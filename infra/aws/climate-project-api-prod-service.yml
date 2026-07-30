@@ -1,0 +1,119 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  App Runner service for climate-project-api, deployed dark: it serves the
+  health/version walking skeleton only. No real traffic or domain logic
+  depends on it yet — this proves the deploy pipeline before #48-56 land.
+
+Parameters:
+  ServiceName:
+    Type: String
+    Default: climate-project-api-prod
+    AllowedPattern: "[A-Za-z0-9][A-Za-z0-9-_]{3,39}"
+    Description: App Runner service name.
+  ImageIdentifier:
+    Type: String
+    Description: Full ECR image identifier, including tag.
+  EcrAccessRoleArn:
+    Type: String
+    Description: IAM role ARN that App Runner uses to pull the private ECR image.
+  HealthCheckPath:
+    Type: String
+    Default: /health
+    Description: App Runner HTTP health check path.
+  Cpu:
+    Type: String
+    Default: 0.25 vCPU
+    AllowedValues:
+      - 0.25 vCPU
+      - 0.5 vCPU
+      - 1 vCPU
+      - 2 vCPU
+      - 4 vCPU
+    Description: App Runner CPU allocation.
+  Memory:
+    Type: String
+    Default: 0.5 GB
+    AllowedValues:
+      - 0.5 GB
+      - 1 GB
+      - 2 GB
+      - 3 GB
+      - 4 GB
+      - 6 GB
+      - 8 GB
+      - 10 GB
+      - 12 GB
+    Description: App Runner memory allocation.
+
+Resources:
+  AppRunnerInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ServiceName}-instance
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: tasks.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      Tags:
+        - Key: Project
+          Value: climate-project-api
+        - Key: Environment
+          Value: production
+
+  AppRunnerService:
+    Type: AWS::AppRunner::Service
+    Properties:
+      ServiceName: !Ref ServiceName
+      SourceConfiguration:
+        AuthenticationConfiguration:
+          AccessRoleArn: !Ref EcrAccessRoleArn
+        AutoDeploymentsEnabled: false
+        ImageRepository:
+          ImageIdentifier: !Ref ImageIdentifier
+          ImageRepositoryType: ECR
+          ImageConfiguration:
+            Port: "8080"
+            RuntimeEnvironmentVariables:
+              - Name: ASPNETCORE_ENVIRONMENT
+                Value: Production
+              - Name: ASPNETCORE_URLS
+                Value: http://+:8080
+      InstanceConfiguration:
+        Cpu: !Ref Cpu
+        Memory: !Ref Memory
+        InstanceRoleArn: !GetAtt AppRunnerInstanceRole.Arn
+      HealthCheckConfiguration:
+        Protocol: HTTP
+        Path: !Ref HealthCheckPath
+        Interval: 10
+        Timeout: 5
+        HealthyThreshold: 1
+        UnhealthyThreshold: 5
+      NetworkConfiguration:
+        IngressConfiguration:
+          IsPubliclyAccessible: true
+        EgressConfiguration:
+          EgressType: DEFAULT
+        IpAddressType: IPV4
+      Tags:
+        - Key: Project
+          Value: climate-project-api
+        - Key: Environment
+          Value: production
+
+Outputs:
+  ServiceArn:
+    Description: App Runner service ARN.
+    Value: !GetAtt AppRunnerService.ServiceArn
+  ServiceId:
+    Description: App Runner service ID.
+    Value: !GetAtt AppRunnerService.ServiceId
+  ServiceUrl:
+    Description: App Runner generated service URL, without protocol.
+    Value: !GetAtt AppRunnerService.ServiceUrl
+  InstanceRoleArn:
+    Description: Runtime instance role ARN.
+    Value: !GetAtt AppRunnerInstanceRole.Arn
