@@ -1,0 +1,127 @@
+name: deploy-prod
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  BOOTSTRAP_STACK_NAME: climate-project-api-bootstrap
+  SERVICE_STACK_NAME: climate-project-api-prod
+  SERVICE_NAME: climate-project-api-prod
+
+jobs:
+  deploy:
+    name: Deploy prod API
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Test API
+        run: dotnet test ClimateProject.slnx --configuration Release
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/climate-project-github-deploy-prod
+
+      - name: Read bootstrap outputs
+        id: bootstrap
+        run: |
+          set -euo pipefail
+          ECR_REPOSITORY_URI="$(aws cloudformation describe-stacks \
+            --stack-name "$BOOTSTRAP_STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='EcrRepositoryUri'].OutputValue | [0]" \
+            --output text)"
+          ECR_ACCESS_ROLE_ARN="$(aws cloudformation describe-stacks \
+            --stack-name "$BOOTSTRAP_STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='AppRunnerEcrAccessRoleArn'].OutputValue | [0]" \
+            --output text)"
+          if [ -z "$ECR_REPOSITORY_URI" ] || [ "$ECR_REPOSITORY_URI" = "None" ]; then
+            echo "Missing EcrRepositoryUri output from $BOOTSTRAP_STACK_NAME" >&2
+            exit 1
+          fi
+          if [ -z "$ECR_ACCESS_ROLE_ARN" ] || [ "$ECR_ACCESS_ROLE_ARN" = "None" ]; then
+            echo "Missing AppRunnerEcrAccessRoleArn output from $BOOTSTRAP_STACK_NAME" >&2
+            exit 1
+          fi
+          ECR_REGISTRY="${ECR_REPOSITORY_URI%/*}"
+          {
+            echo "ecr_repository_uri=$ECR_REPOSITORY_URI"
+            echo "ecr_registry=$ECR_REGISTRY"
+            echo "ecr_access_role_arn=$ECR_ACCESS_ROLE_ARN"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Login to ECR
+        run: |
+          set -euo pipefail
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "${{ steps.bootstrap.outputs.ecr_registry }}"
+
+      - name: Build and push API image
+        id: image
+        run: |
+          set -euo pipefail
+          IMAGE_TAG="prod-${GITHUB_SHA}"
+          IMAGE_URI="${{ steps.bootstrap.outputs.ecr_repository_uri }}:${IMAGE_TAG}"
+          docker build -t "$IMAGE_URI" .
+          docker tag "$IMAGE_URI" "${{ steps.bootstrap.outputs.ecr_repository_uri }}:prod-latest"
+          docker push "$IMAGE_URI"
+          docker push "${{ steps.bootstrap.outputs.ecr_repository_uri }}:prod-latest"
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy App Runner service stack
+        run: |
+          set -euo pipefail
+          aws cloudformation deploy \
+            --stack-name "$SERVICE_STACK_NAME" \
+            --template-file infra/aws/climate-project-api-prod-service.yml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              ServiceName="$SERVICE_NAME" \
+              ImageIdentifier="${{ steps.image.outputs.image_uri }}" \
+              EcrAccessRoleArn="${{ steps.bootstrap.outputs.ecr_access_role_arn }}"
+
+      - name: Read App Runner URL
+        id: service
+        run: |
+          set -euo pipefail
+          SERVICE_URL="$(aws cloudformation describe-stacks \
+            --stack-name "$SERVICE_STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue | [0]" \
+            --output text)"
+          if [ -z "$SERVICE_URL" ] || [ "$SERVICE_URL" = "None" ]; then
+            echo "Missing ServiceUrl output from $SERVICE_STACK_NAME" >&2
+            exit 1
+          fi
+          echo "base_url=https://$SERVICE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Health canary
+        run: |
+          set -euo pipefail
+          URL="${{ steps.service.outputs.base_url }}/health"
+          for i in $(seq 1 10); do
+            STATUS=$(curl -s -o /tmp/health_body -w "%{http_code}" "$URL" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check passed:"
+              cat /tmp/health_body
+              exit 0
+            fi
+            echo "Attempt $i: status $STATUS, retrying in 10s..."
+            sleep 10
+          done
+          echo "Health check failed after 10 attempts" >&2
+          exit 1
