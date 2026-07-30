@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ClimateProject.Api/ClimateProject.Api.csproj" />
+    <Project Path="src/ClimateProject.Application/ClimateProject.Application.csproj" />
+    <Project Path="src/ClimateProject.Domain/ClimateProject.Domain.csproj" />
+    <Project Path="src/ClimateProject.Infrastructure/ClimateProject.Infrastructure.csproj" />
+    <Project Path="src/ClimateProject.Workers/ClimateProject.Workers.csproj" />
+  </Folder>
+</Solution>
