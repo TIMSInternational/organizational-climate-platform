@@ -15,5 +15,5 @@
 
 ```bash
 dotnet run --project src/ClimateProject.Api
-curl http://localhost:5000/health
+curl http://localhost:5080/health
 ```
