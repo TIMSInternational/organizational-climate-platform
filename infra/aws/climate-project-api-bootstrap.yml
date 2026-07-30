@@ -1,0 +1,203 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Bootstrap resources for the climate-project-api deployment.
+
+Parameters:
+  RepositoryName:
+    Type: String
+    Default: climate-project-api
+    Description: ECR repository name for climate-project-api images.
+  GitHubRepository:
+    Type: String
+    Default: TIMSInternational/climate-project-api
+    Description: GitHub owner/repository allowed to assume the deploy role.
+  GitHubBranch:
+    Type: String
+    Default: main
+    Description: GitHub branch allowed to assume the deploy role.
+
+Resources:
+  ClimateProjectApiRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref RepositoryName
+      ImageTagMutability: MUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Expire untagged images after 7 days",
+                "selection": {
+                  "tagStatus": "untagged",
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": 7
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 2,
+                "description": "Keep the most recent 40 prod images",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPrefixList": ["prod-"],
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 40
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: climate-project-api
+        - Key: Environment
+          Value: production
+
+  AppRunnerEcrAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: climate-project-apprunner-ecr-access-prod
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: build.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
+      Tags:
+        - Key: Project
+          Value: climate-project-api
+        - Key: Environment
+          Value: production
+
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: climate-project-github-deploy-prod
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${GitHubRepository}:ref:refs/heads/${GitHubBranch}
+                  - !Sub repo:${GitHubRepository}:environment:production
+      Policies:
+        - PolicyName: climate-project-api-deploy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadBootstrapOutputs
+                Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:GetTemplate
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/climate-project-api-bootstrap/*
+              - Sid: ManageServiceStack
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:CreateStack
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStacks
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:GetTemplate
+                  - cloudformation:GetTemplateSummary
+                  - cloudformation:UpdateStack
+                  - cloudformation:ValidateTemplate
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/climate-project-api-prod/*
+              - Sid: PushApiImages
+                Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:CompleteLayerUpload
+                  - ecr:DescribeImages
+                  - ecr:DescribeRepositories
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                Resource: !GetAtt ClimateProjectApiRepository.Arn
+              - Sid: GetEcrAuthorizationToken
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: "*"
+              - Sid: ManageAppRunnerService
+                Effect: Allow
+                Action:
+                  - apprunner:CreateService
+                  - apprunner:DeleteService
+                  - apprunner:DescribeService
+                  - apprunner:ListOperations
+                  - apprunner:ListTagsForResource
+                  - apprunner:StartDeployment
+                  - apprunner:TagResource
+                  - apprunner:UntagResource
+                  - apprunner:UpdateService
+                Resource: "*"
+              - Sid: ManageAppRunnerInstanceRole
+                Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                  - iam:GetRole
+                  - iam:GetRolePolicy
+                  - iam:ListRolePolicies
+                  - iam:PutRolePolicy
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:UpdateAssumeRolePolicy
+                Resource:
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/climate-project-api-prod-instance
+              - Sid: PassAppRunnerRoles
+                Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt AppRunnerEcrAccessRole.Arn
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/climate-project-api-prod-instance
+      Tags:
+        - Key: Project
+          Value: climate-project-api
+        - Key: Environment
+          Value: production
+
+Outputs:
+  EcrRepositoryName:
+    Description: ECR repository name.
+    Value: !Ref ClimateProjectApiRepository
+  EcrRepositoryUri:
+    Description: ECR repository URI.
+    Value: !GetAtt ClimateProjectApiRepository.RepositoryUri
+  AppRunnerEcrAccessRoleArn:
+    Description: Role App Runner uses to pull private ECR images.
+    Value: !GetAtt AppRunnerEcrAccessRole.Arn
+  GitHubDeployRoleArn:
+    Description: Role GitHub Actions assumes through OIDC for deploys.
+    Value: !GetAtt GitHubDeployRole.Arn
