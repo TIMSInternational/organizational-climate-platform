@@ -6,4 +6,8 @@
     <Project Path="src/ClimateProject.Infrastructure/ClimateProject.Infrastructure.csproj" />
     <Project Path="src/ClimateProject.Workers/ClimateProject.Workers.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ClimateProject.IntegrationTests/ClimateProject.IntegrationTests.csproj" />
+    <Project Path="tests/ClimateProject.UnitTests/ClimateProject.UnitTests.csproj" />
+  </Folder>
 </Solution>
