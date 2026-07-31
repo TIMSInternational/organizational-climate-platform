@@ -75,4 +75,33 @@ public class IdentityMappingClaimsTests : IAsyncLifetime
 
         Assert.Equal("legacy-mongo-id-abc123", DecodeSubClaim(loginToken));
     }
+
+    [Fact]
+    public async Task Refresh_succeeds_when_PersonaExternalId_is_a_non_guid_string()
+    {
+        var client = _factory.CreateClient();
+        var email = $"refresh-external@{_emailDomain}";
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Refresh External", email, "a-good-password"));
+        await signup.Content.ReadFromJsonAsync<TokenResponse>();
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var user = db.Users.First(u => u.Email == email);
+            user.PersonaExternalId = "legacy-mongo-id-abc123";
+            await db.SaveChangesAsync();
+        }
+
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var loginToken = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
+        Assert.Equal("legacy-mongo-id-abc123", DecodeSubClaim(loginToken));
+
+        using var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "/auth/refresh");
+        refreshRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginToken);
+        var refresh = await client.SendAsync(refreshRequest);
+
+        Assert.True(refresh.IsSuccessStatusCode, $"Expected success, got {(int)refresh.StatusCode}: {await refresh.Content.ReadAsStringAsync()}");
+        var refreshToken = (await refresh.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
+        Assert.Equal("legacy-mongo-id-abc123", DecodeSubClaim(refreshToken));
+    }
 }
