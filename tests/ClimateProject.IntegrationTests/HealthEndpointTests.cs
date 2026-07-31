@@ -1,5 +1,7 @@
 using System.Net;
+using ClimateProject.IntegrationTests.Support;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 
 namespace ClimateProject.IntegrationTests;
 
@@ -9,7 +11,20 @@ public class HealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 
     public HealthEndpointTests(WebApplicationFactory<Program> factory)
     {
-        _factory = factory;
+        // The JWT bearer handler runs on every request (even unauthenticated ones
+        // like /health) to attempt authentication, and needs a non-empty signing
+        // key. appsettings.json ships an empty TrackingJwtSecret, so this test
+        // (predating auth) needs its own override to avoid a 500.
+        _factory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, config) =>
+            {
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["TrackingJwtSecret"] = AuthWebApplicationFactory.TestJwtSecret,
+                });
+            });
+        });
     }
 
     [Fact]

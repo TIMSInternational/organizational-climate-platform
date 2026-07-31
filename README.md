@@ -13,7 +13,14 @@
 
 ## Running locally
 
+Requires a local Postgres instance and a `TrackingJwtSecret` value (the auth
+endpoints won't start without one).
+
 ```bash
+docker compose up -d
+dotnet user-secrets set TrackingJwtSecret "any-local-dev-value-at-least-32-bytes-long" \
+  --project src/ClimateProject.Api
+dotnet ef database update --project src/ClimateProject.Infrastructure --startup-project src/ClimateProject.Api
 dotnet run --project src/ClimateProject.Api
 curl http://localhost:5080/health
 ```
