@@ -59,7 +59,7 @@ public static class AuthEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         var token = jwtTokenService.IssueToken(new TokenClaims(
-            Sub: user.Id.ToString(),
+            Sub: user.PersonaExternalId ?? user.Id.ToString(),
             Role: user.Role,
             NodoId: user.NodoId,
             Email: user.Email,
@@ -127,7 +127,7 @@ public static class AuthEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         var token = jwtTokenService.IssueToken(new TokenClaims(
-            Sub: user.Id.ToString(),
+            Sub: user.PersonaExternalId ?? user.Id.ToString(),
             Role: user.Role,
             NodoId: user.NodoId,
             Email: user.Email,
@@ -195,7 +195,7 @@ public static class AuthEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         var token = jwtTokenService.IssueToken(new TokenClaims(
-            Sub: user.Id.ToString(),
+            Sub: user.PersonaExternalId ?? user.Id.ToString(),
             Role: user.Role,
             NodoId: user.NodoId,
             Email: user.Email,
@@ -222,7 +222,7 @@ public static class AuthEndpoints
         }
 
         var token = jwtTokenService.IssueToken(new TokenClaims(
-            Sub: user.Id.ToString(),
+            Sub: user.PersonaExternalId ?? user.Id.ToString(),
             Role: user.Role,
             NodoId: user.NodoId,
             Email: user.Email,

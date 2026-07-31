@@ -3,7 +3,7 @@ namespace ClimateProject.Domain.Entities;
 public class UserInvitation
 {
     public Guid Id { get; set; }
-    public required string Email { get; set; }
+    public string? Email { get; set; }
     public Guid CompanyId { get; set; }
     public Guid? DepartmentId { get; set; }
     public Guid InvitedBy { get; set; }

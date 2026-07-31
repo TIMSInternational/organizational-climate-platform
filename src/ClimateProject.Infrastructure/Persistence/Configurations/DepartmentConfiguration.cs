@@ -10,6 +10,7 @@ public class DepartmentConfiguration : IEntityTypeConfiguration<Department>
     {
         builder.ToTable("departments");
         builder.HasKey(d => d.Id);
+        builder.Property(d => d.LegacyExternalId).HasColumnName("legacy_external_id").HasMaxLength(64);
         builder.Property(d => d.CompanyId).HasColumnName("company_id").IsRequired();
         builder.Property(d => d.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
         builder.Property(d => d.Description).HasColumnName("description").HasMaxLength(1000);
