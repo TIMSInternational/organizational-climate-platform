@@ -53,6 +53,7 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<DemographicSnapshot> DemographicSnapshots => Set<DemographicSnapshot>();
     public DbSet<DemographicSnapshotEntry> DemographicSnapshotEntries => Set<DemographicSnapshotEntry>();
     public DbSet<DemographicSnapshotChange> DemographicSnapshotChanges => Set<DemographicSnapshotChange>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
