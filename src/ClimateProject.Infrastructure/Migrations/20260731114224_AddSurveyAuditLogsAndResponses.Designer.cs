@@ -3,6 +3,7 @@ using System;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ClimateProject.Infrastructure.Migrations
 {
     [DbContext(typeof(ClimateProjectDbContext))]
-    partial class ClimateProjectDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731114224_AddSurveyAuditLogsAndResponses")]
+    partial class AddSurveyAuditLogsAndResponses
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -159,15 +162,11 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnName("description");
 
                     b.Property<int>("EmployeeCount")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
-                        .HasDefaultValue(0)
                         .HasColumnName("employee_count");
 
                     b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
-                        .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
                     b.Property<Guid?>("ManagerId")
@@ -1516,41 +1515,29 @@ namespace ClimateProject.Infrastructure.Migrations
                                 .HasColumnType("uuid");
 
                             b1.Property<bool>("AutoActionPlans")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("boolean")
-                                .HasDefaultValue(true)
                                 .HasColumnName("settings_auto_action_plans");
 
                             b1.Property<string>("MicroclimateFrequency")
                                 .IsRequired()
-                                .ValueGeneratedOnAdd()
                                 .HasMaxLength(20)
                                 .HasColumnType("character varying(20)")
-                                .HasDefaultValue("monthly")
                                 .HasColumnName("settings_microclimate_frequency");
 
                             b1.Property<bool>("NotificationEmail")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("boolean")
-                                .HasDefaultValue(true)
                                 .HasColumnName("settings_notification_email");
 
                             b1.Property<bool>("NotificationSlack")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("boolean")
-                                .HasDefaultValue(false)
                                 .HasColumnName("settings_notification_slack");
 
                             b1.Property<bool>("NotificationTeams")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("boolean")
-                                .HasDefaultValue(false)
                                 .HasColumnName("settings_notification_teams");
 
                             b1.Property<bool>("SurveyParticipationRequired")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("boolean")
-                                .HasDefaultValue(true)
                                 .HasColumnName("settings_survey_participation_required");
 
                             b1.HasKey("DepartmentId");
