@@ -14,8 +14,12 @@ public class JwtTokenService : IJwtTokenService
 
     public JwtTokenService(IConfiguration configuration)
     {
-        var secret = configuration["TrackingJwtSecret"]
-            ?? throw new InvalidOperationException("Missing TrackingJwtSecret configuration.");
+        var secret = configuration["TrackingJwtSecret"];
+        if (string.IsNullOrWhiteSpace(secret))
+        {
+            throw new InvalidOperationException("Missing TrackingJwtSecret configuration.");
+        }
+
         _signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
     }
 

@@ -114,4 +114,28 @@ public class JwtTokenServiceTests
         Assert.Equal(SampleClaims.CompanyId, principal.FindFirst("companyId")?.Value);
         Assert.Equal("true", principal.FindFirst("isActive")?.Value);
     }
+
+    [Fact]
+    public void Constructor_throws_when_TrackingJwtSecret_is_empty_string()
+    {
+        // appsettings.json ships "TrackingJwtSecret": "" as a placeholder. An
+        // empty string is not null, so a naive "?? throw" null-coalescing guard
+        // silently lets it through, producing a zero-length signing key. This
+        // proves the constructor rejects that case explicitly.
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["TrackingJwtSecret"] = "" })
+            .Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => new JwtTokenService(configuration));
+        Assert.Equal("Missing TrackingJwtSecret configuration.", exception.Message);
+    }
+
+    [Fact]
+    public void Constructor_throws_when_TrackingJwtSecret_is_missing()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => new JwtTokenService(configuration));
+        Assert.Equal("Missing TrackingJwtSecret configuration.", exception.Message);
+    }
 }

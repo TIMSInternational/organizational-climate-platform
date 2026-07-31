@@ -90,4 +90,15 @@ public class SignupEndpointTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Signup_with_email_missing_at_sign_returns_400_not_500()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("No At Sign", "noatsign", "a-good-password"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+        Assert.Equal("Invalid email format", body!.Message);
+    }
 }

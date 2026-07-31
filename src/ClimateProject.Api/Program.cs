@@ -18,8 +18,12 @@ var builder = WebApplication.CreateBuilder(args);
 // builder.Build() is invoked, which is later in this file.
 builder.Services.AddDbContext<ClimateProjectDbContext>((sp, options) =>
 {
-    var connectionString = sp.GetRequiredService<IConfiguration>().GetConnectionString("ClimateProject")
-        ?? throw new InvalidOperationException("Missing ConnectionStrings:ClimateProject configuration.");
+    var connectionString = sp.GetRequiredService<IConfiguration>().GetConnectionString("ClimateProject");
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        throw new InvalidOperationException("Missing ConnectionStrings:ClimateProject configuration.");
+    }
+
     options.UseNpgsql(connectionString);
 });
 
@@ -33,8 +37,11 @@ builder.Services
 builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
     .Configure<IConfiguration>((options, configuration) =>
     {
-        var trackingJwtSecret = configuration["TrackingJwtSecret"]
-            ?? throw new InvalidOperationException("Missing TrackingJwtSecret configuration.");
+        var trackingJwtSecret = configuration["TrackingJwtSecret"];
+        if (string.IsNullOrWhiteSpace(trackingJwtSecret))
+        {
+            throw new InvalidOperationException("Missing TrackingJwtSecret configuration.");
+        }
 
         // Without this, the handler remaps well-known claim names ("sub" -> NameIdentifier
         // URI, "role" -> Role URI, etc.) before CurrentUser reads them by their raw names.
@@ -49,7 +56,15 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             ValidateLifetime = true,
             NameClaimType = "sub",
         };
-    });
+    })
+    // Forces the Configure delegate above to run at host-startup time (via the
+    // options-validation hosted service that runs after builder.Build()), so a
+    // missing/empty TrackingJwtSecret fails fast at startup instead of on the
+    // first inbound request (which would otherwise 500 on every request,
+    // including /health). Running after builder.Build() still correctly picks
+    // up WebApplicationFactory test config overrides -- see the lazy-resolution
+    // comment above.
+    .ValidateOnStart();
 
 builder.Services.AddAuthorization();
 
