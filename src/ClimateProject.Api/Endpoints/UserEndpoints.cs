@@ -21,7 +21,7 @@ public static class UserEndpoints
 
     private static bool CanAccessCompany(CurrentUser currentUser, Guid companyId)
         => currentUser.Role == Roles.SuperAdmin
-           || currentUser.CompanyId == companyId.ToString();
+           || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
 
     private static UserListItem ToListItem(User u)
         => new(u.Id, u.Email, u.Name, u.Role, u.DepartmentId, u.IsActive, u.LastLoginAt, u.CreatedAt);

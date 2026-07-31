@@ -80,6 +80,41 @@ public class UserEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task NonAdmin_cannot_list_get_or_update_users_in_their_own_company()
+    {
+        var client = _factory.CreateClient();
+        var (employeeToken, _) = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+        var (_, coworkerId) = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", employeeToken);
+
+        var listResponse = await client.GetAsync($"/admin/users?companyId={_companyAId}");
+        Assert.Equal(HttpStatusCode.Forbidden, listResponse.StatusCode);
+
+        var getResponse = await client.GetAsync($"/admin/users/{coworkerId}");
+        Assert.Equal(HttpStatusCode.Forbidden, getResponse.StatusCode);
+
+        var updateResponse = await client.PutAsJsonAsync($"/admin/users/{coworkerId}", new UpdateUserRequest("Renamed", null, null, false));
+        Assert.Equal(HttpStatusCode.Forbidden, updateResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Supervisor_and_Leader_cannot_list_users_in_their_own_company()
+    {
+        var client = _factory.CreateClient();
+        var (supervisorToken, _) = await SignUpAndGetTokenAsync(client, Roles.Supervisor, _companyADomain, _companyAId);
+        var (leaderToken, _) = await SignUpAndGetTokenAsync(client, Roles.Leader, _companyADomain, _companyAId);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", supervisorToken);
+        var supervisorListResponse = await client.GetAsync($"/admin/users?companyId={_companyAId}");
+        Assert.Equal(HttpStatusCode.Forbidden, supervisorListResponse.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", leaderToken);
+        var leaderListResponse = await client.GetAsync($"/admin/users?companyId={_companyAId}");
+        Assert.Equal(HttpStatusCode.Forbidden, leaderListResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task CompanyAdmin_cannot_list_or_get_users_in_another_company()
     {
         var client = _factory.CreateClient();
