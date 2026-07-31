@@ -89,4 +89,38 @@ public class DepartmentTests(PostgresContainerFixture postgres)
 
         Assert.Equal(["Leaf", "Mid", "Root"], names);
     }
+
+    [Fact]
+    public async Task Existing_department_without_new_defaults_still_loads_with_defaults()
+    {
+        // Simulates a row that existed BEFORE the AddDepartmentDefaults migration ran: run all
+        // migrations, then insert a row via raw SQL that only sets the pre-fix (#15-era) columns
+        // -- Id, company_id, name, created_at, updated_at -- leaving every NOT NULL column that
+        // previously had no DB-level default (employee_count, is_active, and the six
+        // settings_* owned-type columns) to whatever the DB-level column default now is.
+        // Reading it back via EF must show the intended domain defaults, proving those defaults
+        // are baked into the migration's AlterColumn calls (defaultValue: ...) rather than only
+        // existing as C# object-initializer defaults that a legacy row would never pick up.
+        await using var db = CreateContext();
+        await db.Database.MigrateAsync();
+        var company = await SeedCompanyAsync(db);
+
+        var minimalDepartmentId = Guid.NewGuid();
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+             INSERT INTO departments ("Id", company_id, name, created_at, updated_at)
+             VALUES ({minimalDepartmentId}, {company.Id}, {"Minimal Dept"}, {DateTimeOffset.UtcNow}, {DateTimeOffset.UtcNow})
+             """);
+
+        await using var readDb = CreateContext();
+        var loaded = await readDb.Departments.SingleAsync(d => d.Id == minimalDepartmentId);
+        Assert.Equal(0, loaded.EmployeeCount);
+        Assert.True(loaded.IsActive);
+        Assert.True(loaded.Settings.SurveyParticipationRequired);
+        Assert.Equal("monthly", loaded.Settings.MicroclimateFrequency);
+        Assert.True(loaded.Settings.AutoActionPlans);
+        Assert.True(loaded.Settings.NotificationEmail);
+        Assert.False(loaded.Settings.NotificationSlack);
+        Assert.False(loaded.Settings.NotificationTeams);
+    }
 }
