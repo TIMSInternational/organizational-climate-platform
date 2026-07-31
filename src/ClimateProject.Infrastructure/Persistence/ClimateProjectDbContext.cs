@@ -8,6 +8,7 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
 {
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<Department> Departments => Set<Department>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
