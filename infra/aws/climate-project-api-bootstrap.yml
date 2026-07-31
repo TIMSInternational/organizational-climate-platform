@@ -8,7 +8,7 @@ Parameters:
     Description: ECR repository name for climate-project-api images.
   GitHubRepository:
     Type: String
-    Default: TIMSInternational/climate-project-api
+    Default: TIMSInternational/organizational-climate-platform
     Description: GitHub owner/repository allowed to assume the deploy role.
   GitHubBranch:
     Type: String

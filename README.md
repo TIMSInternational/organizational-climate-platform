@@ -1,6 +1,11 @@
-# climate-project-api
+# organizational-climate-platform
 
-.NET 10 backend for climate-project — migration target from the legacy Next.js/MongoDB stack. See [climate-project#17](https://github.com/TIMSInternational/climate-project/issues/17) for the full migration epic and [#47](https://github.com/TIMSInternational/climate-project/issues/47) for this repo's foundation-scaffold spec.
+Monorepo for the organizational climate platform: `web/` (React + Vite frontend) and
+`src/` (.NET 10 backend) — the migration target for the legacy Next.js/MongoDB stack at
+[climate-project](https://github.com/TIMSInternational/climate-project). See
+[climate-project#17](https://github.com/TIMSInternational/climate-project/issues/17) for the
+full migration epic and [#47](https://github.com/TIMSInternational/climate-project/issues/47)
+for this repo's foundation-scaffold spec.
 
 ## Solution structure
 
