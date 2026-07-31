@@ -56,7 +56,8 @@ public static class DepartmentEndpoints
             return Results.Forbid();
         }
 
-        if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 100)
+        var name = request.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 100)
         {
             return Results.Json(new { message = "Name is required and must be at most 100 characters" }, statusCode: 400);
         }
@@ -77,7 +78,7 @@ public static class DepartmentEndpoints
 
         var duplicate = await db.Departments.FirstOrDefaultAsync(
             d => d.CompanyId == request.CompanyId
-                 && d.Name == request.Name
+                 && d.Name == name
                  && d.ParentDepartmentId == request.ParentDepartmentId,
             cancellationToken);
         if (duplicate is not null)
@@ -89,7 +90,7 @@ public static class DepartmentEndpoints
         {
             Id = Guid.NewGuid(),
             CompanyId = request.CompanyId,
-            Name = request.Name.Trim(),
+            Name = name,
             Description = request.Description?.Trim(),
             ParentDepartmentId = request.ParentDepartmentId,
             IsActive = request.IsActive,
@@ -145,16 +146,17 @@ public static class DepartmentEndpoints
             return Results.Forbid();
         }
 
-        if (!string.IsNullOrWhiteSpace(request.Name) && request.Name != department.Name)
+        var name = request.Name?.Trim();
+        if (!string.IsNullOrWhiteSpace(name) && name != department.Name)
         {
-            if (request.Name.Length > 100)
+            if (name.Length > 100)
             {
                 return Results.Json(new { message = "Name must be at most 100 characters" }, statusCode: 400);
             }
 
             var duplicate = await db.Departments.FirstOrDefaultAsync(
                 d => d.CompanyId == department.CompanyId
-                     && d.Name == request.Name
+                     && d.Name == name
                      && d.ParentDepartmentId == department.ParentDepartmentId
                      && d.Id != id,
                 cancellationToken);
@@ -163,7 +165,7 @@ public static class DepartmentEndpoints
                 return Results.Json(new { message = "Department with this name already exists at this level" }, statusCode: 400);
             }
 
-            department.Name = request.Name.Trim();
+            department.Name = name;
         }
 
         if (request.Description is not null)

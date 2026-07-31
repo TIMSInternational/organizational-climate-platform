@@ -132,6 +132,51 @@ public class DepartmentEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Create_rejects_duplicate_name_that_only_differs_by_whitespace()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var created = await client.PostAsJsonAsync("/admin/departments", new CreateDepartmentRequest(
+            CompanyId: _companyAId, Name: "HR", Description: null, ParentDepartmentId: null, IsActive: true));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var duplicate = await client.PostAsJsonAsync("/admin/departments", new CreateDepartmentRequest(
+            CompanyId: _companyAId, Name: " HR", Description: null, ParentDepartmentId: null, IsActive: true));
+
+        Assert.Equal(HttpStatusCode.BadRequest, duplicate.StatusCode);
+    }
+
+    [Fact]
+    public async Task Update_persists_name_description_and_isActive_changes()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.SuperAdmin, _companyADomain);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/admin/departments", new CreateDepartmentRequest(
+            CompanyId: _companyAId, Name: "Finance", Description: "Original description", ParentDepartmentId: null, IsActive: true));
+        var created = await createResponse.Content.ReadFromJsonAsync<DepartmentDetail>();
+
+        var updateResponse = await client.PutAsJsonAsync($"/admin/departments/{created!.Id}", new UpdateDepartmentRequest(
+            Name: "Finance & Accounting", Description: "Updated description", IsActive: false));
+
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        var updated = await updateResponse.Content.ReadFromJsonAsync<DepartmentDetail>();
+        Assert.Equal("Finance & Accounting", updated!.Name);
+        Assert.Equal("Updated description", updated.Description);
+        Assert.False(updated.IsActive);
+
+        var getResponse = await client.GetAsync($"/admin/departments/{created.Id}");
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        var persisted = await getResponse.Content.ReadFromJsonAsync<DepartmentDetail>();
+        Assert.Equal("Finance & Accounting", persisted!.Name);
+        Assert.Equal("Updated description", persisted.Description);
+        Assert.False(persisted.IsActive);
+    }
+
+    [Fact]
     public async Task Create_rejects_a_parent_department_from_a_different_company()
     {
         var client = _factory.CreateClient();
