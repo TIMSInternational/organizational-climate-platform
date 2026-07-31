@@ -45,6 +45,10 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<Benchmark> Benchmarks => Set<Benchmark>();
     public DbSet<BenchmarkMetric> BenchmarkMetrics => Set<BenchmarkMetric>();
+    public DbSet<AnalyticsInsight> AnalyticsInsights => Set<AnalyticsInsight>();
+    public DbSet<AnalyticsMetricData> AnalyticsMetricData => Set<AnalyticsMetricData>();
+    public DbSet<AnalyticsTimeSeries> AnalyticsTimeSeries => Set<AnalyticsTimeSeries>();
+    public DbSet<AIInsight> AIInsights => Set<AIInsight>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
