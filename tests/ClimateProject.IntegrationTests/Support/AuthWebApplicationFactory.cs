@@ -1,9 +1,12 @@
+using ClimateProject.Application.Auth;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace ClimateProject.IntegrationTests.Support;
 
@@ -19,7 +22,14 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
             {
                 ["ConnectionStrings:ClimateProject"] = connectionString,
                 ["TrackingJwtSecret"] = TestJwtSecret,
+                ["GoogleClientId"] = "test-google-client-id",
             });
+        });
+
+        builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IGoogleTokenVerifier>();
+            services.AddScoped<IGoogleTokenVerifier, FakeGoogleTokenVerifier>();
         });
     }
 
