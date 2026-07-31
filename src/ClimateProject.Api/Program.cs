@@ -1,6 +1,7 @@
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Cors;
+using ClimateProject.Application.OrgStructure;
 using ClimateProject.Infrastructure.Auth;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -112,6 +113,7 @@ app.MapGet("/version", () => Results.Ok(new VersionResponse(
     Environment: app.Environment.EnvironmentName)));
 
 app.MapAuthEndpoints();
+app.MapCompanyEndpoints();
 
 app.Run();
 
