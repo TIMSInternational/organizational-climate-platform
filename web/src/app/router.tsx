@@ -1,20 +1,27 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 import LoginPage from '../auth/LoginPage'
 import RequireAuth from './RequireAuth'
 import AdminLayout from './AdminLayout'
+import RouteErrorBoundary from './RouteErrorBoundary'
 import CompaniesListPage from '../features/org-structure/pages/CompaniesListPage'
 import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage'
 
 export const router = createBrowserRouter([
-  { path: '/login', element: <LoginPage /> },
   {
-    element: <RequireAuth />,
+    errorElement: <RouteErrorBoundary />,
     children: [
+      { path: '/', element: <Navigate to="/admin/companies" replace /> },
+      { path: '/login', element: <LoginPage /> },
       {
-        element: <AdminLayout />,
+        element: <RequireAuth />,
         children: [
-          { path: '/admin/companies', element: <CompaniesListPage /> },
-          { path: '/admin/companies/:id', element: <CompanyDetailPage /> },
+          {
+            element: <AdminLayout />,
+            children: [
+              { path: '/admin/companies', element: <CompaniesListPage /> },
+              { path: '/admin/companies/:id', element: <CompanyDetailPage /> },
+            ],
+          },
         ],
       },
     ],

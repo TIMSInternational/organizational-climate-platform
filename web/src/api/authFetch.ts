@@ -1,4 +1,4 @@
-import { getToken } from '../auth/token'
+import { getToken, clearToken } from '../auth/token'
 
 export async function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
   const token = getToken()
@@ -10,6 +10,11 @@ export async function authFetch(url: string, init: RequestInit = {}): Promise<Re
 
   const response = await fetch(url, { ...init, headers })
   if (!response.ok) {
+    if (response.status === 401) {
+      clearToken()
+      window.location.href = '/login'
+      throw new Error('Session expired')
+    }
     const body = await response.json().catch(() => null)
     throw new Error((body && body.message) || `Request failed: ${response.status}`)
   }
