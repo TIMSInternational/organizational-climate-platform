@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using ClimateProject.Application.Auth;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
@@ -13,6 +14,7 @@ public static class AuthEndpoints
 
         group.MapPost("/login", LoginAsync);
         group.MapPost("/signup", SignupAsync);
+        group.MapPost("/refresh", RefreshAsync).RequireAuthorization();
     }
 
     private static async Task<IResult> LoginAsync(
@@ -117,6 +119,33 @@ public static class AuthEndpoints
             IsActive: user.IsActive));
 
         return Results.Json(new TokenResponse(token), statusCode: 201);
+    }
+
+    private static async Task<IResult> RefreshAsync(
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        IJwtTokenService jwtTokenService,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        var userId = Guid.Parse(currentUser.Sub);
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+        if (user is null || !user.IsActive)
+        {
+            return Results.Json(new ErrorResponse("Account is no longer active"), statusCode: 401);
+        }
+
+        var token = jwtTokenService.IssueToken(new TokenClaims(
+            Sub: user.Id.ToString(),
+            Role: user.Role,
+            NodoId: user.NodoId,
+            Email: user.Email,
+            Name: user.Name,
+            CompanyId: user.CompanyId.ToString(),
+            IsActive: user.IsActive));
+
+        return Results.Ok(new TokenResponse(token));
     }
 }
 
