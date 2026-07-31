@@ -8,14 +8,21 @@ export default function CompaniesListPage() {
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<CompanyFiltersValue>({ search: '' })
   const [showCreateForm, setShowCreateForm] = useState(false)
 
   async function reload() {
     setLoading(true)
-    const result = await listCompanies(baseUrl)
-    setCompanies(result)
-    setLoading(false)
+    setError(null)
+    try {
+      const result = await listCompanies(baseUrl)
+      setCompanies(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load companies')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -51,7 +58,8 @@ export default function CompaniesListPage() {
       <CompanyFilters value={filters} onChange={setFilters} />
       <button onClick={() => setShowCreateForm((v) => !v)}>{showCreateForm ? 'Cancel' : 'New company'}</button>
       {showCreateForm && <CompanyForm submitLabel="Create company" onSubmit={handleCreate} />}
-      {loading ? <p>Loading…</p> : <CompanyList companies={filtered} />}
+      {error && <p role="alert">{error}</p>}
+      {!error && (loading ? <p>Loading…</p> : <CompanyList companies={filtered} />)}
     </div>
   )
 }

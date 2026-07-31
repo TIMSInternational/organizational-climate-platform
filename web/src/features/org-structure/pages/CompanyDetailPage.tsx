@@ -14,20 +14,30 @@ export default function CompanyDetailPage() {
   const [editingCompany, setEditingCompany] = useState(false)
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null)
   const [creatingDepartment, setCreatingDepartment] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function reload() {
     if (!id) return
-    const [companyResult, departmentsResult] = await Promise.all([
-      getCompany(baseUrl, id),
-      listDepartments(baseUrl, id),
-    ])
-    setCompany(companyResult)
-    setDepartments(departmentsResult)
+    setError(null)
+    try {
+      const [companyResult, departmentsResult] = await Promise.all([
+        getCompany(baseUrl, id),
+        listDepartments(baseUrl, id),
+      ])
+      setCompany(companyResult)
+      setDepartments(departmentsResult)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load company')
+    }
   }
 
   useEffect(() => {
     reload()
   }, [id])
+
+  if (error) {
+    return <p role="alert">{error}</p>
+  }
 
   if (!company) {
     return <p>Loading…</p>
@@ -89,6 +99,7 @@ export default function CompanyDetailPage() {
 
       {editingDepartment && (
         <DepartmentForm
+          key={editingDepartment.id}
           departments={departments}
           excludeIdFromParentOptions={editingDepartment.id}
           submitLabel="Save department"
