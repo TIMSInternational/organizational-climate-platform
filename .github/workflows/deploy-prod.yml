@@ -76,7 +76,7 @@ jobs:
           set -euo pipefail
           IMAGE_TAG="prod-${GITHUB_SHA}"
           IMAGE_URI="${{ steps.bootstrap.outputs.ecr_repository_uri }}:${IMAGE_TAG}"
-          docker build -t "$IMAGE_URI" .
+          docker build --platform linux/amd64 -t "$IMAGE_URI" .
           docker tag "$IMAGE_URI" "${{ steps.bootstrap.outputs.ecr_repository_uri }}:prod-latest"
           docker push "$IMAGE_URI"
           docker push "${{ steps.bootstrap.outputs.ecr_repository_uri }}:prod-latest"
