@@ -31,6 +31,7 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<Microclimate> Microclimates => Set<Microclimate>();
     public DbSet<MicroclimateDepartmentTarget> MicroclimateDepartmentTargets => Set<MicroclimateDepartmentTarget>();
     public DbSet<MicroclimateQuestion> MicroclimateQuestions => Set<MicroclimateQuestion>();
+    public DbSet<MicroclimateAiInsight> MicroclimateAiInsights => Set<MicroclimateAiInsight>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
