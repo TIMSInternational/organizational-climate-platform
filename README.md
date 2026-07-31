@@ -40,3 +40,9 @@ npm run dev
 ```
 
 Requires the API (above) running on `http://localhost:5080` — `web/.env.development` points at it via `VITE_API_BASE_URL`.
+
+## Deployments
+
+- **Frontend:** [organizational-climate-platform.vercel.app](https://organizational-climate-platform.vercel.app) — deployed via Vercel, Root Directory `web/`, builds on push independent of GitHub Actions. Preview deployments use the `https://climate-*-federicos-projects-21f2ff63.vercel.app` pattern (also allowlisted in the API's CORS policy).
+- **Backend:** `https://bhgrdkd4gt.us-east-1.awsapprunner.com` — AWS App Runner, see `infra/aws/README.md` for the deploy runbook. `TrackingJwtSecret` and (once provisioned) the database connection string are supplied via Secrets Manager (`RuntimeEnvironmentSecrets`), not plain env vars.
+- Production Postgres is Supabase-hosted; local dev and the integration test suite use the `docker-compose` Postgres instead (never Supabase).
