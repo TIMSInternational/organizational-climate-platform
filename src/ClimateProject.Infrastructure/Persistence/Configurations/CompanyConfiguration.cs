@@ -22,21 +22,21 @@ public class CompanyConfiguration : IEntityTypeConfiguration<Company>
         builder.OwnsOne(c => c.Branding, branding =>
         {
             branding.Property(b => b.LogoUrl).HasColumnName("branding_logo_url").HasMaxLength(500);
-            branding.Property(b => b.PrimaryColor).HasColumnName("branding_primary_color").HasMaxLength(20).IsRequired();
-            branding.Property(b => b.SecondaryColor).HasColumnName("branding_secondary_color").HasMaxLength(20).IsRequired();
-            branding.Property(b => b.FontFamily).HasColumnName("branding_font_family").HasMaxLength(100).IsRequired();
+            branding.Property(b => b.PrimaryColor).HasColumnName("branding_primary_color").HasMaxLength(20).IsRequired().HasDefaultValue("#3B82F6");
+            branding.Property(b => b.SecondaryColor).HasColumnName("branding_secondary_color").HasMaxLength(20).IsRequired().HasDefaultValue("#1F2937");
+            branding.Property(b => b.FontFamily).HasColumnName("branding_font_family").HasMaxLength(100).IsRequired().HasDefaultValue("Inter");
             branding.Property(b => b.CustomCss).HasColumnName("branding_custom_css").HasColumnType("text");
         });
 
         builder.OwnsOne(c => c.Settings, settings =>
         {
-            settings.Property(s => s.SurveyFrequency).HasColumnName("settings_survey_frequency").HasConversion<string>().HasMaxLength(20).IsRequired();
-            settings.Property(s => s.MicroclimateEnabled).HasColumnName("settings_microclimate_enabled").IsRequired();
-            settings.Property(s => s.AiInsightsEnabled).HasColumnName("settings_ai_insights_enabled").IsRequired();
-            settings.Property(s => s.AnonymousSurveys).HasColumnName("settings_anonymous_surveys").IsRequired();
-            settings.Property(s => s.DataRetentionDays).HasColumnName("settings_data_retention_days").IsRequired();
-            settings.Property(s => s.Timezone).HasColumnName("settings_timezone").HasMaxLength(100).IsRequired();
-            settings.Property(s => s.Language).HasColumnName("settings_language").HasMaxLength(10).IsRequired();
+            settings.Property(s => s.SurveyFrequency).HasColumnName("settings_survey_frequency").HasConversion<string>().HasMaxLength(20).IsRequired().HasDefaultValue("quarterly");
+            settings.Property(s => s.MicroclimateEnabled).HasColumnName("settings_microclimate_enabled").IsRequired().HasDefaultValue(true);
+            settings.Property(s => s.AiInsightsEnabled).HasColumnName("settings_ai_insights_enabled").IsRequired().HasDefaultValue(true);
+            settings.Property(s => s.AnonymousSurveys).HasColumnName("settings_anonymous_surveys").IsRequired().HasDefaultValue(false);
+            settings.Property(s => s.DataRetentionDays).HasColumnName("settings_data_retention_days").IsRequired().HasDefaultValue(2555);
+            settings.Property(s => s.Timezone).HasColumnName("settings_timezone").HasMaxLength(100).IsRequired().HasDefaultValue("UTC");
+            settings.Property(s => s.Language).HasColumnName("settings_language").HasMaxLength(10).IsRequired().HasDefaultValue("en");
         });
     }
 }

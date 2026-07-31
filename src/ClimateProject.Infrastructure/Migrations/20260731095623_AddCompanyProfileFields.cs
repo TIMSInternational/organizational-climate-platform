@@ -22,7 +22,7 @@ namespace ClimateProject.Infrastructure.Migrations
                 type: "character varying(100)",
                 maxLength: 100,
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "Inter");
 
             migrationBuilder.AddColumn<string>(
                 name: "branding_logo_url",
@@ -37,7 +37,7 @@ namespace ClimateProject.Infrastructure.Migrations
                 type: "character varying(20)",
                 maxLength: 20,
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "#3B82F6");
 
             migrationBuilder.AddColumn<string>(
                 name: "branding_secondary_color",
@@ -45,7 +45,7 @@ namespace ClimateProject.Infrastructure.Migrations
                 type: "character varying(20)",
                 maxLength: 20,
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "#1F2937");
 
             migrationBuilder.AddColumn<string>(
                 name: "country",
@@ -66,7 +66,7 @@ namespace ClimateProject.Infrastructure.Migrations
                 table: "companies",
                 type: "boolean",
                 nullable: false,
-                defaultValue: false);
+                defaultValue: true);
 
             migrationBuilder.AddColumn<bool>(
                 name: "settings_anonymous_surveys",
@@ -80,7 +80,7 @@ namespace ClimateProject.Infrastructure.Migrations
                 table: "companies",
                 type: "integer",
                 nullable: false,
-                defaultValue: 0);
+                defaultValue: 2555);
 
             migrationBuilder.AddColumn<string>(
                 name: "settings_language",
@@ -88,14 +88,14 @@ namespace ClimateProject.Infrastructure.Migrations
                 type: "character varying(10)",
                 maxLength: 10,
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "en");
 
             migrationBuilder.AddColumn<bool>(
                 name: "settings_microclimate_enabled",
                 table: "companies",
                 type: "boolean",
                 nullable: false,
-                defaultValue: false);
+                defaultValue: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "settings_survey_frequency",
@@ -103,7 +103,7 @@ namespace ClimateProject.Infrastructure.Migrations
                 type: "character varying(20)",
                 maxLength: 20,
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "quarterly");
 
             migrationBuilder.AddColumn<string>(
                 name: "settings_timezone",
@@ -111,7 +111,7 @@ namespace ClimateProject.Infrastructure.Migrations
                 type: "character varying(100)",
                 maxLength: 100,
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "UTC");
 
             migrationBuilder.AddColumn<string>(
                 name: "size",
