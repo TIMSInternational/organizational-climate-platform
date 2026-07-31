@@ -202,8 +202,10 @@ namespace ClimateProject.Infrastructure.Migrations
 
                             b1.Property<string>("FontFamily")
                                 .IsRequired()
+                                .ValueGeneratedOnAdd()
                                 .HasMaxLength(100)
                                 .HasColumnType("character varying(100)")
+                                .HasDefaultValue("Inter")
                                 .HasColumnName("branding_font_family");
 
                             b1.Property<string>("LogoUrl")
@@ -213,14 +215,18 @@ namespace ClimateProject.Infrastructure.Migrations
 
                             b1.Property<string>("PrimaryColor")
                                 .IsRequired()
+                                .ValueGeneratedOnAdd()
                                 .HasMaxLength(20)
                                 .HasColumnType("character varying(20)")
+                                .HasDefaultValue("#3B82F6")
                                 .HasColumnName("branding_primary_color");
 
                             b1.Property<string>("SecondaryColor")
                                 .IsRequired()
+                                .ValueGeneratedOnAdd()
                                 .HasMaxLength(20)
                                 .HasColumnType("character varying(20)")
+                                .HasDefaultValue("#1F2937")
                                 .HasColumnName("branding_secondary_color");
 
                             b1.HasKey("CompanyId");
@@ -237,37 +243,51 @@ namespace ClimateProject.Infrastructure.Migrations
                                 .HasColumnType("uuid");
 
                             b1.Property<bool>("AiInsightsEnabled")
+                                .ValueGeneratedOnAdd()
                                 .HasColumnType("boolean")
+                                .HasDefaultValue(true)
                                 .HasColumnName("settings_ai_insights_enabled");
 
                             b1.Property<bool>("AnonymousSurveys")
+                                .ValueGeneratedOnAdd()
                                 .HasColumnType("boolean")
+                                .HasDefaultValue(false)
                                 .HasColumnName("settings_anonymous_surveys");
 
                             b1.Property<int>("DataRetentionDays")
+                                .ValueGeneratedOnAdd()
                                 .HasColumnType("integer")
+                                .HasDefaultValue(2555)
                                 .HasColumnName("settings_data_retention_days");
 
                             b1.Property<string>("Language")
                                 .IsRequired()
+                                .ValueGeneratedOnAdd()
                                 .HasMaxLength(10)
                                 .HasColumnType("character varying(10)")
+                                .HasDefaultValue("en")
                                 .HasColumnName("settings_language");
 
                             b1.Property<bool>("MicroclimateEnabled")
+                                .ValueGeneratedOnAdd()
                                 .HasColumnType("boolean")
+                                .HasDefaultValue(true)
                                 .HasColumnName("settings_microclimate_enabled");
 
                             b1.Property<string>("SurveyFrequency")
                                 .IsRequired()
+                                .ValueGeneratedOnAdd()
                                 .HasMaxLength(20)
                                 .HasColumnType("character varying(20)")
+                                .HasDefaultValue("quarterly")
                                 .HasColumnName("settings_survey_frequency");
 
                             b1.Property<string>("Timezone")
                                 .IsRequired()
+                                .ValueGeneratedOnAdd()
                                 .HasMaxLength(100)
                                 .HasColumnType("character varying(100)")
+                                .HasDefaultValue("UTC")
                                 .HasColumnName("settings_timezone");
 
                             b1.HasKey("CompanyId");
