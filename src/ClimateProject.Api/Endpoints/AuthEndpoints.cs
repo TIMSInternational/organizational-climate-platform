@@ -14,6 +14,7 @@ public static class AuthEndpoints
 
         group.MapPost("/login", LoginAsync);
         group.MapPost("/signup", SignupAsync);
+        group.MapPost("/google", GoogleLoginAsync);
         group.MapPost("/refresh", RefreshAsync).RequireAuthorization();
     }
 
@@ -121,6 +122,69 @@ public static class AuthEndpoints
         return Results.Json(new TokenResponse(token), statusCode: 201);
     }
 
+    private static async Task<IResult> GoogleLoginAsync(
+        GoogleLoginRequest request,
+        ClimateProjectDbContext db,
+        IGoogleTokenVerifier googleTokenVerifier,
+        IJwtTokenService jwtTokenService,
+        CancellationToken cancellationToken)
+    {
+        var googleUser = await googleTokenVerifier.VerifyAsync(request.IdToken, cancellationToken);
+        if (googleUser is null)
+        {
+            return Results.Json(new ErrorResponse("Google sign-in failed"), statusCode: 401);
+        }
+
+        var email = googleUser.Email.ToLowerInvariant();
+        var domain = email.Split('@')[1];
+
+        var company = await db.Companies.FirstOrDefaultAsync(c => c.EmailDomain == domain, cancellationToken);
+        if (company is null)
+        {
+            company = new Company
+            {
+                Id = Guid.NewGuid(),
+                Name = $"{char.ToUpperInvariant(domain[0])}{domain[1..]} Organization",
+                EmailDomain = domain,
+                CreatedAt = DateTimeOffset.UtcNow,
+            };
+            db.Companies.Add(company);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        if (user is null)
+        {
+            user = new User
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = company.Id,
+                Email = email,
+                Name = googleUser.Name,
+                Role = Roles.Employee,
+                IsActive = true,
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            db.Users.Add(user);
+        }
+
+        user.LastLoginAt = now;
+        await db.SaveChangesAsync(cancellationToken);
+
+        var token = jwtTokenService.IssueToken(new TokenClaims(
+            Sub: user.Id.ToString(),
+            Role: user.Role,
+            NodoId: user.NodoId,
+            Email: user.Email,
+            Name: user.Name,
+            CompanyId: user.CompanyId.ToString(),
+            IsActive: user.IsActive));
+
+        return Results.Ok(new TokenResponse(token));
+    }
+
     private static async Task<IResult> RefreshAsync(
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
@@ -151,5 +215,6 @@ public static class AuthEndpoints
 
 public sealed record LoginRequest(string Email, string Password);
 public sealed record SignupRequest(string Name, string Email, string Password);
+public sealed record GoogleLoginRequest(string IdToken);
 public sealed record TokenResponse(string Token);
 public sealed record ErrorResponse(string Message);
