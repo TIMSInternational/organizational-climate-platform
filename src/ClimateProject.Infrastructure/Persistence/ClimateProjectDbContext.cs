@@ -49,6 +49,10 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<AnalyticsMetricData> AnalyticsMetricData => Set<AnalyticsMetricData>();
     public DbSet<AnalyticsTimeSeries> AnalyticsTimeSeries => Set<AnalyticsTimeSeries>();
     public DbSet<AIInsight> AIInsights => Set<AIInsight>();
+    public DbSet<DemographicField> DemographicFields => Set<DemographicField>();
+    public DbSet<DemographicSnapshot> DemographicSnapshots => Set<DemographicSnapshot>();
+    public DbSet<DemographicSnapshotEntry> DemographicSnapshotEntries => Set<DemographicSnapshotEntry>();
+    public DbSet<DemographicSnapshotChange> DemographicSnapshotChanges => Set<DemographicSnapshotChange>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
