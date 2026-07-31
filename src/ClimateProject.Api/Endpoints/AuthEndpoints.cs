@@ -16,6 +16,7 @@ public static class AuthEndpoints
         group.MapPost("/signup", SignupAsync);
         group.MapPost("/google", GoogleLoginAsync);
         group.MapPost("/refresh", RefreshAsync).RequireAuthorization();
+        group.MapPost("/admin/reset-credentials", ResetCredentialsAsync).RequireAuthorization();
     }
 
     private static async Task<IResult> LoginAsync(
@@ -211,6 +212,33 @@ public static class AuthEndpoints
 
         return Results.Ok(new TokenResponse(token));
     }
+
+    private static async Task<IResult> ResetCredentialsAsync(
+        ResetCredentialsRequest request,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        IPasswordHasher passwordHasher,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        if (!Roles.Admin.Contains(currentUser.Role))
+        {
+            return Results.Forbid();
+        }
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId, cancellationToken);
+        if (user is null)
+        {
+            return Results.Json(new ErrorResponse("User not found"), statusCode: 404);
+        }
+
+        var temporaryPassword = Guid.NewGuid().ToString("N")[..12];
+        user.PasswordHash = passwordHasher.Hash(temporaryPassword);
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(new ResetCredentialsResponse(user.Email, temporaryPassword));
+    }
 }
 
 public sealed record LoginRequest(string Email, string Password);
@@ -218,3 +246,5 @@ public sealed record SignupRequest(string Name, string Email, string Password);
 public sealed record GoogleLoginRequest(string IdToken);
 public sealed record TokenResponse(string Token);
 public sealed record ErrorResponse(string Message);
+public sealed record ResetCredentialsRequest(Guid UserId);
+public sealed record ResetCredentialsResponse(string Email, string TemporaryPassword);
