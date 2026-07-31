@@ -43,6 +43,8 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<ActionPlanKpiUpdate> ActionPlanKpiUpdates => Set<ActionPlanKpiUpdate>();
     public DbSet<ActionPlanObjectiveUpdate> ActionPlanObjectiveUpdates => Set<ActionPlanObjectiveUpdate>();
     public DbSet<Report> Reports => Set<Report>();
+    public DbSet<Benchmark> Benchmarks => Set<Benchmark>();
+    public DbSet<BenchmarkMetric> BenchmarkMetrics => Set<BenchmarkMetric>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
