@@ -1,4 +1,13 @@
+using ClimateProject.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
+
+var connectionString = builder.Configuration.GetConnectionString("ClimateProject")
+    ?? throw new InvalidOperationException("Missing ConnectionStrings:ClimateProject configuration.");
+
+builder.Services.AddDbContext<ClimateProjectDbContext>(options =>
+    options.UseNpgsql(connectionString));
 
 builder.Services.AddOpenApi();
 
