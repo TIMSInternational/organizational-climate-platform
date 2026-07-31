@@ -115,6 +115,7 @@ app.MapGet("/version", () => Results.Ok(new VersionResponse(
 app.MapAuthEndpoints();
 app.MapCompanyEndpoints();
 app.MapDepartmentEndpoints();
+app.MapUserEndpoints();
 
 app.Run();
 
