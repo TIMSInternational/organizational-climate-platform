@@ -3,6 +3,7 @@ using System;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ClimateProject.Infrastructure.Migrations
 {
     [DbContext(typeof(ClimateProjectDbContext))]
-    partial class ClimateProjectDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731111446_AddSurveyDistributionAndInvitations")]
+    partial class AddSurveyDistributionAndInvitations
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1200,7 +1203,7 @@ namespace ClimateProject.Infrastructure.Migrations
 
                             b1.HasKey("CompanyId");
 
-                            b1.ToTable("companies", (string)null);
+                            b1.ToTable("companies");
 
                             b1.WithOwner()
                                 .HasForeignKey("CompanyId");
@@ -1261,7 +1264,7 @@ namespace ClimateProject.Infrastructure.Migrations
 
                             b1.HasKey("CompanyId");
 
-                            b1.ToTable("companies", (string)null);
+                            b1.ToTable("companies");
 
                             b1.WithOwner()
                                 .HasForeignKey("CompanyId");
@@ -1320,7 +1323,7 @@ namespace ClimateProject.Infrastructure.Migrations
 
                             b1.HasKey("DepartmentId");
 
-                            b1.ToTable("departments", (string)null);
+                            b1.ToTable("departments");
 
                             b1.WithOwner()
                                 .HasForeignKey("DepartmentId");
@@ -1472,7 +1475,7 @@ namespace ClimateProject.Infrastructure.Migrations
 
                             b1.HasKey("SurveyId");
 
-                            b1.ToTable("surveys", (string)null);
+                            b1.ToTable("surveys");
 
                             b1.WithOwner()
                                 .HasForeignKey("SurveyId");
@@ -1553,7 +1556,7 @@ namespace ClimateProject.Infrastructure.Migrations
 
                             b1.HasKey("SurveyDistributionId");
 
-                            b1.ToTable("survey_distributions", (string)null);
+                            b1.ToTable("survey_distributions");
 
                             b1.WithOwner()
                                 .HasForeignKey("SurveyDistributionId");
@@ -1593,7 +1596,7 @@ namespace ClimateProject.Infrastructure.Migrations
 
                             b1.HasKey("SurveyDistributionId");
 
-                            b1.ToTable("survey_distributions", (string)null);
+                            b1.ToTable("survey_distributions");
 
                             b1.WithOwner()
                                 .HasForeignKey("SurveyDistributionId");
@@ -1745,7 +1748,7 @@ namespace ClimateProject.Infrastructure.Migrations
 
                             b1.HasKey("UserId");
 
-                            b1.ToTable("users", (string)null);
+                            b1.ToTable("users");
 
                             b1.WithOwner()
                                 .HasForeignKey("UserId");
@@ -1790,7 +1793,7 @@ namespace ClimateProject.Infrastructure.Migrations
 
                             b1.HasKey("UserId");
 
-                            b1.ToTable("users", (string)null);
+                            b1.ToTable("users");
 
                             b1.WithOwner()
                                 .HasForeignKey("UserId");
