@@ -37,6 +37,7 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<ActionPlanTemplateKpi> ActionPlanTemplateKpis => Set<ActionPlanTemplateKpi>();
     public DbSet<ActionPlanTemplateObjective> ActionPlanTemplateObjectives => Set<ActionPlanTemplateObjective>();
     public DbSet<ActionPlan> ActionPlans => Set<ActionPlan>();
+    public DbSet<ActionPlanKpi> ActionPlanKpis => Set<ActionPlanKpi>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
