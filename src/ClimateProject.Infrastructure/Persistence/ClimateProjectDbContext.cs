@@ -19,6 +19,7 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<TemplateQuestion> TemplateQuestions => Set<TemplateQuestion>();
     public DbSet<SurveyDraft> SurveyDrafts => Set<SurveyDraft>();
     public DbSet<SurveyVersion> SurveyVersions => Set<SurveyVersion>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
