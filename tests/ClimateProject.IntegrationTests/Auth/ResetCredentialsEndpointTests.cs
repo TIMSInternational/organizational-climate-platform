@@ -21,10 +21,20 @@ public class ResetCredentialsEndpointTests : IAsyncLifetime
         EmailDomain = $"acme-{Guid.NewGuid():N}.test",
         CreatedAt = DateTimeOffset.UtcNow,
     };
+    private readonly Company _otherCompany = new()
+    {
+        Id = Guid.NewGuid(),
+        Name = "Globex",
+        EmailDomain = $"globex-{Guid.NewGuid():N}.test",
+        CreatedAt = DateTimeOffset.UtcNow,
+    };
     private User _admin = null!;
     private User _employee = null!;
+    private User _otherCompanyEmployee = null!;
+    private User _superAdmin = null!;
     private string _adminToken = null!;
     private string _employeeToken = null!;
+    private string _superAdminToken = null!;
 
     public ResetCredentialsEndpointTests(PostgresContainerFixture postgres)
     {
@@ -39,7 +49,7 @@ public class ResetCredentialsEndpointTests : IAsyncLifetime
         using (var scope = _factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
-            db.Companies.Add(_company);
+            db.Companies.AddRange(_company, _otherCompany);
 
             _admin = new User
             {
@@ -65,7 +75,31 @@ public class ResetCredentialsEndpointTests : IAsyncLifetime
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow,
             };
-            db.Users.AddRange(_admin, _employee);
+            _otherCompanyEmployee = new User
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _otherCompany.Id,
+                Email = $"employee@{_otherCompany.EmailDomain}",
+                Name = "Other Company Employee",
+                PasswordHash = hasher.Hash("other-employee-password"),
+                Role = "employee",
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            };
+            _superAdmin = new User
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _company.Id,
+                Email = $"super-admin@{_company.EmailDomain}",
+                Name = "Super Admin",
+                PasswordHash = hasher.Hash("super-admin-password"),
+                Role = "super_admin",
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            };
+            db.Users.AddRange(_admin, _employee, _otherCompanyEmployee, _superAdmin);
             await db.SaveChangesAsync();
         }
 
@@ -75,6 +109,9 @@ public class ResetCredentialsEndpointTests : IAsyncLifetime
 
         var employeeLogin = await client.PostAsJsonAsync("/auth/login", new LoginRequest(_employee.Email, "employee-password"));
         _employeeToken = (await employeeLogin.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
+
+        var superAdminLogin = await client.PostAsJsonAsync("/auth/login", new LoginRequest(_superAdmin.Email, "super-admin-password"));
+        _superAdminToken = (await superAdminLogin.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
@@ -126,5 +163,42 @@ public class ResetCredentialsEndpointTests : IAsyncLifetime
         var response = await client.PostAsJsonAsync("/auth/admin/reset-credentials", new ResetCredentialsRequest(Guid.NewGuid()));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Company_admin_cannot_reset_a_user_in_a_different_company()
+    {
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _adminToken);
+
+        var response = await client.PostAsJsonAsync(
+            "/auth/admin/reset-credentials",
+            new ResetCredentialsRequest(_otherCompanyEmployee.Id));
+
+        // 404, not 403 -- same response as "user not found" so this endpoint
+        // doesn't leak the existence of users in other companies.
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Super_admin_can_reset_a_user_in_any_company()
+    {
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _superAdminToken);
+
+        var response = await client.PostAsJsonAsync(
+            "/auth/admin/reset-credentials",
+            new ResetCredentialsRequest(_otherCompanyEmployee.Id));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ResetCredentialsResponse>();
+        Assert.Equal(_otherCompanyEmployee.Email, body!.Email);
+        Assert.False(string.IsNullOrEmpty(body.TemporaryPassword));
+
+        var loginClient = _factory.CreateClient();
+        var loginResponse = await loginClient.PostAsJsonAsync(
+            "/auth/login",
+            new LoginRequest(_otherCompanyEmployee.Email, body.TemporaryPassword));
+        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
     }
 }

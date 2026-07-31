@@ -10,8 +10,13 @@ public class GoogleTokenVerifier : IGoogleTokenVerifier
 
     public GoogleTokenVerifier(IConfiguration configuration)
     {
-        _clientId = configuration["GoogleClientId"]
-            ?? throw new InvalidOperationException("Missing GoogleClientId configuration.");
+        var clientId = configuration["GoogleClientId"];
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            throw new InvalidOperationException("Missing GoogleClientId configuration.");
+        }
+
+        _clientId = clientId;
     }
 
     public async Task<GoogleUserInfo?> VerifyAsync(string idToken, CancellationToken cancellationToken)

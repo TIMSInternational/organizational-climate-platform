@@ -81,4 +81,15 @@ public class GoogleLoginEndpointTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Google_login_with_missing_id_token_returns_400_not_500()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/auth/google", new { });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+        Assert.Equal("Google ID token is required", body!.Message);
+    }
 }

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 using ClimateProject.Application.Auth;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
@@ -8,6 +9,10 @@ namespace ClimateProject.Api.Endpoints;
 
 public static class AuthEndpoints
 {
+    // Same simple pattern used by the legacy climate-project codebase for
+    // signup email-format validation.
+    private const string EmailFormatPattern = @"^[^\s@]+@[^\s@]+\.[^\s@]+$";
+
     public static void MapAuthEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/auth");
@@ -26,6 +31,11 @@ public static class AuthEndpoints
         IJwtTokenService jwtTokenService,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
+        {
+            return Results.Json(new ErrorResponse("Email and password are required"), statusCode: 400);
+        }
+
         var email = request.Email.ToLowerInvariant();
         var user = await db.Users
             .FirstOrDefaultAsync(u => u.Email == email && u.IsActive, cancellationToken);
@@ -75,6 +85,11 @@ public static class AuthEndpoints
         if (request.Password.Length < 8)
         {
             return Results.Json(new ErrorResponse("Password must be at least 8 characters long"), statusCode: 400);
+        }
+
+        if (!Regex.IsMatch(request.Email, EmailFormatPattern))
+        {
+            return Results.Json(new ErrorResponse("Invalid email format"), statusCode: 400);
         }
 
         var email = request.Email.ToLowerInvariant();
@@ -130,6 +145,11 @@ public static class AuthEndpoints
         IJwtTokenService jwtTokenService,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(request.IdToken))
+        {
+            return Results.Json(new ErrorResponse("Google ID token is required"), statusCode: 400);
+        }
+
         var googleUser = await googleTokenVerifier.VerifyAsync(request.IdToken, cancellationToken);
         if (googleUser is null)
         {
@@ -226,7 +246,14 @@ public static class AuthEndpoints
             return Results.Forbid();
         }
 
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId, cancellationToken);
+        // Scoped to the admin's own company unless they're a super_admin, mirroring
+        // the legacy User.canAccessCompany behavior (super_admin can access any
+        // company). Returns 404 -- not 403 -- on a tenant mismatch so this endpoint
+        // doesn't leak the existence of users in other companies.
+        var user = await db.Users.FirstOrDefaultAsync(
+            u => u.Id == request.UserId
+                && (currentUser.Role == Roles.SuperAdmin || u.CompanyId.ToString() == currentUser.CompanyId),
+            cancellationToken);
         if (user is null)
         {
             return Results.Json(new ErrorResponse("User not found"), statusCode: 404);

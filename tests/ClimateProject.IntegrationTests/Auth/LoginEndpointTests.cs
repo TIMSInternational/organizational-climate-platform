@@ -120,4 +120,15 @@ public class LoginEndpointTests : IAsyncLifetime
         var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
         Assert.Equal("This account uses Google sign-in", body!.Message);
     }
+
+    [Fact]
+    public async Task Login_with_missing_email_and_password_returns_400_not_500()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/auth/login", new { });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+        Assert.Equal("Email and password are required", body!.Message);
+    }
 }
