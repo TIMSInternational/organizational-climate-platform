@@ -54,6 +54,9 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<DemographicSnapshotEntry> DemographicSnapshotEntries => Set<DemographicSnapshotEntry>();
     public DbSet<DemographicSnapshotChange> DemographicSnapshotChanges => Set<DemographicSnapshotChange>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
+    public DbSet<NotificationTemplateVariable> NotificationTemplateVariables => Set<NotificationTemplateVariable>();
+    public DbSet<NotificationPersonalizationRule> NotificationPersonalizationRules => Set<NotificationPersonalizationRule>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

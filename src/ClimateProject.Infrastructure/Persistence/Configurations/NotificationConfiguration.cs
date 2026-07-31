@@ -41,6 +41,7 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
 
         builder.HasOne<User>().WithMany().HasForeignKey(n => n.UserId);
         builder.HasOne<Company>().WithMany().HasForeignKey(n => n.CompanyId);
+        builder.HasOne<NotificationTemplate>().WithMany().HasForeignKey(n => n.TemplateId).OnDelete(DeleteBehavior.SetNull);
 
         builder.OwnsOne(n => n.Metadata, metadata =>
         {
