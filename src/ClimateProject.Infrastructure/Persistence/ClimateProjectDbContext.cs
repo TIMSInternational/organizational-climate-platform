@@ -20,6 +20,8 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<SurveyDraft> SurveyDrafts => Set<SurveyDraft>();
     public DbSet<SurveyVersion> SurveyVersions => Set<SurveyVersion>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<SurveyDistribution> SurveyDistributions => Set<SurveyDistribution>();
+    public DbSet<SurveyInvitation> SurveyInvitations => Set<SurveyInvitation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
