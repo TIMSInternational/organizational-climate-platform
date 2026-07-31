@@ -16,11 +16,36 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.PasswordHash).HasColumnName("password_hash");
         builder.Property(u => u.Role).HasColumnName("role").HasMaxLength(32).IsRequired();
         builder.Property(u => u.NodoId).HasColumnName("nodo_id").HasMaxLength(64);
+        builder.Property(u => u.DepartmentId).HasColumnName("department_id");
+        builder.Property(u => u.ManagerId).HasColumnName("manager_id");
         builder.Property(u => u.IsActive).HasColumnName("is_active").IsRequired();
         builder.Property(u => u.LastLoginAt).HasColumnName("last_login_at");
+        builder.Property(u => u.ConsentUpdatedAt).HasColumnName("consent_updated_at");
+        builder.Property(u => u.Demographics).HasColumnName("demographics").HasColumnType("jsonb");
         builder.Property(u => u.CreatedAt).HasColumnName("created_at").IsRequired();
         builder.Property(u => u.UpdatedAt).HasColumnName("updated_at").IsRequired();
         builder.HasIndex(u => u.Email).IsUnique();
+
         builder.HasOne<Company>().WithMany().HasForeignKey(u => u.CompanyId);
+        builder.HasOne<Department>().WithMany().HasForeignKey(u => u.DepartmentId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<User>().WithMany().HasForeignKey(u => u.ManagerId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.OwnsOne(u => u.Preferences, preferences =>
+        {
+            preferences.Property(p => p.Language).HasColumnName("preferences_language").HasMaxLength(10).IsRequired().HasDefaultValue("en");
+            preferences.Property(p => p.Timezone).HasColumnName("preferences_timezone").HasMaxLength(100).IsRequired().HasDefaultValue("UTC");
+            preferences.Property(p => p.DashboardLayout).HasColumnName("preferences_dashboard_layout").HasMaxLength(50).IsRequired().HasDefaultValue("default");
+            preferences.Property(p => p.Theme).HasColumnName("preferences_theme").HasConversion<string>().HasMaxLength(10).IsRequired().HasDefaultValue("light");
+        });
+
+        builder.OwnsOne(u => u.Consent, consent =>
+        {
+            consent.Property(c => c.Essential).HasColumnName("consent_essential").IsRequired().HasDefaultValue(true);
+            consent.Property(c => c.Analytics).HasColumnName("consent_analytics").IsRequired().HasDefaultValue(false);
+            consent.Property(c => c.Marketing).HasColumnName("consent_marketing").IsRequired().HasDefaultValue(false);
+            consent.Property(c => c.Personalization).HasColumnName("consent_personalization").IsRequired().HasDefaultValue(false);
+            consent.Property(c => c.ThirdParty).HasColumnName("consent_third_party").IsRequired().HasDefaultValue(false);
+            consent.Property(c => c.Demographics).HasColumnName("consent_demographics").IsRequired().HasDefaultValue(false);
+        });
     }
 }
