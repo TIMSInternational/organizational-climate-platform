@@ -34,6 +34,8 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<MicroclimateAiInsight> MicroclimateAiInsights => Set<MicroclimateAiInsight>();
     public DbSet<MicroclimateInvitation> MicroclimateInvitations => Set<MicroclimateInvitation>();
     public DbSet<ActionPlanTemplate> ActionPlanTemplates => Set<ActionPlanTemplate>();
+    public DbSet<ActionPlanTemplateKpi> ActionPlanTemplateKpis => Set<ActionPlanTemplateKpi>();
+    public DbSet<ActionPlanTemplateObjective> ActionPlanTemplateObjectives => Set<ActionPlanTemplateObjective>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
