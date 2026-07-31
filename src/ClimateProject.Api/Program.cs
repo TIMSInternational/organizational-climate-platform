@@ -1,8 +1,10 @@
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Cors;
 using ClimateProject.Infrastructure.Auth;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -68,6 +70,20 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
 
 builder.Services.AddAuthorization();
 
+builder.Services.AddCors();
+builder.Services.AddOptions<CorsOptions>()
+    .Configure<IConfiguration>((options, configuration) =>
+    {
+        var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+        var allowedWildcardOrigins = configuration.GetSection("Cors:AllowedWildcardOrigins").Get<string[]>() ?? [];
+        var matcher = new CorsOriginMatcher(allowedOrigins, allowedWildcardOrigins);
+
+        options.AddPolicy("Frontend", policy => policy
+            .SetIsOriginAllowed(matcher.IsAllowed)
+            .AllowAnyHeader()
+            .AllowAnyMethod());
+    });
+
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
@@ -76,6 +92,7 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
