@@ -10,5 +10,8 @@ coverage/
 .env
 .env.*
 !.env.example
+!web/.env.development
 .DS_Store
 .worktrees/
+node_modules/
+dist/

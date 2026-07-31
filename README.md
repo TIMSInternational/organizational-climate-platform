@@ -29,3 +29,14 @@ dotnet ef database update --project src/ClimateProject.Infrastructure --startup-
 dotnet run --project src/ClimateProject.Api
 curl http://localhost:5080/health
 ```
+
+### Frontend (`web/`)
+
+```bash
+cd web
+npm install
+cp .env.example .env.development   # if not already present
+npm run dev
+```
+
+Requires the API (above) running on `http://localhost:5080` — `web/.env.development` points at it via `VITE_API_BASE_URL`.
