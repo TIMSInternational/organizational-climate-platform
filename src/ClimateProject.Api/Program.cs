@@ -151,6 +151,7 @@ app.MapSystemSettingsEndpoints();
 app.MapDemographicFieldEndpoints();
 app.MapBulkImportEndpoints();
 app.MapTrackingPickerEndpoints();
+app.MapTrackingInternalEndpoints();
 app.MapMicroclimateEndpoints();
 app.MapMicroclimateTemplateEndpoints();
 
