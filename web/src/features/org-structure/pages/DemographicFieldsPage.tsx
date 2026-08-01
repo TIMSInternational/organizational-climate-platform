@@ -54,6 +54,7 @@ export default function DemographicFieldsPage() {
       options: parseOptions(values.optionsText),
       required: values.required,
       order: values.order,
+      isActive: values.isActive,
     })
     setEditingField(null)
     await reload()

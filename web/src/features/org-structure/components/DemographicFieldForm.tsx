@@ -8,6 +8,7 @@ export interface DemographicFieldFormValues {
   optionsText: string
   required: boolean
   order: number
+  isActive: boolean
 }
 
 interface DemographicFieldFormProps {
@@ -19,6 +20,7 @@ interface DemographicFieldFormProps {
 const TYPES = ['select', 'text', 'number', 'date']
 
 export default function DemographicFieldForm({ initialValues, submitLabel, onSubmit }: DemographicFieldFormProps) {
+  const isEditMode = Boolean(initialValues?.field)
   const [values, setValues] = useState<DemographicFieldFormValues>({
     field: initialValues?.field ?? '',
     label: initialValues?.label ?? '',
@@ -26,6 +28,7 @@ export default function DemographicFieldForm({ initialValues, submitLabel, onSub
     optionsText: (initialValues?.options ?? []).join(', '),
     required: initialValues?.required ?? false,
     order: initialValues?.order ?? 0,
+    isActive: initialValues?.isActive ?? true,
   })
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -72,6 +75,20 @@ export default function DemographicFieldForm({ initialValues, submitLabel, onSub
         <input type="checkbox" checked={values.required} onChange={(e) => setValues({ ...values, required: e.target.checked })} />
         Required
       </label>
+      <label>
+        Order
+        <input
+          type="number"
+          value={values.order}
+          onChange={(e) => setValues({ ...values, order: Number(e.target.value) })}
+        />
+      </label>
+      {isEditMode && (
+        <label>
+          <input type="checkbox" checked={values.isActive} onChange={(e) => setValues({ ...values, isActive: e.target.checked })} />
+          Active
+        </label>
+      )}
       <button type="submit" disabled={submitting}>{submitting ? 'Saving…' : submitLabel}</button>
     </form>
   )
