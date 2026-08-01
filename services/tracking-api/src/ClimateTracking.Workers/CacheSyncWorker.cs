@@ -10,12 +10,10 @@ namespace ClimateTracking.Workers;
 /// Polls climate-project's /internal/nodos, /internal/personas, and /internal/ciclos-encuesta
 /// on an interval and upserts the corresponding cache tables.
 ///
-/// KNOWN GAP: HallazgoCache is not populated by this worker or by anything else in this PR.
-/// The original plan called for dashboard reads to refresh it on-demand per (ciclo, nodo),
-/// but no dashboard endpoint added so far surfaces hallazgo data, so that refresh path was
-/// never wired up — IClimateProjectClient.GetHallazgosAsync exists but is currently unused.
-/// PlanesAccionEndpoints.CreateAsync's optional hallazgo→ciclo lookup will silently find
-/// nothing until this is built. Flagging here rather than guessing at an implementation.
+/// Hallazgos are deliberately NOT synced here -- they're looked up on-demand via
+/// IClimateProjectClient.GetHallazgoByIdAsync in PlanesAccionEndpoints.CreateAsync
+/// instead of cached, since they're only needed at plan-creation time for a single
+/// hallazgo, not queried in bulk like nodos/personas/ciclos.
 /// </summary>
 public class CacheSyncWorker(
     IServiceScopeFactory scopeFactory,

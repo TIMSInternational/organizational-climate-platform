@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using ClimateTracking.Application.Auth;
+using ClimateTracking.Application.ExternalApi;
 using ClimateTracking.Application.PlanesAccion;
 using ClimateTracking.Domain.Entities;
 using ClimateTracking.Infrastructure.Persistence;
@@ -26,6 +27,7 @@ public static class PlanesAccionEndpoints
         CreatePlanRequest request,
         ClaimsPrincipal user,
         ClimateTrackingDbContext db,
+        IClimateProjectClient climateProjectClient,
         CancellationToken cancellationToken)
     {
         var currentUser = user.GetCurrentUser();
@@ -51,9 +53,8 @@ public static class PlanesAccionEndpoints
         string? cicloExternalId = null;
         if (request.HallazgoExternalId is not null)
         {
-            var hallazgo = await db.Hallazgos.FirstOrDefaultAsync(
-                h => h.ExternalId == request.HallazgoExternalId, cancellationToken);
-            cicloExternalId = hallazgo?.CicloExternalId;
+            var hallazgo = await climateProjectClient.GetHallazgoByIdAsync(request.HallazgoExternalId, cancellationToken);
+            cicloExternalId = hallazgo?.CicloId;
         }
 
         var fechaCreacion = DateOnly.FromDateTime(DateTime.UtcNow);

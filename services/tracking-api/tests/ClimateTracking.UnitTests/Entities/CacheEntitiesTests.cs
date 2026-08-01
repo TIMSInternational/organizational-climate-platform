@@ -52,22 +52,4 @@ public class CacheEntitiesTests
 
         Assert.Equal(EstadoCicloEncuesta.Cerrado, ciclo.Estado);
     }
-
-    [Fact]
-    public void HallazgoCache_holds_benchmark_and_prior_year_percentages()
-    {
-        var hallazgo = new HallazgoCache
-        {
-            ExternalId = "HAL-00567",
-            CicloExternalId = "CIC-2026-Q3",
-            NodoExternalId = "ND-014",
-            Categoria = "Reconocimiento",
-            ResultadoPct = 0.62m,
-            BenchmarkSectorPct = 0.71m,
-            ResultadoAnioAnteriorPct = 0.58m,
-            LastSyncedAt = DateTimeOffset.UtcNow,
-        };
-
-        Assert.Equal(0.71m, hallazgo.BenchmarkSectorPct);
-    }
 }
