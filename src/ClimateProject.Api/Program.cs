@@ -121,6 +121,7 @@ app.MapUserEndpoints();
 app.MapInvitationEndpoints();
 app.MapInvitationAcceptEndpoints();
 app.MapSystemSettingsEndpoints();
+app.MapDemographicFieldEndpoints();
 
 app.Run();
 
