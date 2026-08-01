@@ -24,3 +24,24 @@ public sealed record PersonaInternalDto(
     string CompanyId);
 
 public sealed record PersonasData(IReadOnlyList<PersonaInternalDto> Personas);
+
+public sealed record CicloInternalDto(
+    string CicloId,
+    DateTimeOffset FechaApertura,
+    DateTimeOffset FechaCierre,
+    int NumeroPreguntas,
+    string Estado,
+    string CompanyId);
+
+public sealed record CiclosData(IReadOnlyList<CicloInternalDto> Ciclos);
+
+public sealed record HallazgoInternalDto(
+    string HallazgoId,
+    string NodoId,
+    string Categoria,
+    decimal ResultadoPct,
+    decimal? BenchmarkSectorPct,
+    decimal? ResultadoAnioAnteriorPct,
+    string? CicloId);
+
+public sealed record HallazgosData(IReadOnlyList<HallazgoInternalDto> Hallazgos);

@@ -20,6 +20,9 @@ public static class TrackingInternalEndpoints
 
         group.MapGet("/nodos", ListNodosAsync);
         group.MapGet("/personas", ListPersonasAsync);
+        group.MapGet("/ciclos-encuesta", ListCiclosAsync);
+        group.MapGet("/hallazgos", ListHallazgosAsync);
+        group.MapPost("/send-notification", SendNotificationAsync);
     }
 
     private static async Task<IResult> ListNodosAsync(
@@ -89,5 +92,32 @@ public static class TrackingInternalEndpoints
             .ToList();
 
         return Results.Json(new Envelope<PersonasData>(true, new PersonasData(personas)), SnakeCaseOptions);
+    }
+
+    private static Task<IResult> ListCiclosAsync(
+        [FromQuery(Name = "company_id")] string companyId)
+    {
+        // Stub: surveys domain (#51) doesn't exist yet. Always returns an empty list;
+        // #51 replaces this body with a real query once survey-cycle data exists.
+        return Task.FromResult(Results.Json(new Envelope<CiclosData>(true, new CiclosData([])), SnakeCaseOptions));
+    }
+
+    private static Task<IResult> ListHallazgosAsync(
+        [FromQuery(Name = "company_id")] string companyId,
+        [FromQuery(Name = "ciclo_id")] string? cicloId,
+        [FromQuery(Name = "hallazgo_id")] string? hallazgoId)
+    {
+        // Stub: surveys domain (#51) doesn't exist yet. Always returns an empty list
+        // regardless of the ciclo_id/hallazgo_id filters; #51 replaces this body with a
+        // real query and MUST honor both filters at that point (the old Next.js
+        // /internal/hallazgos silently ignored ciclo_id -- don't repeat that here).
+        return Task.FromResult(Results.Json(new Envelope<HallazgosData>(true, new HallazgosData([])), SnakeCaseOptions));
+    }
+
+    private static IResult SendNotificationAsync()
+    {
+        // Stub: notifications domain (#55) doesn't exist yet. No-op success response;
+        // #55 replaces this body with a real send once notification infrastructure exists.
+        return Results.Json(new Envelope<object?>(true, null), SnakeCaseOptions);
     }
 }
