@@ -150,6 +150,8 @@ app.MapInvitationAcceptEndpoints();
 app.MapSystemSettingsEndpoints();
 app.MapDemographicFieldEndpoints();
 app.MapBulkImportEndpoints();
+app.MapMicroclimateEndpoints();
+app.MapMicroclimateTemplateEndpoints();
 
 app.Run();
 
