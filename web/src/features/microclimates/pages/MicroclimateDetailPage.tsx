@@ -28,8 +28,13 @@ export default function MicroclimateDetailPage() {
 
   async function handleStatusChange(status: string) {
     if (!id) return
-    await updateMicroclimate(baseUrl, id, { status })
-    await reload()
+    setError(null)
+    try {
+      await updateMicroclimate(baseUrl, id, { status })
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update status')
+    }
   }
 
   if (error) {
