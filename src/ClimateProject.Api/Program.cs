@@ -151,6 +151,7 @@ app.MapSystemSettingsEndpoints();
 app.MapDemographicFieldEndpoints();
 app.MapBulkImportEndpoints();
 app.MapActionPlanEndpoints();
+app.MapActionPlanTemplateEndpoints();
 
 app.Run();
 
