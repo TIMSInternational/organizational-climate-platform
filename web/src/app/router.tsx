@@ -13,6 +13,7 @@ import ActionPlansListPage from '../features/action-plans/pages/ActionPlansListP
 import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetailPage'
 import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
 import MicroclimateDetailPage from '../features/microclimates/pages/MicroclimateDetailPage'
+import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
 import { getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import { resolveInitialRoute } from './resolveInitialRoute'
@@ -35,6 +36,7 @@ export const router = createBrowserRouter([
       { path: '/', element: <HomeRedirect /> },
       { path: '/login', element: <LoginPage /> },
       { path: '/accept-invitation/:token', element: <AcceptInvitationPage /> },
+      { path: '/microclimates/:id/respond', element: <MicroclimateRespondPage /> },
       {
         element: <RequireAuth />,
         children: [
