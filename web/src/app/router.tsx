@@ -7,6 +7,7 @@ import RouteErrorBoundary from './RouteErrorBoundary'
 import CompaniesListPage from '../features/org-structure/pages/CompaniesListPage'
 import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage'
 import UsersListPage from '../features/org-structure/pages/UsersListPage'
+import SystemSettingsPage from '../features/org-structure/pages/SystemSettingsPage'
 
 export const router = createBrowserRouter([
   {
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
               { path: '/admin/companies', element: <CompaniesListPage /> },
               { path: '/admin/companies/:id', element: <CompanyDetailPage /> },
               { path: '/admin/companies/:companyId/users', element: <UsersListPage /> },
+              { path: '/admin/system-settings', element: <SystemSettingsPage /> },
             ],
           },
         ],

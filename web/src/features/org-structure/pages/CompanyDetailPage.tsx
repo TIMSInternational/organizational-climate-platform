@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getCompany, updateCompany, type CompanyDetail } from '../api/companies'
 import { listDepartments, createDepartment, updateDepartment, type Department } from '../api/departments'
+import { updateCompanySettings, type CompanySettingsResponse } from '../api/companySettings'
 import CompanyForm, { type CompanyFormValues } from '../components/CompanyForm'
+import CompanySettingsForm, { type CompanySettingsFormValues } from '../components/CompanySettingsForm'
 import DepartmentList from '../components/DepartmentList'
 import DepartmentForm, { type DepartmentFormValues } from '../components/DepartmentForm'
 
@@ -14,6 +16,7 @@ export default function CompanyDetailPage() {
   const [editingCompany, setEditingCompany] = useState(false)
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null)
   const [creatingDepartment, setCreatingDepartment] = useState(false)
+  const [companySettings, setCompanySettings] = useState<CompanySettingsResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   async function reload() {
@@ -71,6 +74,12 @@ export default function CompanyDetailPage() {
     await reload()
   }
 
+  async function handleUpdateSettings(values: CompanySettingsFormValues) {
+    if (!id) return
+    const result = await updateCompanySettings(baseUrl, id, values)
+    setCompanySettings(result)
+  }
+
   return (
     <div>
       <h1>{company.name}</h1>
@@ -92,6 +101,13 @@ export default function CompanyDetailPage() {
         />
       ) : (
         <button onClick={() => setEditingCompany(true)}>Edit company</button>
+      )}
+
+      <h2>Settings</h2>
+      {companySettings ? (
+        <CompanySettingsForm settings={companySettings.settings} branding={companySettings.branding} onSubmit={handleUpdateSettings} />
+      ) : (
+        <button onClick={() => updateCompanySettings(baseUrl, id!, {}).then(setCompanySettings)}>Load settings</button>
       )}
 
       <h2>Departments</h2>
