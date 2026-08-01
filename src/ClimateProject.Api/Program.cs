@@ -152,6 +152,7 @@ app.MapDemographicFieldEndpoints();
 app.MapBulkImportEndpoints();
 app.MapActionPlanEndpoints();
 app.MapActionPlanTemplateEndpoints();
+app.MapMicroclimateEndpoints();
 
 app.Run();
 
