@@ -3,15 +3,22 @@ import { listActionPlans, createActionPlan, type ActionPlan } from '../api/actio
 import ActionPlanList from '../components/ActionPlanList'
 import ActionPlanFilters, { type ActionPlanFiltersValue } from '../components/ActionPlanFilters'
 import ActionPlanForm, { type ActionPlanFormValues } from '../components/ActionPlanForm'
+import { getToken } from '../../../auth/token'
+import { decodeJwtPayload } from '../../../auth/jwt'
 
 // This slice has no company-picker UI yet (org-structure's admin shell doesn't
-// expose a "current company" concept for a CompanyAdmin browsing their own
-// data outside /admin/companies/:id) -- VITE_DEFAULT_COMPANY_ID is a stopgap
-// read directly from env for local/manual testing until #57 (cross-cutting
-// frontend) or a later pass adds a real company-context selector.
+// expose a "current company" concept for a SuperAdmin browsing across
+// companies). CompanyAdmin's own companyId comes straight off their JWT
+// claims -- the same source AdminLayout.tsx already uses for nav/routing --
+// so every CompanyAdmin sees and creates action plans for their own company,
+// not a globally-configured one. SuperAdmin has no companyId claim at all;
+// until #57 (cross-cutting frontend) adds a real company-context selector,
+// SuperAdmin simply can't use this page yet.
 export default function ActionPlansListPage() {
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const companyId = import.meta.env.VITE_DEFAULT_COMPANY_ID as string
+  const token = getToken()
+  const claims = token ? decodeJwtPayload(token) : null
+  const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
   const [plans, setPlans] = useState<ActionPlan[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -39,6 +46,7 @@ export default function ActionPlansListPage() {
   const filtered = plans.filter((plan) => !filters.status || plan.status === filters.status)
 
   async function handleCreate(values: ActionPlanFormValues) {
+    if (!companyId) return
     await createActionPlan(baseUrl, {
       title: values.title,
       description: values.description,
@@ -53,7 +61,7 @@ export default function ActionPlansListPage() {
   }
 
   if (!companyId) {
-    return <p role="alert">VITE_DEFAULT_COMPANY_ID is not configured.</p>
+    return <p role="alert">No company is associated with your account.</p>
   }
 
   if (error) {
