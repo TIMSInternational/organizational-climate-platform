@@ -153,6 +153,7 @@ app.MapBulkImportEndpoints();
 app.MapActionPlanEndpoints();
 app.MapActionPlanTemplateEndpoints();
 app.MapMicroclimateEndpoints();
+app.MapMicroclimateTemplateEndpoints();
 
 app.Run();
 
