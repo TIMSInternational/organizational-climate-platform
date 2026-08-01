@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import type { Kpi, Objective, KpiUpdateInput, ObjectiveUpdateInput } from '../api/actionPlans'
 
 export interface ProgressUpdateFormValues {
@@ -20,6 +20,19 @@ export default function ProgressUpdateForm({ kpis, objectives, onSubmit }: Progr
   const [objectivePercentages, setObjectivePercentages] = useState<Record<string, number>>(Object.fromEntries(objectives.map((o) => [o.id, o.completionPercentage])))
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  // Resync local edit state whenever the parent supplies fresh kpis/objectives
+  // (e.g. after a reload following a successful progress submission), so a
+  // second update in the same session starts from the latest server values
+  // instead of stale pre-submission ones.
+  useEffect(() => {
+    setKpiValues(Object.fromEntries(kpis.map((k) => [k.id, k.currentValue])))
+  }, [kpis])
+
+  useEffect(() => {
+    setObjectiveStatuses(Object.fromEntries(objectives.map((o) => [o.id, o.currentStatus])))
+    setObjectivePercentages(Object.fromEntries(objectives.map((o) => [o.id, o.completionPercentage])))
+  }, [objectives])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()

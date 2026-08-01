@@ -28,8 +28,13 @@ export default function ActionPlanDetailPage() {
 
   async function handleStatusChange(status: string) {
     if (!id) return
-    await updateActionPlan(baseUrl, id, { status })
-    await reload()
+    setError(null)
+    try {
+      await updateActionPlan(baseUrl, id, { status })
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update status')
+    }
   }
 
   async function handleProgress(values: ProgressUpdateFormValues) {
