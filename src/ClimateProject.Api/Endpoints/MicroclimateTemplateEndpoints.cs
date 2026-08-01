@@ -53,8 +53,13 @@ public static class MicroclimateTemplateEndpoints
             return Results.Forbid();
         }
 
-        if (request.CompanyId.HasValue && currentUser.Role != Roles.SuperAdmin && currentUser.CompanyId != request.CompanyId.Value.ToString())
+        if (currentUser.Role != Roles.SuperAdmin
+            && (!request.CompanyId.HasValue || currentUser.CompanyId != request.CompanyId.Value.ToString()))
         {
+            // Non-SuperAdmins must supply their own CompanyId; a null CompanyId would create
+            // an IsSystemTemplate=true template visible to every company (see ListAsync's
+            // `t.CompanyId == companyId || t.CompanyId == null` filter), which only SuperAdmins
+            // are allowed to do.
             return Results.Forbid();
         }
 

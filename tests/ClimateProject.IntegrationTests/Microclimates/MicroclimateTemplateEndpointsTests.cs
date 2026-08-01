@@ -70,4 +70,37 @@ public class MicroclimateTemplateEndpointsTests : IAsyncLifetime
         var list = await listResponse.Content.ReadFromJsonAsync<MicroclimateTemplateListResponse>();
         Assert.Contains(list!.Templates, t => t.Id == created!.Id);
     }
+
+    [Fact]
+    public async Task CompanyAdmin_cannot_create_system_template_by_omitting_CompanyId()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimate-templates", new CreateMicroclimateTemplateRequest(
+            "Sneaky system template", "Should not be allowed", "engagement", null));
+
+        Assert.Equal(HttpStatusCode.Forbidden, createResponse.StatusCode);
+
+        // Confirm no system template leaked into the DB (would otherwise surface to every
+        // other company's template list via ListAsync's `t.CompanyId == null` clause).
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.False(await db.MicroclimateTemplates.AnyAsync(t => t.Name == "Sneaky system template"));
+    }
+
+    [Fact]
+    public async Task CompanyAdmin_cannot_create_template_for_another_company()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var otherCompanyId = Guid.NewGuid();
+        var createResponse = await client.PostAsJsonAsync("/microclimate-templates", new CreateMicroclimateTemplateRequest(
+            "Cross-tenant template", "Should not be allowed", "engagement", otherCompanyId));
+
+        Assert.Equal(HttpStatusCode.Forbidden, createResponse.StatusCode);
+    }
 }
