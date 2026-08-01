@@ -33,14 +33,16 @@ public sealed record CicloDto(
     string Estado,
     string CompanyId);
 
-/// <summary>Mirrors /internal/hallazgos (src/app/api/internal/hallazgos/route.ts).</summary>
+/// <summary>Mirrors /internal/hallazgos (organizational-climate-platform's
+/// TrackingInternalEndpoints).</summary>
 public sealed record HallazgoDto(
     string HallazgoId,
     string NodoId,
     string Categoria,
     decimal ResultadoPct,
     decimal? BenchmarkSectorPct,
-    decimal? ResultadoAnioAnteriorPct);
+    decimal? ResultadoAnioAnteriorPct,
+    string? CicloId);
 
 public sealed record SendNotificationRequest(
     IReadOnlyList<string> DestinatariosIds,
@@ -54,5 +56,6 @@ public interface IClimateProjectClient
     Task<IReadOnlyList<PersonaDto>> GetPersonasAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<CicloDto>> GetCiclosAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<HallazgoDto>> GetHallazgosAsync(string cicloId, CancellationToken cancellationToken);
+    Task<HallazgoDto?> GetHallazgoByIdAsync(string hallazgoId, CancellationToken cancellationToken);
     Task SendNotificationAsync(SendNotificationRequest request, CancellationToken cancellationToken);
 }

@@ -55,6 +55,9 @@ public class CacheSyncWorkerTests : IClassFixture<PostgresFixture>, IAsyncLifeti
         public Task<IReadOnlyList<HallazgoDto>> GetHallazgosAsync(string cicloId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<HallazgoDto>>([]);
 
+        public Task<HallazgoDto?> GetHallazgoByIdAsync(string hallazgoId, CancellationToken cancellationToken) =>
+            Task.FromResult<HallazgoDto?>(null);
+
         public Task SendNotificationAsync(SendNotificationRequest request, CancellationToken cancellationToken) =>
             Task.CompletedTask;
     }

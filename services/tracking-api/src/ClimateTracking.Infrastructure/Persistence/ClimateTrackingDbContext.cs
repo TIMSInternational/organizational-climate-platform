@@ -9,7 +9,6 @@ public class ClimateTrackingDbContext(DbContextOptions<ClimateTrackingDbContext>
     public DbSet<NodoCache> Nodos => Set<NodoCache>();
     public DbSet<PersonaCache> Personas => Set<PersonaCache>();
     public DbSet<CicloEncuestaCache> CiclosEncuesta => Set<CicloEncuestaCache>();
-    public DbSet<HallazgoCache> Hallazgos => Set<HallazgoCache>();
     public DbSet<PlanDeAccion> PlanesDeAccion => Set<PlanDeAccion>();
     public DbSet<Notificacion> Notificaciones => Set<Notificacion>();
     public DbSet<SemaforoThresholdConfig> SemaforoThresholdConfigs => Set<SemaforoThresholdConfig>();
