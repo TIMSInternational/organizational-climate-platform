@@ -95,6 +95,7 @@ export default function CompanyDetailPage() {
     <div>
       <h1>{company.name}</h1>
       <p><Link to={`/admin/companies/${company.id}/users`}>Manage users</Link></p>
+      <p><Link to={`/admin/companies/${company.id}/demographic-fields`}>Manage demographic fields</Link></p>
       <p>{company.userCount} active users</p>
 
       {editingCompany ? (
