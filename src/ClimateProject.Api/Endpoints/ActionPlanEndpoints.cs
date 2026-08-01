@@ -233,9 +233,14 @@ public static class ActionPlanEndpoints
             return Results.Json(new { message = "Action plan not found" }, statusCode: 404);
         }
 
-        if (!CanAccessCompany(currentUser, plan.CompanyId))
+        if (!Roles.Admin.Contains(currentUser.Role) || !CanAccessCompany(currentUser, plan.CompanyId))
         {
             return Results.Forbid();
+        }
+
+        if (string.IsNullOrWhiteSpace(request.OverallNotes))
+        {
+            return Results.Json(new { message = "Overall notes are required" }, statusCode: 400);
         }
 
         var kpis = await db.ActionPlanKpis.Where(k => k.ActionPlanId == id).ToListAsync(cancellationToken);

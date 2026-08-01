@@ -99,4 +99,60 @@ public class ActionPlanProgressEndpointTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.BadRequest, progressResponse.StatusCode);
     }
+
+    [Fact]
+    public async Task Recording_progress_as_a_non_admin_role_is_forbidden()
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var createResponse = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "Plan", "desc", _companyId, null, DateTimeOffset.UtcNow.AddDays(30), "medium", null, null, null, null, null, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<ActionPlanDetail>();
+
+        var employeeToken = await SignUpAndGetTokenAsync(client, Roles.Employee);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", employeeToken);
+
+        var progressResponse = await client.PostAsJsonAsync($"/action-plans/{created!.Id}/progress", new RecordProgressRequest(
+            "notes", null, null));
+
+        Assert.Equal(HttpStatusCode.Forbidden, progressResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Recording_progress_with_blank_overall_notes_fails_with_400()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "Plan", "desc", _companyId, null, DateTimeOffset.UtcNow.AddDays(30), "medium", null, null, null, null, null, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<ActionPlanDetail>();
+
+        var progressResponse = await client.PostAsJsonAsync($"/action-plans/{created!.Id}/progress", new RecordProgressRequest(
+            "   ", null, null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, progressResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Recording_progress_with_missing_overall_notes_field_fails_with_400_not_500()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "Plan", "desc", _companyId, null, DateTimeOffset.UtcNow.AddDays(30), "medium", null, null, null, null, null, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<ActionPlanDetail>();
+
+        // Raw JSON payload that omits overallNotes entirely; System.Text.Json binds the
+        // missing property to null for the non-nullable record parameter.
+        var payload = new { kpiUpdates = (object?)null, objectiveUpdates = (object?)null };
+        var progressResponse = await client.PostAsJsonAsync($"/action-plans/{created!.Id}/progress", payload);
+
+        Assert.Equal(HttpStatusCode.BadRequest, progressResponse.StatusCode);
+    }
 }
