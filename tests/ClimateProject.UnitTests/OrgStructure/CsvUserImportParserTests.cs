@@ -41,4 +41,48 @@ public class CsvUserImportParserTests
         Assert.Equal("Jane Doe", rows[0].Name);
         Assert.Equal("jane@example.test", rows[0].Email);
     }
+
+    [Fact]
+    public void A_single_data_row_with_no_header_line_is_still_parsed_not_silently_dropped()
+    {
+        var csv = "Jane Doe,jane@example.test,employee,Engineering";
+
+        var rows = CsvUserImportParser.Parse(csv);
+
+        Assert.Single(rows);
+        Assert.Equal("Jane Doe", rows[0].Name);
+        Assert.Equal("jane@example.test", rows[0].Email);
+        Assert.Equal(1, rows[0].RowNumber);
+    }
+
+    [Fact]
+    public void Multiple_data_rows_with_no_header_line_are_all_parsed()
+    {
+        var csv = "Jane Doe,jane@example.test,employee,\nJohn Roe,john@example.test,supervisor,";
+
+        var rows = CsvUserImportParser.Parse(csv);
+
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(1, rows[0].RowNumber);
+        Assert.Equal(2, rows[1].RowNumber);
+    }
+
+    [Fact]
+    public void A_header_line_is_still_recognized_and_skipped_case_insensitively()
+    {
+        var csv = "Name,Email,Role,Department\nJane Doe,jane@example.test,employee,";
+
+        var rows = CsvUserImportParser.Parse(csv);
+
+        Assert.Single(rows);
+        Assert.Equal("Jane Doe", rows[0].Name);
+    }
+
+    [Fact]
+    public void An_empty_file_parses_to_zero_rows()
+    {
+        var rows = CsvUserImportParser.Parse("");
+
+        Assert.Empty(rows);
+    }
 }

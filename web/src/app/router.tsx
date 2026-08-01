@@ -9,12 +9,26 @@ import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage
 import UsersListPage from '../features/org-structure/pages/UsersListPage'
 import SystemSettingsPage from '../features/org-structure/pages/SystemSettingsPage'
 import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
+import { getToken } from '../auth/token'
+import { decodeJwtPayload } from '../auth/jwt'
+import { resolveInitialRoute } from './resolveInitialRoute'
+
+// /admin/companies (the old unconditional target) is SuperAdmin-only -- a
+// company_admin (or anyone else) landing on `/` needs routing to whatever page
+// their role can actually load, same as a fresh login (see LoginPage.tsx).
+function HomeRedirect() {
+  const token = getToken()
+  const claims = token ? decodeJwtPayload(token) : null
+  const role = typeof claims?.role === 'string' ? claims.role : undefined
+  const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
+  return <Navigate to={resolveInitialRoute(role, companyId)} replace />
+}
 
 export const router = createBrowserRouter([
   {
     errorElement: <RouteErrorBoundary />,
     children: [
-      { path: '/', element: <Navigate to="/admin/companies" replace /> },
+      { path: '/', element: <HomeRedirect /> },
       { path: '/login', element: <LoginPage /> },
       { path: '/accept-invitation/:token', element: <AcceptInvitationPage /> },
       {

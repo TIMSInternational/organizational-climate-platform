@@ -18,7 +18,9 @@ public class BulkImportEndpointsTests : IAsyncLifetime
 {
     private readonly AuthWebApplicationFactory _factory;
     private readonly string _companyDomain = $"bulk-{Guid.NewGuid():N}.test";
+    private readonly string _otherCompanyDomain = $"bulk-other-{Guid.NewGuid():N}.test";
     private Guid _companyId;
+    private Guid _otherCompanyId;
 
     public BulkImportEndpointsTests(PostgresContainerFixture postgres)
     {
@@ -31,8 +33,10 @@ public class BulkImportEndpointsTests : IAsyncLifetime
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
         var company = new Company { Id = Guid.NewGuid(), Name = "Bulk Co", EmailDomain = _companyDomain, CreatedAt = DateTimeOffset.UtcNow };
-        db.Companies.Add(company);
+        var otherCompany = new Company { Id = Guid.NewGuid(), Name = "Other Bulk Co", EmailDomain = _otherCompanyDomain, CreatedAt = DateTimeOffset.UtcNow };
+        db.Companies.AddRange(company, otherCompany);
         _companyId = company.Id;
+        _otherCompanyId = otherCompany.Id;
         await db.SaveChangesAsync();
     }
 
@@ -86,6 +90,23 @@ public class BulkImportEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_headerless_single_row_csv_is_parsed_not_silently_dropped()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var csv = "Headerless Person,headerless@example.test,employee,";
+        var response = await client.PostAsync("/admin/users/bulk-import", BuildForm(csv, _companyId, preview: true));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<BulkImportResponse>();
+        Assert.Single(result!.Rows);
+        Assert.Equal(1, result.SuccessCount);
+        Assert.Equal("headerless@example.test", result.Rows[0].Email);
+    }
+
+    [Fact]
     public async Task Non_preview_mode_creates_valid_rows_and_reports_errors_for_invalid_ones()
     {
         var client = _factory.CreateClient();
@@ -119,6 +140,57 @@ public class BulkImportEndpointsTests : IAsyncLifetime
         var result = await response.Content.ReadFromJsonAsync<BulkImportResponse>();
         Assert.Equal(1, result!.SuccessCount);
         Assert.Equal("duplicate", result.Rows[1].Status);
+    }
+
+    [Fact]
+    public async Task Preview_reports_a_cross_tenant_email_collision_as_duplicate_not_valid()
+    {
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            db.Users.Add(new User
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _otherCompanyId,
+                Email = "shared@example.test",
+                Name = "Existing In Other Company",
+                PasswordHash = "irrelevant",
+                Role = Roles.Employee,
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // users.email has a GLOBAL unique index (no company_id), so this row -- whose
+        // email already belongs to a user in a DIFFERENT company -- must be reported
+        // as a duplicate in preview, not "valid". If preview ever again claims this
+        // row is importable, the real (non-preview) import will 500 on the unique
+        // index and roll back every row in the same request, including GoodPerson.
+        var csv = "name,email,role,department\nGood Person,goodperson2@example.test,employee,\nCross Tenant,shared@example.test,employee,";
+        var previewResponse = await client.PostAsync("/admin/users/bulk-import", BuildForm(csv, _companyId, preview: true));
+
+        Assert.Equal(HttpStatusCode.OK, previewResponse.StatusCode);
+        var previewResult = await previewResponse.Content.ReadFromJsonAsync<BulkImportResponse>();
+        Assert.Equal("valid", previewResult!.Rows[0].Status);
+        Assert.Equal("duplicate", previewResult.Rows[1].Status);
+        Assert.Equal(1, previewResult.SuccessCount);
+
+        var importResponse = await client.PostAsync("/admin/users/bulk-import", BuildForm(csv, _companyId, preview: false));
+        Assert.Equal(HttpStatusCode.OK, importResponse.StatusCode);
+        var importResult = await importResponse.Content.ReadFromJsonAsync<BulkImportResponse>();
+        Assert.Equal("duplicate", importResult!.Rows[1].Status);
+        Assert.Equal(1, importResult.SuccessCount);
+
+        using var assertScope = _factory.Services.CreateScope();
+        var assertDb = assertScope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.NotNull(await assertDb.Users.FirstOrDefaultAsync(u => u.Email == "goodperson2@example.test"));
+        Assert.Equal(1, await assertDb.Users.CountAsync(u => u.Email == "shared@example.test"));
     }
 
     [Fact]

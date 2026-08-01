@@ -45,8 +45,29 @@ public static class SystemSettingsEndpoints
             EmailSettings = new SystemEmailSettings()
         };
         db.SystemSettings.Add(settings);
-        await db.SaveChangesAsync(cancellationToken);
-        return settings;
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return settings;
+        }
+        catch (DbUpdateException)
+        {
+            // Lost the race to a concurrent GetOrCreateAsync call: the singleton_guard
+            // unique index (see SystemSettingsConfiguration) rejected our insert
+            // because another request already created the row (two admin tabs, a
+            // refresh racing a StrictMode double-effect). Detach our failed entity
+            // and read back whichever row won instead of bubbling up an unhandled
+            // 500 or -- worse -- silently leaving a second, invisible duplicate row.
+            db.Entry(settings).State = EntityState.Detached;
+            var winner = await db.SystemSettings.FirstOrDefaultAsync(cancellationToken);
+            if (winner is null)
+            {
+                throw;
+            }
+
+            return winner;
+        }
     }
 
     private static async Task<IResult> GetAsync(

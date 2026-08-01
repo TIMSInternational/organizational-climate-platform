@@ -87,12 +87,26 @@ public static class DemographicFieldEndpoints
             return Results.Json(new { message = error }, statusCode: 400);
         }
 
+        var fieldKey = request.Field.Trim();
+        // IX_demographic_fields_company_id_field is a UNIQUE index (companyId, field).
+        // Pre-check and return 409, matching the sibling pattern in
+        // CompanyEndpoints.CreateAsync/UpdateAsync for the analogous unique
+        // email-domain conflict -- without this, retyping an existing key hits the
+        // unique index inside SaveChangesAsync and (with no exception middleware)
+        // surfaced as an unhandled 500.
+        var existing = await db.DemographicFields
+            .FirstOrDefaultAsync(f => f.CompanyId == request.CompanyId && f.Field == fieldKey, cancellationToken);
+        if (existing is not null)
+        {
+            return Results.Json(new { message = $"A demographic field with key '{fieldKey}' already exists for this company" }, statusCode: 409);
+        }
+
         var now = DateTimeOffset.UtcNow;
         var field = new DemographicField
         {
             Id = Guid.NewGuid(),
             CompanyId = request.CompanyId,
-            Field = request.Field.Trim(),
+            Field = fieldKey,
             Label = request.Label.Trim(),
             Type = request.Type,
             Options = request.Options,

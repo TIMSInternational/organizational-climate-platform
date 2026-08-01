@@ -43,6 +43,12 @@ export default function SystemSettingsForm({ settings, onSubmit }: SystemSetting
         Maintenance message
         <input value={maintenanceMessage} onChange={(e) => setMaintenanceMessage(e.target.value)} />
       </label>
+      <p>
+        <em>
+          Login enabled and Maintenance mode are enforced on every login attempt (a SuperAdmin
+          account can always still sign in).
+        </em>
+      </p>
       <label>
         Max login attempts
         <input type="number" value={maxLoginAttempts} onChange={(e) => setMaxLoginAttempts(Number(e.target.value))} min={1} />
@@ -51,6 +57,12 @@ export default function SystemSettingsForm({ settings, onSubmit }: SystemSetting
         Session timeout (minutes)
         <input type="number" value={sessionTimeoutMinutes} onChange={(e) => setSessionTimeoutMinutes(Number(e.target.value))} min={1} />
       </label>
+      <p>
+        <em>
+          Max login attempts and Session timeout are saved but not yet enforced by the API --
+          they do not currently lock out accounts or expire sessions early.
+        </em>
+      </p>
       <button type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Save'}</button>
     </form>
   )

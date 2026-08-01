@@ -9,6 +9,10 @@ export default function DemographicFieldList({ fields, onEdit }: { fields: Demog
     <table>
       <thead>
         <tr>
+          {/* Field key is shown so an admin can see which keys are already taken --
+              without it, a duplicate-key 409 (POST /admin/demographic-fields) gives
+              no visual clue which of the fields below is the collision. */}
+          <th>Key</th>
           <th>Label</th>
           <th>Type</th>
           <th>Required</th>
@@ -19,6 +23,7 @@ export default function DemographicFieldList({ fields, onEdit }: { fields: Demog
       <tbody>
         {fields.map((field) => (
           <tr key={field.id}>
+            <td>{field.field}</td>
             <td>{field.label}</td>
             <td>{field.type}</td>
             <td>{field.required ? 'Yes' : 'No'}</td>

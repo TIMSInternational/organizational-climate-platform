@@ -82,6 +82,29 @@ public class DemographicFieldEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Creating_a_field_with_a_key_that_already_exists_for_the_company_returns_409_not_500()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var first = await client.PostAsJsonAsync("/admin/demographic-fields", new CreateDemographicFieldRequest(
+            _companyAId, "tenure", "Tenure", "number", null, false, 1));
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+
+        // IX_demographic_fields_company_id_field is a UNIQUE index -- this must be a
+        // clean 409 (matching CompanyEndpoints' analogous email-domain conflict),
+        // never an unhandled 500 from the unique index inside SaveChangesAsync.
+        var second = await client.PostAsJsonAsync("/admin/demographic-fields", new CreateDemographicFieldRequest(
+            _companyAId, "tenure", "Tenure (duplicate)", "text", null, false, 2));
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.Equal(1, await db.DemographicFields.CountAsync(f => f.CompanyId == _companyAId && f.Field == "tenure"));
+    }
+
+    [Fact]
     public async Task Select_type_field_requires_non_empty_options()
     {
         var client = _factory.CreateClient();

@@ -14,9 +14,20 @@ public static class BulkImportEndpoints
         app.MapPost("/admin/users/bulk-import", ImportAsync).RequireAuthorization();
     }
 
+    // Matches the CanAccessCompany helper in every sibling endpoint file
+    // (UserEndpoints, DepartmentEndpoints, DemographicFieldEndpoints,
+    // InvitationEndpoints): SuperAdmin any company, CompanyAdmin only their own.
+    // A prior version of this specific helper omitted the `Role == CompanyAdmin`
+    // clause entirely (SuperAdmin OR *any* role matching the target company),
+    // while being unused -- an identically-named, identically-signatured helper
+    // with looser semantics than its five siblings sitting right next to the
+    // (correct, hand-written) live check below is a booby trap: the obvious DRY
+    // cleanup of replacing that inline check with a call to this helper would
+    // have silently granted any employee/supervisor/leader bulk-import into
+    // their own company. Now that the semantics match, ImportAsync uses it directly.
     private static bool CanAccessCompany(CurrentUser currentUser, Guid companyId)
         => currentUser.Role == Roles.SuperAdmin
-           || currentUser.CompanyId == companyId.ToString();
+           || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
 
     private static bool IsValidEmail(string email)
         => !string.IsNullOrWhiteSpace(email) && email.Contains('@') && email.Split('@').Length == 2 && email.Split('@')[1].Contains('.');
@@ -47,7 +58,7 @@ public static class BulkImportEndpoints
             return Results.Json(new { message = "A valid companyId is required" }, statusCode: 400);
         }
 
-        if (!Roles.Admin.Contains(currentUser.Role) || (currentUser.Role != Roles.SuperAdmin && currentUser.CompanyId != companyId.ToString()))
+        if (!CanAccessCompany(currentUser, companyId))
         {
             return Results.Forbid();
         }
@@ -59,7 +70,15 @@ public static class BulkImportEndpoints
         var parsedRows = CsvUserImportParser.Parse(csv);
 
         var departments = await db.Departments.Where(d => d.CompanyId == companyId).ToListAsync(cancellationToken);
-        var existingEmails = (await db.Users.Where(u => u.CompanyId == companyId).Select(u => u.Email).ToListAsync(cancellationToken)).ToHashSet();
+
+        // Intentionally NOT scoped to `companyId`: UserConfiguration.cs puts a GLOBAL
+        // unique index on users.email (no company_id in it), matching signup/login,
+        // which look a user up by email alone across the whole platform. Scoping this
+        // check to the target company would let a CSV row whose email already belongs
+        // to a user in a DIFFERENT company pass as "valid" in preview and then throw
+        // an unhandled DbUpdateException out of the single SaveChangesAsync call
+        // below -- rolling back every other valid row in the same file.
+        var existingEmails = (await db.Users.Select(u => u.Email).ToListAsync(cancellationToken)).ToHashSet();
         var seenInThisFile = new HashSet<string>();
 
         var results = new List<BulkImportRowResult>();

@@ -122,5 +122,40 @@ public class SystemSettingsEndpointsTests : IAsyncLifetime
         var getAgain = await client.GetAsync("/admin/system-settings");
         var reread = await getAgain.Content.ReadFromJsonAsync<SystemSettingsDetail>();
         Assert.False(reread!.LoginEnabled);
+
+        // Restore defaults: this class shares one Postgres DB with every other test
+        // class in the "Postgres" collection (they run sequentially against the same
+        // container). Leaving LoginEnabled=false here would make any later test
+        // class's SignUpAndGetTokenAsync-style /auth/login calls for non-SuperAdmin
+        // users fail once AuthEndpoints started honoring this kill switch.
+        await client.PutAsJsonAsync("/admin/system-settings", new UpdateSystemSettingsRequest(
+            LoginEnabled: true, MaintenanceMode: false, MaintenanceMessage: null, MaxLoginAttempts: 5, SessionTimeoutMinutes: 60, PasswordPolicy: null, EmailSettings: null));
+    }
+
+    [Fact]
+    public async Task Concurrent_first_reads_do_not_create_duplicate_rows()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.SuperAdmin);
+
+        // Two separate HttpClients (same JWT) hitting GET at the same time, before any
+        // row exists yet -- both should observe "no row" in GetOrCreateAsync's initial
+        // read and race to insert. Without the singleton_guard unique index + the
+        // catch-and-reread in GetOrCreateAsync, this either throws an unhandled
+        // DbUpdateException on one of the two requests or leaves two rows behind.
+        var client1 = _factory.CreateClient();
+        var client2 = _factory.CreateClient();
+        client1.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        client2.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var responses = await Task.WhenAll(
+            client1.GetAsync("/admin/system-settings"),
+            client2.GetAsync("/admin/system-settings"));
+
+        Assert.All(responses, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.Equal(1, await db.SystemSettings.CountAsync());
     }
 }
