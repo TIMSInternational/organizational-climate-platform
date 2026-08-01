@@ -19,6 +19,9 @@ public static class MicroclimateEndpoints
         group.MapPut("/{id:guid}", UpdateAsync);
         group.MapGet("/{id:guid}/live-results", GetLiveResultsAsync);
 
+        // Outside the authorized group -- the public respond page (Task 7) needs to read
+        // title/description/status/questions before an anonymous visitor has any token.
+        app.MapGet("/microclimates/{id:guid}/respond", GetPublicRespondDetailsAsync).AllowAnonymous();
         app.MapPost("/microclimates/{id:guid}/responses", SubmitResponseAsync);
     }
 
@@ -146,6 +149,25 @@ public static class MicroclimateEndpoints
         }
 
         return Results.Ok(await ToDetailAsync(microclimate, db, cancellationToken));
+    }
+
+    private static async Task<IResult> GetPublicRespondDetailsAsync(
+        Guid id,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var microclimate = await db.Microclimates.FirstOrDefaultAsync(m => m.Id == id, cancellationToken);
+        if (microclimate is null)
+        {
+            return Results.Json(new { message = "Microclimate not found" }, statusCode: 404);
+        }
+
+        var questions = await db.MicroclimateQuestions.Where(q => q.MicroclimateId == microclimate.Id)
+            .OrderBy(q => q.Order)
+            .Select(q => new QuestionDto(q.Id, q.Text, q.Type, q.Options, q.Required, q.Order))
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(new PublicMicroclimateDetail(microclimate.Id, microclimate.Title, microclimate.Description, microclimate.Status, questions));
     }
 
     private static async Task<IResult> UpdateAsync(

@@ -145,4 +145,61 @@ public class MicroclimateEndpointsTests : IAsyncLifetime
         var crossGet = await client.GetAsync($"/microclimates/{created!.Id}");
         Assert.Equal(HttpStatusCode.Forbidden, crossGet.StatusCode);
     }
+
+    [Fact]
+    public async Task GetAsync_still_requires_authentication_for_a_completely_anonymous_caller()
+    {
+        // Locks in the exact defect from the Task 7 review: a genuinely anonymous caller
+        // (no Authorization header at all) hitting the authenticated `GET /microclimates/{id}`
+        // route must 401, not silently succeed with an omitted-token bearer header. This is
+        // the route the public respond page must NOT call.
+        var adminClient = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(adminClient, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        adminClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var createResponse = await adminClient.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Auth required", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5, true, null, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+
+        var anonymousClient = _factory.CreateClient(); // deliberately no Authorization header
+        var anonymousGet = await anonymousClient.GetAsync($"/microclimates/{created!.Id}");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousGet.StatusCode);
+    }
+
+    [Fact]
+    public async Task Anonymous_visitor_can_read_public_respond_details_without_any_token()
+    {
+        var adminClient = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(adminClient, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        adminClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var createResponse = await adminClient.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Public pulse", "Tell us how you feel", _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5, true, null,
+            new List<CreateQuestionInput> { new("How are you?", "open_text", null, true, 1) }));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+        await adminClient.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
+
+        var anonymousClient = _factory.CreateClient(); // deliberately no Authorization header
+        var publicGet = await anonymousClient.GetAsync($"/microclimates/{created.Id}/respond");
+        Assert.Equal(HttpStatusCode.OK, publicGet.StatusCode);
+
+        var body = await publicGet.Content.ReadAsStringAsync();
+        var publicDetail = await publicGet.Content.ReadFromJsonAsync<PublicMicroclimateDetail>();
+        Assert.Equal("Public pulse", publicDetail!.Title);
+        Assert.Equal("active", publicDetail.Status);
+        Assert.Single(publicDetail.Questions);
+        Assert.Equal("How are you?", publicDetail.Questions[0].Text);
+
+        // Must not leak internal/admin-only fields to an anonymous caller.
+        Assert.DoesNotContain("companyId", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("createdBy", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("responseCount", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("targetParticipantCount", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Public_respond_details_returns_404_for_an_unknown_id_without_requiring_auth()
+    {
+        var anonymousClient = _factory.CreateClient();
+        var response = await anonymousClient.GetAsync($"/microclimates/{Guid.NewGuid()}/respond");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
 }

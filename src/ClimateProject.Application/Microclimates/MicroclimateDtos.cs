@@ -40,6 +40,16 @@ public sealed record CreateMicroclimateRequest(
     Guid? TemplateId,
     List<CreateQuestionInput>? Questions);
 
+// Deliberately excludes CompanyId, CreatedBy, ResponseCount, TargetParticipantCount,
+// AnonymousResponses, and ShowLiveResults -- this is served to unauthenticated visitors
+// on the public respond page (Task 7) and must not leak internal/admin-only data.
+public sealed record PublicMicroclimateDetail(
+    Guid Id,
+    string Title,
+    string? Description,
+    string Status,
+    List<QuestionDto> Questions);
+
 public sealed record UpdateMicroclimateRequest(
     string? Title,
     string? Description,

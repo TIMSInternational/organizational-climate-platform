@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setToken } from '../../../auth/token'
-import { listMicroclimates, createMicroclimate, getMicroclimate, updateMicroclimate, getLiveResults, submitResponse } from './microclimates'
+import {
+  listMicroclimates,
+  createMicroclimate,
+  getMicroclimate,
+  updateMicroclimate,
+  getLiveResults,
+  submitResponse,
+  getMicroclimateForRespond,
+} from './microclimates'
 
 const baseUrl = 'http://api.test'
 
@@ -57,5 +65,23 @@ describe('microclimates api client', () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 201 }))
     await submitResponse(baseUrl, 'm1', { q1: 'good' })
     expect(fetch).toHaveBeenCalledWith(`${baseUrl}/microclimates/m1/responses`, expect.objectContaining({ method: 'POST' }))
+  })
+
+  it('gets public respond details against the /respond route without an Authorization header, even when a token is set', async () => {
+    const publicDetail = { id: 'm1', title: 'Pulse', description: null, status: 'active', questions: [] }
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(publicDetail), { status: 200 }))
+
+    const result = await getMicroclimateForRespond(baseUrl, 'm1')
+
+    expect(fetch).toHaveBeenCalledWith(`${baseUrl}/microclimates/m1/respond`)
+    const [, init] = vi.mocked(fetch).mock.calls[0]
+    const headers = new Headers((init as RequestInit | undefined)?.headers)
+    expect(headers.has('Authorization')).toBe(false)
+    expect(result).toEqual(publicDetail)
+  })
+
+  it('surfaces the backend error message when getMicroclimateForRespond gets a non-401 error (e.g. a 404 for an unknown id)', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ message: 'Microclimate not found' }), { status: 404 }))
+    await expect(getMicroclimateForRespond(baseUrl, 'unknown')).rejects.toThrow('Microclimate not found')
   })
 })

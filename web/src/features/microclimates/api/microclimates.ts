@@ -94,6 +94,30 @@ export async function getMicroclimate(baseUrl: string, id: string): Promise<Micr
   return response.json() as Promise<MicroclimateDetail>
 }
 
+export interface PublicMicroclimateDetail {
+  id: string
+  title: string
+  description: string | null
+  status: string
+  questions: Question[]
+}
+
+// Deliberately does not use authFetch -- this backs the unauthenticated public respond
+// page (Task 7). The backend route (`GET /microclimates/{id}/respond`) is registered with
+// AllowAnonymous specifically so a genuinely anonymous visitor (no token at all) can read
+// the microclimate's title/description/status/questions before submitting a response;
+// `authFetch` against the authenticated `GET /microclimates/{id}` route would 401 for such
+// a visitor (that route sits behind `.RequireAuthorization()`) and authFetch's 401 handler
+// clears any token and hard-redirects to /login, which would break this page entirely.
+export async function getMicroclimateForRespond(baseUrl: string, id: string): Promise<PublicMicroclimateDetail> {
+  const response = await fetch(`${baseUrl}/microclimates/${id}/respond`)
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    throw new Error((body && body.message) || `Request failed: ${response.status}`)
+  }
+  return response.json() as Promise<PublicMicroclimateDetail>
+}
+
 export async function updateMicroclimate(baseUrl: string, id: string, input: UpdateMicroclimateInput): Promise<MicroclimateDetail> {
   const response = await authFetch(`${baseUrl}/microclimates/${id}`, {
     method: 'PUT',

@@ -1,11 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
-import { getMicroclimate, submitResponse, type MicroclimateDetail } from '../api/microclimates'
+import { getMicroclimateForRespond, submitResponse, type PublicMicroclimateDetail } from '../api/microclimates'
 
 export default function MicroclimateRespondPage() {
   const { id } = useParams<{ id: string }>()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const [microclimate, setMicroclimate] = useState<MicroclimateDetail | null>(null)
+  const [microclimate, setMicroclimate] = useState<PublicMicroclimateDetail | null>(null)
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
@@ -13,7 +13,11 @@ export default function MicroclimateRespondPage() {
 
   useEffect(() => {
     if (!id) return
-    getMicroclimate(baseUrl, id)
+    // Uses getMicroclimateForRespond (plain, unauthenticated fetch against the
+    // AllowAnonymous `GET /microclimates/{id}/respond` route), NOT getMicroclimate/authFetch --
+    // the latter targets the authenticated `GET /microclimates/{id}` route and 401s (then
+    // hard-redirects to /login) for a visitor with no token, which breaks this public page.
+    getMicroclimateForRespond(baseUrl, id)
       .then(setMicroclimate)
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load'))
   }, [id, baseUrl])
