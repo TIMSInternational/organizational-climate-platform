@@ -119,6 +119,7 @@ app.MapCompanyEndpoints();
 app.MapDepartmentEndpoints();
 app.MapUserEndpoints();
 app.MapInvitationEndpoints();
+app.MapInvitationAcceptEndpoints();
 
 app.Run();
 

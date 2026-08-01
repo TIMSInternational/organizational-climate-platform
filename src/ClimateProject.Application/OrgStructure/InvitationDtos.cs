@@ -27,3 +27,5 @@ public sealed record CreateShareableLinkRequest(
     Guid CompanyId,
     Guid? DepartmentId,
     string Role);
+
+public sealed record AcceptInvitationRequest(string? Email, string Name, string Password);
