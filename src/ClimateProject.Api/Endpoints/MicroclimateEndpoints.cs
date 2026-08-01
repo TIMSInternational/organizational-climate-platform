@@ -17,6 +17,9 @@ public static class MicroclimateEndpoints
         group.MapPost("", CreateAsync);
         group.MapGet("/{id:guid}", GetAsync);
         group.MapPut("/{id:guid}", UpdateAsync);
+        group.MapGet("/{id:guid}/live-results", GetLiveResultsAsync);
+
+        app.MapPost("/microclimates/{id:guid}/responses", SubmitResponseAsync);
     }
 
     internal static bool CanAccessCompany(CurrentUser currentUser, Guid companyId)
@@ -182,5 +185,117 @@ public static class MicroclimateEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         return Results.Ok(await ToDetailAsync(microclimate, db, cancellationToken));
+    }
+
+    private static Dictionary<string, int> CountWordFrequencies(IEnumerable<string> texts)
+    {
+        var counts = new Dictionary<string, int>();
+        foreach (var text in texts)
+        {
+            var words = text.ToLowerInvariant()
+                .Split([' ', '\t', '\n', '.', ',', '!', '?'], StringSplitOptions.RemoveEmptyEntries);
+            foreach (var word in words)
+            {
+                counts[word] = counts.GetValueOrDefault(word) + 1;
+            }
+        }
+
+        return counts;
+    }
+
+    private static string ComputeEngagementLevel(int responseCount, int targetParticipantCount)
+    {
+        if (targetParticipantCount <= 0)
+        {
+            return "medium";
+        }
+
+        var ratio = (double)responseCount / targetParticipantCount;
+        return ratio switch
+        {
+            < 0.3 => "low",
+            < 0.7 => "medium",
+            _ => "high",
+        };
+    }
+
+    private static async Task<IResult> GetLiveResultsAsync(
+        Guid id,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        var microclimate = await db.Microclimates.FirstOrDefaultAsync(m => m.Id == id, cancellationToken);
+        if (microclimate is null)
+        {
+            return Results.Json(new { message = "Microclimate not found" }, statusCode: 404);
+        }
+
+        if (!CanAccessCompany(currentUser, microclimate.CompanyId))
+        {
+            return Results.Forbid();
+        }
+
+        var wordCloud = string.IsNullOrWhiteSpace(microclimate.LiveResults.WordCloudData)
+            ? []
+            : System.Text.Json.JsonSerializer.Deserialize<List<WordCloudEntry>>(microclimate.LiveResults.WordCloudData) ?? [];
+
+        return Results.Ok(new LiveResultsDetail(
+            microclimate.LiveResults.SentimentScore,
+            microclimate.LiveResults.EngagementLevel,
+            wordCloud,
+            microclimate.ResponseCount,
+            microclimate.TargetParticipantCount));
+    }
+
+    private static async Task<IResult> SubmitResponseAsync(
+        Guid id,
+        SubmitResponseRequest request,
+        HttpContext httpContext,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var microclimate = await db.Microclimates.FirstOrDefaultAsync(m => m.Id == id, cancellationToken);
+        if (microclimate is null)
+        {
+            return Results.Json(new { message = "Microclimate not found" }, statusCode: 404);
+        }
+
+        if (!microclimate.RealtimeSettings.AnonymousResponses && !(httpContext.User.Identity?.IsAuthenticated ?? false))
+        {
+            return Results.Json(new { message = "This microclimate requires authentication to respond" }, statusCode: 401);
+        }
+
+        if (microclimate.Status != "active")
+        {
+            return Results.Json(new { message = "This microclimate is not currently accepting responses" }, statusCode: 400);
+        }
+
+        var openTextAnswers = request.Answers.Values;
+        var existingCloud = string.IsNullOrWhiteSpace(microclimate.LiveResults.WordCloudData)
+            ? new Dictionary<string, int>()
+            : System.Text.Json.JsonSerializer.Deserialize<List<WordCloudEntry>>(microclimate.LiveResults.WordCloudData)!.ToDictionary(w => w.Text, w => w.Value);
+
+        foreach (var (word, count) in CountWordFrequencies(openTextAnswers))
+        {
+            existingCloud[word] = existingCloud.GetValueOrDefault(word) + count;
+        }
+
+        var topWords = existingCloud
+            .OrderByDescending(kv => kv.Value)
+            .Take(20)
+            .Select(kv => new WordCloudEntry(kv.Key, kv.Value))
+            .ToList();
+
+        microclimate.ResponseCount += 1;
+        microclimate.LiveResults.WordCloudData = System.Text.Json.JsonSerializer.Serialize(topWords);
+        microclimate.LiveResults.EngagementLevel = ComputeEngagementLevel(microclimate.ResponseCount, microclimate.TargetParticipantCount);
+        microclimate.LiveResults.SentimentScore = 0;
+        microclimate.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.StatusCode(201);
     }
 }
