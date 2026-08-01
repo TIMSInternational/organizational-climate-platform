@@ -179,6 +179,7 @@ app.MapTrackingPickerEndpoints();
 app.MapTrackingInternalEndpoints();
 app.MapMicroclimateEndpoints();
 app.MapMicroclimateTemplateEndpoints();
+app.MapReportEndpoints();
 
 app.Run();
 
