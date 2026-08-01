@@ -17,6 +17,7 @@ public static class CompanyEndpoints
         group.MapPost("", CreateAsync);
         group.MapGet("/{id:guid}", GetAsync);
         group.MapPut("/{id:guid}", UpdateAsync);
+        group.MapPut("/{id:guid}/settings", UpdateSettingsAsync);
     }
 
     private static async Task<IResult> ListAsync(
@@ -204,5 +205,46 @@ public static class CompanyEndpoints
         var userCount = await db.Users.CountAsync(u => u.CompanyId == id && u.IsActive, cancellationToken);
 
         return Results.Ok(new CompanyDetail(company.Id, company.Name, company.EmailDomain, company.Industry, company.Size, company.Country, company.SubscriptionTier, company.CreatedAt, userCount));
+    }
+
+    private static async Task<IResult> UpdateSettingsAsync(
+        Guid id,
+        UpdateCompanySettingsRequest request,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        if (!Roles.Admin.Contains(currentUser.Role) || (currentUser.Role != Roles.SuperAdmin && currentUser.CompanyId != id.ToString()))
+        {
+            return Results.Forbid();
+        }
+
+        var company = await db.Companies.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (company is null)
+        {
+            return Results.Json(new { message = "Company not found" }, statusCode: 404);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.SurveyFrequency)) company.Settings.SurveyFrequency = request.SurveyFrequency;
+        if (request.MicroclimateEnabled.HasValue) company.Settings.MicroclimateEnabled = request.MicroclimateEnabled.Value;
+        if (request.AiInsightsEnabled.HasValue) company.Settings.AiInsightsEnabled = request.AiInsightsEnabled.Value;
+        if (request.AnonymousSurveys.HasValue) company.Settings.AnonymousSurveys = request.AnonymousSurveys.Value;
+        if (request.DataRetentionDays.HasValue) company.Settings.DataRetentionDays = request.DataRetentionDays.Value;
+        if (!string.IsNullOrWhiteSpace(request.Timezone)) company.Settings.Timezone = request.Timezone;
+        if (!string.IsNullOrWhiteSpace(request.Language)) company.Settings.Language = request.Language;
+
+        if (request.LogoUrl is not null) company.Branding.LogoUrl = request.LogoUrl;
+        if (!string.IsNullOrWhiteSpace(request.PrimaryColor)) company.Branding.PrimaryColor = request.PrimaryColor;
+        if (!string.IsNullOrWhiteSpace(request.SecondaryColor)) company.Branding.SecondaryColor = request.SecondaryColor;
+        if (!string.IsNullOrWhiteSpace(request.FontFamily)) company.Branding.FontFamily = request.FontFamily;
+        if (request.CustomCss is not null) company.Branding.CustomCss = request.CustomCss;
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(new CompanySettingsResponse(
+            company.Id,
+            new CompanySettingsDto(company.Settings.SurveyFrequency, company.Settings.MicroclimateEnabled, company.Settings.AiInsightsEnabled, company.Settings.AnonymousSurveys, company.Settings.DataRetentionDays, company.Settings.Timezone, company.Settings.Language),
+            new CompanyBrandingDto(company.Branding.LogoUrl, company.Branding.PrimaryColor, company.Branding.SecondaryColor, company.Branding.FontFamily, company.Branding.CustomCss)));
     }
 }
