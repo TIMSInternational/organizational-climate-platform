@@ -15,7 +15,12 @@ public static class MicroclimateEndpoints
 
         group.MapGet("", ListAsync);
         group.MapPost("", CreateAsync);
-        group.MapGet("/{id:guid}", GetAsync);
+        // AllowAnonymous so the public MicroclimateRespondPage (Task 7) can load a microclimate's
+        // title/questions without a JWT -- GetAsync still enforces its own access rule below
+        // (authenticated requests get the usual CanAccessCompany check; unauthenticated requests
+        // are only served when the microclimate is configured for AnonymousResponses, mirroring
+        // the policy SubmitResponseAsync already enforces for the actual submission).
+        group.MapGet("/{id:guid}", GetAsync).AllowAnonymous();
         group.MapPut("/{id:guid}", UpdateAsync);
         group.MapGet("/{id:guid}/live-results", GetLiveResultsAsync);
 
@@ -133,16 +138,27 @@ public static class MicroclimateEndpoints
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
-        var currentUser = principal.GetCurrentUser();
         var microclimate = await db.Microclimates.FirstOrDefaultAsync(m => m.Id == id, cancellationToken);
         if (microclimate is null)
         {
             return Results.Json(new { message = "Microclimate not found" }, statusCode: 404);
         }
 
-        if (!CanAccessCompany(currentUser, microclimate.CompanyId))
+        var isAuthenticated = principal.Identity?.IsAuthenticated ?? false;
+        if (isAuthenticated)
         {
-            return Results.Forbid();
+            var currentUser = principal.GetCurrentUser();
+            if (!CanAccessCompany(currentUser, microclimate.CompanyId))
+            {
+                return Results.Forbid();
+            }
+        }
+        else if (!microclimate.RealtimeSettings.AnonymousResponses)
+        {
+            // Unauthenticated visitors may only view microclimates that are actually configured
+            // for anonymous responses -- the same policy SubmitResponseAsync enforces below.
+            // Anything else still requires a token, same as every other route in this group.
+            return Results.Json(new { message = "Authentication required to view this microclimate" }, statusCode: 401);
         }
 
         return Results.Ok(await ToDetailAsync(microclimate, db, cancellationToken));
@@ -285,12 +301,51 @@ public static class MicroclimateEndpoints
             return Results.Json(new { message = "This microclimate is not currently accepting responses" }, statusCode: 400);
         }
 
+        var questions = await db.MicroclimateQuestions
+            .Where(q => q.MicroclimateId == id)
+            .Select(q => new { q.Id, q.Type, q.Options })
+            .ToListAsync(cancellationToken);
+        var questionsById = questions.ToDictionary(q => q.Id);
+
+        // Constrained question types (multiple_choice, rating, yes_no) must not accept arbitrary
+        // freeform text -- validate each submitted answer against the question's own allowed
+        // values so an invalid choice/rating never gets counted as a "real" response.
+        foreach (var (questionId, answer) in request.Answers)
+        {
+            if (!questionsById.TryGetValue(questionId, out var question))
+            {
+                continue;
+            }
+
+            var validationError = question.Type switch
+            {
+                "yes_no" => answer.Equals("yes", StringComparison.OrdinalIgnoreCase)
+                    || answer.Equals("no", StringComparison.OrdinalIgnoreCase)
+                    ? null
+                    : "must be 'yes' or 'no'",
+                "rating" when question.Options is { Length: > 0 } => question.Options.Contains(answer)
+                    ? null
+                    : $"must be one of: {string.Join(", ", question.Options)}",
+                "rating" => int.TryParse(answer, out var rating) && rating is >= 1 and <= 5
+                    ? null
+                    : "must be a rating between 1 and 5",
+                "multiple_choice" when question.Options is { Length: > 0 } => question.Options.Contains(answer)
+                    ? null
+                    : $"must be one of: {string.Join(", ", question.Options)}",
+                _ => null,
+            };
+
+            if (validationError is not null)
+            {
+                return Results.Json(new { message = $"Invalid answer for question {questionId}: {validationError}" }, statusCode: 400);
+            }
+        }
+
         // Word cloud is built from open-text responses only -- ratings, yes/no, and
         // multiple-choice option text must not be fed into word-frequency counting.
-        var openTextQuestionIds = (await db.MicroclimateQuestions
-                .Where(q => q.MicroclimateId == id && q.Type == "open_text")
-                .Select(q => q.Id)
-                .ToListAsync(cancellationToken))
+        var openTextQuestionIds = questions
+            .Where(q => q.Type == "open_text")
+            .Select(q => q.Id)
             .ToHashSet();
 
         var openTextAnswers = request.Answers

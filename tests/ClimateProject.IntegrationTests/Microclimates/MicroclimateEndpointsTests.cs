@@ -122,4 +122,46 @@ public class MicroclimateEndpointsTests : IAsyncLifetime
         var crossGet = await client.GetAsync($"/microclimates/{created!.Id}");
         Assert.Equal(HttpStatusCode.Forbidden, crossGet.StatusCode);
     }
+
+    [Fact]
+    public async Task Anonymous_visitor_can_read_details_of_a_microclimate_configured_for_anonymous_responses()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Public pulse", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5,
+            AnonymousResponses: true, null,
+            new List<CreateQuestionInput> { new("How are you feeling?", "open_text", null, true, 1) }));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+
+        // No Authorization header at all -- a genuinely anonymous respondent, not a logged-in
+        // user with an expired/absent token.
+        var anonymousClient = _factory.CreateClient();
+        var getResponse = await anonymousClient.GetAsync($"/microclimates/{created!.Id}");
+
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        var fetched = await getResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+        Assert.Equal("Public pulse", fetched!.Title);
+        Assert.Single(fetched.Questions);
+    }
+
+    [Fact]
+    public async Task Anonymous_visitor_cannot_read_details_of_a_microclimate_not_configured_for_anonymous_responses()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Private pulse", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5,
+            AnonymousResponses: false, null, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+
+        var anonymousClient = _factory.CreateClient();
+        var getResponse = await anonymousClient.GetAsync($"/microclimates/{created!.Id}");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, getResponse.StatusCode);
+    }
 }

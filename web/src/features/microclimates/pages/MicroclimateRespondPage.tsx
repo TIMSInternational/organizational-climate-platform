@@ -1,6 +1,85 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
-import { getMicroclimate, submitResponse, type MicroclimateDetail } from '../api/microclimates'
+import { getMicroclimatePublic, submitResponse, type MicroclimateDetail, type Question } from '../api/microclimates'
+
+function QuestionInput({
+  question,
+  value,
+  onChange,
+}: {
+  question: Question
+  value: string
+  onChange: (value: string) => void
+}) {
+  switch (question.type) {
+    case 'multiple_choice':
+      return (
+        <div role="radiogroup" aria-label={question.text}>
+          {(question.options ?? []).map((option) => (
+            <label key={option}>
+              <input
+                type="radio"
+                name={question.id}
+                value={option}
+                checked={value === option}
+                required={question.required}
+                onChange={(e) => onChange(e.target.value)}
+              />
+              {option}
+            </label>
+          ))}
+        </div>
+      )
+    case 'rating': {
+      const scale = question.options && question.options.length > 0 ? question.options : ['1', '2', '3', '4', '5']
+      return (
+        <div role="radiogroup" aria-label={question.text}>
+          {scale.map((option) => (
+            <label key={option}>
+              <input
+                type="radio"
+                name={question.id}
+                value={option}
+                checked={value === option}
+                required={question.required}
+                onChange={(e) => onChange(e.target.value)}
+              />
+              {option}
+            </label>
+          ))}
+        </div>
+      )
+    }
+    case 'yes_no':
+      return (
+        <div role="radiogroup" aria-label={question.text}>
+          {['yes', 'no'].map((option) => (
+            <label key={option}>
+              <input
+                type="radio"
+                name={question.id}
+                value={option}
+                checked={value === option}
+                required={question.required}
+                onChange={(e) => onChange(e.target.value)}
+              />
+              {option === 'yes' ? 'Yes' : 'No'}
+            </label>
+          ))}
+        </div>
+      )
+    case 'open_text':
+    default:
+      return (
+        <input
+          type="text"
+          required={question.required}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )
+  }
+}
 
 export default function MicroclimateRespondPage() {
   const { id } = useParams<{ id: string }>()
@@ -13,7 +92,7 @@ export default function MicroclimateRespondPage() {
 
   useEffect(() => {
     if (!id) return
-    getMicroclimate(baseUrl, id)
+    getMicroclimatePublic(baseUrl, id)
       .then(setMicroclimate)
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load'))
   }, [id, baseUrl])
@@ -54,14 +133,14 @@ export default function MicroclimateRespondPage() {
       <h1>{microclimate.title}</h1>
       <form onSubmit={handleSubmit}>
         {microclimate.questions.map((question) => (
-          <label key={question.id}>
-            {question.text}
-            <input
-              required={question.required}
+          <fieldset key={question.id}>
+            <legend>{question.text}</legend>
+            <QuestionInput
+              question={question}
               value={answers[question.id] ?? ''}
-              onChange={(e) => setAnswers({ ...answers, [question.id]: e.target.value })}
+              onChange={(value) => setAnswers({ ...answers, [question.id]: value })}
             />
-          </label>
+          </fieldset>
         ))}
         <button type="submit" disabled={submitting}>{submitting ? 'Submitting…' : 'Submit'}</button>
       </form>

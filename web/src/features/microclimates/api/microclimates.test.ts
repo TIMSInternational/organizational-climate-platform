@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { setToken } from '../../../auth/token'
-import { listMicroclimates, createMicroclimate, getMicroclimate, updateMicroclimate, getLiveResults, submitResponse } from './microclimates'
+import { setToken, clearToken } from '../../../auth/token'
+import { listMicroclimates, createMicroclimate, getMicroclimate, getMicroclimatePublic, updateMicroclimate, getLiveResults, submitResponse } from './microclimates'
 
 const baseUrl = 'http://api.test'
 
@@ -57,5 +57,28 @@ describe('microclimates api client', () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 201 }))
     await submitResponse(baseUrl, 'm1', { q1: 'good' })
     expect(fetch).toHaveBeenCalledWith(`${baseUrl}/microclimates/m1/responses`, expect.objectContaining({ method: 'POST' }))
+  })
+
+  describe('getMicroclimatePublic', () => {
+    it('fetches without an Authorization header when no token is stored', async () => {
+      clearToken()
+      vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }))
+      const result = await getMicroclimatePublic(baseUrl, 'm1')
+      expect(fetch).toHaveBeenCalledWith(`${baseUrl}/microclimates/m1`, { headers: {} })
+      expect(result).toEqual(detail)
+    })
+
+    it('attaches an Authorization header when a token happens to be present', async () => {
+      setToken('test-token')
+      vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }))
+      await getMicroclimatePublic(baseUrl, 'm1')
+      expect(fetch).toHaveBeenCalledWith(`${baseUrl}/microclimates/m1`, { headers: { Authorization: 'Bearer test-token' } })
+    })
+
+    it('throws a plain error on a non-ok response instead of redirecting to /login', async () => {
+      clearToken()
+      vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ message: 'Authentication required to view this microclimate' }), { status: 401 }))
+      await expect(getMicroclimatePublic(baseUrl, 'm1')).rejects.toThrow('Authentication required to view this microclimate')
+    })
   })
 })

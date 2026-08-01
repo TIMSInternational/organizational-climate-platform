@@ -187,6 +187,72 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Submitting_an_out_of_range_rating_is_rejected()
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Rating validation", null, _companyId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 4, true, null,
+            new List<CreateQuestionInput> { new("Rate your week", "rating", null, true, 1) }));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+        await client.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
+        var ratingQuestionId = created.Questions.Single().Id;
+
+        var anonymousClient = _factory.CreateClient();
+        var response = await anonymousClient.PostAsJsonAsync($"/microclimates/{created.Id}/responses", new SubmitResponseRequest(
+            new Dictionary<Guid, string> { [ratingQuestionId] = "9000" }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Submitting_a_yes_no_answer_outside_yes_or_no_is_rejected()
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Yes/no validation", null, _companyId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 4, true, null,
+            new List<CreateQuestionInput> { new("Are you happy?", "yes_no", null, true, 1) }));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+        await client.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
+        var yesNoQuestionId = created.Questions.Single().Id;
+
+        var anonymousClient = _factory.CreateClient();
+        var response = await anonymousClient.PostAsJsonAsync($"/microclimates/{created.Id}/responses", new SubmitResponseRequest(
+            new Dictionary<Guid, string> { [yesNoQuestionId] = "maybe" }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Submitting_a_multiple_choice_answer_outside_the_configured_options_is_rejected()
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Multiple choice validation", null, _companyId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 4, true, null,
+            new List<CreateQuestionInput> { new("Pick one", "multiple_choice", ["Red", "Green", "Blue"], true, 1) }));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+        await client.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
+        var choiceQuestionId = created.Questions.Single().Id;
+
+        var anonymousClient = _factory.CreateClient();
+        var invalid = await anonymousClient.PostAsJsonAsync($"/microclimates/{created.Id}/responses", new SubmitResponseRequest(
+            new Dictionary<Guid, string> { [choiceQuestionId] = "Purple" }));
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        var valid = await anonymousClient.PostAsJsonAsync($"/microclimates/{created.Id}/responses", new SubmitResponseRequest(
+            new Dictionary<Guid, string> { [choiceQuestionId] = "Green" }));
+        Assert.Equal(HttpStatusCode.Created, valid.StatusCode);
+    }
+
+    [Fact]
     public async Task Concurrent_response_submissions_do_not_lose_updates()
     {
         var client = _factory.CreateClient();

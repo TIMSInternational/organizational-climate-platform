@@ -1,4 +1,5 @@
 import { authFetch } from '../../../api/authFetch'
+import { getToken } from '../../../auth/token'
 
 export interface Question {
   id: string
@@ -91,6 +92,29 @@ export async function createMicroclimate(baseUrl: string, input: CreateMicroclim
 
 export async function getMicroclimate(baseUrl: string, id: string): Promise<MicroclimateDetail> {
   const response = await authFetch(`${baseUrl}/microclimates/${id}`)
+  return response.json() as Promise<MicroclimateDetail>
+}
+
+// Deliberately does not use authFetch -- this is called from the unauthenticated public
+// respond page (Task 7), same as submitResponse below. A genuinely anonymous visitor has no
+// token to begin with, and authFetch's 401 handling (clear token + hard-redirect to /login)
+// would otherwise yank them off the respond page before the form (or a normal error message)
+// ever renders. A token IS still attached if one happens to be present (an already-logged-in
+// admin previewing the form). The backend allows this specific GET without a token when the
+// microclimate is configured for anonymous responses; anything else surfaces as a normal
+// thrown error for the page to render inline.
+export async function getMicroclimatePublic(baseUrl: string, id: string): Promise<MicroclimateDetail> {
+  const token = getToken()
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
+  const response = await fetch(`${baseUrl}/microclimates/${id}`, { headers })
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    throw new Error((body && body.message) || `Request failed: ${response.status}`)
+  }
   return response.json() as Promise<MicroclimateDetail>
 }
 
