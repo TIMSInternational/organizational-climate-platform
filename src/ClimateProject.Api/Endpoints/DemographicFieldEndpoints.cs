@@ -20,7 +20,7 @@ public static class DemographicFieldEndpoints
 
     private static bool CanAccessCompany(CurrentUser currentUser, Guid companyId)
         => currentUser.Role == Roles.SuperAdmin
-           || currentUser.CompanyId == companyId.ToString();
+           || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
 
     private static DemographicFieldDetail ToDetail(DemographicField f)
         => new(f.Id, f.CompanyId, f.Field, f.Label, f.Type, f.Options, f.Required, f.Order, f.IsActive);

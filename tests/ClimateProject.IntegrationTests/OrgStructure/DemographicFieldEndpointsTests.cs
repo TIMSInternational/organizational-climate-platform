@@ -108,4 +108,22 @@ public class DemographicFieldEndpointsTests : IAsyncLifetime
         var listResponse = await client.GetAsync($"/admin/demographic-fields?companyId={_companyBId}");
         Assert.Equal(HttpStatusCode.Forbidden, listResponse.StatusCode);
     }
+
+    [Theory]
+    [InlineData(Roles.Employee)]
+    [InlineData(Roles.Leader)]
+    [InlineData(Roles.Supervisor)]
+    public async Task Non_admin_role_cannot_manage_fields_even_in_their_own_company(string role)
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, role, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/admin/demographic-fields", new CreateDemographicFieldRequest(
+            _companyAId, "tenure", "Tenure", "number", null, false, 1));
+        Assert.Equal(HttpStatusCode.Forbidden, createResponse.StatusCode);
+
+        var listResponse = await client.GetAsync($"/admin/demographic-fields?companyId={_companyAId}");
+        Assert.Equal(HttpStatusCode.Forbidden, listResponse.StatusCode);
+    }
 }
