@@ -40,12 +40,23 @@ export default function UsersListPage() {
 
   async function handleUpdate(values: UserFormValues) {
     if (!editingUser) return
-    await updateUser(baseUrl, editingUser.id, { name: values.name, isActive: values.isActive })
-    if (values.role !== editingUser.role) {
-      await updateUserRole(baseUrl, editingUser.id, values.role)
+    // updateUser and updateUserRole are two separate backend calls with no server-side
+    // transaction between them (role changes are intentionally SuperAdmin-only and
+    // stricter, per Global Constraints). If updateUser succeeds but updateUserRole then
+    // fails (e.g. a CompanyAdmin gets a 403), the profile change is already persisted.
+    // Always reload() -- even on failure -- so the table reflects whatever the server
+    // actually committed instead of showing stale pre-edit values, and only clear
+    // editingUser (closing the form) once both calls have actually succeeded so the
+    // admin can see the error and retry the remaining change.
+    try {
+      await updateUser(baseUrl, editingUser.id, { name: values.name, isActive: values.isActive })
+      if (values.role !== editingUser.role) {
+        await updateUserRole(baseUrl, editingUser.id, values.role)
+      }
+      setEditingUser(null)
+    } finally {
+      await reload()
     }
-    setEditingUser(null)
-    await reload()
   }
 
   if (error) {
