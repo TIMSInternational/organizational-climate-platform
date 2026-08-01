@@ -1,5 +1,13 @@
 import { authFetch } from '../../../api/authFetch'
 
+// NOT YET USABLE FROM A BROWSER IN PRODUCTION: climate-tracking has no CORS configuration
+// today, and authFetch always sets both Authorization and Content-Type: application/json,
+// which forces a preflight on every cross-origin call this client makes. Every export
+// below will fail until climate-tracking's CORS policy allows this frontend's origin(s) --
+// tracked as #56's Plan B (climate-tracking-side change, not fixable here). Don't build UI
+// that depends on this client succeeding until that lands. See
+// docs/superpowers/specs/2026-07-31-tracking-integration-design.md ("Requires: ...CORS...").
+
 export interface SemaforoCounts {
   rojo: number
   amarillo: number

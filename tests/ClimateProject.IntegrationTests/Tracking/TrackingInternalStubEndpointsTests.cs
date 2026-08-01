@@ -56,4 +56,29 @@ public class TrackingInternalStubEndpointsTests
         var response = await client.PostAsync("/api/internal/send-notification", new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
+
+    // Prior review finding: /nodos and /personas 400 on a non-GUID company_id while
+    // /ciclos-encuesta and /hallazgos silently 200'd regardless -- a misconfigured
+    // ProcomerCompanyId on climate-tracking's side produced a confusing half-working
+    // state instead of one clear failure. These assert the two stub routes now fail
+    // closed exactly like the real routes.
+    [Fact]
+    public async Task Ciclos_endpoint_rejects_non_guid_company_id()
+    {
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AuthWebApplicationFactory.TestInternalApiKey);
+
+        var response = await client.GetAsync("/api/internal/ciclos-encuesta?company_id=not-a-guid");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Hallazgos_endpoint_rejects_non_guid_company_id()
+    {
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AuthWebApplicationFactory.TestInternalApiKey);
+
+        var response = await client.GetAsync("/api/internal/hallazgos?company_id=not-a-guid");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

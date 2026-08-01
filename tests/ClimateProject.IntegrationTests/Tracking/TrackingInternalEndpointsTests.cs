@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -22,6 +23,14 @@ public class TrackingInternalEndpointsTests : IAsyncLifetime
         _factory = new AuthWebApplicationFactory(postgres.ConnectionString);
     }
 
+    private Guid _parentDepartmentId;
+    private Guid _childDepartmentId;
+    private Guid _managerId;
+    private string _legacyParentNodoId = null!;
+    private string _legacyChildNodoId = null!;
+    private string _legacyManagerPersonaId = null!;
+    private string _legacyPersonaId = null!;
+
     public async Task InitializeAsync()
     {
         await _factory.ApplyMigrationsAsync();
@@ -32,15 +41,54 @@ public class TrackingInternalEndpointsTests : IAsyncLifetime
         db.Companies.Add(company);
         _companyId = company.Id;
 
-        var legacyNodoId = $"legacy-nodo-{Guid.NewGuid():N}";
-        var legacyPersonaId = $"legacy-persona-{Guid.NewGuid():N}";
+        _legacyParentNodoId = $"legacy-nodo-parent-{Guid.NewGuid():N}";
+        _legacyChildNodoId = $"legacy-nodo-child-{Guid.NewGuid():N}";
+        _legacyManagerPersonaId = $"legacy-persona-manager-{Guid.NewGuid():N}";
+        _legacyPersonaId = $"legacy-persona-{Guid.NewGuid():N}";
+
+        _parentDepartmentId = Guid.NewGuid();
+        _childDepartmentId = Guid.NewGuid();
+        _managerId = Guid.NewGuid();
+
+        // Parent department first -- the manager references it via DepartmentId and the
+        // child department references it via ParentDepartmentId (Restrict on delete),
+        // so it must exist before either.
+        db.Departments.Add(new Department
+        {
+            Id = _parentDepartmentId,
+            CompanyId = _companyId,
+            Name = "Headquarters",
+            LegacyExternalId = _legacyParentNodoId,
+            EmployeeCount = 1,
+            IsActive = true,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        db.Users.Add(new User
+        {
+            Id = _managerId,
+            CompanyId = _companyId,
+            Email = $"manager@{companyDomain}",
+            Name = "Test Manager",
+            Role = "company_admin",
+            PersonaExternalId = _legacyManagerPersonaId,
+            DepartmentId = _parentDepartmentId,
+            IsActive = true,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync();
 
         db.Departments.Add(new Department
         {
-            Id = Guid.NewGuid(),
+            Id = _childDepartmentId,
             CompanyId = _companyId,
             Name = "Engineering",
-            LegacyExternalId = legacyNodoId,
+            LegacyExternalId = _legacyChildNodoId,
+            ParentDepartmentId = _parentDepartmentId,
+            ManagerId = _managerId,
             EmployeeCount = 3,
             IsActive = true,
             CreatedAt = DateTimeOffset.UtcNow,
@@ -53,7 +101,9 @@ public class TrackingInternalEndpointsTests : IAsyncLifetime
             Email = $"persona@{companyDomain}",
             Name = "Test Persona",
             Role = "employee",
-            PersonaExternalId = legacyPersonaId,
+            PersonaExternalId = _legacyPersonaId,
+            DepartmentId = _childDepartmentId,
+            ManagerId = _managerId,
             IsActive = true,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
@@ -74,10 +124,18 @@ public class TrackingInternalEndpointsTests : IAsyncLifetime
 
         var envelope = await response.Content.ReadFromJsonAsync<Envelope<NodosData>>(_snakeCaseOptions);
         Assert.True(envelope!.Success);
-        var nodo = Assert.Single(envelope.Data.Nodos);
-        Assert.Equal("Engineering", nodo.Nombre);
-        Assert.Equal(3, nodo.CantidadColaboradores);
-        Assert.StartsWith("legacy-nodo-", nodo.NodoId);
+        Assert.Equal(2, envelope.Data.Nodos.Count);
+
+        var parent = Assert.Single(envelope.Data.Nodos, n => n.Nombre == "Headquarters");
+        Assert.Equal(_legacyParentNodoId, parent.NodoId);
+        Assert.Null(parent.NodoPadreId);
+        Assert.Null(parent.LiderId);
+
+        var child = Assert.Single(envelope.Data.Nodos, n => n.Nombre == "Engineering");
+        Assert.Equal(_legacyChildNodoId, child.NodoId);
+        Assert.Equal(3, child.CantidadColaboradores);
+        Assert.Equal(parent.NodoId, child.NodoPadreId);
+        Assert.Equal(_legacyManagerPersonaId, child.LiderId);
     }
 
     [Fact]
@@ -91,10 +149,39 @@ public class TrackingInternalEndpointsTests : IAsyncLifetime
 
         var envelope = await response.Content.ReadFromJsonAsync<Envelope<PersonasData>>(_snakeCaseOptions);
         Assert.True(envelope!.Success);
-        var persona = Assert.Single(envelope.Data.Personas);
-        Assert.Equal("Test Persona", persona.NombreCompleto);
-        Assert.StartsWith("legacy-persona-", persona.PersonaId);
+        var persona = Assert.Single(envelope.Data.Personas, p => p.NombreCompleto == "Test Persona");
+        Assert.Equal(_legacyPersonaId, persona.PersonaId);
         Assert.StartsWith("persona@", persona.Correo);
+        Assert.Equal(_legacyManagerPersonaId, persona.ManagerId);
+        Assert.Equal(_legacyChildNodoId, persona.NodoId);
+    }
+
+    // Regression test for the Critical finding: /personas used to emit `NodoId` from the
+    // never-populated `User.NodoId` column instead of resolving it through
+    // `User.DepartmentId`, so it never matched any nodo_id from /nodos. Assert the join
+    // explicitly across both endpoints rather than just checking each shape in isolation.
+    [Fact]
+    public async Task Personas_nodo_id_resolves_to_a_nodo_id_present_in_the_nodos_response()
+    {
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AuthWebApplicationFactory.TestInternalApiKey);
+
+        var nodosResponse = await client.GetAsync($"/api/internal/nodos?company_id={_companyId}");
+        var personasResponse = await client.GetAsync($"/api/internal/personas?company_id={_companyId}");
+        Assert.Equal(HttpStatusCode.OK, nodosResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, personasResponse.StatusCode);
+
+        var nodosEnvelope = await nodosResponse.Content.ReadFromJsonAsync<Envelope<NodosData>>(_snakeCaseOptions);
+        var personasEnvelope = await personasResponse.Content.ReadFromJsonAsync<Envelope<PersonasData>>(_snakeCaseOptions);
+
+        var nodoIds = nodosEnvelope!.Data.Nodos.Select(n => n.NodoId).ToHashSet();
+        Assert.NotEmpty(nodoIds);
+
+        foreach (var persona in personasEnvelope!.Data.Personas)
+        {
+            Assert.False(string.IsNullOrEmpty(persona.NodoId));
+            Assert.Contains(persona.NodoId, nodoIds);
+        }
     }
 
     [Fact]

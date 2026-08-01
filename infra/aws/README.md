@@ -65,6 +65,20 @@ Used as a workaround while GitHub Actions is billing-blocked. Requires local AWS
        EcrAccessRoleArn=<AppRunnerEcrAccessRoleArn from step 1>
    ```
 
+   > `CorsAllowedOrigin`, `CorsAllowedWildcardOrigin`, `TrackingJwtSecretArn`,
+   > `DatabaseConnectionStringSecretArn` and `InternalApiKeySecretArn` have no CloudFormation
+   > default and aren't in the command above — `aws cloudformation deploy` reuses each
+   > parameter's previous value on a stack **update** when it's omitted, so this is safe once
+   > every one of them has already been supplied at least once. On the **first** deploy after
+   > a new no-default parameter is introduced (like `InternalApiKeySecretArn`, added for the
+   > `/api/internal/*` routes), it must be passed explicitly that one time or the deploy fails
+   > with a missing-parameter error — and until it's set, every `/api/internal/*` request
+   > 500s in production with `"Internal API is not configured."` (`InternalApiKeyFilter`
+   > fails closed when the key is unset). Create an `InternalApiKey` secret in Secrets
+   > Manager first (same shared value climate-tracking's `INTERNAL_API_KEY` config points
+   > at), then add `InternalApiKeySecretArn=<that-secret-arn>` to the command above for that
+   > first run.
+
 6. Confirm the service is healthy by checking the `ServiceUrl` stack output and hitting `/health`.
 
 ## Stack and resource name reference

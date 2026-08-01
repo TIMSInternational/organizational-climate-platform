@@ -7,6 +7,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ClimateProject.Api.Endpoints;
 
+// Contract: every `company_id` query param below must be a climate-project `Company` GUID
+// (Departments.CompanyId / Users.CompanyId), never a legacy/free-form identifier. All 5
+// routes are called by climate-tracking's `ClimateProjectClient` with the same configured
+// `_options.ProcomerCompanyId` value — a blank or legacy value fails closed (400) uniformly
+// across every route here, rather than succeeding on some and 400ing on others.
 public static class TrackingInternalEndpoints
 {
     private static readonly JsonSerializerOptions SnakeCaseOptions = new()
@@ -30,9 +35,9 @@ public static class TrackingInternalEndpoints
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
-        if (!Guid.TryParse(companyId, out var companyGuid))
+        if (!TryParseCompanyId(companyId, out var companyGuid, out var error))
         {
-            return Results.Json(new { message = "company_id must be a valid GUID." }, statusCode: 400);
+            return error;
         }
 
         var departments = await db.Departments
@@ -67,9 +72,9 @@ public static class TrackingInternalEndpoints
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
-        if (!Guid.TryParse(companyId, out var companyGuid))
+        if (!TryParseCompanyId(companyId, out var companyGuid, out var error))
         {
-            return Results.Json(new { message = "company_id must be a valid GUID." }, statusCode: 400);
+            return error;
         }
 
         var users = await db.Users
@@ -78,11 +83,27 @@ public static class TrackingInternalEndpoints
 
         var usersById = users.ToDictionary(u => u.Id);
 
+        // The real user->department link is User.DepartmentId, not the never-populated
+        // User.NodoId column (no code path in this repo writes NodoId). Resolve nodo_id via
+        // the department the user belongs to, using the same TrackingIdentifiers convention
+        // the /nodos endpoint uses, so a persona's nodo_id always joins to a nodo_id present
+        // in that endpoint's response.
+        var departmentIds = users
+            .Where(u => u.DepartmentId.HasValue)
+            .Select(u => u.DepartmentId!.Value)
+            .Distinct()
+            .ToList();
+        var departmentsById = await db.Departments
+            .Where(d => departmentIds.Contains(d.Id))
+            .ToDictionaryAsync(d => d.Id, cancellationToken);
+
         var personas = users.Select(u => new PersonaInternalDto(
             PersonaId: TrackingIdentifiers.ExternalPersonaId(u),
             NombreCompleto: u.Name,
             Correo: u.Email,
-            NodoId: u.NodoId ?? string.Empty,
+            NodoId: u.DepartmentId.HasValue && departmentsById.TryGetValue(u.DepartmentId.Value, out var department)
+                ? TrackingIdentifiers.ExternalNodoId(department)
+                : string.Empty,
             ManagerId: u.ManagerId.HasValue && usersById.TryGetValue(u.ManagerId.Value, out var manager)
                 ? TrackingIdentifiers.ExternalPersonaId(manager)
                 : null,
@@ -97,6 +118,11 @@ public static class TrackingInternalEndpoints
     private static Task<IResult> ListCiclosAsync(
         [FromQuery(Name = "company_id")] string companyId)
     {
+        if (!TryParseCompanyId(companyId, out _, out var error))
+        {
+            return Task.FromResult(error);
+        }
+
         // Stub: surveys domain (#51) doesn't exist yet. Always returns an empty list;
         // #51 replaces this body with a real query once survey-cycle data exists.
         return Task.FromResult(Results.Json(new Envelope<CiclosData>(true, new CiclosData([])), SnakeCaseOptions));
@@ -107,6 +133,11 @@ public static class TrackingInternalEndpoints
         [FromQuery(Name = "ciclo_id")] string? cicloId,
         [FromQuery(Name = "hallazgo_id")] string? hallazgoId)
     {
+        if (!TryParseCompanyId(companyId, out _, out var error))
+        {
+            return Task.FromResult(error);
+        }
+
         // Stub: surveys domain (#51) doesn't exist yet. Always returns an empty list
         // regardless of the ciclo_id/hallazgo_id filters; #51 replaces this body with a
         // real query and MUST honor both filters at that point (the old Next.js
@@ -119,5 +150,21 @@ public static class TrackingInternalEndpoints
         // Stub: notifications domain (#55) doesn't exist yet. No-op success response;
         // #55 replaces this body with a real send once notification infrastructure exists.
         return Results.Json(new Envelope<object?>(true, null), SnakeCaseOptions);
+    }
+
+    // Shared `company_id` validation for all 5 /api/internal/* routes -- see the contract
+    // note on the containing class. Keeping this uniform across real and stub endpoints is
+    // itself the fix for the validation drift a prior review flagged (real routes 400ing on
+    // a bad value while stub routes silently 200'd).
+    private static bool TryParseCompanyId(string companyId, out Guid companyGuid, out IResult error)
+    {
+        if (Guid.TryParse(companyId, out companyGuid))
+        {
+            error = null!;
+            return true;
+        }
+
+        error = Results.Json(new { message = "company_id must be a valid GUID." }, statusCode: 400);
+        return false;
     }
 }

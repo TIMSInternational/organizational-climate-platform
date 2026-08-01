@@ -44,5 +44,22 @@ Requires the API (above) running on `http://localhost:5080` — `web/.env.develo
 ## Deployments
 
 - **Frontend:** [organizational-climate-platform.vercel.app](https://organizational-climate-platform.vercel.app) — deployed via Vercel, Root Directory `web/`, builds on push independent of GitHub Actions. Preview deployments use the `https://climate-*-federicos-projects-21f2ff63.vercel.app` pattern (also allowlisted in the API's CORS policy).
-- **Backend:** `https://bhgrdkd4gt.us-east-1.awsapprunner.com` — AWS App Runner, see `infra/aws/README.md` for the deploy runbook. `TrackingJwtSecret` and the database connection string are supplied via Secrets Manager (`RuntimeEnvironmentSecrets`), not plain env vars.
+- **Backend:** `https://bhgrdkd4gt.us-east-1.awsapprunner.com` — AWS App Runner, see `infra/aws/README.md` for the deploy runbook. `TrackingJwtSecret`, `InternalApiKey`, and the database connection string are supplied via Secrets Manager (`RuntimeEnvironmentSecrets`), not plain env vars. `InternalApiKey` must be set or every `/api/internal/*` route 500s — see `infra/aws/README.md`'s manual-path step 5 note.
 - **Database:** Supabase-hosted Postgres (project `organizational-climate-platform`, `us-east-1`). The app connects via the Transaction pooler (port 6543) at runtime; EF Core migrations must be run against the **direct** connection (port 5432, `db.<project-ref>.supabase.co`) — the pooler's transaction mode is incompatible with `dotnet ef database update`. Local dev and the integration test suite use the `docker-compose` Postgres instead (never Supabase).
+
+## Tracking-module integration (#56)
+
+- **`/api/internal/*` (nodos, personas, ciclos-encuesta, hallazgos, send-notification):**
+  Authed via a static `InternalApiKey` (a `Bearer` token, not a user JWT) — the only caller
+  is climate-tracking's own backend. Every route's `company_id` query param must be a
+  climate-project `Company` GUID; all 5 validate it the same way and 400 uniformly on
+  anything else (climate-tracking passes the same configured value to all 5, so a
+  misconfiguration should fail closed everywhere, not just on the routes that happen to
+  have real data behind them).
+- **Frontend `web/src/features/tracking/api/trackingApi.ts`:** a typed client for calling
+  climate-tracking's API directly from the browser (no proxy through this backend). **This
+  client is not yet usable in production or from a browser at all** — climate-tracking has
+  no CORS configuration, so every cross-origin call from this client will fail the
+  preflight `authFetch` forces (it always sets both `Authorization` and
+  `Content-Type: application/json`). Fixing this is climate-tracking-side work, tracked
+  under `#56`'s Plan B; don't wire up UI that calls this client until that lands.
