@@ -22,6 +22,12 @@ public class MicroclimateConfiguration : IEntityTypeConfiguration<Microclimate>
         builder.Property(m => m.CreatedAt).HasColumnName("created_at").IsRequired();
         builder.Property(m => m.UpdatedAt).HasColumnName("updated_at").IsRequired();
 
+        // Optimistic concurrency token mapped to PostgreSQL's built-in "xmin" system column.
+        // This requires no migration/schema change -- xmin already exists on every table --
+        // it just makes EF Core detect lost updates (e.g. two concurrent response submissions)
+        // instead of silently overwriting one with the other.
+        builder.Property<uint>("RowVersion").IsRowVersion();
+
         builder.HasIndex(m => new { m.CompanyId, m.Status });
 
         builder.HasOne<Company>().WithMany().HasForeignKey(m => m.CompanyId);

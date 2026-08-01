@@ -37,9 +37,12 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
 
     public Task DisposeAsync() => Task.CompletedTask;
 
-    private async Task<string> SignUpAndGetTokenAsync(HttpClient client, string role)
+    private Task<string> SignUpAndGetTokenAsync(HttpClient client, string role)
+        => SignUpAndGetTokenAsync(client, role, _companyDomain, _companyId);
+
+    private async Task<string> SignUpAndGetTokenAsync(HttpClient client, string role, string emailDomain, Guid companyId)
     {
-        var email = $"{Guid.NewGuid():N}@{_companyDomain}";
+        var email = $"{Guid.NewGuid():N}@{emailDomain}";
         var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test Admin", email, "a-good-password"));
         var token = (await signup.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
 
@@ -47,7 +50,7 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
         var user = await db.Users.FirstAsync(u => u.Email == email);
         user.Role = role;
-        user.CompanyId = _companyId;
+        user.CompanyId = companyId;
         await db.SaveChangesAsync();
 
         var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
@@ -103,5 +106,112 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
             new Dictionary<Guid, string> { [questionId] = "hello" }));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Word_cloud_only_counts_open_text_answers_not_ratings_or_yes_no()
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Mixed question types", null, _companyId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 4, true, null,
+            new List<CreateQuestionInput>
+            {
+                new("How do you feel?", "open_text", null, true, 1),
+                new("Rate your week", "rating", null, true, 2),
+                new("Are you happy?", "yes_no", null, true, 3),
+            }));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+        await client.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
+
+        var openTextQuestionId = created.Questions.Single(q => q.Type == "open_text").Id;
+        var ratingQuestionId = created.Questions.Single(q => q.Type == "rating").Id;
+        var yesNoQuestionId = created.Questions.Single(q => q.Type == "yes_no").Id;
+
+        var anonymousClient = _factory.CreateClient();
+        var response = await anonymousClient.PostAsJsonAsync($"/microclimates/{created.Id}/responses", new SubmitResponseRequest(
+            new Dictionary<Guid, string>
+            {
+                [openTextQuestionId] = "great amazing",
+                [ratingQuestionId] = "5",
+                [yesNoQuestionId] = "yes",
+            }));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        anonymousClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var liveResponse = await anonymousClient.GetAsync($"/microclimates/{created.Id}/live-results");
+        var live = await liveResponse.Content.ReadFromJsonAsync<LiveResultsDetail>();
+
+        // The rating value "5" and the yes/no answer "yes" must not pollute the word cloud --
+        // only the open_text answer's words should be counted.
+        Assert.DoesNotContain(live!.WordCloud, w => w.Text == "5");
+        Assert.DoesNotContain(live.WordCloud, w => w.Text == "yes");
+        Assert.Contains(live.WordCloud, w => w.Text == "great" && w.Value == 1);
+        Assert.Contains(live.WordCloud, w => w.Text == "amazing" && w.Value == 1);
+    }
+
+    [Fact]
+    public async Task Non_anonymous_microclimate_rejects_a_response_from_a_different_companys_authenticated_user()
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        var (microclimateId, questionId) = await CreateActiveMicroclimateAsync(client, adminToken, anonymous: false);
+
+        var otherCompanyDomain = $"live-other-{Guid.NewGuid():N}.test";
+        Guid otherCompanyId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var otherCompany = new Company { Id = Guid.NewGuid(), Name = "Other Co", EmailDomain = otherCompanyDomain, CreatedAt = DateTimeOffset.UtcNow };
+            db.Companies.Add(otherCompany);
+            otherCompanyId = otherCompany.Id;
+            await db.SaveChangesAsync();
+        }
+
+        var otherClient = _factory.CreateClient();
+        var otherToken = await SignUpAndGetTokenAsync(otherClient, Roles.CompanyAdmin, otherCompanyDomain, otherCompanyId);
+        otherClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", otherToken);
+
+        var response = await otherClient.PostAsJsonAsync($"/microclimates/{microclimateId}/responses", new SubmitResponseRequest(
+            new Dictionary<Guid, string> { [questionId] = "hello" }));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        // Confirm the cross-company attempt did not sneak through and inflate the aggregate.
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var liveResponse = await client.GetAsync($"/microclimates/{microclimateId}/live-results");
+        var live = await liveResponse.Content.ReadFromJsonAsync<LiveResultsDetail>();
+        Assert.Equal(0, live!.ResponseCount);
+    }
+
+    [Fact]
+    public async Task Concurrent_response_submissions_do_not_lose_updates()
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        var (microclimateId, questionId) = await CreateActiveMicroclimateAsync(client, adminToken, anonymous: true);
+
+        const int concurrentSubmissions = 8;
+        var tasks = Enumerable.Range(0, concurrentSubmissions).Select(async i =>
+        {
+            var anonymousClient = _factory.CreateClient();
+            return await anonymousClient.PostAsJsonAsync($"/microclimates/{microclimateId}/responses", new SubmitResponseRequest(
+                new Dictionary<Guid, string> { [questionId] = $"word{i}" }));
+        });
+
+        var responses = await Task.WhenAll(tasks);
+        Assert.All(responses, r => Assert.Equal(HttpStatusCode.Created, r.StatusCode));
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var liveResponse = await client.GetAsync($"/microclimates/{microclimateId}/live-results");
+        var live = await liveResponse.Content.ReadFromJsonAsync<LiveResultsDetail>();
+
+        // Without concurrency handling, concurrent read-modify-write races on ResponseCount /
+        // WordCloudData would silently drop some increments (lost updates). Every submission
+        // must be reflected.
+        Assert.Equal(concurrentSubmissions, live!.ResponseCount);
+        Assert.Equal(concurrentSubmissions, live.WordCloud.Sum(w => w.Value));
     }
 }

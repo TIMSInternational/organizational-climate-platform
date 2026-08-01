@@ -262,9 +262,22 @@ public static class MicroclimateEndpoints
             return Results.Json(new { message = "Microclimate not found" }, statusCode: 404);
         }
 
-        if (!microclimate.RealtimeSettings.AnonymousResponses && !(httpContext.User.Identity?.IsAuthenticated ?? false))
+        var isAuthenticated = httpContext.User.Identity?.IsAuthenticated ?? false;
+
+        if (!microclimate.RealtimeSettings.AnonymousResponses)
         {
-            return Results.Json(new { message = "This microclimate requires authentication to respond" }, statusCode: 401);
+            if (!isAuthenticated)
+            {
+                return Results.Json(new { message = "This microclimate requires authentication to respond" }, statusCode: 401);
+            }
+
+            // Non-anonymous microclimates require the submitter to belong to the same
+            // company -- otherwise any authenticated user from any company could inflate
+            // another company's ResponseCount/word cloud.
+            if (!CanAccessCompany(httpContext.User.GetCurrentUser(), microclimate.CompanyId))
+            {
+                return Results.Forbid();
+            }
         }
 
         if (microclimate.Status != "active")
@@ -272,29 +285,62 @@ public static class MicroclimateEndpoints
             return Results.Json(new { message = "This microclimate is not currently accepting responses" }, statusCode: 400);
         }
 
-        var openTextAnswers = request.Answers.Values;
-        var existingCloud = string.IsNullOrWhiteSpace(microclimate.LiveResults.WordCloudData)
-            ? new Dictionary<string, int>()
-            : System.Text.Json.JsonSerializer.Deserialize<List<WordCloudEntry>>(microclimate.LiveResults.WordCloudData)!.ToDictionary(w => w.Text, w => w.Value);
+        // Word cloud is built from open-text responses only -- ratings, yes/no, and
+        // multiple-choice option text must not be fed into word-frequency counting.
+        var openTextQuestionIds = (await db.MicroclimateQuestions
+                .Where(q => q.MicroclimateId == id && q.Type == "open_text")
+                .Select(q => q.Id)
+                .ToListAsync(cancellationToken))
+            .ToHashSet();
 
-        foreach (var (word, count) in CountWordFrequencies(openTextAnswers))
-        {
-            existingCloud[word] = existingCloud.GetValueOrDefault(word) + count;
-        }
-
-        var topWords = existingCloud
-            .OrderByDescending(kv => kv.Value)
-            .Take(20)
-            .Select(kv => new WordCloudEntry(kv.Key, kv.Value))
+        var openTextAnswers = request.Answers
+            .Where(kv => openTextQuestionIds.Contains(kv.Key))
+            .Select(kv => kv.Value)
             .ToList();
 
-        microclimate.ResponseCount += 1;
-        microclimate.LiveResults.WordCloudData = System.Text.Json.JsonSerializer.Serialize(topWords);
-        microclimate.LiveResults.EngagementLevel = ComputeEngagementLevel(microclimate.ResponseCount, microclimate.TargetParticipantCount);
-        microclimate.LiveResults.SentimentScore = 0;
-        microclimate.UpdatedAt = DateTimeOffset.UtcNow;
+        // ResponseCount and LiveResults.WordCloudData are a read-modify-write aggregate with
+        // no natural per-response row to insert into, so concurrent submissions (the normal
+        // case for a live microclimate) can race. Retry on optimistic-concurrency conflict
+        // (backed by the "xmin" token configured in MicroclimateConfiguration.cs) instead of
+        // silently losing one submission's increment/word counts.
+        const int maxAttempts = 20;
+        for (var attempt = 1; ; attempt++)
+        {
+            var existingCloud = string.IsNullOrWhiteSpace(microclimate.LiveResults.WordCloudData)
+                ? new Dictionary<string, int>()
+                : System.Text.Json.JsonSerializer.Deserialize<List<WordCloudEntry>>(microclimate.LiveResults.WordCloudData)!.ToDictionary(w => w.Text, w => w.Value);
 
-        await db.SaveChangesAsync(cancellationToken);
+            foreach (var (word, count) in CountWordFrequencies(openTextAnswers))
+            {
+                existingCloud[word] = existingCloud.GetValueOrDefault(word) + count;
+            }
+
+            var topWords = existingCloud
+                .OrderByDescending(kv => kv.Value)
+                .Take(20)
+                .Select(kv => new WordCloudEntry(kv.Key, kv.Value))
+                .ToList();
+
+            microclimate.ResponseCount += 1;
+            microclimate.LiveResults.WordCloudData = System.Text.Json.JsonSerializer.Serialize(topWords);
+            microclimate.LiveResults.EngagementLevel = ComputeEngagementLevel(microclimate.ResponseCount, microclimate.TargetParticipantCount);
+            microclimate.LiveResults.SentimentScore = 0;
+            microclimate.UpdatedAt = DateTimeOffset.UtcNow;
+
+            try
+            {
+                await db.SaveChangesAsync(cancellationToken);
+                break;
+            }
+            catch (DbUpdateConcurrencyException) when (attempt < maxAttempts)
+            {
+                // Another submission won the race and committed first. Discard our stale
+                // tracked state entirely and re-read the now-current row, then reapply this
+                // submission's word counts/increment on top of it.
+                db.ChangeTracker.Clear();
+                microclimate = await db.Microclimates.FirstAsync(m => m.Id == id, cancellationToken);
+            }
+        }
 
         return Results.StatusCode(201);
     }
