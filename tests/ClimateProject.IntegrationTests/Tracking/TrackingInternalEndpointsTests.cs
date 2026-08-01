@@ -184,6 +184,50 @@ public class TrackingInternalEndpointsTests : IAsyncLifetime
         }
     }
 
+    // Regression test for the finding that /personas emitted nodo_id: "" for any user with
+    // no DepartmentId (the common case: plain /auth/signup and Google login never set it).
+    // A departmentless user must still get a non-empty nodo_id that resolves to a nodo_id
+    // present in /nodos.
+    [Fact]
+    public async Task Personas_with_no_department_resolve_to_a_synthetic_unassigned_nodo_present_in_nodos_response()
+    {
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            db.Users.Add(new User
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _companyId,
+                Email = "no-department@internal.test",
+                Name = "No Department User",
+                Role = "employee",
+                DepartmentId = null,
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AuthWebApplicationFactory.TestInternalApiKey);
+
+        var nodosResponse = await client.GetAsync($"/api/internal/nodos?company_id={_companyId}");
+        var personasResponse = await client.GetAsync($"/api/internal/personas?company_id={_companyId}");
+        Assert.Equal(HttpStatusCode.OK, nodosResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, personasResponse.StatusCode);
+
+        var nodosEnvelope = await nodosResponse.Content.ReadFromJsonAsync<Envelope<NodosData>>(_snakeCaseOptions);
+        var personasEnvelope = await personasResponse.Content.ReadFromJsonAsync<Envelope<PersonasData>>(_snakeCaseOptions);
+
+        var expectedUnassignedId = TrackingIdentifiers.UnassignedNodoId(_companyId);
+        Assert.Contains(nodosEnvelope!.Data.Nodos, n => n.NodoId == expectedUnassignedId && n.CantidadColaboradores == 1);
+
+        var persona = Assert.Single(personasEnvelope!.Data.Personas, p => p.NombreCompleto == "No Department User");
+        Assert.Equal(expectedUnassignedId, persona.NodoId);
+        Assert.Contains(persona.NodoId, nodosEnvelope.Data.Nodos.Select(n => n.NodoId));
+    }
+
     [Fact]
     public async Task Rejects_request_with_missing_or_wrong_api_key()
     {

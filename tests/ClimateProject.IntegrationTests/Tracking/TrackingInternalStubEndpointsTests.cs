@@ -57,28 +57,35 @@ public class TrackingInternalStubEndpointsTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    // Prior review finding: /nodos and /personas 400 on a non-GUID company_id while
-    // /ciclos-encuesta and /hallazgos silently 200'd regardless -- a misconfigured
-    // ProcomerCompanyId on climate-tracking's side produced a confusing half-working
-    // state instead of one clear failure. These assert the two stub routes now fail
-    // closed exactly like the real routes.
+    // Regression test for the finding that a prior pass added company_id GUID validation to
+    // these stub routes, deviating from the plan's Task 3 Step 2 (unconditional empty/no-op
+    // stub bodies, no validation) without it being requested or approved. Assert the stubs
+    // stay permissive -- see the class-level contract note on TrackingInternalEndpoints.
     [Fact]
-    public async Task Ciclos_endpoint_rejects_non_guid_company_id()
+    public async Task Ciclos_endpoint_returns_empty_envelope_even_for_a_non_guid_company_id()
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AuthWebApplicationFactory.TestInternalApiKey);
 
         var response = await client.GetAsync("/api/internal/ciclos-encuesta?company_id=not-a-guid");
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var envelope = await response.Content.ReadFromJsonAsync<Envelope<CiclosData>>(_snakeCaseOptions);
+        Assert.True(envelope!.Success);
+        Assert.Empty(envelope.Data.Ciclos);
     }
 
     [Fact]
-    public async Task Hallazgos_endpoint_rejects_non_guid_company_id()
+    public async Task Hallazgos_endpoint_returns_empty_envelope_even_for_a_non_guid_company_id()
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AuthWebApplicationFactory.TestInternalApiKey);
 
         var response = await client.GetAsync("/api/internal/hallazgos?company_id=not-a-guid");
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var envelope = await response.Content.ReadFromJsonAsync<Envelope<HallazgosData>>(_snakeCaseOptions);
+        Assert.True(envelope!.Success);
+        Assert.Empty(envelope.Data.Hallazgos);
     }
 }

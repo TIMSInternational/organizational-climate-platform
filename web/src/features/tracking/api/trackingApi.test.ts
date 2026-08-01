@@ -125,4 +125,17 @@ describe('trackingApi client', () => {
     expect(fetch).toHaveBeenCalledWith(`${baseUrl}/api/planes-accion/p1/involucrados`, expect.objectContaining({ method: 'POST' }))
     expect(response.involucradosExternalIds).toContain('p2')
   })
+
+  // Regression test for the finding that VITE_TRACKING_API_BASE_URL was added to
+  // web/.env.example but never actually read anywhere in web/src -- every export took
+  // baseUrl as a required explicit argument with no default, so the env var was decorative.
+  it('defaults baseUrl to VITE_TRACKING_API_BASE_URL when no explicit baseUrl is passed', async () => {
+    vi.stubEnv('VITE_TRACKING_API_BASE_URL', 'http://tracking.env.test')
+    const result = { conteos: { rojo: 0, amarillo: 0, verde: 0 }, porNodo: [] }
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(result), { status: 200 }))
+
+    await getConsolidado()
+
+    expect(fetch).toHaveBeenCalledWith('http://tracking.env.test/api/consolidado', expect.anything())
+  })
 })
