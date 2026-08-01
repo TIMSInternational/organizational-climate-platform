@@ -120,6 +120,7 @@ app.MapDepartmentEndpoints();
 app.MapUserEndpoints();
 app.MapInvitationEndpoints();
 app.MapInvitationAcceptEndpoints();
+app.MapSystemSettingsEndpoints();
 
 app.Run();
 
