@@ -54,3 +54,17 @@ public sealed record UpdateActionPlanRequest(
     string? Status,
     string? Priority,
     string[]? Tags);
+
+public sealed record KpiUpdateInput(Guid KpiId, decimal NewValue, string? Notes);
+public sealed record ObjectiveUpdateInput(Guid ObjectiveId, string StatusUpdate, int? CompletionPercentage, string? Notes);
+
+public sealed record RecordProgressRequest(
+    string OverallNotes,
+    List<KpiUpdateInput>? KpiUpdates,
+    List<ObjectiveUpdateInput>? ObjectiveUpdates);
+
+public sealed record ProgressUpdateDetail(
+    Guid Id,
+    DateTimeOffset UpdateDate,
+    string OverallNotes,
+    Guid UpdatedBy);

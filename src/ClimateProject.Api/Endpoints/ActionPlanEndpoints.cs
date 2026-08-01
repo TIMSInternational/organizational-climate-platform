@@ -17,6 +17,7 @@ public static class ActionPlanEndpoints
         group.MapPost("", CreateAsync);
         group.MapGet("/{id:guid}", GetAsync);
         group.MapPut("/{id:guid}", UpdateAsync);
+        group.MapPost("/{id:guid}/progress", RecordProgressAsync);
     }
 
     private static bool CanAccessCompany(CurrentUser currentUser, Guid companyId)
@@ -216,5 +217,95 @@ public static class ActionPlanEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         return Results.Ok(await ToDetailAsync(plan, db, cancellationToken));
+    }
+
+    private static async Task<IResult> RecordProgressAsync(
+        Guid id,
+        RecordProgressRequest request,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        var plan = await db.ActionPlans.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        if (plan is null)
+        {
+            return Results.Json(new { message = "Action plan not found" }, statusCode: 404);
+        }
+
+        if (!CanAccessCompany(currentUser, plan.CompanyId))
+        {
+            return Results.Forbid();
+        }
+
+        var kpis = await db.ActionPlanKpis.Where(k => k.ActionPlanId == id).ToListAsync(cancellationToken);
+        var objectives = await db.ActionPlanObjectives.Where(o => o.ActionPlanId == id).ToListAsync(cancellationToken);
+
+        foreach (var kpiUpdate in request.KpiUpdates ?? [])
+        {
+            if (kpis.All(k => k.Id != kpiUpdate.KpiId))
+            {
+                return Results.Json(new { message = $"KPI {kpiUpdate.KpiId} does not belong to this action plan" }, statusCode: 400);
+            }
+        }
+
+        foreach (var objectiveUpdate in request.ObjectiveUpdates ?? [])
+        {
+            if (objectives.All(o => o.Id != objectiveUpdate.ObjectiveId))
+            {
+                return Results.Json(new { message = $"Objective {objectiveUpdate.ObjectiveId} does not belong to this action plan" }, statusCode: 400);
+            }
+        }
+
+        var actingUser = await db.Users.FirstOrDefaultAsync(u => u.Email == currentUser.Email, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        var progressUpdate = new ActionPlanProgressUpdate
+        {
+            Id = Guid.NewGuid(),
+            ActionPlanId = id,
+            UpdateDate = now,
+            OverallNotes = request.OverallNotes,
+            UpdatedBy = actingUser?.Id ?? Guid.Empty,
+        };
+        db.ActionPlanProgressUpdates.Add(progressUpdate);
+
+        foreach (var kpiUpdate in request.KpiUpdates ?? [])
+        {
+            var kpi = kpis.First(k => k.Id == kpiUpdate.KpiId);
+            kpi.CurrentValue = kpiUpdate.NewValue;
+            db.ActionPlanKpiUpdates.Add(new ActionPlanKpiUpdate
+            {
+                Id = Guid.NewGuid(),
+                ProgressUpdateId = progressUpdate.Id,
+                KpiId = kpiUpdate.KpiId,
+                NewValue = kpiUpdate.NewValue,
+                Notes = kpiUpdate.Notes,
+            });
+        }
+
+        foreach (var objectiveUpdate in request.ObjectiveUpdates ?? [])
+        {
+            var objective = objectives.First(o => o.Id == objectiveUpdate.ObjectiveId);
+            objective.CurrentStatus = objectiveUpdate.StatusUpdate;
+            if (objectiveUpdate.CompletionPercentage.HasValue)
+            {
+                objective.CompletionPercentage = objectiveUpdate.CompletionPercentage.Value;
+            }
+
+            db.ActionPlanObjectiveUpdates.Add(new ActionPlanObjectiveUpdate
+            {
+                Id = Guid.NewGuid(),
+                ProgressUpdateId = progressUpdate.Id,
+                ObjectiveId = objectiveUpdate.ObjectiveId,
+                StatusUpdate = objectiveUpdate.StatusUpdate,
+                CompletionPercentage = objectiveUpdate.CompletionPercentage,
+                Notes = objectiveUpdate.Notes,
+            });
+        }
+
+        plan.UpdatedAt = now;
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Json(new ProgressUpdateDetail(progressUpdate.Id, progressUpdate.UpdateDate, progressUpdate.OverallNotes, progressUpdate.UpdatedBy), statusCode: 201);
     }
 }
