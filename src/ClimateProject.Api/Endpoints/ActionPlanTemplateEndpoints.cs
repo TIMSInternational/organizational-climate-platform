@@ -54,8 +54,12 @@ public static class ActionPlanTemplateEndpoints
             return Results.Forbid();
         }
 
-        if (request.CompanyId.HasValue && currentUser.Role != Roles.SuperAdmin && currentUser.CompanyId != request.CompanyId.Value.ToString())
+        if (currentUser.Role != Roles.SuperAdmin
+            && (!request.CompanyId.HasValue || currentUser.CompanyId != request.CompanyId.Value.ToString()))
         {
+            // Non-super-admins must scope the template to their own company; only a
+            // super_admin may create a system-wide template (CompanyId == null), which
+            // would otherwise be visible to every tenant via the List query.
             return Results.Forbid();
         }
 

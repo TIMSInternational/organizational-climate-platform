@@ -72,6 +72,22 @@ public class ActionPlanTemplateEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CompanyAdmin_cannot_create_a_system_wide_template_with_null_company_id()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/action-plan-templates", new CreateActionPlanTemplateRequest(
+            "Malicious system template", "Should not be allowed", "hr", null, new[] { "onboarding" }));
+        Assert.Equal(HttpStatusCode.Forbidden, createResponse.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.False(await db.ActionPlanTemplates.AnyAsync(t => t.Name == "Malicious system template"));
+    }
+
+    [Fact]
     public async Task System_templates_with_no_company_are_visible_to_everyone()
     {
         // Create a system user to own the system template
