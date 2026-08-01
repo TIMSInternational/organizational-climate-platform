@@ -55,6 +55,12 @@ public static class AuthEndpoints
             return Results.Json(new ErrorResponse("Invalid email or password"), statusCode: 401);
         }
 
+        var gate = await CheckSystemSettingsGateAsync(db, user.Role, cancellationToken);
+        if (gate is not null)
+        {
+            return gate;
+        }
+
         user.LastLoginAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
@@ -82,9 +88,19 @@ public static class AuthEndpoints
             return Results.Json(new ErrorResponse("Name, email, and password are required"), statusCode: 400);
         }
 
-        if (request.Password.Length < 8)
+        // Signup has no existing user yet to check for a SuperAdmin bypass -- a fresh
+        // signup is always minted as Roles.Employee below, so the platform-wide kill
+        // switches apply unconditionally here (unlike LoginAsync/GoogleLoginAsync).
+        var signupGate = await CheckSystemSettingsGateAsync(db, currentUserRole: null, cancellationToken);
+        if (signupGate is not null)
         {
-            return Results.Json(new ErrorResponse("Password must be at least 8 characters long"), statusCode: 400);
+            return signupGate;
+        }
+
+        var minPasswordLength = await GetMinPasswordLengthAsync(db, cancellationToken);
+        if (request.Password.Length < minPasswordLength)
+        {
+            return Results.Json(new ErrorResponse($"Password must be at least {minPasswordLength} characters long"), statusCode: 400);
         }
 
         if (!Regex.IsMatch(request.Email, EmailFormatPattern))
@@ -158,6 +174,16 @@ public static class AuthEndpoints
 
         var email = googleUser.Email.ToLowerInvariant();
         var domain = email.Split('@')[1];
+
+        // Read-only lookup (AsNoTracking) purely to resolve a SuperAdmin bypass for the
+        // kill-switch gate below, before any company/user rows get written. A tracked
+        // re-fetch happens further down for the actual create-or-update.
+        var existingUserForGate = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
+        var googleGate = await CheckSystemSettingsGateAsync(db, existingUserForGate?.Role, cancellationToken);
+        if (googleGate is not null)
+        {
+            return googleGate;
+        }
 
         var company = await db.Companies.FirstOrDefaultAsync(c => c.EmailDomain == domain, cancellationToken);
         if (company is null)
@@ -271,6 +297,48 @@ public static class AuthEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         return Results.Ok(new ResetCredentialsResponse(user.Email, temporaryPassword));
+    }
+
+    // Platform-wide incident-response kill switches (SystemSettings.LoginEnabled /
+    // MaintenanceMode). Read-only -- deliberately does NOT call
+    // SystemSettingsEndpoints.GetOrCreateAsync, so a login/signup attempt never
+    // has the side effect of creating the singleton row; a missing row is treated
+    // as "defaults" (LoginEnabled=true, MaintenanceMode=false), i.e. no gating.
+    // currentUserRole is null for a brand-new signup (no existing user yet) or an
+    // unresolved Google sign-in -- in both cases there is no SuperAdmin to bypass
+    // the gate with.
+    private static async Task<IResult?> CheckSystemSettingsGateAsync(
+        ClimateProjectDbContext db,
+        string? currentUserRole,
+        CancellationToken cancellationToken)
+    {
+        var settings = await db.SystemSettings.FirstOrDefaultAsync(cancellationToken);
+        if (settings is null || currentUserRole == Roles.SuperAdmin)
+        {
+            return null;
+        }
+
+        if (settings.MaintenanceMode)
+        {
+            return Results.Json(
+                new ErrorResponse(settings.MaintenanceMessage ?? "The system is currently under maintenance. Please try again later."),
+                statusCode: 503);
+        }
+
+        if (!settings.LoginEnabled)
+        {
+            return Results.Json(new ErrorResponse("Login is currently disabled by an administrator."), statusCode: 403);
+        }
+
+        return null;
+    }
+
+    // Falls back to the same default (8) as SystemSettings.PasswordPolicy.MinLength
+    // when no settings row exists yet, matching the hardcoded rule this replaces.
+    private static async Task<int> GetMinPasswordLengthAsync(ClimateProjectDbContext db, CancellationToken cancellationToken)
+    {
+        var settings = await db.SystemSettings.FirstOrDefaultAsync(cancellationToken);
+        return settings?.PasswordPolicy.MinLength ?? 8;
     }
 }
 

@@ -8,6 +8,7 @@ import UserForm, { type UserFormValues } from '../components/UserForm'
 import InvitationList from '../components/InvitationList'
 import InvitationForm, { type InvitationFormValues } from '../components/InvitationForm'
 import ShareableLinkPanel from '../components/ShareableLinkPanel'
+import BulkImportPanel from '../components/BulkImportPanel'
 
 export default function UsersListPage() {
   const { companyId } = useParams<{ companyId: string }>()
@@ -107,6 +108,8 @@ export default function UsersListPage() {
       <InvitationForm allowCompanyAdminSetup onSubmit={handleCreateInvitation} />
       <ShareableLinkPanel onCreate={handleCreateShareableLink} />
       <InvitationList invitations={invitations} onResend={handleResend} />
+      <h2>Bulk import</h2>
+      {companyId && <BulkImportPanel baseUrl={baseUrl} companyId={companyId} onImported={reload} />}
     </div>
   )
 }

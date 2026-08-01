@@ -7,6 +7,7 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     : DbContext(options)
 {
     public DbSet<Company> Companies => Set<Company>();
+    public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<UserInvitation> UserInvitations => Set<UserInvitation>();

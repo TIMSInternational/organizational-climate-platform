@@ -7,8 +7,10 @@ using ClimateProject.Infrastructure.OrgStructure;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Cors.Infrastructure;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -95,6 +97,31 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+// Whole-repo previously had NO exception middleware anywhere in this pipeline, so
+// any unhandled exception (most commonly a DbUpdateException from a unique-index
+// violation the endpoint didn't pre-check for) reached the client as a bare 500
+// with no body -- e.g. BulkImportEndpoints hitting the global users.email unique
+// index, or a demographic-field key collision. This is a deliberately generic,
+// last-resort safety net: individual endpoints should still pre-check and return
+// a specific 409 with a helpful message where that's feasible (see
+// DemographicFieldEndpoints.CreateAsync), this only stops a residual/racy
+// constraint violation from surfacing as an opaque, bodiless crash.
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+        var isUniqueViolation = exception is DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } };
+
+        context.Response.ContentType = "application/json";
+        context.Response.StatusCode = isUniqueViolation ? StatusCodes.Status409Conflict : StatusCodes.Status500InternalServerError;
+        var message = isUniqueViolation
+            ? "The request conflicts with existing data."
+            : "An unexpected error occurred.";
+        await context.Response.WriteAsJsonAsync(new { message });
+    });
+});
+
 app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
@@ -120,6 +147,9 @@ app.MapDepartmentEndpoints();
 app.MapUserEndpoints();
 app.MapInvitationEndpoints();
 app.MapInvitationAcceptEndpoints();
+app.MapSystemSettingsEndpoints();
+app.MapDemographicFieldEndpoints();
+app.MapBulkImportEndpoints();
 
 app.Run();
 
