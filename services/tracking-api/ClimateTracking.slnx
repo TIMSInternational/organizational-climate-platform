@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ClimateTracking.Api/ClimateTracking.Api.csproj" />
+    <Project Path="src/ClimateTracking.Application/ClimateTracking.Application.csproj" />
+    <Project Path="src/ClimateTracking.Domain/ClimateTracking.Domain.csproj" />
+    <Project Path="src/ClimateTracking.Infrastructure/ClimateTracking.Infrastructure.csproj" />
+    <Project Path="src/ClimateTracking.Workers/ClimateTracking.Workers.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ClimateTracking.IntegrationTests/ClimateTracking.IntegrationTests.csproj" />
+    <Project Path="tests/ClimateTracking.UnitTests/ClimateTracking.UnitTests.csproj" />
+  </Folder>
+</Solution>
