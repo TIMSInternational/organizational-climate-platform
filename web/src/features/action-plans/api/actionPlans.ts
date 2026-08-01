@@ -104,6 +104,22 @@ export interface ProgressUpdateDetail {
   updatedBy: string
 }
 
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+// `<input type="date">` submits a bare "YYYY-MM-DD". The backend's DueDate is a
+// non-nullable DateTimeOffset, and System.Text.Json's DateTimeOffset converter
+// treats an offset-less date-only string as midnight in *whatever time zone the
+// server process happens to be running in* -- not necessarily UTC. If that ever
+// differs from UTC (or simply differs from the viewer's browser time zone), the
+// due date a user typed and the due date rendered back to them can be a day
+// apart. Making the offset explicit here removes the ambiguity: every
+// environment agrees this instant means "midnight UTC on this calendar date",
+// which is also what ActionPlanList renders back (see its `timeZone: 'UTC'`
+// formatting option).
+function normalizeDueDate(dueDate: string): string {
+  return DATE_ONLY_PATTERN.test(dueDate) ? `${dueDate}T00:00:00.000Z` : dueDate
+}
+
 export async function listActionPlans(baseUrl: string, companyId: string): Promise<ActionPlan[]> {
   const response = await authFetch(`${baseUrl}/action-plans?companyId=${companyId}`)
   const body = (await response.json()) as { actionPlans: ActionPlan[] }
@@ -113,7 +129,7 @@ export async function listActionPlans(baseUrl: string, companyId: string): Promi
 export async function createActionPlan(baseUrl: string, input: CreateActionPlanInput): Promise<ActionPlanDetail> {
   const response = await authFetch(`${baseUrl}/action-plans`, {
     method: 'POST',
-    body: JSON.stringify(input),
+    body: JSON.stringify({ ...input, dueDate: normalizeDueDate(input.dueDate) }),
   })
   return response.json() as Promise<ActionPlanDetail>
 }
@@ -126,7 +142,7 @@ export async function getActionPlan(baseUrl: string, id: string): Promise<Action
 export async function updateActionPlan(baseUrl: string, id: string, input: UpdateActionPlanInput): Promise<ActionPlanDetail> {
   const response = await authFetch(`${baseUrl}/action-plans/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(input),
+    body: JSON.stringify({ ...input, dueDate: input.dueDate ? normalizeDueDate(input.dueDate) : input.dueDate }),
   })
   return response.json() as Promise<ActionPlanDetail>
 }

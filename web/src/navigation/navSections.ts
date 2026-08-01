@@ -26,6 +26,12 @@ export interface NavSection {
 //   CompanyAdmin has no companies-list page to click into one from).
 // - Any other role (employee/supervisor/leader): no admin pages exist for them
 //   yet (see postAcceptRoute.ts) -- empty nav, not a broken link.
+//
+// Action Plans is intentionally NOT in the SuperAdmin section: /action-plans has
+// no company-picker (see ActionPlansListPage.tsx), so a SuperAdmin landing on it
+// would be silently scoped to whatever company their own user row happens to
+// point at, not shown a genuine cross-company view. Add it back once #57
+// (cross-cutting company-context selector) lands.
 export function buildNavSections(role: string | undefined, companyId: string | undefined): NavSection[] {
   if (role === 'super_admin') {
     return [
@@ -40,11 +46,6 @@ export function buildNavSections(role: string | undefined, companyId: string | u
               { label: 'Companies', href: '/admin/companies', icon: Building2 },
               { label: 'System settings', href: '/admin/system-settings', icon: Settings },
             ],
-          },
-          {
-            label: 'Action Plans',
-            href: '/action-plans',
-            icon: Target,
           },
         ],
       },

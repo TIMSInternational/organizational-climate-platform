@@ -17,6 +17,10 @@ public static class ActionPlanTemplateEndpoints
         group.MapPost("", CreateAsync);
     }
 
+    private static bool CanAccessCompany(CurrentUser currentUser, Guid companyId)
+        => currentUser.Role == Roles.SuperAdmin
+           || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
+
     private static ActionPlanTemplateDetail ToDetail(ActionPlanTemplate t)
         => new(t.Id, t.Name, t.Description, t.Category, t.CompanyId, t.Tags, t.UsageCount, t.IsActive);
 
@@ -27,7 +31,7 @@ public static class ActionPlanTemplateEndpoints
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
-        if (currentUser.Role != Roles.SuperAdmin && currentUser.CompanyId != companyId.ToString())
+        if (!CanAccessCompany(currentUser, companyId))
         {
             return Results.Forbid();
         }

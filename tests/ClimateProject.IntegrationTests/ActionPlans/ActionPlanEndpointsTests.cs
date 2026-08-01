@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -183,5 +184,86 @@ public class ActionPlanEndpointsTests : IAsyncLifetime
         var getResponse = await client.GetAsync($"/action-plans/{created.Id}");
         var stillOriginal = await getResponse.Content.ReadFromJsonAsync<ActionPlanDetail>();
         Assert.Equal("Admin-created", stillOriginal!.Title);
+    }
+
+    [Fact]
+    public async Task NonAdmin_cannot_list_or_read_plans_in_their_own_company()
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var createResponse = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "Admin-created", "desc", _companyAId, null, DateTimeOffset.UtcNow.AddDays(10), "low", null, null, null, null, null, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<ActionPlanDetail>();
+
+        var employeeToken = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", employeeToken);
+
+        var listResponse = await client.GetAsync($"/action-plans?companyId={_companyAId}");
+        Assert.Equal(HttpStatusCode.Forbidden, listResponse.StatusCode);
+
+        var getResponse = await client.GetAsync($"/action-plans/{created!.Id}");
+        Assert.Equal(HttpStatusCode.Forbidden, getResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Create_with_unknown_template_id_returns_400_not_500()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "Plan", "desc", _companyAId, null, DateTimeOffset.UtcNow.AddDays(10), "low", null, Guid.NewGuid(), null, null, null, null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Create_with_another_companys_template_id_is_rejected()
+    {
+        var client = _factory.CreateClient();
+        var tokenB = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyBDomain, _companyBId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenB);
+
+        var templateResponse = await client.PostAsJsonAsync("/action-plan-templates", new CreateActionPlanTemplateRequest(
+            "B's template", "desc", "hr", _companyBId, null));
+        var template = await templateResponse.Content.ReadFromJsonAsync<ActionPlanTemplateDetail>();
+
+        var tokenA = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenA);
+
+        var crossResponse = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "Cross-tenant template plan", "desc", _companyAId, null, DateTimeOffset.UtcNow.AddDays(10), "low", null, template!.Id, null, null, null, null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, crossResponse.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.False(await db.ActionPlans.AnyAsync(p => p.Title == "Cross-tenant template plan"));
+    }
+
+    [Fact]
+    public async Task Create_with_a_valid_own_company_template_id_succeeds_and_increments_usage_count()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var templateResponse = await client.PostAsJsonAsync("/action-plan-templates", new CreateActionPlanTemplateRequest(
+            "A's template", "desc", "hr", _companyAId, null));
+        var template = await templateResponse.Content.ReadFromJsonAsync<ActionPlanTemplateDetail>();
+        Assert.Equal(0, template!.UsageCount);
+
+        var createResponse = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "From template", "desc", _companyAId, null, DateTimeOffset.UtcNow.AddDays(10), "low", null, template.Id, null, null, null, null));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var created = await createResponse.Content.ReadFromJsonAsync<ActionPlanDetail>();
+        Assert.Equal(template.Id, created!.TemplateId);
+
+        var listResponse = await client.GetAsync($"/action-plan-templates?companyId={_companyAId}");
+        var list = await listResponse.Content.ReadFromJsonAsync<ActionPlanTemplateListResponse>();
+        Assert.Equal(1, list!.Templates.Single(t => t.Id == template.Id).UsageCount);
     }
 }

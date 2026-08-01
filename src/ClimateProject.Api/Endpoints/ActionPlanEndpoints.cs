@@ -22,7 +22,7 @@ public static class ActionPlanEndpoints
 
     private static bool CanAccessCompany(CurrentUser currentUser, Guid companyId)
         => currentUser.Role == Roles.SuperAdmin
-           || currentUser.CompanyId == companyId.ToString();
+           || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
 
     private static async Task<ActionPlanDetail> ToDetailAsync(ActionPlan plan, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
@@ -93,6 +93,25 @@ public static class ActionPlanEndpoints
             }
         }
 
+        // TemplateId has a real FK to action_plan_templates (see ActionPlanConfiguration).
+        // An unknown id would otherwise surface as an opaque 500 from the DbUpdateException
+        // handler in Program.cs, and an unscoped id would let a CompanyAdmin reference
+        // another tenant's template. Scope the lookup the same way the templates List
+        // endpoint scopes visibility: the caller's own company, or a system-wide template.
+        ActionPlanTemplate? template = null;
+        if (request.TemplateId.HasValue)
+        {
+            template = await db.ActionPlanTemplates.FirstOrDefaultAsync(
+                t => t.Id == request.TemplateId.Value
+                     && (t.CompanyId == request.CompanyId || t.CompanyId == null)
+                     && t.IsActive,
+                cancellationToken);
+            if (template is null)
+            {
+                return Results.Json(new { message = $"Template {request.TemplateId} not found" }, statusCode: 400);
+            }
+        }
+
         var actingUser = await db.Users.FirstOrDefaultAsync(u => u.Email == currentUser.Email, cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var plan = new ActionPlan
@@ -114,6 +133,12 @@ public static class ActionPlanEndpoints
             UpdatedAt = now,
         };
         db.ActionPlans.Add(plan);
+
+        if (template is not null)
+        {
+            template.UsageCount += 1;
+            template.UpdatedAt = now;
+        }
 
         foreach (var kpiInput in request.Kpis ?? [])
         {

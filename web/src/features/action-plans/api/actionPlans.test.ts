@@ -30,6 +30,39 @@ describe('actionPlans api client', () => {
     expect(result).toEqual(detail)
   })
 
+  it('normalizes a bare "YYYY-MM-DD" due date to an explicit UTC-midnight instant before sending', async () => {
+    // A bare date-only string deserializes on the server as midnight in the
+    // *server process's* local offset, not UTC -- see actionPlans.ts's
+    // normalizeDueDate for the full explanation. Pin the wire format here so a
+    // future change can't silently regress back to the ambiguous bare date.
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 201 }))
+    await createActionPlan(baseUrl, { title: 'Plan', description: 'desc', companyId: 'c1', dueDate: '2026-12-01', priority: 'medium' })
+
+    const [, init] = vi.mocked(fetch).mock.calls[0]
+    const sentBody = JSON.parse(init!.body as string)
+    expect(sentBody.dueDate).toBe('2026-12-01T00:00:00.000Z')
+  })
+
+  it('leaves an already-explicit due date untouched', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 201 }))
+    await createActionPlan(baseUrl, {
+      title: 'Plan', description: 'desc', companyId: 'c1', dueDate: '2026-12-01T00:00:00.000-05:00', priority: 'medium',
+    })
+
+    const [, init] = vi.mocked(fetch).mock.calls[0]
+    const sentBody = JSON.parse(init!.body as string)
+    expect(sentBody.dueDate).toBe('2026-12-01T00:00:00.000-05:00')
+  })
+
+  it('normalizes a bare due date on update too', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }))
+    await updateActionPlan(baseUrl, 'p1', { dueDate: '2026-12-01' })
+
+    const [, init] = vi.mocked(fetch).mock.calls[0]
+    const sentBody = JSON.parse(init!.body as string)
+    expect(sentBody.dueDate).toBe('2026-12-01T00:00:00.000Z')
+  })
+
   it('gets an action plan', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }))
     const result = await getActionPlan(baseUrl, 'p1')

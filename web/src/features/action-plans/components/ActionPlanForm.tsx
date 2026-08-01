@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from 'react'
 import type { CreateKpiInput, CreateObjectiveInput } from '../api/actionPlans'
+import type { ActionPlanTemplate } from '../api/actionPlanTemplates'
 
 export interface ActionPlanFormValues {
   title: string
   description: string
   dueDate: string
   priority: string
+  templateId?: string
   kpis: CreateKpiInput[]
   objectives: CreateObjectiveInput[]
 }
@@ -13,9 +15,14 @@ export interface ActionPlanFormValues {
 const PRIORITIES = ['low', 'medium', 'high', 'critical']
 const FREQUENCIES = ['daily', 'weekly', 'monthly', 'quarterly']
 
-const EMPTY_VALUES: ActionPlanFormValues = { title: '', description: '', dueDate: '', priority: 'medium', kpis: [], objectives: [] }
+const EMPTY_VALUES: ActionPlanFormValues = { title: '', description: '', dueDate: '', priority: 'medium', templateId: undefined, kpis: [], objectives: [] }
 
-export default function ActionPlanForm({ onSubmit }: { onSubmit: (values: ActionPlanFormValues) => Promise<void> }) {
+interface ActionPlanFormProps {
+  templates?: ActionPlanTemplate[]
+  onSubmit: (values: ActionPlanFormValues) => Promise<void>
+}
+
+export default function ActionPlanForm({ templates = [], onSubmit }: ActionPlanFormProps) {
   const [values, setValues] = useState<ActionPlanFormValues>(EMPTY_VALUES)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -73,6 +80,26 @@ export default function ActionPlanForm({ onSubmit }: { onSubmit: (values: Action
           ))}
         </select>
       </label>
+
+      {templates.length > 0 && (
+        // Reference-only: selecting a template just sets templateId on the
+        // create request (a one-field pass-through the backend validates and
+        // records against). It does not copy the template's KPIs/objectives
+        // into this form -- that auto-population is explicitly out of scope
+        // for this slice.
+        <label>
+          Start from template (optional)
+          <select
+            value={values.templateId ?? ''}
+            onChange={(e) => setValues({ ...values, templateId: e.target.value || undefined })}
+          >
+            <option value="">No template</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <h3>KPIs</h3>
       {values.kpis.map((kpi, index) => (
