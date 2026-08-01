@@ -27,6 +27,15 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.UpdatedAt).HasColumnName("updated_at").IsRequired();
         builder.HasIndex(u => u.Email).IsUnique();
 
+        // /auth/refresh resolves the acting user by PersonaExternalId (falling back to Id
+        // only when the JWT `sub` doesn't parse as a Guid) and trusts that value as a unique
+        // identity key. Without a DB-level constraint, a duplicate PersonaExternalId (e.g.
+        // from the #56 legacy backfill) would let refresh silently issue a token for
+        // whichever row Postgres happens to return first. Filtered so multiple NULLs
+        // (every user until that backfill runs) remain allowed, matching the
+        // Company.EmailDomain precedent.
+        builder.HasIndex(u => u.PersonaExternalId).IsUnique().HasFilter("persona_external_id IS NOT NULL");
+
         builder.HasOne<Company>().WithMany().HasForeignKey(u => u.CompanyId);
         builder.HasOne<Department>().WithMany().HasForeignKey(u => u.DepartmentId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<User>().WithMany().HasForeignKey(u => u.ManagerId).OnDelete(DeleteBehavior.Restrict);

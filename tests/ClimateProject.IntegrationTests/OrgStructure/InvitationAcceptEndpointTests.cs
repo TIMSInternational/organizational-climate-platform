@@ -194,4 +194,108 @@ public class InvitationAcceptEndpointTests : IAsyncLifetime
             new AcceptInvitationRequest(Email: $"someone@{_companyDomain}", Name: "Right Domain", Password: "a-good-password"));
         Assert.Equal(HttpStatusCode.Created, rightDomain.StatusCode);
     }
+
+    [Fact]
+    public async Task Accepting_a_shareable_link_rejects_a_malformed_email()
+    {
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var invitingUser = new User
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _companyId,
+                Email = $"inviter-{Guid.NewGuid():N}@{_companyDomain}",
+                Name = "Inviter",
+                PasswordHash = "dummy",
+                Role = Roles.CompanyAdmin,
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            };
+            db.Users.Add(invitingUser);
+            await db.SaveChangesAsync();
+
+            db.UserInvitations.Add(new UserInvitation
+            {
+                Id = Guid.NewGuid(),
+                Email = null,
+                CompanyId = _companyId,
+                InvitedBy = invitingUser.Id,
+                InvitationToken = "shareable-token-malformed",
+                InvitationType = InvitationValidation.TypeEmployeeSelfSignup,
+                Role = Roles.Employee,
+                Status = InvitationValidation.StatusSent,
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+                SentAt = DateTimeOffset.UtcNow,
+                ReminderCount = 0,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var client = _factory.CreateClient();
+
+        // No '@' at all -- the old `Contains('@') ? ... : string.Empty` fallback would
+        // have computed domain == "" and, for a company with a non-null EmailDomain,
+        // still correctly rejected this. This test guards the regex-based validation
+        // directly rather than relying on that side effect.
+        var response = await client.PostAsJsonAsync(
+            "/invitations/shareable-token-malformed/accept",
+            new AcceptInvitationRequest(Email: "not-an-email", Name: "Bad Email", Password: "a-good-password"));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Accepting_a_shareable_link_rejects_any_email_when_the_company_has_no_email_domain_configured()
+    {
+        // Regression test: a company row with a NULL EmailDomain must not bypass the
+        // domain check entirely. No current API path creates such a company, but this
+        // proves the endpoint itself doesn't rely on that invariant.
+        Guid noDomainCompanyId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var noDomainCompany = new Company { Id = Guid.NewGuid(), Name = "No Domain Co", EmailDomain = null, CreatedAt = DateTimeOffset.UtcNow };
+            db.Companies.Add(noDomainCompany);
+            noDomainCompanyId = noDomainCompany.Id;
+
+            var invitingUser = new User
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = noDomainCompanyId,
+                Email = $"inviter-{Guid.NewGuid():N}@{_companyDomain}",
+                Name = "Inviter",
+                PasswordHash = "dummy",
+                Role = Roles.SuperAdmin,
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            };
+            db.Users.Add(invitingUser);
+            await db.SaveChangesAsync();
+
+            db.UserInvitations.Add(new UserInvitation
+            {
+                Id = Guid.NewGuid(),
+                Email = null,
+                CompanyId = noDomainCompanyId,
+                InvitedBy = invitingUser.Id,
+                InvitationToken = "shareable-token-no-domain",
+                InvitationType = InvitationValidation.TypeEmployeeSelfSignup,
+                Role = Roles.Employee,
+                Status = InvitationValidation.StatusSent,
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+                SentAt = DateTimeOffset.UtcNow,
+                ReminderCount = 0,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/invitations/shareable-token-no-domain/accept",
+            new AcceptInvitationRequest(Email: "literally-anything@example.test", Name: "Anyone", Password: "a-good-password"));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

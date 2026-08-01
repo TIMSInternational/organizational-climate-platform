@@ -102,6 +102,17 @@ public static class UserEndpoints
             return Results.Forbid();
         }
 
+        // Deactivating an admin-role account (company_admin or super_admin) is a
+        // privilege-escalation-adjacent surface: a CompanyAdmin's CompanyId can match a
+        // super_admin's (signup assigns CompanyId from email domain), which would let a
+        // lower-privileged CompanyAdmin lock out a super_admin -- or another company_admin,
+        // including themselves. Only a SuperAdmin may flip IsActive for an admin-role
+        // target; general field edits for admin-role users still go through untouched.
+        if (request.IsActive.HasValue && currentUser.Role != Roles.SuperAdmin && Roles.Admin.Contains(user.Role))
+        {
+            return Results.Forbid();
+        }
+
         if (!string.IsNullOrWhiteSpace(request.Name))
         {
             user.Name = request.Name.Trim();

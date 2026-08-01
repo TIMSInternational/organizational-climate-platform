@@ -66,7 +66,12 @@ public static class InvitationEndpoints
                 return Results.Forbid();
             }
 
-            if (request.Role == Roles.SuperAdmin || !Roles.All.Contains(request.Role))
+            // company_admin creation is reserved for the company_admin_setup branch above
+            // (SuperAdmin-only). Without excluding it here, any CompanyAdmin could mint a
+            // peer company_admin account via an employee_direct invitation and bypass the
+            // "role changes are SuperAdmin-only" rule -- the same privilege-escalation
+            // surface PUT /admin/users/{id}/role guards against.
+            if (request.Role == Roles.SuperAdmin || request.Role == Roles.CompanyAdmin || !Roles.All.Contains(request.Role))
             {
                 return Results.Json(new { message = "Invalid role for an employee invitation" }, statusCode: 400);
             }
@@ -131,7 +136,10 @@ public static class InvitationEndpoints
             return Results.Forbid();
         }
 
-        if (request.Role == Roles.SuperAdmin || !Roles.All.Contains(request.Role))
+        // Same exclusion as CreateAsync's employee_direct branch: a shareable link must
+        // never mint a company_admin (or super_admin) account, or any CompanyAdmin could
+        // generate a self-service link for peer-admin privilege escalation.
+        if (request.Role == Roles.SuperAdmin || request.Role == Roles.CompanyAdmin || !Roles.All.Contains(request.Role))
         {
             return Results.Json(new { message = "Invalid role for a shareable link" }, statusCode: 400);
         }

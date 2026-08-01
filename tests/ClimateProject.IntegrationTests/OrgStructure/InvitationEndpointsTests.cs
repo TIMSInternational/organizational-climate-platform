@@ -138,6 +138,42 @@ public class InvitationEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Employee_direct_invitation_rejects_company_admin_role()
+    {
+        // Regression test: CompanyAdmin must not be able to mint a peer company_admin
+        // account via employee_direct, bypassing the SuperAdmin-only role-change rule.
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync("/admin/invitations", new CreateInvitationRequest(
+            InvitationType: InvitationValidation.TypeEmployeeDirect,
+            Email: "wannabe-admin@invitee.test",
+            CompanyId: _companyAId,
+            DepartmentId: null,
+            Role: Roles.CompanyAdmin));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Shareable_link_rejects_company_admin_role()
+    {
+        // Regression test: a shareable link must not be usable to self-provision a
+        // company_admin account either.
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync("/admin/invitations/shareable-link", new CreateShareableLinkRequest(
+            CompanyId: _companyAId,
+            DepartmentId: null,
+            Role: Roles.CompanyAdmin));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Shareable_link_creates_an_invitation_with_no_email()
     {
         var client = _factory.CreateClient();

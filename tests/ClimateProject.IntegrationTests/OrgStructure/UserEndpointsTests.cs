@@ -150,6 +150,74 @@ public class UserEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CompanyAdmin_cannot_deactivate_a_super_admin_sharing_their_company_id()
+    {
+        // Regression test: signup assigns CompanyId from the email domain, so a
+        // super_admin can end up sharing a CompanyId with a company_admin who has no
+        // authority over them. A CompanyAdmin flipping that super_admin's IsActive would
+        // be a lower-privileged role locking out a higher-privileged one.
+        var client = _factory.CreateClient();
+        var (adminToken, _) = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var (_, superAdminId) = await SignUpAndGetTokenAsync(client, Roles.SuperAdmin, _companyADomain, _companyAId);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var deactivateResponse = await client.PutAsJsonAsync($"/admin/users/{superAdminId}", new UpdateUserRequest(null, null, null, false));
+        Assert.Equal(HttpStatusCode.Forbidden, deactivateResponse.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var superAdmin = await db.Users.FirstAsync(u => u.Id == superAdminId);
+        Assert.True(superAdmin.IsActive);
+    }
+
+    [Fact]
+    public async Task CompanyAdmin_cannot_deactivate_themselves_or_a_peer_company_admin()
+    {
+        var client = _factory.CreateClient();
+        var (adminToken, adminId) = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var (_, peerAdminId) = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var selfDeactivate = await client.PutAsJsonAsync($"/admin/users/{adminId}", new UpdateUserRequest(null, null, null, false));
+        Assert.Equal(HttpStatusCode.Forbidden, selfDeactivate.StatusCode);
+
+        var peerDeactivate = await client.PutAsJsonAsync($"/admin/users/{peerAdminId}", new UpdateUserRequest(null, null, null, false));
+        Assert.Equal(HttpStatusCode.Forbidden, peerDeactivate.StatusCode);
+    }
+
+    [Fact]
+    public async Task CompanyAdmin_can_still_deactivate_a_regular_employee()
+    {
+        var client = _factory.CreateClient();
+        var (adminToken, _) = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var (_, employeeId) = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var deactivateResponse = await client.PutAsJsonAsync($"/admin/users/{employeeId}", new UpdateUserRequest(null, null, null, false));
+        Assert.Equal(HttpStatusCode.OK, deactivateResponse.StatusCode);
+        var updated = await deactivateResponse.Content.ReadFromJsonAsync<UserDetail>();
+        Assert.False(updated!.IsActive);
+    }
+
+    [Fact]
+    public async Task SuperAdmin_can_deactivate_a_company_admin()
+    {
+        var client = _factory.CreateClient();
+        var (superAdminToken, _) = await SignUpAndGetTokenAsync(client, Roles.SuperAdmin, _companyADomain, _companyAId);
+        var (_, companyAdminId) = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyBDomain, _companyBId);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", superAdminToken);
+
+        var deactivateResponse = await client.PutAsJsonAsync($"/admin/users/{companyAdminId}", new UpdateUserRequest(null, null, null, false));
+        Assert.Equal(HttpStatusCode.OK, deactivateResponse.StatusCode);
+        var updated = await deactivateResponse.Content.ReadFromJsonAsync<UserDetail>();
+        Assert.False(updated!.IsActive);
+    }
+
+    [Fact]
     public async Task SuperAdmin_can_change_a_users_role()
     {
         var client = _factory.CreateClient();
