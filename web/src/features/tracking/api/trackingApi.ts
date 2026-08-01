@@ -115,12 +115,12 @@ export async function listPlanesAccion(baseUrl: string = getTrackingApiBaseUrl()
   return response.json() as Promise<PlanAccion[]>
 }
 
-export async function getPlanAccion(baseUrl: string = getTrackingApiBaseUrl(), id: string): Promise<PlanAccion> {
+export async function getPlanAccion(id: string, baseUrl: string = getTrackingApiBaseUrl()): Promise<PlanAccion> {
   const response = await authFetch(`${baseUrl}/api/planes-accion/${id}`)
   return response.json() as Promise<PlanAccion>
 }
 
-export async function createPlanAccion(baseUrl: string = getTrackingApiBaseUrl(), input: CreatePlanAccionInput): Promise<PlanAccion> {
+export async function createPlanAccion(input: CreatePlanAccionInput, baseUrl: string = getTrackingApiBaseUrl()): Promise<PlanAccion> {
   const response = await authFetch(`${baseUrl}/api/planes-accion`, {
     method: 'POST',
     body: JSON.stringify(input),
@@ -128,7 +128,7 @@ export async function createPlanAccion(baseUrl: string = getTrackingApiBaseUrl()
   return response.json() as Promise<PlanAccion>
 }
 
-export async function registrarAvance(baseUrl: string = getTrackingApiBaseUrl(), id: string, input: RegistrarAvanceInput): Promise<PlanAccion> {
+export async function registrarAvance(id: string, input: RegistrarAvanceInput, baseUrl: string = getTrackingApiBaseUrl()): Promise<PlanAccion> {
   const response = await authFetch(`${baseUrl}/api/planes-accion/${id}/avance`, {
     method: 'POST',
     body: JSON.stringify(input),
@@ -136,7 +136,7 @@ export async function registrarAvance(baseUrl: string = getTrackingApiBaseUrl(),
   return response.json() as Promise<PlanAccion>
 }
 
-export async function marcarCumplido(baseUrl: string = getTrackingApiBaseUrl(), id: string, input: MarcarCumplidoInput): Promise<PlanAccion> {
+export async function marcarCumplido(id: string, input: MarcarCumplidoInput, baseUrl: string = getTrackingApiBaseUrl()): Promise<PlanAccion> {
   const response = await authFetch(`${baseUrl}/api/planes-accion/${id}/cumplir`, {
     method: 'POST',
     body: JSON.stringify(input),
@@ -144,7 +144,7 @@ export async function marcarCumplido(baseUrl: string = getTrackingApiBaseUrl(), 
   return response.json() as Promise<PlanAccion>
 }
 
-export async function agregarInvolucrado(baseUrl: string = getTrackingApiBaseUrl(), id: string, input: AgregarInvolucradoInput): Promise<PlanAccion> {
+export async function agregarInvolucrado(id: string, input: AgregarInvolucradoInput, baseUrl: string = getTrackingApiBaseUrl()): Promise<PlanAccion> {
   const response = await authFetch(`${baseUrl}/api/planes-accion/${id}/involucrados`, {
     method: 'POST',
     body: JSON.stringify(input),

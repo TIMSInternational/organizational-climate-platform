@@ -79,7 +79,7 @@ describe('trackingApi client', () => {
   it('gets a single plan de accion', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(samplePlan), { status: 200 }))
 
-    const response = await getPlanAccion(baseUrl, 'p1')
+    const response = await getPlanAccion('p1', baseUrl)
 
     expect(fetch).toHaveBeenCalledWith(`${baseUrl}/api/planes-accion/p1`, expect.anything())
     expect(response.id).toBe('p1')
@@ -88,13 +88,13 @@ describe('trackingApi client', () => {
   it('creates a plan de accion', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(samplePlan), { status: 201 }))
 
-    await createPlanAccion(baseUrl, {
+    await createPlanAccion({
       nodoExternalId: 'n1',
       descripcionQue: 'Improve onboarding',
       metodologiaComo: 'Weekly check-ins',
       responsableEjecucionExternalId: 'r1',
       fechaCompromiso: '2026-09-01',
-    })
+    }, baseUrl)
 
     expect(fetch).toHaveBeenCalledWith(`${baseUrl}/api/planes-accion`, expect.objectContaining({ method: 'POST' }))
   })
@@ -102,7 +102,7 @@ describe('trackingApi client', () => {
   it('registers avance', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ ...samplePlan, porcentajeAvance: 50 }), { status: 200 }))
 
-    const response = await registrarAvance(baseUrl, 'p1', { porcentajeAvance: 50, fecha: '2026-08-15' })
+    const response = await registrarAvance('p1', { porcentajeAvance: 50, fecha: '2026-08-15' }, baseUrl)
 
     expect(fetch).toHaveBeenCalledWith(`${baseUrl}/api/planes-accion/p1/avance`, expect.objectContaining({ method: 'POST' }))
     expect(response.porcentajeAvance).toBe(50)
@@ -111,7 +111,7 @@ describe('trackingApi client', () => {
   it('marks a plan as cumplido', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ ...samplePlan, cumplido: true }), { status: 200 }))
 
-    const response = await marcarCumplido(baseUrl, 'p1', { fecha: '2026-09-01' })
+    const response = await marcarCumplido('p1', { fecha: '2026-09-01' }, baseUrl)
 
     expect(fetch).toHaveBeenCalledWith(`${baseUrl}/api/planes-accion/p1/cumplir`, expect.objectContaining({ method: 'POST' }))
     expect(response.cumplido).toBe(true)
@@ -120,7 +120,7 @@ describe('trackingApi client', () => {
   it('adds an involucrado', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ ...samplePlan, involucradosExternalIds: ['p2'] }), { status: 200 }))
 
-    const response = await agregarInvolucrado(baseUrl, 'p1', { personaExternalId: 'p2' })
+    const response = await agregarInvolucrado('p1', { personaExternalId: 'p2' }, baseUrl)
 
     expect(fetch).toHaveBeenCalledWith(`${baseUrl}/api/planes-accion/p1/involucrados`, expect.objectContaining({ method: 'POST' }))
     expect(response.involucradosExternalIds).toContain('p2')
