@@ -8,10 +8,12 @@ using ClimateProject.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using System.Text;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -95,6 +97,26 @@ builder.Services.AddScoped<IInvitationEmailSender, LoggingInvitationEmailSender>
 
 builder.Services.AddOpenApi();
 
+// POST /microclimates/{id}/responses is the app's only unauthenticated write surface (approved
+// 2026-07-31 for microclimates configured with AnonymousResponses). With no per-respondent
+// identity and no persisted individual response rows to reconcile against later, a single
+// visitor/bot holding the microclimate's GUID could otherwise inflate ResponseCount/
+// EngagementLevel/the word cloud without bound. Partition per client IP -- generous enough for
+// legitimate shared-IP participation (office NAT, etc.) but bounded against a scripted flood.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(MicroclimateEndpoints.ResponseSubmissionRateLimiterPolicy, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+});
+
 var app = builder.Build();
 
 // Whole-repo previously had NO exception middleware anywhere in this pipeline, so
@@ -125,6 +147,7 @@ app.UseExceptionHandler(errorApp =>
 app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapOpenApi();
 

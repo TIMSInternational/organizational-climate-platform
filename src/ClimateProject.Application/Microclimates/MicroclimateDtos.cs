@@ -29,6 +29,16 @@ public sealed record MicroclimateDetail(
     bool ShowLiveResults,
     List<QuestionDto> Questions);
 
+// Deliberately reduced view served to unauthenticated callers (the public
+// MicroclimateRespondPage) -- see GetAsync. Must never carry CompanyId, CreatedBy,
+// Description, ResponseCount/TargetParticipantCount, or any other internal/participation
+// data that an anonymous visitor holding a GUID has no business seeing.
+public sealed record PublicMicroclimateDetail(
+    Guid Id,
+    string Title,
+    string Status,
+    List<QuestionDto> Questions);
+
 public sealed record CreateMicroclimateRequest(
     string Title,
     string? Description,
@@ -38,7 +48,8 @@ public sealed record CreateMicroclimateRequest(
     int TargetParticipantCount,
     bool AnonymousResponses,
     Guid? TemplateId,
-    List<CreateQuestionInput>? Questions);
+    List<CreateQuestionInput>? Questions,
+    string? Timezone = null);
 
 public sealed record UpdateMicroclimateRequest(
     string? Title,

@@ -3,12 +3,19 @@ using ClimateProject.Application.Auth;
 using ClimateProject.Application.Microclimates;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClimateProject.Api.Endpoints;
 
 public static class MicroclimateEndpoints
 {
+    // Shared with Program.cs's rate limiter registration -- this is the only
+    // unauthenticated write surface in the domain (POST /responses), so it gets its
+    // own named policy rather than a global limiter that would also throttle
+    // authenticated admin traffic.
+    internal const string ResponseSubmissionRateLimiterPolicy = "microclimate-response-submission";
+
     public static void MapMicroclimateEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/microclimates").RequireAuthorization();
@@ -18,18 +25,31 @@ public static class MicroclimateEndpoints
         // AllowAnonymous so the public MicroclimateRespondPage (Task 7) can load a microclimate's
         // title/questions without a JWT -- GetAsync still enforces its own access rule below
         // (authenticated requests get the usual CanAccessCompany check; unauthenticated requests
-        // are only served when the microclimate is configured for AnonymousResponses, mirroring
-        // the policy SubmitResponseAsync already enforces for the actual submission).
+        // are only served when the microclimate is configured for AnonymousResponses AND is
+        // currently active, mirroring the policy SubmitResponseAsync already enforces for the
+        // actual submission, and are served a reduced PublicMicroclimateDetail payload instead
+        // of the full admin detail).
         group.MapGet("/{id:guid}", GetAsync).AllowAnonymous();
         group.MapPut("/{id:guid}", UpdateAsync);
         group.MapGet("/{id:guid}/live-results", GetLiveResultsAsync);
 
-        app.MapPost("/microclimates/{id:guid}/responses", SubmitResponseAsync);
+        // Only unauthenticated write surface in the app -- rate-limited per client IP so a
+        // single visitor/bot holding the microclimate's GUID can't unboundedly inflate
+        // ResponseCount/EngagementLevel/the word cloud (individual responses aren't persisted,
+        // so there is nothing to reconcile against after the fact).
+        app.MapPost("/microclimates/{id:guid}/responses", SubmitResponseAsync)
+            .RequireRateLimiting(ResponseSubmissionRateLimiterPolicy);
     }
 
+    // SuperAdmin can access any company; CompanyAdmin only their own. Every other role
+    // (employee/supervisor/leader) is deliberately excluded -- matches the identically-named
+    // helper in ActionPlanEndpoints and the plan's Global Constraint ("Roles.Admin.Contains +
+    // own-company for CompanyAdmin, any for SuperAdmin"). Do not weaken this to a bare
+    // CompanyId match: that previously let any authenticated employee of the company rewrite
+    // Title/Description/EndTime and flip Status via PUT /microclimates/{id}.
     internal static bool CanAccessCompany(CurrentUser currentUser, Guid companyId)
         => currentUser.Role == Roles.SuperAdmin
-           || currentUser.CompanyId == companyId.ToString();
+           || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
 
     internal static async Task<MicroclimateDetail> ToDetailAsync(Microclimate m, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
@@ -90,6 +110,40 @@ public static class MicroclimateEndpoints
             {
                 return Results.Json(new { message = $"Invalid question type: {question.Type}" }, statusCode: 400);
             }
+
+            // multiple_choice has no meaningful fallback rendering -- unlike "rating" (which
+            // falls back to a 1-5 scale) there is nothing to show the respondent without at
+            // least 2 real options, and SubmitResponseAsync's validation for this type only
+            // makes sense once Options is guaranteed non-empty. Reject at creation time instead
+            // of persisting an unanswerable question.
+            if (question.Type == "multiple_choice")
+            {
+                var optionCount = question.Options?.Count(o => !string.IsNullOrWhiteSpace(o)) ?? 0;
+                if (optionCount < 2)
+                {
+                    return Results.Json(new { message = "multiple_choice questions require at least 2 options" }, statusCode: 400);
+                }
+            }
+        }
+
+        // TemplateId has a real FK to microclimate_templates (see MicroclimateConfiguration).
+        // An unknown id would otherwise surface as an opaque 500 from the DbUpdateException
+        // handler in Program.cs, and an unscoped id would let a CompanyAdmin reference another
+        // tenant's template. Scope the lookup the same way ActionPlanEndpoints.CreateAsync
+        // and the templates List endpoint scope visibility: the caller's own company, or a
+        // system-wide template.
+        MicroclimateTemplate? template = null;
+        if (request.TemplateId.HasValue)
+        {
+            template = await db.MicroclimateTemplates.FirstOrDefaultAsync(
+                t => t.Id == request.TemplateId.Value
+                     && (t.CompanyId == request.CompanyId || t.CompanyId == null)
+                     && t.IsActive,
+                cancellationToken);
+            if (template is null)
+            {
+                return Results.Json(new { message = $"Template {request.TemplateId} not found" }, statusCode: 400);
+            }
         }
 
         var actingUser = await db.Users.FirstOrDefaultAsync(u => u.Email == currentUser.Email, cancellationToken);
@@ -109,9 +163,16 @@ public static class MicroclimateEndpoints
         };
         microclimate.Scheduling.StartTime = request.StartTime;
         microclimate.Scheduling.EndTime = request.EndTime;
+        if (!string.IsNullOrWhiteSpace(request.Timezone)) microclimate.Scheduling.Timezone = request.Timezone;
         microclimate.RealtimeSettings.AnonymousResponses = request.AnonymousResponses;
 
         db.Microclimates.Add(microclimate);
+
+        if (template is not null)
+        {
+            template.UsageCount += 1;
+            template.UpdatedAt = now;
+        }
 
         foreach (var questionInput in request.Questions ?? [])
         {
@@ -152,16 +213,29 @@ public static class MicroclimateEndpoints
             {
                 return Results.Forbid();
             }
-        }
-        else if (!microclimate.RealtimeSettings.AnonymousResponses)
-        {
-            // Unauthenticated visitors may only view microclimates that are actually configured
-            // for anonymous responses -- the same policy SubmitResponseAsync enforces below.
-            // Anything else still requires a token, same as every other route in this group.
-            return Results.Json(new { message = "Authentication required to view this microclimate" }, statusCode: 401);
+
+            return Results.Ok(await ToDetailAsync(microclimate, db, cancellationToken));
         }
 
-        return Results.Ok(await ToDetailAsync(microclimate, db, cancellationToken));
+        // Unauthenticated visitors may only view microclimates that are both configured for
+        // anonymous responses AND currently active -- the same policy SubmitResponseAsync
+        // enforces for the actual submission. Draft (unlaunched) and closed (finished)
+        // microclimates must never be publicly readable, even when AnonymousResponses is true.
+        if (!microclimate.RealtimeSettings.AnonymousResponses || microclimate.Status != "active")
+        {
+            return Results.Json(new { message = "This microclimate is not currently available" }, statusCode: 401);
+        }
+
+        // Anonymous callers get a deliberately reduced payload -- title/status/questions only.
+        // The full MicroclimateDetail (CompanyId, CreatedBy, Description, ResponseCount,
+        // TargetParticipantCount) is internal data the public respond page never needs and
+        // must not leak to an unauthenticated caller holding only the microclimate's GUID.
+        var questions = await db.MicroclimateQuestions.Where(q => q.MicroclimateId == microclimate.Id)
+            .OrderBy(q => q.Order)
+            .Select(q => new QuestionDto(q.Id, q.Text, q.Type, q.Options, q.Required, q.Order))
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(new PublicMicroclimateDetail(microclimate.Id, microclimate.Title, microclimate.Status, questions));
     }
 
     private static async Task<IResult> UpdateAsync(
@@ -178,7 +252,7 @@ public static class MicroclimateEndpoints
             return Results.Json(new { message = "Microclimate not found" }, statusCode: 404);
         }
 
-        if (!CanAccessCompany(currentUser, microclimate.CompanyId))
+        if (!Roles.Admin.Contains(currentUser.Role) || !CanAccessCompany(currentUser, microclimate.CompanyId))
         {
             return Results.Forbid();
         }
@@ -329,9 +403,17 @@ public static class MicroclimateEndpoints
                 "rating" => int.TryParse(answer, out var rating) && rating is >= 1 and <= 5
                     ? null
                     : "must be a rating between 1 and 5",
-                "multiple_choice" when question.Options is { Length: > 0 } => question.Options.Contains(answer)
+                // No "no options configured" fallback here (unlike "rating"'s 1-5 default) --
+                // multiple_choice has no valid answer without a configured option set, so an
+                // answer against an options-less multiple_choice question must always be
+                // rejected rather than silently accepted (CreateAsync now guarantees every
+                // multiple_choice question has >= 2 options, but this stays defensive against
+                // any question created before that check existed).
+                "multiple_choice" => question.Options is { Length: > 0 } && question.Options.Contains(answer)
                     ? null
-                    : $"must be one of: {string.Join(", ", question.Options)}",
+                    : question.Options is { Length: > 0 }
+                        ? $"must be one of: {string.Join(", ", question.Options)}"
+                        : "this question has no configured options to answer",
                 _ => null,
             };
 

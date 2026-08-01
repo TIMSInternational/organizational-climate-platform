@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { listMicroclimates, createMicroclimate, type Microclimate } from '../api/microclimates'
+import { listMicroclimateTemplates, type MicroclimateTemplate } from '../api/microclimateTemplates'
 import MicroclimateList from '../components/MicroclimateList'
 import MicroclimateFilters, { type MicroclimateFiltersValue } from '../components/MicroclimateFilters'
 import MicroclimateForm, { type MicroclimateFormValues } from '../components/MicroclimateForm'
@@ -29,6 +30,7 @@ export default function MicroclimatesListPage() {
   const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
   const isSuperAdmin = role === 'super_admin'
   const [microclimates, setMicroclimates] = useState<Microclimate[]>([])
+  const [templates, setTemplates] = useState<MicroclimateTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<MicroclimateFiltersValue>({ status: '' })
@@ -39,8 +41,12 @@ export default function MicroclimatesListPage() {
     setLoading(true)
     setError(null)
     try {
-      const result = await listMicroclimates(baseUrl, companyId)
-      setMicroclimates(result)
+      const [microclimatesResult, templatesResult] = await Promise.all([
+        listMicroclimates(baseUrl, companyId),
+        listMicroclimateTemplates(baseUrl, companyId),
+      ])
+      setMicroclimates(microclimatesResult)
+      setTemplates(templatesResult)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load microclimates')
     } finally {
@@ -63,6 +69,7 @@ export default function MicroclimatesListPage() {
       endTime: values.endTime,
       targetParticipantCount: values.targetParticipantCount,
       anonymousResponses: values.anonymousResponses,
+      templateId: values.templateId,
       questions: values.questions,
     })
     setShowCreateForm(false)
@@ -90,7 +97,7 @@ export default function MicroclimatesListPage() {
       <h1>Microclimates</h1>
       <MicroclimateFilters value={filters} onChange={setFilters} />
       <button onClick={() => setShowCreateForm((v) => !v)}>{showCreateForm ? 'Cancel' : 'New microclimate'}</button>
-      {showCreateForm && <MicroclimateForm onSubmit={handleCreate} />}
+      {showCreateForm && <MicroclimateForm templates={templates} onSubmit={handleCreate} />}
       {loading ? <p>Loading…</p> : <MicroclimateList microclimates={filtered} />}
     </div>
   )

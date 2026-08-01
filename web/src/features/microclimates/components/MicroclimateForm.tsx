@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { CreateQuestionInput } from '../api/microclimates'
+import type { MicroclimateTemplate } from '../api/microclimateTemplates'
 
 export interface MicroclimateFormValues {
   title: string
@@ -7,15 +8,22 @@ export interface MicroclimateFormValues {
   endTime: string
   targetParticipantCount: number
   anonymousResponses: boolean
+  templateId?: string
   questions: CreateQuestionInput[]
 }
 
 const QUESTION_TYPES = ['multiple_choice', 'open_text', 'rating', 'yes_no']
 
-const EMPTY_VALUES: MicroclimateFormValues = { title: '', startTime: '', endTime: '', targetParticipantCount: 10, anonymousResponses: true, questions: [] }
+const EMPTY_VALUES: MicroclimateFormValues = { title: '', startTime: '', endTime: '', targetParticipantCount: 10, anonymousResponses: true, templateId: undefined, questions: [] }
 
-export default function MicroclimateForm({ onSubmit }: { onSubmit: (values: MicroclimateFormValues) => Promise<void> }) {
+interface MicroclimateFormProps {
+  templates?: MicroclimateTemplate[]
+  onSubmit: (values: MicroclimateFormValues) => Promise<void>
+}
+
+export default function MicroclimateForm({ templates = [], onSubmit }: MicroclimateFormProps) {
   const [values, setValues] = useState<MicroclimateFormValues>(EMPTY_VALUES)
+  const [optionsDraft, setOptionsDraft] = useState<Record<number, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -27,13 +35,30 @@ export default function MicroclimateForm({ onSubmit }: { onSubmit: (values: Micr
     setValues({ ...values, questions: values.questions.map((q, i) => (i === index ? question : q)) })
   }
 
+  function updateOptions(index: number, raw: string) {
+    setOptionsDraft({ ...optionsDraft, [index]: raw })
+    const options = raw.split(',').map((o) => o.trim()).filter(Boolean)
+    updateQuestion(index, { ...values.questions[index], options: options.length > 0 ? options : undefined })
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
+
+    // multiple_choice has no fallback rendering -- an unanswerable question must not reach
+    // the backend (which also rejects this, but failing fast here gives the admin a clearer
+    // message and avoids a round-trip).
+    const invalidChoice = values.questions.find((q) => q.type === 'multiple_choice' && (q.options ?? []).length < 2)
+    if (invalidChoice) {
+      setError('Multiple choice questions need at least 2 options.')
+      return
+    }
+
     setSubmitting(true)
     try {
       await onSubmit(values)
       setValues(EMPTY_VALUES)
+      setOptionsDraft({})
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed')
     } finally {
@@ -65,6 +90,26 @@ export default function MicroclimateForm({ onSubmit }: { onSubmit: (values: Micr
         Anonymous responses
       </label>
 
+      {templates.length > 0 && (
+        // Reference-only, same as ActionPlanForm's template picker: selecting a template just
+        // sets templateId on the create request (a one-field pass-through the backend
+        // validates, scopes to the caller's company/system templates, and increments
+        // UsageCount against). It does not copy the template's questions into this form --
+        // that auto-population is explicitly out of scope for this slice.
+        <label>
+          Start from template (optional)
+          <select
+            value={values.templateId ?? ''}
+            onChange={(e) => setValues({ ...values, templateId: e.target.value || undefined })}
+          >
+            <option value="">No template</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </label>
+      )}
+
       <h3>Questions</h3>
       {values.questions.map((question, index) => (
         <div key={index}>
@@ -74,6 +119,16 @@ export default function MicroclimateForm({ onSubmit }: { onSubmit: (values: Micr
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
+          {question.type === 'multiple_choice' && (
+            <label>
+              Options (comma-separated, at least 2)
+              <input
+                placeholder="e.g. Red, Green, Blue"
+                value={optionsDraft[index] ?? (question.options ?? []).join(', ')}
+                onChange={(e) => updateOptions(index, e.target.value)}
+              />
+            </label>
+          )}
         </div>
       ))}
       <button type="button" onClick={addQuestion}>Add question</button>

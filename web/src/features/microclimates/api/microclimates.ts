@@ -44,6 +44,18 @@ export interface MicroclimateDetail {
   questions: Question[]
 }
 
+// Deliberately reduced shape -- this is what GET /microclimates/{id} returns to an
+// unauthenticated caller (the public MicroclimateRespondPage), not the full MicroclimateDetail
+// an authenticated admin sees. Must stay in sync with PublicMicroclimateDetail on the backend
+// (MicroclimateDtos.cs) -- title/status/questions only, no companyId/createdBy/description/
+// participation metrics.
+export interface PublicMicroclimateDetail {
+  id: string
+  title: string
+  status: string
+  questions: Question[]
+}
+
 export interface CreateMicroclimateInput {
   title: string
   description?: string
@@ -54,6 +66,9 @@ export interface CreateMicroclimateInput {
   anonymousResponses: boolean
   templateId?: string
   questions?: CreateQuestionInput[]
+  /** IANA timezone name (e.g. "America/Bogota"). Defaults to the browser's own timezone
+   * if omitted -- see createMicroclimate below. */
+  timezone?: string
 }
 
 export interface UpdateMicroclimateInput {
@@ -82,10 +97,26 @@ export async function listMicroclimates(baseUrl: string, companyId: string): Pro
   return body.microclimates
 }
 
+// <input type="datetime-local"> values (e.g. "2026-08-01T10:30") carry no UTC offset. Sent
+// as-is, System.Text.Json parses them as DateTimeOffset by stamping the *server's* local
+// offset, silently reinterpreting the admin's intended wall-clock time in whatever zone the
+// server happens to run in. `new Date(local)` parses that same string as the *browser's*
+// local time (the only reasonable interpretation of what the admin typed), and
+// `.toISOString()` always emits an unambiguous UTC ("Z") string -- safe regardless of server
+// timezone.
+function toUtcIso(localDateTime: string): string {
+  return new Date(localDateTime).toISOString()
+}
+
 export async function createMicroclimate(baseUrl: string, input: CreateMicroclimateInput): Promise<MicroclimateDetail> {
   const response = await authFetch(`${baseUrl}/microclimates`, {
     method: 'POST',
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      ...input,
+      startTime: toUtcIso(input.startTime),
+      endTime: toUtcIso(input.endTime),
+      timezone: input.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+    }),
   })
   return response.json() as Promise<MicroclimateDetail>
 }
@@ -103,7 +134,7 @@ export async function getMicroclimate(baseUrl: string, id: string): Promise<Micr
 // admin previewing the form). The backend allows this specific GET without a token when the
 // microclimate is configured for anonymous responses; anything else surfaces as a normal
 // thrown error for the page to render inline.
-export async function getMicroclimatePublic(baseUrl: string, id: string): Promise<MicroclimateDetail> {
+export async function getMicroclimatePublic(baseUrl: string, id: string): Promise<PublicMicroclimateDetail> {
   const token = getToken()
   const headers: Record<string, string> = {}
   if (token) {
@@ -115,7 +146,7 @@ export async function getMicroclimatePublic(baseUrl: string, id: string): Promis
     const body = await response.json().catch(() => null)
     throw new Error((body && body.message) || `Request failed: ${response.status}`)
   }
-  return response.json() as Promise<MicroclimateDetail>
+  return response.json() as Promise<PublicMicroclimateDetail>
 }
 
 export async function updateMicroclimate(baseUrl: string, id: string, input: UpdateMicroclimateInput): Promise<MicroclimateDetail> {

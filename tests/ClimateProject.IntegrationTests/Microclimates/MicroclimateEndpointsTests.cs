@@ -124,27 +124,81 @@ public class MicroclimateEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Anonymous_visitor_can_read_details_of_a_microclimate_configured_for_anonymous_responses()
+    public async Task Anonymous_visitor_can_read_reduced_details_of_an_active_microclimate_configured_for_anonymous_responses()
     {
         var client = _factory.CreateClient();
         var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
-            "Public pulse", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5,
+            "Public pulse", "Internal-only description", _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5,
             AnonymousResponses: true, null,
             new List<CreateQuestionInput> { new("How are you feeling?", "open_text", null, true, 1) }));
         var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
 
+        // Anonymous visibility requires the microclimate to actually be active, not merely
+        // configured for anonymous responses -- a draft is not yet publicly readable.
+        await client.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
+
         // No Authorization header at all -- a genuinely anonymous respondent, not a logged-in
         // user with an expired/absent token.
         var anonymousClient = _factory.CreateClient();
-        var getResponse = await anonymousClient.GetAsync($"/microclimates/{created!.Id}");
+        var getResponse = await anonymousClient.GetAsync($"/microclimates/{created.Id}");
 
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
-        var fetched = await getResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+        var fetched = await getResponse.Content.ReadFromJsonAsync<PublicMicroclimateDetail>();
         Assert.Equal("Public pulse", fetched!.Title);
+        Assert.Equal("active", fetched.Status);
         Assert.Single(fetched.Questions);
+
+        // The reduced public payload must not leak internal fields -- confirm via the raw JSON
+        // rather than the strongly-typed DTO (which would just default-initialize anything
+        // missing and mask the leak).
+        var raw = await getResponse.Content.ReadAsStringAsync();
+        using var json = System.Text.Json.JsonDocument.Parse(raw);
+        Assert.False(json.RootElement.TryGetProperty("companyId", out _));
+        Assert.False(json.RootElement.TryGetProperty("createdBy", out _));
+        Assert.False(json.RootElement.TryGetProperty("description", out _));
+        Assert.False(json.RootElement.TryGetProperty("responseCount", out _));
+        Assert.False(json.RootElement.TryGetProperty("targetParticipantCount", out _));
+    }
+
+    [Fact]
+    public async Task Anonymous_visitor_cannot_read_a_draft_microclimate_even_when_configured_for_anonymous_responses()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Not yet launched", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5,
+            AnonymousResponses: true, null, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+        Assert.Equal("draft", created!.Status);
+
+        var anonymousClient = _factory.CreateClient();
+        var getResponse = await anonymousClient.GetAsync($"/microclimates/{created.Id}");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, getResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Anonymous_visitor_cannot_read_a_closed_microclimate_even_when_configured_for_anonymous_responses()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Finished pulse", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5,
+            AnonymousResponses: true, null, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+        await client.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "closed", null));
+
+        var anonymousClient = _factory.CreateClient();
+        var getResponse = await anonymousClient.GetAsync($"/microclimates/{created.Id}");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, getResponse.StatusCode);
     }
 
     [Fact]
@@ -163,5 +217,174 @@ public class MicroclimateEndpointsTests : IAsyncLifetime
         var getResponse = await anonymousClient.GetAsync($"/microclimates/{created!.Id}");
 
         Assert.Equal(HttpStatusCode.Unauthorized, getResponse.StatusCode);
+    }
+
+    // --- Privilege-escalation regression coverage (final whole-branch review finding #1) ---
+    // Every test above signs up as CompanyAdmin, which made the pre-fix CanAccessCompany bug
+    // (missing the Roles.CompanyAdmin clause, so *any* authenticated role in the company passed)
+    // invisible to the suite. These sign up as non-admin roles explicitly.
+
+    [Theory]
+    [InlineData(Roles.Employee)]
+    [InlineData(Roles.Supervisor)]
+    [InlineData(Roles.Leader)]
+    public async Task Non_admin_roles_cannot_list_their_companys_microclimates(string role)
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Admin-only listing", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5, true, null, null));
+
+        var nonAdminToken = await SignUpAndGetTokenAsync(client, role, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", nonAdminToken);
+
+        var listResponse = await client.GetAsync($"/microclimates?companyId={_companyAId}");
+        Assert.Equal(HttpStatusCode.Forbidden, listResponse.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(Roles.Employee)]
+    [InlineData(Roles.Supervisor)]
+    [InlineData(Roles.Leader)]
+    public async Task Non_admin_roles_cannot_update_a_microclimate_in_their_own_company(string role)
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Not for employees to activate", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5, true, null, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+
+        var nonAdminToken = await SignUpAndGetTokenAsync(client, role, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", nonAdminToken);
+
+        var updateResponse = await client.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
+        Assert.Equal(HttpStatusCode.Forbidden, updateResponse.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(Roles.Employee)]
+    [InlineData(Roles.Supervisor)]
+    [InlineData(Roles.Leader)]
+    public async Task Non_admin_roles_cannot_create_a_microclimate(string role)
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, role, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Should be forbidden", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5, true, null, null));
+
+        Assert.Equal(HttpStatusCode.Forbidden, createResponse.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(Roles.Employee)]
+    [InlineData(Roles.Supervisor)]
+    [InlineData(Roles.Leader)]
+    public async Task Non_admin_roles_cannot_view_live_results_for_a_microclimate_in_their_own_company(string role)
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Not for employees to view", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5, true, null, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+
+        var nonAdminToken = await SignUpAndGetTokenAsync(client, role, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", nonAdminToken);
+
+        var liveResultsResponse = await client.GetAsync($"/microclimates/{created!.Id}/live-results");
+        Assert.Equal(HttpStatusCode.Forbidden, liveResultsResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Creating_a_microclimate_with_an_unknown_template_id_returns_400_not_500()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Bad template ref", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5, true,
+            TemplateId: Guid.NewGuid(), Questions: null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, createResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Creating_a_microclimate_with_another_companys_template_id_returns_400()
+    {
+        var client = _factory.CreateClient();
+        var tokenB = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyBDomain, _companyBId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenB);
+        var templateResponse = await client.PostAsJsonAsync("/microclimate-templates", new CreateMicroclimateTemplateRequest(
+            "Company B's template", "Only for company B", "engagement", _companyBId));
+        var template = await templateResponse.Content.ReadFromJsonAsync<MicroclimateTemplateDetail>();
+
+        var tokenA = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenA);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Cross-tenant template ref", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5, true,
+            TemplateId: template!.Id, Questions: null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, createResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Creating_a_microclimate_from_a_valid_template_increments_its_usage_count()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var templateResponse = await client.PostAsJsonAsync("/microclimate-templates", new CreateMicroclimateTemplateRequest(
+            "Weekly check-in", "Standard weekly pulse", "engagement", _companyAId));
+        var template = await templateResponse.Content.ReadFromJsonAsync<MicroclimateTemplateDetail>();
+        Assert.Equal(0, template!.UsageCount);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "From template", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5, true,
+            TemplateId: template.Id, Questions: null));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var listResponse = await client.GetAsync($"/microclimate-templates?companyId={_companyAId}");
+        var list = await listResponse.Content.ReadFromJsonAsync<MicroclimateTemplateListResponse>();
+        Assert.Equal(1, list!.Templates.Single(t => t.Id == template.Id).UsageCount);
+    }
+
+    [Fact]
+    public async Task Creating_a_multiple_choice_question_with_fewer_than_2_options_is_rejected()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Broken multiple choice", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5, true, null,
+            new List<CreateQuestionInput> { new("Pick one", "multiple_choice", null, true, 1) }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, createResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Creating_a_microclimate_with_a_timezone_persists_it_on_scheduling()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Timezone test", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5, true, null, null,
+            Timezone: "America/Bogota"));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var microclimate = await db.Microclimates.FirstAsync(m => m.Id == created!.Id);
+        Assert.Equal("America/Bogota", microclimate.Scheduling.Timezone);
     }
 }
