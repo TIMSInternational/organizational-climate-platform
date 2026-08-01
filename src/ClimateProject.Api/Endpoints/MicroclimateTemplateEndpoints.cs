@@ -27,7 +27,14 @@ public static class MicroclimateTemplateEndpoints
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
-        if (currentUser.Role != Roles.SuperAdmin && currentUser.CompanyId != companyId.ToString())
+        // Matches MicroclimateEndpoints.CanAccessCompany and this file's own CreateAsync:
+        // SuperAdmin (any company) or CompanyAdmin (own company only). Without the
+        // Roles.Admin.Contains check, any employee/supervisor/leader in the company could
+        // list its templates plus every system template, while being 403'd from listing
+        // microclimates -- an inconsistent authorization model between the two endpoint
+        // files added in this branch.
+        if (!Roles.Admin.Contains(currentUser.Role)
+            || (currentUser.Role != Roles.SuperAdmin && currentUser.CompanyId != companyId.ToString()))
         {
             return Results.Forbid();
         }

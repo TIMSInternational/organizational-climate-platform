@@ -3,13 +3,20 @@ import { listMicroclimates, createMicroclimate, type Microclimate } from '../api
 import MicroclimateList from '../components/MicroclimateList'
 import MicroclimateFilters, { type MicroclimateFiltersValue } from '../components/MicroclimateFilters'
 import MicroclimateForm, { type MicroclimateFormValues } from '../components/MicroclimateForm'
+import { getToken } from '../../../auth/token'
+import { decodeJwtPayload } from '../../../auth/jwt'
 
-// Same stopgap as ActionPlansListPage (Task 5 of #53's plan) -- no company-context
-// selector exists yet in the admin shell. See that plan's note; #57 (cross-cutting
-// frontend) or a later pass should replace this with a real selector.
+// Company context comes from the signed-in user's own JWT claim -- the same source
+// AdminLayout.tsx/navSections.ts use to decide what nav to show this user (see
+// navSections.ts:16-17: nav must never point somewhere the backend would 403 for that
+// role). A single hardcoded company id would violate that same invariant: any
+// company_admin whose company differs from a hardcoded value would get Results.Forbid()
+// from MicroclimateEndpoints.ListAsync's CanAccessCompany check.
 export default function MicroclimatesListPage() {
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const companyId = import.meta.env.VITE_DEFAULT_COMPANY_ID as string
+  const token = getToken()
+  const claims = token ? decodeJwtPayload(token) : null
+  const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
   const [microclimates, setMicroclimates] = useState<Microclimate[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -37,6 +44,7 @@ export default function MicroclimatesListPage() {
   const filtered = microclimates.filter((m) => !filters.status || m.status === filters.status)
 
   async function handleCreate(values: MicroclimateFormValues) {
+    if (!companyId) return
     await createMicroclimate(baseUrl, {
       title: values.title,
       companyId,
@@ -51,7 +59,7 @@ export default function MicroclimatesListPage() {
   }
 
   if (!companyId) {
-    return <p role="alert">VITE_DEFAULT_COMPANY_ID is not configured.</p>
+    return <p role="alert">Unable to determine your company. Please log in again.</p>
   }
 
   if (error) {

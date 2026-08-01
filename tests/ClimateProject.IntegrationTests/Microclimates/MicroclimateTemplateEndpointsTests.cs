@@ -103,4 +103,19 @@ public class MicroclimateTemplateEndpointsTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Forbidden, createResponse.StatusCode);
     }
+
+    [Fact]
+    public async Task Employee_cannot_list_microclimate_templates()
+    {
+        // Whole-branch review fix: ListAsync must apply the same Roles.Admin.Contains gate
+        // as CreateAsync (this file) and MicroclimateEndpoints.CanAccessCompany -- otherwise
+        // a non-admin company member can list templates while being 403'd from listing
+        // microclimates, an inconsistent authorization model between the two files.
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.Employee);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var listResponse = await client.GetAsync($"/microclimate-templates?companyId={_companyId}");
+        Assert.Equal(HttpStatusCode.Forbidden, listResponse.StatusCode);
+    }
 }

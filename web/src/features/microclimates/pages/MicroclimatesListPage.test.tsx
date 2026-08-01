@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import MicroclimatesListPage from './MicroclimatesListPage'
 import { listMicroclimates, createMicroclimate } from '../api/microclimates'
 import type { Microclimate } from '../api/microclimates'
+import { setToken, clearToken } from '../../../auth/token'
 
 vi.mock('../api/microclimates', () => ({
   listMicroclimates: vi.fn(),
@@ -13,6 +14,12 @@ vi.mock('../api/microclimates', () => ({
 
 const mockListMicroclimates = vi.mocked(listMicroclimates)
 const mockCreateMicroclimate = vi.mocked(createMicroclimate)
+
+function makeToken(payload: Record<string, unknown>): string {
+  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+  const body = btoa(JSON.stringify(payload))
+  return `${header}.${body}.signature`
+}
 
 const microclimates: Microclimate[] = [
   { id: 'm1', title: 'Weekly pulse', companyId: 'c1', status: 'active', responseCount: 3, targetParticipantCount: 10, createdAt: '2026-01-01' },
@@ -30,26 +37,37 @@ function renderPage() {
 describe('MicroclimatesListPage', () => {
   beforeEach(() => {
     vi.stubEnv('VITE_API_BASE_URL', 'http://api.test')
-    vi.stubEnv('VITE_DEFAULT_COMPANY_ID', 'c1')
+    setToken(makeToken({ sub: 'user-1', role: 'company_admin', companyId: 'c1' }))
     mockListMicroclimates.mockReset()
     mockCreateMicroclimate.mockReset()
   })
 
   afterEach(() => {
     vi.unstubAllEnvs()
+    clearToken()
   })
 
-  it('shows a configuration alert and never calls the API when no company id is configured', async () => {
-    vi.stubEnv('VITE_DEFAULT_COMPANY_ID', '')
+  it('shows an alert and never calls the API when the JWT has no companyId claim', async () => {
+    setToken(makeToken({ sub: 'user-1', role: 'company_admin' }))
     mockListMicroclimates.mockResolvedValue(microclimates)
 
     renderPage()
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('VITE_DEFAULT_COMPANY_ID is not configured.')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to determine your company. Please log in again.')
     expect(mockListMicroclimates).not.toHaveBeenCalled()
   })
 
-  it('loads and renders microclimates for the configured company on mount', async () => {
+  it('shows an alert and never calls the API when there is no stored token at all', async () => {
+    clearToken()
+    mockListMicroclimates.mockResolvedValue(microclimates)
+
+    renderPage()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to determine your company. Please log in again.')
+    expect(mockListMicroclimates).not.toHaveBeenCalled()
+  })
+
+  it('loads and renders microclimates for the company derived from the JWT on mount', async () => {
     mockListMicroclimates.mockResolvedValue(microclimates)
 
     renderPage()

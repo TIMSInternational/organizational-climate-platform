@@ -202,4 +202,73 @@ public class MicroclimateEndpointsTests : IAsyncLifetime
         var response = await anonymousClient.GetAsync($"/microclimates/{Guid.NewGuid()}/respond");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Public_respond_details_returns_404_for_a_microclimate_that_requires_authentication_to_respond()
+    {
+        // Locks in the whole-branch review fix: GET /microclimates/{id}/respond must not
+        // serve title/description/questions for a microclimate with AnonymousResponses ==
+        // false, even though the route is AllowAnonymous. Otherwise this becomes an
+        // unauthenticated read surface for non-public microclimates.
+        var adminClient = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(adminClient, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        adminClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var createResponse = await adminClient.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Members only pulse", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5,
+            AnonymousResponses: false, TemplateId: null, Questions: null));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+        await adminClient.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
+
+        var anonymousClient = _factory.CreateClient();
+        var publicGet = await anonymousClient.GetAsync($"/microclimates/{created.Id}/respond");
+        Assert.Equal(HttpStatusCode.NotFound, publicGet.StatusCode);
+    }
+
+    [Fact]
+    public async Task Public_respond_details_returns_404_for_an_unpublished_draft_microclimate()
+    {
+        // Locks in the whole-branch review fix: an unpublished draft's question wording is
+        // exactly the kind of internal/admin-only data PublicMicroclimateDetail's own
+        // comment says must not leak, even when AnonymousResponses is true.
+        var adminClient = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(adminClient, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        adminClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var createResponse = await adminClient.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Still being drafted", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5,
+            AnonymousResponses: true, TemplateId: null,
+            Questions: new List<CreateQuestionInput> { new("Secret draft question", "open_text", null, true, 1) }));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+        Assert.Equal("draft", created!.Status);
+
+        var anonymousClient = _factory.CreateClient();
+        var publicGet = await anonymousClient.GetAsync($"/microclimates/{created.Id}/respond");
+        Assert.Equal(HttpStatusCode.NotFound, publicGet.StatusCode);
+    }
+
+    [Fact]
+    public async Task Submitting_a_response_to_a_non_anonymous_microclimate_as_an_authenticated_company_member_succeeds()
+    {
+        // The public /respond page can never reach a non-anonymous microclimate (see the
+        // 404 tests above), but the authenticated submission path itself must still work
+        // for a genuinely authenticated same-company caller -- this is the intended way to
+        // respond to a members-only microclimate.
+        var adminClient = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(adminClient, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        adminClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var createResponse = await adminClient.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Members only pulse", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5,
+            AnonymousResponses: false, TemplateId: null,
+            Questions: new List<CreateQuestionInput> { new("How are you?", "open_text", null, true, 1) }));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+        await adminClient.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
+
+        var employeeToken = await SignUpAndGetTokenAsync(adminClient, Roles.Employee, _companyADomain, _companyAId);
+        var employeeClient = _factory.CreateClient();
+        employeeClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", employeeToken);
+
+        var submit = await employeeClient.PostAsJsonAsync(
+            $"/microclimates/{created.Id}/responses",
+            new SubmitResponseRequest(new Dictionary<Guid, string> { [created.Questions[0].Id] = "Doing fine" }));
+        Assert.Equal(HttpStatusCode.Created, submit.StatusCode);
+    }
 }

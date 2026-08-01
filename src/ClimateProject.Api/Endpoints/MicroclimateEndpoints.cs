@@ -157,7 +157,16 @@ public static class MicroclimateEndpoints
         CancellationToken cancellationToken)
     {
         var microclimate = await db.Microclimates.FirstOrDefaultAsync(m => m.Id == id, cancellationToken);
-        if (microclimate is null)
+
+        // Serve this AllowAnonymous route only for microclimates that are genuinely meant
+        // to be public right now: AnonymousResponses must be enabled, and the microclimate
+        // must be active. Without this gate, any v4 GUID (draft or otherwise) would leak its
+        // title/description/question set to an unauthenticated caller -- including
+        // unpublished drafts still being authored, and microclimates that explicitly require
+        // authentication to respond (see SubmitResponseAsync below). Returning the same 404
+        // shape as "not found" (rather than 403) avoids distinguishing "doesn't exist" from
+        // "exists but isn't public" to an anonymous caller.
+        if (microclimate is null || !microclimate.RealtimeSettings.AnonymousResponses || microclimate.Status != "active")
         {
             return Results.Json(new { message = "Microclimate not found" }, statusCode: 404);
         }
