@@ -62,15 +62,21 @@ public static class PlanesAccionEndpoints
                 var hallazgo = await climateProjectClient.GetHallazgoByIdAsync(request.HallazgoExternalId, cancellationToken);
                 cicloExternalId = hallazgo?.CicloId;
             }
-            // HttpRequestException: non-2xx or network failure (ClimateProjectClient.GetAsync's
-            // EnsureSuccessStatusCode) after Polly's retries are exhausted.
-            // BrokenCircuitException: Polly's circuit breaker is open and is short-circuiting calls.
-            // TaskCanceledException: HttpClient's own request timeout fired — guarded by
-            // !cancellationToken.IsCancellationRequested so a caller-initiated cancellation
-            // (client disconnect) still propagates instead of being swallowed here.
+            // Catch everything the lookup can throw, not just connection/5xx failures:
+            // ClimateProjectClient.GetAsync does `ReadFromJsonAsync<T>(...)!` and this method
+            // immediately dereferences envelope.Data.Hallazgos, so a reachable-but-misbehaving
+            // climate-project can throw well past HttpRequestException/BrokenCircuitException —
+            // a 200 whose body omits "data" throws NullReferenceException, a non-JSON response
+            // (e.g. a proxy/HTML interstitial) throws NotSupportedException, and a truncated
+            // body throws JsonException. cicloExternalId is enrichment only, so none of these
+            // should turn into a 500 for plan creation.
+            // The one exception we let through is a genuine caller-initiated cancellation
+            // (client disconnect): OperationCanceledException/TaskCanceledException raised
+            // because cancellationToken itself was signaled must still propagate instead of
+            // being swallowed here — HttpClient's own request-timeout TaskCanceledException
+            // (token not signaled) is still caught like any other lookup failure.
             catch (Exception ex) when (
-                (ex is HttpRequestException or Polly.CircuitBreaker.BrokenCircuitException or TaskCanceledException)
-                && !cancellationToken.IsCancellationRequested)
+                !(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
             {
                 logger.LogError(
                     ex, "Hallazgo lookup failed for {HallazgoExternalId}; creating plan without cicloExternalId",
@@ -273,22 +279,62 @@ public static class PlanesAccionEndpoints
         // bound as query parameters anyway. Created lazily on first use per year rather
         // than pre-migrated, since future years aren't known in advance.
         var sequenceName = $"plan_code_seq_{year}";
+        var prefix = $"PA-{year}-";
+        bool createdNewSequence;
 #pragma warning disable EF1002
         try
         {
-            await db.Database.ExecuteSqlRawAsync($"CREATE SEQUENCE IF NOT EXISTS {sequenceName}", cancellationToken);
+            // Deliberately CREATE SEQUENCE without IF NOT EXISTS: this makes Postgres raise
+            // a duplicate-relation error whenever the sequence already exists -- whether it
+            // was created by an earlier call this year or by a concurrent request that won
+            // the race to create it just now -- giving us a definite "did I just create
+            // this?" signal instead of the silent no-op IF NOT EXISTS would give.
+            await db.Database.ExecuteSqlRawAsync($"CREATE SEQUENCE {sequenceName}", cancellationToken);
+            createdNewSequence = true;
         }
         catch (Npgsql.PostgresException ex) when (
-            ex.SqlState is Npgsql.PostgresErrorCodes.UniqueViolation or Npgsql.PostgresErrorCodes.DuplicateObject)
+            ex.SqlState is Npgsql.PostgresErrorCodes.UniqueViolation
+                or Npgsql.PostgresErrorCodes.DuplicateObject
+                or Npgsql.PostgresErrorCodes.DuplicateTable)
         {
-            // Postgres's CREATE SEQUENCE IF NOT EXISTS is not safe against concurrent
-            // callers: two requests can both pass the "does not exist" catalog check
-            // before either commits, and the loser raises a unique-violation on
-            // pg_class's name index (23505) instead of a graceful no-op (42710 is the
-            // equivalent error without IF NOT EXISTS, kept here for completeness). By
-            // the time we observe this, the winner's CREATE has already committed, so
-            // the sequence now exists -- safe to fall through to nextval below.
+            // A plain (non-"IF NOT EXISTS") CREATE SEQUENCE on a name that's already taken
+            // deterministically raises 42P07 (duplicate_table -- sequences are relations in
+            // pg_class, so this is the same error class as re-creating an existing table).
+            // 23505/42710 are kept too for the genuine concurrent-race case: two requests
+            // can both pass Postgres's internal "does this relation exist" check before
+            // either commits, and the loser can surface as a unique-violation on pg_class's
+            // name index instead of the deterministic duplicate_table.
+            // Someone else already created (and, if they won a creation race, is seeding)
+            // this year's sequence -- by the time we observe this, their CREATE has already
+            // committed, so the sequence now exists and is safe to use.
+            createdNewSequence = false;
         }
+
+        if (createdNewSequence)
+        {
+            // We just created a brand-new sequence, which always starts at 1 -- but this
+            // database may already hold plans for this year created before this sequence
+            // existed (the old COUNT(*)-based scheme, a prior deploy, or a database
+            // restored from an environment that already has data, e.g. staging/prod).
+            // Seed it from the highest existing PlanCode suffix so nextval() can't
+            // collide with a pre-existing unique PlanCode.
+            // The suffix-is-all-digits check guards against a legacy/malformed PlanCode that
+            // happens to match the '{prefix}%' LIKE filter but isn't purely numeric after the
+            // prefix -- without it, CAST(... AS bigint) would throw for that row instead of
+            // just being excluded from the max.
+            var maxExisting = await db.Database.SqlQueryRaw<long>(
+                $"""
+                SELECT COALESCE(MAX(CAST(SUBSTRING("PlanCode" FROM {prefix.Length + 1}) AS bigint)), 0) AS "Value"
+                FROM planes_de_accion
+                WHERE "PlanCode" LIKE '{prefix}%'
+                  AND SUBSTRING("PlanCode" FROM {prefix.Length + 1}) ~ '^[0-9]+$'
+                """).SingleAsync(cancellationToken);
+            if (maxExisting > 0)
+            {
+                await db.Database.ExecuteSqlRawAsync($"SELECT setval('{sequenceName}', {maxExisting})", cancellationToken);
+            }
+        }
+
         // EF Core's scalar SqlQueryRaw<T> wraps the raw SQL as
         // `SELECT s."Value" FROM (<sql>) AS s`, so the inner query's column must be
         // aliased "Value" -- nextval(...) alone produces a column literally named

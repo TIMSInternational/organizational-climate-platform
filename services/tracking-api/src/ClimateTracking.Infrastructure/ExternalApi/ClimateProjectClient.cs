@@ -58,7 +58,11 @@ public sealed class ClimateProjectClient : IClimateProjectClient
         var query = $"/api/internal/hallazgos?hallazgo_id={Uri.EscapeDataString(hallazgoId)}" +
             $"&company_id={Uri.EscapeDataString(_options.ProcomerCompanyId)}";
         var envelope = await GetAsync<Envelope<HallazgosData>>(query, cancellationToken);
-        return envelope.Data.Hallazgos.FirstOrDefault();
+        // Don't trust the server to have honored hallazgo_id: climate-project's live
+        // /internal/hallazgos route only reads company_id and ignores hallazgo_id entirely,
+        // returning every hallazgo for the company. Filtering client-side keeps this method
+        // correct regardless of the server's filter fidelity (today or after it's fixed).
+        return envelope.Data.Hallazgos.FirstOrDefault(h => h.HallazgoId == hallazgoId);
     }
 
     public async Task SendNotificationAsync(SendNotificationRequest request, CancellationToken cancellationToken)
