@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Reports;
 using ClimateProject.Domain.Entities;
@@ -79,7 +80,10 @@ public static class ReportEndpoints
         // Stub: no real rendering engine yet -- completes synchronously and instantly.
         report.Status = "completed";
         report.GenerationCompletedAt = DateTimeOffset.UtcNow;
-        report.ReportOutput = "Report generation is stubbed -- no real rendering yet.";
+        // ReportOutput is mapped as jsonb (ReportConfiguration.cs) -- Npgsql requires the
+        // stored text to already be valid JSON, so the stub message must be serialized
+        // (same pattern as MicroclimateEndpoints.cs's WordCloudData), not assigned raw.
+        report.ReportOutput = JsonSerializer.Serialize("Report generation is stubbed -- no real rendering yet.");
         report.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
