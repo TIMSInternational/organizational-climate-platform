@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import LoginPage from '../auth/LoginPage'
+import AcceptInvitationPage from '../features/org-structure/pages/AcceptInvitationPage'
 import RequireAuth from './RequireAuth'
 import AdminLayout from './AdminLayout'
 import RouteErrorBoundary from './RouteErrorBoundary'
@@ -13,6 +14,7 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <Navigate to="/admin/companies" replace /> },
       { path: '/login', element: <LoginPage /> },
+      { path: '/accept-invitation/:token', element: <AcceptInvitationPage /> },
       {
         element: <RequireAuth />,
         children: [
