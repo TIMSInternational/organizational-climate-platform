@@ -45,3 +45,14 @@ public sealed record UpdateMicroclimateRequest(
     string? Description,
     string? Status,
     DateTimeOffset? EndTime);
+
+public sealed record WordCloudEntry(string Text, int Value);
+
+public sealed record LiveResultsDetail(
+    double SentimentScore,
+    string EngagementLevel,
+    List<WordCloudEntry> WordCloud,
+    int ResponseCount,
+    int TargetParticipantCount);
+
+public sealed record SubmitResponseRequest(Dictionary<Guid, string> Answers);
