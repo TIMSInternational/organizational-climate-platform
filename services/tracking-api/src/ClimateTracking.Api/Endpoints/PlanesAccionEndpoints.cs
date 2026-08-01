@@ -81,9 +81,9 @@ public static class PlanesAccionEndpoints
         var fechaCreacion = DateOnly.FromDateTime(DateTime.UtcNow);
         var plan = new PlanDeAccion
         {
-            // Sequential per-year numbering has a known race window under concurrent
-            // creates (two requests could read the same count before either commits) —
-            // acceptable for now given expected creation volume; revisit if that changes.
+            // Sequential per-year numbering is generated from a Postgres sequence
+            // (GeneratePlanCodeAsync) precisely to avoid the race window a naive
+            // COUNT(*)-based approach would have under concurrent creates.
             PlanCode = await GeneratePlanCodeAsync(db, cancellationToken),
             NodoExternalId = request.NodoExternalId,
             LiderExternalId = nodo.LiderExternalId,
@@ -274,8 +274,26 @@ public static class PlanesAccionEndpoints
         // than pre-migrated, since future years aren't known in advance.
         var sequenceName = $"plan_code_seq_{year}";
 #pragma warning disable EF1002
-        await db.Database.ExecuteSqlRawAsync($"CREATE SEQUENCE IF NOT EXISTS {sequenceName}", cancellationToken);
-        var nextVal = await db.Database.SqlQueryRaw<long>($"SELECT nextval('{sequenceName}')").SingleAsync(cancellationToken);
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync($"CREATE SEQUENCE IF NOT EXISTS {sequenceName}", cancellationToken);
+        }
+        catch (Npgsql.PostgresException ex) when (
+            ex.SqlState is Npgsql.PostgresErrorCodes.UniqueViolation or Npgsql.PostgresErrorCodes.DuplicateObject)
+        {
+            // Postgres's CREATE SEQUENCE IF NOT EXISTS is not safe against concurrent
+            // callers: two requests can both pass the "does not exist" catalog check
+            // before either commits, and the loser raises a unique-violation on
+            // pg_class's name index (23505) instead of a graceful no-op (42710 is the
+            // equivalent error without IF NOT EXISTS, kept here for completeness). By
+            // the time we observe this, the winner's CREATE has already committed, so
+            // the sequence now exists -- safe to fall through to nextval below.
+        }
+        // EF Core's scalar SqlQueryRaw<T> wraps the raw SQL as
+        // `SELECT s."Value" FROM (<sql>) AS s`, so the inner query's column must be
+        // aliased "Value" -- nextval(...) alone produces a column literally named
+        // "nextval", which makes Postgres raise 42703 (column s.Value does not exist).
+        var nextVal = await db.Database.SqlQueryRaw<long>($"SELECT nextval('{sequenceName}') AS \"Value\"").SingleAsync(cancellationToken);
 #pragma warning restore EF1002
         return $"PA-{year}-{nextVal:D5}";
     }
