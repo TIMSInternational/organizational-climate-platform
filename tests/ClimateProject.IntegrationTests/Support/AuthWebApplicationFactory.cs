@@ -13,6 +13,7 @@ namespace ClimateProject.IntegrationTests.Support;
 public class AuthWebApplicationFactory(string connectionString) : WebApplicationFactory<Program>
 {
     public const string TestJwtSecret = "integration-test-tracking-jwt-secret-32-bytes-min";
+    public const string TestInternalApiKey = "integration-test-internal-api-key";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -22,6 +23,7 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
             {
                 ["ConnectionStrings:ClimateProject"] = connectionString,
                 ["TrackingJwtSecret"] = TestJwtSecret,
+                ["InternalApiKey"] = TestInternalApiKey,
                 ["GoogleClientId"] = "test-google-client-id",
             });
         });

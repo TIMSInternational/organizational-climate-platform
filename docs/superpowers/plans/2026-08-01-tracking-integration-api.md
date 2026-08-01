@@ -304,6 +304,25 @@ git commit -m "feat: add nodo/persona picker endpoints for tracking-module integ
 
 ## Task 2: Internal API-key auth filter + real internal nodos/personas endpoints
 
+> **Amendment (2026-08-01, post-implementation, recorded during final review fixes):** Step 4's
+> literal code below resolves persona `nodo_id` from `u.NodoId ?? string.Empty`. The shipped
+> implementation deviates from this: `grep -rn "NodoId = " src/` returns zero writers of
+> `User.NodoId`, so the literal plan code would always emit an empty string. It instead
+> resolves `nodo_id` via `User.DepartmentId -> TrackingIdentifiers.ExternalNodoId(department)`,
+> falling back to a synthetic `TrackingIdentifiers.UnassignedNodoId(companyId)` for users with
+> no department (see the further amendment on the departmentless-user fix below). This is
+> covered by tests and is the correct behavior; `User.NodoId` is tracked as a dead column for
+> cleanup in `climate-project#73`.
+>
+> **Second amendment (2026-08-01):** the first fix above still emitted `nodo_id: ""` for any
+> user with no `DepartmentId` — the common case, since plain `/auth/signup` and Google login
+> never set it (only bulk-import, admin user-create/invitation flows do). Since
+> climate-tracking's `PersonaDto.NodoId` is non-nullable and used for tablero authorization
+> scoping, an empty value is a real bug, not just a cosmetic gap. Fixed by having `/personas`
+> fall back to `TrackingIdentifiers.UnassignedNodoId(companyId)` for departmentless users, and
+> having `/nodos` include a matching synthetic "Sin nodo asignado" entry whenever a company has
+> at least one such user, so the id always resolves to something present in `/nodos`.
+
 **Files:**
 - Create: `src/ClimateProject.Api/Infrastructure/InternalApiKeyFilter.cs`
 - Create: `src/ClimateProject.Application/Tracking/TrackingInternalDtos.cs`
@@ -643,6 +662,15 @@ git commit -m "feat: add internal API-key auth and real /api/internal/nodos,pers
 
 ## Task 3: Internal endpoint stubs (ciclos-encuesta, hallazgos, send-notification)
 
+> **Amendment (2026-08-01):** Step 2's stub bodies below are unconditional empty/no-op
+> responses with no `company_id` validation, as written. A later, unreviewed pass added the
+> same GUID validation the real `/nodos`/`/personas` endpoints use to these stub routes,
+> to "close a drift" — that was an unrequested contract change nobody approved, and it made
+> the stub routes fail closed (400) exactly when the plan intended them to degrade gracefully
+> instead (empty results, regardless of `company_id`). Reverted during final review fixes to
+> match this section's literal contract; see the class-level comment on
+> `TrackingInternalEndpoints` for the full rationale.
+
 **Files:**
 - Modify: `src/ClimateProject.Application/Tracking/TrackingInternalDtos.cs`
 - Modify: `src/ClimateProject.Api/Endpoints/TrackingInternalEndpoints.cs`
@@ -802,6 +830,16 @@ git commit -m "feat: add stubbed /api/internal/ciclos-encuesta,hallazgos,send-no
 ---
 
 ## Task 4: Frontend typed API client for direct climate-tracking calls
+
+> **Amendment (2026-08-01):** as shipped, this client had zero callers anywhere in `web/src`
+> (by design -- this plan explicitly excludes tracking pages, see Global Constraints), and
+> `VITE_TRACKING_API_BASE_URL` was referenced only in `web/.env.example`, never read in code.
+> Fixed by adding `web/src/features/tracking/api/config.ts` (`getTrackingApiBaseUrl()`) and
+> defaulting every export's `baseUrl` parameter to it, and by adding an opt-in
+> `trackingApi.live.test.ts` (skipped unless `TRACKING_API_LIVE_URL` is set) so the client can
+> actually be verified against a real climate-tracking instance instead of only a stubbed
+> fetch. Wiring an actual page to this client remains out of scope here and is tracked as
+> `climate-project#74`.
 
 **Files:**
 - Modify: `web/.env.example` (add `VITE_TRACKING_API_BASE_URL`)
