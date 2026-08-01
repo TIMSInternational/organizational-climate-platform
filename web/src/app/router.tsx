@@ -12,6 +12,7 @@ import DemographicFieldsPage from '../features/org-structure/pages/DemographicFi
 import ActionPlansListPage from '../features/action-plans/pages/ActionPlansListPage'
 import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetailPage'
 import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
+import MicroclimateDetailPage from '../features/microclimates/pages/MicroclimateDetailPage'
 import { getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import { resolveInitialRoute } from './resolveInitialRoute'
@@ -48,6 +49,7 @@ export const router = createBrowserRouter([
               { path: '/action-plans', element: <ActionPlansListPage /> },
               { path: '/action-plans/:id', element: <ActionPlanDetailPage /> },
               { path: '/microclimates', element: <MicroclimatesListPage /> },
+              { path: '/microclimates/:id', element: <MicroclimateDetailPage /> },
             ],
           },
         ],
