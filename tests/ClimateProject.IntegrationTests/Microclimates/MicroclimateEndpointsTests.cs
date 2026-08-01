@@ -108,6 +108,29 @@ public class MicroclimateEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Employee_cannot_update_a_microclimate()
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            "Employee cannot touch this", null, _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5, true, null, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+
+        var employeeToken = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", employeeToken);
+
+        var updateResponse = await client.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
+        Assert.Equal(HttpStatusCode.Forbidden, updateResponse.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var getResponse = await client.GetAsync($"/microclimates/{created.Id}");
+        var unchanged = await getResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+        Assert.Equal("draft", unchanged!.Status);
+    }
+
+    [Fact]
     public async Task CompanyAdmin_cannot_access_another_companys_microclimates()
     {
         var client = _factory.CreateClient();
