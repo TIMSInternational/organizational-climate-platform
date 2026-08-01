@@ -10,6 +10,7 @@ export default function MicroclimateDetailPage() {
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [microclimate, setMicroclimate] = useState<MicroclimateDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [statusError, setStatusError] = useState<string | null>(null)
 
   async function reload() {
     if (!id) return
@@ -28,8 +29,16 @@ export default function MicroclimateDetailPage() {
 
   async function handleStatusChange(status: string) {
     if (!id) return
-    await updateMicroclimate(baseUrl, id, { status })
-    await reload()
+    setStatusError(null)
+    try {
+      await updateMicroclimate(baseUrl, id, { status })
+      await reload()
+    } catch (err) {
+      // Surface the failure and force a re-render so the controlled <select>
+      // snaps back to the last known server status instead of silently
+      // sticking on the user's unsaved selection (403/500/network failures).
+      setStatusError(err instanceof Error ? err.message : 'Failed to update status')
+    }
   }
 
   if (error) {
@@ -51,6 +60,7 @@ export default function MicroclimateDetailPage() {
           ))}
         </select>
       </label>
+      {statusError && <p role="alert">{statusError}</p>}
 
       <h2>Live results</h2>
       <LiveResultsPanel baseUrl={baseUrl} microclimateId={microclimate.id} isActive={microclimate.status === 'active'} />
