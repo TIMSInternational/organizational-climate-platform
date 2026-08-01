@@ -32,6 +32,7 @@ public class PlanesAccionHallazgoLookupTests : IClassFixture<PostgresFixture>, I
     private sealed class FakeClimateProjectClient : IClimateProjectClient
     {
         public HallazgoDto? HallazgoToReturn { get; set; }
+        public Exception? ExceptionToThrowOnHallazgoLookup { get; set; }
 
         public Task<IReadOnlyList<NodoDto>> GetNodosAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<NodoDto>>([]);
@@ -41,8 +42,15 @@ public class PlanesAccionHallazgoLookupTests : IClassFixture<PostgresFixture>, I
             Task.FromResult<IReadOnlyList<CicloDto>>([]);
         public Task<IReadOnlyList<HallazgoDto>> GetHallazgosAsync(string cicloId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<HallazgoDto>>([]);
-        public Task<HallazgoDto?> GetHallazgoByIdAsync(string hallazgoId, CancellationToken cancellationToken) =>
-            Task.FromResult(HallazgoToReturn);
+        public Task<HallazgoDto?> GetHallazgoByIdAsync(string hallazgoId, CancellationToken cancellationToken)
+        {
+            if (ExceptionToThrowOnHallazgoLookup is not null)
+            {
+                throw ExceptionToThrowOnHallazgoLookup;
+            }
+
+            return Task.FromResult(HallazgoToReturn);
+        }
         public Task SendNotificationAsync(SendNotificationRequest request, CancellationToken cancellationToken) =>
             Task.CompletedTask;
     }
@@ -151,6 +159,33 @@ public class PlanesAccionHallazgoLookupTests : IClassFixture<PostgresFixture>, I
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(System.Net.HttpStatusCode.Created, response.StatusCode);
+        Assert.True(body.GetProperty("cicloEncuestaExternalId").ValueKind == JsonValueKind.Null);
+    }
+
+    [Theory]
+    [InlineData(typeof(HttpRequestException))]
+    [InlineData(typeof(Polly.CircuitBreaker.BrokenCircuitException))]
+    [InlineData(typeof(TaskCanceledException))]
+    public async Task CreatingAPlanWhenTheHallazgoLookupThrows_stillCreatesThePlan_withNullCicloEncuestaExternalId(
+        Type exceptionType)
+    {
+        _fakeClient.ExceptionToThrowOnHallazgoLookup =
+            (Exception)Activator.CreateInstance(exceptionType, "climate-project-api is unreachable")!;
+        var client = CreateAuthenticatedClient("PER-0231", "leader", "ND-014");
+
+        var response = await client.PostAsJsonAsync("/api/planes-accion", new
+        {
+            nodoExternalId = "ND-014",
+            hallazgoExternalId = "HAL-1",
+            descripcionQue = "Plan creado con climate-project-api caido",
+            metodologiaComo = "N/A",
+            responsableEjecucionExternalId = "PER-0231",
+            fechaCompromiso = new DateOnly(2026, 12, 31),
+            involucrados = (string[]?)null,
+        });
+
+        Assert.Equal(System.Net.HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(body.GetProperty("cicloEncuestaExternalId").ValueKind == JsonValueKind.Null);
     }
 }

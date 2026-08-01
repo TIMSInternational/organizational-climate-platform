@@ -28,6 +28,7 @@ public static class PlanesAccionEndpoints
         ClaimsPrincipal user,
         ClimateTrackingDbContext db,
         IClimateProjectClient climateProjectClient,
+        ILogger<Program> logger,
         CancellationToken cancellationToken)
     {
         var currentUser = user.GetCurrentUser();
@@ -53,8 +54,28 @@ public static class PlanesAccionEndpoints
         string? cicloExternalId = null;
         if (request.HallazgoExternalId is not null)
         {
-            var hallazgo = await climateProjectClient.GetHallazgoByIdAsync(request.HallazgoExternalId, cancellationToken);
-            cicloExternalId = hallazgo?.CicloId;
+            // Enrichment only, not required for plan creation to succeed: if climate-project
+            // is briefly unreachable (retries exhausted, or the Polly circuit breaker is open),
+            // fall back to no cicloExternalId rather than failing the whole request with a 500.
+            try
+            {
+                var hallazgo = await climateProjectClient.GetHallazgoByIdAsync(request.HallazgoExternalId, cancellationToken);
+                cicloExternalId = hallazgo?.CicloId;
+            }
+            // HttpRequestException: non-2xx or network failure (ClimateProjectClient.GetAsync's
+            // EnsureSuccessStatusCode) after Polly's retries are exhausted.
+            // BrokenCircuitException: Polly's circuit breaker is open and is short-circuiting calls.
+            // TaskCanceledException: HttpClient's own request timeout fired — guarded by
+            // !cancellationToken.IsCancellationRequested so a caller-initiated cancellation
+            // (client disconnect) still propagates instead of being swallowed here.
+            catch (Exception ex) when (
+                (ex is HttpRequestException or Polly.CircuitBreaker.BrokenCircuitException or TaskCanceledException)
+                && !cancellationToken.IsCancellationRequested)
+            {
+                logger.LogError(
+                    ex, "Hallazgo lookup failed for {HallazgoExternalId}; creating plan without cicloExternalId",
+                    request.HallazgoExternalId);
+            }
         }
 
         var fechaCreacion = DateOnly.FromDateTime(DateTime.UtcNow);
