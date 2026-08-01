@@ -150,6 +150,7 @@ app.MapInvitationAcceptEndpoints();
 app.MapSystemSettingsEndpoints();
 app.MapDemographicFieldEndpoints();
 app.MapBulkImportEndpoints();
+app.MapTrackingPickerEndpoints();
 app.MapMicroclimateEndpoints();
 app.MapMicroclimateTemplateEndpoints();
 
