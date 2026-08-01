@@ -1,4 +1,4 @@
-import { Shield, Building2, Settings, Users, Tags } from 'lucide-react'
+import { Shield, Building2, Settings, Users, Tags, Target } from 'lucide-react'
 
 export interface NavItem {
   label: string
@@ -26,6 +26,12 @@ export interface NavSection {
 //   CompanyAdmin has no companies-list page to click into one from).
 // - Any other role (employee/supervisor/leader): no admin pages exist for them
 //   yet (see postAcceptRoute.ts) -- empty nav, not a broken link.
+//
+// Action Plans is intentionally NOT in the SuperAdmin section: /action-plans has
+// no company-picker (see ActionPlansListPage.tsx), so a SuperAdmin landing on it
+// would be silently scoped to whatever company their own user row happens to
+// point at, not shown a genuine cross-company view. Add it back once #57
+// (cross-cutting company-context selector) lands.
 export function buildNavSections(role: string | undefined, companyId: string | undefined): NavSection[] {
   if (role === 'super_admin') {
     return [
@@ -60,6 +66,11 @@ export function buildNavSections(role: string | undefined, companyId: string | u
               { label: 'Users', href: `/admin/companies/${companyId}/users`, icon: Users },
               { label: 'Demographic fields', href: `/admin/companies/${companyId}/demographic-fields`, icon: Tags },
             ],
+          },
+          {
+            label: 'Action Plans',
+            href: '/action-plans',
+            icon: Target,
           },
         ],
       },

@@ -13,6 +13,16 @@ describe('buildNavSections', () => {
     expect(links.some((href) => href.includes('company-1'))).toBe(false)
   })
 
+  it('does not give a super_admin an Action Plans link -- that page has no company-picker and would silently mis-scope', () => {
+    const links = hrefs(buildNavSections('super_admin', 'company-1'))
+    expect(links).not.toContain('/action-plans')
+  })
+
+  it('gives a company_admin an Action Plans link scoped to their own company session', () => {
+    const links = hrefs(buildNavSections('company_admin', 'company-1'))
+    expect(links).toContain('/action-plans')
+  })
+
   it('gives a company_admin links scoped to their own company only', () => {
     const links = hrefs(buildNavSections('company_admin', 'company-1'))
     expect(links).toContain('/admin/companies/company-1')
