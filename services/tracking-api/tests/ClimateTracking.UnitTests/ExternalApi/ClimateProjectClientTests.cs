@@ -101,6 +101,45 @@ public class ClimateProjectClientTests
     }
 
     [Fact]
+    public async Task GetHallazgoByIdAsync_passes_hallazgo_id_and_company_id_and_returns_first_match()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(new
+        {
+            success = true,
+            data = new
+            {
+                hallazgos = new[]
+                {
+                    new { hallazgo_id = "HAL-1", nodo_id = "ND-1", categoria = "Clima", resultado_pct = 0.5m, benchmark_sector_pct = (decimal?)null, resultado_anio_anterior_pct = (decimal?)null, ciclo_id = "CIC-2026-Q3" },
+                },
+            },
+        }));
+        var client = CreateClient(handler);
+
+        var result = await client.GetHallazgoByIdAsync("HAL-1", CancellationToken.None);
+
+        var request = handler.Requests[0];
+        Assert.Contains("hallazgo_id=HAL-1", request.RequestUri!.Query);
+        Assert.Contains("company_id=CO-014", request.RequestUri!.Query);
+        Assert.Equal("CIC-2026-Q3", result!.CicloId);
+    }
+
+    [Fact]
+    public async Task GetHallazgoByIdAsync_returns_null_when_not_found()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(new
+        {
+            success = true,
+            data = new { hallazgos = Array.Empty<object>() },
+        }));
+        var client = CreateClient(handler);
+
+        var result = await client.GetHallazgoByIdAsync("HAL-missing", CancellationToken.None);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
     public async Task SendNotificationAsync_posts_the_expected_body()
     {
         HttpRequestMessage? capturedRequest = null;

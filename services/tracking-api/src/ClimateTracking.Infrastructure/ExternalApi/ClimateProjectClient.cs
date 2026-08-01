@@ -53,6 +53,14 @@ public sealed class ClimateProjectClient : IClimateProjectClient
         return envelope.Data.Hallazgos;
     }
 
+    public async Task<HallazgoDto?> GetHallazgoByIdAsync(string hallazgoId, CancellationToken cancellationToken)
+    {
+        var query = $"/api/internal/hallazgos?hallazgo_id={Uri.EscapeDataString(hallazgoId)}" +
+            $"&company_id={Uri.EscapeDataString(_options.ProcomerCompanyId)}";
+        var envelope = await GetAsync<Envelope<HallazgosData>>(query, cancellationToken);
+        return envelope.Data.Hallazgos.FirstOrDefault();
+    }
+
     public async Task SendNotificationAsync(SendNotificationRequest request, CancellationToken cancellationToken)
     {
         var response = await _httpClient.PostAsJsonAsync(
