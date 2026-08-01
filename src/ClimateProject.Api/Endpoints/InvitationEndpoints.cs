@@ -23,7 +23,7 @@ public static class InvitationEndpoints
 
     private static bool CanAccessCompany(CurrentUser currentUser, Guid companyId)
         => currentUser.Role == Roles.SuperAdmin
-           || currentUser.CompanyId == companyId.ToString();
+           || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
 
     private static InvitationDetail ToDetail(UserInvitation i)
         => new(i.Id, i.Email, i.CompanyId, i.DepartmentId, i.InvitationType, i.Role, i.Status,

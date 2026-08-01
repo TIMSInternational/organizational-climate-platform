@@ -194,4 +194,40 @@ public class InvitationEndpointsTests : IAsyncLifetime
         var otherCompanyList = await client.GetAsync($"/admin/invitations?companyId={_companyBId}");
         Assert.Equal(HttpStatusCode.Forbidden, otherCompanyList.StatusCode);
     }
+
+    [Fact]
+    public async Task NonAdmin_cannot_list_or_resend_invitations_in_their_own_company()
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var createResponse = await client.PostAsJsonAsync("/admin/invitations", new CreateInvitationRequest(
+            InvitationValidation.TypeEmployeeDirect, "nonadmin-target@invitee.test", _companyAId, null, Roles.Employee));
+        var created = await createResponse.Content.ReadFromJsonAsync<InvitationDetail>();
+
+        var employeeToken = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", employeeToken);
+
+        var listResponse = await client.GetAsync($"/admin/invitations?companyId={_companyAId}");
+        Assert.Equal(HttpStatusCode.Forbidden, listResponse.StatusCode);
+
+        var resendResponse = await client.PostAsync($"/admin/invitations/{created!.Id}/resend", content: null);
+        Assert.Equal(HttpStatusCode.Forbidden, resendResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Supervisor_and_Leader_cannot_list_invitations_in_their_own_company()
+    {
+        var client = _factory.CreateClient();
+        var supervisorToken = await SignUpAndGetTokenAsync(client, Roles.Supervisor, _companyADomain, _companyAId);
+        var leaderToken = await SignUpAndGetTokenAsync(client, Roles.Leader, _companyADomain, _companyAId);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", supervisorToken);
+        var supervisorListResponse = await client.GetAsync($"/admin/invitations?companyId={_companyAId}");
+        Assert.Equal(HttpStatusCode.Forbidden, supervisorListResponse.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", leaderToken);
+        var leaderListResponse = await client.GetAsync($"/admin/invitations?companyId={_companyAId}");
+        Assert.Equal(HttpStatusCode.Forbidden, leaderListResponse.StatusCode);
+    }
 }
