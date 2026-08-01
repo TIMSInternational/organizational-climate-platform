@@ -181,7 +181,7 @@ public static class ActionPlanEndpoints
             return Results.Json(new { message = "Action plan not found" }, statusCode: 404);
         }
 
-        if (!CanAccessCompany(currentUser, plan.CompanyId))
+        if (!Roles.Admin.Contains(currentUser.Role) || !CanAccessCompany(currentUser, plan.CompanyId))
         {
             return Results.Forbid();
         }

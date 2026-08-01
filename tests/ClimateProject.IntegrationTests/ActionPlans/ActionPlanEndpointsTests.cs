@@ -146,4 +146,42 @@ public class ActionPlanEndpointsTests : IAsyncLifetime
         Assert.Equal("in_progress", updated!.Status);
         Assert.Equal("critical", updated.Priority);
     }
+
+    [Fact]
+    public async Task NonAdmin_cannot_create_a_plan()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "Employee plan", "desc", _companyAId, null, DateTimeOffset.UtcNow.AddDays(10), "low", null, null, null, null, null, null));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task NonAdmin_cannot_update_a_plan_in_their_own_company()
+    {
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var createResponse = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "Admin-created", "desc", _companyAId, null, DateTimeOffset.UtcNow.AddDays(10), "low", null, null, null, null, null, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<ActionPlanDetail>();
+
+        var employeeToken = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", employeeToken);
+
+        var updateResponse = await client.PutAsJsonAsync($"/action-plans/{created!.Id}", new UpdateActionPlanRequest(
+            "Hijacked title", null, null, null, null, null));
+
+        Assert.Equal(HttpStatusCode.Forbidden, updateResponse.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var getResponse = await client.GetAsync($"/action-plans/{created.Id}");
+        var stillOriginal = await getResponse.Content.ReadFromJsonAsync<ActionPlanDetail>();
+        Assert.Equal("Admin-created", stillOriginal!.Title);
+    }
 }
