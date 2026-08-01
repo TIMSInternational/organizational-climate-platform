@@ -80,6 +80,17 @@ export default function CompanyDetailPage() {
     setCompanySettings(result)
   }
 
+  async function handleLoadSettings() {
+    if (!id) return
+    setError(null)
+    try {
+      const result = await updateCompanySettings(baseUrl, id, {})
+      setCompanySettings(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load company settings')
+    }
+  }
+
   return (
     <div>
       <h1>{company.name}</h1>
@@ -107,7 +118,7 @@ export default function CompanyDetailPage() {
       {companySettings ? (
         <CompanySettingsForm settings={companySettings.settings} branding={companySettings.branding} onSubmit={handleUpdateSettings} />
       ) : (
-        <button onClick={() => updateCompanySettings(baseUrl, id!, {}).then(setCompanySettings)}>Load settings</button>
+        <button onClick={handleLoadSettings}>Load settings</button>
       )}
 
       <h2>Departments</h2>
