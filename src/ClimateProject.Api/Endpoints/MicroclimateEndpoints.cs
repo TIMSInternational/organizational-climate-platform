@@ -262,9 +262,18 @@ public static class MicroclimateEndpoints
             return Results.Json(new { message = "Microclimate not found" }, statusCode: 404);
         }
 
-        if (!microclimate.RealtimeSettings.AnonymousResponses && !(httpContext.User.Identity?.IsAuthenticated ?? false))
+        if (!microclimate.RealtimeSettings.AnonymousResponses)
         {
-            return Results.Json(new { message = "This microclimate requires authentication to respond" }, statusCode: 401);
+            if (!(httpContext.User.Identity?.IsAuthenticated ?? false))
+            {
+                return Results.Json(new { message = "This microclimate requires authentication to respond" }, statusCode: 401);
+            }
+
+            var currentUser = httpContext.User.GetCurrentUser();
+            if (currentUser.Role != Roles.SuperAdmin && currentUser.CompanyId != microclimate.CompanyId.ToString())
+            {
+                return Results.Forbid();
+            }
         }
 
         if (microclimate.Status != "active")
@@ -272,7 +281,20 @@ public static class MicroclimateEndpoints
             return Results.Json(new { message = "This microclimate is not currently accepting responses" }, statusCode: 400);
         }
 
-        var openTextAnswers = request.Answers.Values;
+        if (request.Answers is null || request.Answers.Count == 0)
+        {
+            return Results.Json(new { message = "Answers is required" }, statusCode: 400);
+        }
+
+        var openTextQuestionIds = await db.MicroclimateQuestions
+            .Where(q => q.MicroclimateId == id && q.Type == "open_text")
+            .Select(q => q.Id)
+            .ToListAsync(cancellationToken);
+
+        var openTextAnswers = request.Answers
+            .Where(kv => openTextQuestionIds.Contains(kv.Key))
+            .Select(kv => kv.Value);
+
         var existingCloud = string.IsNullOrWhiteSpace(microclimate.LiveResults.WordCloudData)
             ? new Dictionary<string, int>()
             : System.Text.Json.JsonSerializer.Deserialize<List<WordCloudEntry>>(microclimate.LiveResults.WordCloudData)!.ToDictionary(w => w.Text, w => w.Value);
