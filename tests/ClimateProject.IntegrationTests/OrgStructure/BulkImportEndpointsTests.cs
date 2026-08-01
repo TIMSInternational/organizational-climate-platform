@@ -122,6 +122,31 @@ public class BulkImportEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CompanyAdmin_cannot_bulk_import_a_row_with_company_admin_or_super_admin_role()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var csv = "name,email,role,department\n"
+            + "Peer Admin,peeradmin@example.test,company_admin,\n"
+            + "Platform Admin,platformadmin@example.test,super_admin,";
+        var response = await client.PostAsync("/admin/users/bulk-import", BuildForm(csv, _companyId, preview: false));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<BulkImportResponse>();
+        Assert.Equal(0, result!.SuccessCount);
+        Assert.Equal(2, result.ErrorCount);
+        Assert.Equal("error", result.Rows[0].Status);
+        Assert.Equal("error", result.Rows[1].Status);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.Null(await db.Users.FirstOrDefaultAsync(u => u.Email == "peeradmin@example.test"));
+        Assert.Null(await db.Users.FirstOrDefaultAsync(u => u.Email == "platformadmin@example.test"));
+    }
+
+    [Fact]
     public async Task Employee_cannot_bulk_import_users()
     {
         var client = _factory.CreateClient();

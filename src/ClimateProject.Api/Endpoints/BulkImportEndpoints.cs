@@ -80,7 +80,15 @@ public static class BulkImportEndpoints
                 errors.Add("Invalid email format");
             }
 
-            if (!Roles.All.Contains(row.Role))
+            // super_admin/company_admin are excluded from bulk-importable roles, not just
+            // invalid ones. CanAccessCompany treats Role == SuperAdmin as unconditionally
+            // authorized for any company, so without this exclusion a CompanyAdmin bulk-
+            // importing into their own company could mint a peer company_admin (or, if the
+            // row role were ever trusted further, a platform-wide super_admin). This mirrors
+            // the same exclusion in InvitationEndpoints.CreateAsync's employee_direct branch
+            // and CreateShareableLinkAsync -- company-scoped bulk role assignment must never
+            // be able to create admin accounts.
+            if (!Roles.All.Contains(row.Role) || row.Role == Roles.SuperAdmin || row.Role == Roles.CompanyAdmin)
             {
                 errors.Add($"Invalid role: {row.Role}");
             }
