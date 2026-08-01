@@ -51,6 +51,17 @@ builder.Services
 
 builder.Services.AddOpenApi();
 
+builder.Services.AddCors();
+builder.Services.AddOptions<Microsoft.AspNetCore.Cors.Infrastructure.CorsOptions>()
+    .Configure<IConfiguration>((options, configuration) =>
+    {
+        var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+        options.AddPolicy("Frontend", policy => policy
+            .WithOrigins(allowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod());
+    });
+
 builder.Services.AddSingleton<IAuthorizationHandler, MatchingTenantHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, PlanAccessHandler>();
 builder.Services.AddAuthorization(options =>
@@ -65,6 +76,8 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+
+app.UseCors("Frontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
