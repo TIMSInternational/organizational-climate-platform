@@ -268,8 +268,15 @@ public static class PlanesAccionEndpoints
     private static async Task<string> GeneratePlanCodeAsync(ClimateTrackingDbContext db, CancellationToken cancellationToken)
     {
         var year = DateTime.UtcNow.Year;
-        var countThisYear = await db.PlanesDeAccion.CountAsync(
-            p => p.FechaCreacion.Year == year, cancellationToken);
-        return $"PA-{year}-{(countThisYear + 1):D5}";
+        // Sequence name is built from a server-side int (DateTime.UtcNow.Year), never
+        // user input -- safe to interpolate directly; Postgres identifiers can't be
+        // bound as query parameters anyway. Created lazily on first use per year rather
+        // than pre-migrated, since future years aren't known in advance.
+        var sequenceName = $"plan_code_seq_{year}";
+#pragma warning disable EF1002
+        await db.Database.ExecuteSqlRawAsync($"CREATE SEQUENCE IF NOT EXISTS {sequenceName}", cancellationToken);
+        var nextVal = await db.Database.SqlQueryRaw<long>($"SELECT nextval('{sequenceName}')").SingleAsync(cancellationToken);
+#pragma warning restore EF1002
+        return $"PA-{year}-{nextVal:D5}";
     }
 }
