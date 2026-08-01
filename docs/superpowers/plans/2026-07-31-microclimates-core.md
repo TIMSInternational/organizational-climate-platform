@@ -1784,11 +1784,27 @@ git commit -m "feat: add MicroclimateDetailPage with polling live results"
 
 - [ ] **Step 1: Respond page**
 
-`getMicroclimate` uses `authFetch` (bearer-token injection), which is fine even for this public
-page — `authFetch` simply omits the `Authorization` header when no token is present (see
-`web/src/api/authFetch.ts`), so an anonymous visitor can still read microclimate details
-(title, questions) to render the form; only the response *submission* needs to be genuinely
-unauthenticated, which `submitResponse` (Task 4) already is.
+**Correction (post-review, 2026-08-01):** the paragraph originally here claimed `getMicroclimate`
+via `authFetch` was "fine even for this public page" because `authFetch` omits the
+`Authorization` header when no token is present. That was false as shipped: `GET
+/microclimates/{id:guid}` carried the route group's `.RequireAuthorization()` with no
+`AllowAnonymous` exception (Task 1, `MapMicroclimateEndpoints`), so a genuinely anonymous
+visitor (no stored JWT) got a 401 — and `authFetch`'s 401 handling (`web/src/api/authFetch.ts`)
+clears the token and hard-redirects to `/login` on *any* 401, before the form could ever render.
+The page only worked for already-logged-in users previewing the form, not real anonymous
+respondents — the opposite of this task's stated purpose.
+
+The actual fix (applied in the Task 7 review-fix round) has two parts:
+- **Backend:** `GET /{id:guid}` is now mapped with `.AllowAnonymous()`. `GetAsync` itself still
+  enforces access: authenticated callers get the existing `CanAccessCompany` check; unauthenticated
+  callers are only served when `microclimate.RealtimeSettings.AnonymousResponses` is `true`
+  (401 otherwise) — mirroring the policy `SubmitResponseAsync` already enforced for submission.
+- **Frontend:** the respond page uses a dedicated `getMicroclimatePublic` (plain `fetch`, token
+  attached only if one happens to be present) instead of `getMicroclimate`/`authFetch`, so a 401
+  here surfaces as a normal in-page error instead of clearing the token and navigating away —
+  correct for a visitor who was never logged in to begin with. Only the response *submission*
+  was ever unauthenticated by design; now the detail *read* genuinely is too, for
+  anonymous-enabled microclimates.
 
 Create `web/src/features/microclimates/pages/MicroclimateRespondPage.tsx`:
 
@@ -1864,6 +1880,18 @@ export default function MicroclimateRespondPage() {
   )
 }
 ```
+
+**Superseded by the Task 7 review-fix round:** the code sample above (`getMicroclimate` +
+freeform `<input>` per question) is what was originally shipped and is kept here for history,
+but it had two real defects fixed afterward and no longer matches
+`web/src/features/microclimates/pages/MicroclimateRespondPage.tsx`:
+1. `getMicroclimate`/`authFetch` is replaced with `getMicroclimatePublic` (see the correction
+   note above Step 1) so a 401 doesn't hard-redirect an anonymous visitor to `/login`.
+2. The single freeform `<input type="text">` is replaced with a `QuestionInput` component that
+   renders `multiple_choice` and `rating` as radio groups built from `question.options` (rating
+   falls back to a 1–5 scale when no options are configured), `yes_no` as a Yes/No radio group,
+   and only `open_text` as a text input — `question.options` is now actually read and displayed,
+   and `SubmitResponseAsync` (Task 2 endpoint) now rejects answers outside those allowed values.
 
 - [ ] **Step 2: Wire the route (unauthenticated, sibling of `/login`)**
 

@@ -11,6 +11,9 @@ import SystemSettingsPage from '../features/org-structure/pages/SystemSettingsPa
 import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
 import ActionPlansListPage from '../features/action-plans/pages/ActionPlansListPage'
 import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetailPage'
+import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
+import MicroclimateDetailPage from '../features/microclimates/pages/MicroclimateDetailPage'
+import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
 import { getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import { resolveInitialRoute } from './resolveInitialRoute'
@@ -33,6 +36,7 @@ export const router = createBrowserRouter([
       { path: '/', element: <HomeRedirect /> },
       { path: '/login', element: <LoginPage /> },
       { path: '/accept-invitation/:token', element: <AcceptInvitationPage /> },
+      { path: '/microclimates/:id/respond', element: <MicroclimateRespondPage /> },
       {
         element: <RequireAuth />,
         children: [
@@ -46,6 +50,8 @@ export const router = createBrowserRouter([
               { path: '/admin/system-settings', element: <SystemSettingsPage /> },
               { path: '/action-plans', element: <ActionPlansListPage /> },
               { path: '/action-plans/:id', element: <ActionPlanDetailPage /> },
+              { path: '/microclimates', element: <MicroclimatesListPage /> },
+              { path: '/microclimates/:id', element: <MicroclimateDetailPage /> },
             ],
           },
         ],
