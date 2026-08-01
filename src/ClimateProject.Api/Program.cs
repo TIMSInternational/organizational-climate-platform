@@ -180,6 +180,7 @@ app.MapTrackingInternalEndpoints();
 app.MapMicroclimateEndpoints();
 app.MapMicroclimateTemplateEndpoints();
 app.MapReportEndpoints();
+app.MapBenchmarkEndpoints();
 
 app.Run();
 
