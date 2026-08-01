@@ -1,4 +1,4 @@
-import { Shield, Building2, Settings, Users, Tags, Waves } from 'lucide-react'
+import { Shield, Building2, Settings, Users, Tags } from 'lucide-react'
 
 export interface NavItem {
   label: string
@@ -60,11 +60,6 @@ export function buildNavSections(role: string | undefined, companyId: string | u
               { label: 'Users', href: `/admin/companies/${companyId}/users`, icon: Users },
               { label: 'Demographic fields', href: `/admin/companies/${companyId}/demographic-fields`, icon: Tags },
             ],
-          },
-          {
-            label: 'Microclimates',
-            href: '/microclimates',
-            icon: Waves,
           },
         ],
       },

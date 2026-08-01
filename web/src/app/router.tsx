@@ -9,9 +9,6 @@ import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage
 import UsersListPage from '../features/org-structure/pages/UsersListPage'
 import SystemSettingsPage from '../features/org-structure/pages/SystemSettingsPage'
 import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
-import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
-import MicroclimateDetailPage from '../features/microclimates/pages/MicroclimateDetailPage'
-import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
 import { getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import { resolveInitialRoute } from './resolveInitialRoute'
@@ -34,7 +31,6 @@ export const router = createBrowserRouter([
       { path: '/', element: <HomeRedirect /> },
       { path: '/login', element: <LoginPage /> },
       { path: '/accept-invitation/:token', element: <AcceptInvitationPage /> },
-      { path: '/microclimates/:id/respond', element: <MicroclimateRespondPage /> },
       {
         element: <RequireAuth />,
         children: [
@@ -46,8 +42,6 @@ export const router = createBrowserRouter([
               { path: '/admin/companies/:companyId/users', element: <UsersListPage /> },
               { path: '/admin/companies/:companyId/demographic-fields', element: <DemographicFieldsPage /> },
               { path: '/admin/system-settings', element: <SystemSettingsPage /> },
-              { path: '/microclimates', element: <MicroclimatesListPage /> },
-              { path: '/microclimates/:id', element: <MicroclimateDetailPage /> },
             ],
           },
         ],
