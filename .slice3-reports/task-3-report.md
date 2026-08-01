@@ -232,4 +232,4 @@ I manually re-ran the three new theory cases against the pre-fix `CanAccessCompa
 
 ### Commit
 
-Fix committed as a new commit on top of `4ed22f6` (see git log for SHA).
+Fix committed as `7c9bc5f55d24ff4ad1f0c2319c50c0343a6da6ff` on top of `4ed22f6` (`fix: restore CompanyAdmin role check in DemographicField CanAccessCompany`).
