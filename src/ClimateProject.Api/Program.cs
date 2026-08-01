@@ -3,6 +3,7 @@ using ClimateProject.Application.Auth;
 using ClimateProject.Application.Cors;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Infrastructure.Auth;
+using ClimateProject.Infrastructure.OrgStructure;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Cors.Infrastructure;
@@ -88,6 +89,7 @@ builder.Services.AddOptions<CorsOptions>()
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
+builder.Services.AddScoped<IInvitationEmailSender, LoggingInvitationEmailSender>();
 
 builder.Services.AddOpenApi();
 
@@ -115,6 +117,9 @@ app.MapGet("/version", () => Results.Ok(new VersionResponse(
 app.MapAuthEndpoints();
 app.MapCompanyEndpoints();
 app.MapDepartmentEndpoints();
+app.MapUserEndpoints();
+app.MapInvitationEndpoints();
+app.MapInvitationAcceptEndpoints();
 
 app.Run();
 

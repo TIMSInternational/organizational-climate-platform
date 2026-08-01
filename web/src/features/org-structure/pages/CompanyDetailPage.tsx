@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { getCompany, updateCompany, type CompanyDetail } from '../api/companies'
 import { listDepartments, createDepartment, updateDepartment, type Department } from '../api/departments'
 import CompanyForm, { type CompanyFormValues } from '../components/CompanyForm'
@@ -74,6 +74,7 @@ export default function CompanyDetailPage() {
   return (
     <div>
       <h1>{company.name}</h1>
+      <p><Link to={`/admin/companies/${company.id}/users`}>Manage users</Link></p>
       <p>{company.userCount} active users</p>
 
       {editingCompany ? (

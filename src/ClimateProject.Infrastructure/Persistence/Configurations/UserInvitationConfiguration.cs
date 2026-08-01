@@ -10,7 +10,7 @@ public class UserInvitationConfiguration : IEntityTypeConfiguration<UserInvitati
     {
         builder.ToTable("user_invitations");
         builder.HasKey(i => i.Id);
-        builder.Property(i => i.Email).HasColumnName("email").HasMaxLength(255).IsRequired();
+        builder.Property(i => i.Email).HasColumnName("email").HasMaxLength(255);
         builder.Property(i => i.CompanyId).HasColumnName("company_id").IsRequired();
         builder.Property(i => i.DepartmentId).HasColumnName("department_id");
         builder.Property(i => i.InvitedBy).HasColumnName("invited_by").IsRequired();

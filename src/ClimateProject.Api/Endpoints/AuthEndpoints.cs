@@ -59,7 +59,7 @@ public static class AuthEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         var token = jwtTokenService.IssueToken(new TokenClaims(
-            Sub: user.Id.ToString(),
+            Sub: user.PersonaExternalId ?? user.Id.ToString(),
             Role: user.Role,
             NodoId: user.NodoId,
             Email: user.Email,
@@ -127,7 +127,7 @@ public static class AuthEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         var token = jwtTokenService.IssueToken(new TokenClaims(
-            Sub: user.Id.ToString(),
+            Sub: user.PersonaExternalId ?? user.Id.ToString(),
             Role: user.Role,
             NodoId: user.NodoId,
             Email: user.Email,
@@ -195,7 +195,7 @@ public static class AuthEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         var token = jwtTokenService.IssueToken(new TokenClaims(
-            Sub: user.Id.ToString(),
+            Sub: user.PersonaExternalId ?? user.Id.ToString(),
             Role: user.Role,
             NodoId: user.NodoId,
             Email: user.Email,
@@ -213,16 +213,22 @@ public static class AuthEndpoints
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
-        var userId = Guid.Parse(currentUser.Sub);
+        var sub = currentUser.Sub;
 
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+        // Sub is minted as PersonaExternalId when set, otherwise the user's own Guid Id
+        // (see LoginAsync/SignupAsync/GoogleLoginAsync/RefreshAsync). It is not always a
+        // parseable Guid, so match on PersonaExternalId first and only attempt an Id match
+        // when the value does parse as one — never let a non-Guid Sub throw here.
+        var user = Guid.TryParse(sub, out var userId)
+            ? await db.Users.FirstOrDefaultAsync(u => u.Id == userId || u.PersonaExternalId == sub, cancellationToken)
+            : await db.Users.FirstOrDefaultAsync(u => u.PersonaExternalId == sub, cancellationToken);
         if (user is null || !user.IsActive)
         {
             return Results.Json(new ErrorResponse("Account is no longer active"), statusCode: 401);
         }
 
         var token = jwtTokenService.IssueToken(new TokenClaims(
-            Sub: user.Id.ToString(),
+            Sub: user.PersonaExternalId ?? user.Id.ToString(),
             Role: user.Role,
             NodoId: user.NodoId,
             Email: user.Email,

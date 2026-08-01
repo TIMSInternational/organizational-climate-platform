@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ClimateProject.Infrastructure.Migrations
 {
     [DbContext(typeof(ClimateProjectDbContext))]
-    partial class ClimateProjectDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731231301_AddIdentityMappingColumns")]
+    partial class AddIdentityMappingColumns
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3179,10 +3182,6 @@ namespace ClimateProject.Infrastructure.Migrations
                         .IsUnique();
 
                     b.HasIndex("ManagerId");
-
-                    b.HasIndex("PersonaExternalId")
-                        .IsUnique()
-                        .HasFilter("persona_external_id IS NOT NULL");
 
                     b.ToTable("users", (string)null);
                 });

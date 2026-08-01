@@ -9,6 +9,7 @@ public class User
     public string? PasswordHash { get; set; }
     public required string Role { get; set; }
     public string? NodoId { get; set; }
+    public string? PersonaExternalId { get; set; }
     public Guid? DepartmentId { get; set; }
     public Guid? ManagerId { get; set; }
     public bool IsActive { get; set; } = true;

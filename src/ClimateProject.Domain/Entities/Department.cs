@@ -3,6 +3,7 @@ namespace ClimateProject.Domain.Entities;
 public class Department
 {
     public Guid Id { get; set; }
+    public string? LegacyExternalId { get; set; }
     public Guid CompanyId { get; set; }
     public required string Name { get; set; }
     public string? Description { get; set; }
