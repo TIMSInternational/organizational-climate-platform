@@ -21,11 +21,19 @@ export default function AdminLayout() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <aside style={{ width: 240, borderRight: '1px solid var(--admin-border-default)' }}>
+      <aside
+        style={{
+          width: 'var(--admin-size-sidebar)',
+          flexShrink: 0,
+          padding: 'var(--admin-size-shell-gutter)',
+          background: 'var(--admin-bg-panel)',
+          borderRight: '1px solid var(--admin-border-default)',
+        }}
+      >
         <RoleBasedNav sections={sections} />
         <button onClick={handleLogout}>Log out</button>
       </aside>
-      <main style={{ flex: 1, padding: 24 }}>
+      <main style={{ flex: 1, minWidth: 0, padding: 'var(--admin-size-section-gap)' }}>
         <Outlet />
       </main>
     </div>

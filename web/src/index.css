@@ -1,111 +1,332 @@
-:root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+/* ===========================================================================
+ * Application stylesheet entry point
+ * ===========================================================================
+ *
+ * Import order is load-bearing:
+ *   1. tailwindcss  — must come first; it defines the layer order that every
+ *                     `@theme` block below registers into.
+ *   2. fonts.css    — @font-face + the metric-matched fallback.
+ *   3. tokens.css   — the `--admin-*` values themselves.
+ *   4. theme.css    — maps those tokens onto Tailwind utilities.
+ *
+ * Everything after the imports is the base element layer. It exists because the
+ * pages in this app are plain semantic markup with no classes of their own (see
+ * ./styles/README.md, "How the pages consume tokens") — styling the elements
+ * here is what puts all twelve of them in the design language at once, and is
+ * why none of them needs to name a colour.
+ * ========================================================================= */
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+@import 'tailwindcss';
+@import './styles/fonts.css';
+@import './styles/tokens.css';
+@import './styles/theme.css';
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  html {
+    /* 13px admin base — set on the root so `rem`-based utilities and the token
+       px scale agree rather than drifting apart at the edges. */
+    font-family: var(--admin-font-sans);
+    font-size: var(--admin-text-base);
+    line-height: var(--admin-leading-normal);
+    background: var(--admin-bg-outer);
+    color: var(--admin-font-primary);
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
+    /* NB: no `font-synthesis: none` here (the Vite starter had it). The
+       'Poppins Fallback' face is a single regular weight by design, so it
+       depends on synthesised bold for the few ms before Poppins lands.
+       Disabling synthesis would make every bold string visibly snap weight on
+       swap — reintroducing exactly the shift fonts.css sets out to remove. */
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100svh;
+  }
+
+  /* -- Headings ---------------------------------------------------------- */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: var(--admin-font-primary);
+    font-weight: var(--admin-weight-semibold);
+    line-height: var(--admin-leading-tight);
+    letter-spacing: var(--admin-tracking-tight);
+    margin: 0 0 var(--admin-space-4);
+  }
+
+  h1 {
+    font-size: var(--admin-text-3xl);
+  }
+  h2 {
+    font-size: var(--admin-text-2xl);
+  }
+  h3,
+  h4 {
+    font-size: var(--admin-text-xl);
+  }
+  h5,
+  h6 {
+    font-size: var(--admin-text-lg);
+    letter-spacing: var(--admin-tracking-normal);
+  }
+
+  /* -- Text -------------------------------------------------------------- */
+  p {
+    margin: 0 0 var(--admin-space-4);
+    color: var(--admin-font-secondary);
+  }
+
+  small {
+    font-size: var(--admin-text-sm);
+    color: var(--admin-font-tertiary);
+  }
+
+  a {
+    color: var(--admin-accent-blue);
+    text-decoration: none;
+    transition: color var(--admin-duration-fast) var(--admin-ease-out);
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+
+  code,
+  pre {
+    font-family: var(--admin-font-mono);
+    font-size: var(--admin-text-sm);
+    color: var(--admin-font-primary);
+    background: var(--admin-bg-icon-box);
+    border-radius: var(--admin-radius-md);
+  }
+
+  code {
+    padding: var(--admin-space-1) var(--admin-space-2);
+  }
+
+  pre {
+    padding: var(--admin-space-4);
+    overflow-x: auto;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid var(--admin-border-light);
+    margin: var(--admin-size-section-gap) 0;
+  }
+
+  /* -- Alerts ------------------------------------------------------------
+     Every page reports failure as `<p role="alert">`, so the role carries the
+     styling and no page has to name the error colour. */
+  [role='alert'] {
+    color: var(--admin-accent-red);
+    background: var(--admin-accent-bg-red);
+    border: 1px solid var(--admin-accent-border-red);
+    border-radius: var(--admin-radius-lg);
+    padding: var(--admin-space-3) var(--admin-space-4);
+    font-size: var(--admin-text-sm);
+  }
+
+  /* -- Forms -------------------------------------------------------------
+     The pages render `<label>Text <input/></label>`, so labels are the layout
+     unit for form rows and stack their own control. */
+  label {
+    display: block;
+    margin-bottom: var(--admin-space-6);
+    font-size: var(--admin-text-sm);
+    font-weight: var(--admin-weight-medium);
+    color: var(--admin-font-secondary);
+  }
+
+  input,
+  select,
+  textarea {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: var(--admin-space-2);
+    padding: 0 var(--admin-space-4);
+    height: var(--admin-size-control-md);
+    font-family: inherit;
+    font-size: var(--admin-text-base);
+    font-weight: var(--admin-weight-regular);
+    color: var(--admin-font-primary);
+    background: var(--admin-bg-input);
+    border: 1px solid var(--admin-border-default);
+    border-radius: var(--admin-radius-md);
+    transition: border-color var(--admin-duration-fast) var(--admin-ease-out);
+  }
+
+  textarea {
+    height: auto;
+    min-height: calc(var(--admin-size-control-md) * 3);
+    padding: var(--admin-space-3) var(--admin-space-4);
+    line-height: var(--admin-leading-normal);
+    resize: vertical;
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    display: inline-block;
+    width: auto;
+    height: auto;
+    margin-top: 0;
+    accent-color: var(--admin-accent-blue);
+  }
+
+  input:hover,
+  select:hover,
+  textarea:hover {
+    border-color: var(--admin-border-hover);
+  }
+
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    color: var(--admin-font-light);
+    background: var(--admin-bg-outer);
+    cursor: not-allowed;
+  }
+
+  /* -- Buttons ----------------------------------------------------------- */
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--admin-size-inline-gap);
+    height: var(--admin-size-control-lg);
+    padding: 0 var(--admin-space-6);
+    font-family: inherit;
+    font-size: var(--admin-text-base);
+    font-weight: var(--admin-weight-medium);
+    color: var(--admin-font-primary);
+    background: var(--admin-bg-card);
+    border: 1px solid var(--admin-border-default);
+    border-radius: var(--admin-radius-md);
+    cursor: pointer;
+    transition:
+      background-color var(--admin-duration-fast) var(--admin-ease-out),
+      border-color var(--admin-duration-fast) var(--admin-ease-out);
+  }
+
+  button:hover:not(:disabled) {
+    background: var(--admin-bg-card-hover);
+    border-color: var(--admin-border-hover);
+  }
+
+  button:disabled {
+    color: var(--admin-font-light);
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  /* -- Tables ------------------------------------------------------------
+     The list pages are tables; this is where the density pass is most visible. */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--admin-text-base);
+  }
+
+  th,
+  td {
+    padding: var(--admin-space-3) var(--admin-space-4);
+    text-align: left;
+    line-height: var(--admin-leading-snug);
+    border-bottom: 1px solid var(--admin-border-light);
+  }
+
+  th {
+    font-size: var(--admin-text-xs);
+    font-weight: var(--admin-weight-medium);
+    color: var(--admin-font-section-label);
+    letter-spacing: var(--admin-tracking-label);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  td {
+    color: var(--admin-font-secondary);
+  }
+
+  tbody tr:hover {
+    background: var(--admin-bg-hover);
+  }
+
+  /* -- Lists ------------------------------------------------------------- */
+  ul,
+  ol {
+    margin: 0 0 var(--admin-space-4);
+    padding-left: var(--admin-space-10);
+    color: var(--admin-font-secondary);
+  }
+
+  li {
+    margin-bottom: var(--admin-space-2);
+  }
+
+  /* -- Focus -------------------------------------------------------------
+     One ring for everything, from the token. The legacy rule wrapped the ring
+     colour in hsl() around a hex value, which is invalid and rendered no ring
+     at all — see the note in ./styles/tokens.css. */
+  :focus-visible {
+    outline: var(--admin-focus-ring-width) solid var(--admin-focus-ring);
+    outline-offset: var(--admin-focus-ring-offset);
+  }
+
+  /* Respect a stated preference for less motion. The token durations are the
+     only thing animating, so zeroing them here covers the whole app. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+/* ---------------------------------------------------------------------------
+ * Navigation
+ *
+ * RoleBasedNav emits `.nav-icon`, `.nav-badge` and `.nav-section-title` but
+ * nothing ever defined them, so they rendered as unstyled text. Defined here
+ * from tokens.
+ * ------------------------------------------------------------------------- */
+@layer components {
+  .nav-section-title {
+    padding: var(--admin-space-4) var(--admin-space-6) var(--admin-space-2);
+    font-size: var(--admin-text-2xs);
+    font-weight: var(--admin-weight-medium);
+    color: var(--admin-font-section-label);
+    letter-spacing: var(--admin-tracking-label);
+    text-transform: uppercase;
   }
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
+  .nav-icon {
+    width: var(--admin-size-icon);
+    height: var(--admin-size-icon);
+    flex-shrink: 0;
   }
-}
 
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-}
-
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+  .nav-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--admin-space-8);
+    padding: 0 var(--admin-space-2);
+    font-size: var(--admin-text-2xs);
+    font-weight: var(--admin-weight-medium);
+    color: var(--admin-accent-blue);
+    background: var(--admin-accent-bg-blue);
+    border-radius: var(--admin-radius-full);
   }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
 }

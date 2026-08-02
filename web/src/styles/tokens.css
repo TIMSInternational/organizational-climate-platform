@@ -1,0 +1,260 @@
+/* ===========================================================================
+ * Design tokens — the `--admin-*` layer
+ * ===========================================================================
+ *
+ * Ported from the legacy Next.js app, where the same token set lived in
+ * `src/styles/tokens/colors.ts` and was written onto `document.documentElement`
+ * at runtime by `AdminThemeContext`. Here it is plain CSS instead: the values
+ * are in the stylesheet, so they are correct on the very first paint and there
+ * is no flash of unstyled/mis-themed content and no JS on the critical path.
+ *
+ * Colour values are Twenty-CRM's admin palette (dark from theme-dark.css,
+ * light from theme-light.css) and are byte-for-byte the legacy values — that is
+ * what makes "no visual regression against the legacy admin pages" checkable.
+ *
+ * THEMING
+ *   Light is the default, matching the legacy default mode.
+ *     <html>                           -> light
+ *     <html data-admin-theme="light">  -> light
+ *     <html data-admin-theme="dark">   -> dark
+ *   The override lands on the same element (`:root`) as the defaults, so
+ *   anything built on `var(--admin-*)` re-themes with no extra work.
+ *
+ * NAMING
+ *   --admin-<group>-<role>[-<variant>]
+ *   groups: bg | border | font | accent | accent-bg | accent-border
+ *           space | radius | text | leading | weight | tracking
+ *           size | shadow | duration | ease | z
+ *
+ * See ./README.md before adding anything here.
+ * ========================================================================= */
+
+:root {
+  /* -- Typeface ---------------------------------------------------------- */
+  /* 'Poppins Fallback' (see ./fonts.css) sits directly behind Poppins so the
+     swap is metrically identical. Everything after it is the legacy stack. */
+  --admin-font-sans:
+    'Poppins', 'Poppins Fallback', Inter, -apple-system, 'Segoe UI', Roboto,
+    system-ui, sans-serif;
+  --admin-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* -- Type scale --------------------------------------------------------
+     13px is the admin base, not 16px. The whole shell is one step denser than
+     a marketing page; this is the single most load-bearing density decision in
+     the system and every other size hangs off it. */
+  --admin-text-2xs: 10px; /* section labels, all-caps eyebrows */
+  --admin-text-xs: 11px; /* badges, table meta */
+  --admin-text-sm: 12px; /* secondary body, help text */
+  --admin-text-base: 13px; /* shell default */
+  --admin-text-lg: 14px; /* emphasised body, h6 */
+  --admin-text-xl: 16px; /* h5 / h4 */
+  --admin-text-2xl: 20px; /* h3 / h2 */
+  --admin-text-3xl: 24px; /* h1 — a page title, not a hero */
+
+  --admin-leading-tight: 1.2; /* headings */
+  --admin-leading-snug: 1.35; /* dense table/data rows */
+  --admin-leading-normal: 1.5; /* body copy */
+
+  --admin-weight-regular: 400;
+  --admin-weight-medium: 500; /* nav, buttons, labels */
+  --admin-weight-semibold: 600; /* headings */
+  --admin-weight-bold: 700;
+
+  --admin-tracking-tight: -0.01em; /* large headings */
+  --admin-tracking-normal: 0;
+  --admin-tracking-label: 0.06em; /* uppercase section labels */
+
+  /* -- Space scale -------------------------------------------------------
+     2px base. The legacy admin surfaces are built almost entirely out of
+     2/4/6/8/10/12/14/16, so a 2px unit expresses every real value exactly and
+     nothing in between gets invented. --admin-space-N is always N * 2px. */
+  --admin-space-0: 0px;
+  --admin-space-px: 1px;
+  --admin-space-1: 2px;
+  --admin-space-2: 4px;
+  --admin-space-3: 6px;
+  --admin-space-4: 8px;
+  --admin-space-5: 10px;
+  --admin-space-6: 12px;
+  --admin-space-7: 14px;
+  --admin-space-8: 16px;
+  --admin-space-10: 20px;
+  --admin-space-12: 24px;
+  --admin-space-16: 32px;
+  --admin-space-20: 40px;
+
+  /* -- Density primitives -----------------------------------------------
+     Named composites so a card is a card everywhere. These are the "card, box
+     and text sweep" values from the legacy density pass, not free parameters. */
+  --admin-size-card-padding: var(--admin-space-6); /* 12px */
+  --admin-size-panel-padding: var(--admin-space-8); /* 16px */
+  --admin-size-panel-gap: var(--admin-space-4); /* 8px  between panels */
+  --admin-size-shell-gutter: var(--admin-space-6); /* 12px shell inset */
+  --admin-size-row-gap: var(--admin-space-1); /* 2px  nav/list rows */
+  --admin-size-inline-gap: var(--admin-space-4); /* 8px  icon-to-label */
+  --admin-size-section-gap: var(--admin-space-12); /* 24px between sections */
+
+  --admin-size-control-sm: 24px; /* icon button */
+  --admin-size-control-md: 28px; /* nav row, input, select */
+  --admin-size-control-lg: 32px; /* primary button */
+  --admin-size-icon: 16px;
+  --admin-size-icon-box: 28px;
+
+  --admin-size-sidebar: 240px;
+  --admin-size-sidebar-collapsed: 52px;
+  --admin-size-content-max: 1280px;
+
+  /* -- Radii ------------------------------------------------------------- */
+  --admin-radius-sm: 2px; /* hairline joins, breadcrumb elbows */
+  --admin-radius-md: 4px; /* controls: buttons, inputs, nav rows */
+  --admin-radius-lg: 6px; /* badges, chips */
+  --admin-radius-xl: 8px; /* panels, cards, dialogs */
+  --admin-radius-full: 999px;
+
+  /* -- Motion ------------------------------------------------------------ */
+  --admin-duration-fast: 120ms; /* hover/active feedback */
+  --admin-duration-base: 200ms; /* expand/collapse, sidebar width */
+  --admin-duration-slow: 300ms; /* enter/exit */
+  --admin-ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --admin-ease-in-out: cubic-bezier(0.4, 0, 0.6, 1);
+
+  /* -- Stacking ---------------------------------------------------------- */
+  --admin-z-base: 0;
+  --admin-z-sticky: 10;
+  --admin-z-dropdown: 100;
+  --admin-z-overlay: 200;
+  --admin-z-dialog: 300;
+  --admin-z-toast: 400;
+
+  /* =========================================================================
+   * Light theme (default)
+   * ====================================================================== */
+  color-scheme: light;
+
+  --admin-bg-outer: #f0f0f0;
+  --admin-bg-panel: #ffffff;
+  --admin-bg-card: #ffffff;
+  --admin-bg-card-hover: #fafafa;
+  --admin-bg-input: #ffffff;
+  --admin-bg-icon-box: #f0f0f0;
+  --admin-bg-overlay: rgba(255, 255, 255, 0.8);
+  --admin-bg-hover: rgba(0, 0, 0, 0.04);
+  --admin-bg-active: rgba(0, 0, 0, 0.08);
+
+  --admin-border-default: #e0e0e0;
+  --admin-border-hover: #d0d0d0;
+  --admin-border-light: #eeeeee;
+  --admin-border-panel: #e0e0e0;
+
+  --admin-font-primary: #141414;
+  --admin-font-secondary: #474747;
+  --admin-font-tertiary: #818181;
+  --admin-font-light: #999999;
+  --admin-font-section-label: #999999;
+
+  --admin-accent-green: #059669;
+  --admin-accent-red: #dc2626;
+  --admin-accent-blue: #2e9098;
+  --admin-accent-purple: #7c3aed;
+  --admin-accent-amber: #d97706;
+  --admin-accent-orange: #ea580c;
+
+  --admin-accent-bg-green: rgba(16, 185, 129, 0.08);
+  --admin-accent-bg-red: rgba(239, 68, 68, 0.08);
+  --admin-accent-bg-blue: rgba(46, 144, 152, 0.08);
+  --admin-accent-bg-purple: rgba(139, 92, 246, 0.08);
+  --admin-accent-bg-amber: rgba(245, 158, 11, 0.08);
+  --admin-accent-bg-orange: rgba(249, 115, 22, 0.08);
+  --admin-accent-bg-green-subtle: rgba(16, 185, 129, 0.04);
+  --admin-accent-bg-blue-subtle: rgba(46, 144, 152, 0.04);
+  --admin-accent-bg-purple-subtle: rgba(139, 92, 246, 0.04);
+  --admin-accent-bg-orange-subtle: rgba(249, 115, 22, 0.04);
+
+  --admin-accent-border-green: rgba(16, 185, 129, 0.2);
+  --admin-accent-border-red: rgba(239, 68, 68, 0.2);
+  --admin-accent-border-blue: rgba(46, 144, 152, 0.2);
+  --admin-accent-border-purple: rgba(139, 92, 246, 0.2);
+  --admin-accent-border-amber: rgba(245, 158, 11, 0.2);
+  --admin-accent-border-orange: rgba(249, 115, 22, 0.2);
+
+  --admin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --admin-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --admin-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* The legacy focus ring pointed at --ring, which was set to the *lightest*
+     font colour and then wrapped in hsl() — so it computed to nothing and no
+     ring rendered. Fixed here rather than ported: the ring is the blue accent,
+     which clears 3:1 against every surface in both themes. */
+  --admin-focus-ring: var(--admin-accent-blue);
+  --admin-focus-ring-width: 2px;
+  --admin-focus-ring-offset: 2px;
+}
+
+/* =========================================================================
+ * Dark theme
+ * ====================================================================== */
+:root[data-admin-theme='dark'] {
+  color-scheme: dark;
+
+  --admin-bg-outer: #1d1d1d;
+  --admin-bg-panel: #171717;
+  --admin-bg-card: #1e1e1e;
+  --admin-bg-card-hover: #222222;
+  --admin-bg-input: #1e1e1e;
+  --admin-bg-icon-box: #2a2a2a;
+  --admin-bg-overlay: rgba(0, 0, 0, 0.5);
+  --admin-bg-hover: rgba(255, 255, 255, 0.06);
+  --admin-bg-active: rgba(255, 255, 255, 0.1);
+
+  --admin-border-default: #333333;
+  --admin-border-hover: #444444;
+  --admin-border-light: #2a2a2a;
+  --admin-border-panel: #333333;
+
+  --admin-font-primary: #ebebeb;
+  --admin-font-secondary: #b3b3b3;
+  --admin-font-tertiary: #818181;
+  --admin-font-light: #555555;
+  --admin-font-section-label: #666666;
+
+  --admin-accent-green: #10b981;
+  --admin-accent-red: #ef4444;
+  --admin-accent-blue: #2e9098;
+  --admin-accent-purple: #8b5cf6;
+  --admin-accent-amber: #f59e0b;
+  --admin-accent-orange: #f97316;
+
+  --admin-accent-bg-green: rgba(16, 185, 129, 0.1);
+  --admin-accent-bg-red: rgba(239, 68, 68, 0.1);
+  --admin-accent-bg-blue: rgba(46, 144, 152, 0.1);
+  --admin-accent-bg-purple: rgba(139, 92, 246, 0.1);
+  --admin-accent-bg-amber: rgba(245, 158, 11, 0.1);
+  --admin-accent-bg-orange: rgba(249, 115, 22, 0.1);
+  --admin-accent-bg-green-subtle: rgba(16, 185, 129, 0.05);
+  --admin-accent-bg-blue-subtle: rgba(46, 144, 152, 0.05);
+  --admin-accent-bg-purple-subtle: rgba(139, 92, 246, 0.05);
+  --admin-accent-bg-orange-subtle: rgba(249, 115, 22, 0.05);
+
+  --admin-accent-border-green: rgba(16, 185, 129, 0.15);
+  --admin-accent-border-red: rgba(239, 68, 68, 0.15);
+  --admin-accent-border-blue: rgba(46, 144, 152, 0.15);
+  --admin-accent-border-purple: rgba(139, 92, 246, 0.15);
+  --admin-accent-border-amber: rgba(245, 158, 11, 0.15);
+  --admin-accent-border-orange: rgba(249, 115, 22, 0.15);
+
+  --admin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --admin-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --admin-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+/* There is deliberately no `prefers-color-scheme` block and no "system" value.
+ *
+ * A third mode would mean a third copy of the palette (a `@media` rule cannot
+ * share a declaration block with a non-`@media` one), and a duplicated palette
+ * is precisely the drift this issue exists to stop — see #169, where an earlier
+ * port ended up with two copies of the token values that disagreed.
+ *
+ * "Follow the OS" is therefore a job for whatever sets the attribute, not for
+ * the stylesheet: a theme toggle resolves the user's preference to a concrete
+ * `light`/`dark` and writes that. The CSS holds exactly two palettes, once each.
+ */

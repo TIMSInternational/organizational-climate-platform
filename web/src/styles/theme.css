@@ -1,0 +1,199 @@
+/* ===========================================================================
+ * Tailwind theme — exposes the `--admin-*` tokens as utilities
+ * ===========================================================================
+ *
+ * Tailwind v4 is configured in CSS, so this file is the equivalent of the
+ * legacy `tailwind.config.js` `theme.extend` block. Nothing here holds a value
+ * of its own: every entry points at a token from ./tokens.css, so a utility and
+ * an inline `var(--admin-*)` can never disagree.
+ *
+ * `@theme inline` (rather than plain `@theme`) matters for the colours: it makes
+ * `bg-surface-panel` compile to `background-color: var(--admin-bg-panel)`
+ * directly instead of to a copy Tailwind snapshots into `:root`. The utility
+ * then re-resolves under `[data-admin-theme="dark"]` — and keeps working if a
+ * future scoped theme (a light-on-dark dialog, say) overrides tokens on
+ * something other than `:root`.
+ * ========================================================================= */
+
+@theme inline {
+  /* -- Typeface ---------------------------------------------------------- */
+  --font-sans: var(--admin-font-sans);
+  --font-mono: var(--admin-font-mono);
+
+  /* -- Surfaces ---------------------------------------------------------- */
+  --color-surface-outer: var(--admin-bg-outer);
+  --color-surface-panel: var(--admin-bg-panel);
+  --color-surface-card: var(--admin-bg-card);
+  --color-surface-card-hover: var(--admin-bg-card-hover);
+  --color-surface-input: var(--admin-bg-input);
+  --color-surface-icon-box: var(--admin-bg-icon-box);
+  --color-surface-overlay: var(--admin-bg-overlay);
+
+  /* -- Interaction states (translucent, layer over any surface) ---------- */
+  --color-state-hover: var(--admin-bg-hover);
+  --color-state-active: var(--admin-bg-active);
+
+  /* -- Lines ------------------------------------------------------------- */
+  --color-line-default: var(--admin-border-default);
+  --color-line-hover: var(--admin-border-hover);
+  --color-line-light: var(--admin-border-light);
+  --color-line-panel: var(--admin-border-panel);
+
+  /* -- Foreground -------------------------------------------------------- */
+  --color-fg-primary: var(--admin-font-primary);
+  --color-fg-secondary: var(--admin-font-secondary);
+  --color-fg-tertiary: var(--admin-font-tertiary);
+  --color-fg-light: var(--admin-font-light);
+  --color-fg-label: var(--admin-font-section-label);
+
+  /* -- Accents: solid, soft fill, subtle fill, hairline ------------------ */
+  --color-accent-green: var(--admin-accent-green);
+  --color-accent-red: var(--admin-accent-red);
+  --color-accent-blue: var(--admin-accent-blue);
+  --color-accent-purple: var(--admin-accent-purple);
+  --color-accent-amber: var(--admin-accent-amber);
+  --color-accent-orange: var(--admin-accent-orange);
+
+  --color-accent-green-soft: var(--admin-accent-bg-green);
+  --color-accent-red-soft: var(--admin-accent-bg-red);
+  --color-accent-blue-soft: var(--admin-accent-bg-blue);
+  --color-accent-purple-soft: var(--admin-accent-bg-purple);
+  --color-accent-amber-soft: var(--admin-accent-bg-amber);
+  --color-accent-orange-soft: var(--admin-accent-bg-orange);
+
+  --color-accent-green-subtle: var(--admin-accent-bg-green-subtle);
+  --color-accent-blue-subtle: var(--admin-accent-bg-blue-subtle);
+  --color-accent-purple-subtle: var(--admin-accent-bg-purple-subtle);
+  --color-accent-orange-subtle: var(--admin-accent-bg-orange-subtle);
+
+  --color-accent-green-ring: var(--admin-accent-border-green);
+  --color-accent-red-ring: var(--admin-accent-border-red);
+  --color-accent-blue-ring: var(--admin-accent-border-blue);
+  --color-accent-purple-ring: var(--admin-accent-border-purple);
+  --color-accent-amber-ring: var(--admin-accent-border-amber);
+  --color-accent-orange-ring: var(--admin-accent-border-orange);
+
+  /* -- Space ------------------------------------------------------------
+     Tailwind derives every `p-*`/`m-*`/`gap-*` step from `--spacing`. Pointing
+     it at the 2px token unit keeps the numeric utilities *identical* to stock
+     Tailwind (--admin-space-2 is 4px, so `p-4` is still 16px) while making the
+     token the single source: change the density unit in one place and the
+     utilities and the inline styles move together. */
+  --spacing: var(--admin-space-2);
+
+  /* Named density steps — the composites, so `p-card` and
+     `var(--admin-size-card-padding)` are the same 12px by construction. */
+  --spacing-card: var(--admin-size-card-padding);
+  --spacing-panel: var(--admin-size-panel-padding);
+  --spacing-panel-gap: var(--admin-size-panel-gap);
+  --spacing-gutter: var(--admin-size-shell-gutter);
+  --spacing-row: var(--admin-size-row-gap);
+  --spacing-inline: var(--admin-size-inline-gap);
+  --spacing-section: var(--admin-size-section-gap);
+
+  /* -- Sizes -------------------------------------------------------------
+     These are in the `--spacing-*` namespace, not `--size-*`, on purpose.
+     Tailwind's `--size-*` namespace only ever generates the square `size-<name>`
+     utility (width and height together) — it produces no `w-*` and no `h-*`. A
+     sidebar width and a control height are exactly the one-axis cases, so under
+     `--size-*` the useful utilities (`w-sidebar`, `h-control-md`) silently did
+     not exist. `--spacing-*` generates the full set: w-, h-, size-, min-*,
+     max-*, p-, m-, gap-. */
+  --spacing-control-sm: var(--admin-size-control-sm);
+  --spacing-control-md: var(--admin-size-control-md);
+  --spacing-control-lg: var(--admin-size-control-lg);
+  --spacing-icon: var(--admin-size-icon);
+  --spacing-icon-box: var(--admin-size-icon-box);
+  --spacing-sidebar: var(--admin-size-sidebar);
+  --spacing-sidebar-collapsed: var(--admin-size-sidebar-collapsed);
+
+  /* `--container-*` gives both `max-w-content` and `w-content`. */
+  --container-content: var(--admin-size-content-max);
+
+  /* -- Radii ------------------------------------------------------------- */
+  --radius-sm: var(--admin-radius-sm);
+  --radius-md: var(--admin-radius-md);
+  --radius-lg: var(--admin-radius-lg);
+  --radius-xl: var(--admin-radius-xl);
+
+  /* -- Type scale -------------------------------------------------------- */
+  --text-2xs: var(--admin-text-2xs);
+  --text-2xs--line-height: var(--admin-leading-snug);
+  --text-xs: var(--admin-text-xs);
+  --text-xs--line-height: var(--admin-leading-snug);
+  --text-sm: var(--admin-text-sm);
+  --text-sm--line-height: var(--admin-leading-normal);
+  --text-base: var(--admin-text-base);
+  --text-base--line-height: var(--admin-leading-normal);
+  --text-lg: var(--admin-text-lg);
+  --text-lg--line-height: var(--admin-leading-normal);
+  --text-xl: var(--admin-text-xl);
+  --text-xl--line-height: var(--admin-leading-tight);
+  --text-2xl: var(--admin-text-2xl);
+  --text-2xl--line-height: var(--admin-leading-tight);
+  --text-3xl: var(--admin-text-3xl);
+  --text-3xl--line-height: var(--admin-leading-tight);
+
+  --leading-tight: var(--admin-leading-tight);
+  --leading-snug: var(--admin-leading-snug);
+  --leading-normal: var(--admin-leading-normal);
+
+  --font-weight-normal: var(--admin-weight-regular);
+  --font-weight-medium: var(--admin-weight-medium);
+  --font-weight-semibold: var(--admin-weight-semibold);
+  --font-weight-bold: var(--admin-weight-bold);
+
+  --tracking-tight: var(--admin-tracking-tight);
+  --tracking-normal: var(--admin-tracking-normal);
+  --tracking-label: var(--admin-tracking-label);
+
+  /* -- Elevation --------------------------------------------------------- */
+  --shadow-sm: var(--admin-shadow-sm);
+  --shadow-md: var(--admin-shadow-md);
+  --shadow-lg: var(--admin-shadow-lg);
+
+  /* -- Motion ------------------------------------------------------------ */
+  --ease-out: var(--admin-ease-out);
+  --ease-in-out: var(--admin-ease-in-out);
+}
+
+/* Motion presets. Kept out of the `inline` block: keyframe names have to be
+   emitted, not substituted. These are the three animations the legacy theme
+   actually used on admin surfaces; the rest of its 20-entry animation list went
+   with the marketing pages and is deliberately not ported. */
+@theme {
+  --animate-fade-in: fade-in var(--admin-duration-slow) var(--admin-ease-out);
+  --animate-slide-up: slide-up var(--admin-duration-slow) var(--admin-ease-out);
+  --animate-scale-in: scale-in var(--admin-duration-base) var(--admin-ease-out);
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+}
