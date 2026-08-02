@@ -20,11 +20,24 @@ public static class BenchmarkEndpoints
         group.MapPost("/{id:guid}/metrics", AddMetricAsync);
     }
 
-    private static bool CanAccessBenchmark(CurrentUser currentUser, Guid? benchmarkCompanyId)
+    // Read access: a CompanyAdmin may view global benchmarks (CompanyId == null, visible to
+    // every tenant for comparison purposes -- see ListAsync) as well as their own company's.
+    private static bool CanReadBenchmark(CurrentUser currentUser, Guid? benchmarkCompanyId)
     {
         if (currentUser.Role == Roles.SuperAdmin) return true;
-        if (benchmarkCompanyId is null) return currentUser.Role == Roles.CompanyAdmin;
-        return currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == benchmarkCompanyId.Value.ToString();
+        if (currentUser.Role != Roles.CompanyAdmin) return false;
+        return benchmarkCompanyId is null || currentUser.CompanyId == benchmarkCompanyId.Value.ToString();
+    }
+
+    // Write access: a CompanyAdmin may only create/update/add-metrics-to benchmarks scoped to
+    // their OWN company. Global benchmarks (CompanyId == null) are visible to every tenant
+    // (CanReadBenchmark), so allowing CompanyAdmin writes there would let any tenant tamper
+    // with data every other tenant sees -- global benchmarks are SuperAdmin-only to write.
+    private static bool CanWriteBenchmark(CurrentUser currentUser, Guid? benchmarkCompanyId)
+    {
+        if (currentUser.Role == Roles.SuperAdmin) return true;
+        if (currentUser.Role != Roles.CompanyAdmin) return false;
+        return benchmarkCompanyId is not null && currentUser.CompanyId == benchmarkCompanyId.Value.ToString();
     }
 
     private static async Task<IResult> ListAsync(Guid? companyId, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
@@ -54,7 +67,18 @@ public static class BenchmarkEndpoints
     private static async Task<IResult> CreateAsync(CreateBenchmarkRequest request, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
-        if (!CanAccessBenchmark(currentUser, request.CompanyId)) return Results.Forbid();
+        if (!CanWriteBenchmark(currentUser, request.CompanyId)) return Results.Forbid();
+
+        var name = request.Name?.Trim();
+        var description = request.Description?.Trim();
+        var type = request.Type?.Trim();
+        var category = request.Category?.Trim();
+        var source = request.Source?.Trim();
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(description)
+            || string.IsNullOrWhiteSpace(type) || string.IsNullOrWhiteSpace(category) || string.IsNullOrWhiteSpace(source))
+        {
+            return Results.Json(new { message = "Name, Description, Type, Category, and Source are required" }, statusCode: 400);
+        }
 
         if (request.PriorPeriodBenchmarkId.HasValue)
         {
@@ -67,11 +91,11 @@ public static class BenchmarkEndpoints
         var benchmark = new Benchmark
         {
             Id = Guid.NewGuid(),
-            Name = request.Name,
-            Description = request.Description,
-            Type = request.Type,
-            Category = request.Category,
-            Source = request.Source,
+            Name = name,
+            Description = description,
+            Type = type,
+            Category = category,
+            Source = source,
             Industry = request.Industry,
             CompanySize = request.CompanySize,
             Region = request.Region,
@@ -95,20 +119,27 @@ public static class BenchmarkEndpoints
         var currentUser = principal.GetCurrentUser();
         var benchmark = await db.Benchmarks.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
         if (benchmark is null) return Results.Json(new { message = "Benchmark not found" }, statusCode: 404);
-        if (!CanAccessBenchmark(currentUser, benchmark.CompanyId)) return Results.Forbid();
+        if (!CanReadBenchmark(currentUser, benchmark.CompanyId)) return Results.Forbid();
 
         return Results.Ok(await LoadDetailAsync(db, id, cancellationToken));
     }
 
-    private static async Task<IResult> UpdateAsync(Guid id, CreateBenchmarkRequest request, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> UpdateAsync(Guid id, UpdateBenchmarkRequest request, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         var benchmark = await db.Benchmarks.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
         if (benchmark is null) return Results.Json(new { message = "Benchmark not found" }, statusCode: 404);
-        if (!CanAccessBenchmark(currentUser, benchmark.CompanyId)) return Results.Forbid();
+        if (!CanWriteBenchmark(currentUser, benchmark.CompanyId)) return Results.Forbid();
 
-        benchmark.Name = request.Name;
-        benchmark.Description = request.Description;
+        var name = request.Name?.Trim();
+        var description = request.Description?.Trim();
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(description))
+        {
+            return Results.Json(new { message = "Name and Description are required" }, statusCode: 400);
+        }
+
+        benchmark.Name = name;
+        benchmark.Description = description;
         benchmark.Industry = request.Industry;
         benchmark.CompanySize = request.CompanySize;
         benchmark.Region = request.Region;
@@ -123,7 +154,7 @@ public static class BenchmarkEndpoints
         var currentUser = principal.GetCurrentUser();
         var benchmark = await db.Benchmarks.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
         if (benchmark is null) return Results.Json(new { message = "Benchmark not found" }, statusCode: 404);
-        if (!CanAccessBenchmark(currentUser, benchmark.CompanyId)) return Results.Forbid();
+        if (!CanWriteBenchmark(currentUser, benchmark.CompanyId)) return Results.Forbid();
 
         var metric = new BenchmarkMetric
         {
