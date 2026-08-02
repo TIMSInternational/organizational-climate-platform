@@ -4,8 +4,10 @@ import { login } from './api'
 import { setToken } from './token'
 import { decodeJwtPayload } from './jwt'
 import { resolveInitialRoute } from '../app/resolveInitialRoute'
+import { useTranslation } from '../i18n'
 
 export default function LoginPage() {
+  const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -28,7 +30,7 @@ export default function LoginPage() {
       const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
       navigate(resolveInitialRoute(role, companyId))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setSubmitting(false)
     }
@@ -36,18 +38,18 @@ export default function LoginPage() {
 
   return (
     <form onSubmit={handleSubmit}>
-      <h1>Sign in</h1>
+      <h1>{t('auth.signIn')}</h1>
       {error && <p role="alert">{error}</p>}
       <label>
-        Email
+        {t('auth.email')}
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
       </label>
       <label>
-        Password
+        {t('auth.password')}
         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
       </label>
       <button type="submit" disabled={submitting}>
-        {submitting ? 'Signing in…' : 'Sign in'}
+        {submitting ? t('auth.signingIn') : t('auth.signIn')}
       </button>
     </form>
   )

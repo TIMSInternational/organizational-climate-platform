@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { getSystemSettings, updateSystemSettings, type SystemSettingsData } from '../api/systemSettings'
 import SystemSettingsForm from '../components/SystemSettingsForm'
+import { useTranslation } from '../../../i18n'
 
 export default function SystemSettingsPage() {
+  const { t } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [settings, setSettings] = useState<SystemSettingsData | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -13,7 +15,7 @@ export default function SystemSettingsPage() {
       const result = await getSystemSettings(baseUrl)
       setSettings(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load system settings')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     }
   }
 
@@ -32,8 +34,12 @@ export default function SystemSettingsPage() {
 
   return (
     <div>
-      <h1>System settings</h1>
-      {settings ? <SystemSettingsForm settings={settings} onSubmit={handleSubmit} /> : <p>Loading…</p>}
+      <h1>{t('navigation.systemSettings')}</h1>
+      {settings ? (
+        <SystemSettingsForm settings={settings} onSubmit={handleSubmit} />
+      ) : (
+        <p>{t('common.loading')}</p>
+      )}
     </div>
   )
 }

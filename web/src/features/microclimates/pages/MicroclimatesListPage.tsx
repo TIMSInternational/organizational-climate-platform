@@ -6,6 +6,7 @@ import MicroclimateFilters, { type MicroclimateFiltersValue } from '../component
 import MicroclimateForm, { type MicroclimateFormValues } from '../components/MicroclimateForm'
 import { getToken } from '../../../auth/token'
 import { decodeJwtPayload } from '../../../auth/jwt'
+import { useTranslation } from '../../../i18n'
 
 // This slice has no company-picker UI yet (org-structure's admin shell doesn't
 // expose a "current company" concept for a SuperAdmin browsing across
@@ -23,6 +24,7 @@ import { decodeJwtPayload } from '../../../auth/jwt'
 // including any microclimate they went on to create. Block it explicitly
 // instead until #57 (cross-cutting company-context selector) lands.
 export default function MicroclimatesListPage() {
+  const { t } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const token = getToken()
   const claims = token ? decodeJwtPayload(token) : null
@@ -48,7 +50,7 @@ export default function MicroclimatesListPage() {
       setMicroclimates(microclimatesResult)
       setTemplates(templatesResult)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load microclimates')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setLoading(false)
     }
@@ -79,13 +81,13 @@ export default function MicroclimatesListPage() {
   if (isSuperAdmin) {
     return (
       <p role="alert">
-        SuperAdmin company-scoped browsing for Microclimates is not available yet -- see issue #57.
+        {t('common.superAdminScopedBrowsingUnavailable', { feature: t('navigation.microclimates') })}
       </p>
     )
   }
 
   if (!companyId) {
-    return <p role="alert">No company is associated with your account.</p>
+    return <p role="alert">{t('common.noCompanyAssociated')}</p>
   }
 
   if (error) {
@@ -94,11 +96,11 @@ export default function MicroclimatesListPage() {
 
   return (
     <div>
-      <h1>Microclimates</h1>
+      <h1>{t('navigation.microclimates')}</h1>
       <MicroclimateFilters value={filters} onChange={setFilters} />
-      <button onClick={() => setShowCreateForm((v) => !v)}>{showCreateForm ? 'Cancel' : 'New microclimate'}</button>
+      <button onClick={() => setShowCreateForm((v) => !v)}>{showCreateForm ? t('common.cancel') : t('common.newMicroclimate')}</button>
       {showCreateForm && <MicroclimateForm templates={templates} onSubmit={handleCreate} />}
-      {loading ? <p>Loading…</p> : <MicroclimateList microclimates={filtered} />}
+      {loading ? <p>{t('common.loading')}</p> : <MicroclimateList microclimates={filtered} />}
     </div>
   )
 }
