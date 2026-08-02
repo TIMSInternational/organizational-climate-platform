@@ -59,6 +59,37 @@ export function applyAdminTheme(mode: AdminThemeMode): AdminTheme {
   return theme
 }
 
+/**
+ * Teardown for the live `prefers-color-scheme` listener, or null when not in
+ * `system` mode.
+ *
+ * This is module state on purpose. The listener has to outlive whichever call
+ * created it — `initAdminTheme` at startup, or a later `setAdminThemeMode` — and
+ * exactly one may exist at a time. Tracking it per-caller is what let the
+ * previous version strand a listener: switching from `system` to an explicit
+ * mode left the old subscription attached, so the next OS change overwrote the
+ * user's explicit choice.
+ */
+let unsubscribeFromSystem: (() => void) | null = null
+
+/**
+ * Points the OS-preference subscription at `mode`: attached for `system`,
+ * detached for anything explicit. Safe to call repeatedly.
+ */
+function syncSystemSubscription(mode: AdminThemeMode): void {
+  unsubscribeFromSystem?.()
+  unsubscribeFromSystem = null
+
+  if (mode !== 'system') return
+
+  const query = darkMediaQuery()
+  if (!query || typeof query.addEventListener !== 'function') return
+
+  const onChange = () => applyAdminTheme('system')
+  query.addEventListener('change', onChange)
+  unsubscribeFromSystem = () => query.removeEventListener('change', onChange)
+}
+
 /** Persists the preference and applies it. Returns the resolved theme. */
 export function setAdminThemeMode(mode: AdminThemeMode): AdminTheme {
   try {
@@ -66,6 +97,7 @@ export function setAdminThemeMode(mode: AdminThemeMode): AdminTheme {
   } catch {
     // Not being able to remember the choice is not a reason to not apply it.
   }
+  syncSystemSubscription(mode)
   return applyAdminTheme(mode)
 }
 
@@ -73,18 +105,16 @@ export function setAdminThemeMode(mode: AdminThemeMode): AdminTheme {
  * Applies the stored preference and keeps `system` following the OS.
  *
  * Called from `src/main.tsx` before the first render, so the attribute is on
- * `<html>` before anything paints. Returns an unsubscribe function.
+ * `<html>` before anything paints. Returns a teardown function; calling it also
+ * clears any subscription a later `setAdminThemeMode` installed.
  */
 export function initAdminTheme(): () => void {
   const mode = readAdminThemeMode()
   applyAdminTheme(mode)
+  syncSystemSubscription(mode)
 
-  if (mode !== 'system') return () => {}
-
-  const query = darkMediaQuery()
-  if (!query || typeof query.addEventListener !== 'function') return () => {}
-
-  const onChange = () => applyAdminTheme('system')
-  query.addEventListener('change', onChange)
-  return () => query.removeEventListener('change', onChange)
+  return () => {
+    unsubscribeFromSystem?.()
+    unsubscribeFromSystem = null
+  }
 }

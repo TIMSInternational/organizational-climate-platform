@@ -37,6 +37,10 @@ function stubMatchMedia(matches: boolean) {
 describe('admin theme mode', () => {
   beforeEach(() => {
     localStorage.clear()
+    // The OS subscription is module state, so drop anything a previous test left
+    // attached. With nothing stored this initialises to `light`, which subscribes
+    // to nothing, and the returned teardown clears the slot.
+    initAdminTheme()()
     document.documentElement.removeAttribute(ADMIN_THEME_ATTRIBUTE)
   })
 
@@ -120,5 +124,58 @@ describe('admin theme mode', () => {
     initAdminTheme()
     expect(media.listenerCount()).toBe(0)
     expect(document.documentElement.getAttribute(ADMIN_THEME_ATTRIBUTE)).toBe('light')
+  })
+
+  it('stops following the OS once an explicit mode is chosen', () => {
+    const media = stubMatchMedia(false)
+    localStorage.setItem(ADMIN_THEME_STORAGE_KEY, 'system')
+
+    initAdminTheme()
+    expect(media.listenerCount()).toBe(1)
+
+    // The user picks light explicitly. The system listener must go with it —
+    // otherwise the next OS change silently overrides that choice.
+    setAdminThemeMode('light')
+    expect(media.listenerCount()).toBe(0)
+
+    media.emit(true)
+    expect(document.documentElement.getAttribute(ADMIN_THEME_ATTRIBUTE)).toBe('light')
+  })
+
+  it('starts following the OS when system is chosen after an explicit mode', () => {
+    const media = stubMatchMedia(false)
+    localStorage.setItem(ADMIN_THEME_STORAGE_KEY, 'light')
+
+    initAdminTheme()
+    expect(media.listenerCount()).toBe(0)
+
+    setAdminThemeMode('system')
+    expect(media.listenerCount()).toBe(1)
+
+    media.emit(true)
+    expect(document.documentElement.getAttribute(ADMIN_THEME_ATTRIBUTE)).toBe('dark')
+  })
+
+  it('keeps at most one OS listener attached', () => {
+    const media = stubMatchMedia(false)
+
+    initAdminTheme()
+    setAdminThemeMode('system')
+    setAdminThemeMode('system')
+    setAdminThemeMode('system')
+
+    expect(media.listenerCount()).toBe(1)
+  })
+
+  it('teardown also clears a subscription installed after init', () => {
+    const media = stubMatchMedia(false)
+    localStorage.setItem(ADMIN_THEME_STORAGE_KEY, 'light')
+
+    const teardown = initAdminTheme()
+    setAdminThemeMode('system')
+    expect(media.listenerCount()).toBe(1)
+
+    teardown()
+    expect(media.listenerCount()).toBe(0)
   })
 })
