@@ -14,20 +14,49 @@
  * ./styles/README.md, "How the pages consume tokens") — styling the elements
  * here is what puts all twelve of them in the design language at once, and is
  * why none of them needs to name a colour.
+ *
+ * EVERY RULE BELOW IS A PORT, AND SAYS WHERE FROM.
+ * The legacy admin surface expressed its density in component primitives
+ * (`src/components/ui/{button,input,select,textarea,table,label,alert}.tsx`)
+ * and in the shell's inline styles (`AppShell.tsx`, `Sidebar.tsx`,
+ * `navigation/RoleBasedNav.tsx`), not in a stylesheet — so a rule here cites
+ * the primitive it reproduces. The handful with no legacy counterpart are
+ * marked `NO LEGACY COUNTERPART` with the reason. ./styles/README.md
+ * § "Provenance" collects the whole table, and ./styles/tokens.test.ts asserts
+ * the values so drift fails the build.
+ *
+ * Where globals.css and the admin primitives disagreed, the primitive wins:
+ * globals.css is the marketing surface (Montserrat, `h1` 36px, `p` 16px) and
+ * the legacy admin pages did not render bare `h1`/`p` — they rendered
+ * `<h1 className="text-2xl font-bold">` inside a 13px shell. Reproducing
+ * globals.css literally would reproduce a page nobody ever saw.
  * ========================================================================= */
 
-@import 'tailwindcss';
+@import 'tailwindcss' source(none);
 @import './styles/fonts.css';
 @import './styles/tokens.css';
 @import './styles/theme.css';
 
+/* Class detection is declared explicitly rather than left to Tailwind's
+   automatic source scan. The scan walks every non-ignored file in the project,
+   which includes ./styles/README.md and the comments in ./styles/theme.css —
+   so a utility named in prose was being compiled into the production bundle as
+   if a component used it (~200 rules of dead CSS), and editing a docs file
+   silently changed the shipped CSS. Sources are the two places a class name can
+   actually reach the DOM from. */
+@source '../index.html';
+@source './**/*.{ts,tsx}';
+/* Tests talk *about* utilities (`p-4` vs `--admin-space-4`); they do not render
+   them, and a class name in an assertion must not become a shipped rule. */
+@source not './**/*.test.{ts,tsx}';
+
 @layer base {
   html {
-    /* 13px admin base — set on the root so `rem`-based utilities and the token
-       px scale agree rather than drifting apart at the edges. */
+    /* The root font size is deliberately NOT set. The legacy app did not
+       override it either, and pinning it to an absolute px value would drop the
+       user's browser default-font-size preference on the floor (WCAG 1.4.4).
+       The 13px shell base is applied to `body`, in `rem`, so it scales. */
     font-family: var(--admin-font-sans);
-    font-size: var(--admin-text-base);
-    line-height: var(--admin-leading-normal);
     background: var(--admin-bg-outer);
     color: var(--admin-font-primary);
 
@@ -42,11 +71,20 @@
   }
 
   body {
+    /* 13px/1.5 — legacy AppShell.tsx `fontSize: 13` on the shell root,
+       globals.css `body { line-height: 1.5 }`. */
+    font-size: var(--admin-text-base);
+    line-height: var(--admin-leading-normal);
     margin: 0;
     min-height: 100svh;
   }
 
-  /* -- Headings ---------------------------------------------------------- */
+  /* -- Headings ----------------------------------------------------------
+     Weight/leading/tracking are globals.css `h1..h6` verbatim (600, 1.2,
+     -0.025em). The sizes are the admin scale, i.e. what the legacy admin pages
+     rendered: page titles were `text-2xl font-bold` (24px) in every admin
+     component, and section headings `text-lg font-semibold`. globals.css's own
+     36/30/24/20/18/16 belongs to the Montserrat marketing pages. */
   h1,
   h2,
   h3,
@@ -57,32 +95,39 @@
     font-weight: var(--admin-weight-semibold);
     line-height: var(--admin-leading-tight);
     letter-spacing: var(--admin-tracking-tight);
-    margin: 0 0 var(--admin-space-4);
+    /* NO LEGACY COUNTERPART: the legacy headings carried their bottom margin
+       per-instance (`mb-2`). 8px is that value, applied once. */
+    margin: 0 0 var(--admin-space-8);
   }
 
   h1 {
-    font-size: var(--admin-text-3xl);
+    font-size: var(--admin-text-3xl); /* 24px — legacy `text-2xl` page title */
   }
   h2 {
-    font-size: var(--admin-text-2xl);
+    font-size: var(--admin-text-2xl); /* 20px */
   }
   h3,
   h4 {
-    font-size: var(--admin-text-xl);
+    font-size: var(--admin-text-xl); /* 16px */
   }
   h5,
   h6 {
-    font-size: var(--admin-text-lg);
+    font-size: var(--admin-text-lg); /* 14px */
     letter-spacing: var(--admin-tracking-normal);
   }
 
-  /* -- Text -------------------------------------------------------------- */
+  /* -- Text --------------------------------------------------------------
+     `p` inherits its colour, as the legacy `p` rule did — admin components
+     opted into muted text per instance (`text-muted-foreground`) rather than
+     making body copy grey by default. */
   p {
-    margin: 0 0 var(--admin-space-4);
-    color: var(--admin-font-secondary);
+    margin: 0 0 var(--admin-space-8);
   }
 
   small {
+    /* globals.css `small { font-size: 0.75rem }`. The colour is the one
+       deviation: legacy `small` inherited, but it is used here only for meta
+       text, which `--admin-font-tertiary` is exactly the token for. */
     font-size: var(--admin-text-sm);
     color: var(--admin-font-tertiary);
   }
@@ -97,6 +142,8 @@
     text-decoration: underline;
   }
 
+  /* NO LEGACY COUNTERPART: the legacy admin surface renders no code/pre. Built
+     from tokens so that if a page ever does, it is not unstyled. */
   code,
   pre {
     font-family: var(--admin-font-mono);
@@ -107,11 +154,11 @@
   }
 
   code {
-    padding: var(--admin-space-1) var(--admin-space-2);
+    padding: var(--admin-space-2) var(--admin-space-4);
   }
 
   pre {
-    padding: var(--admin-space-4);
+    padding: var(--admin-space-8);
     overflow-x: auto;
   }
 
@@ -122,37 +169,46 @@
   }
 
   /* -- Alerts ------------------------------------------------------------
-     Every page reports failure as `<p role="alert">`, so the role carries the
-     styling and no page has to name the error colour. */
+     ui/alert.tsx: `rounded-lg border px-4 py-3 text-sm` (8px radius, 16px/12px
+     padding, 14px) with the `destructive` variant colouring the text. Every
+     page reports failure as `<p role="alert">`, so the role carries the styling
+     and no page has to name the error colour. Deviation: the fill is the soft
+     red accent rather than `bg-card`, so an alert reads as an alert on a card. */
   [role='alert'] {
     color: var(--admin-accent-red);
     background: var(--admin-accent-bg-red);
     border: 1px solid var(--admin-accent-border-red);
-    border-radius: var(--admin-radius-lg);
-    padding: var(--admin-space-3) var(--admin-space-4);
-    font-size: var(--admin-text-sm);
+    border-radius: var(--admin-radius-xl);
+    padding: var(--admin-space-12) var(--admin-space-16);
+    font-size: var(--admin-text-lg);
   }
 
   /* -- Forms -------------------------------------------------------------
-     The pages render `<label>Text <input/></label>`, so labels are the layout
-     unit for form rows and stack their own control. */
+     ui/label.tsx is `text-sm font-medium` and globals.css `label` is
+     `0.875rem / 1.25rem / 500` — 14px medium either way.
+
+     NO LEGACY COUNTERPART: `display: block` and the bottom margin. The legacy
+     forms wrapped label+control in a `FormItem` that supplied both; the pages
+     here render `<label>Text <input/></label>`, so the label *is* the form row
+     and has to stack its control and space the next row. */
   label {
     display: block;
-    margin-bottom: var(--admin-space-6);
-    font-size: var(--admin-text-sm);
+    margin-bottom: var(--admin-space-12);
+    font-size: var(--admin-text-lg);
     font-weight: var(--admin-weight-medium);
+    line-height: var(--admin-leading-normal);
     color: var(--admin-font-secondary);
   }
 
+  /* ui/input.tsx: `h-8 rounded-[4px] border border-input bg-background px-3
+     text-[13px]`. ui/select.tsx matches (`data-[size=default]:h-8 px-3
+     rounded-[4px] text-[13px]`). 32px tall, 12px inset, 4px radius. */
   input,
   select,
   textarea {
-    display: block;
-    width: 100%;
     box-sizing: border-box;
-    margin-top: var(--admin-space-2);
-    padding: 0 var(--admin-space-4);
-    height: var(--admin-size-control-md);
+    padding: 0 var(--admin-space-12);
+    height: var(--admin-size-control-lg);
     font-family: inherit;
     font-size: var(--admin-text-base);
     font-weight: var(--admin-weight-regular);
@@ -163,10 +219,24 @@
     transition: border-color var(--admin-duration-fast) var(--admin-ease-out);
   }
 
+  /* Legacy `Input` was `w-full` — but full-bleed only ever made sense because
+     it was full-bleed *inside its form row*. Scoped to that here, so a
+     standalone control (the users search box in
+     features/org-structure/components/UserFilters.tsx) keeps its intrinsic
+     width instead of stretching the whole content column. */
+  label > input,
+  label > select,
+  label > textarea {
+    display: block;
+    width: 100%;
+    margin-top: var(--admin-space-4);
+  }
+
+  /* ui/textarea.tsx: `min-h-[80px] px-3 py-2`. */
   textarea {
     height: auto;
-    min-height: calc(var(--admin-size-control-md) * 3);
-    padding: var(--admin-space-3) var(--admin-space-4);
+    min-height: 80px;
+    padding: var(--admin-space-8) var(--admin-space-12);
     line-height: var(--admin-leading-normal);
     resize: vertical;
   }
@@ -194,14 +264,18 @@
     cursor: not-allowed;
   }
 
-  /* -- Buttons ----------------------------------------------------------- */
+  /* -- Buttons -----------------------------------------------------------
+     ui/button.tsx `size="sm"`: `h-8 rounded-[4px] gap-1.5 px-3` on the base
+     `inline-flex items-center justify-center text-[13px] font-medium`. That is
+     the admin button: `size="sm"` is used 49 times across the legacy admin
+     components and the default `h-9` never. Disabled is its `opacity-50`. */
   button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--admin-size-inline-gap);
+    gap: var(--admin-space-6);
     height: var(--admin-size-control-lg);
-    padding: 0 var(--admin-space-6);
+    padding: 0 var(--admin-space-12);
     font-family: inherit;
     font-size: var(--admin-text-base);
     font-weight: var(--admin-weight-medium);
@@ -223,11 +297,19 @@
   button:disabled {
     color: var(--admin-font-light);
     cursor: not-allowed;
-    opacity: 0.7;
+    opacity: 0.5;
   }
 
   /* -- Tables ------------------------------------------------------------
-     The list pages are tables; this is where the density pass is most visible. */
+     ui/table.tsx, cell for cell:
+       table -> `w-full text-[13px]`
+       th    -> `px-3 py-2 text-left align-middle text-xs font-medium
+                 text-muted-foreground`   (12px/8px, 12px type, muted, NOT
+                                            uppercase and not tracked)
+       td    -> `px-3 py-2.5 align-middle` (12px/10px, inherits colour)
+       tr    -> `border-b hover:bg-accent/60`
+     `--admin-font-tertiary` is the token the legacy shell mapped
+     `--muted-foreground` to inside the admin shell. */
   table {
     width: 100%;
     border-collapse: collapse;
@@ -236,39 +318,40 @@
 
   th,
   td {
-    padding: var(--admin-space-3) var(--admin-space-4);
     text-align: left;
+    vertical-align: middle;
     line-height: var(--admin-leading-snug);
     border-bottom: 1px solid var(--admin-border-light);
   }
 
   th {
-    font-size: var(--admin-text-xs);
+    padding: var(--admin-space-8) var(--admin-space-12);
+    font-size: var(--admin-text-sm);
     font-weight: var(--admin-weight-medium);
-    color: var(--admin-font-section-label);
-    letter-spacing: var(--admin-tracking-label);
-    text-transform: uppercase;
+    color: var(--admin-font-tertiary);
     white-space: nowrap;
   }
 
   td {
-    color: var(--admin-font-secondary);
+    padding: var(--admin-space-10) var(--admin-space-12);
   }
 
   tbody tr:hover {
     background: var(--admin-bg-hover);
   }
 
-  /* -- Lists ------------------------------------------------------------- */
+  /* -- Lists -------------------------------------------------------------
+     NO LEGACY COUNTERPART: the legacy admin surface renders lists as flex
+     stacks, never as a styled `ul`. Margin and indent are the paragraph rhythm
+     and a two-step indent from the same scale. */
   ul,
   ol {
-    margin: 0 0 var(--admin-space-4);
-    padding-left: var(--admin-space-10);
-    color: var(--admin-font-secondary);
+    margin: 0 0 var(--admin-space-8);
+    padding-left: var(--admin-space-20);
   }
 
   li {
-    margin-bottom: var(--admin-space-2);
+    margin-bottom: var(--admin-space-4);
   }
 
   /* -- Focus -------------------------------------------------------------
@@ -280,8 +363,8 @@
     outline-offset: var(--admin-focus-ring-offset);
   }
 
-  /* Respect a stated preference for less motion. The token durations are the
-     only thing animating, so zeroing them here covers the whole app. */
+  /* globals.css ships this block verbatim. The token durations are the only
+     thing animating, so zeroing them here covers the whole app. */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -298,31 +381,37 @@
  * Navigation
  *
  * RoleBasedNav emits `.nav-icon`, `.nav-badge` and `.nav-section-title` but
- * nothing ever defined them, so they rendered as unstyled text. Defined here
- * from tokens.
+ * nothing ever defined them, so they rendered as unstyled text.
  * ------------------------------------------------------------------------- */
 @layer components {
+  /* Legacy navigation/RoleBasedNav.tsx section heading:
+     `pt-2 pb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.06em]`
+     with `color: var(--admin-font-light)`. */
   .nav-section-title {
-    padding: var(--admin-space-4) var(--admin-space-6) var(--admin-space-2);
+    padding: var(--admin-space-8) var(--admin-space-8) var(--admin-space-6);
     font-size: var(--admin-text-2xs);
-    font-weight: var(--admin-weight-medium);
-    color: var(--admin-font-section-label);
+    font-weight: var(--admin-weight-semibold);
+    color: var(--admin-font-light);
     letter-spacing: var(--admin-tracking-label);
     text-transform: uppercase;
   }
 
+  /* Legacy nav icon: `h-4 w-4 flex-shrink-0`. */
   .nav-icon {
     width: var(--admin-size-icon);
     height: var(--admin-size-icon);
     flex-shrink: 0;
   }
 
+  /* NO LEGACY COUNTERPART: the legacy nav had no badge. Built from the badge
+     tokens (11px, `--admin-radius-lg`, soft accent fill) so it is at least
+     consistent with the rest of the language. */
   .nav-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: var(--admin-space-8);
-    padding: 0 var(--admin-space-2);
+    min-width: var(--admin-space-16);
+    padding: 0 var(--admin-space-4);
     font-size: var(--admin-text-2xs);
     font-weight: var(--admin-weight-medium);
     color: var(--admin-accent-blue);

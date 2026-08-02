@@ -45,6 +45,7 @@
   --color-fg-tertiary: var(--admin-font-tertiary);
   --color-fg-light: var(--admin-font-light);
   --color-fg-label: var(--admin-font-section-label);
+  --color-fg-on-accent: var(--admin-font-on-accent);
 
   /* -- Accents: solid, soft fill, subtle fill, hairline ------------------ */
   --color-accent-green: var(--admin-accent-green);
@@ -74,12 +75,19 @@
   --color-accent-orange-ring: var(--admin-accent-border-orange);
 
   /* -- Space ------------------------------------------------------------
-     Tailwind derives every `p-*`/`m-*`/`gap-*` step from `--spacing`. Pointing
-     it at the 2px token unit keeps the numeric utilities *identical* to stock
-     Tailwind (--admin-space-2 is 4px, so `p-4` is still 16px) while making the
-     token the single source: change the density unit in one place and the
-     utilities and the inline styles move together. */
-  --spacing: var(--admin-space-2);
+     Tailwind derives every `p-*`/`m-*`/`gap-*` step from `--spacing`, by
+     multiplication: `p-4` is `calc(var(--spacing) * 4)`. Pointing `--spacing`
+     at the 4px token keeps the numeric utilities identical to stock Tailwind
+     while making the token the single source.
+
+     ⚠ TWO NUMBERING SYSTEMS MEET HERE, AND THEY DO NOT AGREE:
+         p-4                      -> 4 × 4px = 16px   (a step count)
+         var(--admin-space-4)     -> 4px              (a pixel count)
+       That is why the token scale is named by pixel value and not by step
+       index — a token spells its own value, so the two can be told apart on
+       sight instead of silently halving each other. Written out in
+       ./README.md § "Space"; asserted in ./tokens.test.ts. */
+  --spacing: var(--admin-space-4);
 
   /* Named density steps — the composites, so `p-card` and
      `var(--admin-size-card-padding)` are the same 12px by construction. */

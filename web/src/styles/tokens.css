@@ -9,16 +9,21 @@
  * is no flash of unstyled/mis-themed content and no JS on the critical path.
  *
  * Colour values are Twenty-CRM's admin palette (dark from theme-dark.css,
- * light from theme-light.css) and are byte-for-byte the legacy values — that is
- * what makes "no visual regression against the legacy admin pages" checkable.
+ * light from theme-light.css) and are byte-for-byte the legacy values.
+ *
+ * Every non-colour value below cites the legacy declaration it came from.
+ * `../README.md` § "Provenance" is the same table in one place, and
+ * `./tokens.test.ts` asserts these values so a later edit that drifts from the
+ * legacy surface fails the build rather than the eye.
  *
  * THEMING
  *   Light is the default, matching the legacy default mode.
  *     <html>                           -> light
  *     <html data-admin-theme="light">  -> light
  *     <html data-admin-theme="dark">   -> dark
- *   The override lands on the same element (`:root`) as the defaults, so
- *   anything built on `var(--admin-*)` re-themes with no extra work.
+ *   `src/theme/adminTheme.ts` sets the attribute (localStorage key
+ *   `admin-theme`, values light|dark|system — the same contract as the legacy
+ *   AdminThemeContext), and `src/main.tsx` calls it before the first render.
  *
  * NAMING
  *   --admin-<group>-<role>[-<variant>]
@@ -32,83 +37,104 @@
 :root {
   /* -- Typeface ---------------------------------------------------------- */
   /* 'Poppins Fallback' (see ./fonts.css) sits directly behind Poppins so the
-     swap is metrically identical. Everything after it is the legacy stack. */
+     swap is metrically identical. Everything after it is the legacy stack
+     (globals.css `.admin-shell`). */
   --admin-font-sans:
     'Poppins', 'Poppins Fallback', Inter, -apple-system, 'Segoe UI', Roboto,
     system-ui, sans-serif;
   --admin-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* -- Type scale --------------------------------------------------------
-     13px is the admin base, not 16px. The whole shell is one step denser than
-     a marketing page; this is the single most load-bearing density decision in
-     the system and every other size hangs off it. */
-  --admin-text-2xs: 10px; /* section labels, all-caps eyebrows */
-  --admin-text-xs: 11px; /* badges, table meta */
-  --admin-text-sm: 12px; /* secondary body, help text */
-  --admin-text-base: 13px; /* shell default */
-  --admin-text-lg: 14px; /* emphasised body, h6 */
-  --admin-text-xl: 16px; /* h5 / h4 */
-  --admin-text-2xl: 20px; /* h3 / h2 */
-  --admin-text-3xl: 24px; /* h1 — a page title, not a hero */
+     13px is the admin base, not 16px: legacy AppShell.tsx and Sidebar.tsx both
+     set `fontSize: 13` on the shell, and ui/button.tsx, ui/input.tsx,
+     ui/select.tsx and ui/table.tsx all hardcode `text-[13px]`.
 
-  --admin-leading-tight: 1.2; /* headings */
+     Expressed in `rem`, like the legacy scale (globals.css uses 0.75rem /
+     0.875rem / 1.125rem …), and the root font size is deliberately NOT
+     overridden — a user who raises their browser's default font size scales the
+     whole app with it (WCAG 1.4.4). The px comments are the rendered size at a
+     16px default. */
+  --admin-text-2xs: 0.625rem; /* 10px — section labels, all-caps eyebrows */
+  --admin-text-xs: 0.6875rem; /* 11px — badge/meta */
+  --admin-text-sm: 0.75rem; /* 12px — help text, <th> (globals .text-small) */
+  --admin-text-base: 0.8125rem; /* 13px — shell default */
+  --admin-text-lg: 0.875rem; /* 14px — labels, alerts, h5/h6 (globals label) */
+  --admin-text-xl: 1rem; /* 16px — h3/h4 (globals h6) */
+  --admin-text-2xl: 1.25rem; /* 20px — h2 (globals h4) */
+  --admin-text-3xl: 1.5rem; /* 24px — h1; legacy admin page titles are text-2xl */
+
+  --admin-leading-tight: 1.2; /* headings — globals.css h1..h6 */
   --admin-leading-snug: 1.35; /* dense table/data rows */
-  --admin-leading-normal: 1.5; /* body copy */
+  --admin-leading-normal: 1.5; /* body copy — globals.css body */
 
   --admin-weight-regular: 400;
-  --admin-weight-medium: 500; /* nav, buttons, labels */
-  --admin-weight-semibold: 600; /* headings */
+  --admin-weight-medium: 500; /* nav, buttons, labels — globals.css */
+  --admin-weight-semibold: 600; /* headings — globals.css h1..h6 */
   --admin-weight-bold: 700;
 
-  --admin-tracking-tight: -0.01em; /* large headings */
+  --admin-tracking-tight: -0.025em; /* headings — globals.css h1..h6 */
   --admin-tracking-normal: 0;
-  --admin-tracking-label: 0.06em; /* uppercase section labels */
+  --admin-tracking-label: 0.06em; /* uppercase section labels — legacy
+                                     RoleBasedNav `tracking-[0.06em]` */
 
   /* -- Space scale -------------------------------------------------------
-     2px base. The legacy admin surfaces are built almost entirely out of
-     2/4/6/8/10/12/14/16, so a 2px unit expresses every real value exactly and
-     nothing in between gets invented. --admin-space-N is always N * 2px. */
+     ⚠ THE NUMBER IN THE NAME IS THE PIXEL COUNT, NOT A STEP INDEX.
+       --admin-space-8 is 8px. Tailwind's `p-8` is 32px. They are two different
+       numbering systems and they are meant to look different at a glance:
+       a token always spells its own value, a utility always counts 4px steps.
+       See ./README.md § "Space" — this is the one place the two can be
+       confused, so the token names refuse to play along.
+
+     The legacy admin surfaces are built almost entirely out of
+     2/4/6/8/10/12/14/16/20/24, which is why the scale is 2px-granular at the
+     bottom (Sidebar.tsx padding: '4px 8px', '8px 10px'; ui/table.tsx py-2.5). */
   --admin-space-0: 0px;
-  --admin-space-px: 1px;
-  --admin-space-1: 2px;
-  --admin-space-2: 4px;
-  --admin-space-3: 6px;
-  --admin-space-4: 8px;
-  --admin-space-5: 10px;
-  --admin-space-6: 12px;
-  --admin-space-7: 14px;
-  --admin-space-8: 16px;
-  --admin-space-10: 20px;
-  --admin-space-12: 24px;
-  --admin-space-16: 32px;
-  --admin-space-20: 40px;
+  --admin-space-1: 1px; /* hairlines */
+  --admin-space-2: 2px;
+  --admin-space-4: 4px;
+  --admin-space-6: 6px;
+  --admin-space-8: 8px;
+  --admin-space-10: 10px;
+  --admin-space-12: 12px;
+  --admin-space-14: 14px;
+  --admin-space-16: 16px;
+  --admin-space-20: 20px;
+  --admin-space-24: 24px;
+  --admin-space-32: 32px;
+  --admin-space-40: 40px;
 
   /* -- Density primitives -----------------------------------------------
      Named composites so a card is a card everywhere. These are the "card, box
      and text sweep" values from the legacy density pass, not free parameters. */
-  --admin-size-card-padding: var(--admin-space-6); /* 12px */
-  --admin-size-panel-padding: var(--admin-space-8); /* 16px */
-  --admin-size-panel-gap: var(--admin-space-4); /* 8px  between panels */
-  --admin-size-shell-gutter: var(--admin-space-6); /* 12px shell inset */
-  --admin-size-row-gap: var(--admin-space-1); /* 2px  nav/list rows */
-  --admin-size-inline-gap: var(--admin-space-4); /* 8px  icon-to-label */
-  --admin-size-section-gap: var(--admin-space-12); /* 24px between sections */
+  --admin-size-card-padding: var(--admin-space-12); /* 12px — Sidebar rows */
+  --admin-size-panel-padding: var(--admin-space-16); /* 16px */
+  --admin-size-panel-gap: var(--admin-space-8); /* 8px — AppShell content gap */
+  --admin-size-shell-gutter: var(--admin-space-12); /* 12px — AppShell padding */
+  --admin-size-row-gap: var(--admin-space-2); /* 2px — nav rows (space-y-0.5) */
+  --admin-size-inline-gap: var(--admin-space-8); /* 8px — icon-to-label (gap-2) */
+  --admin-size-section-gap: var(--admin-space-24); /* 24px between sections */
 
-  --admin-size-control-sm: 24px; /* icon button */
-  --admin-size-control-md: 28px; /* nav row, input, select */
-  --admin-size-control-lg: 32px; /* primary button */
-  --admin-size-icon: 16px;
-  --admin-size-icon-box: 28px;
+  /* Control heights are in `rem` for the same reason the type scale is: a
+     control is a box around text, and it has to grow when the text does.
+     24px/28px/32px at a 16px browser default. */
+  --admin-size-control-sm: 1.5rem; /* 24px — icon button */
+  --admin-size-control-md: 1.75rem; /* 28px — nav row (Sidebar minHeight: 28) */
+  --admin-size-control-lg: 2rem; /* 32px — button/input/select (h-8) */
+  --admin-size-icon: 16px; /* legacy `h-4 w-4`; an SVG box, so px */
+  --admin-size-icon-box: 1.75rem; /* 28px — Sidebar avatar/icon tile */
 
   --admin-size-sidebar: 240px;
   --admin-size-sidebar-collapsed: 52px;
   --admin-size-content-max: 1280px;
 
-  /* -- Radii ------------------------------------------------------------- */
+  /* -- Radii -------------------------------------------------------------
+     4px on controls and 8px on panels are the legacy literals: ui/button.tsx
+     and ui/input.tsx use `rounded-[4px]`, AppShell's <main> uses
+     `borderRadius: 8`. */
   --admin-radius-sm: 2px; /* hairline joins, breadcrumb elbows */
   --admin-radius-md: 4px; /* controls: buttons, inputs, nav rows */
   --admin-radius-lg: 6px; /* badges, chips */
-  --admin-radius-xl: 8px; /* panels, cards, dialogs */
+  --admin-radius-xl: 8px; /* panels, cards, dialogs, alerts */
   --admin-radius-full: 999px;
 
   /* -- Motion ------------------------------------------------------------ */
@@ -151,6 +177,9 @@
   --admin-font-tertiary: #818181;
   --admin-font-light: #999999;
   --admin-font-section-label: #999999;
+  /* Text on a solid accent fill — the selected nav row in the legacy
+     RoleBasedNav is `color: '#fff'` on `--admin-accent-blue`. */
+  --admin-font-on-accent: #ffffff;
 
   --admin-accent-green: #059669;
   --admin-accent-red: #dc2626;
@@ -216,6 +245,7 @@
   --admin-font-tertiary: #818181;
   --admin-font-light: #555555;
   --admin-font-section-label: #666666;
+  --admin-font-on-accent: #ffffff;
 
   --admin-accent-green: #10b981;
   --admin-accent-red: #ef4444;
@@ -247,14 +277,16 @@
   --admin-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
 }
 
-/* There is deliberately no `prefers-color-scheme` block and no "system" value.
+/* There is deliberately no `prefers-color-scheme` block and no `system` palette.
  *
  * A third mode would mean a third copy of the palette (a `@media` rule cannot
  * share a declaration block with a non-`@media` one), and a duplicated palette
  * is precisely the drift this issue exists to stop — see #169, where an earlier
  * port ended up with two copies of the token values that disagreed.
  *
- * "Follow the OS" is therefore a job for whatever sets the attribute, not for
- * the stylesheet: a theme toggle resolves the user's preference to a concrete
- * `light`/`dark` and writes that. The CSS holds exactly two palettes, once each.
+ * "Follow the OS" is therefore a job for whatever sets the attribute, and that
+ * is `src/theme/adminTheme.ts`: it supports the legacy `system` mode by
+ * resolving the media query to a concrete `light`/`dark` and writing that,
+ * re-resolving when the OS preference changes. The CSS holds exactly two
+ * palettes, once each.
  */

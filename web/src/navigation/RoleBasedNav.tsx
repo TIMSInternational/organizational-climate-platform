@@ -6,11 +6,12 @@ import type { NavSection, NavItem as NavItemType } from './navSections'
 function SubItemBreadcrumb({ isLast, isActive }: { isLast: boolean; isActive: boolean }) {
   const lineColor = 'var(--admin-border-default)'
   const activeColor = 'var(--admin-font-tertiary)'
+  const midline = 'calc(var(--admin-size-control-md) / 2)'
   return (
     // The elbow is drawn on the nav row's own geometry: the box is one icon wide
-    // and one control tall, and the corner sits at `--admin-space-7` (14px), the
-    // vertical centre of a 28px row. Tokens keep the elbow meeting the label
-    // mid-line if the control height ever changes.
+    // and one control tall, and the corner sits at half a control height — the
+    // vertical centre of the row — so the elbow keeps meeting the label mid-line
+    // if the control height ever changes.
     <div
       style={{
         position: 'relative',
@@ -23,20 +24,20 @@ function SubItemBreadcrumb({ isLast, isActive }: { isLast: boolean; isActive: bo
       <div
         style={{
           position: 'absolute',
-          left: 'var(--admin-space-2)',
+          left: 'var(--admin-space-4)',
           top: 0,
-          width: 'var(--admin-space-px)',
-          height: 'var(--admin-space-7)',
+          width: 'var(--admin-space-1)',
+          height: midline,
           background: isActive ? activeColor : lineColor,
         }}
       />
       <div
         style={{
           position: 'absolute',
-          left: 'var(--admin-space-2)',
-          top: 'var(--admin-space-7)',
-          width: 'var(--admin-space-4)',
-          height: 'var(--admin-space-px)',
+          left: 'var(--admin-space-4)',
+          top: midline,
+          width: 'var(--admin-space-8)',
+          height: 'var(--admin-space-1)',
           background: isActive ? activeColor : lineColor,
           borderBottomLeftRadius: 'var(--admin-radius-sm)',
         }}
@@ -45,10 +46,10 @@ function SubItemBreadcrumb({ isLast, isActive }: { isLast: boolean; isActive: bo
         <div
           style={{
             position: 'absolute',
-            left: 'var(--admin-space-2)',
-            top: 'var(--admin-space-7)',
-            width: 'var(--admin-space-px)',
-            height: 'var(--admin-space-7)',
+            left: 'var(--admin-space-4)',
+            top: midline,
+            width: 'var(--admin-space-1)',
+            height: midline,
             background: lineColor,
           }}
         />
@@ -94,20 +95,31 @@ export default function RoleBasedNav({ sections }: { sections: NavSection[] }) {
           <Link
             to={item.href}
             onClick={hasSub ? (e) => { e.preventDefault(); toggleExpand(item.label) } : undefined}
+            // Ported from the legacy navigation/RoleBasedNav.tsx row:
+            // `minHeight: 28, padding: '4px 8px', fontSize: 13, gap-2,
+            // rounded-[4px]`, and the same three-way selected state — a selected
+            // leaf is white on the blue accent, a selected parent stays on the
+            // panel and goes bold, everything else is secondary text.
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 'var(--admin-size-inline-gap)',
               flex: 1,
               minWidth: 0,
-              height: 'var(--admin-size-control-md)',
-              padding: `0 var(--admin-space-3)`,
+              minHeight: 'var(--admin-size-control-md)',
+              padding: `var(--admin-space-4) var(--admin-space-8)`,
               borderRadius: 'var(--admin-radius-md)',
               fontSize: 'var(--admin-text-base)',
-              fontWeight: 'var(--admin-weight-medium)',
+              fontWeight:
+                isActive && hasSub ? 'var(--admin-weight-bold)' : 'var(--admin-weight-medium)',
               textDecoration: 'none',
-              background: isActive ? 'var(--admin-bg-active)' : 'transparent',
-              color: isActive ? 'var(--admin-font-primary)' : 'var(--admin-font-secondary)',
+              background: isActive && !hasSub ? 'var(--admin-accent-blue)' : 'transparent',
+              color:
+                isActive && !hasSub
+                  ? 'var(--admin-font-on-accent)'
+                  : isActive
+                    ? 'var(--admin-font-primary)'
+                    : 'var(--admin-font-secondary)',
             }}
           >
             <item.icon className="nav-icon" />
@@ -139,7 +151,7 @@ export default function RoleBasedNav({ sections }: { sections: NavSection[] }) {
                   style={{
                     flex: 1,
                     minWidth: 0,
-                    padding: `0 var(--admin-space-3)`,
+                    padding: `var(--admin-space-4) var(--admin-space-8)`,
                     borderRadius: 'var(--admin-radius-md)',
                     fontSize: 'var(--admin-text-sm)',
                     textDecoration: 'none',

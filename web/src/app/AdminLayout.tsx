@@ -33,8 +33,24 @@ export default function AdminLayout() {
         <RoleBasedNav sections={sections} />
         <button onClick={handleLogout}>Log out</button>
       </aside>
-      <main style={{ flex: 1, minWidth: 0, padding: 'var(--admin-size-section-gap)' }}>
-        <Outlet />
+      {/* The legacy AppShell inset its content by 12px and put it on a panel:
+          `background: var(--admin-bg-panel)`, `1px solid var(--admin-border-panel)`,
+          `borderRadius: 8`. `--admin-size-content-max` caps the column so a
+          full-width control (a search box, a table) stops growing with the
+          viewport on an ultrawide monitor. */}
+      <main style={{ flex: 1, minWidth: 0, padding: 'var(--admin-size-shell-gutter)' }}>
+        <div
+          style={{
+            maxWidth: 'var(--admin-size-content-max)',
+            margin: '0 auto',
+            padding: 'var(--admin-size-panel-padding)',
+            background: 'var(--admin-bg-panel)',
+            border: '1px solid var(--admin-border-panel)',
+            borderRadius: 'var(--admin-radius-xl)',
+          }}
+        >
+          <Outlet />
+        </div>
       </main>
     </div>
   )
