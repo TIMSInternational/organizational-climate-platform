@@ -4,8 +4,10 @@ import { acceptInvitation } from '../api/acceptInvitation'
 import { setToken } from '../../../auth/token'
 import { decodeJwtPayload } from '../../../auth/jwt'
 import { resolvePostAcceptRoute } from './postAcceptRoute'
+import { useTranslation } from '../../../i18n'
 
 export default function AcceptInvitationPage() {
+  const { t } = useTranslation()
   const { token } = useParams<{ token: string }>()
   const navigate = useNavigate()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
@@ -38,7 +40,7 @@ export default function AcceptInvitationPage() {
         setAccountCreated(true)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to accept invitation')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setSubmitting(false)
     }
@@ -47,30 +49,30 @@ export default function AcceptInvitationPage() {
   if (accountCreated) {
     return (
       <div>
-        <h1>Account created</h1>
-        <p>Your account has been created successfully. Your administrator will be in touch with next steps.</p>
+        <h1>{t('auth.accountCreated')}</h1>
+        <p>{t('auth.accountCreatedDetail')}</p>
       </div>
     )
   }
 
   return (
     <div>
-      <h1>Accept invitation</h1>
+      <h1>{t('auth.acceptInvitation')}</h1>
       <form onSubmit={handleSubmit}>
         {error && <p role="alert">{error}</p>}
         <label>
-          Email (only needed for a shareable link)
+          {t('auth.emailForShareableLink')}
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
         <label>
-          Name
+          {t('users.name')}
           <input value={name} onChange={(e) => setName(e.target.value)} required />
         </label>
         <label>
-          Password
+          {t('auth.password')}
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
         </label>
-        <button type="submit" disabled={submitting}>{submitting ? 'Creating account…' : 'Create account'}</button>
+        <button type="submit" disabled={submitting}>{submitting ? t('auth.creatingAccount') : t('auth.createAccount')}</button>
       </form>
     </div>
   )

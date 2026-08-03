@@ -6,6 +6,7 @@ import ActionPlanFilters, { type ActionPlanFiltersValue } from '../components/Ac
 import ActionPlanForm, { type ActionPlanFormValues } from '../components/ActionPlanForm'
 import { getToken } from '../../../auth/token'
 import { decodeJwtPayload } from '../../../auth/jwt'
+import { useTranslation } from '../../../i18n'
 
 // This slice has no company-picker UI yet (org-structure's admin shell doesn't
 // expose a "current company" concept for a SuperAdmin browsing across
@@ -23,6 +24,7 @@ import { decodeJwtPayload } from '../../../auth/jwt'
 // including any plan they went on to create. Block it explicitly instead until
 // #57 (cross-cutting company-context selector) lands.
 export default function ActionPlansListPage() {
+  const { t } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const token = getToken()
   const claims = token ? decodeJwtPayload(token) : null
@@ -48,7 +50,7 @@ export default function ActionPlansListPage() {
       setPlans(plansResult)
       setTemplates(templatesResult)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load action plans')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setLoading(false)
     }
@@ -82,13 +84,13 @@ export default function ActionPlansListPage() {
   if (isSuperAdmin) {
     return (
       <p role="alert">
-        SuperAdmin company-scoped browsing for Action Plans is not available yet -- see issue #57.
+        {t('common.superAdminScopedBrowsingUnavailable', { feature: t('navigation.actionPlans') })}
       </p>
     )
   }
 
   if (!companyId) {
-    return <p role="alert">No company is associated with your account.</p>
+    return <p role="alert">{t('common.noCompanyAssociated')}</p>
   }
 
   if (error) {
@@ -97,11 +99,11 @@ export default function ActionPlansListPage() {
 
   return (
     <div>
-      <h1>Action Plans</h1>
+      <h1>{t('navigation.actionPlans')}</h1>
       <ActionPlanFilters value={filters} onChange={setFilters} />
-      <button onClick={() => setShowCreateForm((v) => !v)}>{showCreateForm ? 'Cancel' : 'New action plan'}</button>
+      <button onClick={() => setShowCreateForm((v) => !v)}>{showCreateForm ? t('common.cancel') : t('common.newActionPlan')}</button>
       {showCreateForm && <ActionPlanForm templates={templates} onSubmit={handleCreate} />}
-      {loading ? <p>Loading…</p> : <ActionPlanList plans={filtered} />}
+      {loading ? <p>{t('common.loading')}</p> : <ActionPlanList plans={filtered} />}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
 import { getMicroclimatePublic, submitResponse, type PublicMicroclimateDetail, type Question } from '../api/microclimates'
+import { useTranslation } from '../../../i18n'
 
 function QuestionInput({
   question,
@@ -11,6 +12,8 @@ function QuestionInput({
   value: string
   onChange: (value: string) => void
 }) {
+  const { t } = useTranslation()
+
   switch (question.type) {
     case 'multiple_choice':
       // The backend now rejects multiple_choice questions with fewer than 2 options at
@@ -18,7 +21,7 @@ function QuestionInput({
       // validation existed -- an empty radiogroup with no message is indistinguishable from
       // a loading/broken UI to the respondent.
       if (!question.options || question.options.length === 0) {
-        return <p role="alert">This question has no configured options and cannot be answered.</p>
+        return <p role="alert">{t('microclimates.questionHasNoOptions')}</p>
       }
       return (
         <div role="radiogroup" aria-label={question.text}>
@@ -70,7 +73,7 @@ function QuestionInput({
                 required={question.required}
                 onChange={(e) => onChange(e.target.value)}
               />
-              {option === 'yes' ? 'Yes' : 'No'}
+              {option === 'yes' ? t('common.yes') : t('common.no')}
             </label>
           ))}
         </div>
@@ -88,12 +91,28 @@ function QuestionInput({
   }
 }
 
+/**
+ * A failure carried as data rather than as a finished string.
+ *
+ * The message from a real API error is already human-readable and locale-agnostic
+ * here; only the fallback needs translating, and doing that at render keeps `t`
+ * out of the fetch effect's dependency array.
+ */
+interface PageError {
+  message: string | null
+}
+
+function toPageError(err: unknown): PageError {
+  return { message: err instanceof Error ? err.message : null }
+}
+
 export default function MicroclimateRespondPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [microclimate, setMicroclimate] = useState<PublicMicroclimateDetail | null>(null)
   const [answers, setAnswers] = useState<Record<string, string>>({})
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<PageError | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -101,7 +120,7 @@ export default function MicroclimateRespondPage() {
     if (!id) return
     getMicroclimatePublic(baseUrl, id)
       .then(setMicroclimate)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load'))
+      .catch((err) => setError(toPageError(err)))
   }, [id, baseUrl])
 
   async function handleSubmit(event: FormEvent) {
@@ -113,26 +132,26 @@ export default function MicroclimateRespondPage() {
       await submitResponse(baseUrl, id, answers)
       setSubmitted(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit response')
+      setError(toPageError(err))
     } finally {
       setSubmitting(false)
     }
   }
 
   if (error) {
-    return <p role="alert">{error}</p>
+    return <p role="alert">{error.message ?? t('errors.generic')}</p>
   }
 
   if (submitted) {
-    return <p>Thank you for your response.</p>
+    return <p>{t('microclimates.thankYouForResponse')}</p>
   }
 
   if (!microclimate) {
-    return <p>Loading…</p>
+    return <p>{t('common.loading')}</p>
   }
 
   if (microclimate.status !== 'active') {
-    return <p>This microclimate is not currently accepting responses.</p>
+    return <p>{t('microclimates.notAcceptingResponses')}</p>
   }
 
   return (
@@ -149,7 +168,7 @@ export default function MicroclimateRespondPage() {
             />
           </fieldset>
         ))}
-        <button type="submit" disabled={submitting}>{submitting ? 'Submitting…' : 'Submit'}</button>
+        <button type="submit" disabled={submitting}>{submitting ? t('common.submitting') : t('common.submit')}</button>
       </form>
     </div>
   )

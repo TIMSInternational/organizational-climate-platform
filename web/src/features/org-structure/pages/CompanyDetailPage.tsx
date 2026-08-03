@@ -7,8 +7,10 @@ import CompanyForm, { type CompanyFormValues } from '../components/CompanyForm'
 import CompanySettingsForm, { type CompanySettingsFormValues } from '../components/CompanySettingsForm'
 import DepartmentList from '../components/DepartmentList'
 import DepartmentForm, { type DepartmentFormValues } from '../components/DepartmentForm'
+import { useTranslation } from '../../../i18n'
 
 export default function CompanyDetailPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [company, setCompany] = useState<CompanyDetail | null>(null)
@@ -37,7 +39,7 @@ export default function CompanyDetailPage() {
       setCompanyProfileError(null)
     } catch (err) {
       setCompany(null)
-      setCompanyProfileError(err instanceof Error ? err.message : 'Failed to load company profile')
+      setCompanyProfileError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setCompanyProfileLoaded(true)
     }
@@ -47,7 +49,7 @@ export default function CompanyDetailPage() {
       setDepartments(departmentsResult)
       setDepartmentsError(null)
     } catch (err) {
-      setDepartmentsError(err instanceof Error ? err.message : 'Failed to load departments')
+      setDepartmentsError(err instanceof Error ? err.message : t('errors.generic'))
     }
   }
 
@@ -96,26 +98,26 @@ export default function CompanyDetailPage() {
       const result = await updateCompanySettings(baseUrl, id, {})
       setCompanySettings(result)
     } catch (err) {
-      setSettingsError(err instanceof Error ? err.message : 'Failed to load company settings')
+      setSettingsError(err instanceof Error ? err.message : t('errors.generic'))
     }
   }
 
   if (!companyProfileLoaded) {
-    return <p>Loading…</p>
+    return <p>{t('common.loading')}</p>
   }
 
   return (
     <div>
-      <h1>{company?.name ?? 'Company'}</h1>
-      <p><Link to={`/admin/companies/${id}/users`}>Manage users</Link></p>
-      <p><Link to={`/admin/companies/${id}/demographic-fields`}>Manage demographic fields</Link></p>
+      <h1>{company?.name ?? t('dashboard.company')}</h1>
+      <p><Link to={`/admin/companies/${id}/users`}>{t('dashboard.manageUsers')}</Link></p>
+      <p><Link to={`/admin/companies/${id}/demographic-fields`}>{t('dashboard.manageDemographicFields')}</Link></p>
 
       {company ? (
         <>
-          <p>{company.userCount} active users</p>
+          <p>{t('dashboard.activeUsersCount', { count: company.userCount })}</p>
           {editingCompany ? (
             <CompanyForm
-              submitLabel="Save"
+              submitLabel={t('common.save')}
               initialValues={{
                 name: company.name,
                 emailDomain: company.emailDomain ?? '',
@@ -127,7 +129,7 @@ export default function CompanyDetailPage() {
               onSubmit={handleUpdateCompany}
             />
           ) : (
-            <button onClick={() => setEditingCompany(true)}>Edit company</button>
+            <button onClick={() => setEditingCompany(true)}>{t('dashboard.editCompany')}</button>
           )}
         </>
       ) : (
@@ -135,28 +137,28 @@ export default function CompanyDetailPage() {
         // not an error state for a CompanyAdmin viewing their own company, just an
         // unavailable section. Settings/Departments/Demographic fields below are
         // unaffected since they use a broader permission check.
-        companyProfileError && <p>Company profile details are only visible to a platform administrator.</p>
+        companyProfileError && <p>{t('dashboard.companyProfileAdminOnly')}</p>
       )}
 
-      <h2>Settings</h2>
+      <h2>{t('navigation.settings')}</h2>
       {settingsError && <p role="alert">{settingsError}</p>}
       {companySettings ? (
         <CompanySettingsForm settings={companySettings.settings} branding={companySettings.branding} onSubmit={handleUpdateSettings} />
       ) : (
-        <button onClick={handleLoadSettings}>Load settings</button>
+        <button onClick={handleLoadSettings}>{t('dashboard.loadSettings')}</button>
       )}
 
-      <h2>Departments</h2>
+      <h2>{t('navigation.departments')}</h2>
       {departmentsError && <p role="alert">{departmentsError}</p>}
-      <button onClick={() => setCreatingDepartment((v) => !v)}>{creatingDepartment ? 'Cancel' : 'New department'}</button>
-      {creatingDepartment && <DepartmentForm departments={departments} submitLabel="Create department" onSubmit={handleCreateDepartment} />}
+      <button onClick={() => setCreatingDepartment((v) => !v)}>{creatingDepartment ? t('common.cancel') : t('departments.newDepartment')}</button>
+      {creatingDepartment && <DepartmentForm departments={departments} submitLabel={t('departments.createDepartment')} onSubmit={handleCreateDepartment} />}
 
       {editingDepartment && (
         <DepartmentForm
           key={editingDepartment.id}
           departments={departments}
           excludeIdFromParentOptions={editingDepartment.id}
-          submitLabel="Save department"
+          submitLabel={t('departments.saveChanges')}
           initialValues={{
             name: editingDepartment.name,
             description: editingDepartment.description ?? '',

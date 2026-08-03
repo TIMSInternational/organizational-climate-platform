@@ -3,8 +3,10 @@ import { listCompanies, createCompany, type Company } from '../api/companies'
 import CompanyList from '../components/CompanyList'
 import CompanyFilters, { type CompanyFiltersValue } from '../components/CompanyFilters'
 import CompanyForm, { type CompanyFormValues } from '../components/CompanyForm'
+import { useTranslation } from '../../../i18n'
 
 export default function CompaniesListPage() {
+  const { t } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(true)
@@ -19,7 +21,7 @@ export default function CompaniesListPage() {
       const result = await listCompanies(baseUrl)
       setCompanies(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load companies')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setLoading(false)
     }
@@ -54,12 +56,16 @@ export default function CompaniesListPage() {
 
   return (
     <div>
-      <h1>Companies</h1>
+      <h1>{t('navigation.companies')}</h1>
       <CompanyFilters value={filters} onChange={setFilters} />
-      <button onClick={() => setShowCreateForm((v) => !v)}>{showCreateForm ? 'Cancel' : 'New company'}</button>
-      {showCreateForm && <CompanyForm submitLabel="Create company" onSubmit={handleCreate} />}
+      <button onClick={() => setShowCreateForm((v) => !v)}>
+        {showCreateForm ? t('common.cancel') : t('common.newCompany')}
+      </button>
+      {showCreateForm && (
+        <CompanyForm submitLabel={t('common.createCompany')} onSubmit={handleCreate} />
+      )}
       {error && <p role="alert">{error}</p>}
-      {!error && (loading ? <p>Loading…</p> : <CompanyList companies={filtered} />)}
+      {!error && (loading ? <p>{t('common.loading')}</p> : <CompanyList companies={filtered} />)}
     </div>
   )
 }

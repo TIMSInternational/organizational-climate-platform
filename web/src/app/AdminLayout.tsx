@@ -4,9 +4,11 @@ import { buildNavSections } from '../navigation/navSections'
 import { clearToken, getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation, LanguageSwitcher } from '../i18n'
 
 export default function AdminLayout() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
 
   function handleLogout() {
     clearToken()
@@ -31,7 +33,17 @@ export default function AdminLayout() {
         }}
       >
         <RoleBasedNav sections={sections} />
-        <button onClick={handleLogout}>Log out</button>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--admin-size-row-gap)',
+            marginTop: 'var(--admin-size-panel-gap)',
+          }}
+        >
+          <LanguageSwitcher />
+          <button onClick={handleLogout}>{t('shell.signOut')}</button>
+        </div>
       </aside>
       {/* The legacy AppShell inset its content by 12px and put it on a panel:
           `background: var(--admin-bg-panel)`, `1px solid var(--admin-border-panel)`,

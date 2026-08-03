@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { getMicroclimate, updateMicroclimate, type MicroclimateDetail } from '../api/microclimates'
 import LiveResultsPanel from '../components/LiveResultsPanel'
+import { useTranslation } from '../../../i18n'
 
 const STATUSES = ['draft', 'active', 'closed']
 
 export default function MicroclimateDetailPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [microclimate, setMicroclimate] = useState<MicroclimateDetail | null>(null)
@@ -18,7 +20,7 @@ export default function MicroclimateDetailPage() {
       const result = await getMicroclimate(baseUrl, id)
       setMicroclimate(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load microclimate')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     }
   }
 
@@ -33,7 +35,7 @@ export default function MicroclimateDetailPage() {
       await updateMicroclimate(baseUrl, id, { status })
       await reload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update status')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     }
   }
 
@@ -42,14 +44,14 @@ export default function MicroclimateDetailPage() {
   }
 
   if (!microclimate) {
-    return <p>Loading…</p>
+    return <p>{t('common.loading')}</p>
   }
 
   return (
     <div>
       <h1>{microclimate.title}</h1>
       <label>
-        Status
+        {t('common.status')}
         <select value={microclimate.status} onChange={(e) => handleStatusChange(e.target.value)}>
           {STATUSES.map((status) => (
             <option key={status} value={status}>{status}</option>
@@ -57,7 +59,7 @@ export default function MicroclimateDetailPage() {
         </select>
       </label>
 
-      <h2>Live results</h2>
+      <h2>{t('microclimates.liveResults')}</h2>
       <LiveResultsPanel baseUrl={baseUrl} microclimateId={microclimate.id} isActive={microclimate.status === 'active'} />
     </div>
   )

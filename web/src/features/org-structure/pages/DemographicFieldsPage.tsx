@@ -3,8 +3,10 @@ import { useParams } from 'react-router-dom'
 import { listDemographicFields, createDemographicField, updateDemographicField, type DemographicField } from '../api/demographicFields'
 import DemographicFieldList from '../components/DemographicFieldList'
 import DemographicFieldForm, { type DemographicFieldFormValues } from '../components/DemographicFieldForm'
+import { useTranslation } from '../../../i18n'
 
 export default function DemographicFieldsPage() {
+  const { t } = useTranslation()
   const { companyId } = useParams<{ companyId: string }>()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [fields, setFields] = useState<DemographicField[]>([])
@@ -19,7 +21,7 @@ export default function DemographicFieldsPage() {
       const result = await listDemographicFields(baseUrl, companyId)
       setFields(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load demographic fields')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     }
   }
 
@@ -66,11 +68,20 @@ export default function DemographicFieldsPage() {
 
   return (
     <div>
-      <h1>Demographic fields</h1>
-      <button onClick={() => setCreating((v) => !v)}>{creating ? 'Cancel' : 'New field'}</button>
-      {creating && <DemographicFieldForm submitLabel="Create field" onSubmit={handleCreate} />}
+      <h1>{t('dashboard.demographicFields')}</h1>
+      <button onClick={() => setCreating((v) => !v)}>
+        {creating ? t('common.cancel') : t('common.newField')}
+      </button>
+      {creating && (
+        <DemographicFieldForm submitLabel={t('common.createField')} onSubmit={handleCreate} />
+      )}
       {editingField && (
-        <DemographicFieldForm key={editingField.id} initialValues={editingField} submitLabel="Save field" onSubmit={handleUpdate} />
+        <DemographicFieldForm
+          key={editingField.id}
+          initialValues={editingField}
+          submitLabel={t('common.saveField')}
+          onSubmit={handleUpdate}
+        />
       )}
       <DemographicFieldList fields={fields} onEdit={setEditingField} />
     </div>

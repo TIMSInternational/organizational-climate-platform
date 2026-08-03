@@ -9,8 +9,10 @@ import InvitationList from '../components/InvitationList'
 import InvitationForm, { type InvitationFormValues } from '../components/InvitationForm'
 import ShareableLinkPanel from '../components/ShareableLinkPanel'
 import BulkImportPanel from '../components/BulkImportPanel'
+import { useTranslation } from '../../../i18n'
 
 export default function UsersListPage() {
+  const { t } = useTranslation()
   const { companyId } = useParams<{ companyId: string }>()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [users, setUsers] = useState<User[]>([])
@@ -32,7 +34,7 @@ export default function UsersListPage() {
       setUsers(usersResult)
       setInvitations(invitationsResult)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load users')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setLoading(false)
     }
@@ -98,17 +100,17 @@ export default function UsersListPage() {
 
   return (
     <div>
-      <h1>Users</h1>
+      <h1>{t('navigation.users')}</h1>
       <UserFilters value={filters} onChange={setFilters} />
       {editingUser && (
         <UserForm key={editingUser.id} user={editingUser} canChangeRole onSubmit={handleUpdate} />
       )}
-      {loading ? <p>Loading…</p> : <UserList users={filtered} onEdit={setEditingUser} />}
-      <h2>Invitations</h2>
+      {loading ? <p>{t('common.loading')}</p> : <UserList users={filtered} onEdit={setEditingUser} />}
+      <h2>{t('users.invitations')}</h2>
       <InvitationForm allowCompanyAdminSetup onSubmit={handleCreateInvitation} />
       <ShareableLinkPanel onCreate={handleCreateShareableLink} />
       <InvitationList invitations={invitations} onResend={handleResend} />
-      <h2>Bulk import</h2>
+      <h2>{t('users.bulkImport')}</h2>
       {companyId && <BulkImportPanel baseUrl={baseUrl} companyId={companyId} onImported={reload} />}
     </div>
   )
