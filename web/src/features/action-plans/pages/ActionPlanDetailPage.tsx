@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { getActionPlan, updateActionPlan, recordProgress, type ActionPlanDetail } from '../api/actionPlans'
 import ProgressUpdateForm, { type ProgressUpdateFormValues } from '../components/ProgressUpdateForm'
 import { useTranslation } from '../../../i18n'

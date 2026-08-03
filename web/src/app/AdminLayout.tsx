@@ -1,9 +1,9 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet } from 'react-router'
 import RoleBasedNav from '../navigation/RoleBasedNav'
 import { buildNavSections } from '../navigation/navSections'
 import { clearToken, getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { useTranslation, LanguageSwitcher } from '../i18n'
 
 export default function AdminLayout() {

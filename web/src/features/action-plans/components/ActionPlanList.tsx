@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import type { ActionPlan } from '../api/actionPlans'
 
 // dueDate is a calendar date, not a moment -- the API sends it as a UTC-midnight

@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router'
 import LoginPage from '../auth/LoginPage'
 import AcceptInvitationPage from '../features/org-structure/pages/AcceptInvitationPage'
 import RequireAuth from './RequireAuth'

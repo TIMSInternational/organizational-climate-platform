@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router'
 import { getCompany, updateCompany, type CompanyDetail } from '../api/companies'
 import { listDepartments, createDepartment, updateDepartment, type Department } from '../api/departments'
 import { updateCompanySettings, type CompanySettingsResponse } from '../api/companySettings'

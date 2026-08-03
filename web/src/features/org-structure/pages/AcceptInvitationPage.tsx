@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import { acceptInvitation } from '../api/acceptInvitation'
 import { setToken } from '../../../auth/token'
 import { decodeJwtPayload } from '../../../auth/jwt'

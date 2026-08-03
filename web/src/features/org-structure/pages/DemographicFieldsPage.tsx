@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { listDemographicFields, createDemographicField, updateDemographicField, type DemographicField } from '../api/demographicFields'
 import DemographicFieldList from '../components/DemographicFieldList'
 import DemographicFieldForm, { type DemographicFieldFormValues } from '../components/DemographicFieldForm'

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import type { Company } from '../api/companies'
 
 export default function CompanyList({ companies }: { companies: Company[] }) {
