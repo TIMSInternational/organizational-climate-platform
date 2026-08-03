@@ -190,3 +190,7 @@ export {
 } from './notification-dropdown'
 export { SkipLink } from './skip-link'
 export { LiveRegion, type LiveRegionProps } from './live-region'
+
+// Date selection (#77 follow-up: originally skipped, ported with locale wiring).
+export { Calendar, type CalendarProps } from './calendar'
+export { DatePicker, type DatePickerProps } from './date-picker'
