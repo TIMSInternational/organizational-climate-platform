@@ -1,0 +1,49 @@
+/* ---------------------------------------------------------------------------
+ * Poppins — self-hosted, latin subset, weights used by the admin language.
+ *
+ * Self-hosted (via @fontsource) rather than the Google Fonts CDN so the font
+ * is a first-party, fingerprinted, immutably-cached asset: no third-party
+ * connection on first paint and no render-blocking cross-origin stylesheet.
+ *
+ * The legacy app loaded Poppins 400/500/600/700, latin, display: swap through
+ * next/font. Those are the same four weights and the same subset.
+ * ------------------------------------------------------------------------- */
+
+@import '@fontsource/poppins/latin-400.css';
+@import '@fontsource/poppins/latin-500.css';
+@import '@fontsource/poppins/latin-600.css';
+@import '@fontsource/poppins/latin-700.css';
+
+/* ---------------------------------------------------------------------------
+ * "Poppins Fallback" — the no-layout-shift half of the story.
+ *
+ * @fontsource ships `font-display: swap`, so text paints immediately in a
+ * fallback face and is repainted in Poppins once it arrives. Left alone, that
+ * swap reflows the page, because Poppins is both taller and wider per em than
+ * any system sans.
+ *
+ * This face renders with the *local* Arial/Helvetica outlines but reports
+ * Poppins' own metrics, so the pre-swap and post-swap text occupy the same box
+ * and the swap costs no CLS. Values are Poppins' real font metrics normalised
+ * against size-adjust (these are the metrics next/font computed for the legacy
+ * app, kept identical so the two apps shift the same amount, i.e. not at all):
+ *
+ *   size-adjust      112.16%   Poppins/Arial average advance-width ratio
+ *   ascent-override    93.62%   = (1050 / 1000) / 1.1216
+ *   descent-override   31.21%   = ( 350 / 1000) / 1.1216
+ *   line-gap-override   8.92%   = ( 100 / 1000) / 1.1216
+ *
+ * One face covers all weights: the fallback is only ever on screen for the few
+ * ms before the real file lands, and synthesised bold tracks close enough that
+ * per-weight faces would buy nothing.
+ * ------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'Poppins Fallback';
+  font-style: normal;
+  src: local('Arial'), local('Helvetica'), local('Liberation Sans');
+  ascent-override: 93.62%;
+  descent-override: 31.21%;
+  line-gap-override: 8.92%;
+  size-adjust: 112.16%;
+}

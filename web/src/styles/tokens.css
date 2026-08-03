@@ -1,0 +1,292 @@
+/* ===========================================================================
+ * Design tokens — the `--admin-*` layer
+ * ===========================================================================
+ *
+ * Ported from the legacy Next.js app, where the same token set lived in
+ * `src/styles/tokens/colors.ts` and was written onto `document.documentElement`
+ * at runtime by `AdminThemeContext`. Here it is plain CSS instead: the values
+ * are in the stylesheet, so they are correct on the very first paint and there
+ * is no flash of unstyled/mis-themed content and no JS on the critical path.
+ *
+ * Colour values are Twenty-CRM's admin palette (dark from theme-dark.css,
+ * light from theme-light.css) and are byte-for-byte the legacy values.
+ *
+ * Every non-colour value below cites the legacy declaration it came from.
+ * `../README.md` § "Provenance" is the same table in one place, and
+ * `./tokens.test.ts` asserts these values so a later edit that drifts from the
+ * legacy surface fails the build rather than the eye.
+ *
+ * THEMING
+ *   Light is the default, matching the legacy default mode.
+ *     <html>                           -> light
+ *     <html data-admin-theme="light">  -> light
+ *     <html data-admin-theme="dark">   -> dark
+ *   `src/theme/adminTheme.ts` sets the attribute (localStorage key
+ *   `admin-theme`, values light|dark|system — the same contract as the legacy
+ *   AdminThemeContext), and `src/main.tsx` calls it before the first render.
+ *
+ * NAMING
+ *   --admin-<group>-<role>[-<variant>]
+ *   groups: bg | border | font | accent | accent-bg | accent-border
+ *           space | radius | text | leading | weight | tracking
+ *           size | shadow | duration | ease | z
+ *
+ * See ./README.md before adding anything here.
+ * ========================================================================= */
+
+:root {
+  /* -- Typeface ---------------------------------------------------------- */
+  /* 'Poppins Fallback' (see ./fonts.css) sits directly behind Poppins so the
+     swap is metrically identical. Everything after it is the legacy stack
+     (globals.css `.admin-shell`). */
+  --admin-font-sans:
+    'Poppins', 'Poppins Fallback', Inter, -apple-system, 'Segoe UI', Roboto,
+    system-ui, sans-serif;
+  --admin-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* -- Type scale --------------------------------------------------------
+     13px is the admin base, not 16px: legacy AppShell.tsx and Sidebar.tsx both
+     set `fontSize: 13` on the shell, and ui/button.tsx, ui/input.tsx,
+     ui/select.tsx and ui/table.tsx all hardcode `text-[13px]`.
+
+     Expressed in `rem`, like the legacy scale (globals.css uses 0.75rem /
+     0.875rem / 1.125rem …), and the root font size is deliberately NOT
+     overridden — a user who raises their browser's default font size scales the
+     whole app with it (WCAG 1.4.4). The px comments are the rendered size at a
+     16px default. */
+  --admin-text-2xs: 0.625rem; /* 10px — section labels, all-caps eyebrows */
+  --admin-text-xs: 0.6875rem; /* 11px — badge/meta */
+  --admin-text-sm: 0.75rem; /* 12px — help text, <th> (globals .text-small) */
+  --admin-text-base: 0.8125rem; /* 13px — shell default */
+  --admin-text-lg: 0.875rem; /* 14px — labels, alerts, h5/h6 (globals label) */
+  --admin-text-xl: 1rem; /* 16px — h3/h4 (globals h6) */
+  --admin-text-2xl: 1.25rem; /* 20px — h2 (globals h4) */
+  --admin-text-3xl: 1.5rem; /* 24px — h1; legacy admin page titles are text-2xl */
+
+  --admin-leading-tight: 1.2; /* headings — globals.css h1..h6 */
+  --admin-leading-snug: 1.35; /* dense table/data rows */
+  --admin-leading-normal: 1.5; /* body copy — globals.css body */
+
+  --admin-weight-regular: 400;
+  --admin-weight-medium: 500; /* nav, buttons, labels — globals.css */
+  --admin-weight-semibold: 600; /* headings — globals.css h1..h6 */
+  --admin-weight-bold: 700;
+
+  --admin-tracking-tight: -0.025em; /* headings — globals.css h1..h6 */
+  --admin-tracking-normal: 0;
+  --admin-tracking-label: 0.06em; /* uppercase section labels — legacy
+                                     RoleBasedNav `tracking-[0.06em]` */
+
+  /* -- Space scale -------------------------------------------------------
+     ⚠ THE NUMBER IN THE NAME IS THE PIXEL COUNT, NOT A STEP INDEX.
+       --admin-space-8 is 8px. Tailwind's `p-8` is 32px. They are two different
+       numbering systems and they are meant to look different at a glance:
+       a token always spells its own value, a utility always counts 4px steps.
+       See ./README.md § "Space" — this is the one place the two can be
+       confused, so the token names refuse to play along.
+
+     The legacy admin surfaces are built almost entirely out of
+     2/4/6/8/10/12/14/16/20/24, which is why the scale is 2px-granular at the
+     bottom (Sidebar.tsx padding: '4px 8px', '8px 10px'; ui/table.tsx py-2.5). */
+  --admin-space-0: 0px;
+  --admin-space-1: 1px; /* hairlines */
+  --admin-space-2: 2px;
+  --admin-space-4: 4px;
+  --admin-space-6: 6px;
+  --admin-space-8: 8px;
+  --admin-space-10: 10px;
+  --admin-space-12: 12px;
+  --admin-space-14: 14px;
+  --admin-space-16: 16px;
+  --admin-space-20: 20px;
+  --admin-space-24: 24px;
+  --admin-space-32: 32px;
+  --admin-space-40: 40px;
+
+  /* -- Density primitives -----------------------------------------------
+     Named composites so a card is a card everywhere. These are the "card, box
+     and text sweep" values from the legacy density pass, not free parameters. */
+  --admin-size-card-padding: var(--admin-space-12); /* 12px — Sidebar rows */
+  --admin-size-panel-padding: var(--admin-space-16); /* 16px */
+  --admin-size-panel-gap: var(--admin-space-8); /* 8px — AppShell content gap */
+  --admin-size-shell-gutter: var(--admin-space-12); /* 12px — AppShell padding */
+  --admin-size-row-gap: var(--admin-space-2); /* 2px — nav rows (space-y-0.5) */
+  --admin-size-inline-gap: var(--admin-space-8); /* 8px — icon-to-label (gap-2) */
+  --admin-size-section-gap: var(--admin-space-24); /* 24px between sections */
+
+  /* Control heights are in `rem` for the same reason the type scale is: a
+     control is a box around text, and it has to grow when the text does.
+     24px/28px/32px at a 16px browser default. */
+  --admin-size-control-sm: 1.5rem; /* 24px — icon button */
+  --admin-size-control-md: 1.75rem; /* 28px — nav row (Sidebar minHeight: 28) */
+  --admin-size-control-lg: 2rem; /* 32px — button/input/select (h-8) */
+  --admin-size-icon: 16px; /* legacy `h-4 w-4`; an SVG box, so px */
+  --admin-size-icon-box: 1.75rem; /* 28px — Sidebar avatar/icon tile */
+
+  --admin-size-sidebar: 240px;
+  --admin-size-sidebar-collapsed: 52px;
+  --admin-size-content-max: 1280px;
+
+  /* -- Radii -------------------------------------------------------------
+     4px on controls and 8px on panels are the legacy literals: ui/button.tsx
+     and ui/input.tsx use `rounded-[4px]`, AppShell's <main> uses
+     `borderRadius: 8`. */
+  --admin-radius-sm: 2px; /* hairline joins, breadcrumb elbows */
+  --admin-radius-md: 4px; /* controls: buttons, inputs, nav rows */
+  --admin-radius-lg: 6px; /* badges, chips */
+  --admin-radius-xl: 8px; /* panels, cards, dialogs, alerts */
+  --admin-radius-full: 999px;
+
+  /* -- Motion ------------------------------------------------------------ */
+  --admin-duration-fast: 120ms; /* hover/active feedback */
+  --admin-duration-base: 200ms; /* expand/collapse, sidebar width */
+  --admin-duration-slow: 300ms; /* enter/exit */
+  --admin-ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --admin-ease-in-out: cubic-bezier(0.4, 0, 0.6, 1);
+
+  /* -- Stacking ---------------------------------------------------------- */
+  --admin-z-base: 0;
+  --admin-z-sticky: 10;
+  --admin-z-dropdown: 100;
+  --admin-z-overlay: 200;
+  --admin-z-dialog: 300;
+  --admin-z-toast: 400;
+
+  /* =========================================================================
+   * Light theme (default)
+   * ====================================================================== */
+  color-scheme: light;
+
+  --admin-bg-outer: #f0f0f0;
+  --admin-bg-panel: #ffffff;
+  --admin-bg-card: #ffffff;
+  --admin-bg-card-hover: #fafafa;
+  --admin-bg-input: #ffffff;
+  --admin-bg-icon-box: #f0f0f0;
+  --admin-bg-overlay: rgba(255, 255, 255, 0.8);
+  --admin-bg-hover: rgba(0, 0, 0, 0.04);
+  --admin-bg-active: rgba(0, 0, 0, 0.08);
+
+  --admin-border-default: #e0e0e0;
+  --admin-border-hover: #d0d0d0;
+  --admin-border-light: #eeeeee;
+  --admin-border-panel: #e0e0e0;
+
+  --admin-font-primary: #141414;
+  --admin-font-secondary: #474747;
+  --admin-font-tertiary: #818181;
+  --admin-font-light: #999999;
+  --admin-font-section-label: #999999;
+  /* Text on a solid accent fill — the selected nav row in the legacy
+     RoleBasedNav is `color: '#fff'` on `--admin-accent-blue`. */
+  --admin-font-on-accent: #ffffff;
+
+  --admin-accent-green: #059669;
+  --admin-accent-red: #dc2626;
+  --admin-accent-blue: #2e9098;
+  --admin-accent-purple: #7c3aed;
+  --admin-accent-amber: #d97706;
+  --admin-accent-orange: #ea580c;
+
+  --admin-accent-bg-green: rgba(16, 185, 129, 0.08);
+  --admin-accent-bg-red: rgba(239, 68, 68, 0.08);
+  --admin-accent-bg-blue: rgba(46, 144, 152, 0.08);
+  --admin-accent-bg-purple: rgba(139, 92, 246, 0.08);
+  --admin-accent-bg-amber: rgba(245, 158, 11, 0.08);
+  --admin-accent-bg-orange: rgba(249, 115, 22, 0.08);
+  --admin-accent-bg-green-subtle: rgba(16, 185, 129, 0.04);
+  --admin-accent-bg-blue-subtle: rgba(46, 144, 152, 0.04);
+  --admin-accent-bg-purple-subtle: rgba(139, 92, 246, 0.04);
+  --admin-accent-bg-orange-subtle: rgba(249, 115, 22, 0.04);
+
+  --admin-accent-border-green: rgba(16, 185, 129, 0.2);
+  --admin-accent-border-red: rgba(239, 68, 68, 0.2);
+  --admin-accent-border-blue: rgba(46, 144, 152, 0.2);
+  --admin-accent-border-purple: rgba(139, 92, 246, 0.2);
+  --admin-accent-border-amber: rgba(245, 158, 11, 0.2);
+  --admin-accent-border-orange: rgba(249, 115, 22, 0.2);
+
+  --admin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --admin-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --admin-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* The legacy focus ring pointed at --ring, which was set to the *lightest*
+     font colour and then wrapped in hsl() — so it computed to nothing and no
+     ring rendered. Fixed here rather than ported: the ring is the blue accent,
+     which clears 3:1 against every surface in both themes. */
+  --admin-focus-ring: var(--admin-accent-blue);
+  --admin-focus-ring-width: 2px;
+  --admin-focus-ring-offset: 2px;
+}
+
+/* =========================================================================
+ * Dark theme
+ * ====================================================================== */
+:root[data-admin-theme='dark'] {
+  color-scheme: dark;
+
+  --admin-bg-outer: #1d1d1d;
+  --admin-bg-panel: #171717;
+  --admin-bg-card: #1e1e1e;
+  --admin-bg-card-hover: #222222;
+  --admin-bg-input: #1e1e1e;
+  --admin-bg-icon-box: #2a2a2a;
+  --admin-bg-overlay: rgba(0, 0, 0, 0.5);
+  --admin-bg-hover: rgba(255, 255, 255, 0.06);
+  --admin-bg-active: rgba(255, 255, 255, 0.1);
+
+  --admin-border-default: #333333;
+  --admin-border-hover: #444444;
+  --admin-border-light: #2a2a2a;
+  --admin-border-panel: #333333;
+
+  --admin-font-primary: #ebebeb;
+  --admin-font-secondary: #b3b3b3;
+  --admin-font-tertiary: #818181;
+  --admin-font-light: #555555;
+  --admin-font-section-label: #666666;
+  --admin-font-on-accent: #ffffff;
+
+  --admin-accent-green: #10b981;
+  --admin-accent-red: #ef4444;
+  --admin-accent-blue: #2e9098;
+  --admin-accent-purple: #8b5cf6;
+  --admin-accent-amber: #f59e0b;
+  --admin-accent-orange: #f97316;
+
+  --admin-accent-bg-green: rgba(16, 185, 129, 0.1);
+  --admin-accent-bg-red: rgba(239, 68, 68, 0.1);
+  --admin-accent-bg-blue: rgba(46, 144, 152, 0.1);
+  --admin-accent-bg-purple: rgba(139, 92, 246, 0.1);
+  --admin-accent-bg-amber: rgba(245, 158, 11, 0.1);
+  --admin-accent-bg-orange: rgba(249, 115, 22, 0.1);
+  --admin-accent-bg-green-subtle: rgba(16, 185, 129, 0.05);
+  --admin-accent-bg-blue-subtle: rgba(46, 144, 152, 0.05);
+  --admin-accent-bg-purple-subtle: rgba(139, 92, 246, 0.05);
+  --admin-accent-bg-orange-subtle: rgba(249, 115, 22, 0.05);
+
+  --admin-accent-border-green: rgba(16, 185, 129, 0.15);
+  --admin-accent-border-red: rgba(239, 68, 68, 0.15);
+  --admin-accent-border-blue: rgba(46, 144, 152, 0.15);
+  --admin-accent-border-purple: rgba(139, 92, 246, 0.15);
+  --admin-accent-border-amber: rgba(245, 158, 11, 0.15);
+  --admin-accent-border-orange: rgba(249, 115, 22, 0.15);
+
+  --admin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --admin-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --admin-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+/* There is deliberately no `prefers-color-scheme` block and no `system` palette.
+ *
+ * A third mode would mean a third copy of the palette (a `@media` rule cannot
+ * share a declaration block with a non-`@media` one), and a duplicated palette
+ * is precisely the drift this issue exists to stop — see #169, where an earlier
+ * port ended up with two copies of the token values that disagreed.
+ *
+ * "Follow the OS" is therefore a job for whatever sets the attribute, and that
+ * is `src/theme/adminTheme.ts`: it supports the legacy `system` mode by
+ * resolving the media query to a concrete `light`/`dark` and writing that,
+ * re-resolving when the OS preference changes. The CSS holds exactly two
+ * palettes, once each.
+ */

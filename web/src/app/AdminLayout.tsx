@@ -21,12 +21,36 @@ export default function AdminLayout() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <aside style={{ width: 240, borderRight: '1px solid var(--admin-border-default)' }}>
+      <aside
+        style={{
+          width: 'var(--admin-size-sidebar)',
+          flexShrink: 0,
+          padding: 'var(--admin-size-shell-gutter)',
+          background: 'var(--admin-bg-panel)',
+          borderRight: '1px solid var(--admin-border-default)',
+        }}
+      >
         <RoleBasedNav sections={sections} />
         <button onClick={handleLogout}>Log out</button>
       </aside>
-      <main style={{ flex: 1, padding: 24 }}>
-        <Outlet />
+      {/* The legacy AppShell inset its content by 12px and put it on a panel:
+          `background: var(--admin-bg-panel)`, `1px solid var(--admin-border-panel)`,
+          `borderRadius: 8`. `--admin-size-content-max` caps the column so a
+          full-width control (a search box, a table) stops growing with the
+          viewport on an ultrawide monitor. */}
+      <main style={{ flex: 1, minWidth: 0, padding: 'var(--admin-size-shell-gutter)' }}>
+        <div
+          style={{
+            maxWidth: 'var(--admin-size-content-max)',
+            margin: '0 auto',
+            padding: 'var(--admin-size-panel-padding)',
+            background: 'var(--admin-bg-panel)',
+            border: '1px solid var(--admin-border-panel)',
+            borderRadius: 'var(--admin-radius-xl)',
+          }}
+        >
+          <Outlet />
+        </div>
       </main>
     </div>
   )
