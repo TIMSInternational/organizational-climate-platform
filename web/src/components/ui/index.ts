@@ -144,3 +144,49 @@ export {
   type ErrorStateProps,
   type NetworkErrorProps,
 } from './error-state'
+
+// Batch 3 of the ui/ primitive port (#77): data display and navigation.
+export {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableEmpty,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableSortHeader,
+  type SortDirection,
+} from './table'
+export { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs'
+export { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './accordion'
+export { Collapsible, CollapsibleContent, CollapsibleTrigger } from './collapsible'
+export {
+  Breadcrumb,
+  BreadcrumbEllipsis,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from './breadcrumb'
+export { ScrollArea, ScrollBar } from './scroll-area'
+export { Slider, type SliderProps } from './slider'
+export {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from './pagination'
+export { usePagination, type PaginationRange } from './usePagination'
+export {
+  NotificationDropdown,
+  type NotificationDropdownProps,
+  type NotificationItem,
+} from './notification-dropdown'
+export { SkipLink } from './skip-link'
+export { LiveRegion, type LiveRegionProps } from './live-region'
