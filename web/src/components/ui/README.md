@@ -173,3 +173,54 @@ because sonner renders a bare `<section>` that forwards neither `data-slot` nor
 What *did* survive from `Loading.tsx` is `LoadingRegion`, because it carries behaviour
 rather than layout: it is where `aria-busy` and the polite announcement belong, and it
 keeps children mounted so content is not replaced by a spinner.
+
+---
+
+# Batch 3 (#77): data display and navigation
+
+Ported: `table` · `tabs` · `pagination` · `accordion` · `collapsible` · `breadcrumb` ·
+`scroll-area` · `slider` · `notification-dropdown` · `SkipLink` · `LiveRegion`
+
+## Added, because #77 asked for it
+
+`table` gained **sort and empty-state support**; the legacy table had neither.
+`TableSortHeader` sets `aria-sort` on the `<th>` — the part a hand-rolled sort control
+almost always misses, and without which a screen-reader user cannot tell which column
+is sorted or which way. `TableEmpty` renders a real `<tr>` with `colSpan` so the table's
+semantics survive an empty result.
+
+`usePagination` handles the window: first, last, a window around the current page, and
+`null` where pages were elided. A **single** skipped page renders as that page, not as
+an ellipsis hiding exactly one number.
+
+## Rebuilt
+
+**`Slider`** now sits on `@radix-ui/react-slider`. The legacy version was an
+`<input type="range">` wrapper with no label plumbing and no range support, which the M4
+results screens need.
+
+Note where the label goes: Radix puts `role="slider"` on the **thumb**, not the root, so
+an `aria-label` on the root names nothing. A test caught the first version rendering an
+unnamed slider. Pass `thumbLabels` for a range so each end is named separately.
+
+**`NotificationDropdown`** was 447 framer-motion lines that also **fetched its own data**
+and knew the legacy notification row shape. #77 says keep the contract generic for #99,
+so the fetch is gone: it takes a list and callbacks, and the caller owns loading, paging
+and date formatting. Built on the #76 `DropdownMenu`, so focus handling and Escape are
+inherited rather than re-implemented.
+
+## Not ported, and why
+
+| | |
+|---|---|
+| `sidebar` (726 lines) | #77 says reconcile with the existing nav, not replace it. The role-aware logic in `AdminLayout.tsx` and `navigation/` is deliberate and tested (`navSections.test.ts`). Dropping shadcn's sidebar on top would replace tested behaviour with untested behaviour. |
+| `navigation-menu` | A top-level mega-menu. This app navigates from the sidebar; no planned page has a horizontal menu bar. |
+| `command` (+ `cmdk`) | A command palette. No planned page uses one — #77 explicitly says to skip rather than port dead code. |
+| `calendar` (+ `react-day-picker`), `date-picker` (+ `date-fns`) | **The app already uses native `type="date"` and `type="datetime-local"`** in `ActionPlanForm` and `MicroclimateForm`, styled by `index.css`. Native pickers are localised by the browser for free; a custom one needs locale wiring, and Spanish is a first-class language here (#78). Two dependencies for a **downgrade** in i18n behaviour. |
+| `enhanced-tabs` | `tabs` plus a framer-motion sliding indicator. The indicator is a `transition` on the active trigger's border, so it needs no library — and two tab components would be two things to keep in sync. |
+| `animated` (516 lines) | framer-motion decoration. `index.css` ships the three animations the legacy admin surface actually used. |
+| most of `accessible-components` | Superseded by batch 2: `AccessibleModal`→`Dialog`, `ProgressBar`→`Progress`, `AccessibleLoadingSpinner`→`Spinner`/`LoadingRegion`, `AccessibleBreadcrumb`→`Breadcrumb`. Only `SkipLink` and `LiveRegion` were genuinely new. |
+
+**Total: 6 of the 17 listed components deliberately skipped, 2 folded into others.** Each
+skip avoids either a dependency, dead code, or overwriting tested behaviour — and none of
+them is needed by a planned page. Say the word if any is wanted and it can be added.

@@ -51,9 +51,14 @@ const RULES: { rule: string; pattern: RegExp }[] = [
  *
  * `--radix-*` are runtime-measured values Radix writes onto the element, not
  * design decisions. `px` is the one-device-pixel hairline, which has no token
- * because it is not a spacing step.
+ * because it is not a spacing step. `rounded-[inherit]` names no radius at all —
+ * it defers to whatever the caller set, which is the opposite of hardcoding one.
  */
-const ALLOWED = [/--radix-[a-z-]+/, /^(?:h|w|border|border-[trbl])-px$/]
+const ALLOWED = [
+  /--radix-[a-z-]+/,
+  /^(?:h|w|border|border-[trbl])-px$/,
+  /^rounded-\[inherit\]$/,
+]
 
 /**
  * Removes comments before scanning.
@@ -85,7 +90,7 @@ function findViolations(file: string): Violation[] {
 describe('token discipline in ui/ primitives', () => {
   it('finds the primitives', () => {
     // Guard the guard: an empty sweep would make the assertion below vacuous.
-    expect(sourceFiles().length).toBeGreaterThanOrEqual(15)
+    expect(sourceFiles().length).toBeGreaterThanOrEqual(38)
   })
 
   it('hardcodes no colour, size or arbitrary value', () => {
@@ -118,7 +123,12 @@ describe('token discipline in ui/ primitives', () => {
   })
 
   it('does not flag the values that are legitimately raw', () => {
-    const samples = ['max-h-(--radix-select-content-available-height)', 'h-px', 'border-px']
+    const samples = [
+      'max-h-(--radix-select-content-available-height)',
+      'h-px',
+      'border-px',
+      'rounded-[inherit]',
+    ]
     for (const sample of samples) {
       const violations = RULES.flatMap(({ pattern }) => [
         ...sample.matchAll(new RegExp(pattern.source, 'g')),
