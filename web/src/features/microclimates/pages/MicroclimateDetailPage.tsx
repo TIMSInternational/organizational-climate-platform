@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { getMicroclimate, updateMicroclimate, type MicroclimateDetail } from '../api/microclimates'
 import LiveResultsPanel from '../components/LiveResultsPanel'
 import { useTranslation } from '../../../i18n'

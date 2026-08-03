@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { listUsers, updateUser, updateUserRole, type User } from '../api/users'
 import { listInvitations, createInvitation, createShareableLink, resendInvitation, type Invitation } from '../api/invitations'
 import UserList from '../components/UserList'

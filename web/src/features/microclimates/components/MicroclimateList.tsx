@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import type { Microclimate } from '../api/microclimates'
 
 export default function MicroclimateList({ microclimates }: { microclimates: Microclimate[] }) {
