@@ -1,8 +1,11 @@
 import type { DemographicField } from '../api/demographicFields'
+import { useTranslation } from '../../../i18n'
 
 export default function DemographicFieldList({ fields, onEdit }: { fields: DemographicField[]; onEdit: (field: DemographicField) => void }) {
+  const { t } = useTranslation()
+
   if (fields.length === 0) {
-    return <p>No demographic fields defined yet.</p>
+    return <p>{t('users.noDemographicFieldsYet')}</p>
   }
 
   return (
@@ -12,11 +15,11 @@ export default function DemographicFieldList({ fields, onEdit }: { fields: Demog
           {/* Field key is shown so an admin can see which keys are already taken --
               without it, a duplicate-key 409 (POST /admin/demographic-fields) gives
               no visual clue which of the fields below is the collision. */}
-          <th>Key</th>
-          <th>Label</th>
-          <th>Type</th>
-          <th>Required</th>
-          <th>Active</th>
+          <th>{t('common.key')}</th>
+          <th>{t('common.label')}</th>
+          <th>{t('common.type')}</th>
+          <th>{t('common.required')}</th>
+          <th>{t('common.active')}</th>
           <th></th>
         </tr>
       </thead>
@@ -26,9 +29,9 @@ export default function DemographicFieldList({ fields, onEdit }: { fields: Demog
             <td>{field.field}</td>
             <td>{field.label}</td>
             <td>{field.type}</td>
-            <td>{field.required ? 'Yes' : 'No'}</td>
-            <td>{field.isActive ? 'Yes' : 'No'}</td>
-            <td><button onClick={() => onEdit(field)}>Edit</button></td>
+            <td>{field.required ? t('common.yes') : t('common.no')}</td>
+            <td>{field.isActive ? t('common.yes') : t('common.no')}</td>
+            <td><button onClick={() => onEdit(field)}>{t('common.edit')}</button></td>
           </tr>
         ))}
       </tbody>

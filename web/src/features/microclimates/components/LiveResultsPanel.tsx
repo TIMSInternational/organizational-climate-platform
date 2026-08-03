@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getLiveResults, type LiveResults } from '../api/microclimates'
+import { useTranslation } from '../../../i18n'
 
 interface LiveResultsPanelProps {
   baseUrl: string
@@ -8,6 +9,7 @@ interface LiveResultsPanelProps {
 }
 
 export default function LiveResultsPanel({ baseUrl, microclimateId, isActive }: LiveResultsPanelProps) {
+  const { t } = useTranslation()
   const [live, setLive] = useState<LiveResults | null>(null)
 
   useEffect(() => {
@@ -34,17 +36,21 @@ export default function LiveResultsPanel({ baseUrl, microclimateId, isActive }: 
   }, [baseUrl, microclimateId, isActive])
 
   if (!isActive) {
-    return <p>Live results are only available while this microclimate is active.</p>
+    return <p>{t('microclimates.liveResultsOnlyWhenActive')}</p>
   }
 
   if (!live) {
-    return <p>Loading live results…</p>
+    return <p>{t('microclimates.loadingLiveResults')}</p>
   }
 
   return (
     <div>
-      <p>Responses: {live.responseCount} / {live.targetParticipantCount}</p>
-      <p>Engagement: {live.engagementLevel}</p>
+      <p>
+        {t('microclimates.responsesLabel')} {live.responseCount} / {live.targetParticipantCount}
+      </p>
+      <p>
+        {t('microclimates.engagementLabel')} {live.engagementLevel}
+      </p>
       <ul>
         {live.wordCloud.map((entry) => (
           <li key={entry.text}>{entry.text} ({entry.value})</li>

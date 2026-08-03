@@ -1,20 +1,23 @@
 import { Link } from 'react-router'
 import type { Company } from '../api/companies'
+import { useTranslation } from '../../../i18n'
 
 export default function CompanyList({ companies }: { companies: Company[] }) {
+  const { t } = useTranslation()
+
   if (companies.length === 0) {
-    return <p>No companies found.</p>
+    return <p>{t('dashboard.noCompaniesFound')}</p>
   }
 
   return (
     <table>
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Domain</th>
-          <th>Industry</th>
-          <th>Size</th>
-          <th>Country</th>
+          <th>{t('departments.name')}</th>
+          <th>{t('dashboard.domain')}</th>
+          <th>{t('dashboard.industry')}</th>
+          <th>{t('dashboard.size')}</th>
+          <th>{t('dashboard.country')}</th>
         </tr>
       </thead>
       <tbody>
