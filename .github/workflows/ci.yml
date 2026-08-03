@@ -95,3 +95,31 @@ jobs:
       - name: Lint
         working-directory: web
         run: npm run lint
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `scripts/verify-secret-scanning.sh` scans committed history, not just
+          # the working tree, so it needs the whole history rather than a shallow
+          # clone. A secret removed from HEAD but still reachable in an older blob
+          # is exactly the case worth catching.
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          VERSION=8.30.1
+          curl -sSfL -o /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      # Asserts both directions: that a planted credential is still detected, and
+      # that the repository is clean. A scanner reporting "no leaks found" because
+      # it is misconfigured is indistinguishable from a genuinely clean repo, so
+      # the detection half is what makes the clean half mean anything.
+      - name: Verify secret scanning
+        run: ./scripts/verify-secret-scanning.sh

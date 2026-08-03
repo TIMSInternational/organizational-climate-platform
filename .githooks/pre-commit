@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#
+# Pre-commit secret scan (#70).
+#
+# Enable once per clone — hooks are not distributed by git:
+#
+#   git config core.hooksPath .githooks
+#
+# This scans only what is staged, so it is fast enough to run on every commit. It is
+# a convenience, not the enforcement point: a developer can skip it with --no-verify
+# and a fresh clone has it disabled until the command above is run. The `secret-scan`
+# job in .github/workflows/ci.yml is the gate that actually holds.
+
+set -euo pipefail
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "warning: gitleaks not found on PATH — staged changes were NOT scanned for secrets." >&2
+  echo "         macOS: brew install gitleaks" >&2
+  echo "         CI still scans, so this is not a bypass, only a local blind spot." >&2
+  exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+if gitleaks git "$REPO_ROOT" --staged --config "$REPO_ROOT/.gitleaks.toml" \
+     --no-banner --redact >/dev/null 2>&1; then
+  exit 0
+fi
+
+echo >&2
+echo "COMMIT BLOCKED — a secret was detected in the staged changes:" >&2
+echo >&2
+gitleaks git "$REPO_ROOT" --staged --config "$REPO_ROOT/.gitleaks.toml" \
+  --no-banner --redact -v >&2 || true
+echo >&2
+echo "If this is a real credential, treat it as compromised even though the commit was" >&2
+echo "blocked — it has been on disk in a shell history and an editor buffer. Rotate it." >&2
+echo >&2
+echo "If it is a false positive, add a narrow, commented entry to .gitleaks.toml rather" >&2
+echo "than committing with --no-verify. Broad allowlists are how a scanner goes quiet." >&2
+exit 1

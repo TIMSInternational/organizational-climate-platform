@@ -41,6 +41,30 @@ npm run dev
 
 Requires the API (above) running on `http://localhost:5080` — `web/.env.development` points at it via `VITE_API_BASE_URL`.
 
+Node **>= 22.12** is required (`web/package.json` `engines`); `.nvmrc` pins 24. CI runs the
+web suite on 22, 24 and 25 because two defects here have come from Node version drift — see
+`.github/workflows/ci.yml` for the details.
+
+### Secret scanning
+
+Enable the pre-commit hook once per clone (git does not distribute hooks):
+
+```bash
+git config core.hooksPath .githooks
+brew install gitleaks   # or https://github.com/gitleaks/gitleaks/releases
+```
+
+The hook scans staged changes only. The enforcement point is the `secret-scan` CI job, which
+runs `scripts/verify-secret-scanning.sh` — that asserts both that the scanner still detects a
+planted credential and that the repository is clean, since a misconfigured scanner and a
+clean repo produce identical output. Run it yourself any time:
+
+```bash
+./scripts/verify-secret-scanning.sh
+```
+
+Background and the credential-rotation checklist: `docs/security/rotation-inventory.md`.
+
 ## Deployments
 
 - **Frontend:** [organizational-climate-platform.vercel.app](https://organizational-climate-platform.vercel.app) — deployed via Vercel, Root Directory `web/`, builds on push independent of GitHub Actions. Preview deployments use the `https://climate-*-federicos-projects-21f2ff63.vercel.app` pattern (also allowlisted in the API's CORS policy).

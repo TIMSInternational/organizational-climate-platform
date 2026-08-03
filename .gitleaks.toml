@@ -1,0 +1,42 @@
+# gitleaks configuration — secret scanning for #70.
+#
+# `extend.useDefault` pulls in gitleaks' full upstream ruleset; this file only adds
+# allowlists on top. The allowlist is deliberately narrow. A secret scanner that has
+# been broadly allowlisted reports "no leaks found" for the same reason an empty file
+# sweep passes vacuously — see `scripts/verify-secret-scanning.sh`, which plants a
+# known-detectable credential and asserts the scanner still fires. Run that before
+# trusting a clean report from this config.
+#
+# Baseline when this landed: `gitleaks dir .` and `gitleaks git .` both reported no
+# leaks across all 190 commits, corroborating an independent manual scan of every blob
+# in the repository (including unreachable objects).
+
+title = "organizational-climate-platform"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholders and documented attacker indicators — never real credentials."
+
+paths = [
+  # Attacker-controlled values recorded as indicators of compromise: contract
+  # addresses, transaction hashes and the decoded loader's own strings. These must
+  # stay verbatim to remain useful, and none is a credential of ours.
+  '''docs/security/2026-07-30-tailwind-payload-analysis\.md''',
+
+  # Archived issue text imported from the retired climate-project tracker, kept as a
+  # historical record and never edited.
+  '''docs/legacy-issues/.*''',
+]
+
+regexes = [
+  # docker-compose / appsettings.Development.json local Postgres. Not reachable from
+  # outside a developer's machine and identical in every checkout.
+  '''Password=postgres''',
+  '''Username=climate_tracking;Password=changeme''',
+
+  # README's local-dev instruction for `dotnet user-secrets set TrackingJwtSecret`.
+  # A literal instruction to the reader, not a value in use anywhere.
+  '''any-local-dev-value-at-least-32-bytes-long''',
+]
