@@ -39,3 +39,11 @@ same as invitation email.
 - Personalization-rule evaluation logic (the `Condition`/`Modifications` fields are stored
   as opaque strings, not interpreted) — this domain ships the data model + CRUD, not a rule
   engine.
+
+  **When it is implemented (#96), the approach is already fixed by #73:** see
+  [2026-08-03-notification-condition-evaluator-design.md](./2026-08-03-notification-condition-evaluator-design.md).
+  A typed, non-executing condition — parsed from the legacy string form with a strict
+  whitelist, rejected at write time *and* re-validated at evaluation time. The legacy
+  implementation used `new Function()` on admin-editable strings, which is tenant-controlled
+  arbitrary code execution; it must not be ported. Only one condition exists in the legacy
+  data (`reminderCount >= 3`), so the safe design costs almost nothing.
