@@ -7,6 +7,11 @@ Monorepo for the organizational climate platform: `web/` (React + Vite frontend)
 full migration epic and [#47](https://github.com/TIMSInternational/climate-project/issues/47)
 for this repo's foundation-scaffold spec.
 
+**What the client asked for lives in [`docs/requirements/`](docs/requirements/README.md)** — the
+PRD, the tech spec and five rounds of client review notes, ported verbatim from the legacy repo.
+Requirements in them are binding; their technical-stack sections are superseded by this stack.
+Read the relevant ones before building a feature, not after.
+
 ## Solution structure
 
 - `src/ClimateProject.Domain` — entities, no dependencies.

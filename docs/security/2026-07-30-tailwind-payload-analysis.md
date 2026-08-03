@@ -100,6 +100,14 @@ The BSC transactions can be inspected on a public explorer to recover the stage 
 was live at the time — the most direct route to learning what actually ran, and worth
 doing before the attacker rotates them.
 
+> **Superseded 2026-08-03 — see [2026-08-03-recovered-onchain-stages.md](./2026-08-03-recovered-onchain-stages.md).**
+> The stages **have now been recovered**, but not this way: **neither BSC hash above exists on
+> BSC mainnet** (verified `null` on three independent nodes, against historical controls). They
+> are stale hardcoded fallbacks. Per steps 4–5 above the real hash is resolved at runtime from
+> the TRON dead drop, and following that path recovers all three stages — yielding four
+> attacker-controlled IPs, a plain-HTTP C2 at `/$/boot`, and a `Sec-V` request header. Use the
+> revised indicator list in that document for the #71 audit.
+
 ### Host artefacts
 
 - Globals `_V`, `_p_t`, `C`, `r`, `m` set on `globalThis`
@@ -166,6 +174,13 @@ logs is weak evidence: `stdio: 'ignore'` means the child produced no output, and
 outbound HTTPS from a build container is not logged by default. **Treat "no evidence"
 as "no telemetry", not as "no detonation."**
 
+> **Expanded 2026-08-03.** The four hostnames above are *legitimate* public infrastructure and
+> make for a noisy search. The recovered stages add **attacker-controlled** indicators with no
+> benign explanation — IPs `166.88.134.62`, `198.105.127.210`, `23.27.202.27` (incl. `:27017`),
+> `23.27.13.43`, the URL path `/$/boot`, and the `Sec-V` request header, over **plain HTTP**.
+> Search those first. Full list:
+> [2026-08-03-recovered-onchain-stages.md](./2026-08-03-recovered-onchain-stages.md#indicators-of-compromise--revised).
+
 ### #72 — this document
 
 Complete, with one deliberate deviation: the issue asked for *sandbox* analysis.
@@ -177,6 +192,13 @@ added nothing, since the stage it fetches today need not be the stage it fetched
 The one thing static analysis cannot recover is the stage itself. The BSC transaction
 inputs listed above are the way to get it, and that is an explorer lookup rather than
 a sandbox run.
+
+> **Retracted 2026-08-03.** Static analysis *did* recover the stages — all three, still without
+> executing anything, by resolving the TRON dead drops rather than trusting the hardcoded BSC
+> hashes. See [2026-08-03-recovered-onchain-stages.md](./2026-08-03-recovered-onchain-stages.md).
+> Everything else in this document that the follow-up could independently check was confirmed
+> correct: the recovered chain-A stage's own string table matches the loader decoding above
+> exactly.
 
 ---
 

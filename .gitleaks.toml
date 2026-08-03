@@ -25,6 +25,11 @@ paths = [
   # stay verbatim to remain useful, and none is a credential of ours.
   '''docs/security/2026-07-30-tailwind-payload-analysis\.md''',
 
+  # Same reasoning, for the recovered on-chain stages. This one trips gitleaks'
+  # generic-api-key rule on the C2 response XOR key `ThZG+0jfXE6VAGOJ` — a 16-byte
+  # attacker key that is an indicator to search for, not a credential to protect.
+  '''docs/security/2026-08-03-recovered-onchain-stages\.md''',
+
   # Archived issue text imported from the retired climate-project tracker, kept as a
   # historical record and never edited.
   '''docs/legacy-issues/.*''',
