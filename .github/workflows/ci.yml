@@ -34,18 +34,36 @@ jobs:
 
   web-build-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      # Report every version's result: knowing a failure is 22-only vs everywhere
+      # is the whole point of running the matrix.
+      fail-fast: false
+      matrix:
+        # 22 is the floor declared in web/package.json engines, 24 is .nvmrc, 25 is
+        # what developers currently run locally. All three are tested because this
+        # job's guards are Node-version sensitive and drift here has hidden real
+        # defects twice: #172 (Node 25 enables Web Storage by default, shadowing
+        # happy-dom's localStorage) and #68 (fs.globSync is Node >=22, so on the
+        # previously pinned Node 20 both repo-wide guard tests threw and the token
+        # and hardcoded-string rules never actually ran in CI).
+        node-version: ['22', '24', '25']
+    name: web-build-and-test (node ${{ matrix.node-version }})
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node-version }}
           cache: npm
           cache-dependency-path: web/package-lock.json
 
       - name: Install dependencies
         working-directory: web
         run: npm ci
+
+      - name: Typecheck
+        working-directory: web
+        run: npm run typecheck
 
       - name: Build
         working-directory: web
@@ -54,3 +72,26 @@ jobs:
       - name: Test
         working-directory: web
         run: npm test
+
+  web-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      # `npm run lint` is `oxlint --max-warnings 10`, pinning the documented
+      # baseline (9 react-hooks/exhaustive-deps + 1 fast-refresh). The threshold
+      # lives in package.json rather than here so a local run and a CI run gate
+      # identically — a guard that only exists on one entrypoint is not a guard.
+      - name: Lint
+        working-directory: web
+        run: npm run lint

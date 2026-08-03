@@ -9,12 +9,52 @@ Deployment is split into two CloudFormation stacks. `climate-project-api-bootstr
 ## Automated path (preferred)
 
 ```
-gh workflow run deploy-prod.yml --repo TIMSInternational/climate-project-api --ref main
+gh workflow run deploy-prod.yml --repo TIMSInternational/organizational-climate-platform --ref main
 ```
 
 This runs `.github/workflows/deploy-prod.yml`, which tests the API, builds and pushes the image to ECR, deploys the service stack, and health-checks the result.
 
-**Caveat as of this writing:** TIMSInternational's GitHub Actions is billing-blocked account-wide, so no workflow run — including this one — currently executes. Every run fails within seconds on a billing error, not on any test/build content. See the tracking issue for status before assuming this path works: https://github.com/TIMSInternational/climate-project-api/issues/5 ("GitHub Actions billing block prevents all CI/CD runs").
+**Status as of 2026-08-03.** The account-wide GitHub Actions billing block described in earlier
+revisions of this file is **resolved** — workflows execute again. `CI` now runs on every PR and
+every push to `main`, and its .NET job passes. Two things are still unverified, so do not yet
+treat the automated deploy as proven:
+
+- **`deploy-prod.yml` has never had a successful run.** It is `workflow_dispatch`-only and was
+  never dispatched while billing was blocked. Every production deploy to date went through the
+  manual path below.
+- **The OIDC trust relationship has not been confirmed against the live account.** The
+  `GitHubRepository` parameter default in `climate-project-api-bootstrap.yml` was updated to
+  `TIMSInternational/organizational-climate-platform` after the repo rename, but a
+  CloudFormation parameter **default only applies when the parameter is not supplied** — the
+  deployed stack retains the value it was last deployed with, which predates the rename. If the
+  live `climate-project-github-deploy-prod` role still trusts
+  `repo:TIMSInternational/climate-project-api:*`, the first dispatched deploy fails at
+  `configure-aws-credentials` with a `sts:AssumeRoleWithWebIdentity` denial. Verify before
+  dispatching:
+
+  ```
+  aws iam get-role --role-name climate-project-github-deploy-prod \
+    --query 'Role.AssumeRolePolicyDocument.Statement[].Condition' --output json
+  ```
+
+  Both `sub` entries must name `organizational-climate-platform`. If they name the old repo,
+  redeploy the bootstrap stack with `GitHubRepository` passed explicitly:
+
+  ```
+  aws cloudformation deploy \
+    --stack-name climate-project-api-bootstrap \
+    --template-file infra/aws/climate-project-api-bootstrap.yml \
+    --capabilities CAPABILITY_NAMED_IAM \
+    --no-fail-on-empty-changeset \
+    --parameter-overrides GitHubRepository=TIMSInternational/organizational-climate-platform
+  ```
+
+  This check requires credentials for the production account (`AWS_ACCOUNT_ID` repo variable,
+  `747814092517`). Note that the resource names in the table below are **live infrastructure
+  identifiers** and still use the pre-rename `climate-project-api` prefix deliberately —
+  renaming them orphans the deployed stacks. Only the GitHub repository reference changed.
+
+Tracking issue: https://github.com/TIMSInternational/organizational-climate-platform/issues/68
 
 ## Manual path (what actually deployed the currently-live service)
 
