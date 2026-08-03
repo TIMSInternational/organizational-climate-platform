@@ -10,9 +10,21 @@ namespace ClimateProject.IntegrationTests;
 /// "?? throw" null-coalescing guard silently lets it through: the app used to
 /// start successfully with a zero-length JWT signing key and then 500 on
 /// every request (including /health). These tests prove the app instead
-/// fails fast at startup -- before accepting any traffic -- when
-/// TrackingJwtSecret is empty.
+/// fails fast at startup -- before accepting any traffic.
+///
+/// Two distinct branches of the guard, which is
+/// string.IsNullOrWhiteSpace(...) in Program.cs:
+///   * Empty_   -- TrackingJwtSecret present but "" (what appsettings.json ships)
+///   * Missing_ -- TrackingJwtSecret genuinely absent (null)
+///
+/// Keeping those apart takes care: because appsettings.json ships "", simply
+/// omitting the key from a test's in-memory configuration does *not* produce a
+/// null, and the two tests silently collapse onto the same branch. See the
+/// comment in Missing_ for the mechanism. Verified by narrowing the production
+/// guard to "is null" and confirming the two tests then disagree -- Empty_ fails,
+/// Missing_ passes.
 /// </summary>
+[Collection("AppHost")]
 public class StartupValidationTests
 {
     [Fact]
@@ -57,7 +69,15 @@ public class StartupValidationTests
                 {
                     ["ConnectionStrings:ClimateProject"] = "Host=localhost;Database=unused;Username=unused;Password=unused",
                     ["GoogleClientId"] = "test-google-client-id",
-                    // TrackingJwtSecret intentionally omitted entirely.
+                    // Explicit null, NOT omission. Omitting the key here does not
+                    // produce a missing value: appsettings.json ships
+                    // "TrackingJwtSecret": "", and that provider still resolves, so
+                    // an omitted key silently falls back to the empty string and
+                    // this test becomes a duplicate of the Empty_ case above --
+                    // leaving the genuinely-absent branch uncovered. An explicit
+                    // null in a later in-memory provider wins and yields a real
+                    // null, which is the case this test exists to cover.
+                    ["TrackingJwtSecret"] = null,
                 });
             });
         });

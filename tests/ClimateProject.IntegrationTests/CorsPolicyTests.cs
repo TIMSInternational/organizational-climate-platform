@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace ClimateProject.IntegrationTests;
 
+[Collection("AppHost")]
 public class CorsPolicyTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly WebApplicationFactory<Program> _factory;
