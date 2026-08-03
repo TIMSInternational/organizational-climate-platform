@@ -64,6 +64,13 @@ must happen before anything is built on top of them.
 - **FE:** `#79` charts · `#80` shell · `#81` auth pages · `#82` PWA · `#83` a11y (after `#75-77`)
 - **BE:** `#73` safe-evaluator design → `#96 → #97 → #100 → #101`
 - **`#67` must land here.** Three issues are blocked behind it.
+- **Build against [`docs/requirements/`](requirements/README.md), not against inference.** This is
+  the first batch with the client PRD and review notes actually in the repo; its
+  [per-issue reading list](requirements/README.md#what-batch-2-should-build-against) says which
+  document governs which issue. Two conflicts to resolve rather than discover late: the notes put
+  **SSO out of scope** while the Login screen spec lists it (`#81`), and neither the **PWA**
+  decision (`#82`) nor the **a11y baseline** (`#83`) is specified by the client at all — those two
+  are genuinely ours to decide.
 
 ### Batch 3 — First real pages + backend hardening
 - **FE:** `#124` company-context **first** (it changes nav gating for everything after) →
