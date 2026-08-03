@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { SystemSettingsData } from '../api/systemSettings'
+import { useTranslation } from '../../../i18n'
 
 interface SystemSettingsFormProps {
   settings: SystemSettingsData
@@ -7,6 +8,7 @@ interface SystemSettingsFormProps {
 }
 
 export default function SystemSettingsForm({ settings, onSubmit }: SystemSettingsFormProps) {
+  const { t } = useTranslation()
   const [loginEnabled, setLoginEnabled] = useState(settings.loginEnabled)
   const [maintenanceMode, setMaintenanceMode] = useState(settings.maintenanceMode)
   const [maintenanceMessage, setMaintenanceMessage] = useState(settings.maintenanceMessage ?? '')
@@ -22,7 +24,7 @@ export default function SystemSettingsForm({ settings, onSubmit }: SystemSetting
     try {
       await onSubmit({ loginEnabled, maintenanceMode, maintenanceMessage, maxLoginAttempts, sessionTimeoutMinutes })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setSubmitting(false)
     }
@@ -33,37 +35,35 @@ export default function SystemSettingsForm({ settings, onSubmit }: SystemSetting
       {error && <p role="alert">{error}</p>}
       <label>
         <input type="checkbox" checked={loginEnabled} onChange={(e) => setLoginEnabled(e.target.checked)} />
-        Login enabled
+        {t('settings.loginEnabled')}
       </label>
       <label>
         <input type="checkbox" checked={maintenanceMode} onChange={(e) => setMaintenanceMode(e.target.checked)} />
-        Maintenance mode
+        {t('settings.maintenanceMode')}
       </label>
       <label>
-        Maintenance message
+        {t('settings.maintenanceMessage')}
         <input value={maintenanceMessage} onChange={(e) => setMaintenanceMessage(e.target.value)} />
       </label>
       <p>
         <em>
-          Login enabled and Maintenance mode are enforced on every login attempt (a SuperAdmin
-          account can always still sign in).
+          {t('settings.enforcedOnEveryLoginNote')}
         </em>
       </p>
       <label>
-        Max login attempts
+        {t('settings.maxLoginAttempts')}
         <input type="number" value={maxLoginAttempts} onChange={(e) => setMaxLoginAttempts(Number(e.target.value))} min={1} />
       </label>
       <label>
-        Session timeout (minutes)
+        {t('settings.sessionTimeoutMinutes')}
         <input type="number" value={sessionTimeoutMinutes} onChange={(e) => setSessionTimeoutMinutes(Number(e.target.value))} min={1} />
       </label>
       <p>
         <em>
-          Max login attempts and Session timeout are saved but not yet enforced by the API --
-          they do not currently lock out accounts or expire sessions early.
+          {t('settings.notYetEnforcedNote')}
         </em>
       </p>
-      <button type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Save'}</button>
+      <button type="submit" disabled={submitting}>{submitting ? t('common.saving') : t('common.save')}</button>
     </form>
   )
 }

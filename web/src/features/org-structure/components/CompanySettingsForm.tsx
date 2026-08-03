@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { CompanySettingsData, CompanyBranding } from '../api/companySettings'
+import { useTranslation } from '../../../i18n'
 
 export interface CompanySettingsFormValues {
   surveyFrequency: string
@@ -15,6 +16,7 @@ interface CompanySettingsFormProps {
 }
 
 export default function CompanySettingsForm({ settings, branding, onSubmit }: CompanySettingsFormProps) {
+  const { t } = useTranslation()
   const [values, setValues] = useState<CompanySettingsFormValues>({
     surveyFrequency: settings.surveyFrequency,
     microclimateEnabled: settings.microclimateEnabled,
@@ -41,22 +43,22 @@ export default function CompanySettingsForm({ settings, branding, onSubmit }: Co
     <form onSubmit={handleSubmit}>
       {error && <p role="alert">{error}</p>}
       <label>
-        Survey frequency
+        {t('dashboard.surveyFrequency')}
         <input value={values.surveyFrequency} onChange={(e) => setValues({ ...values, surveyFrequency: e.target.value })} />
       </label>
       <label>
         <input type="checkbox" checked={values.microclimateEnabled} onChange={(e) => setValues({ ...values, microclimateEnabled: e.target.checked })} />
-        Microclimates enabled
+        {t('dashboard.microclimatesEnabled')}
       </label>
       <label>
         <input type="checkbox" checked={values.anonymousSurveys} onChange={(e) => setValues({ ...values, anonymousSurveys: e.target.checked })} />
-        Anonymous surveys
+        {t('dashboard.anonymousSurveys')}
       </label>
       <label>
-        Primary color
+        {t('dashboard.primaryColor')}
         <input type="color" value={values.primaryColor} onChange={(e) => setValues({ ...values, primaryColor: e.target.value })} />
       </label>
-      <button type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Save settings'}</button>
+      <button type="submit" disabled={submitting}>{submitting ? t('common.saving') : t('dashboard.saveSettings')}</button>
     </form>
   )
 }

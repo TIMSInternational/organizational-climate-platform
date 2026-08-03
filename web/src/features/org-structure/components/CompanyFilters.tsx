@@ -1,3 +1,5 @@
+import { useTranslation } from '../../../i18n'
+
 export interface CompanyFiltersValue {
   search: string
 }
@@ -8,10 +10,12 @@ interface CompanyFiltersProps {
 }
 
 export default function CompanyFilters({ value, onChange }: CompanyFiltersProps) {
+  const { t } = useTranslation()
+
   return (
     <input
       type="search"
-      placeholder="Search by name, domain, or industry"
+      placeholder={t('dashboard.searchCompanies')}
       value={value.search}
       onChange={(e) => onChange({ search: e.target.value })}
     />

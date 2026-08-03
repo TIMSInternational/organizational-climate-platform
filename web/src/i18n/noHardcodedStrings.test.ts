@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync, writeFileSync, globSync } from 'node:fs'
+import { readFileSync, globSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import ts from 'typescript'
-import BASELINE from './hardcodedStringsBaseline.json'
 
 /**
  * Guard against user-facing English creeping back in.
@@ -20,17 +19,15 @@ import BASELINE from './hardcodedStringsBaseline.json'
  * `useState<Record<string, string>>(x)` reads as copy — that produced ~90 false
  * positives before this was rewritten.
  *
- * #78 translated every page but not the 24 feature components, whose 157 literals
- * are recorded in hardcodedStringsBaseline.json. The baseline is a ratchet, not an
- * allowlist: new copy anywhere fails, pages are held at zero unconditionally, and
- * a stale baseline entry fails too, so the file can only shrink. Removing it
- * entirely is the follow-up issue's job.
+ * #78 translated every page and parked the 24 feature components on a ratcheted
+ * baseline of 157 literals. #176 drained that baseline to zero and deleted it, so
+ * this is now an absolute check rather than a ratchet: any untranslated copy
+ * anywhere under src/ fails.
  */
 
 // Vitest runs with the package root as cwd. `import.meta.url` is not a file URL
 // here, because Vite serves modules over its own dev server.
 const SRC = join(process.cwd(), 'src')
-const BASELINE_PATH = join(SRC, 'i18n', 'hardcodedStringsBaseline.json')
 
 /** Props whose values are read out to a user. */
 const USER_FACING_PROPS = new Set([
@@ -196,54 +193,16 @@ describe('no hardcoded user-facing strings', () => {
     ])
   })
 
-  it('introduces no new untranslated copy', () => {
+  it('has no untranslated copy anywhere in src/', () => {
     const findings = sourceFiles().flatMap(findHardcoded)
     const report = findings.map((f) => `${relative(SRC, f.file)}  [${f.kind}]  ${f.text}`).sort()
 
-    // Regenerate with `UPDATE_I18N_BASELINE=1 npx vitest run`. Deriving the
-    // baseline any other way loses fidelity — multi-line JSX text and embedded
-    // quotes have to round-trip exactly.
-    if (process.env.UPDATE_I18N_BASELINE) {
-      writeFileSync(BASELINE_PATH, `${JSON.stringify(report, null, 2)}\n`)
-      return
-    }
-
-    const baseline = new Set(BASELINE)
-    const added = report.filter((entry) => !baseline.has(entry))
-
     expect(
-      added,
-      'New untranslated copy. Use t() from useTranslation() instead of a literal. If it ' +
-        'is genuinely not translatable copy, add it to ALLOWED in this file with a reason.',
+      report,
+      'Use t() from useTranslation() instead of a literal. If it is genuinely not ' +
+        'translatable copy, add it to ALLOWED in this file with a reason — there is no ' +
+        'baseline to add it to, #176 drained and removed it.',
     ).toEqual([])
   })
 
-  it('has no untranslated copy in any page', () => {
-    // #78 translated every page. Nothing in the baseline is a page, so a page
-    // regression fails here even if someone widens the baseline.
-    const pageFindings = sourceFiles()
-      .filter((file) => /Page\.tsx$|RouteErrorBoundary\.tsx$/.test(file))
-      .flatMap(findHardcoded)
-      .map((f) => `${relative(SRC, f.file)}  [${f.kind}]  ${f.text}`)
-      .sort()
-
-    expect(pageFindings).toEqual([])
-  })
-
-  it('keeps the baseline honest — every entry still exists', () => {
-    // Once a component is translated its entries must be deleted from the
-    // baseline, otherwise the file rots into a permanent allowlist.
-    const report = new Set(
-      sourceFiles()
-        .flatMap(findHardcoded)
-        .map((f) => `${relative(SRC, f.file)}  [${f.kind}]  ${f.text}`),
-    )
-    const stale = BASELINE.filter((entry) => !report.has(entry))
-
-    expect(
-      stale,
-      'These baseline entries no longer exist. Remove them from ' +
-        'hardcodedStringsBaseline.json — the baseline shrinks, it never grows.',
-    ).toEqual([])
-  })
 })

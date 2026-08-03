@@ -62,7 +62,18 @@
     "createCompany": "Crear Empresa",
     "newActionPlan": "Nuevo Plan de Acción",
     "newMicroclimate": "Nuevo Microclima",
-    "submitting": "Enviando…"
+    "submitting": "Enviando…",
+    "type": "Tipo",
+    "key": "Clave",
+    "label": "Etiqueta",
+    "order": "Orden",
+    "parent": "Superior",
+    "preview": "Vista Previa",
+    "saving": "Guardando…",
+    "creating": "Creando…",
+    "sending": "Enviando…",
+    "allStatuses": "Todos los Estados",
+    "noneTopLevel": "Ninguno (nivel superior)"
   },
   "navigation": {
     "dashboard": "Panel de Control",
@@ -366,7 +377,18 @@
     "demographicFields": "Campos Demográficos",
     "companyProfileAdminOnly": "Los detalles del perfil de la empresa solo son visibles para un administrador de la plataforma.",
     "company": "Empresa",
-    "activeUsersCount": "{count} usuarios activos"
+    "activeUsersCount": "{count} usuarios activos",
+    "domain": "Dominio",
+    "size": "Tamaño",
+    "employees": "Empleados",
+    "primaryColor": "Color Principal",
+    "defaultBasic": "Predeterminado (básico)",
+    "saveSettings": "Guardar Configuración",
+    "surveyFrequency": "Frecuencia de Encuestas",
+    "anonymousSurveys": "Encuestas Anónimas",
+    "microclimatesEnabled": "Microclimas Habilitados",
+    "searchCompanies": "Buscar por nombre, dominio o industria",
+    "noCompaniesFound": "No se encontraron empresas."
   },
   "departments": {
     "structureOverview": "Visión General de la Estructura",
@@ -477,7 +499,8 @@
     "inactiveDepartments": "Departamentos Inactivos",
     "averageUsersPerDepartment": "Usuarios Promedio por Departamento",
     "maxHierarchyDepth": "Profundidad Máxima de Jerarquía",
-    "newDepartment": "Nuevo Departamento"
+    "newDepartment": "Nuevo Departamento",
+    "noDepartmentsYet": "Aún no hay departamentos."
   },
   "superadmin": {
     "superAdminTitle": "Panel de Super Administrador",
@@ -568,7 +591,24 @@
     "educationLevel": "Nivel Educativo",
     "employmentType": "Tipo de Empleo",
     "bulkImport": "Importación Masiva",
-    "invitations": "Invitaciones"
+    "invitations": "Invitaciones",
+    "fieldKey": "Clave del Campo",
+    "noInvitationsYet": "Aún no hay invitaciones.",
+    "sendInvitation": "Enviar Invitación",
+    "resend": "Reenviar",
+    "resending": "Reenviando…",
+    "shareableLinkSuffix": "(enlace compartible)",
+    "createShareableLink": "Crear Enlace Compartible",
+    "linkAcceptOnce": "Enlace (uso único):",
+    "noDemographicFieldsYet": "Aún no se han definido campos demográficos.",
+    "optionsCommaSeparated": "Opciones (separadas por comas)",
+    "optionsExample": "p. ej. Rojo, Verde, Azul",
+    "csvColumnsHint": "Columnas del CSV: nombre, correo electrónico, rol, departamento. No se admiten comas dentro de un campo.",
+    "noRowsFound": "No se encontraron filas en este archivo. Asegúrese de que tenga al menos una fila de datos con el formato: nombre, correo electrónico, rol, departamento.",
+    "bulkImportSummary": "{succeeded} fila(s) correctas, {errors} error(es), de {total} fila(s) leídas.",
+    "row": "Fila",
+    "errors": "Errores",
+    "searchByNameOrEmail": "Buscar por nombre o correo electrónico"
   },
   "surveys": {
     "title": "Encuestas",
@@ -760,7 +800,14 @@
     "departmentsNotFoundDescription": "Algunos departamentos objetivo ya no existen. Por favor edite el microclima para actualizar los departamentos objetivo antes de lanzar.",
     "thankYouForResponse": "Gracias por su respuesta.",
     "notAcceptingResponses": "Este microclima no está aceptando respuestas en este momento.",
-    "questionHasNoOptions": "Esta pregunta no tiene opciones configuradas y no se puede responder."
+    "questionHasNoOptions": "Esta pregunta no tiene opciones configuradas y no se puede responder.",
+    "noMicroclimatesFound": "No se encontraron microclimas.",
+    "anonymousResponses": "Respuestas Anónimas",
+    "optionsCommaSeparatedMin2": "Opciones (separadas por comas, al menos 2)",
+    "loadingLiveResults": "Cargando resultados en vivo…",
+    "liveResultsOnlyWhenActive": "Los resultados en vivo solo están disponibles mientras este microclima está activo.",
+    "responsesLabel": "Respuestas:",
+    "engagementLabel": "Participación:"
   },
   "actionPlans": {
     "title": "Planes de Acción",
@@ -821,7 +868,10 @@
     "viewAiInsights": "Ver Información de IA",
     "createSurvey": "Crear Encuesta",
     "kpisShort": "KPIs",
-    "recordProgress": "Registrar Progreso"
+    "recordProgress": "Registrar Progreso",
+    "noActionPlansFound": "No se encontraron planes de acción.",
+    "startFromTemplate": "Comenzar desde una plantilla (opcional)",
+    "noTemplate": "Sin plantilla"
   },
   "export": {
     "exportPDF": "Exportar PDF",
@@ -883,7 +933,14 @@
     "changePassword": "Cambiar Contraseña",
     "twoFactorAuth": "Autenticación de Dos Factores",
     "apiKeys": "Claves API",
-    "integrations": "Integraciones"
+    "integrations": "Integraciones",
+    "loginEnabled": "Inicio de Sesión Habilitado",
+    "maintenanceMode": "Modo de Mantenimiento",
+    "maintenanceMessage": "Mensaje de Mantenimiento",
+    "maxLoginAttempts": "Intentos Máximos de Inicio de Sesión",
+    "sessionTimeoutMinutes": "Tiempo de Espera de Sesión (minutos)",
+    "enforcedOnEveryLoginNote": "Inicio de Sesión Habilitado y Modo de Mantenimiento se aplican en cada intento de inicio de sesión (una cuenta SuperAdmin siempre puede iniciar sesión).",
+    "notYetEnforcedNote": "Intentos Máximos de Inicio de Sesión y Tiempo de Espera de Sesión se guardan pero la API aún no los aplica: actualmente no bloquean cuentas ni expiran sesiones antes de tiempo."
   },
   "validation": {
     "required": "Este campo es requerido",

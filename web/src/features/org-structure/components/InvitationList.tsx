@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Invitation } from '../api/invitations'
+import { useTranslation } from '../../../i18n'
 
 interface InvitationListProps {
   invitations: Invitation[]
@@ -7,6 +8,7 @@ interface InvitationListProps {
 }
 
 export default function InvitationList({ invitations, onResend }: InvitationListProps) {
+  const { t } = useTranslation()
   const [error, setError] = useState<string | null>(null)
   const [resendingId, setResendingId] = useState<string | null>(null)
 
@@ -16,14 +18,14 @@ export default function InvitationList({ invitations, onResend }: InvitationList
     try {
       await onResend(invitation)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to resend invitation')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setResendingId(null)
     }
   }
 
   if (invitations.length === 0) {
-    return <p>No invitations yet.</p>
+    return <p>{t('users.noInvitationsYet')}</p>
   }
 
   return (
@@ -32,24 +34,24 @@ export default function InvitationList({ invitations, onResend }: InvitationList
       <table>
         <thead>
           <tr>
-            <th>Email</th>
-            <th>Type</th>
-            <th>Role</th>
-            <th>Status</th>
+            <th>{t('users.email')}</th>
+            <th>{t('common.type')}</th>
+            <th>{t('users.role')}</th>
+            <th>{t('common.status')}</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {invitations.map((invitation) => (
             <tr key={invitation.id}>
-              <td>{invitation.email ?? '(shareable link)'}</td>
+              <td>{invitation.email ?? t('users.shareableLinkSuffix')}</td>
               <td>{invitation.invitationType}</td>
               <td>{invitation.role}</td>
               <td>{invitation.status}</td>
               <td>
                 {invitation.status !== 'accepted' && (
                   <button onClick={() => handleResendClick(invitation)} disabled={resendingId === invitation.id}>
-                    {resendingId === invitation.id ? 'Resending…' : 'Resend'}
+                    {resendingId === invitation.id ? t('users.resending') : t('users.resend')}
                   </button>
                 )}
               </td>

@@ -1,18 +1,21 @@
 import type { User } from '../api/users'
+import { useTranslation } from '../../../i18n'
 
 export default function UserList({ users, onEdit }: { users: User[]; onEdit: (user: User) => void }) {
+  const { t } = useTranslation()
+
   if (users.length === 0) {
-    return <p>No users found.</p>
+    return <p>{t('users.noUsersFound')}</p>
   }
 
   return (
     <table>
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Email</th>
-          <th>Role</th>
-          <th>Active</th>
+          <th>{t('users.name')}</th>
+          <th>{t('users.email')}</th>
+          <th>{t('users.role')}</th>
+          <th>{t('common.active')}</th>
           <th></th>
         </tr>
       </thead>
@@ -22,8 +25,8 @@ export default function UserList({ users, onEdit }: { users: User[]; onEdit: (us
             <td>{user.name}</td>
             <td>{user.email}</td>
             <td>{user.role}</td>
-            <td>{user.isActive ? 'Yes' : 'No'}</td>
-            <td><button onClick={() => onEdit(user)}>Edit</button></td>
+            <td>{user.isActive ? t('common.yes') : t('common.no')}</td>
+            <td><button onClick={() => onEdit(user)}>{t('common.edit')}</button></td>
           </tr>
         ))}
       </tbody>

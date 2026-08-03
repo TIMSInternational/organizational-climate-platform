@@ -62,7 +62,18 @@
     "createCompany": "Create company",
     "newActionPlan": "New action plan",
     "newMicroclimate": "New microclimate",
-    "submitting": "Submitting…"
+    "submitting": "Submitting…",
+    "type": "Type",
+    "key": "Key",
+    "label": "Label",
+    "order": "Order",
+    "parent": "Parent",
+    "preview": "Preview",
+    "saving": "Saving…",
+    "creating": "Creating…",
+    "sending": "Sending…",
+    "allStatuses": "All statuses",
+    "noneTopLevel": "None (top-level)"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -366,7 +377,18 @@
     "demographicFields": "Demographic fields",
     "companyProfileAdminOnly": "Company profile details are only visible to a platform administrator.",
     "company": "Company",
-    "activeUsersCount": "{count} active users"
+    "activeUsersCount": "{count} active users",
+    "domain": "Domain",
+    "size": "Size",
+    "employees": "Employees",
+    "primaryColor": "Primary color",
+    "defaultBasic": "Default (basic)",
+    "saveSettings": "Save settings",
+    "surveyFrequency": "Survey frequency",
+    "anonymousSurveys": "Anonymous surveys",
+    "microclimatesEnabled": "Microclimates enabled",
+    "searchCompanies": "Search by name, domain, or industry",
+    "noCompaniesFound": "No companies found."
   },
   "departments": {
     "structureOverview": "Structure Overview",
@@ -477,7 +499,8 @@
     "inactiveDepartments": "Inactive Departments",
     "averageUsersPerDepartment": "Average Users per Department",
     "maxHierarchyDepth": "Max Hierarchy Depth",
-    "newDepartment": "New department"
+    "newDepartment": "New department",
+    "noDepartmentsYet": "No departments yet."
   },
   "superadmin": {
     "superAdminTitle": "Super Admin Dashboard",
@@ -568,7 +591,24 @@
     "educationLevel": "Education Level",
     "employmentType": "Employment Type",
     "bulkImport": "Bulk import",
-    "invitations": "Invitations"
+    "invitations": "Invitations",
+    "fieldKey": "Field key",
+    "noInvitationsYet": "No invitations yet.",
+    "sendInvitation": "Send invitation",
+    "resend": "Resend",
+    "resending": "Resending…",
+    "shareableLinkSuffix": "(shareable link)",
+    "createShareableLink": "Create shareable link",
+    "linkAcceptOnce": "Link (accept-once):",
+    "noDemographicFieldsYet": "No demographic fields defined yet.",
+    "optionsCommaSeparated": "Options (comma-separated)",
+    "optionsExample": "e.g. Red, Green, Blue",
+    "csvColumnsHint": "CSV columns: name, email, role, department. Embedded commas inside a field are not supported.",
+    "noRowsFound": "No rows were found in this file. Make sure it has at least one data row in the format: name, email, role, department.",
+    "bulkImportSummary": "{succeeded} row(s) succeeded, {errors} error(s), out of {total} row(s) read.",
+    "row": "Row",
+    "errors": "Errors",
+    "searchByNameOrEmail": "Search by name or email"
   },
   "surveys": {
     "title": "Surveys",
@@ -760,7 +800,14 @@
     "departmentsNotFoundDescription": "Some targeted departments no longer exist. Please edit the microclimate to update department targeting before launching.",
     "thankYouForResponse": "Thank you for your response.",
     "notAcceptingResponses": "This microclimate is not currently accepting responses.",
-    "questionHasNoOptions": "This question has no configured options and cannot be answered."
+    "questionHasNoOptions": "This question has no configured options and cannot be answered.",
+    "noMicroclimatesFound": "No microclimates found.",
+    "anonymousResponses": "Anonymous responses",
+    "optionsCommaSeparatedMin2": "Options (comma-separated, at least 2)",
+    "loadingLiveResults": "Loading live results…",
+    "liveResultsOnlyWhenActive": "Live results are only available while this microclimate is active.",
+    "responsesLabel": "Responses:",
+    "engagementLabel": "Engagement:"
   },
   "actionPlans": {
     "title": "Action Plans",
@@ -821,7 +868,10 @@
     "viewAiInsights": "View AI Insights",
     "createSurvey": "Create Survey",
     "kpisShort": "KPIs",
-    "recordProgress": "Record progress"
+    "recordProgress": "Record progress",
+    "noActionPlansFound": "No action plans found.",
+    "startFromTemplate": "Start from template (optional)",
+    "noTemplate": "No template"
   },
   "export": {
     "exportPDF": "Export PDF",
@@ -883,7 +933,14 @@
     "changePassword": "Change Password",
     "twoFactorAuth": "Two-Factor Authentication",
     "apiKeys": "API Keys",
-    "integrations": "Integrations"
+    "integrations": "Integrations",
+    "loginEnabled": "Login enabled",
+    "maintenanceMode": "Maintenance mode",
+    "maintenanceMessage": "Maintenance message",
+    "maxLoginAttempts": "Max login attempts",
+    "sessionTimeoutMinutes": "Session timeout (minutes)",
+    "enforcedOnEveryLoginNote": "Login enabled and Maintenance mode are enforced on every login attempt (a SuperAdmin account can always still sign in).",
+    "notYetEnforcedNote": "Max login attempts and Session timeout are saved but not yet enforced by the API — they do not currently lock out accounts or expire sessions early."
   },
   "validation": {
     "required": "This field is required",
