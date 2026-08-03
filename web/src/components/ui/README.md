@@ -224,3 +224,39 @@ inherited rather than re-implemented.
 **Total: 6 of the 17 listed components deliberately skipped, 2 folded into others.** Each
 skip avoids either a dependency, dead code, or overwriting tested behaviour — and none of
 them is needed by a planned page. Say the word if any is wanted and it can be added.
+
+---
+
+# Follow-up: `calendar` and `date-picker` (reversing a #77 skip)
+
+#77 shipped with these two **skipped**, on the argument that the app's native
+`type="date"` / `datetime-local` inputs are localised by the browser for free, so a
+custom picker plus `react-day-picker` and `date-fns` would be two dependencies for an
+i18n *downgrade*.
+
+They are now ported, with that objection answered rather than ignored: **`Calendar`
+reads the active locale from `useTranslation()`** and hands react-day-picker the
+matching date-fns locale. Month names, weekday initials, the day `aria-label`s and the
+**week-start day** all follow the UI language. `DatePicker` formats its trigger the
+same way, so a Spanish user sees *3 de agosto de 2026*, not *August 3rd, 2026*.
+
+Four tests exist specifically to hold that line — English vs Spanish captions, a
+localised day label, and the Monday-vs-Sunday week start.
+
+**The native inputs in `ActionPlanForm` and `MicroclimateForm` are deliberately left
+alone.** This is available for screens that want a styled picker; a native input is
+still the better default when one will do, and churning working controls was not part
+of the ask.
+
+## Two things worth knowing when testing this
+
+Days are addressed by **`td[data-day="YYYY-MM-DD"]`**, and the clickable element is a
+`<button>` *inside* that cell — clicking the `gridcell` itself does nothing. Querying
+by accessible name is not an option either: the button's `aria-label` is a fully
+localised date, so a name-based query would be locale-dependent in a suite whose
+entire purpose is switching locale.
+
+`DayPickerProps` is a **discriminated union on `mode`**. A plain
+`Omit<DayPickerProps, 'locale'>` collapses it into the no-mode branch and makes
+`<Calendar mode="range">` a type error; `CalendarProps` uses a distributive omit to
+keep each branch intact, with one documented cast on the rest-spread.
