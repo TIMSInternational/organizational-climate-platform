@@ -95,3 +95,81 @@ selection-follows-focus. Radix implements the latter by tracking arrow keydown o
 `document` and reading that flag in the item's focus handler; happy-dom dispatches
 focus asynchronously relative to the flag being cleared, so the selection never
 lands. The failure is environmental, not a component bug — noted in the test.
+
+---
+
+# Batch 2 (#76): overlays and feedback
+
+`dialog` · `alert-dialog` · `confirmation-dialog` · `success-dialog` · `sheet` ·
+`popover` · `tooltip` · `dropdown-menu` · `toast` · `alert` · `spinner` · `skeleton` ·
+`progress` · `error-state`
+
+## Accessibility is asserted, not assumed
+
+#76 names focus trapping as the most common place a port silently regresses, so the
+tests check the mechanism rather than trusting Radix:
+
+- focus moves **into** the dialog on open, and `Tab` cycles without escaping
+- focus is **restored to the trigger** on close — the half that regresses quietly
+- the rest of the page is `aria-hidden` while a modal is open. Radix implements
+  modality that way, **not** via `aria-modal`; that was verified against the rendered
+  output after an `aria-modal` assertion failed.
+- `AlertDialog` uses `role="alertdialog"`, has no close button, and cannot be
+  dismissed by backdrop click — it must be answered
+- `Popover` is *not* modal, and a test asserts it leaves the page readable
+- `Tooltip` opens on keyboard focus, not only on hover
+
+## Copy is always passed in
+
+No primitive defaults an English string. `DialogContent` uses a union type:
+
+```ts
+{ showCloseButton?: true; closeLabel: string } | { showCloseButton: false; closeLabel?: never }
+```
+
+so rendering a close button with no accessible name is a **type error**, and there is
+no English default to leak into a Spanish UI. Pass `t('common.close')`. Same for
+`ConfirmationDialog` (`confirmText`/`cancelText`), `SuccessDialog` (`dismissText`) and
+`NetworkError` (`retryText`) — `NetworkError` omits its retry button entirely rather
+than invent a label.
+
+`src/i18n/noHardcodedStrings.test.ts` caught the two `sr-only` "Close" strings that
+started out hardcoded here. It works.
+
+## Behavioural fixes to the legacy components
+
+**`ConfirmationDialog` waits for `onConfirm`.** The legacy version closed immediately
+and left the returned promise unobserved, so a *failed* confirm looked exactly like a
+successful one. It now stays open until the promise settles, stays open on rejection so
+the caller has somewhere to show the error, and swallows the rejection only to avoid an
+unhandled-rejection warning — reporting is the caller's job.
+
+**`Progress` was rebuilt on Radix.** The legacy version was divs with no ARIA at all —
+no `role="progressbar"`, no `aria-valuenow` — so a screen reader saw a coloured box.
+
+**`Toaster` reads `data-admin-theme`.** The legacy version read `next-themes`, which
+does not exist here. The resolution lives in `toasterTheme.ts` and is unit-tested,
+because sonner renders a bare `<section>` that forwards neither `data-slot` nor
+`data-theme`, so the wiring cannot be asserted from the DOM.
+
+## Not ported, and why
+
+- **`LoadingErrorBoundary`** — #76 asked that error handling integrate with the
+  existing boundary rather than duplicate it. `src/app/RouteErrorBoundary.tsx` is the
+  router's `errorElement` and now renders `ErrorState`.
+- **`SuccessDisplay`** — a success message is a toast or an `Alert`; a third spelling
+  would be a third thing to keep in sync.
+- **`ValidationError`** — field errors belong to `FormMessage` (#75), which already
+  wires `aria-invalid` and `aria-describedby`.
+- **framer-motion**, again — `Loading`, `LoadingSpinner` and `skeleton` were 640 lines
+  of it. `animate-spin` and `animate-pulse` do the same job, and `index.css` already
+  honours `prefers-reduced-motion`.
+- **The legacy skeleton presets** (`LoadingCard`, `LoadingTable`, dashboard skeletons)
+  encoded the *legacy* page layouts, which is what this migration replaces. Shipping
+  them would ship dead shapes. `Skeleton` + `SkeletonText` remain.
+- **`LoadingButton`** — `Button` already has `disabled`, and a caller composes
+  `<Spinner />` as a child.
+
+What *did* survive from `Loading.tsx` is `LoadingRegion`, because it carries behaviour
+rather than layout: it is where `aria-busy` and the polite announcement belong, and it
+keeps children mounted so content is not replaced by a spinner.

@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router-dom'
 import { router } from './app/router'
 import { initAdminTheme } from './theme/adminTheme'
 import { TranslationProvider } from './i18n'
+import { Toaster } from './components/ui'
 import './index.css'
 
 // Before the first render, so the palette in src/styles/tokens.css is settled
@@ -18,6 +19,10 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <TranslationProvider>
       <RouterProvider router={router} />
+      {/* One Toaster for the whole app. #76 asked for App.tsx; that file is the
+          dead Vite scaffold (see the note above), so it mounts here beside the
+          router, which is what "app-level" means in this app. */}
+      <Toaster />
     </TranslationProvider>
   </StrictMode>,
 )
