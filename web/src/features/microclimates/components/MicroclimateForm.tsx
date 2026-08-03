@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import type { CreateQuestionInput } from '../api/microclimates'
 import type { MicroclimateTemplate } from '../api/microclimateTemplates'
+import { useTranslation } from '../../../i18n'
 
 export interface MicroclimateFormValues {
   title: string
@@ -22,6 +23,7 @@ interface MicroclimateFormProps {
 }
 
 export default function MicroclimateForm({ templates = [], onSubmit }: MicroclimateFormProps) {
+  const { t } = useTranslation()
   const [values, setValues] = useState<MicroclimateFormValues>(EMPTY_VALUES)
   const [optionsDraft, setOptionsDraft] = useState<Record<number, string>>({})
   const [error, setError] = useState<string | null>(null)
@@ -70,24 +72,24 @@ export default function MicroclimateForm({ templates = [], onSubmit }: Microclim
     <form onSubmit={handleSubmit}>
       {error && <p role="alert">{error}</p>}
       <label>
-        Title
+        {t('microclimates.title')}
         <input value={values.title} onChange={(e) => setValues({ ...values, title: e.target.value })} required />
       </label>
       <label>
-        Start time
+        {t('microclimates.startTime')}
         <input type="datetime-local" value={values.startTime} onChange={(e) => setValues({ ...values, startTime: e.target.value })} required />
       </label>
       <label>
-        End time
+        {t('microclimates.endTime')}
         <input type="datetime-local" value={values.endTime} onChange={(e) => setValues({ ...values, endTime: e.target.value })} required />
       </label>
       <label>
-        Target participants
+        {t('surveys.targetParticipants')}
         <input type="number" value={values.targetParticipantCount} onChange={(e) => setValues({ ...values, targetParticipantCount: Number(e.target.value) })} min={1} />
       </label>
       <label>
         <input type="checkbox" checked={values.anonymousResponses} onChange={(e) => setValues({ ...values, anonymousResponses: e.target.checked })} />
-        Anonymous responses
+        {t('microclimates.anonymousResponses')}
       </label>
 
       {templates.length > 0 && (
@@ -97,12 +99,12 @@ export default function MicroclimateForm({ templates = [], onSubmit }: Microclim
         // UsageCount against). It does not copy the template's questions into this form --
         // that auto-population is explicitly out of scope for this slice.
         <label>
-          Start from template (optional)
+          {t('actionPlans.startFromTemplate')}
           <select
             value={values.templateId ?? ''}
             onChange={(e) => setValues({ ...values, templateId: e.target.value || undefined })}
           >
-            <option value="">No template</option>
+            <option value="">{t('actionPlans.noTemplate')}</option>
             {templates.map((t) => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
@@ -110,10 +112,10 @@ export default function MicroclimateForm({ templates = [], onSubmit }: Microclim
         </label>
       )}
 
-      <h3>Questions</h3>
+      <h3>{t('surveys.questions')}</h3>
       {values.questions.map((question, index) => (
         <div key={index}>
-          <input placeholder="Question text" value={question.text} onChange={(e) => updateQuestion(index, { ...question, text: e.target.value })} />
+          <input placeholder={t('surveys.questionText')} value={question.text} onChange={(e) => updateQuestion(index, { ...question, text: e.target.value })} />
           <select value={question.type} onChange={(e) => updateQuestion(index, { ...question, type: e.target.value })}>
             {QUESTION_TYPES.map((t) => (
               <option key={t} value={t}>{t}</option>
@@ -121,9 +123,9 @@ export default function MicroclimateForm({ templates = [], onSubmit }: Microclim
           </select>
           {question.type === 'multiple_choice' && (
             <label>
-              Options (comma-separated, at least 2)
+              {t('microclimates.optionsCommaSeparatedMin2')}
               <input
-                placeholder="e.g. Red, Green, Blue"
+                placeholder={t('users.optionsExample')}
                 value={optionsDraft[index] ?? (question.options ?? []).join(', ')}
                 onChange={(e) => updateOptions(index, e.target.value)}
               />
@@ -131,9 +133,9 @@ export default function MicroclimateForm({ templates = [], onSubmit }: Microclim
           )}
         </div>
       ))}
-      <button type="button" onClick={addQuestion}>Add question</button>
+      <button type="button" onClick={addQuestion}>{t('surveys.addQuestion')}</button>
 
-      <button type="submit" disabled={submitting}>{submitting ? 'Creating…' : 'Create microclimate'}</button>
+      <button type="submit" disabled={submitting}>{submitting ? t('common.creating') : t('microclimates.createMicroclimate')}</button>
     </form>
   )
 }

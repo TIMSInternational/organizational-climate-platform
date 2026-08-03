@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import type { CreateKpiInput, CreateObjectiveInput } from '../api/actionPlans'
 import type { ActionPlanTemplate } from '../api/actionPlanTemplates'
+import { useTranslation } from '../../../i18n'
 
 export interface ActionPlanFormValues {
   title: string
@@ -23,6 +24,7 @@ interface ActionPlanFormProps {
 }
 
 export default function ActionPlanForm({ templates = [], onSubmit }: ActionPlanFormProps) {
+  const { t } = useTranslation()
   const [values, setValues] = useState<ActionPlanFormValues>(EMPTY_VALUES)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -61,19 +63,19 @@ export default function ActionPlanForm({ templates = [], onSubmit }: ActionPlanF
     <form onSubmit={handleSubmit}>
       {error && <p role="alert">{error}</p>}
       <label>
-        Title
+        {t('users.title')}
         <input value={values.title} onChange={(e) => setValues({ ...values, title: e.target.value })} required />
       </label>
       <label>
-        Description
+        {t('actionPlans.description')}
         <textarea value={values.description} onChange={(e) => setValues({ ...values, description: e.target.value })} required />
       </label>
       <label>
-        Due date
+        {t('actionPlans.dueDate')}
         <input type="date" value={values.dueDate} onChange={(e) => setValues({ ...values, dueDate: e.target.value })} required />
       </label>
       <label>
-        Priority
+        {t('actionPlans.priority')}
         <select value={values.priority} onChange={(e) => setValues({ ...values, priority: e.target.value })}>
           {PRIORITIES.map((p) => (
             <option key={p} value={p}>{p}</option>
@@ -88,12 +90,12 @@ export default function ActionPlanForm({ templates = [], onSubmit }: ActionPlanF
         // into this form -- that auto-population is explicitly out of scope
         // for this slice.
         <label>
-          Start from template (optional)
+          {t('actionPlans.startFromTemplate')}
           <select
             value={values.templateId ?? ''}
             onChange={(e) => setValues({ ...values, templateId: e.target.value || undefined })}
           >
-            <option value="">No template</option>
+            <option value="">{t('actionPlans.noTemplate')}</option>
             {templates.map((t) => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
@@ -101,12 +103,12 @@ export default function ActionPlanForm({ templates = [], onSubmit }: ActionPlanF
         </label>
       )}
 
-      <h3>KPIs</h3>
+      <h3>{t('actionPlans.kpisShort')}</h3>
       {values.kpis.map((kpi, index) => (
         <div key={index}>
-          <input placeholder="Name" value={kpi.name} onChange={(e) => updateKpi(index, { ...kpi, name: e.target.value })} />
-          <input type="number" placeholder="Target" value={kpi.targetValue} onChange={(e) => updateKpi(index, { ...kpi, targetValue: Number(e.target.value) })} />
-          <input placeholder="Unit" value={kpi.unit} onChange={(e) => updateKpi(index, { ...kpi, unit: e.target.value })} />
+          <input placeholder={t('departments.name')} value={kpi.name} onChange={(e) => updateKpi(index, { ...kpi, name: e.target.value })} />
+          <input type="number" placeholder={t('dashboard.target')} value={kpi.targetValue} onChange={(e) => updateKpi(index, { ...kpi, targetValue: Number(e.target.value) })} />
+          <input placeholder={t('actionPlans.unit')} value={kpi.unit} onChange={(e) => updateKpi(index, { ...kpi, unit: e.target.value })} />
           <select value={kpi.measurementFrequency} onChange={(e) => updateKpi(index, { ...kpi, measurementFrequency: e.target.value })}>
             {FREQUENCIES.map((f) => (
               <option key={f} value={f}>{f}</option>
@@ -114,18 +116,18 @@ export default function ActionPlanForm({ templates = [], onSubmit }: ActionPlanF
           </select>
         </div>
       ))}
-      <button type="button" onClick={addKpi}>Add KPI</button>
+      <button type="button" onClick={addKpi}>{t('actionPlans.addKPI')}</button>
 
-      <h3>Objectives</h3>
+      <h3>{t('actionPlans.objectives')}</h3>
       {values.objectives.map((objective, index) => (
         <div key={index}>
-          <input placeholder="Description" value={objective.description} onChange={(e) => updateObjective(index, { ...objective, description: e.target.value })} />
-          <input placeholder="Success criteria" value={objective.successCriteria} onChange={(e) => updateObjective(index, { ...objective, successCriteria: e.target.value })} />
+          <input placeholder={t('actionPlans.description')} value={objective.description} onChange={(e) => updateObjective(index, { ...objective, description: e.target.value })} />
+          <input placeholder={t('actionPlans.successCriteria')} value={objective.successCriteria} onChange={(e) => updateObjective(index, { ...objective, successCriteria: e.target.value })} />
         </div>
       ))}
-      <button type="button" onClick={addObjective}>Add objective</button>
+      <button type="button" onClick={addObjective}>{t('actionPlans.addObjective')}</button>
 
-      <button type="submit" disabled={submitting}>{submitting ? 'Creating…' : 'Create action plan'}</button>
+      <button type="submit" disabled={submitting}>{submitting ? t('common.creating') : t('actionPlans.createActionPlan')}</button>
     </form>
   )
 }

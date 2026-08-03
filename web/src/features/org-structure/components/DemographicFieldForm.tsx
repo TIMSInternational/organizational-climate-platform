@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { DemographicField } from '../api/demographicFields'
+import { useTranslation } from '../../../i18n'
 
 export interface DemographicFieldFormValues {
   field: string
@@ -20,6 +21,7 @@ interface DemographicFieldFormProps {
 const TYPES = ['select', 'text', 'number', 'date']
 
 export default function DemographicFieldForm({ initialValues, submitLabel, onSubmit }: DemographicFieldFormProps) {
+  const { t } = useTranslation()
   const isEditMode = Boolean(initialValues?.field)
   const [values, setValues] = useState<DemographicFieldFormValues>({
     field: initialValues?.field ?? '',
@@ -40,7 +42,7 @@ export default function DemographicFieldForm({ initialValues, submitLabel, onSub
     try {
       await onSubmit(values)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setSubmitting(false)
     }
@@ -50,15 +52,15 @@ export default function DemographicFieldForm({ initialValues, submitLabel, onSub
     <form onSubmit={handleSubmit}>
       {error && <p role="alert">{error}</p>}
       <label>
-        Field key
+        {t('users.fieldKey')}
         <input value={values.field} onChange={(e) => setValues({ ...values, field: e.target.value })} required disabled={Boolean(initialValues?.field)} />
       </label>
       <label>
-        Label
+        {t('common.label')}
         <input value={values.label} onChange={(e) => setValues({ ...values, label: e.target.value })} required />
       </label>
       <label>
-        Type
+        {t('common.type')}
         <select value={values.type} onChange={(e) => setValues({ ...values, type: e.target.value })} disabled={Boolean(initialValues?.field)}>
           {TYPES.map((type) => (
             <option key={type} value={type}>{type}</option>
@@ -67,16 +69,16 @@ export default function DemographicFieldForm({ initialValues, submitLabel, onSub
       </label>
       {values.type === 'select' && (
         <label>
-          Options (comma-separated)
+          {t('users.optionsCommaSeparated')}
           <input value={values.optionsText} onChange={(e) => setValues({ ...values, optionsText: e.target.value })} />
         </label>
       )}
       <label>
         <input type="checkbox" checked={values.required} onChange={(e) => setValues({ ...values, required: e.target.checked })} />
-        Required
+        {t('common.required')}
       </label>
       <label>
-        Order
+        {t('common.order')}
         <input
           type="number"
           value={values.order}
@@ -86,10 +88,10 @@ export default function DemographicFieldForm({ initialValues, submitLabel, onSub
       {isEditMode && (
         <label>
           <input type="checkbox" checked={values.isActive} onChange={(e) => setValues({ ...values, isActive: e.target.checked })} />
-          Active
+          {t('common.active')}
         </label>
       )}
-      <button type="submit" disabled={submitting}>{submitting ? 'Saving…' : submitLabel}</button>
+      <button type="submit" disabled={submitting}>{submitting ? t('common.saving') : submitLabel}</button>
     </form>
   )
 }

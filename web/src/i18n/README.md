@@ -68,21 +68,23 @@ merely imperfect rather than broken.
 ## Adding copy
 
 Use `t()`. `noHardcodedStrings.test.ts` walks the TypeScript AST of every `.tsx`
-file and fails on literal JSX text, literal user-facing props, and literal
-copy-shaped props such as `submitLabel`.
+file and fails on literal JSX text, literal user-facing props, literal copy-shaped
+props such as `submitLabel`, and literal ternaries rendered as children.
 
-Every page is translated. The 24 feature components are not — their 157 literals are
-recorded in `hardcodedStringsBaseline.json`, which is a ratchet, not an allowlist:
+**Every page and every feature component is translated.** #78 did the pages and left
+the 24 components on a ratcheted baseline of 157 literals; #176 drained that baseline
+to zero and deleted it. The check is now absolute — there is no baseline to add an
+exception to. If a literal genuinely is not translatable copy, add it to `ALLOWED` in
+the test with a reason.
 
-- new copy anywhere fails, including in files already in the baseline
-- pages are held at zero unconditionally
-- a baseline entry that no longer exists also fails, so the file can only shrink
+Two patterns worth copying when you add copy:
 
-Translate a component, then regenerate:
-
-```sh
-UPDATE_I18N_BASELINE=1 npx vitest run src/i18n/noHardcodedStrings.test.ts
-```
-
-Deriving the baseline any other way loses fidelity — multi-line JSX text and
-embedded quotes have to round-trip exactly.
+- **Never split a sentence around a JSX expression.** `{n} row(s) succeeded, {e}
+  error(s), out of {t} row(s) read.` was three fragments; Spanish cannot keep that
+  word order, so it is one key with three placeholders (`users.bulkImportSummary`).
+  A *label* followed by its value is fine — `microclimates.responsesLabel` stays a
+  label, because `Responses: 12` is word-order stable.
+- **Reuse a key before adding one.** 40 of the 100 component strings already had
+  keys. The exception is when the existing copy is genuinely worse: `users.searchUsers`
+  was `Search users...`, which drops the hint about *which* fields are searchable, so
+  `users.searchByNameOrEmail` was added rather than flattening onto it.

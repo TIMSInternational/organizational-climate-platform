@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { Kpi, Objective, KpiUpdateInput, ObjectiveUpdateInput } from '../api/actionPlans'
+import { useTranslation } from '../../../i18n'
 
 export interface ProgressUpdateFormValues {
   overallNotes: string
@@ -14,6 +15,7 @@ interface ProgressUpdateFormProps {
 }
 
 export default function ProgressUpdateForm({ kpis, objectives, onSubmit }: ProgressUpdateFormProps) {
+  const { t } = useTranslation()
   const [overallNotes, setOverallNotes] = useState('')
   const [kpiValues, setKpiValues] = useState<Record<string, number>>(Object.fromEntries(kpis.map((k) => [k.id, k.currentValue])))
   const [objectiveStatuses, setObjectiveStatuses] = useState<Record<string, string>>(Object.fromEntries(objectives.map((o) => [o.id, o.currentStatus])))
@@ -46,7 +48,7 @@ export default function ProgressUpdateForm({ kpis, objectives, onSubmit }: Progr
       })
       setOverallNotes('')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to record progress')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setSubmitting(false)
     }
@@ -56,7 +58,7 @@ export default function ProgressUpdateForm({ kpis, objectives, onSubmit }: Progr
     <form onSubmit={handleSubmit}>
       {error && <p role="alert">{error}</p>}
       <label>
-        Notes
+        {t('actionPlans.notes')}
         <textarea value={overallNotes} onChange={(e) => setOverallNotes(e.target.value)} required />
       </label>
       {kpis.map((kpi) => (
@@ -72,7 +74,7 @@ export default function ProgressUpdateForm({ kpis, objectives, onSubmit }: Progr
           <input type="number" min={0} max={100} value={objectivePercentages[objective.id]} onChange={(e) => setObjectivePercentages({ ...objectivePercentages, [objective.id]: Number(e.target.value) })} />
         </div>
       ))}
-      <button type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Record progress'}</button>
+      <button type="submit" disabled={submitting}>{submitting ? t('common.saving') : t('actionPlans.recordProgress')}</button>
     </form>
   )
 }

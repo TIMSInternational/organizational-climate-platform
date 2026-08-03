@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { CompanyValidation } from './companyValidation'
+import { useTranslation } from '../../../i18n'
 
 export interface CompanyFormValues {
   name: string
@@ -19,6 +20,7 @@ interface CompanyFormProps {
 const EMPTY_VALUES: CompanyFormValues = { name: '', emailDomain: '', industry: '', size: '', country: '', subscriptionTier: '' }
 
 export default function CompanyForm({ initialValues, submitLabel, onSubmit }: CompanyFormProps) {
+  const { t } = useTranslation()
   const [values, setValues] = useState<CompanyFormValues>({ ...EMPTY_VALUES, ...initialValues })
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -40,40 +42,40 @@ export default function CompanyForm({ initialValues, submitLabel, onSubmit }: Co
     <form onSubmit={handleSubmit}>
       {error && <p role="alert">{error}</p>}
       <label>
-        Name
+        {t('departments.name')}
         <input value={values.name} onChange={(e) => setValues({ ...values, name: e.target.value })} required />
       </label>
       <label>
-        Domain
+        {t('dashboard.domain')}
         <input value={values.emailDomain} onChange={(e) => setValues({ ...values, emailDomain: e.target.value })} required />
       </label>
       <label>
-        Industry
+        {t('dashboard.industry')}
         <input value={values.industry} onChange={(e) => setValues({ ...values, industry: e.target.value })} required />
       </label>
       <label>
-        Size
+        {t('dashboard.size')}
         <select value={values.size} onChange={(e) => setValues({ ...values, size: e.target.value })} required>
-          <option value="">Select size</option>
+          <option value="">{t('dashboard.selectSize')}</option>
           {CompanyValidation.sizes.map((size) => (
             <option key={size} value={size}>{size}</option>
           ))}
         </select>
       </label>
       <label>
-        Country
+        {t('dashboard.country')}
         <input value={values.country} onChange={(e) => setValues({ ...values, country: e.target.value })} required />
       </label>
       <label>
-        Subscription tier
+        {t('dashboard.subscriptionTier')}
         <select value={values.subscriptionTier} onChange={(e) => setValues({ ...values, subscriptionTier: e.target.value })}>
-          <option value="">Default (basic)</option>
+          <option value="">{t('dashboard.defaultBasic')}</option>
           {CompanyValidation.subscriptionTiers.map((tier) => (
             <option key={tier} value={tier}>{tier}</option>
           ))}
         </select>
       </label>
-      <button type="submit" disabled={submitting}>{submitting ? 'Saving…' : submitLabel}</button>
+      <button type="submit" disabled={submitting}>{submitting ? t('common.saving') : submitLabel}</button>
     </form>
   )
 }

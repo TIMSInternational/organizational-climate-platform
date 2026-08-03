@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { bulkImportUsers, type BulkImportResponse } from '../api/bulkImport'
+import { useTranslation } from '../../../i18n'
 
 interface BulkImportPanelProps {
   baseUrl: string
@@ -8,6 +9,7 @@ interface BulkImportPanelProps {
 }
 
 export default function BulkImportPanel({ baseUrl, companyId, onImported }: BulkImportPanelProps) {
+  const { t } = useTranslation()
   const [file, setFile] = useState<File | null>(null)
   const [result, setResult] = useState<BulkImportResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -21,7 +23,7 @@ export default function BulkImportPanel({ baseUrl, companyId, onImported }: Bulk
       const response = await bulkImportUsers(baseUrl, companyId, file, true)
       setResult(response)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Preview failed')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setSubmitting(false)
     }
@@ -36,7 +38,7 @@ export default function BulkImportPanel({ baseUrl, companyId, onImported }: Bulk
       setResult(response)
       onImported()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Import failed')
+      setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setSubmitting(false)
     }
@@ -45,10 +47,10 @@ export default function BulkImportPanel({ baseUrl, companyId, onImported }: Bulk
   return (
     <div>
       {error && <p role="alert">{error}</p>}
-      <p>CSV columns: name, email, role, department. Embedded commas inside a field are not supported.</p>
+      <p>{t('users.csvColumnsHint')}</p>
       <input type="file" accept=".csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-      <button onClick={handlePreview} disabled={!file || submitting}>Preview</button>
-      <button onClick={handleConfirm} disabled={!file || submitting}>Import</button>
+      <button onClick={handlePreview} disabled={!file || submitting}>{t('common.preview')}</button>
+      <button onClick={handleConfirm} disabled={!file || submitting}>{t('common.import')}</button>
       {result && result.rows.length === 0 && (
         // Previously an empty result rendered as just an empty table with column
         // headers and no message -- indistinguishable from "the file had zero
@@ -56,15 +58,27 @@ export default function BulkImportPanel({ baseUrl, companyId, onImported }: Bulk
         // recognizes a missing header, this mainly guards a genuinely empty file,
         // but never leave a zero-row result unexplained.
         <p role="alert">
-          No rows were found in this file. Make sure it has at least one data row in the format: name, email, role, department.
+          {t('users.noRowsFound')}
         </p>
       )}
       {result && result.rows.length > 0 && (
         <>
-          <p>{result.successCount} row(s) succeeded, {result.errorCount} error(s), out of {result.rows.length} row(s) read.</p>
+          <p>
+            {t('users.bulkImportSummary', {
+              succeeded: result.successCount,
+              errors: result.errorCount,
+              total: result.rows.length,
+            })}
+          </p>
           <table>
             <thead>
-              <tr><th>Row</th><th>Name</th><th>Email</th><th>Status</th><th>Errors</th></tr>
+              <tr>
+                <th>{t('users.row')}</th>
+                <th>{t('users.name')}</th>
+                <th>{t('users.email')}</th>
+                <th>{t('common.status')}</th>
+                <th>{t('users.errors')}</th>
+              </tr>
             </thead>
             <tbody>
               {result.rows.map((row) => (
