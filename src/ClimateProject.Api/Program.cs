@@ -1,3 +1,4 @@
+using ClimateProject.Api;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Cors;
@@ -153,16 +154,67 @@ app.MapOpenApi();
 
 app.MapGet("/", () => Results.Redirect("/health"));
 
+// Liveness. Deliberately a static literal with no dependency probe: this is what
+// App Runner's own health check polls (HealthCheckPath in the service template), and
+// tying that to the database would let a transient Postgres blip convince App Runner
+// the container is dead and tear down a service whose process is perfectly healthy.
+// Use /ready for "can this instance actually serve traffic".
 app.MapGet("/health", () => Results.Ok(new
 {
     service = "climate-project-api",
     status = "ok"
 }));
 
+// Readiness. Unlike /health this performs a real round-trip to Postgres, which is
+// what makes it usable as a deploy gate: the previous canary hit /health, so an
+// instance with a broken/misconfigured connection string booted, answered the canary
+// 200, and the deploy was reported successful. Everything then 500'd on first real
+// request. `SELECT 1` is deliberately a query and not `CanConnectAsync` -- the latter
+// can be satisfied by a pooler handshake without proving the session can execute.
+//
+// Returns 503 on failure so orchestrators and the deploy canary can distinguish "not
+// ready" from "broken request". The exception is logged but never echoed to the
+// caller: this endpoint is unauthenticated, and Npgsql failure messages contain the
+// host, database, and username of the production database.
+app.MapGet("/ready", async (
+    ClimateProjectDbContext dbContext,
+    ILoggerFactory loggerFactory,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        await dbContext.Database.ExecuteSqlRawAsync("SELECT 1", cancellationToken);
+
+        return Results.Ok(new ReadinessResponse(
+            Service: "climate-project-api",
+            Status: "ready",
+            Database: "ok"));
+    }
+    catch (Exception exception)
+    {
+        loggerFactory
+            .CreateLogger("ClimateProject.Api.Readiness")
+            .LogError(exception, "Readiness probe failed: database round-trip did not succeed.");
+
+        return Results.Json(
+            new ReadinessResponse(
+                Service: "climate-project-api",
+                Status: "not-ready",
+                Database: "unreachable"),
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+// Commit and BuiltAt are what make this endpoint able to answer "is what's running
+// actually what we shipped?". Without them /version was invariant across code
+// changes and could not distinguish a successful deploy from one that silently
+// no-op'd. See BuildInfo.cs.
 app.MapGet("/version", () => Results.Ok(new VersionResponse(
     Service: "climate-project-api",
     Runtime: Environment.Version.ToString(),
-    Environment: app.Environment.EnvironmentName)));
+    Environment: app.Environment.EnvironmentName,
+    Commit: BuildInfo.CommitSha,
+    BuiltAt: BuildInfo.BuildTimestamp)));
 
 app.MapAuthEndpoints();
 app.MapCompanyEndpoints();
@@ -182,9 +234,16 @@ app.MapMicroclimateTemplateEndpoints();
 
 app.Run();
 
+internal sealed record ReadinessResponse(
+    string Service,
+    string Status,
+    string Database);
+
 internal sealed record VersionResponse(
     string Service,
     string Runtime,
-    string Environment);
+    string Environment,
+    string Commit,
+    string BuiltAt);
 
 public partial class Program;

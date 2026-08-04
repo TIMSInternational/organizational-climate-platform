@@ -3,13 +3,21 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+# Build provenance, surfaced by GET /version so a running instance can be traced
+# back to the commit it was built from. Defaulted to "unknown" so a bare
+# `docker build .` still works; deploy-prod.yml passes the real values.
+ARG COMMIT_SHA=unknown
+ARG BUILD_TIMESTAMP=unknown
+
 COPY . .
 RUN dotnet restore ClimateProject.slnx
 RUN dotnet publish src/ClimateProject.Api/ClimateProject.Api.csproj \
     --configuration Release \
     --output /app/publish \
     --no-restore \
-    /p:UseAppHost=false
+    /p:UseAppHost=false \
+    "/p:CommitSha=${COMMIT_SHA}" \
+    "/p:BuildTimestamp=${BUILD_TIMESTAMP}"
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
