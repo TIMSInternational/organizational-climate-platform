@@ -1,7 +1,31 @@
 # `charts/` — data visualisation
 
-Foundation for #79. This directory currently holds the **palette layer**; the eleven
-chart components land on top of it.
+Progress on #79. The **palette layer** plus the first three components; eight remain.
+
+| Component | Replaces | Status |
+|---|---|---|
+| `BarChart` | `AnimatedBarChart` | done — grouped and stacked |
+| `LineChart` | `AnimatedLineChart` | done |
+| `Counter` | `AnimatedCounter` | done |
+| `ChartFrame` / `ChartCanvas` | — | shared scaffolding: title, loading, empty, table view, sizing |
+| `PieChart` | `AnimatedPieChart` | to do |
+| `HeatMap` | `HeatMap` + `widgets/heatmap` | to do — consolidate |
+| `WordCloud` | `WordCloud` + `widgets/word-cloud` | to do — consolidate |
+| `KPIDisplay` | `KPIDisplay` | to do |
+| `ParticipationTracker` | `ParticipationTracker` + `widgets/progress-bar` | to do — consolidate |
+| `RealTimeChartContainer` | `RealTimeChartContainer` | to do — polling, not WebSockets |
+| `SentimentVisualization` | `SentimentVisualization` | to do — stub data pending #67 |
+| `RecommendationCard` | `RecommendationCard` | to do |
+
+**Dependency:** `recharts` pinned at `3.10.1` (exact, not a range). Legacy used
+`^3.1.2`, so this is the same major; 3.10.1 declares React 19 support and `npm audit`
+stays at 0.
+
+**No `framer-motion`.** All eleven legacy components used it, and this project does not
+port it (~1700 legacy lines dropped in #75–#77). That is why the `Animated*` prefix is
+gone: recharts' own `isAnimationActive` covers bars growing from the baseline, and
+`Counter` counts up with `requestAnimationFrame` in a few lines — while also respecting
+`prefers-reduced-motion`, which the legacy version did not.
 
 ## Why a chart palette exists separately from the accents
 
@@ -74,22 +98,41 @@ well as `ui/`, and a raw hex fails the build.
 - **Identity is never colour-alone.** For ≥2 series a legend is always present, and ≤4
   series are also directly labelled.
 
+## Testing charts under happy-dom
+
+Two things were **probed, not assumed**, and both shape how these tests are written.
+
+**1. `ResponsiveContainer` renders nothing.** It measures its parent with
+`getBoundingClientRect`, which returns 0 under happy-dom:
+
+```
+explicit width/height  ->  1 <svg>, 2 bar rectangles, ticks ['a','b']
+ResponsiveContainer    ->  0 <svg>, 0 rectangles, an empty inner <div style="width:0px">
+```
+
+So **every chart test passes an explicit `width`**; the app omits it and gets the
+responsive path. This is deliberately not solved by stubbing `getBoundingClientRect`
+globally — that makes every chart test depend on a fixture that silently governs layout.
+
+**2. Bars have no observable fill.** recharts renders each bar as an empty group,
+`<g class="recharts-bar-rectangle"><g class="recharts-inactive-bar"></g></g>`, with no
+`<path>` inside. So a bar's `fill` and `stroke-width` cannot be asserted here. Colour is
+asserted on the **legend icon** instead, which is a fair proxy — the swatch is exactly what
+a reader matches a bar against — but it cannot catch a bar drawn in a different colour from
+its own swatch. Line charts are luckier: `.recharts-line-curve` carries a real `stroke`.
+
+Where an attribute genuinely is not observable — the 2px stacked-segment gap — the test is
+**omitted with a comment saying so**, rather than written as an assertion that cannot fail.
+Those belong to the visual check the acceptance criteria already require.
+
 ## Still to do for #79
 
-The eleven components, on this foundation. Notes gathered while surveying the legacy code:
-
-- **Charting dependency is not yet chosen or added.** Legacy used `recharts ^3.1.2`. That
-  is the obvious default, but confirm before adding — the acceptance criteria ask for it to
-  be pinned deliberately.
-- **All eleven legacy components use `framer-motion`**, which this project does not port
-  (~1700 legacy lines were dropped for #75–#77 in favour of the three `index.css`
-  animations plus `animate-spin`/`animate-pulse`). So the `Animated*` prefix does not
-  survive as-is, and the animation approach is a decision rather than a port.
-- **Widget duplicates** exist for `heatmap`, `word-cloud` and `progress-bar` in
+- The eight components in the table above.
+- **Widget duplicates** for `heatmap`, `word-cloud` and `progress-bar` in
   `climate-project/src/components/widgets/`. Consolidate; do not port both copies.
-- **Empty and loading states are required per chart** — analytics pages routinely render
-  before data arrives.
-- **`RealTimeChartContainer` must use polling** (3–5s), not WebSockets, per the
-  microclimates design.
-- **`WordCloud` and `SentimentVisualization` have no real data source yet** — sentiment is
+- **`RealTimeChartContainer` must poll** (3–5s), not use WebSockets, per the microclimates
+  design.
+- **`WordCloud` and `SentimentVisualization` have no real data source** — sentiment is
   stubbed pending #67. Build them to render whatever the stub returns.
+- **Render in at least one real page**, which the acceptance criteria require and which is
+  also the only way to verify the mark specs that happy-dom cannot see.
