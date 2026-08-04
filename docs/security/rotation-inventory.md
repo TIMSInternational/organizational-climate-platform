@@ -84,7 +84,7 @@ Consequences to plan for:
 
 | Item | Where | Notes | Rotated? |
 |---|---|---|---|
-| `InternalApiKey` | Secrets Manager (`InternalApiKeySecretArn`) → env `InternalApiKey` | Static bearer token guarding `/api/internal/*`; the only caller is climate-tracking's backend, which passes it as `ClimateProjectInternalApiKey`. **Rotate on both sides together.** `InternalApiKeyFilter` fails closed, so a mismatch 500s every `/api/internal/*` request with `"Internal API is not configured."` rather than failing open. | ☐ |
+| `InternalApiKey` | Secrets Manager (`InternalApiKeySecretArn`) → env `InternalApiKey` | Static bearer token guarding `/api/internal/*`; the only caller is climate-tracking's backend, which passes it as `ClimateProjectInternalApiKey`. **Rotate on both sides together.** Two distinct failure modes, worth keeping apart when planning the rotation: an **unset/empty** value now fails the host at *startup* (`.ValidateOnStart()`, added by #189), so a blank rotation means the service does not boot and the deploy fails outright — loud, not silent. A **mismatched** value (set on one side, stale on the other) is not a 500: `InternalApiKeyFilter` returns **401 `"Invalid or missing internal API key."`** per request, failing closed. The filter's 500 `"Internal API is not configured."` branch is now unreachable in a running service and is retained only as defence in depth. | ☐ |
 
 ### D. Identity / OAuth
 

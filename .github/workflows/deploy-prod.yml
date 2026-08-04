@@ -12,6 +12,16 @@ env:
   BOOTSTRAP_STACK_NAME: climate-project-api-bootstrap
   SERVICE_STACK_NAME: climate-project-api-prod
   SERVICE_NAME: climate-project-api-prod
+  # App Runner's own health-check path. Deliberately the *static* /health and not
+  # /ready: App Runner tears down instances that fail this probe, so pointing it at
+  # a database-dependent endpoint would let a transient Postgres blip destroy a
+  # perfectly healthy service. /ready is used as the deploy gate instead, at the end
+  # of this job.
+  HEALTH_CHECK_PATH: /health
+  # Passed explicitly rather than relying on the template defaults. See the comment
+  # on the deploy step for why every parameter is now supplied.
+  SERVICE_CPU: 0.25 vCPU
+  SERVICE_MEMORY: 0.5 GB
 
 jobs:
   deploy:
@@ -22,6 +32,42 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Fails in seconds, before any image is built or pushed, if the deploy is
+      # missing configuration. Previously a missing value surfaced either as an
+      # opaque CloudFormation "parameter not supplied" error ~10 minutes in, or --
+      # worse -- not at all, because `aws cloudformation deploy` silently reuses the
+      # previous value on an update.
+      - name: Verify deploy configuration is present
+        env:
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          CORS_ALLOWED_ORIGIN: ${{ vars.CORS_ALLOWED_ORIGIN }}
+          CORS_ALLOWED_WILDCARD_ORIGIN: ${{ vars.CORS_ALLOWED_WILDCARD_ORIGIN }}
+          TRACKING_JWT_SECRET_ARN: ${{ vars.TRACKING_JWT_SECRET_ARN }}
+          DATABASE_CONNECTION_STRING_SECRET_ARN: ${{ vars.DATABASE_CONNECTION_STRING_SECRET_ARN }}
+          INTERNAL_API_KEY_SECRET_ARN: ${{ vars.INTERNAL_API_KEY_SECRET_ARN }}
+          MIGRATION_DATABASE_CONNECTION_STRING: ${{ secrets.MIGRATION_DATABASE_CONNECTION_STRING }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in \
+            AWS_ACCOUNT_ID \
+            CORS_ALLOWED_ORIGIN \
+            CORS_ALLOWED_WILDCARD_ORIGIN \
+            TRACKING_JWT_SECRET_ARN \
+            DATABASE_CONNECTION_STRING_SECRET_ARN \
+            INTERNAL_API_KEY_SECRET_ARN \
+            MIGRATION_DATABASE_CONNECTION_STRING; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is empty. Set it on the 'production' environment (repository variable, or secret for MIGRATION_DATABASE_CONNECTION_STRING) before dispatching this workflow."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Refusing to deploy with incomplete configuration." >&2
+            exit 1
+          fi
+          echo "All required deploy configuration is present."
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -76,12 +122,62 @@ jobs:
           set -euo pipefail
           IMAGE_TAG="prod-${GITHUB_SHA}"
           IMAGE_URI="${{ steps.bootstrap.outputs.ecr_repository_uri }}:${IMAGE_TAG}"
-          docker build --platform linux/amd64 -t "$IMAGE_URI" .
+          BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          docker build --platform linux/amd64 \
+            --build-arg "COMMIT_SHA=${GITHUB_SHA}" \
+            --build-arg "BUILD_TIMESTAMP=${BUILD_TIMESTAMP}" \
+            -t "$IMAGE_URI" .
           docker tag "$IMAGE_URI" "${{ steps.bootstrap.outputs.ecr_repository_uri }}:prod-latest"
           docker push "$IMAGE_URI"
           docker push "${{ steps.bootstrap.outputs.ecr_repository_uri }}:prod-latest"
           echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
 
+      # Applied *before* the new image is deployed, so the schema is never behind the
+      # code that expects it. There was previously no migration step here at all and
+      # no Migrate() call anywhere in src/, so a fully green deploy shipped code
+      # against whatever schema the database happened to already have.
+      #
+      # KNOWN WINDOW, deliberately accepted: between this step and the App Runner
+      # rollout below, the currently-live (old) code runs against the new schema.
+      # That is safe for purely additive migrations but NOT for rewrites -- notably
+      # 20260804002058_RenameOpenTextQuestionTypeToOpenEnded, which rewrites existing
+      # question-type rows from 'open_text' to 'open_ended'. Old code reading those
+      # rows will not recognise the new value until the rollout completes. For that
+      # migration specifically the exposure is a few minutes of a dark service; if a
+      # future migration cannot tolerate this window it needs the expand/contract
+      # treatment (deploy tolerant code first, migrate second) rather than a change
+      # to this step's position.
+      - name: Apply EF Core migrations
+        env:
+          # The Supabase DIRECT connection (port 5432), never the 6543 pooler.
+          # Supavisor in transaction mode multiplexes sessions across backends, which
+          # breaks the session-scoped advisory lock EF uses to serialise migrations
+          # and the multi-statement transactions the migrations run in. The guard
+          # below enforces this rather than trusting the secret to be set correctly.
+          ConnectionStrings__ClimateProject: ${{ secrets.MIGRATION_DATABASE_CONNECTION_STRING }}
+        run: |
+          set -euo pipefail
+
+          if printf '%s' "$ConnectionStrings__ClimateProject" | grep -qE '(^|[^0-9])6543([^0-9]|$)'; then
+            echo "::error::MIGRATION_DATABASE_CONNECTION_STRING points at port 6543 (the Supabase transaction-mode pooler). EF Core migrations require the direct connection on 5432." >&2
+            exit 1
+          fi
+
+          dotnet tool restore
+          dotnet dotnet-ef database update \
+            --project src/ClimateProject.Infrastructure \
+            --startup-project src/ClimateProject.Api \
+            --configuration Release
+
+      # Every parameter is now passed explicitly, including the ones that have
+      # template defaults. `aws cloudformation deploy` reuses a parameter's PREVIOUS
+      # STACK VALUE when it is omitted -- it does not fall back to the template
+      # default -- so omitting parameters made the deployed configuration a function
+      # of invisible prior stack state rather than of this repository. Concretely:
+      # this step used to pass 3 of the template's 11 parameters, and
+      # InternalApiKeySecretArn (added 2026-08-01, after this workflow was last
+      # touched on 2026-07-30) would have failed the first dispatch outright unless
+      # it had already been supplied by hand.
       - name: Deploy App Runner service stack
         run: |
           set -euo pipefail
@@ -93,7 +189,15 @@ jobs:
             --parameter-overrides \
               ServiceName="$SERVICE_NAME" \
               ImageIdentifier="${{ steps.image.outputs.image_uri }}" \
-              EcrAccessRoleArn="${{ steps.bootstrap.outputs.ecr_access_role_arn }}"
+              EcrAccessRoleArn="${{ steps.bootstrap.outputs.ecr_access_role_arn }}" \
+              HealthCheckPath="$HEALTH_CHECK_PATH" \
+              Cpu="$SERVICE_CPU" \
+              Memory="$SERVICE_MEMORY" \
+              CorsAllowedOrigin="${{ vars.CORS_ALLOWED_ORIGIN }}" \
+              CorsAllowedWildcardOrigin="${{ vars.CORS_ALLOWED_WILDCARD_ORIGIN }}" \
+              TrackingJwtSecretArn="${{ vars.TRACKING_JWT_SECRET_ARN }}" \
+              DatabaseConnectionStringSecretArn="${{ vars.DATABASE_CONNECTION_STRING_SECRET_ARN }}" \
+              InternalApiKeySecretArn="${{ vars.INTERNAL_API_KEY_SECRET_ARN }}"
 
       - name: Read App Runner URL
         id: service
@@ -109,19 +213,44 @@ jobs:
           fi
           echo "base_url=https://$SERVICE_URL" >> "$GITHUB_OUTPUT"
 
-      - name: Health canary
+      # Gates on /ready, not /health. /health is a static literal that cannot observe
+      # the database, so the old canary would pass against an instance whose
+      # connection string was wrong or whose database was unreachable -- the deploy
+      # was then reported successful and every real request 500'd. /ready performs a
+      # `SELECT 1` round-trip, so a 200 here means the instance can actually serve.
+      - name: Readiness canary
         run: |
           set -euo pipefail
-          URL="${{ steps.service.outputs.base_url }}/health"
+          URL="${{ steps.service.outputs.base_url }}/ready"
           for i in $(seq 1 10); do
-            STATUS=$(curl -s -o /tmp/health_body -w "%{http_code}" "$URL" || echo "000")
+            STATUS=$(curl -s -o /tmp/ready_body -w "%{http_code}" "$URL" || echo "000")
             if [ "$STATUS" = "200" ]; then
-              echo "Health check passed:"
-              cat /tmp/health_body
+              echo "Readiness check passed:"
+              cat /tmp/ready_body
               exit 0
             fi
             echo "Attempt $i: status $STATUS, retrying in 10s..."
+            [ -s /tmp/ready_body ] && cat /tmp/ready_body
             sleep 10
           done
-          echo "Health check failed after 10 attempts" >&2
+          echo "Readiness check failed after 10 attempts" >&2
           exit 1
+
+      # The step that makes deploy drift impossible to miss. /version now reports the
+      # commit the running image was built from, so the deploy can assert that what
+      # is live is what this run just built. Without this a deploy that pushed an
+      # image but failed to roll it out (App Runner keeping the previous revision)
+      # still reported success -- which is how production came to sit 156 commits
+      # behind main unnoticed.
+      - name: Verify deployed commit matches this run
+        run: |
+          set -euo pipefail
+          URL="${{ steps.service.outputs.base_url }}/version"
+          BODY="$(curl -sSf "$URL")"
+          echo "$BODY"
+          DEPLOYED_COMMIT="$(printf '%s' "$BODY" | jq -r '.commit')"
+          if [ "$DEPLOYED_COMMIT" != "$GITHUB_SHA" ]; then
+            echo "::error::Live service reports commit '$DEPLOYED_COMMIT' but this run deployed '$GITHUB_SHA'. The rollout did not take effect." >&2
+            exit 1
+          fi
+          echo "Live service is running the expected commit: $GITHUB_SHA"
