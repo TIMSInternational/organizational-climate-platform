@@ -95,11 +95,11 @@ export default function Counter({
         {format(value)}
         {suffix}
       </output>
-      <span aria-hidden="true" className="text-3xl font-semibold text-primary">
+      <span aria-hidden="true" className="text-3xl font-semibold text-fg-primary">
         {format(displayed)}
         {suffix}
       </span>
-      {label ? <span className="text-sm text-secondary">{label}</span> : null}
+      {label ? <span className="text-sm text-fg-secondary">{label}</span> : null}
     </div>
   )
 }
