@@ -1,7 +1,13 @@
 # `charts/` — data visualisation
 
 #79, complete: the palette layer plus all eleven components, rendered together at
-[`/dev/chart-gallery`](../../features/charts/pages/ChartGalleryPage.tsx).
+[`/dev/chart-gallery`](../../features/charts/pages/ChartGalleryPage.tsx) — a route that
+exists **in development builds only**. `import.meta.env.DEV` gates it in
+[`app/router.tsx`](../../app/router.tsx), and because the dynamic `import()` sits inside
+that branch, Rollup never reaches the module: a production build emits no chunk for the
+gallery or its sample data. Verified against a real build, and asserted three ways in
+`app/router.test.ts` — including that nothing in the production graph statically imports
+it, which is the regression that would ship the chunk while the route stayed hidden.
 
 | Component | Replaces | Status |
 |---|---|---|
@@ -124,6 +130,33 @@ well as `ui/`, and a raw hex fails the build.
 - **Identity is never colour-alone.** For ≥2 series a legend is always present, and ≤4
   series are also directly labelled.
 
+## Bars start at zero. Lines do not.
+
+The single most re-litigated question about an axis, so it is written down once here and
+again at both `<YAxis>` call sites.
+
+**A bar encodes value as length**, measured from the axis. Move the axis off zero and a
+bar twice as long stops meaning twice as much — the classic misleading chart. So
+`BarChart` passes no `domain` and keeps recharts' zero-anchored default.
+
+**A line encodes value as position**, and the reader takes meaning from the slope between
+points, not from the distance down to the axis. Zero therefore buys nothing and costs the
+vertical space the slope needs. So `LineChart` passes `domain={['auto', 'auto']}`.
+
+This was measured rather than argued. The gallery's six-month 65→78 climb — a 20%
+improvement — rendered as a **39px** rise inside a 280px chart under the zero-anchored
+default, which is a horizontal line to any reader. Fitted, it is **195px**.
+
+`['auto', 'auto']` rather than `['dataMin', 'dataMax']`: the latter puts the extreme
+points exactly on the plot edges, where the markers clip against the axis. `auto` picks
+round bounds just outside the data (64–80 for 65–78). Fitting the domain is also not the
+same as hiding zero — a series running from −12 to 4 still gets a zero tick, because
+there the baseline is real information.
+
+Both halves are pinned: `LineChart.test.tsx` fails if the domain re-anchors (on ticks
+*and* on the measured pixel span), and `BarChart.test.tsx` fails if a future tidy-up
+makes the two "consistent" by fitting the bar domain. The inconsistency is the point.
+
 ## Testing charts under happy-dom
 
 Two things were **probed, not assumed**, and both shape how these tests are written.
@@ -154,6 +187,13 @@ omitted with a comment. Line charts are the lucky case: `.recharts-line-curve` c
 
 `HeatMap` sidesteps all of this by not being a recharts chart at all — it is an HTML
 `<table>`, so every cell's `backgroundColor` and accessible name are directly assertable.
+
+**Axis tick labels are not inside the axis group.** recharts renders them into a sibling
+`recharts-yAxis-tick-labels` / `recharts-xAxis-tick-labels` layer, so
+`.recharts-yAxis .recharts-cartesian-axis-tick-value` matches **nothing** — probed, not
+assumed, after that selector silently returned an empty array. Use the `*-tick-labels`
+layer as the hook when a test needs one axis's ticks rather than both, as the y-domain
+tests do.
 
 Where an attribute genuinely is not observable — the 2px stacked-segment gap — the test is
 **omitted with a comment saying so**, rather than written as an assertion that cannot fail.
@@ -220,14 +260,21 @@ Spanish.
   `grep sentimentStub` finds every caller and deleting it turns a survivor into a compile
   error rather than a page quietly showing invented numbers. Pass `isPlaceholder` and the
   chart says so on screen.
-- **`LineChart` anchors its y-axis at zero**, which flattens a real trend: the gallery's
-  65→78 climb over six months reads as a horizontal line. A zero baseline is mandatory for
-  bars, where length encodes value, but a line encodes *position*, so fitting the domain to
-  the data is the defensible default for this form. Left as-is here because it is landed,
-  tested behaviour and an axis-domain policy deserves its own decision rather than a
-  drive-by change.
-- **`PieChart`'s legend order does not follow slice order** — recharts sorts the payload,
-  so a 45/35/20 pie legends as "Disengaged, Engaged, Neutral". The colours are correct;
-  only the reading order makes comparison harder than it should be.
-- **The loading skeleton is nearly invisible in light mode.** `bg-surface-icon-box` is
-  close enough to the page background that a pulsing block barely reads as anything.
+- **`PieChart`'s legend order does not follow slice order.** recharts sorts the payload it
+  derives **alphabetically by name**, so a 45/35/20 pie legends as "Disengaged, Engaged,
+  Neutral" while the wedges run largest-first. Each label carries the *correct* colour —
+  verified in a browser — so this is a reading-order annoyance, not a misattribution.
+
+  Not fixed, and the reason is worth recording so nobody repeats the attempt:
+  `Legend payload={...}` is the obvious fix, and **recharts 3.10.1 deliberately removes
+  `payload` from `Legend`'s props type** (`Omit<Props, 'ref' | 'payload' | 'layout' |
+  'verticalAlign'>`), so supplying it means casting past the library's own contract. It
+  would also have been a testability win — an explicit payload renders a legend even
+  without sector geometry, the one part of a pie happy-dom could then assert — so it is
+  worth revisiting if a later recharts restores the prop.
+
+- **~1.8 kB gzipped of gallery-only copy still ships.** The 46 `charts.gallery*` keys live
+  in `i18n/{en,es}.json`, which are statically imported and cannot be tree-shaken per key,
+  so they survive in production even though the page does not. Dropping them would mean
+  exempting the gallery from `noHardcodedStrings`, and weakening a guard is a worse trade
+  than 1.8 kB of unreferenced strings — but it is a real cost, recorded rather than hidden.

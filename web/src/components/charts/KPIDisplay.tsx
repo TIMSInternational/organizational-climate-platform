@@ -93,7 +93,7 @@ export default function KPIDisplay({
           className={`grid gap-4 ${COLUMN_CLASSES[columns]}`}
         >
           {Array.from({ length: columns }, (_, index) => (
-            <div key={index} className="h-32 animate-pulse rounded-lg bg-surface-icon-box" />
+            <div key={index} className="h-32 animate-pulse rounded-lg border border-line-default bg-surface-icon-box" />
           ))}
         </div>
       ) : kpis.length === 0 ? (

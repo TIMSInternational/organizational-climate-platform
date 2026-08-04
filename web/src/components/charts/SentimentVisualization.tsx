@@ -91,7 +91,7 @@ export default function SentimentVisualization({
         <div
           role="status"
           aria-label={t('charts.loadingChart')}
-          className="h-40 animate-pulse rounded-lg bg-surface-icon-box"
+          className="h-40 animate-pulse rounded-lg border border-line-default bg-surface-icon-box"
         />
       </figure>
     )

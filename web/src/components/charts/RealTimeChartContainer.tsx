@@ -109,7 +109,7 @@ export default function RealTimeChartContainer<T>({
         <div
           role="status"
           aria-label={t('charts.loadingChart')}
-          className="h-40 animate-pulse rounded-lg bg-surface-icon-box"
+          className="h-40 animate-pulse rounded-lg border border-line-default bg-surface-icon-box"
         />
       ) : data === null ? (
         // Distinct from empty: the first fetch failed, so there is nothing to show

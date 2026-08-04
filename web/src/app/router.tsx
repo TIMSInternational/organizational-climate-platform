@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router'
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
 import LoginPage from '../auth/LoginPage'
 import AcceptInvitationPage from '../features/org-structure/pages/AcceptInvitationPage'
 import RequireAuth from './RequireAuth'
@@ -14,7 +14,6 @@ import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetai
 import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
 import MicroclimateDetailPage from '../features/microclimates/pages/MicroclimateDetailPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
-import ChartGalleryRoute from '../features/charts/pages/ChartGalleryRoute'
 import { getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import { resolveInitialRoute } from './resolveInitialRoute'
@@ -30,6 +29,39 @@ function HomeRedirect() {
   return <Navigate to={resolveInitialRoute(role, companyId)} replace />
 }
 
+/**
+ * Routes that exist in development builds and nowhere else.
+ *
+ * Currently just the #79 chart gallery. It renders hardcoded sample data and makes
+ * no API calls, so it leaks nothing — but it is not behind `RequireAuth`, and a
+ * page whose whole job is to display placeholder numbers has no business being
+ * reachable on a customer's deployment.
+ *
+ * `import.meta.env.DEV` is what makes that true rather than merely intended. Vite
+ * replaces it with the literal `false` in a production build, so Rollup eliminates
+ * this branch — and because the dynamic `import()` lives *inside* the branch, the
+ * gallery module and its sample data are never reached, so no chunk is emitted for
+ * them at all. Gating only the route entry would not achieve that: a static import
+ * at the top of this file keeps the module in the graph and the chunk on disk,
+ * unreachable but shipped. Asserted in router.test.ts and verified against a real
+ * production build.
+ *
+ * Route-level `lazy` rather than `React.lazy` + `<Suspense>`: the router awaits it
+ * during navigation, which needs no fallback element and keeps the dynamic import
+ * inline here instead of in a wrapper component that would have to be statically
+ * imported — defeating the point.
+ */
+const devOnlyRoutes: RouteObject[] = import.meta.env.DEV
+  ? [
+      {
+        path: '/dev/chart-gallery',
+        lazy: async () => ({
+          Component: (await import('../features/charts/pages/ChartGalleryPage')).default,
+        }),
+      },
+    ]
+  : []
+
 export const router = createBrowserRouter([
   {
     errorElement: <RouteErrorBoundary />,
@@ -38,11 +70,7 @@ export const router = createBrowserRouter([
       { path: '/login', element: <LoginPage /> },
       { path: '/accept-invitation/:token', element: <AcceptInvitationPage /> },
       { path: '/microclimates/:id/respond', element: <MicroclimateRespondPage /> },
-      // The #79 chart gallery: hardcoded sample data, no API calls, code-split
-      // (see ChartGalleryRoute.tsx). Outside RequireAuth so it is usable for
-      // visual review without a login; ChartGalleryPage.tsx carries the open
-      // question about whether it should ship in a production build.
-      { path: '/dev/chart-gallery', element: <ChartGalleryRoute /> },
+      ...devOnlyRoutes,
       {
         element: <RequireAuth />,
         children: [

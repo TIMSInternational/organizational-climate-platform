@@ -57,11 +57,19 @@ import { readAdminThemeMode, resolveAdminTheme, setAdminThemeMode } from '../../
  * show nothing it should not. The sentiment figures come from `sentimentStub` and
  * are flagged on screen as placeholders, because sentiment is blocked on #67.
  *
- * **Open question for review:** whether this should be reachable in a production
- * build at all. It is lazily loaded (see `app/router.tsx`), so it costs the main
- * bundle nothing and is only fetched if someone visits the URL — but it is not
- * behind auth. Gating it on `import.meta.env.DEV` is a one-line change if the
- * answer is no.
+ * ## Development builds only
+ *
+ * The route is gated on `import.meta.env.DEV` in `app/router.tsx`, and the dynamic
+ * `import()` that reaches this file sits *inside* that branch — so Rollup never
+ * reaches this module in a production build and emits no chunk for it. That is the
+ * part worth being careful about: gating only the route entry would hide the URL
+ * while still shipping the code, because a static import at the top of the router
+ * keeps the module in the graph. `app/router.test.ts` asserts all of it, including
+ * that nothing in the production graph statically imports this page.
+ *
+ * One residue: the ~46 `charts.gallery*` translation keys live in the shared
+ * catalogues, which cannot be tree-shaken per key, so about 1.8 kB gzipped of
+ * dev-only copy does ship. Noted in `components/charts/README.md`.
  */
 export default function ChartGalleryPage() {
   const { t } = useTranslation()

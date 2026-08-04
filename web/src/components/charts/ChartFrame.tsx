@@ -49,10 +49,18 @@ export default function ChartFrame({
         // animate-pulse rather than a spinner: the shape of the thing being
         // loaded is more informative than a rotating icon, and framer-motion is
         // not ported (#75-#77).
+        //
+        // The border is load-bearing, not decoration. `--admin-bg-icon-box` and
+        // `--admin-bg-outer` are BOTH `#f0f0f0` in light mode, so a skeleton
+        // sitting on the outer surface was #f0f0f0 on #f0f0f0 -- a 1.00:1
+        // contrast ratio, i.e. an invisible loading state, which reads as a
+        // blank page rather than as "working on it". Measured on the chart
+        // gallery; the empty state below already had the border for the same
+        // reason.
         <div
           role="status"
           aria-label={t('charts.loadingChart')}
-          className="animate-pulse rounded-md bg-surface-icon-box"
+          className="animate-pulse rounded-md border border-line-default bg-surface-icon-box"
           style={{ height }}
         />
       ) : isEmpty ? (

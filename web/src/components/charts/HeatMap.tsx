@@ -88,7 +88,7 @@ export default function HeatMap({
         <div
           role="status"
           aria-label={t('charts.loadingChart')}
-          className="h-40 animate-pulse rounded-md bg-surface-icon-box"
+          className="h-40 animate-pulse rounded-md border border-line-default bg-surface-icon-box"
         />
       ) : isEmpty ? (
         <p role="status" className="text-fg-secondary">
