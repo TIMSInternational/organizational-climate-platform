@@ -82,9 +82,21 @@ public class StartupValidationTests
     /// Starts the host and returns whatever it threw, <b>without issuing a request</b>.
     /// </summary>
     /// <remarks>
-    /// Touching <c>factory.Services</c> builds and starts the host (WebApplicationFactory's
-    /// EnsureServer calls Host.Start), which runs the options-validation hosted service. No HTTP
-    /// request is sent, so a failure observed here can only have come from startup.
+    /// <c>CreateClient()</c> builds and starts the host (WebApplicationFactory's EnsureServer
+    /// calls Host.Start), which runs the options-validation hosted service. No HTTP request is
+    /// sent, so a failure observed here can only have come from startup.
+    /// <para>
+    /// Note it must be <c>CreateClient()</c> and not <c>factory.Services</c>, even though the
+    /// latter reads as the more direct way to say "just start the host". When Host.Start throws,
+    /// WebApplicationFactory disposes the provider, and a subsequent read of the Services
+    /// property then throws ObjectDisposedException *instead of* the real startup exception --
+    /// intermittently, depending on internal ordering. That passed locally three times and
+    /// failed once in CI on Empty_GoogleClientId_fails_startup_when_google_auth_is_required,
+    /// reporting "Cannot access a disposed object" while the log showed the intended
+    /// "Missing GoogleClientId configuration" had been raised correctly. CreateClient()
+    /// propagates the original exception and is the path the original two tests here used
+    /// reliably for months. Do not "simplify" this back to factory.Services.
+    /// </para>
     /// <para>
     /// That distinction is the whole point. These tests originally asserted through a
     /// GET /health, which conflates "fails at startup" with "fails on the first request" -- and
@@ -119,7 +131,9 @@ public class StartupValidationTests
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(configuration));
         });
 
-        return Record.Exception(() => _ = factory.Services);
+        // No request is issued -- CreateClient() only builds/starts the host and hands back an
+        // HttpClient. That is what separates "failed at startup" from "failed on first request".
+        return Record.Exception(() => factory.CreateClient());
     }
 
     private static void AssertFailsStartupMentioning(
