@@ -444,6 +444,27 @@ Required behaviour:
 `Response` and `QuestionResponse` gain a `Language` column under #195 and need the same
 attribution and the same reporting.
 
+## 3. This changes the decomposition, not only the field mapping
+
+[Proposed decomposition](#proposed-decomposition) recommends that sub-issues **A–E** (the 26
+"mappable" collections) proceed now, independent of **F** (the #58-blocked question collections).
+That still holds for 24 of them, but **not for `Response`/`QuestionResponse`**.
+
+#195 moves question options from `text[]` to a child table carrying a **stable, locale-independent
+`value`**, because `MicroclimateEndpoints.SubmitResponseAsync` currently validates and stores an
+answer as the option's *display text* — which becomes locale-dependent the moment options are
+bilingual, fragmenting every count, chart and export with no error and reconciling row counts.
+
+The consequence for this ETL: `question_responses.response_value` must be loaded as the stable
+value, not as legacy option text. Loading it before the options migration exists writes
+locale-ambiguous text into the column, and the backfill that would repair it is only unambiguous
+*while no bilingual options exist* — i.e. that window closes behind the loader.
+
+**So whichever sub-issue owns `Response`/`QuestionResponse` must be sequenced after #195's options
+migration.** The other 24 A–E collections remain independent. This is the one place where #195
+changes #154's shape rather than just its per-field mapping, and it is easy to miss because
+`Response` is not in the schema-blocked set.
+
 **Corrected count.** Where this document says *"26 mappable · 1 excluded · 1 decision-blocked ·
 4 schema-blocked"*, read:
 

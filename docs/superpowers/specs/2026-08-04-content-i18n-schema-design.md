@@ -1,8 +1,15 @@
 # Content i18n schema design (#195)
 
-**Status: DRAFT — recommendation. One question must go to the client before the migration is
-written.** The representation below is implementable as-is; the *third-language* question in
-[Question for the client](#question-for-the-client) changes it, and only the client can answer.
+**Status: scope settled 2026-08-04; one question still with the client.** The representation below
+is implementable as-is. Two open items from the first draft are now decided — the options child
+table is **approved scope**, and Tier 2 is **deferred to #210** — so what remains before the
+migration is written is the *third-language* question in
+[Question for the client](#question-for-the-client), which only the client can answer.
+
+#195 is **P0**, `parity-gap`, `batch:2-foundation-b`, milestone *M4 - Surveys*. On the
+`parity-gap` label: it is correct that a pre-cutover parity audit must not miss this, but see
+[Does not hold](#does-not-hold--the-legacy-system-was-fully-bilingual) — only about half of #195
+is a parity port; the rest is functionality the legacy app never had.
 
 **Blocks:** #58 (question repositories), #108 (survey builder wizard), #154(F) (ETL's bilingual
 collections), and every survey/microclimate page in Batch 3.
@@ -215,10 +222,21 @@ means.
 | `SystemSettings` | `MaintenanceMessage` | none — shown to every user in every locale |
 | `NotificationTemplate` | `Subject`, `Title`, `Content`, `HtmlContent` | none — but these are the **emails a bilingual workforce receives**. See the scope question below |
 
-### Tier 2 — Author-facing authored content · **mechanism A** · scope decision required
+### Tier 2 — Author-facing authored content · **mechanism A** · deferred to #210
 
-27 fields. A bilingual *administrator* wants these; a respondent never sees them. Deferring is
-defensible; deferring **silently** is not.
+27 fields. A bilingual *administrator* wants these; a respondent never sees them.
+
+**Decided 2026-08-04: out of scope for #195, filed as #210.** Tier 1 alone satisfies #195's
+binding acceptance criterion (*"Export/show the survey in ES and EN without 'untranslated'
+strings"*), and keeping Tier 2 in would roughly double a `size:L` P0 already blocking #58, #108,
+#154(F) and Batch 3 — for content no respondent sees.
+
+It is a **deferral, not a scope reduction.** PRD CLIMA-011 requires *"Complete ES/EN localization
+for all platform content"*, which covers these fields, so dropping them outright would need client
+sign-off under `docs/requirements/README.md`'s rule. #210 exists so that cannot happen by
+attrition. #210 also records the one ordering constraint: **do not add `category_en`/`category_es`
+to the question tables** — those three fields become a FK to a bilingual `QuestionCategory` under
+#58, so doing it early is thrown-away work.
 
 `SurveyTemplate.Name/Description/Category` · `MicroclimateTemplate.Name/Description/Category` ·
 `Question.Category`, `TemplateQuestion.Category`, `MicroclimateTemplateQuestion.Category` (free
@@ -290,8 +308,8 @@ Everything else. Enumerated so it is on the record that it was considered, not s
 
 ### Recommendation
 
-> **Paired language columns — `<field>_en` / `<field>_es` — as the storage contract for Tier 1
-> (and Tier 2 if it is in scope), with three structural changes that come with it:**
+> **Paired language columns — `<field>_en` / `<field>_es` — as the storage contract for Tier 1,
+> with three structural changes that come with it:**
 >
 > 1. **`Survey.Language` and `Microclimate.Language`**, validated `'es' | 'en' | 'both'`, default
 >    `'both'`. Per `microclimate-req.md:40`. This is the field the validation gate reads.
@@ -303,6 +321,16 @@ Everything else. Enumerated so it is on the record that it was considered, not s
 > fields on a read path.** Reads return resolved text plus the locale it resolved to; writes take
 > a locale-keyed map. This is what makes a third language a migration instead of a rewrite, and it
 > costs nothing today.
+
+**Scope, settled 2026-08-04.** Two of the open items in the first draft of this document have been
+answered and are no longer open questions:
+
+- **Item 2 (the options child table) is APPROVED and is part of #195**, not an optional extra.
+  [Why options must become a child table](#why-options-must-become-a-child-table) is now the
+  specified design rather than a proposal.
+- **Tier 2 (author-facing content, 27 fields) is out of scope for #195**, filed as **#210**. #195
+  covers respondent-facing content — Tier 1. See
+  [Tier 2](#tier-2--author-facing-authored-content--mechanism-a--deferred-to-210).
 
 ### Why paired columns
 
@@ -374,17 +402,56 @@ today, and whatever replaces it needs the same treatment and the same style of t
 
 ### Why options must become a child table
 
-`Question.Options` is `text[]`. Naively pairing it gives `options_en text[]` and `options_es
-text[]` with an **index-alignment invariant Postgres cannot enforce** — nothing stops the arrays
-having different lengths, and if they drift, option 3 in Spanish silently means option 4 in
-English.
+**Approved 2026-08-04. This is the specified design for #195, not an optional extra.** The
+reasoning is written out at length because the cheap-looking alternative is genuinely tempting and
+its failure mode is invisible — whoever implements this needs to be able to reconstruct why the
+harder option was chosen.
 
-More importantly it does not fix
-[finding 1](#not-in-195-and-each-changes-the-work): the answer is stored as the option *text*, so
-bilingual options fragment every aggregation.
+#### What breaks if options stay `text[]`
 
-A child table solves both, and the house pattern for it **already exists two entities away** —
-`QuestionEmojiOption(QuestionId, Order, Emoji, Label, Value)`:
+Two independent defects, and the second is the serious one.
+
+**1. An index-alignment invariant Postgres cannot enforce.** Naively pairing the array gives
+`options_en text[]` and `options_es text[]`. Nothing constrains them to the same length or to
+index-aligned meaning. If they drift by one, option 3 in Spanish silently *is* option 4 in English
+— for every respondent, permanently, with no error.
+
+**2. Bilingual option text fragments every aggregation.** This is the one that must not be
+discovered in production. `MicroclimateEndpoints.SubmitResponseAsync` validates a submitted answer
+by exact string comparison against the question's own option text, and stores that same string:
+
+```csharp
+QuestionTypes.MultipleChoice => question.Options is { Length: > 0 } && question.Options.Contains(answer)
+```
+
+So with per-language option text, the stored `question_responses.response_value` is
+**locale-dependent**. Concretely, one question, one option, two respondents:
+
+| | Served locale | Submitted | Stored `response_value` |
+|---|---|---|---|
+| Respondent A | `en` | `"Strongly agree"` | `"Strongly agree"` |
+| Respondent B | `es` | `"Muy de acuerdo"` | `"Muy de acuerdo"` |
+
+They gave the **same answer**. The database now holds two unrelated values. Every consumer splits
+them: response distributions, every chart from #79, benchmark comparisons, CSV/Excel exports, and
+`Microclimate.LiveResults.ResponseDistribution`. A 60/40 result across a bilingual workforce reads
+as four categories instead of two.
+
+And it fails **silently and symmetrically**: no exception, no constraint violation, per-collection
+row counts reconcile exactly, and #154's reconciliation-by-count reports success. That is the same
+failure shape as the `password_hash` `select: false` finding — the defect is invisible to precisely
+the checks built to catch defects.
+
+**Why this cannot be deferred and fixed later.** Once real responses exist, the option text that
+produced them is the only key linking a response to its option. Retrofitting a stable value means
+back-inferring which language each stored string was, per row, per company, across a corpus with no
+language tag — and #104 already freezes survey structure once responses exist. A bilingual survey
+whose results are wrong is worse than a monolingual survey whose results are right.
+
+#### The design
+
+A child table fixes both defects, and the house pattern for it **already exists two entities away**
+— `QuestionEmojiOption(QuestionId, Order, Emoji, Label, Value)`:
 
 ```
 question_options
@@ -396,28 +463,51 @@ question_options
   PK (question_id, order)
 ```
 
-`value` is what `response_value` holds and what `Options.Contains(answer)` validates against; the
-labels are display only. This also matches legacy's own richest shape,
-`LibraryQuestion.emoji_options[] { value, emoji, label_en, label_es }` — the model that carried a
-stable `value` alongside per-language labels was the one written last.
+`value` is what `response_value` holds and what the validator compares against; the labels are
+display only. So the table above collapses back to one stored value for both respondents, which is
+the entire point.
+
+Two pieces of evidence that this is the grain of the codebase rather than a new invention:
+
+- **`QuestionTypes.YesNo` already does exactly this** in the same `switch` — it compares against the
+  codes `"yes"`/`"no"`, never against localised labels. The correct pattern is already present one
+  case up; multiple-choice simply never adopted it.
+- **Legacy's own richest model agrees.** `LibraryQuestion.emoji_options[] { value, emoji, label_en,
+  label_es }` carries a stable `value` beside per-language labels — and it is the *last* of the
+  three legacy question models to be written. The legacy codebase converged on this shape too.
 
 Five collections of options move this way: `Question`, `TemplateQuestion`, `MicroclimateQuestion`,
 `MicroclimateTemplateQuestion`, `DemographicField`.
 
-**This is a scope increase over #195 as written**, and it touches the response path rather than
-only authoring. Stated plainly so it is chosen, not absorbed: doing #195 without it produces a
-bilingual survey whose results are wrong, which is worse than a monolingual survey whose results
-are right.
+#### Consequences to carry into implementation
+
+- **`SubmitResponseAsync`'s validator changes** from `question.Options.Contains(answer)` to a lookup
+  against `question_options.value`. The `NumericScale` 1–5 fallback and the "multiple_choice with no
+  options is always rejected" branch both stay as they are.
+- **Existing `response_value` rows are migrated by matching the old option text**, which is
+  unambiguous *only* because no bilingual options exist yet — every current row was written against
+  a single monolingual `text[]`. This is the window in which the migration is trivial, and it closes
+  the moment bilingual authoring ships. Any row that fails to match must go to the data-quality
+  report, not be silently dropped.
+- **`DemographicField.Options` is `List<string>`, not `text[]`**, so it needs the same treatment via
+  a slightly different EF mapping. It also interacts with #193, which is deciding the demographics
+  shape — see decision 3 below.
+- **#154's `Response`/`QuestionResponse` loaders depend on this.** They are in the ETL doc's
+  "mappable now" set, but they cannot load response values until the stable-value shape exists. See
+  [What this unblocks — #154(F)](#what-this-unblocks--154f).
 
 ### Migration shape
+
+Tier 1 only — Tier 2's 27 fields are #210's migration, not this one.
 
 | Change | Count |
 |---|---|
 | Existing column renamed `<field>` → `<field>_en` | 25 |
 | New `<field>_es` column | 25 |
-| `text[]`/`List<string>` options → child table | 5 |
+| `text[]`/`List<string>` options → child table (**approved scope**) | 5 |
 | New language columns (`surveys`, `microclimates`, `responses`) | 3 |
 | jsonb payload shape changes (`binary_comment_config`, `questions_snapshot`, `report_output`) | 3 |
+| Backfill of `question_responses.response_value` to stable option values | 1 data migration |
 | Endpoint files to update | 2 (`MicroclimateEndpoints`, `MicroclimateTemplateEndpoints`) |
 | DTO files to update | 2 |
 
@@ -628,23 +718,57 @@ has been added to the ETL design doc pointing here.
 
 ---
 
-## Decisions needed, in order
+## Decisions
 
-1. **The three client questions above.** Everything else is downstream. Q3 is answerable in a
-   sentence and should not wait on Q1/Q2.
-2. **Is Tier 2 (author-facing content) in scope for #195, or a follow-up issue?** 27 fields.
-   Recommendation: **follow-up.** Tier 1 satisfies "a survey in ES and EN with no untranslated
-   strings"; Tier 2 makes the *admin console* bilingual, which no requirement states. It must be a
-   filed issue, not a silent omission.
-3. **Are bilingual `NotificationTemplate`s in scope?** These are the emails respondents receive, so
+### Settled 2026-08-04
+
+- **Options move to a child table with a stable locale-independent value.** APPROVED and folded into
+  #195's scope. See [Why options must become a child table](#why-options-must-become-a-child-table).
+- **Tier 2 (27 author-facing fields) is out of scope for #195**, filed as **#210** — a deferral, not
+  a scope reduction, since CLIMA-011 covers it.
+
+### Still needed, in order
+
+1. **The three client questions** in [Question for the client](#question-for-the-client). Everything
+   else is downstream. **Q3 — can one company operate in two languages at once — is answerable in a
+   sentence and should not wait on Q1/Q2**, because it sets the default for `Survey.Language` and
+   therefore how strict the publish gate feels every day.
+2. **Are bilingual `NotificationTemplate`s in scope?** These are the emails respondents receive, so
    they are arguably Tier 1, but legacy is monolingual and #97 is about to define the notification
    surface. Recommendation: **in scope for the schema, deferred for the UI**, and coordinate with
    #97 the same way #192 must.
-4. **Accept the options-to-child-table scope increase?** Recommendation: **yes** — without it,
-   bilingual surveys produce fragmented results.
-5. **Are bilingual `DemographicField.Label`s in scope?** Interacts with #193, which is deciding the
-   demographics shape right now. Whichever way #193 goes, the label needs two languages if the
-   dashboard is bilingual. **Decide #193 first**, then this follows.
+3. **Are bilingual `DemographicField.Label`/`Options` in scope?** Interacts with #193, which is
+   deciding the demographics shape. Whichever way #193 goes, the label needs two languages if the
+   dashboard is bilingual — and the options need the same child-table treatment as questions.
+   **Decide #193 first**, then this follows. #193 is now P0 in the same batch, so this is an
+   ordering constraint within the batch rather than a cross-batch wait.
+
+---
+
+## Sequencing
+
+Recorded because the batch placement is a judgement call and this document is where the dependency
+graph is actually visible. **#195 in `batch:2-foundation-b` is right** — it must precede the
+`batch:3-first-pages` survey and microclimate work, and nothing found here argues otherwise. Three
+constraints *within* and *across* batches do follow from the design, though:
+
+1. **#193 before #195's migration.** `DemographicField.Label` and `.Options` are Tier 1, and #193 is
+   deciding whether demographics normalise at all. Writing the #195 migration first risks migrating
+   a column #193 removes. Both are P0 in `batch:2-foundation-b`, so this is intra-batch ordering.
+2. **#192 and #97 alongside the `NotificationTemplate` question** (decision 2 above). Same coupling
+   #192 already has to #97; deciding the bilingual question separately would define the notification
+   surface twice.
+3. **#195's options change must precede #154's `Response`/`QuestionResponse` load — and this crosses
+   batches.** The ETL doc recommends sub-issues A–E (the 26 "mappable" collections) proceed now,
+   independent of the #58-blocked F. `Response` and `QuestionResponse` are in that A–E set, but they
+   cannot load response values until the stable-value option shape exists, because otherwise the ETL
+   writes locale-ambiguous option text into `response_value` and the backfill window described above
+   closes behind it. So **A–E is not fully independent after all**: whichever sub-issue owns
+   `Response` must be sequenced after #195, or #154 must land its response load only after the
+   options migration. This is the one place where this design changes #154's decomposition rather
+   than just its field mapping.
+
+`batch:3-first-pages` is unaffected beyond already waiting on #195.
 
 ---
 
@@ -653,10 +777,15 @@ has been added to the ETL design doc pointing here.
 - [x] Representation decided and recorded, with the third-language question **explicitly asked**
 - [x] Every translatable field enumerated (Tiers 1–5, all 50 entities)
 - [x] Missing-content validation + fallback specified, traced to the requirement's wording
+- [x] Tier 2 scope decided — deferred to #210, filed rather than omitted
+- [x] Options representation decided — child table with a stable locale-independent value, approved
 - [ ] Client answers the three questions
-- [ ] Migration added
+- [ ] Migration added (see [Migration shape](#migration-shape); EF migration gap tracked as #204)
+- [ ] `question_options` child tables added and `SubmitResponseAsync` switched to stable values
+- [ ] `question_responses.response_value` backfilled to stable values, with unmatched rows reported
 - [ ] Validation + fallback implemented and tested
 - [ ] A survey authored and rendered in both ES and EN with no untranslated strings
+- [ ] **The same answer submitted from an ES session and an EN session stores one identical value**
 - [ ] #58 unblocked (design above), #154(F) unblocked (rules above)
 
 ---
