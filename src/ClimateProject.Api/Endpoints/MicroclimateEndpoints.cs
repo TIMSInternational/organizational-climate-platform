@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Microclimates;
+using ClimateProject.Application.Questions;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.AspNetCore.RateLimiting;
@@ -116,7 +117,7 @@ public static class MicroclimateEndpoints
             // least 2 real options, and SubmitResponseAsync's validation for this type only
             // makes sense once Options is guaranteed non-empty. Reject at creation time instead
             // of persisting an unanswerable question.
-            if (question.Type == "multiple_choice")
+            if (question.Type == QuestionTypes.MultipleChoice)
             {
                 var optionCount = question.Options?.Count(o => !string.IsNullOrWhiteSpace(o)) ?? 0;
                 if (optionCount < 2)
@@ -381,7 +382,7 @@ public static class MicroclimateEndpoints
             .ToListAsync(cancellationToken);
         var questionsById = questions.ToDictionary(q => q.Id);
 
-        // Constrained question types (multiple_choice, rating, yes_no) must not accept arbitrary
+        // Constrained question types (multiple_choice, likert, rating, yes_no) must not accept arbitrary
         // freeform text -- validate each submitted answer against the question's own allowed
         // values so an invalid choice/rating never gets counted as a "real" response.
         foreach (var (questionId, answer) in request.Answers)
@@ -393,23 +394,30 @@ public static class MicroclimateEndpoints
 
             var validationError = question.Type switch
             {
-                "yes_no" => answer.Equals("yes", StringComparison.OrdinalIgnoreCase)
+                QuestionTypes.YesNo => answer.Equals("yes", StringComparison.OrdinalIgnoreCase)
                     || answer.Equals("no", StringComparison.OrdinalIgnoreCase)
                     ? null
                     : "must be 'yes' or 'no'",
-                "rating" when question.Options is { Length: > 0 } => question.Options.Contains(answer)
-                    ? null
-                    : $"must be one of: {string.Join(", ", question.Options)}",
-                "rating" => int.TryParse(answer, out var rating) && rating is >= 1 and <= 5
-                    ? null
-                    : "must be a rating between 1 and 5",
+                // likert and rating are validated identically: an explicit option set if
+                // one is configured, otherwise a 1-5 scale. They stay distinct types
+                // because they mean different things to the reader (agreement vs
+                // quality), not because they are answered differently.
+                _ when QuestionTypes.NumericScale.Contains(question.Type)
+                        && question.Options is { Length: > 0 }
+                    => question.Options.Contains(answer)
+                        ? null
+                        : $"must be one of: {string.Join(", ", question.Options)}",
+                _ when QuestionTypes.NumericScale.Contains(question.Type)
+                    => int.TryParse(answer, out var rating) && rating is >= 1 and <= 5
+                        ? null
+                        : "must be a rating between 1 and 5",
                 // No "no options configured" fallback here (unlike "rating"'s 1-5 default) --
                 // multiple_choice has no valid answer without a configured option set, so an
                 // answer against an options-less multiple_choice question must always be
                 // rejected rather than silently accepted (CreateAsync now guarantees every
                 // multiple_choice question has >= 2 options, but this stays defensive against
                 // any question created before that check existed).
-                "multiple_choice" => question.Options is { Length: > 0 } && question.Options.Contains(answer)
+                QuestionTypes.MultipleChoice => question.Options is { Length: > 0 } && question.Options.Contains(answer)
                     ? null
                     : question.Options is { Length: > 0 }
                         ? $"must be one of: {string.Join(", ", question.Options)}"
@@ -426,7 +434,7 @@ public static class MicroclimateEndpoints
         // Word cloud is built from open-text responses only -- ratings, yes/no, and
         // multiple-choice option text must not be fed into word-frequency counting.
         var openTextQuestionIds = questions
-            .Where(q => q.Type == "open_text")
+            .Where(q => QuestionTypes.FreeText.Contains(q.Type))
             .Select(q => q.Id)
             .ToHashSet();
 

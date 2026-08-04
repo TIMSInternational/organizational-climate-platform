@@ -74,7 +74,7 @@ public class MicroclimateEndpointsTests : IAsyncLifetime
             TargetParticipantCount: 10,
             AnonymousResponses: true,
             TemplateId: null,
-            Questions: new List<CreateQuestionInput> { new("How are you feeling today?", "open_text", null, true, 1) }));
+            Questions: new List<CreateQuestionInput> { new("How are you feeling today?", "open_ended", null, true, 1) }));
 
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
         var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
@@ -133,7 +133,7 @@ public class MicroclimateEndpointsTests : IAsyncLifetime
         var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
             "Public pulse", "Internal-only description", _companyAId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5,
             AnonymousResponses: true, null,
-            new List<CreateQuestionInput> { new("How are you feeling?", "open_text", null, true, 1) }));
+            new List<CreateQuestionInput> { new("How are you feeling?", "open_ended", null, true, 1) }));
         var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
 
         // Anonymous visibility requires the microclimate to actually be active, not merely
