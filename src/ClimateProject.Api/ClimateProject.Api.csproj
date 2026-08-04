@@ -21,4 +21,22 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!--
+    Build provenance surfaced by GET /version. See BuildInfo.cs for why.
+
+    Both default to "unknown" rather than being left empty so that a plain
+    `dotnet build` succeeds and reports an honest "no provenance" value. The
+    Dockerfile overrides them from build args; deploy-prod.yml supplies the real
+    commit SHA and build timestamp.
+  -->
+  <PropertyGroup>
+    <CommitSha Condition="'$(CommitSha)' == ''">unknown</CommitSha>
+    <BuildTimestamp Condition="'$(BuildTimestamp)' == ''">unknown</BuildTimestamp>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="CommitSha" Value="$(CommitSha)" />
+    <AssemblyMetadata Include="BuildTimestamp" Value="$(BuildTimestamp)" />
+  </ItemGroup>
+
 </Project>
