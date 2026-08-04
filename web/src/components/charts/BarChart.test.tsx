@@ -92,6 +92,50 @@ describe('BarChart', () => {
     }
   })
 
+  /**
+   * The loading skeleton needs a border to exist at all. `--admin-bg-icon-box` and
+   * `--admin-bg-outer` are both `#f0f0f0` in light mode, so a skeleton on the outer
+   * surface was #f0f0f0 on #f0f0f0 -- a 1.00:1 contrast ratio. An invisible loading
+   * state reads as a blank page rather than as "working on it". Found by rendering
+   * the chart gallery; happy-dom resolves no custom properties, so this pins the
+   * class that carries the fix.
+   */
+  it('gives the loading placeholder a visible edge', () => {
+    render(<BarChart data={data} series={series} width={WIDTH} height={HEIGHT} isLoading />)
+    const skeleton = screen.getByRole('status')
+    expect(skeleton.className).toContain('border-line-default')
+  })
+
+  /**
+   * Bars stay anchored at zero, which is the opposite of what `LineChart` now does.
+   * A bar encodes value as length measured from the axis, so truncating the axis
+   * makes a bar twice as long stop meaning twice as much. `LineChart` fits its
+   * domain because a line encodes position and is read as slope.
+   *
+   * This asserts the bar half so a future tidy-up cannot make the two "consistent"
+   * by giving BarChart a fitted domain -- the inconsistency is the point.
+   */
+  it('anchors the value axis at zero even when the data sits far above it', () => {
+    const { container } = render(
+      <BarChart
+        data={[
+          { label: 'Jan', values: { q1: 65 } },
+          { label: 'Feb', values: { q1: 78 } },
+        ]}
+        series={[{ key: 'q1', name: 'Q1' }]}
+        width={600}
+        height={280}
+      />,
+    )
+    const yTicks = [
+      ...container.querySelectorAll(
+        '.recharts-yAxis-tick-labels .recharts-cartesian-axis-tick-value',
+      ),
+    ].map((tick) => tick.textContent ?? '')
+
+    expect(yTicks).toContain('0')
+  })
+
   it('draws axis ticks in the recessive axis token, not a series colour', () => {
     const { container } = render(
       <BarChart data={data} series={series} width={WIDTH} height={HEIGHT} />,

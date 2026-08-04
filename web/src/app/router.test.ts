@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync, globSync } from 'node:fs'
+import { join } from 'node:path'
 import { router } from './router'
 
 /**
@@ -53,5 +55,71 @@ describe('router', () => {
 
   it('has an error element so a thrown render does not blank the page', () => {
     expect(router.routes[0]?.errorElement ?? router.routes[0]?.ErrorBoundary).toBeTruthy()
+  })
+
+  /**
+   * The #79 chart gallery must exist in development and be absent from a production
+   * build — it renders placeholder numbers and sits outside `RequireAuth`.
+   *
+   * Two halves, because neither alone is enough. The first asserts the behaviour in
+   * whichever mode the suite is running in. The second asserts the *mechanism*: the
+   * production half cannot be observed from inside a dev-mode test run, so what is
+   * checked instead is the invariant that makes it true — nothing in the production
+   * module graph may reach the gallery except through a dynamic import inside the
+   * `import.meta.env.DEV` branch. Move that import to the top of the file and the
+   * route still disappears in production while the *chunk* ships, which is the
+   * regression that would otherwise go unnoticed.
+   */
+  describe('the dev-only chart gallery', () => {
+    function allPaths(): string[] {
+      const paths: string[] = []
+      function walk(routes: typeof router.routes): void {
+        for (const route of routes) {
+          if (route.path) paths.push(route.path)
+          if (route.children) walk(route.children as typeof router.routes)
+        }
+      }
+      walk(router.routes)
+      return paths
+    }
+
+    it('is registered in a development build and nowhere else', () => {
+      if (import.meta.env.DEV) {
+        expect(allPaths()).toContain('/dev/chart-gallery')
+      } else {
+        expect(allPaths()).not.toContain('/dev/chart-gallery')
+      }
+    })
+
+    it('is reached only by a dynamic import inside the DEV branch', () => {
+      const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
+
+      // The reference exists, and it is a dynamic import -- not a static one.
+      expect(source).toContain("await import('../features/charts/pages/ChartGalleryPage')")
+      expect(source).not.toMatch(/^import .*ChartGallery.*$/m)
+
+      // And it sits inside the gate rather than beside it.
+      const gate = source.indexOf('import.meta.env.DEV')
+      const dynamicImport = source.indexOf("import('../features/charts/pages/ChartGalleryPage')")
+      expect(gate).toBeGreaterThan(-1)
+      expect(dynamicImport).toBeGreaterThan(gate)
+    })
+
+    it('is statically imported by nothing in the production graph', () => {
+      const src = join(process.cwd(), 'src')
+      const offenders = globSync('**/*.{ts,tsx}', { cwd: src })
+        // The gallery's own folder may import itself; tests may import it directly.
+        .filter((file) => !file.includes('features/charts/') && !/\.test\.tsx?$/.test(file))
+        .filter((file) =>
+          /^\s*import\s[^\n]*ChartGalleryPage/m.test(readFileSync(join(src, file), 'utf8')),
+        )
+
+      expect(
+        offenders,
+        'A static import puts the gallery and its sample data in the production ' +
+          'bundle even though the route is gated. Import it dynamically inside the ' +
+          'import.meta.env.DEV branch in router.tsx.',
+      ).toEqual([])
+    })
   })
 })

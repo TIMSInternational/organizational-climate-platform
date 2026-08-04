@@ -64,7 +64,30 @@ export default function LineChart({
         <RechartsLineChart width={width} height={height} data={rows}>
           <CartesianGrid stroke={CHART_GRID} vertical={false} />
           <XAxis dataKey="label" stroke={CHART_AXIS} tickLine={false} />
-          <YAxis stroke={CHART_AXIS} tickLine={false} />
+          {/* THE Y-AXIS FITS THE DATA HERE, AND IS ANCHORED AT ZERO IN `BarChart`.
+              That difference is deliberate and follows from what each mark encodes.
+
+              A bar encodes value as **length**, measured from the axis, so the axis
+              has to sit at zero: truncate it and a bar twice as long stops meaning
+              twice as much, which is the classic misleading chart. A line encodes
+              value as **position**, and the reader takes meaning from the slope
+              between points rather than from the distance down to the axis -- so
+              zero buys nothing, and forcing it in throws away the vertical space
+              the slope needs.
+
+              Measured, not argued: the six-month 65->78 climb on the chart gallery
+              rendered as a 39px rise in a 280px chart with the zero-anchored
+              default -- visually a horizontal line, hiding a 20% improvement. With
+              the domain fitted it is 195px. Pinned in LineChart.test.tsx.
+
+              `['auto', 'auto']` rather than `['dataMin', 'dataMax']`: the latter
+              puts the highest and lowest points exactly on the plot edges, where
+              the markers are clipped by the axis. `auto` picks round bounds just
+              outside the data (64-80 for 65-78), so the extremes stay legible. Zero
+              still appears whenever it is genuinely inside the range -- a series
+              crossing from -12 to 4 gets a zero tick, because there the baseline is
+              real information. */}
+          <YAxis stroke={CHART_AXIS} tickLine={false} domain={['auto', 'auto']} />
           <Tooltip />
           {series.length > 1 ? <Legend /> : null}
           {series.map((s) => {

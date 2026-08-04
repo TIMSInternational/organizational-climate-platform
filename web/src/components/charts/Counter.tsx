@@ -12,6 +12,18 @@ interface CounterProps {
   durationMs?: number
   /** BCP-47 locale for number formatting. Defaults to the document's language. */
   locale?: string
+  /**
+   * Overrides how the number reads, e.g. as a currency or a percentage.
+   *
+   * Added so `KPIDisplay` can reuse the count-up and the reduced-motion and
+   * accessibility handling without reimplementing them — it passes a
+   * `formatMetric` closure. When omitted the plain locale number formatting
+   * below applies, so existing callers are unaffected.
+   *
+   * It receives *interpolated* values during the animation, so it must tolerate
+   * fractions even for a metric that settles on an integer.
+   */
+  formatValue?: (value: number) => string
 }
 
 /**
@@ -41,6 +53,7 @@ export default function Counter({
   decimals,
   durationMs = 600,
   locale,
+  formatValue,
 }: CounterProps) {
   const places = decimals ?? (Number.isInteger(value) ? 0 : 1)
   const [displayed, setDisplayed] = useState(() => (durationMs > 0 ? 0 : value))
@@ -82,10 +95,12 @@ export default function Counter({
     locale ?? (typeof document !== 'undefined' ? document.documentElement.lang || undefined : undefined)
 
   const format = (n: number) =>
-    new Intl.NumberFormat(resolvedLocale, {
-      minimumFractionDigits: places,
-      maximumFractionDigits: places,
-    }).format(n)
+    formatValue
+      ? formatValue(n)
+      : new Intl.NumberFormat(resolvedLocale, {
+          minimumFractionDigits: places,
+          maximumFractionDigits: places,
+        }).format(n)
 
   return (
     <div className="flex flex-col">
@@ -95,11 +110,11 @@ export default function Counter({
         {format(value)}
         {suffix}
       </output>
-      <span aria-hidden="true" className="text-3xl font-semibold text-primary">
+      <span aria-hidden="true" className="text-3xl font-semibold text-fg-primary">
         {format(displayed)}
         {suffix}
       </span>
-      {label ? <span className="text-sm text-secondary">{label}</span> : null}
+      {label ? <span className="text-sm text-fg-secondary">{label}</span> : null}
     </div>
   )
 }

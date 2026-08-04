@@ -39,6 +39,19 @@ describe('HeatMap', () => {
       expect(screen.getByRole('table')).toBeTruthy()
     })
 
+    /**
+     * index.css sets `table { width: 100% }` for the app's data tables. Applied to
+     * the heatmap it stretched the row-label column across the whole content width
+     * and stranded the coloured cells against the right edge, so a reader could not
+     * follow a row across to its values. happy-dom does no layout, so this asserts
+     * the opt-out class rather than a measured width -- the rendered check lives on
+     * the chart gallery.
+     */
+    it('opts out of the global full-width table rule', () => {
+      render(<HeatMap data={data} />)
+      expect(screen.getByRole('table').className).toContain('w-auto')
+    })
+
     it('heads each column with its x label', () => {
       render(<HeatMap data={data} />)
       expect(screen.getByRole('columnheader', { name: 'Q1' })).toBeTruthy()

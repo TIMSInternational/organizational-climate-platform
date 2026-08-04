@@ -12,9 +12,21 @@ import { cn } from '../../lib/cn'
  *
  * `value` is 0–100. Pass `null` for indeterminate.
  */
-export type ProgressProps = ComponentProps<typeof ProgressPrimitive.Root>
+export type ProgressProps = ComponentProps<typeof ProgressPrimitive.Root> & {
+  /**
+   * Overrides the fill colour of the bar itself.
+   *
+   * The indicator is an inner element, so `className` (which lands on the root)
+   * cannot reach it. Added for `charts/ParticipationTracker`, which colours the
+   * bar by status band — good/warning/critical — rather than always blue. The
+   * alternative was an arbitrary-variant selector
+   * (`[&>[data-slot=progress-indicator]]:bg-accent-green`) at every call site,
+   * which is both harder to read and easy to get subtly wrong.
+   */
+  indicatorClassName?: string
+}
 
-export function Progress({ className, value, ...props }: ProgressProps) {
+export function Progress({ className, indicatorClassName, value, ...props }: ProgressProps) {
   return (
     <ProgressPrimitive.Root
       data-slot="progress"
@@ -27,7 +39,10 @@ export function Progress({ className, value, ...props }: ProgressProps) {
     >
       <ProgressPrimitive.Indicator
         data-slot="progress-indicator"
-        className="size-full flex-1 bg-accent-blue transition-transform ease-out"
+        className={cn(
+          'size-full flex-1 bg-accent-blue transition-transform ease-out',
+          indicatorClassName,
+        )}
         style={{ transform: `translateX(-${100 - (value ?? 0)}%)` }}
       />
     </ProgressPrimitive.Root>

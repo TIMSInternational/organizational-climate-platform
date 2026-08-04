@@ -42,23 +42,31 @@ export default function ChartFrame({
   return (
     <figure className="m-0 flex flex-col gap-2">
       {title ? (
-        <figcaption className="text-lg font-medium text-primary">{title}</figcaption>
+        <figcaption className="text-lg font-medium text-fg-primary">{title}</figcaption>
       ) : null}
 
       {isLoading ? (
         // animate-pulse rather than a spinner: the shape of the thing being
         // loaded is more informative than a rotating icon, and framer-motion is
         // not ported (#75-#77).
+        //
+        // The border is load-bearing, not decoration. `--admin-bg-icon-box` and
+        // `--admin-bg-outer` are BOTH `#f0f0f0` in light mode, so a skeleton
+        // sitting on the outer surface was #f0f0f0 on #f0f0f0 -- a 1.00:1
+        // contrast ratio, i.e. an invisible loading state, which reads as a
+        // blank page rather than as "working on it". Measured on the chart
+        // gallery; the empty state below already had the border for the same
+        // reason.
         <div
           role="status"
           aria-label={t('charts.loadingChart')}
-          className="animate-pulse rounded-md bg-surface-icon-box"
+          className="animate-pulse rounded-md border border-line-default bg-surface-icon-box"
           style={{ height }}
         />
       ) : isEmpty ? (
         <p
           role="status"
-          className="flex items-center justify-center rounded-md border border-default text-secondary"
+          className="flex items-center justify-center rounded-md border border-line-default text-fg-secondary"
           style={{ height }}
         >
           {t('charts.noData')}
@@ -92,16 +100,16 @@ function ChartTable({
 
   return (
     <details>
-      <summary className="cursor-pointer text-sm text-secondary">{t('charts.showTable')}</summary>
+      <summary className="cursor-pointer text-sm text-fg-secondary">{t('charts.showTable')}</summary>
       <table className="w-full text-sm">
         <caption className="sr-only">{t('charts.tableCaption')}</caption>
         <thead>
           <tr>
-            <th scope="col" className="text-left text-secondary">
+            <th scope="col" className="text-left text-fg-secondary">
               {t('charts.categoryColumn')}
             </th>
             {series.map((s) => (
-              <th key={s.key} scope="col" className="text-left text-secondary">
+              <th key={s.key} scope="col" className="text-left text-fg-secondary">
                 {s.name}
               </th>
             ))}
@@ -110,11 +118,11 @@ function ChartTable({
         <tbody>
           {data.map((datum) => (
             <tr key={datum.label}>
-              <th scope="row" className="text-left font-regular text-primary">
+              <th scope="row" className="text-left font-normal text-fg-primary">
                 {datum.label}
               </th>
               {series.map((s) => (
-                <td key={s.key} className="text-primary">
+                <td key={s.key} className="text-fg-primary">
                   {datum.values[s.key] ?? ''}
                 </td>
               ))}

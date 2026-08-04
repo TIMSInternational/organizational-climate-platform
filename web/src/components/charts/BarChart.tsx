@@ -66,6 +66,15 @@ export default function BarChart({
         <RechartsBarChart width={width} height={height} data={rows} barGap={2} barCategoryGap="20%">
           <CartesianGrid stroke={CHART_GRID} vertical={false} />
           <XAxis dataKey="label" stroke={CHART_AXIS} tickLine={false} />
+          {/* NO `domain` HERE, DELIBERATELY -- recharts' default is zero-anchored
+              and that is required for bars. A bar encodes value as length measured
+              from the axis, so moving the axis off zero makes a bar twice as long
+              stop meaning twice as much.
+
+              `LineChart` *does* fit its domain to the data, for the opposite reason:
+              a line encodes position, so it reads slope rather than length. Do not
+              make these two consistent with each other -- the difference is the
+              point. The long version is at LineChart.tsx's YAxis. */}
           <YAxis stroke={CHART_AXIS} tickLine={false} />
           <Tooltip />
           {/* A legend is always present for two or more series -- identity must

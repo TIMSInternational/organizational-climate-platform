@@ -1,6 +1,13 @@
 # `charts/` — data visualisation
 
-Progress on #79. The **palette layer** plus the first three components; eight remain.
+#79, complete: the palette layer plus all eleven components, rendered together at
+[`/dev/chart-gallery`](../../features/charts/pages/ChartGalleryPage.tsx) — a route that
+exists **in development builds only**. `import.meta.env.DEV` gates it in
+[`app/router.tsx`](../../app/router.tsx), and because the dynamic `import()` sits inside
+that branch, Rollup never reaches the module: a production build emits no chunk for the
+gallery or its sample data. Verified against a real build, and asserted three ways in
+`app/router.test.ts` — including that nothing in the production graph statically imports
+it, which is the regression that would ship the chunk while the route stayed hidden.
 
 | Component | Replaces | Status |
 |---|---|---|
@@ -10,12 +17,37 @@ Progress on #79. The **palette layer** plus the first three components; eight re
 | `PieChart` | `AnimatedPieChart` | done — folds extras into "Other" rather than cycling |
 | `HeatMap` | `HeatMap` + `widgets/heatmap` | done — consolidated, real `<table>` |
 | `ChartFrame` / `ChartCanvas` | — | shared scaffolding: title, loading, empty, table view, sizing |
-| `WordCloud` | `WordCloud` + `widgets/word-cloud` | to do — consolidate |
-| `KPIDisplay` | `KPIDisplay` | to do |
-| `ParticipationTracker` | `ParticipationTracker` + `widgets/progress-bar` | to do — consolidate |
-| `RealTimeChartContainer` | `RealTimeChartContainer` | to do — polling, not WebSockets |
-| `SentimentVisualization` | `SentimentVisualization` | to do — stub data pending #67 |
-| `RecommendationCard` | `RecommendationCard` | to do |
+| `WordCloud` | `WordCloud` + `widgets/word-cloud` | done — consolidated, flowing layout |
+| `KPIDisplay` | `KPIDisplay` | done |
+| `ParticipationTracker` | `ParticipationTracker` + `widgets/progress-bar` | done — consolidated |
+| `RealTimeChartContainer` | `RealTimeChartContainer` | done — polls at 3–5s, no WebSockets |
+| `SentimentVisualization` | `SentimentVisualization` | done — placeholder data pending #67 |
+| `RecommendationCard` | `RecommendationCard` | done |
+
+Pure logic sits beside the components in its own modules, because a file exporting
+both a component and a helper breaks React Fast Refresh: `foldSlices`, `palette`,
+`wordScale`, `formatMetric`, `participation`, `sentiment`, `usePolling`. That is
+also where most of the real test coverage lives — see "Testing charts under
+happy-dom" below for why the rendered marks cannot carry it.
+
+## The widget duplicates, and what consolidating them meant
+
+Legacy had a second copy of three of these under `climate-project/src/components/widgets/`
+(`heatmap`, `word-cloud`, `progress-bar`). Worth recording what was found: **that
+whole directory was imported by nothing.** It is exported from `widgets/index.ts` and
+no file outside `widgets/` references either the barrel or any member of it. So the
+"duplicates" were dead code, and consolidation meant keeping the `charts/` version and
+lifting across only what the widget copy genuinely did better:
+
+- **`word-cloud`** contributed a `maxWords` cap and a per-word click handler. Its own
+  layout was worse — a jittered grid with `Math.random()` *inside* the layout function,
+  so positions re-rolled on every render — and it sorted its input with a bare
+  `data.sort()`, mutating the caller's array as a side effect of rendering.
+- **`progress-bar`** contributed nothing: its linear bar is `ui/progress` (Radix, so it
+  has `role="progressbar"` and `aria-valuenow`, which the widget's animated `<div>` did
+  not), and its `CircularProgress`/`StepProgress` already existed in legacy
+  `ui/Progress.tsx` — the widget file was a third copy of primitives that belong in
+  `ui/`, not a participation view.
 
 **Dependency:** `recharts` pinned at `3.10.1` (exact, not a range). Legacy used
 `^3.1.2`, so this is the same major; 3.10.1 declares React 19 support and `npm audit`
@@ -98,6 +130,33 @@ well as `ui/`, and a raw hex fails the build.
 - **Identity is never colour-alone.** For ≥2 series a legend is always present, and ≤4
   series are also directly labelled.
 
+## Bars start at zero. Lines do not.
+
+The single most re-litigated question about an axis, so it is written down once here and
+again at both `<YAxis>` call sites.
+
+**A bar encodes value as length**, measured from the axis. Move the axis off zero and a
+bar twice as long stops meaning twice as much — the classic misleading chart. So
+`BarChart` passes no `domain` and keeps recharts' zero-anchored default.
+
+**A line encodes value as position**, and the reader takes meaning from the slope between
+points, not from the distance down to the axis. Zero therefore buys nothing and costs the
+vertical space the slope needs. So `LineChart` passes `domain={['auto', 'auto']}`.
+
+This was measured rather than argued. The gallery's six-month 65→78 climb — a 20%
+improvement — rendered as a **39px** rise inside a 280px chart under the zero-anchored
+default, which is a horizontal line to any reader. Fitted, it is **195px**.
+
+`['auto', 'auto']` rather than `['dataMin', 'dataMax']`: the latter puts the extreme
+points exactly on the plot edges, where the markers clip against the axis. `auto` picks
+round bounds just outside the data (64–80 for 65–78). Fitting the domain is also not the
+same as hiding zero — a series running from −12 to 4 still gets a zero tick, because
+there the baseline is real information.
+
+Both halves are pinned: `LineChart.test.tsx` fails if the domain re-anchors (on ticks
+*and* on the measured pixel span), and `BarChart.test.tsx` fails if a future tidy-up
+makes the two "consistent" by fitting the bar domain. The inconsistency is the point.
+
 ## Testing charts under happy-dom
 
 Two things were **probed, not assumed**, and both shape how these tests are written.
@@ -129,21 +188,93 @@ omitted with a comment. Line charts are the lucky case: `.recharts-line-curve` c
 `HeatMap` sidesteps all of this by not being a recharts chart at all — it is an HTML
 `<table>`, so every cell's `backgroundColor` and accessible name are directly assertable.
 
+**Axis tick labels are not inside the axis group.** recharts renders them into a sibling
+`recharts-yAxis-tick-labels` / `recharts-xAxis-tick-labels` layer, so
+`.recharts-yAxis .recharts-cartesian-axis-tick-value` matches **nothing** — probed, not
+assumed, after that selector silently returned an empty array. Use the `*-tick-labels`
+layer as the hook when a test needs one axis's ticks rather than both, as the y-domain
+tests do.
+
 Where an attribute genuinely is not observable — the 2px stacked-segment gap — the test is
 **omitted with a comment saying so**, rather than written as an assertion that cannot fail.
 Those belong to the visual check the acceptance criteria already require.
 
-## Still to do for #79
+## What rendering them in a real page found
 
-- The six components still marked "to do" above.
-- **Widget duplicates** for `word-cloud` and `progress-bar` in
-  `climate-project/src/components/widgets/` still to consolidate (`heatmap` is done).
-- **A paired ink token per sequential ramp step**, so `HeatMap`'s `showValues` can be on by
-  default. The ramp inverts between light and dark mode, so one ink colour cannot be legible
-  against both ends — which is why that prop currently defaults to off.
-- **`RealTimeChartContainer` must poll** (3–5s), not use WebSockets, per the microclimates
-  design.
-- **`WordCloud` and `SentimentVisualization` have no real data source** — sentiment is
-  stubbed pending #67. Build them to render whatever the stub returns.
-- **Render in at least one real page**, which the acceptance criteria require and which is
-  also the only way to verify the mark specs that happy-dom cannot see.
+The gallery is an acceptance criterion, and it earned its place: **five defects were
+invisible to the whole test suite** because happy-dom does no layout and computes no
+colour. All five are fixed, each now with a regression test.
+
+1. **Four classes that compiled to nothing.** `ChartFrame`, `Counter` and `HeatMap` used
+   `text-primary`, `text-secondary`, `border-default` and `font-regular`. None exist —
+   `theme.css` declares `--color-fg-primary`, `--color-line-default` and
+   `--font-weight-normal`, so the real names are `text-fg-primary`,
+   `border-line-default` and `font-normal`. Tailwind emits no rule for a candidate it
+   cannot resolve, so the text simply inherited its colour. `tokenDiscipline` cannot
+   catch this: it rejects raw *values*, not names that do not exist. Now guarded by
+   [`styles/utilityExistence.test.ts`](../../styles/utilityExistence.test.ts), which
+   resolves every class in every `.tsx` through the real Tailwind compiler.
+2. **`HeatMap` was stretched across the content width.** `index.css` sets
+   `table { width: 100% }`, which gave the row-label column all the slack and stranded
+   the coloured cells against the right edge — a grid you could not read a row off. Fixed
+   with `w-auto` *and* a block wrapper; neither alone is enough, because the `<figure>`
+   is a flex column and stretched the table again.
+3. **`usePolling` skipped its first fetch on every effect restart.** The in-flight guard
+   was a `useRef`, shared across runs, so an incoming run saw the outgoing run's request
+   still pending and waited a whole interval instead of fetching. React 19 StrictMode
+   re-runs effects on mount, so in development *every* live chart was 3–5s late on first
+   paint. Now scoped per effect run.
+4. **`SentimentVisualization` wore a fill colour as text.** The net score was coloured
+   with `divergingColor`, which breaks this palette's own rule ("text wears text tokens,
+   never the series colour") — a score inside the inner band rendered as pale blue on
+   white, measured at **1.6:1**. The polarity moved to a swatch.
+5. **`ParticipationTracker` disagreed with itself at a band boundary.** The band was
+   computed on the raw ratio while the label showed a rounded one, so 190 of 480 (39.58%)
+   displayed "40%" — the documented threshold for Fair — while banding as Low. Rounded
+   once now, and that one figure drives the label, the band and the bar.
+
+Plus one thing that was merely *misleading* rather than broken: a `WordCloud` category
+that folded past the six-colour ceiling was showing the shared "Other" swatch, so two
+folded categories displayed the same dot and looked like one category. Folded categories
+now get no swatch at all, and the note names them.
+
+### Verified, and only verifiable, in a browser
+
+The palette resolves correctly and flips with the theme — measured off computed styles,
+not asserted from source: light bars `#0d9488 #a21caf #c2410c`, dark `#0d9488 #c026d3
+#ea580c`; all six pie sectors present and distinct (happy-dom renders *no* sectors at
+all); the 4px top-corner arc in the bar path; the 2px surface gap as a stroke on stacked
+segments; `ResponsiveContainer` producing a real 1216×280 `<svg>` where happy-dom yields
+zero; no horizontal overflow at 1440px in either theme; and no untranslated key paths in
+Spanish.
+
+## Still open
+
+- **A paired ink token per sequential ramp step**, so `HeatMap.showValues` can default to
+  on — filed as **#208** with the measured contrast figures. The ramp is *selected* per
+  theme rather than flipped, so no single ink works against both ends: dark mode measures
+  **1.56:1** at worst, with 3 of 11 cells below 3:1. Until then the prop defaults to off
+  and the value is always in the cell's accessible name, so nothing is hidden.
+- **`SentimentVisualization` has no real data source.** Sentiment needs an AI provider,
+  which is #67. It renders `sentimentStub` — deliberately a separate module, so
+  `grep sentimentStub` finds every caller and deleting it turns a survivor into a compile
+  error rather than a page quietly showing invented numbers. Pass `isPlaceholder` and the
+  chart says so on screen.
+- **`PieChart`'s legend order does not follow slice order.** recharts sorts the payload it
+  derives **alphabetically by name**, so a 45/35/20 pie legends as "Disengaged, Engaged,
+  Neutral" while the wedges run largest-first. Each label carries the *correct* colour —
+  verified in a browser — so this is a reading-order annoyance, not a misattribution.
+
+  Not fixed, and the reason is worth recording so nobody repeats the attempt:
+  `Legend payload={...}` is the obvious fix, and **recharts 3.10.1 deliberately removes
+  `payload` from `Legend`'s props type** (`Omit<Props, 'ref' | 'payload' | 'layout' |
+  'verticalAlign'>`), so supplying it means casting past the library's own contract. It
+  would also have been a testability win — an explicit payload renders a legend even
+  without sector geometry, the one part of a pie happy-dom could then assert — so it is
+  worth revisiting if a later recharts restores the prop.
+
+- **~1.8 kB gzipped of gallery-only copy still ships.** The 46 `charts.gallery*` keys live
+  in `i18n/{en,es}.json`, which are statically imported and cannot be tree-shaken per key,
+  so they survive in production even though the page does not. Dropping them would mean
+  exempting the gallery from `noHardcodedStrings`, and weakening a guard is a worse trade
+  than 1.8 kB of unreferenced strings — but it is a real cost, recorded rather than hidden.
