@@ -10,6 +10,7 @@ import InvitationForm, { type InvitationFormValues } from '../components/Invitat
 import ShareableLinkPanel from '../components/ShareableLinkPanel'
 import BulkImportPanel from '../components/BulkImportPanel'
 import { useTranslation } from '../../../i18n'
+import { PageTopBar } from '../../../components/layout'
 
 export default function UsersListPage() {
   const { t } = useTranslation()
@@ -100,7 +101,18 @@ export default function UsersListPage() {
 
   return (
     <div>
-      <h1>{t('navigation.users')}</h1>
+      <PageTopBar
+        title={t('navigation.users')}
+        description={t('navigation.usersDesc')}
+        // /admin/companies/:id is loadable by a super_admin and by the
+        // company_admin of that company, which is exactly who can reach this page
+        // -- so this crumb never links somewhere the viewer would be 403'd. A
+        // crumb to /admin/companies would, since that page is SuperAdmin-only.
+        breadcrumbs={[
+          { label: t('navigation.companySettings'), href: `/admin/companies/${companyId}` },
+          { label: t('navigation.users') },
+        ]}
+      />
       <UserFilters value={filters} onChange={setFilters} />
       {editingUser && (
         <UserForm key={editingUser.id} user={editingUser} canChangeRole onSubmit={handleUpdate} />

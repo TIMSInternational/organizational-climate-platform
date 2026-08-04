@@ -3,6 +3,7 @@ import { useParams } from 'react-router'
 import { getMicroclimate, updateMicroclimate, type MicroclimateDetail } from '../api/microclimates'
 import LiveResultsPanel from '../components/LiveResultsPanel'
 import { useTranslation } from '../../../i18n'
+import { PageTopBar } from '../../../components/layout'
 
 const STATUSES = ['draft', 'active', 'closed']
 
@@ -49,7 +50,13 @@ export default function MicroclimateDetailPage() {
 
   return (
     <div>
-      <h1>{microclimate.title}</h1>
+      <PageTopBar
+        title={microclimate.title}
+        breadcrumbs={[
+          { label: t('navigation.microclimates'), href: '/microclimates' },
+          { label: microclimate.title },
+        ]}
+      />
       <label>
         {t('common.status')}
         <select value={microclimate.status} onChange={(e) => handleStatusChange(e.target.value)}>

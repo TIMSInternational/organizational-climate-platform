@@ -840,6 +840,8 @@
     "companySettings": "Configuración de Empresa",
     "companyConfig": "Configuración de Empresa",
     "companyConfigDesc": "Configuración a nivel de empresa",
+    "companyAdministration": "Administración de Empresa",
+    "demographicFields": "Campos demográficos",
     "systemAdministration": "Administración del Sistema",
     "companies": "Empresas",
     "companiesDesc": "Gestionar empresas y dominios autorizados",
@@ -907,7 +909,12 @@
     "themeSystem": "Sistema",
     "collapseSidebar": "Colapsar barra lateral",
     "expandSidebar": "Expandir barra lateral",
-    "more": "Más"
+    "more": "Más",
+    "menu": "Menú",
+    "openMenu": "Abrir menú",
+    "mainNavigation": "Navegación principal",
+    "skipToContent": "Saltar al contenido",
+    "breadcrumb": "Ruta de navegación"
   },
   "success": {
     "saved": "Guardado exitosamente",

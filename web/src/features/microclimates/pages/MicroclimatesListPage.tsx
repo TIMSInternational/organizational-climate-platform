@@ -7,6 +7,7 @@ import MicroclimateForm, { type MicroclimateFormValues } from '../components/Mic
 import { getToken } from '../../../auth/token'
 import { decodeJwtPayload } from '../../../auth/jwt'
 import { useTranslation } from '../../../i18n'
+import { PageTopBar } from '../../../components/layout'
 
 // This slice has no company-picker UI yet (org-structure's admin shell doesn't
 // expose a "current company" concept for a SuperAdmin browsing across
@@ -96,9 +97,16 @@ export default function MicroclimatesListPage() {
 
   return (
     <div>
-      <h1>{t('navigation.microclimates')}</h1>
+      <PageTopBar
+        title={t('navigation.microclimates')}
+        description={t('navigation.microclimatesDesc')}
+        actions={
+          <button onClick={() => setShowCreateForm((v) => !v)}>
+            {showCreateForm ? t('common.cancel') : t('common.newMicroclimate')}
+          </button>
+        }
+      />
       <MicroclimateFilters value={filters} onChange={setFilters} />
-      <button onClick={() => setShowCreateForm((v) => !v)}>{showCreateForm ? t('common.cancel') : t('common.newMicroclimate')}</button>
       {showCreateForm && <MicroclimateForm templates={templates} onSubmit={handleCreate} />}
       {loading ? <p>{t('common.loading')}</p> : <MicroclimateList microclimates={filtered} />}
     </div>

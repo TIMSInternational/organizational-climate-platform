@@ -1,7 +1,19 @@
 import { Shield, Building2, Settings, Users, Tags, Target, Waves } from 'lucide-react'
 
 export interface NavItem {
-  label: string
+  /**
+   * Catalogue path for the row's label, e.g. `navigation.companies`.
+   *
+   * Not a literal string. This module used to carry English labels
+   * (`label: 'Companies'`), which rendered untranslated for a Spanish user in
+   * both the sidebar and — once #80 added it — the mobile nav. It went unnoticed
+   * because `i18n/noHardcodedStrings.test.ts` sweeps `.tsx` files only, and this
+   * is a `.ts` module, so the guard could not see it. Keys keep `buildNavSections`
+   * a pure function of the JWT claims (no React, no context) while making the
+   * copy the catalogue's problem; `navSections.test.ts` asserts every key
+   * resolves in every locale, which is the check that replaces the guard here.
+   */
+  labelKey: string
   href: string
   icon: React.ComponentType<{ className?: string }>
   badge?: string
@@ -9,7 +21,8 @@ export interface NavItem {
 }
 
 export interface NavSection {
-  title: string
+  /** Catalogue path for the section heading, or `''` for an unheaded section. */
+  titleKey: string
   items: NavItem[]
 }
 
@@ -36,15 +49,15 @@ export function buildNavSections(role: string | undefined, companyId: string | u
   if (role === 'super_admin') {
     return [
       {
-        title: '',
+        titleKey: '',
         items: [
           {
-            label: 'System Administration',
+            labelKey: 'navigation.systemAdministration',
             href: '/admin/companies',
             icon: Shield,
             sub: [
-              { label: 'Companies', href: '/admin/companies', icon: Building2 },
-              { label: 'System settings', href: '/admin/system-settings', icon: Settings },
+              { labelKey: 'navigation.companies', href: '/admin/companies', icon: Building2 },
+              { labelKey: 'navigation.systemSettings', href: '/admin/system-settings', icon: Settings },
             ],
           },
         ],
@@ -55,25 +68,25 @@ export function buildNavSections(role: string | undefined, companyId: string | u
   if (role === 'company_admin' && companyId) {
     return [
       {
-        title: '',
+        titleKey: '',
         items: [
           {
-            label: 'Company Administration',
+            labelKey: 'navigation.companyAdministration',
             href: `/admin/companies/${companyId}`,
             icon: Shield,
             sub: [
-              { label: 'Company settings', href: `/admin/companies/${companyId}`, icon: Building2 },
-              { label: 'Users', href: `/admin/companies/${companyId}/users`, icon: Users },
-              { label: 'Demographic fields', href: `/admin/companies/${companyId}/demographic-fields`, icon: Tags },
+              { labelKey: 'navigation.companySettings', href: `/admin/companies/${companyId}`, icon: Building2 },
+              { labelKey: 'navigation.users', href: `/admin/companies/${companyId}/users`, icon: Users },
+              { labelKey: 'navigation.demographicFields', href: `/admin/companies/${companyId}/demographic-fields`, icon: Tags },
             ],
           },
           {
-            label: 'Action Plans',
+            labelKey: 'navigation.actionPlans',
             href: '/action-plans',
             icon: Target,
           },
           {
-            label: 'Microclimates',
+            labelKey: 'navigation.microclimates',
             href: '/microclimates',
             icon: Waves,
           },
@@ -83,4 +96,21 @@ export function buildNavSections(role: string | undefined, companyId: string | u
   }
 
   return []
+}
+
+/**
+ * The rows a bottom tab bar can offer, in order.
+ *
+ * A grouped item (one with `sub`) is a *toggle* in the sidebar, not a
+ * destination — clicking it expands children rather than navigating — so it must
+ * not occupy one of the bar's few slots. Ported from the legacy `MobileNav`,
+ * where the same flatten was written inline.
+ *
+ * Lives here rather than in the component so it can be asserted against the
+ * role-aware sections directly, without rendering.
+ */
+export function leafNavItems(sections: NavSection[]): NavItem[] {
+  return sections
+    .flatMap((section) => section.items)
+    .flatMap((item) => (item.sub?.length ? item.sub : [item]))
 }
