@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import type { CreateQuestionInput } from '../api/microclimates'
 import type { MicroclimateTemplate } from '../api/microclimateTemplates'
 import { useTranslation } from '../../../i18n'
+import { QUESTION_TYPES, DEFAULT_QUESTION_TYPE } from '../questionTypes'
 
 export interface MicroclimateFormValues {
   title: string
@@ -12,8 +13,6 @@ export interface MicroclimateFormValues {
   templateId?: string
   questions: CreateQuestionInput[]
 }
-
-const QUESTION_TYPES = ['multiple_choice', 'open_text', 'rating', 'yes_no']
 
 const EMPTY_VALUES: MicroclimateFormValues = { title: '', startTime: '', endTime: '', targetParticipantCount: 10, anonymousResponses: true, templateId: undefined, questions: [] }
 
@@ -30,7 +29,7 @@ export default function MicroclimateForm({ templates = [], onSubmit }: Microclim
   const [submitting, setSubmitting] = useState(false)
 
   function addQuestion() {
-    setValues({ ...values, questions: [...values.questions, { text: '', type: 'open_text', required: true, order: values.questions.length + 1 }] })
+    setValues({ ...values, questions: [...values.questions, { text: '', type: DEFAULT_QUESTION_TYPE, required: true, order: values.questions.length + 1 }] })
   }
 
   function updateQuestion(index: number, question: CreateQuestionInput) {

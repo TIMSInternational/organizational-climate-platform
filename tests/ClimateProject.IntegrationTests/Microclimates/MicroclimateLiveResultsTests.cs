@@ -62,7 +62,7 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
             "Live test", null, _companyId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 4, anonymous, null,
-            new List<CreateQuestionInput> { new("How do you feel?", "open_text", null, true, 1) }));
+            new List<CreateQuestionInput> { new("How do you feel?", "open_ended", null, true, 1) }));
         var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
         await client.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
         return (created.Id, created.Questions[0].Id);
@@ -109,7 +109,7 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Word_cloud_only_counts_open_text_answers_not_ratings_or_yes_no()
+    public async Task Word_cloud_only_counts_open_ended_answers_not_ratings_or_yes_no()
     {
         var client = _factory.CreateClient();
         var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
@@ -119,14 +119,14 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
             "Mixed question types", null, _companyId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 4, true, null,
             new List<CreateQuestionInput>
             {
-                new("How do you feel?", "open_text", null, true, 1),
+                new("How do you feel?", "open_ended", null, true, 1),
                 new("Rate your week", "rating", null, true, 2),
                 new("Are you happy?", "yes_no", null, true, 3),
             }));
         var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
         await client.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
 
-        var openTextQuestionId = created.Questions.Single(q => q.Type == "open_text").Id;
+        var openEndedQuestionId = created.Questions.Single(q => q.Type == "open_ended").Id;
         var ratingQuestionId = created.Questions.Single(q => q.Type == "rating").Id;
         var yesNoQuestionId = created.Questions.Single(q => q.Type == "yes_no").Id;
 
@@ -134,7 +134,7 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         var response = await anonymousClient.PostAsJsonAsync($"/microclimates/{created.Id}/responses", new SubmitResponseRequest(
             new Dictionary<Guid, string>
             {
-                [openTextQuestionId] = "great amazing",
+                [openEndedQuestionId] = "great amazing",
                 [ratingQuestionId] = "5",
                 [yesNoQuestionId] = "yes",
             }));
@@ -145,7 +145,7 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
         var live = await liveResponse.Content.ReadFromJsonAsync<LiveResultsDetail>();
 
         // The rating value "5" and the yes/no answer "yes" must not pollute the word cloud --
-        // only the open_text answer's words should be counted.
+        // only the open_ended answer's words should be counted.
         Assert.DoesNotContain(live!.WordCloud, w => w.Text == "5");
         Assert.DoesNotContain(live.WordCloud, w => w.Text == "yes");
         Assert.Contains(live.WordCloud, w => w.Text == "great" && w.Value == 1);

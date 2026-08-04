@@ -40,6 +40,10 @@ function QuestionInput({
           ))}
         </div>
       )
+    // likert and rating render identically -- a 1-5 radiogroup unless the question
+    // configures its own option set. They stay distinct types because they mean
+    // different things (agreement vs quality), not because they look different.
+    case 'likert':
     case 'rating': {
       const scale = question.options && question.options.length > 0 ? question.options : ['1', '2', '3', '4', '5']
       return (
@@ -78,7 +82,7 @@ function QuestionInput({
           ))}
         </div>
       )
-    case 'open_text':
+    case 'open_ended':
     default:
       return (
         <input
