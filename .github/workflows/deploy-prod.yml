@@ -149,17 +149,47 @@ jobs:
       # to this step's position.
       - name: Apply EF Core migrations
         env:
-          # The Supabase DIRECT connection (port 5432), never the 6543 pooler.
-          # Supavisor in transaction mode multiplexes sessions across backends, which
-          # breaks the session-scoped advisory lock EF uses to serialise migrations
-          # and the multi-statement transactions the migrations run in. The guard
-          # below enforces this rather than trusting the secret to be set correctly.
+          # The Supabase SESSION pooler: the SAME host as the runtime connection
+          # string, but port 5432 (session mode) rather than 6543 (transaction mode),
+          # with the username in the `postgres.<project-ref>` form the pooler wants.
+          # In practice: take the runtime string and change 6543 to 5432.
+          #
+          # Two different wrong answers are guarded below. They fail for unrelated
+          # reasons, which is why there are two guards and not one:
+          #
+          #  1. Port 6543 -- WRONG SEMANTICS. Supavisor in transaction mode hands a
+          #     different backend to each statement, which breaks the session-scoped
+          #     advisory lock EF takes to serialise migrations, and the
+          #     multi-statement transactions the migrations run in.
+          #
+          #  2. Host db.<project-ref>.supabase.co -- WRONG ROUTING. This is what the
+          #     Supabase dashboard calls the "direct connection", and revisions of
+          #     this file before #212 recommended it. It publishes an AAAA record and
+          #     NO A record -- it is IPv6-only -- and GitHub Actions runners are
+          #     IPv4-only, so it is unroutable from here regardless of credentials.
+          #     It works fine from a developer workstation on an IPv6 network, which
+          #     is how the bad advice survived. Unguarded it would fail at connect
+          #     with a timeout, reading like a transient network fault rather than a
+          #     misconfigured secret, so guard 2 rejects it by name in seconds and
+          #     says why.
+          #
+          # Neither guard validates the credential -- the preflight step is an
+          # emptiness check, not a validity check -- so these catch the two known
+          # shapes of wrong, not every wrong value.
           ConnectionStrings__ClimateProject: ${{ secrets.MIGRATION_DATABASE_CONNECTION_STRING }}
         run: |
           set -euo pipefail
 
+          # Guard 1 (unchanged condition): reject transaction mode.
           if printf '%s' "$ConnectionStrings__ClimateProject" | grep -qE '(^|[^0-9])6543([^0-9]|$)'; then
-            echo "::error::MIGRATION_DATABASE_CONNECTION_STRING points at port 6543 (the Supabase transaction-mode pooler). EF Core migrations require the direct connection on 5432." >&2
+            echo "::error::MIGRATION_DATABASE_CONNECTION_STRING points at port 6543 (the Supabase transaction-mode pooler). EF Core migrations need session mode: the same host on port 5432, username postgres.<project-ref>." >&2
+            exit 1
+          fi
+
+          # Guard 2: reject the IPv6-only direct host. Fails in seconds with a reason
+          # instead of hanging until the TCP connect times out. See the comment above.
+          if printf '%s' "$ConnectionStrings__ClimateProject" | grep -qE 'db\.[a-z0-9-]+\.supabase\.co'; then
+            echo "::error::MIGRATION_DATABASE_CONNECTION_STRING points at db.<project-ref>.supabase.co (the Supabase 'direct connection'). That host is IPv6-only -- it publishes an AAAA record and no A record -- and GitHub Actions runners are IPv4-only, so it can never be reached from this workflow. Use the session pooler instead: the same host as the runtime connection string, port 5432 (not 6543), username postgres.<project-ref>." >&2
             exit 1
           fi
 
