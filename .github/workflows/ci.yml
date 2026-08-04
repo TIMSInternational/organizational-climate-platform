@@ -96,6 +96,54 @@ jobs:
         working-directory: web
         run: npm run lint
 
+  # The deploy path was the one path CI never validated. `deploy-prod.yml` has never
+  # had a successful run and is workflow_dispatch-only, so nothing exercised it, and
+  # the CloudFormation templates were only ever "validated" by attempting a real
+  # deploy. Both jobs below are static and credential-free, which is the point:
+  # `aws cloudformation validate-template` needs AWS credentials and therefore
+  # cannot run on a pull request, whereas cfn-lint parses the template locally and
+  # additionally checks resource properties against its own AWS spec.
+  deploy-path-lint:
+    name: deploy-path-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      # Pinned: cfn-lint ships new rules in minor releases, and an unpinned install
+      # means a green PR can turn red on main with no repo change. Bump deliberately.
+      - name: Install cfn-lint
+        run: pip install cfn-lint==1.53.3
+
+      - name: Lint CloudFormation templates
+        run: cfn-lint infra/aws/*.yml
+
+  workflow-lint:
+    name: workflow-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # actionlint type-checks ${{ }} expressions, validates action inputs against
+      # each action's real schema, and runs shellcheck over every `run:` block. The
+      # deploy workflow is almost entirely shell, so that last part is most of the
+      # value here.
+      - name: Install actionlint
+        run: |
+          set -euo pipefail
+          VERSION=1.7.12
+          curl -sSfL -o /tmp/actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/actionlint_${VERSION}_linux_amd64.tar.gz"
+          tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
+          sudo install -m 0755 /tmp/actionlint /usr/local/bin/actionlint
+          actionlint --version
+
+      - name: Lint GitHub Actions workflows
+        run: actionlint
+
   secret-scan:
     runs-on: ubuntu-latest
     steps:
