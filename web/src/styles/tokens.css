@@ -206,6 +206,60 @@
   --admin-accent-border-amber: rgba(245, 158, 11, 0.2);
   --admin-accent-border-orange: rgba(249, 115, 22, 0.2);
 
+  /* -- Data visualisation (#79) -------------------------------------------
+     A categorical series palette, because the accent palette above is not one.
+     Measured rather than assumed, with the dataviz validator:
+
+       --admin-accent-blue #2e9098      chroma 0.089 -> below the 0.1 floor, reads GRAY
+       orange #ea580c vs amber #d97706  dE 1.6 deutan, 6.7 normal -> indistinguishable
+                                        even with full colour vision
+
+     So charts cannot draw series colours from the accents. These six can: all
+     inside the light band L 0.43-0.77, all above the chroma floor, worst
+     adjacent CVD dE 13.6 (deutan), worst adjacent normal-vision dE 24.8, all
+     >= 3:1 against #ffffff. Re-check after any edit:
+
+       node scripts/validate_palette.js \
+         "#0d9488,#a21caf,#c2410c,#1d4ed8,#4d7c0f,#7c3aed" --mode light --surface "#ffffff"
+
+     Assigned in fixed order and never cycled: a 7th series folds into "Other"
+     or becomes small multiples. Series 1 is the brand teal family, so the
+     common single-series chart still reads as this product.
+
+     Deliberately disjoint from the status accents above -- green/amber/red mean
+     good/warning/critical and must never also mean "series 3". */
+  --admin-chart-series-1: #0d9488;
+  --admin-chart-series-2: #a21caf;
+  --admin-chart-series-3: #c2410c;
+  --admin-chart-series-4: #1d4ed8;
+  --admin-chart-series-5: #4d7c0f;
+  --admin-chart-series-6: #7c3aed;
+
+  /* Sequential ramp for magnitude: one hue, light -> dark, never a rainbow.
+     Series 1's hue, so a heatmap sits beside a bar chart without a hue clash. */
+  --admin-chart-seq-1: #ccfbf1;
+  --admin-chart-seq-2: #99f6e4;
+  --admin-chart-seq-3: #5eead4;
+  --admin-chart-seq-4: #2dd4bf;
+  --admin-chart-seq-5: #14b8a6;
+  --admin-chart-seq-6: #0d9488;
+  --admin-chart-seq-7: #0f766e;
+
+  /* Diverging: two hues plus a NEUTRAL GRAY midpoint, never a hue at the
+     middle. For sentiment and any above/below-benchmark comparison. */
+  --admin-chart-div-neg-2: #b91c1c;
+  --admin-chart-div-neg-1: #fca5a5;
+  --admin-chart-div-mid: #a1a1a1;
+  --admin-chart-div-pos-1: #7dd3fc;
+  --admin-chart-div-pos-2: #0369a1;
+
+  /* Chart furniture. Recessive on purpose -- grid and axes must not compete
+     with the marks. The gap colour is the surface, used as the 2px spacer
+     between adjacent fills. */
+  --admin-chart-grid: #ebebeb;
+  --admin-chart-axis: #b3b3b3;
+  --admin-chart-surface-gap: #ffffff;
+
   --admin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
   --admin-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
   --admin-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
@@ -271,6 +325,48 @@
   --admin-accent-border-purple: rgba(139, 92, 246, 0.15);
   --admin-accent-border-amber: rgba(245, 158, 11, 0.15);
   --admin-accent-border-orange: rgba(249, 115, 22, 0.15);
+
+  /* -- Data visualisation, dark ------------------------------------------
+     SELECTED for the dark surface, not flipped from light. The dark band is
+     narrower (L 0.48-0.67 vs 0.43-0.77), so the light steps fail it: teal-500
+     #14b8a6 measures L 0.704 and is rejected.
+
+     Same six hue families in the same order, re-stepped and re-validated
+     against the dark panel #171717: all inside L 0.48-0.67, all above the
+     chroma floor, worst adjacent CVD dE 12.8 (deutan), worst adjacent
+     normal-vision dE 29.4, all >= 3:1.
+
+       node scripts/validate_palette.js \
+         "#0d9488,#c026d3,#ea580c,#3b82f6,#65a30d,#8b5cf6" --mode dark --surface "#171717"
+
+     Series 1 is unchanged across modes: the brand teal already sits inside both
+     bands and clears 3:1 against both surfaces. */
+  --admin-chart-series-1: #0d9488;
+  --admin-chart-series-2: #c026d3;
+  --admin-chart-series-3: #ea580c;
+  --admin-chart-series-4: #3b82f6;
+  --admin-chart-series-5: #65a30d;
+  --admin-chart-series-6: #8b5cf6;
+
+  /* Sequential inverts direction for dark: dark -> light, so "more" stays
+     "more visible" against a dark surface. */
+  --admin-chart-seq-1: #042f2e;
+  --admin-chart-seq-2: #134e4a;
+  --admin-chart-seq-3: #115e59;
+  --admin-chart-seq-4: #0f766e;
+  --admin-chart-seq-5: #0d9488;
+  --admin-chart-seq-6: #14b8a6;
+  --admin-chart-seq-7: #2dd4bf;
+
+  --admin-chart-div-neg-2: #f87171;
+  --admin-chart-div-neg-1: #7f1d1d;
+  --admin-chart-div-mid: #6b6b6b;
+  --admin-chart-div-pos-1: #0c4a6e;
+  --admin-chart-div-pos-2: #38bdf8;
+
+  --admin-chart-grid: #2a2a2a;
+  --admin-chart-axis: #818181;
+  --admin-chart-surface-gap: #171717;
 
   --admin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --admin-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
