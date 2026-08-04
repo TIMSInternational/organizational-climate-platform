@@ -114,7 +114,9 @@
     "seriesColumn": "Serie",
     "categoryColumn": "Categoría",
     "valueColumn": "Valor",
-    "chartLabel": "Gráfico de {title}"
+    "chartLabel": "Gráfico de {title}",
+    "other": "Otros",
+    "otherSlices": "Otros ({count})"
   },
   "common": {
     "loading": "Cargando...",

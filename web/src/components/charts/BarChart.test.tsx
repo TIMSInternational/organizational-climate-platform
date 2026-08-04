@@ -173,7 +173,15 @@ describe('BarChart', () => {
   })
 
   it('names the chart with its title', () => {
-    render(<BarChart data={data} series={series} title="Climate by quarter" width={WIDTH} height={HEIGHT} />)
+    render(
+      <BarChart
+        data={data}
+        series={series}
+        title="Climate by quarter"
+        width={WIDTH}
+        height={HEIGHT}
+      />,
+    )
     expect(screen.getByText('Climate by quarter')).toBeTruthy()
   })
 

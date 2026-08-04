@@ -7,11 +7,16 @@
 
 export { default as BarChart } from './BarChart'
 export { default as LineChart } from './LineChart'
+export { default as PieChart } from './PieChart'
+export { default as HeatMap } from './HeatMap'
 export { default as Counter } from './Counter'
 export { default as ChartFrame } from './ChartFrame'
 export { default as ChartCanvas } from './ChartCanvas'
 
 export type { ChartDatum, ChartSeries, ChartSizeProps, ChartStateProps } from './types'
+export type { PieSlice } from './foldSlices'
+export { foldExtraSlices, OTHER_SLICE_KEY } from './foldSlices'
+export type { HeatMapCell } from './HeatMap'
 
 export {
   CHART_AXIS,
