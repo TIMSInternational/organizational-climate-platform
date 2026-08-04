@@ -7,9 +7,9 @@ Progress on #79. The **palette layer** plus the first three components; eight re
 | `BarChart` | `AnimatedBarChart` | done — grouped and stacked |
 | `LineChart` | `AnimatedLineChart` | done |
 | `Counter` | `AnimatedCounter` | done |
+| `PieChart` | `AnimatedPieChart` | done — folds extras into "Other" rather than cycling |
+| `HeatMap` | `HeatMap` + `widgets/heatmap` | done — consolidated, real `<table>` |
 | `ChartFrame` / `ChartCanvas` | — | shared scaffolding: title, loading, empty, table view, sizing |
-| `PieChart` | `AnimatedPieChart` | to do |
-| `HeatMap` | `HeatMap` + `widgets/heatmap` | to do — consolidate |
 | `WordCloud` | `WordCloud` + `widgets/word-cloud` | to do — consolidate |
 | `KPIDisplay` | `KPIDisplay` | to do |
 | `ParticipationTracker` | `ParticipationTracker` + `widgets/progress-bar` | to do — consolidate |
@@ -114,12 +114,20 @@ So **every chart test passes an explicit `width`**; the app omits it and gets th
 responsive path. This is deliberately not solved by stubbing `getBoundingClientRect`
 globally — that makes every chart test depend on a fixture that silently governs layout.
 
-**2. Bars have no observable fill.** recharts renders each bar as an empty group,
+**2. Marks have no observable fill.** For bars, recharts renders each bar as an empty group,
 `<g class="recharts-bar-rectangle"><g class="recharts-inactive-bar"></g></g>`, with no
 `<path>` inside. So a bar's `fill` and `stroke-width` cannot be asserted here. Colour is
 asserted on the **legend icon** instead, which is a fair proxy — the swatch is exactly what
 a reader matches a bar against — but it cannot catch a bar drawn in a different colour from
-its own swatch. Line charts are luckier: `.recharts-line-curve` carries a real `stroke`.
+its own swatch. **Pie charts are worse still**: they render a bare `.recharts-pie` layer with
+*no sectors and no `[fill]` elements anywhere* — not even legend icons, because the legend
+payload derives from sector geometry that never happens. So `PieChart`'s real behaviour is
+covered by unit-testing `foldSlices.ts` and by the table view, and its wedge assertions are
+omitted with a comment. Line charts are the lucky case: `.recharts-line-curve` carries a real
+`stroke`.
+
+`HeatMap` sidesteps all of this by not being a recharts chart at all — it is an HTML
+`<table>`, so every cell's `backgroundColor` and accessible name are directly assertable.
 
 Where an attribute genuinely is not observable — the 2px stacked-segment gap — the test is
 **omitted with a comment saying so**, rather than written as an assertion that cannot fail.
@@ -127,9 +135,12 @@ Those belong to the visual check the acceptance criteria already require.
 
 ## Still to do for #79
 
-- The eight components in the table above.
-- **Widget duplicates** for `heatmap`, `word-cloud` and `progress-bar` in
-  `climate-project/src/components/widgets/`. Consolidate; do not port both copies.
+- The six components still marked "to do" above.
+- **Widget duplicates** for `word-cloud` and `progress-bar` in
+  `climate-project/src/components/widgets/` still to consolidate (`heatmap` is done).
+- **A paired ink token per sequential ramp step**, so `HeatMap`'s `showValues` can be on by
+  default. The ramp inverts between light and dark mode, so one ink colour cannot be legible
+  against both ends — which is why that prop currently defaults to off.
 - **`RealTimeChartContainer` must poll** (3–5s), not use WebSockets, per the microclimates
   design.
 - **`WordCloud` and `SentimentVisualization` have no real data source** — sentiment is
