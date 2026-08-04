@@ -26,6 +26,13 @@ public class VersionEndpointTests : IClassFixture<WebApplicationFactory<Program>
         // Same reasoning as HealthEndpointTests: the JWT bearer handler runs on
         // every request including unauthenticated ones and needs a non-empty
         // signing key, and appsettings.json ships an empty TrackingJwtSecret.
+        //
+        // The connection string and InternalApiKey are supplied for forward
+        // compatibility with #189, which adds .ValidateOnStart() for both -- without
+        // them the host would refuse to start once that lands, and /version would
+        // become unreachable for reasons having nothing to do with /version. The
+        // connection string here is never connected to: /version reports build
+        // metadata and touches no dependency.
         _factory = factory.WithWebHostBuilder(builder =>
         {
             builder.ConfigureAppConfiguration((_, config) =>
@@ -33,6 +40,9 @@ public class VersionEndpointTests : IClassFixture<WebApplicationFactory<Program>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["TrackingJwtSecret"] = AuthWebApplicationFactory.TestJwtSecret,
+                    ["ConnectionStrings:ClimateProject"] = "Host=localhost;Database=unused;Username=unused;Password=unused",
+                    ["InternalApiKey"] = AuthWebApplicationFactory.TestInternalApiKey,
+                    ["GoogleClientId"] = "test-google-client-id",
                 });
             });
         });

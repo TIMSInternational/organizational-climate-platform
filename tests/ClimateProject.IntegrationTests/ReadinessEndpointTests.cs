@@ -17,8 +17,18 @@ namespace ClimateProject.IntegrationTests;
 /// service deployed with a broken connection string passed the canary and the
 /// deploy was reported successful.
 /// </summary>
-[Collection("AppHost")]
-public class ReadinessEndpointTests
+/// <summary>
+/// Holds ONE application host for all three unreachable-database tests.
+///
+/// This is a class fixture rather than a factory created per test on purpose. xUnit
+/// instantiates the test class once per test method, so a factory built in the
+/// constructor would boot three hosts instead of one. That matters here: #189 took
+/// the "AppHost" collection from 5 host boots to 13, and concurrent/most numerous
+/// host boots are the identified structural hazard behind the #68
+/// StartupValidationTests flake (see AppHostCollection). All three tests want
+/// identical configuration, so there is no reason to pay for three.
+/// </summary>
+public sealed class UnreachableDatabaseHostFixture : IDisposable
 {
     // Routable-but-dead: port 1 on the loopback interface. Chosen over a bogus
     // hostname on purpose -- a DNS failure can take the resolver's full timeout on
@@ -27,27 +37,36 @@ public class ReadinessEndpointTests
     private const string UnreachableDatabase =
         "Host=127.0.0.1;Port=1;Database=unreachable;Username=none;Password=none;Timeout=2;Command Timeout=2";
 
-    private static WebApplicationFactory<Program> CreateFactory(string connectionString) =>
+    public WebApplicationFactory<Program> Factory { get; } =
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.ConfigureAppConfiguration((_, config) =>
             {
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["ConnectionStrings:ClimateProject"] = connectionString,
-                    // Must be non-empty or the startup guard trips and this test
+                    ["ConnectionStrings:ClimateProject"] = UnreachableDatabase,
+                    // Must be non-empty or the startup guards trip and these tests
                     // would pass for the wrong reason. See StartupValidationTests.
                     ["TrackingJwtSecret"] = AuthWebApplicationFactory.TestJwtSecret,
                     ["GoogleClientId"] = "test-google-client-id",
+                    ["InternalApiKey"] = AuthWebApplicationFactory.TestInternalApiKey,
                 });
             });
         });
 
+    public void Dispose() => Factory.Dispose();
+}
+
+[Collection("AppHost")]
+public class ReadinessEndpointTests(UnreachableDatabaseHostFixture host)
+    : IClassFixture<UnreachableDatabaseHostFixture>
+{
     [Fact]
     public async Task Ready_returns_503_when_the_database_cannot_be_reached()
     {
-        using var factory = CreateFactory(UnreachableDatabase);
-        var client = factory.CreateClient();
+        // CreateClient(), never host.Factory.Services -- the latter intermittently
+        // throws ObjectDisposedException and masks the real failure (#68).
+        var client = host.Factory.CreateClient();
 
         var response = await client.GetAsync("/ready");
 
@@ -67,8 +86,7 @@ public class ReadinessEndpointTests
         // /health to probe the database, this test fails and forces the
         // conversation rather than silently changing App Runner's teardown
         // behaviour in production.
-        using var factory = CreateFactory(UnreachableDatabase);
-        var client = factory.CreateClient();
+        var client = host.Factory.CreateClient();
 
         var response = await client.GetAsync("/health");
 
@@ -82,8 +100,7 @@ public class ReadinessEndpointTests
         // database name and username of whatever it tried to reach, so echoing the
         // exception would hand an anonymous caller a description of the production
         // database.
-        using var factory = CreateFactory(UnreachableDatabase);
-        var client = factory.CreateClient();
+        var client = host.Factory.CreateClient();
 
         var body = await (await client.GetAsync("/ready")).Content.ReadAsStringAsync();
 
