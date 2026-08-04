@@ -19,6 +19,13 @@ public class CorsPolicyTests : IClassFixture<WebApplicationFactory<Program>>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["TrackingJwtSecret"] = AuthWebApplicationFactory.TestJwtSecret,
+                    // As of #189 the connection string and InternalApiKey are validated at
+                    // startup, so this host no longer boots without them. That this class
+                    // previously proved CORS worked on a host with *no database configured at
+                    // all* is the hole #189 closed; these tests still need no database, only a
+                    // syntactically present connection string.
+                    ["ConnectionStrings:ClimateProject"] = "Host=localhost;Database=unused;Username=unused;Password=unused",
+                    ["InternalApiKey"] = AuthWebApplicationFactory.TestInternalApiKey,
                     ["Cors:AllowedOrigins:0"] = "https://allowed.example.com",
                 });
             });

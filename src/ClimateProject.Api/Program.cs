@@ -1,5 +1,6 @@
 using ClimateProject.Api;
 using ClimateProject.Api.Endpoints;
+using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Cors;
 using ClimateProject.Application.OrgStructure;
@@ -11,6 +12,7 @@ using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using System.Text;
@@ -25,16 +27,67 @@ var builder = WebApplication.CreateBuilder(args);
 // chance to inject its in-memory config overrides via ConfigureWebHost/
 // ConfigureAppConfiguration -- those overrides are only applied at the point
 // builder.Build() is invoked, which is later in this file.
-builder.Services.AddDbContext<ClimateProjectDbContext>((sp, options) =>
-{
-    var connectionString = sp.GetRequiredService<IConfiguration>().GetConnectionString("ClimateProject");
-    if (string.IsNullOrWhiteSpace(connectionString))
+//
+// The guard on the connection string used to live inside the AddDbContext delegate below, so
+// it only fired when a DbContext was first resolved -- i.e. on the first DB-touching request.
+// A deploy with no connection string therefore started successfully, answered /health with
+// "ok" (that endpoint is a static literal and resolves no DbContext), reported a healthy
+// deploy, and then 500'd every real request. #189. Moving the guard into an options type with
+// .ValidateOnStart() makes it fail the host at startup instead, while keeping the lazy
+// IConfiguration read the comment above requires: the Configure delegate runs from the
+// options-validation hosted service *after* builder.Build(), which is late enough for
+// WebApplicationFactory's in-memory overrides to be visible.
+builder.Services.AddOptions<DatabaseOptions>()
+    .Configure<IConfiguration>((options, configuration) =>
     {
-        throw new InvalidOperationException("Missing ConnectionStrings:ClimateProject configuration.");
-    }
+        var connectionString = configuration.GetConnectionString("ClimateProject");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException("Missing ConnectionStrings:ClimateProject configuration.");
+        }
 
-    options.UseNpgsql(connectionString);
-});
+        options.ConnectionString = connectionString;
+    })
+    .ValidateOnStart();
+
+builder.Services.AddDbContext<ClimateProjectDbContext>((sp, options) =>
+    options.UseNpgsql(sp.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString));
+
+// InternalApiKey guards /api/internal/*, which TrackingInternalEndpoints maps unconditionally.
+// Before #189 an unset key meant those routes were mapped and every call 500'd with "Internal
+// API is not configured." -- a failure documented in README.md and infra/aws/README.md but not
+// prevented, and invisible to /health. Unlike GoogleClientId there is no environment where the
+// key is legitimately absent, so refusing to start is strictly better: a deploy that forgets
+// the secret fails its health check and rolls back, rather than coming up with the tracking
+// integration silently dead. InternalApiKeyFilter keeps its own fail-closed check as defence
+// in depth -- see the note there.
+builder.Services.AddOptions<InternalApiOptions>()
+    .Configure<IConfiguration>((options, configuration) =>
+    {
+        var internalApiKey = configuration["InternalApiKey"];
+        if (string.IsNullOrWhiteSpace(internalApiKey))
+        {
+            throw new InvalidOperationException("Missing InternalApiKey configuration.");
+        }
+
+        options.ApiKey = internalApiKey;
+    })
+    .ValidateOnStart();
+
+// GoogleClientId is conditionally required -- see GoogleAuthOptions for why it cannot just be
+// mandatory, and what GoogleAuth:Required is for.
+builder.Services.AddOptions<GoogleAuthOptions>()
+    .Configure<IConfiguration>((options, configuration) =>
+    {
+        options.ClientId = configuration["GoogleClientId"];
+
+        if (configuration.GetValue("GoogleAuth:Required", false) && !options.IsConfigured)
+        {
+            throw new InvalidOperationException(
+                "Missing GoogleClientId configuration (required because GoogleAuth:Required is true).");
+        }
+    })
+    .ValidateOnStart();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -89,7 +142,22 @@ builder.Services.AddOptions<CorsOptions>()
             .SetIsOriginAllowed(matcher.IsAllowed)
             .AllowAnyHeader()
             .AllowAnyMethod());
-    });
+    })
+    // Belt-and-braces, and deliberately labelled as such rather than as a fix (#189).
+    //
+    // An empty CORS allowlist is legitimate config, so unlike the three settings above there is
+    // nothing "missing" to guard against. CorsOriginMatcher's constructor *does* throw on a
+    // wildcard pattern with no '*' in it -- but that already fails at host start today, without
+    // this call: UseCors("Frontend") builds CorsMiddleware while the pipeline is constructed
+    // during Host.Start, and DefaultCorsPolicyProvider resolves IOptions<CorsOptions> in its
+    // constructor.
+    //
+    // Measured, not assumed. Deleting .ValidateOnStart() from the four registrations added here
+    // fails 6 of the 9 fail-fast tests in StartupValidationTests and leaves the CORS one green,
+    // even when the test asserts on host start and issues no request. So this line changes no
+    // behaviour now; it is kept only so that the guarantee survives someone later moving
+    // UseCors behind a conditional, which would otherwise silently remove the eager resolution.
+    .ValidateOnStart();
 
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
