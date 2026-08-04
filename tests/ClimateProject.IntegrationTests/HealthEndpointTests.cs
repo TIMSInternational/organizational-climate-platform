@@ -16,6 +16,13 @@ public class HealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         // like /health) to attempt authentication, and needs a non-empty signing
         // key. appsettings.json ships an empty TrackingJwtSecret, so this test
         // (predating auth) needs its own override to avoid a 500.
+        //
+        // As of #189 the connection string and InternalApiKey are validated at startup too, so
+        // they must be present here as well. Worth being explicit about what that means for
+        // this class: /health is a static literal that touches no dependency, so before #189
+        // these tests proved /health returns "ok" on a host with no database configured. It
+        // still does -- /health is not a readiness probe and does not pretend to be -- but the
+        // host now at least refuses to start without a connection string.
         _factory = factory.WithWebHostBuilder(builder =>
         {
             builder.ConfigureAppConfiguration((_, config) =>
@@ -23,6 +30,8 @@ public class HealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["TrackingJwtSecret"] = AuthWebApplicationFactory.TestJwtSecret,
+                    ["ConnectionStrings:ClimateProject"] = "Host=localhost;Database=unused;Username=unused;Password=unused",
+                    ["InternalApiKey"] = AuthWebApplicationFactory.TestInternalApiKey,
                 });
             });
         });

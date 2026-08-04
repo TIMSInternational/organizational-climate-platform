@@ -389,3 +389,88 @@ be picked up late. It cannot — 4 of 32 collections depend on #58, a `needs-des
 surveys domain. Either #58 moves earlier or #154 splits so that sub-issues A–E (26 collections)
 proceed now and F waits. The latter is preferable: it keeps the ETL off the critical path
 instead of parking the whole thing behind an epic.
+
+---
+
+# Addendum — 2026-08-04 — content i18n (#195) changes the collection count
+
+A **sixth** blocking finding was filed as **#195** after this document was written, and is now
+designed in
+[2026-08-04-content-i18n-schema-design.md](./2026-08-04-content-i18n-schema-design.md). Read that
+document before implementing sub-issues covering `Survey`, `SurveyTemplate`, `SurveyVersion`,
+`Microclimate`, `MicroclimateTemplate` or any question collection. Two things change here.
+
+## 1. `QuestionCategory` / `QuestionLibrary` were blocked on #195, not only on #58
+
+The [Blocking findings](#blocking-findings) section attributes all four schema-blocked
+collections to #58 alone. Two of them are bilingual to their core — `QuestionLibrary` has
+`text_es`/`text_en`, `options_es`/`options_en` and `scale.labels_es`/`labels_en`;
+`QuestionCategory` has nested `{ en, es }` on `name` and `description` — so #58 could not be
+designed until the representation question was settled. It now is: paired `_en`/`_es` columns,
+with options moving to a child table carrying a locale-independent value. The target entity
+shapes for both are specified in the #195 document, so these two are unblocked as soon as #58's
+entities exist.
+
+`LibraryQuestion`'s exclusion as dead code **is confirmed** rather than assumed: its one
+apparent reference in `climate-project/src/components/surveys/QuestionLibraryBrowser.tsx` is a
+locally declared `interface LibraryQuestion`, not an import of the Mongoose model. The row count
+is still worth taking, but the code evidence is now unambiguous.
+
+## 2. Five of the "26 mappable" need a language attribution decision first
+
+This is the part that changes a number in the [Collection mapping](#collection-mapping--status)
+table. Legacy `Survey`, `SurveyTemplate`, `SurveyVersion`, `Microclimate` and
+`MicroclimateTemplate` store **one** string per content field (`title`, `description`,
+`questions[].text`) and **no `language` field on any of them** — verified across all four models.
+The target schema after #195 has two columns per field. So for each of these rows the ETL must
+decide *which column the single legacy string goes into*, and nothing in the source says.
+
+Required behaviour:
+
+1. **Attribute by `Company.language`** — the only signal that exists. Write the value to
+   `<field>_<attributed>` and leave the other language NULL.
+2. **Set `Survey.Language` / `Microclimate.Language` to that same single language, not `both`.**
+   Otherwise #195's publish-time validation gate fails every migrated survey for missing
+   translations that never existed.
+3. **Record every attribution in the data-quality report**, per collection and per company. This
+   is a guess the ETL is making about production content; it must be visible, not silent.
+4. **Add one query to [What is needed to finish this](#what-is-needed-to-finish-this):** the
+   distribution of `Company.language` values in production. `Company.language` defaults to `"en"`,
+   so if companies never set it while their content is in fact Spanish, rule 1 mislabels the whole
+   corpus — Spanish text sitting in an English column, row counts reconciling, no error. That is
+   the same failure shape as the `password_hash` `select: false` finding, and this issue's own AC
+   ("a count match with mangled content is the failure mode to fear") names it.
+
+`Response` and `QuestionResponse` gain a `Language` column under #195 and need the same
+attribution and the same reporting.
+
+## 3. This changes the decomposition, not only the field mapping
+
+[Proposed decomposition](#proposed-decomposition) recommends that sub-issues **A–E** (the 26
+"mappable" collections) proceed now, independent of **F** (the #58-blocked question collections).
+That still holds for 24 of them, but **not for `Response`/`QuestionResponse`**.
+
+#195 moves question options from `text[]` to a child table carrying a **stable, locale-independent
+`value`**, because `MicroclimateEndpoints.SubmitResponseAsync` currently validates and stores an
+answer as the option's *display text* — which becomes locale-dependent the moment options are
+bilingual, fragmenting every count, chart and export with no error and reconciling row counts.
+
+The consequence for this ETL: `question_responses.response_value` must be loaded as the stable
+value, not as legacy option text. Loading it before the options migration exists writes
+locale-ambiguous text into the column, and the backfill that would repair it is only unambiguous
+*while no bilingual options exist* — i.e. that window closes behind the loader.
+
+**So whichever sub-issue owns `Response`/`QuestionResponse` must be sequenced after #195's options
+migration.** The other 24 A–E collections remain independent. This is the one place where #195
+changes #154's shape rather than just its per-field mapping, and it is easy to miss because
+`Response` is not in the schema-blocked set.
+
+**Corrected count.** Where this document says *"26 mappable · 1 excluded · 1 decision-blocked ·
+4 schema-blocked"*, read:
+
+> **21 straightforwardly mappable · 5 mappable with a recorded language attribution ·
+> 1 excluded · 1 decision-blocked · 4 schema-blocked.**
+
+The 32 total and the set of schema-blocked collections are unchanged; what changes is that five
+collections previously counted as clean carry an undecided attribution that must be settled — and
+reported — rather than defaulted silently inside the loader.

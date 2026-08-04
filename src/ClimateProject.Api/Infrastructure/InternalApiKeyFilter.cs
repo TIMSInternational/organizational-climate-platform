@@ -7,6 +7,12 @@ public sealed class InternalApiKeyFilter(IConfiguration configuration) : IEndpoi
 {
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
+        // As of #189 an empty InternalApiKey fails the host at startup (see the
+        // AddOptions<InternalApiOptions>().ValidateOnStart() registration in Program.cs), so in
+        // a running service this branch should be unreachable. Kept deliberately as defence in
+        // depth -- it must fail *closed*, and a filter on an internet-reachable auth boundary
+        // should not depend on a startup guard elsewhere in the file staying in place. Do not
+        // delete it as dead code.
         var expectedKey = configuration["InternalApiKey"];
         if (string.IsNullOrWhiteSpace(expectedKey))
         {

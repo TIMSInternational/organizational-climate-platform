@@ -6,93 +6,222 @@ namespace ClimateProject.IntegrationTests;
 /// <summary>
 /// appsettings.json ships secrets/connection-string placeholders as empty
 /// strings ("TrackingJwtSecret": "", "ConnectionStrings:ClimateProject": "",
-/// "GoogleClientId": ""). An empty string is not null, so a naive
-/// "?? throw" null-coalescing guard silently lets it through: the app used to
+/// "InternalApiKey": "", "GoogleClientId": ""). An empty string is not null, so a
+/// naive "?? throw" null-coalescing guard silently lets it through: the app used to
 /// start successfully with a zero-length JWT signing key and then 500 on
 /// every request (including /health). These tests prove the app instead
 /// fails fast at startup -- before accepting any traffic.
 ///
 /// Two distinct branches of the guard, which is
 /// string.IsNullOrWhiteSpace(...) in Program.cs:
-///   * Empty_   -- TrackingJwtSecret present but "" (what appsettings.json ships)
-///   * Missing_ -- TrackingJwtSecret genuinely absent (null)
+///   * Empty_   -- the setting is present but "" (what appsettings.json ships)
+///   * Missing_ -- the setting is genuinely absent (null)
 ///
 /// Keeping those apart takes care: because appsettings.json ships "", simply
 /// omitting the key from a test's in-memory configuration does *not* produce a
-/// null, and the two tests silently collapse onto the same branch. See the
-/// comment in Missing_ for the mechanism. Verified by narrowing the production
-/// guard to "is null" and confirming the two tests then disagree -- Empty_ fails,
-/// Missing_ passes.
+/// null, and the two tests silently collapse onto the same branch. See
+/// <see cref="ValidConfiguration"/> for the mechanism. Verified originally by narrowing the
+/// production guard to "is null" and confirming the two TrackingJwtSecret tests then
+/// disagree -- Empty_ fails, Missing_ passes.
+///
+/// <para>
+/// #189 extended this from one setting to four. Only TrackingJwtSecret used
+/// AddOptions(...).ValidateOnStart(); ConnectionStrings:ClimateProject, InternalApiKey and the
+/// CORS policy all failed at *request* time instead, which is invisible to /health and
+/// therefore invisible to a deploy canary. Two consequences for how these tests are written:
+/// </para>
+/// <para>
+/// 1. Because several settings are now validated at startup, every test must supply a
+/// complete, valid configuration and override exactly the one setting under test -- otherwise
+/// whichever validator happens to run first throws and the assertion passes or fails for the
+/// wrong reason. <see cref="ValidConfiguration"/> exists to make that hard to get wrong.
+/// </para>
+/// <para>
+/// 2. Assertions are made on <b>host start</b>, not on a request. See
+/// <see cref="CaptureStartupException"/> for why that distinction is load-bearing rather than
+/// stylistic.
+/// </para>
 /// </summary>
 [Collection("AppHost")]
 public class StartupValidationTests
 {
-    [Fact]
-    public async Task Empty_TrackingJwtSecret_fails_startup_instead_of_accepting_traffic()
+    private const string ValidConnectionString = "Host=localhost;Database=unused;Username=unused;Password=unused";
+    private const string ValidTrackingJwtSecret = "integration-test-tracking-jwt-secret-32-bytes-min";
+    private const string ValidInternalApiKey = "integration-test-internal-api-key";
+    private const string ValidGoogleClientId = "test-google-client-id";
+
+    /// <summary>
+    /// A complete configuration that starts the host cleanly, with <paramref name="overrides"/>
+    /// applied on top. Every value goes into a single in-memory provider added *after*
+    /// appsettings.json, so an override of <see langword="null"/> yields a genuine null rather
+    /// than falling back to the "" that appsettings.json ships -- which is what makes the
+    /// Missing_ cases distinguishable from the Empty_ cases at all.
+    /// </summary>
+    private static Dictionary<string, string?> ValidConfiguration(params (string Key, string? Value)[] overrides)
+    {
+        var configuration = new Dictionary<string, string?>
+        {
+            // Not exercised by /health (no DbContext is resolved there), but the connection
+            // string is validated at startup as of #189, so it must be present and non-empty in
+            // every test that is not specifically testing its absence.
+            ["ConnectionStrings:ClimateProject"] = ValidConnectionString,
+            ["TrackingJwtSecret"] = ValidTrackingJwtSecret,
+            ["InternalApiKey"] = ValidInternalApiKey,
+            ["GoogleClientId"] = ValidGoogleClientId,
+        };
+
+        foreach (var (key, value) in overrides)
+        {
+            configuration[key] = value;
+        }
+
+        return configuration;
+    }
+
+    /// <summary>
+    /// Starts the host and returns whatever it threw, <b>without issuing a request</b>.
+    /// </summary>
+    /// <remarks>
+    /// <c>CreateClient()</c> builds and starts the host (WebApplicationFactory's EnsureServer
+    /// calls Host.Start), which runs the options-validation hosted service. No HTTP request is
+    /// sent, so a failure observed here can only have come from startup.
+    /// <para>
+    /// Note it must be <c>CreateClient()</c> and not <c>factory.Services</c>, even though the
+    /// latter reads as the more direct way to say "just start the host". When Host.Start throws,
+    /// WebApplicationFactory disposes the provider, and a subsequent read of the Services
+    /// property then throws ObjectDisposedException *instead of* the real startup exception --
+    /// intermittently, depending on internal ordering. That passed locally three times and
+    /// failed once in CI on Empty_GoogleClientId_fails_startup_when_google_auth_is_required,
+    /// reporting "Cannot access a disposed object" while the log showed the intended
+    /// "Missing GoogleClientId configuration" had been raised correctly. CreateClient()
+    /// propagates the original exception and is the path the original two tests here used
+    /// reliably for months. Do not "simplify" this back to factory.Services.
+    /// </para>
+    /// <para>
+    /// That distinction is the whole point. These tests originally asserted through a
+    /// GET /health, which conflates "fails at startup" with "fails on the first request" -- and
+    /// those genuinely differ for the settings #189 is about, since /health resolves no
+    /// DbContext and no internal-API filter.
+    /// </para>
+    /// <para>
+    /// Guard-the-guard result, measured rather than assumed. Deleting .ValidateOnStart() from
+    /// the four registrations added by #189 fails <b>6 of these 9</b> fail-fast tests:
+    /// both ConnectionString cases, both InternalApiKey cases, and both
+    /// GoogleClientId-when-required cases. Three still pass, each for a known reason:
+    /// </para>
+    /// <para>
+    /// * the two TrackingJwtSecret cases -- JwtBearerOptions keeps its own ValidateOnStart, which
+    ///   the experiment does not touch;<br/>
+    /// * the CORS case -- CorsOptions is *already* resolved during Host.Start, because
+    ///   UseCors("Frontend") constructs CorsMiddleware while the pipeline is built and
+    ///   DefaultCorsPolicyProvider resolves IOptions&lt;CorsOptions&gt; in its constructor. That
+    ///   test therefore documents real behaviour but does not prove ValidateOnStart does
+    ///   anything for CorsOptions -- and the call is labelled as belt-and-braces in Program.cs
+    ///   for exactly that reason.
+    /// </para>
+    /// <para>
+    /// If you add a setting here, run that experiment on it too. A startup-validation test that
+    /// passes without the startup validation is worse than no test.
+    /// </para>
+    /// </remarks>
+    private static Exception? CaptureStartupException(Dictionary<string, string?> configuration)
     {
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
-            builder.ConfigureAppConfiguration((_, config) =>
-            {
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    // Not exercised by /health (no DbContext is injected there),
-                    // but must be non-empty so it doesn't mask the assertion
-                    // this test is actually making.
-                    ["ConnectionStrings:ClimateProject"] = "Host=localhost;Database=unused;Username=unused;Password=unused",
-                    ["TrackingJwtSecret"] = string.Empty,
-                    ["GoogleClientId"] = "test-google-client-id",
-                });
-            });
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(configuration));
         });
 
-        var exception = await Record.ExceptionAsync(async () =>
-        {
-            var client = factory.CreateClient();
-            await client.GetAsync("/health");
-        });
+        // No request is issued -- CreateClient() only builds/starts the host and hands back an
+        // HttpClient. That is what separates "failed at startup" from "failed on first request".
+        return Record.Exception(() => factory.CreateClient());
+    }
+
+    private static void AssertFailsStartupMentioning(
+        Dictionary<string, string?> configuration,
+        string expectedMention)
+    {
+        var exception = CaptureStartupException(configuration);
 
         Assert.NotNull(exception);
         Assert.True(
-            ExceptionChainMentions(exception, "TrackingJwtSecret"),
-            $"Expected the exception chain to mention TrackingJwtSecret (fail-fast startup guard). Actual: {exception}");
+            ExceptionChainMentions(exception, expectedMention),
+            $"Expected the exception chain to mention {expectedMention} (fail-fast startup guard). Actual: {exception}");
     }
 
     [Fact]
-    public async Task Missing_TrackingJwtSecret_fails_startup_instead_of_accepting_traffic()
+    public void Empty_TrackingJwtSecret_fails_startup_instead_of_accepting_traffic() =>
+        AssertFailsStartupMentioning(
+            ValidConfiguration(("TrackingJwtSecret", string.Empty)),
+            "TrackingJwtSecret");
+
+    [Fact]
+    public void Missing_TrackingJwtSecret_fails_startup_instead_of_accepting_traffic() =>
+        AssertFailsStartupMentioning(
+            ValidConfiguration(("TrackingJwtSecret", null)),
+            "TrackingJwtSecret");
+
+    [Fact]
+    public void Empty_ConnectionString_fails_startup_instead_of_500ing_every_db_route() =>
+        AssertFailsStartupMentioning(
+            ValidConfiguration(("ConnectionStrings:ClimateProject", string.Empty)),
+            "ConnectionStrings:ClimateProject");
+
+    [Fact]
+    public void Missing_ConnectionString_fails_startup_instead_of_500ing_every_db_route() =>
+        AssertFailsStartupMentioning(
+            ValidConfiguration(("ConnectionStrings:ClimateProject", null)),
+            "ConnectionStrings:ClimateProject");
+
+    [Fact]
+    public void Empty_InternalApiKey_fails_startup_instead_of_500ing_every_internal_route() =>
+        AssertFailsStartupMentioning(
+            ValidConfiguration(("InternalApiKey", string.Empty)),
+            "InternalApiKey");
+
+    [Fact]
+    public void Missing_InternalApiKey_fails_startup_instead_of_500ing_every_internal_route() =>
+        AssertFailsStartupMentioning(
+            ValidConfiguration(("InternalApiKey", null)),
+            "InternalApiKey");
+
+    /// <summary>
+    /// CorsOriginMatcher throws on a wildcard pattern containing no '*'. Without ValidateOnStart
+    /// on CorsOptions that throw lands on the first request through UseCors, so a typo in
+    /// Cors:AllowedWildcardOrigins boots a service that 500s every request.
+    /// </summary>
+    [Fact]
+    public void Malformed_wildcard_cors_origin_fails_startup_instead_of_500ing_every_request() =>
+        AssertFailsStartupMentioning(
+            ValidConfiguration(("Cors:AllowedWildcardOrigins:0", "https://no-star.example.com")),
+            "must contain '*'");
+
+    /// <summary>
+    /// GoogleClientId is conditionally required -- see GoogleAuthOptions. With
+    /// GoogleAuth:Required false (the default, and what appsettings.json ships) a
+    /// Google-disabled environment must still start, because failing there would be wrong.
+    /// This is the test that stops a future "make it consistent with the others" change from
+    /// silently breaking every deployment that does not use Google sign-in.
+    /// </summary>
+    [Fact]
+    public void Missing_GoogleClientId_does_not_fail_startup_when_google_auth_is_not_required()
     {
-        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureAppConfiguration((_, config) =>
-            {
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:ClimateProject"] = "Host=localhost;Database=unused;Username=unused;Password=unused",
-                    ["GoogleClientId"] = "test-google-client-id",
-                    // Explicit null, NOT omission. Omitting the key here does not
-                    // produce a missing value: appsettings.json ships
-                    // "TrackingJwtSecret": "", and that provider still resolves, so
-                    // an omitted key silently falls back to the empty string and
-                    // this test becomes a duplicate of the Empty_ case above --
-                    // leaving the genuinely-absent branch uncovered. An explicit
-                    // null in a later in-memory provider wins and yields a real
-                    // null, which is the case this test exists to cover.
-                    ["TrackingJwtSecret"] = null,
-                });
-            });
-        });
+        var exception = CaptureStartupException(
+            ValidConfiguration(("GoogleClientId", null), ("GoogleAuth:Required", "false")));
 
-        var exception = await Record.ExceptionAsync(async () =>
-        {
-            var client = factory.CreateClient();
-            await client.GetAsync("/health");
-        });
-
-        Assert.NotNull(exception);
-        Assert.True(
-            ExceptionChainMentions(exception, "TrackingJwtSecret"),
-            $"Expected the exception chain to mention TrackingJwtSecret (fail-fast startup guard). Actual: {exception}");
+        Assert.Null(exception);
     }
+
+    [Fact]
+    public void Empty_GoogleClientId_fails_startup_when_google_auth_is_required() =>
+        AssertFailsStartupMentioning(
+            ValidConfiguration(("GoogleClientId", string.Empty), ("GoogleAuth:Required", "true")),
+            "GoogleClientId");
+
+    [Fact]
+    public void Missing_GoogleClientId_fails_startup_when_google_auth_is_required() =>
+        AssertFailsStartupMentioning(
+            ValidConfiguration(("GoogleClientId", null), ("GoogleAuth:Required", "true")),
+            "GoogleClientId");
 
     private static bool ExceptionChainMentions(Exception? exception, string text)
     {
