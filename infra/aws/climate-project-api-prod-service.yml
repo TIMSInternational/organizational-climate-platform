@@ -60,9 +60,11 @@ Parameters:
     Type: String
     Description: >-
       Secrets Manager ARN holding the InternalApiKey value (shared static secret that
-      authenticates climate-tracking's calls to /api/internal/*). Without this, every
-      /api/internal/* route 500s in production (InternalApiKeyFilter fails closed when
-      the key is unset).
+      authenticates climate-tracking's calls to /api/internal/*). REQUIRED: as of #189 the
+      host validates this at startup (ValidateOnStart), so if it is unset the service does
+      not boot at all, fails its App Runner health check, and the deploy fails outright.
+      It no longer degrades to per-request 500s on /api/internal/* the way it did before
+      #189 -- the failure is now earlier and total.
 
 Resources:
   AppRunnerInstanceRole:

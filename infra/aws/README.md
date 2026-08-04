@@ -12,7 +12,28 @@ Deployment is split into two CloudFormation stacks. `climate-project-api-bootstr
 gh workflow run deploy-prod.yml --repo TIMSInternational/organizational-climate-platform --ref main
 ```
 
-This runs `.github/workflows/deploy-prod.yml`, which tests the API, builds and pushes the image to ECR, deploys the service stack, and health-checks the result.
+This runs `.github/workflows/deploy-prod.yml`, which verifies its configuration is complete, tests the API, builds and pushes the image to ECR (stamping the commit SHA and build timestamp into the image, reported by `/version`), **applies EF Core migrations**, deploys the service stack passing **all 11 template parameters explicitly**, gates on `/ready` (which round-trips Postgres, unlike the static `/health`), and finally asserts the live `/version` reports the commit the run just built.
+
+### Configuration the automated path requires
+
+Set these on the `production` GitHub environment before the first dispatch. The workflow's
+first step fails in seconds if any is empty, rather than surfacing an opaque CloudFormation
+error minutes in:
+
+| Name | Kind | Notes |
+|---|---|---|
+| `AWS_ACCOUNT_ID` | variable | `747814092517` |
+| `CORS_ALLOWED_ORIGIN` | variable | Exact production frontend origin |
+| `CORS_ALLOWED_WILDCARD_ORIGIN` | variable | Vercel preview pattern |
+| `TRACKING_JWT_SECRET_ARN` | variable | Secrets Manager ARN |
+| `DATABASE_CONNECTION_STRING_SECRET_ARN` | variable | Secrets Manager ARN (runtime; transaction pooler, 6543) |
+| `INTERNAL_API_KEY_SECRET_ARN` | variable | Secrets Manager ARN |
+| `MIGRATION_DATABASE_CONNECTION_STRING` | **secret** | **Direct connection, port 5432 — not the 6543 pooler.** The migration step refuses a 6543 URL: Supavisor's transaction-mode multiplexing breaks the session-scoped advisory lock EF uses to serialise migrations. |
+
+Passing every parameter explicitly is deliberate. `aws cloudformation deploy` reuses a
+parameter's **previous stack value** when omitted — it does not fall back to the template
+default — so the previous 3-of-11 invocation made the deployed configuration a function of
+invisible prior stack state rather than of this repository.
 
 **Status as of 2026-08-03.** The account-wide GitHub Actions billing block described in earlier
 revisions of this file is **resolved** — workflows execute again. `CI` now runs on every PR and
@@ -112,12 +133,17 @@ Used as a workaround while GitHub Actions is billing-blocked. Requires local AWS
    > every one of them has already been supplied at least once. On the **first** deploy after
    > a new no-default parameter is introduced (like `InternalApiKeySecretArn`, added for the
    > `/api/internal/*` routes), it must be passed explicitly that one time or the deploy fails
-   > with a missing-parameter error — and until it's set, every `/api/internal/*` request
-   > 500s in production with `"Internal API is not configured."` (`InternalApiKeyFilter`
-   > fails closed when the key is unset). Create an `InternalApiKey` secret in Secrets
+   > with a missing-parameter error. Create an `InternalApiKey` secret in Secrets
    > Manager first (same shared value climate-tracking's `INTERNAL_API_KEY` config points
    > at), then add `InternalApiKeySecretArn=<that-secret-arn>` to the command above for that
    > first run.
+   >
+   > **As of #189 the consequence of getting this wrong is worse than it used to be.** The
+   > host now validates `InternalApiKey` and the connection string at startup
+   > (`.ValidateOnStart()`). An unset value therefore means the service **does not boot**,
+   > fails its App Runner health check, and the deploy fails outright. It no longer degrades
+   > to per-request 500s on `/api/internal/*`. Prefer the automated path, which passes every
+   > parameter explicitly and refuses to start if any is missing.
 
 6. Confirm the service is healthy by checking the `ServiceUrl` stack output and hitting `/health`.
 
