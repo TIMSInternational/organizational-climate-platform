@@ -96,54 +96,70 @@ export default function HeatMap({
         </p>
       ) : (
         <>
-          <table className="border-collapse text-sm">
-            {/* Generic on purpose: when a title is given the figcaption already names
-                    this figure, and repeating it here makes a screen reader announce it
-                    twice. */}
-            <caption className="sr-only">{t('charts.tableCaption')}</caption>
-            <thead>
-              <tr>
-                {/* Empty corner cell: it heads the row-label column, which has no
-                    column name of its own. */}
-                <td />
-                {xLabels.map((x) => (
-                  <th key={x} scope="col" className="px-2 text-left font-normal text-fg-secondary">
-                    {x}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {yLabels.map((y) => (
-                <tr key={y}>
-                  <th scope="row" className="pr-2 text-left font-normal text-fg-secondary">
-                    {y}
-                  </th>
-                  {xLabels.map((x) => {
-                    const value = byPosition.get(cellKey(x, y))
-                    if (value === undefined) {
-                      // A gap is a gap. An absent pair is not a zero score, and
-                      // colouring it as one would invent data.
-                      return <td key={x} className="h-8 w-12" />
-                    }
-                    const fraction = span === 0 ? 1 : (value - min) / span
-                    return (
-                      <td
-                        key={x}
-                        className="h-8 w-12 text-center"
-                        style={{ backgroundColor: sequentialColor(fraction) }}
-                        // The number reaches assistive tech and find-in-page even
-                        // when it is not painted into the cell.
-                        aria-label={`${y}, ${x}: ${value}`}
-                      >
-                        {showValues ? <span className="text-fg-primary">{value}</span> : null}
-                      </td>
-                    )
-                  })}
+          {/* Both the wrapper and `w-auto` are load-bearing, and neither alone is
+              enough. index.css sets `table { width: 100% }` for the app's data
+              tables, which stretched the row-label column across the whole content
+              width and stranded the coloured cells against the right edge -- a grid
+              you cannot read a row off. `w-auto` restores shrink-to-fit, but the
+              `<figure>` above is a flex column, so as a direct flex child the table
+              was stretched again regardless. Inside a plain block wrapper it sizes to
+              its content and sits at the left.
+
+              The wrapper also earns its keep on its own: a heatmap with many columns
+              has to scroll inside itself rather than push the page sideways.
+
+              None of this is visible to happy-dom, which does no layout -- it was
+              caught by rendering the chart gallery. */}
+          <div className="overflow-x-auto">
+            <table className="w-auto border-collapse text-sm">
+              {/* Generic on purpose: when a title is given the figcaption already names
+                      this figure, and repeating it here makes a screen reader announce it
+                      twice. */}
+              <caption className="sr-only">{t('charts.tableCaption')}</caption>
+              <thead>
+                <tr>
+                  {/* Empty corner cell: it heads the row-label column, which has no
+                      column name of its own. */}
+                  <td />
+                  {xLabels.map((x) => (
+                    <th key={x} scope="col" className="px-2 text-left font-normal text-fg-secondary">
+                      {x}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {yLabels.map((y) => (
+                  <tr key={y}>
+                    <th scope="row" className="pr-2 text-left font-normal text-fg-secondary">
+                      {y}
+                    </th>
+                    {xLabels.map((x) => {
+                      const value = byPosition.get(cellKey(x, y))
+                      if (value === undefined) {
+                        // A gap is a gap. An absent pair is not a zero score, and
+                        // colouring it as one would invent data.
+                        return <td key={x} className="h-8 w-12" />
+                      }
+                      const fraction = span === 0 ? 1 : (value - min) / span
+                      return (
+                        <td
+                          key={x}
+                          className="h-8 w-12 text-center"
+                          style={{ backgroundColor: sequentialColor(fraction) }}
+                          // The number reaches assistive tech and find-in-page even
+                          // when it is not painted into the cell.
+                          aria-label={`${y}, ${x}: ${value}`}
+                        >
+                          {showValues ? <span className="text-fg-primary">{value}</span> : null}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <ScaleLegend min={min} max={max} />
         </>

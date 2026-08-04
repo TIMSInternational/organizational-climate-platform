@@ -14,6 +14,7 @@ import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetai
 import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
 import MicroclimateDetailPage from '../features/microclimates/pages/MicroclimateDetailPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
+import ChartGalleryRoute from '../features/charts/pages/ChartGalleryRoute'
 import { getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import { resolveInitialRoute } from './resolveInitialRoute'
@@ -37,6 +38,11 @@ export const router = createBrowserRouter([
       { path: '/login', element: <LoginPage /> },
       { path: '/accept-invitation/:token', element: <AcceptInvitationPage /> },
       { path: '/microclimates/:id/respond', element: <MicroclimateRespondPage /> },
+      // The #79 chart gallery: hardcoded sample data, no API calls, code-split
+      // (see ChartGalleryRoute.tsx). Outside RequireAuth so it is usable for
+      // visual review without a login; ChartGalleryPage.tsx carries the open
+      // question about whether it should ship in a production build.
+      { path: '/dev/chart-gallery', element: <ChartGalleryRoute /> },
       {
         element: <RequireAuth />,
         children: [

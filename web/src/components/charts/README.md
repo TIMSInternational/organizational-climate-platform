@@ -1,6 +1,7 @@
 # `charts/` — data visualisation
 
-Progress on #79. The **palette layer** plus the first three components; eight remain.
+#79, complete: the palette layer plus all eleven components, rendered together at
+[`/dev/chart-gallery`](../../features/charts/pages/ChartGalleryPage.tsx).
 
 | Component | Replaces | Status |
 |---|---|---|
@@ -10,12 +11,37 @@ Progress on #79. The **palette layer** plus the first three components; eight re
 | `PieChart` | `AnimatedPieChart` | done — folds extras into "Other" rather than cycling |
 | `HeatMap` | `HeatMap` + `widgets/heatmap` | done — consolidated, real `<table>` |
 | `ChartFrame` / `ChartCanvas` | — | shared scaffolding: title, loading, empty, table view, sizing |
-| `WordCloud` | `WordCloud` + `widgets/word-cloud` | to do — consolidate |
-| `KPIDisplay` | `KPIDisplay` | to do |
-| `ParticipationTracker` | `ParticipationTracker` + `widgets/progress-bar` | to do — consolidate |
-| `RealTimeChartContainer` | `RealTimeChartContainer` | to do — polling, not WebSockets |
-| `SentimentVisualization` | `SentimentVisualization` | to do — stub data pending #67 |
-| `RecommendationCard` | `RecommendationCard` | to do |
+| `WordCloud` | `WordCloud` + `widgets/word-cloud` | done — consolidated, flowing layout |
+| `KPIDisplay` | `KPIDisplay` | done |
+| `ParticipationTracker` | `ParticipationTracker` + `widgets/progress-bar` | done — consolidated |
+| `RealTimeChartContainer` | `RealTimeChartContainer` | done — polls at 3–5s, no WebSockets |
+| `SentimentVisualization` | `SentimentVisualization` | done — placeholder data pending #67 |
+| `RecommendationCard` | `RecommendationCard` | done |
+
+Pure logic sits beside the components in its own modules, because a file exporting
+both a component and a helper breaks React Fast Refresh: `foldSlices`, `palette`,
+`wordScale`, `formatMetric`, `participation`, `sentiment`, `usePolling`. That is
+also where most of the real test coverage lives — see "Testing charts under
+happy-dom" below for why the rendered marks cannot carry it.
+
+## The widget duplicates, and what consolidating them meant
+
+Legacy had a second copy of three of these under `climate-project/src/components/widgets/`
+(`heatmap`, `word-cloud`, `progress-bar`). Worth recording what was found: **that
+whole directory was imported by nothing.** It is exported from `widgets/index.ts` and
+no file outside `widgets/` references either the barrel or any member of it. So the
+"duplicates" were dead code, and consolidation meant keeping the `charts/` version and
+lifting across only what the widget copy genuinely did better:
+
+- **`word-cloud`** contributed a `maxWords` cap and a per-word click handler. Its own
+  layout was worse — a jittered grid with `Math.random()` *inside* the layout function,
+  so positions re-rolled on every render — and it sorted its input with a bare
+  `data.sort()`, mutating the caller's array as a side effect of rendering.
+- **`progress-bar`** contributed nothing: its linear bar is `ui/progress` (Radix, so it
+  has `role="progressbar"` and `aria-valuenow`, which the widget's animated `<div>` did
+  not), and its `CircularProgress`/`StepProgress` already existed in legacy
+  `ui/Progress.tsx` — the widget file was a third copy of primitives that belong in
+  `ui/`, not a participation view.
 
 **Dependency:** `recharts` pinned at `3.10.1` (exact, not a range). Legacy used
 `^3.1.2`, so this is the same major; 3.10.1 declares React 19 support and `npm audit`
@@ -133,17 +159,75 @@ Where an attribute genuinely is not observable — the 2px stacked-segment gap �
 **omitted with a comment saying so**, rather than written as an assertion that cannot fail.
 Those belong to the visual check the acceptance criteria already require.
 
-## Still to do for #79
+## What rendering them in a real page found
 
-- The six components still marked "to do" above.
-- **Widget duplicates** for `word-cloud` and `progress-bar` in
-  `climate-project/src/components/widgets/` still to consolidate (`heatmap` is done).
-- **A paired ink token per sequential ramp step**, so `HeatMap`'s `showValues` can be on by
-  default. The ramp inverts between light and dark mode, so one ink colour cannot be legible
-  against both ends — which is why that prop currently defaults to off.
-- **`RealTimeChartContainer` must poll** (3–5s), not use WebSockets, per the microclimates
-  design.
-- **`WordCloud` and `SentimentVisualization` have no real data source** — sentiment is
-  stubbed pending #67. Build them to render whatever the stub returns.
-- **Render in at least one real page**, which the acceptance criteria require and which is
-  also the only way to verify the mark specs that happy-dom cannot see.
+The gallery is an acceptance criterion, and it earned its place: **five defects were
+invisible to the whole test suite** because happy-dom does no layout and computes no
+colour. All five are fixed, each now with a regression test.
+
+1. **Four classes that compiled to nothing.** `ChartFrame`, `Counter` and `HeatMap` used
+   `text-primary`, `text-secondary`, `border-default` and `font-regular`. None exist —
+   `theme.css` declares `--color-fg-primary`, `--color-line-default` and
+   `--font-weight-normal`, so the real names are `text-fg-primary`,
+   `border-line-default` and `font-normal`. Tailwind emits no rule for a candidate it
+   cannot resolve, so the text simply inherited its colour. `tokenDiscipline` cannot
+   catch this: it rejects raw *values*, not names that do not exist. Now guarded by
+   [`styles/utilityExistence.test.ts`](../../styles/utilityExistence.test.ts), which
+   resolves every class in every `.tsx` through the real Tailwind compiler.
+2. **`HeatMap` was stretched across the content width.** `index.css` sets
+   `table { width: 100% }`, which gave the row-label column all the slack and stranded
+   the coloured cells against the right edge — a grid you could not read a row off. Fixed
+   with `w-auto` *and* a block wrapper; neither alone is enough, because the `<figure>`
+   is a flex column and stretched the table again.
+3. **`usePolling` skipped its first fetch on every effect restart.** The in-flight guard
+   was a `useRef`, shared across runs, so an incoming run saw the outgoing run's request
+   still pending and waited a whole interval instead of fetching. React 19 StrictMode
+   re-runs effects on mount, so in development *every* live chart was 3–5s late on first
+   paint. Now scoped per effect run.
+4. **`SentimentVisualization` wore a fill colour as text.** The net score was coloured
+   with `divergingColor`, which breaks this palette's own rule ("text wears text tokens,
+   never the series colour") — a score inside the inner band rendered as pale blue on
+   white, measured at **1.6:1**. The polarity moved to a swatch.
+5. **`ParticipationTracker` disagreed with itself at a band boundary.** The band was
+   computed on the raw ratio while the label showed a rounded one, so 190 of 480 (39.58%)
+   displayed "40%" — the documented threshold for Fair — while banding as Low. Rounded
+   once now, and that one figure drives the label, the band and the bar.
+
+Plus one thing that was merely *misleading* rather than broken: a `WordCloud` category
+that folded past the six-colour ceiling was showing the shared "Other" swatch, so two
+folded categories displayed the same dot and looked like one category. Folded categories
+now get no swatch at all, and the note names them.
+
+### Verified, and only verifiable, in a browser
+
+The palette resolves correctly and flips with the theme — measured off computed styles,
+not asserted from source: light bars `#0d9488 #a21caf #c2410c`, dark `#0d9488 #c026d3
+#ea580c`; all six pie sectors present and distinct (happy-dom renders *no* sectors at
+all); the 4px top-corner arc in the bar path; the 2px surface gap as a stroke on stacked
+segments; `ResponsiveContainer` producing a real 1216×280 `<svg>` where happy-dom yields
+zero; no horizontal overflow at 1440px in either theme; and no untranslated key paths in
+Spanish.
+
+## Still open
+
+- **A paired ink token per sequential ramp step**, so `HeatMap.showValues` can default to
+  on — filed as **#208** with the measured contrast figures. The ramp is *selected* per
+  theme rather than flipped, so no single ink works against both ends: dark mode measures
+  **1.56:1** at worst, with 3 of 11 cells below 3:1. Until then the prop defaults to off
+  and the value is always in the cell's accessible name, so nothing is hidden.
+- **`SentimentVisualization` has no real data source.** Sentiment needs an AI provider,
+  which is #67. It renders `sentimentStub` — deliberately a separate module, so
+  `grep sentimentStub` finds every caller and deleting it turns a survivor into a compile
+  error rather than a page quietly showing invented numbers. Pass `isPlaceholder` and the
+  chart says so on screen.
+- **`LineChart` anchors its y-axis at zero**, which flattens a real trend: the gallery's
+  65→78 climb over six months reads as a horizontal line. A zero baseline is mandatory for
+  bars, where length encodes value, but a line encodes *position*, so fitting the domain to
+  the data is the defensible default for this form. Left as-is here because it is landed,
+  tested behaviour and an axis-domain policy deserves its own decision rather than a
+  drive-by change.
+- **`PieChart`'s legend order does not follow slice order** — recharts sorts the payload,
+  so a 45/35/20 pie legends as "Disengaged, Engaged, Neutral". The colours are correct;
+  only the reading order makes comparison harder than it should be.
+- **The loading skeleton is nearly invisible in light mode.** `bg-surface-icon-box` is
+  close enough to the page background that a pulsing block barely reads as anything.

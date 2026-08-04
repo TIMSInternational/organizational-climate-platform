@@ -41,6 +41,13 @@ import { __unstable__loadDesignSystem } from 'tailwindcss'
  *
  * ## What it does not cover
  *
+ * **Class names living in `.ts` modules.** This reads `className` attributes out
+ * of `.tsx`, so a helper that *returns* a class string is invisible to it. That is
+ * a reason to keep the mapping from a semantic state to a class inside the
+ * component — `charts/participation.ts` returns `'good' | 'warning' | 'critical'`
+ * and the component turns that into `text-accent-green` in a ternary, precisely so
+ * the class stays somewhere this guard can see it. Worth preferring generally.
+ *
  * The cva variant tables in `components/ui/*Variants.ts`. Their class strings sit
  * as object *values* two levels inside a `variants: { size: { sm: '...' } }`
  * literal, indistinguishable from the variant *keys* beside them without
