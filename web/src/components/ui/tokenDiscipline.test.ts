@@ -15,10 +15,34 @@ import { join, relative } from 'node:path'
 
 const UI_DIR = join(process.cwd(), 'src', 'components', 'ui')
 
+/**
+ * `charts/` is swept too, as of #79.
+ *
+ * Charts are the single most likely place for a raw colour to appear -- every
+ * charting library's examples pass hex strings, and a chart's colours are
+ * load-bearing rather than decorative. The failure is also the one this guard
+ * exists for: a hardcoded series colour looks right in light mode and disappears
+ * against the dark surface, and it silently bypasses the colourblind-validated
+ * palette in `charts/palette.ts`.
+ *
+ * Unlike `ui/`, this sweep includes `.ts` as well as `.tsx` -- the palette module
+ * itself is plain TypeScript.
+ */
+const CHARTS_DIR = join(process.cwd(), 'src', 'components', 'charts')
+
+function filesIn(dir: string, extensions: string[]): string[] {
+  return extensions
+    .flatMap((extension) => globSync(`*.${extension}`, { cwd: dir }))
+    .filter((file) => !/\.test\.tsx?$/.test(file))
+    .map((file) => join(dir, file))
+}
+
 function sourceFiles(): string[] {
-  return globSync('*.tsx', { cwd: UI_DIR })
-    .filter((file) => !file.endsWith('.test.tsx'))
-    .map((file) => join(UI_DIR, file))
+  return filesIn(UI_DIR, ['tsx'])
+}
+
+function chartFiles(): string[] {
+  return filesIn(CHARTS_DIR, ['tsx', 'ts'])
 }
 
 interface Violation {
@@ -137,5 +161,27 @@ describe('token discipline in ui/ primitives', () => {
         .filter((value) => !ALLOWED.some((allowed) => allowed.test(value)))
       expect(violations, `${sample} should be allowed`).toEqual([])
     }
+  })
+})
+
+describe('token discipline in charts/', () => {
+  it('finds the chart modules', () => {
+    // Guard the guard: an empty sweep passes the assertion below vacuously.
+    // Grows as #79's components land; the palette module alone satisfies it today.
+    expect(chartFiles().length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('hardcodes no colour, size or arbitrary value', () => {
+    const report = chartFiles()
+      .flatMap(findViolations)
+      .map((v) => `${relative(CHARTS_DIR, v.file)}  [${v.rule}]  ${v.match}`)
+      .sort()
+
+    expect(
+      report,
+      'Chart colours come from src/components/charts/palette.ts, which reads the ' +
+        'validated --admin-chart-* tokens. A raw hex bypasses the colourblind ' +
+        'validation and breaks dark mode silently.',
+    ).toEqual([])
   })
 })

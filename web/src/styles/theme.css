@@ -55,6 +55,35 @@
   --color-accent-amber: var(--admin-accent-amber);
   --color-accent-orange: var(--admin-accent-orange);
 
+  /* -- Data visualisation (#79) ------------------------------------------
+     Exposed as utilities so a chart can write `fill-chart-series-1` rather
+     than an inline hex. Values and rationale live in ./tokens.css; nothing
+     here holds a value of its own. */
+  --color-chart-series-1: var(--admin-chart-series-1);
+  --color-chart-series-2: var(--admin-chart-series-2);
+  --color-chart-series-3: var(--admin-chart-series-3);
+  --color-chart-series-4: var(--admin-chart-series-4);
+  --color-chart-series-5: var(--admin-chart-series-5);
+  --color-chart-series-6: var(--admin-chart-series-6);
+
+  --color-chart-seq-1: var(--admin-chart-seq-1);
+  --color-chart-seq-2: var(--admin-chart-seq-2);
+  --color-chart-seq-3: var(--admin-chart-seq-3);
+  --color-chart-seq-4: var(--admin-chart-seq-4);
+  --color-chart-seq-5: var(--admin-chart-seq-5);
+  --color-chart-seq-6: var(--admin-chart-seq-6);
+  --color-chart-seq-7: var(--admin-chart-seq-7);
+
+  --color-chart-div-neg-2: var(--admin-chart-div-neg-2);
+  --color-chart-div-neg-1: var(--admin-chart-div-neg-1);
+  --color-chart-div-mid: var(--admin-chart-div-mid);
+  --color-chart-div-pos-1: var(--admin-chart-div-pos-1);
+  --color-chart-div-pos-2: var(--admin-chart-div-pos-2);
+
+  --color-chart-grid: var(--admin-chart-grid);
+  --color-chart-axis: var(--admin-chart-axis);
+  --color-chart-surface-gap: var(--admin-chart-surface-gap);
+
   --color-accent-green-soft: var(--admin-accent-bg-green);
   --color-accent-red-soft: var(--admin-accent-bg-red);
   --color-accent-blue-soft: var(--admin-accent-bg-blue);
