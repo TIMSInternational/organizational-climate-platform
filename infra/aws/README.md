@@ -28,12 +28,50 @@ error minutes in:
 | `TRACKING_JWT_SECRET_ARN` | variable | Secrets Manager ARN |
 | `DATABASE_CONNECTION_STRING_SECRET_ARN` | variable | Secrets Manager ARN (runtime; transaction pooler, 6543) |
 | `INTERNAL_API_KEY_SECRET_ARN` | variable | Secrets Manager ARN |
-| `MIGRATION_DATABASE_CONNECTION_STRING` | **secret** | **Direct connection, port 5432 — not the 6543 pooler.** The migration step refuses a 6543 URL: Supavisor's transaction-mode multiplexing breaks the session-scoped advisory lock EF uses to serialise migrations. |
+| `MIGRATION_DATABASE_CONNECTION_STRING` | **secret** | **Session pooler: the same host as the runtime string, port 5432, username `postgres.<project-ref>`.** Not 6543, and **not** `db.<project-ref>.supabase.co` — that host is IPv6-only and unreachable from GitHub Actions. See below. |
 
 Passing every parameter explicitly is deliberate. `aws cloudformation deploy` reuses a
 parameter's **previous stack value** when omitted — it does not fall back to the template
 default — so the previous 3-of-11 invocation made the deployed configuration a function of
 invisible prior stack state rather than of this repository.
+
+#### The migration connection string is the session pooler, not the "direct connection"
+
+This is the one value most likely to be filled in wrongly, because the Supabase dashboard
+presents the wrong answer prominently and earlier revisions of this file recommended it.
+
+Supabase exposes the database three ways. Two of them are the **same pooler host** on two
+ports, distinguished only by mode:
+
+| Endpoint | Host | Port | Mode | Usable for EF migrations? |
+|---|---|---|---|---|
+| Transaction pooler | `aws-0-<region>.pooler.supabase.com` | 6543 | multiplexes sessions across backends | **No** — see below |
+| **Session pooler** | `aws-0-<region>.pooler.supabase.com` | **5432** | one dedicated backend per session | **Yes — use this** |
+| "Direct connection" | `db.<project-ref>.supabase.co` | 5432 | straight to Postgres | Works locally, **never from CI** |
+
+Both failure modes are guarded in `deploy-prod.yml`, and they fail for unrelated reasons:
+
+- **Port 6543 is wrong for a semantic reason.** Supavisor's transaction mode hands a
+  different backend to each statement, which breaks the *session-scoped* advisory lock EF
+  Core takes to serialise concurrent migration runs, and breaks the multi-statement
+  transactions the migrations themselves run in.
+- **`db.<project-ref>.supabase.co` is wrong for a routing reason.** That host publishes an
+  **AAAA record and no A record — it is IPv6-only** — and GitHub Actions runners have no
+  IPv6 address. It is therefore unroutable from this workflow no matter how correct the
+  credentials are. Measured 2026-08-04: `dig +short A db.<project-ref>.supabase.co` returns
+  nothing, `dig +short AAAA` returns an address, and the pooler host returns three IPv4
+  addresses. It is a perfectly good target from a developer workstation on an IPv6-capable
+  network, which is why the mistake survives casual testing.
+
+The practical recipe: **take the runtime connection string and change the port from 6543 to
+5432.** The username is already in the `postgres.<project-ref>` form the pooler requires, and
+the password is the same. Do not switch hosts.
+
+Why this mattered enough to write down: the workflow's preflight is an **emptiness check, not
+a validity check**, so a plausible-but-wrong value passes it and fails much later. Pointing at
+the IPv6-only host would have failed at connect with a *timeout*, which reads like a transient
+network fault rather than a misconfigured secret — so the guard rejects that host by name and
+explains why, rather than letting the run hang. Tracking issue: #212.
 
 **Status as of 2026-08-03.** The account-wide GitHub Actions billing block described in earlier
 revisions of this file is **resolved** — workflows execute again. `CI` now runs on every PR and
