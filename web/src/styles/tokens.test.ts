@@ -135,7 +135,12 @@ describe('control density', () => {
 
   it('caps the content column somewhere', () => {
     expect(token('--admin-size-content-max')).toBe('1280px')
-    expect(adminLayoutSource).toContain('var(--admin-size-content-max)')
+    // `max-w-content` since #80, `var(--admin-size-content-max)` before it. Both
+    // are the same cap: theme.css maps `--container-content` onto the token, so
+    // the utility and the custom property cannot disagree by construction. The
+    // claim being made is that the column is capped *at all* — an uncapped one
+    // stretches a table to 3440px on an ultrawide — not which spelling is used.
+    expect(adminLayoutSource).toMatch(/max-w-content|var\(--admin-size-content-max\)/)
   })
 })
 

@@ -8,6 +8,7 @@ import CompanySettingsForm, { type CompanySettingsFormValues } from '../componen
 import DepartmentList from '../components/DepartmentList'
 import DepartmentForm, { type DepartmentFormValues } from '../components/DepartmentForm'
 import { useTranslation } from '../../../i18n'
+import { PageTopBar } from '../../../components/layout'
 
 export default function CompanyDetailPage() {
   const { t } = useTranslation()
@@ -108,9 +109,18 @@ export default function CompanyDetailPage() {
 
   return (
     <div>
-      <h1>{company?.name ?? t('dashboard.company')}</h1>
-      <p><Link to={`/admin/companies/${id}/users`}>{t('dashboard.manageUsers')}</Link></p>
-      <p><Link to={`/admin/companies/${id}/demographic-fields`}>{t('dashboard.manageDemographicFields')}</Link></p>
+      {/* No breadcrumb: the only crumb above this page is /admin/companies, which
+          is SuperAdmin-only, and a company_admin reaches this page as their own
+          company's home. A crumb they would be 403'd on is worse than none. */}
+      <PageTopBar
+        title={company?.name ?? t('dashboard.company')}
+        actions={
+          <>
+            <Link to={`/admin/companies/${id}/users`}>{t('dashboard.manageUsers')}</Link>
+            <Link to={`/admin/companies/${id}/demographic-fields`}>{t('dashboard.manageDemographicFields')}</Link>
+          </>
+        }
+      />
 
       {company ? (
         <>

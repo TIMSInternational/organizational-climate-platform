@@ -3,6 +3,7 @@ import { useParams } from 'react-router'
 import { getActionPlan, updateActionPlan, recordProgress, type ActionPlanDetail } from '../api/actionPlans'
 import ProgressUpdateForm, { type ProgressUpdateFormValues } from '../components/ProgressUpdateForm'
 import { useTranslation } from '../../../i18n'
+import { PageTopBar } from '../../../components/layout'
 
 const STATUSES = ['not_started', 'in_progress', 'completed', 'overdue', 'cancelled']
 
@@ -55,8 +56,14 @@ export default function ActionPlanDetailPage() {
 
   return (
     <div>
-      <h1>{plan.title}</h1>
-      <p>{plan.description}</p>
+      <PageTopBar
+        title={plan.title}
+        description={plan.description}
+        breadcrumbs={[
+          { label: t('navigation.actionPlans'), href: '/action-plans' },
+          { label: plan.title },
+        ]}
+      />
       <label>
         {t('common.status')}
         <select value={plan.status} onChange={(e) => handleStatusChange(e.target.value)}>

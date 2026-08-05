@@ -30,6 +30,19 @@ const UI_DIR = join(process.cwd(), 'src', 'components', 'ui')
  */
 const CHARTS_DIR = join(process.cwd(), 'src', 'components', 'charts')
 
+/**
+ * `layout/` is swept too, as of #80.
+ *
+ * The shell is where a raw value is least visible and most damaging: it frames
+ * every page, so a hardcoded surface colour is wrong on twelve screens at once,
+ * and the legacy shell it is ported from expressed *all* of its density as inline
+ * literals (`fontSize: 13`, `borderRadius: 8`, `#102B47`, `width: 220`) rather
+ * than through a theme. Porting those verbatim is the obvious mistake here, so it
+ * is the one that is checked. `.ts` is included for the same reason as `charts/`:
+ * `gridClasses.ts` holds class strings.
+ */
+const LAYOUT_DIR = join(process.cwd(), 'src', 'components', 'layout')
+
 function filesIn(dir: string, extensions: string[]): string[] {
   return extensions
     .flatMap((extension) => globSync(`*.${extension}`, { cwd: dir }))
@@ -43,6 +56,10 @@ function sourceFiles(): string[] {
 
 function chartFiles(): string[] {
   return filesIn(CHARTS_DIR, ['tsx', 'ts'])
+}
+
+function layoutFiles(): string[] {
+  return filesIn(LAYOUT_DIR, ['tsx', 'ts'])
 }
 
 interface Violation {
@@ -182,6 +199,27 @@ describe('token discipline in charts/', () => {
       'Chart colours come from src/components/charts/palette.ts, which reads the ' +
         'validated --admin-chart-* tokens. A raw hex bypasses the colourblind ' +
         'validation and breaks dark mode silently.',
+    ).toEqual([])
+  })
+})
+
+describe('token discipline in layout/', () => {
+  it('finds the layout modules', () => {
+    // Guard the guard: an empty sweep passes the assertion below vacuously.
+    expect(layoutFiles().length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('hardcodes no colour, size or arbitrary value', () => {
+    const report = layoutFiles()
+      .flatMap(findViolations)
+      .map((v) => `${relative(LAYOUT_DIR, v.file)}  [${v.rule}]  ${v.match}`)
+      .sort()
+
+    expect(
+      report,
+      'The shell frames every page, so a raw value here is wrong everywhere at ' +
+        'once. Use a token utility from src/styles/theme.css, or var(--admin-*) ' +
+        'in an inline style.',
     ).toEqual([])
   })
 })

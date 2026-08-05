@@ -7,6 +7,7 @@ import ActionPlanForm, { type ActionPlanFormValues } from '../components/ActionP
 import { getToken } from '../../../auth/token'
 import { decodeJwtPayload } from '../../../auth/jwt'
 import { useTranslation } from '../../../i18n'
+import { PageTopBar } from '../../../components/layout'
 
 // This slice has no company-picker UI yet (org-structure's admin shell doesn't
 // expose a "current company" concept for a SuperAdmin browsing across
@@ -99,9 +100,16 @@ export default function ActionPlansListPage() {
 
   return (
     <div>
-      <h1>{t('navigation.actionPlans')}</h1>
+      <PageTopBar
+        title={t('navigation.actionPlans')}
+        description={t('navigation.actionPlansDesc')}
+        actions={
+          <button onClick={() => setShowCreateForm((v) => !v)}>
+            {showCreateForm ? t('common.cancel') : t('common.newActionPlan')}
+          </button>
+        }
+      />
       <ActionPlanFilters value={filters} onChange={setFilters} />
-      <button onClick={() => setShowCreateForm((v) => !v)}>{showCreateForm ? t('common.cancel') : t('common.newActionPlan')}</button>
       {showCreateForm && <ActionPlanForm templates={templates} onSubmit={handleCreate} />}
       {loading ? <p>{t('common.loading')}</p> : <ActionPlanList plans={filtered} />}
     </div>

@@ -4,6 +4,7 @@ import CompanyList from '../components/CompanyList'
 import CompanyFilters, { type CompanyFiltersValue } from '../components/CompanyFilters'
 import CompanyForm, { type CompanyFormValues } from '../components/CompanyForm'
 import { useTranslation } from '../../../i18n'
+import { PageTopBar } from '../../../components/layout'
 
 export default function CompaniesListPage() {
   const { t } = useTranslation()
@@ -56,11 +57,16 @@ export default function CompaniesListPage() {
 
   return (
     <div>
-      <h1>{t('navigation.companies')}</h1>
+      <PageTopBar
+        title={t('navigation.companies')}
+        description={t('navigation.companiesDesc')}
+        actions={
+          <button onClick={() => setShowCreateForm((v) => !v)}>
+            {showCreateForm ? t('common.cancel') : t('common.newCompany')}
+          </button>
+        }
+      />
       <CompanyFilters value={filters} onChange={setFilters} />
-      <button onClick={() => setShowCreateForm((v) => !v)}>
-        {showCreateForm ? t('common.cancel') : t('common.newCompany')}
-      </button>
       {showCreateForm && (
         <CompanyForm submitLabel={t('common.createCompany')} onSubmit={handleCreate} />
       )}

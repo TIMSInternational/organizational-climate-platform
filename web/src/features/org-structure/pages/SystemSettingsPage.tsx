@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getSystemSettings, updateSystemSettings, type SystemSettingsData } from '../api/systemSettings'
 import SystemSettingsForm from '../components/SystemSettingsForm'
 import { useTranslation } from '../../../i18n'
+import { PageTopBar } from '../../../components/layout'
 
 export default function SystemSettingsPage() {
   const { t } = useTranslation()
@@ -34,7 +35,10 @@ export default function SystemSettingsPage() {
 
   return (
     <div>
-      <h1>{t('navigation.systemSettings')}</h1>
+      <PageTopBar
+        title={t('navigation.systemSettings')}
+        description={t('navigation.systemSettingsDesc')}
+      />
       {settings ? (
         <SystemSettingsForm settings={settings} onSubmit={handleSubmit} />
       ) : (

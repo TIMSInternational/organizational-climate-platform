@@ -4,6 +4,7 @@ import { listDemographicFields, createDemographicField, updateDemographicField, 
 import DemographicFieldList from '../components/DemographicFieldList'
 import DemographicFieldForm, { type DemographicFieldFormValues } from '../components/DemographicFieldForm'
 import { useTranslation } from '../../../i18n'
+import { PageTopBar } from '../../../components/layout'
 
 export default function DemographicFieldsPage() {
   const { t } = useTranslation()
@@ -68,10 +69,18 @@ export default function DemographicFieldsPage() {
 
   return (
     <div>
-      <h1>{t('dashboard.demographicFields')}</h1>
-      <button onClick={() => setCreating((v) => !v)}>
-        {creating ? t('common.cancel') : t('common.newField')}
-      </button>
+      <PageTopBar
+        title={t('navigation.demographicFields')}
+        breadcrumbs={[
+          { label: t('navigation.companySettings'), href: `/admin/companies/${companyId}` },
+          { label: t('navigation.demographicFields') },
+        ]}
+        actions={
+          <button onClick={() => setCreating((v) => !v)}>
+            {creating ? t('common.cancel') : t('common.newField')}
+          </button>
+        }
+      />
       {creating && (
         <DemographicFieldForm submitLabel={t('common.createField')} onSubmit={handleCreate} />
       )}

@@ -840,6 +840,8 @@
     "companySettings": "Company Settings",
     "companyConfig": "Company Config",
     "companyConfigDesc": "Company-wide settings",
+    "companyAdministration": "Company Administration",
+    "demographicFields": "Demographic fields",
     "systemAdministration": "System Administration",
     "companies": "Companies",
     "companiesDesc": "Manage authorized companies and domains",
@@ -907,7 +909,12 @@
     "themeSystem": "System",
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
-    "more": "More"
+    "more": "More",
+    "menu": "Menu",
+    "openMenu": "Open menu",
+    "mainNavigation": "Main navigation",
+    "skipToContent": "Skip to content",
+    "breadcrumb": "Breadcrumb"
   },
   "success": {
     "saved": "Saved successfully",

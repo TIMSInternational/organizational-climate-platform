@@ -289,6 +289,30 @@ describe('utility existence', () => {
     expect(candidatesOf(['group peer group/field nav-icon'])).toEqual([])
   })
 
+  /**
+   * The dashboard grid class tables, checked by name.
+   *
+   * `components/layout/DashboardGrid.tsx` cannot write its responsive classes
+   * inline: `grid-cols-${n}` compiles to nothing, so the classes have to be
+   * literals in a lookup table, and the sweep above deliberately does not enter
+   * object literals. They live in `components/layout/gridClasses.ts` purely so
+   * they can be imported and checked here rather than not at all — the reasoning
+   * is written out at the top of that module.
+   *
+   * This is a spelled-out case rather than a general rule because there is no
+   * general way to tell a class-valued table from a cva variant table.
+   */
+  it('checks the dashboard grid class tables', async () => {
+    const { GRID_COLUMNS, GRID_GAP, GRID_SPAN } = await import('../components/layout/gridClasses')
+    const tables = { GRID_COLUMNS, GRID_GAP, GRID_SPAN }
+
+    for (const [name, table] of Object.entries(tables)) {
+      const candidates = candidatesOf(Object.values(table))
+      expect(candidates.length, `${name} contributed no candidates`).toBeGreaterThan(0)
+      expect(nonCompiling(candidates), `${name} names a class that compiles to nothing`).toEqual([])
+    }
+  })
+
   it('does not descend into cva variant tables', () => {
     // The exclusion that removed the largest group of false positives. If this
     // regresses, `destructive` and `sm` start reading as broken classes.
