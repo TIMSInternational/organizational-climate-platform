@@ -14,3 +14,7 @@ coverage/
 .worktrees/
 node_modules/
 dist/
+
+# Byte-cache from the Python helpers under scripts/.
+__pycache__/
+*.pyc

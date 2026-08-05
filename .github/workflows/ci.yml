@@ -121,6 +121,14 @@ jobs:
       - name: Lint CloudFormation templates
         run: cfn-lint infra/aws/*.yml
 
+      # cfn-lint checks the trust policy is well-formed, not that it is correct.
+      # The four `sub` claims the deploy role needs are a fact about the live
+      # account, and dropping the two ID-qualified ones breaks every deploy while
+      # leaving a template cfn-lint is perfectly happy with — so that specific
+      # regression gets its own check. PyYAML comes in with cfn-lint above.
+      - name: Verify OIDC trust policy matches live IAM
+        run: python scripts/verify-oidc-trust-subs.py
+
   workflow-lint:
     name: workflow-lint
     runs-on: ubuntu-latest

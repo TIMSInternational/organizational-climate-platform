@@ -73,45 +73,85 @@ the IPv6-only host would have failed at connect with a *timeout*, which reads li
 network fault rather than a misconfigured secret — so the guard rejects that host by name and
 explains why, rather than letting the run hang. Tracking issue: #212.
 
-**Status as of 2026-08-03.** The account-wide GitHub Actions billing block described in earlier
+**Status as of 2026-08-05.** The account-wide GitHub Actions billing block described in earlier
 revisions of this file is **resolved** — workflows execute again. `CI` now runs on every PR and
-every push to `main`, and its .NET job passes. Two things are still unverified, so do not yet
-treat the automated deploy as proven:
+every push to `main`, and its .NET job passes. One thing is still unproven:
 
-- **`deploy-prod.yml` has never had a successful run.** It is `workflow_dispatch`-only and was
-  never dispatched while billing was blocked. Every production deploy to date went through the
-  manual path below.
-- **The OIDC trust relationship has not been confirmed against the live account.** The
-  `GitHubRepository` parameter default in `climate-project-api-bootstrap.yml` was updated to
-  `TIMSInternational/organizational-climate-platform` after the repo rename, but a
-  CloudFormation parameter **default only applies when the parameter is not supplied** — the
-  deployed stack retains the value it was last deployed with, which predates the rename. If the
-  live `climate-project-github-deploy-prod` role still trusts
-  `repo:TIMSInternational/climate-project-api:*`, the first dispatched deploy fails at
-  `configure-aws-credentials` with a `sts:AssumeRoleWithWebIdentity` denial. Verify before
-  dispatching:
+- **`deploy-prod.yml` has never had a successful run — in fact it has never run at all, zero
+  dispatches, lifetime.** It is `workflow_dispatch`-only and was never dispatched while billing
+  was blocked. Every production deploy to date went through the manual path below.
 
-  ```
-  aws iam get-role --role-name climate-project-github-deploy-prod \
-    --query 'Role.AssumeRolePolicyDocument.Statement[].Condition' --output json
-  ```
+The OIDC trust relationship, by contrast, **has now been read back from the live account** and
+is correct. What earlier revisions of this file warned about was not what was actually wrong.
 
-  Both `sub` entries must name `organizational-climate-platform`. If they name the old repo,
-  redeploy the bootstrap stack with `GitHubRepository` passed explicitly:
+### The OIDC subject claim is ID-qualified (this is what broke the first deploy)
 
-  ```
-  aws cloudformation deploy \
-    --stack-name climate-project-api-bootstrap \
-    --template-file infra/aws/climate-project-api-bootstrap.yml \
-    --capabilities CAPABILITY_NAMED_IAM \
-    --no-fail-on-empty-changeset \
-    --parameter-overrides GitHubRepository=TIMSInternational/organizational-climate-platform
-  ```
+Earlier revisions of this file warned that the live `climate-project-github-deploy-prod` role
+"may still trust the pre-rename repo `climate-project-api`", on the reasoning that a
+CloudFormation parameter default only applies when the parameter is not supplied. That warning
+was **checked against IAM on 2026-08-05 and disproven** — no entry in the live trust policy
+names the old repository. The real cause was different, and more interesting.
 
-  This check requires credentials for the production account (`AWS_ACCOUNT_ID` repo variable,
-  `747814092517`). Note that the resource names in the table below are **live infrastructure
-  identifiers** and still use the pre-rename `climate-project-api` prefix deliberately —
-  renaming them orphans the deployed stacks. Only the GitHub repository reference changed.
+GitHub now issues OIDC tokens whose `sub` claim carries an **ID-qualified** subject prefix:
+
+```
+repo:OWNER@<ownerId>/REPO@<repoId>:ref:refs/heads/main
+```
+
+not the bare `repo:OWNER/REPO:...` form that AWS's own documentation still shows. A trust policy
+carrying only the name-based form can therefore **never match any token this repository
+presents**, no matter how correct the repository name in it is. That, not a stale repo name, is
+what failed the first production deploy at `sts:AssumeRoleWithWebIdentity` — and it is a failure
+that looks identical to a credentials or permissions problem from the workflow log.
+
+The live role was fixed by hand and trusts **four** subs:
+
+```
+repo:TIMSInternational@305569681/organizational-climate-platform@1317724282:ref:refs/heads/main
+repo:TIMSInternational@305569681/organizational-climate-platform@1317724282:environment:production
+repo:TIMSInternational/organizational-climate-platform:ref:refs/heads/main
+repo:TIMSInternational/organizational-climate-platform:environment:production
+```
+
+**`climate-project-api-bootstrap.yml` now emits all four.** Until 2026-08-05 it emitted only the
+name-based pair, which made the template *more dangerous than a stale one*: redeploying the
+bootstrap stack would have quietly deleted the two ID-qualified entries and broken deploys
+again, with no error at deploy time and a denial on the next dispatch. If you are reading a
+checkout from before that fix, do not redeploy the bootstrap stack.
+
+The numeric IDs live in two parameters, `GitHubOwnerId` (`305569681`) and `GitHubRepositoryId`
+(`1317724282`). Both are **immutable** — they survive an org rename, a repository rename and a
+transfer within the org — so the ID-qualified form also permanently removes the repo-rename
+fragility the warning above was worried about. Re-derive them with either of:
+
+```
+gh api /repos/TIMSInternational/organizational-climate-platform --jq '{owner: .owner.id, repo: .id}'
+gh api /repos/TIMSInternational/organizational-climate-platform/actions/oidc/customization/sub
+```
+
+The second returns the repository's `sub_claim_prefix`, i.e. the exact subject form GitHub will
+mint — the authoritative answer if the two ever disagree. Measured 2026-08-05 it returns
+`{"use_default": true, "use_immutable_subject": false, "sub_claim_prefix":
+"repo:TIMSInternational@305569681/organizational-climate-platform@1317724282"}`. Note
+`use_default: true`: the ID-qualified prefix is **GitHub's default**, not a customization
+someone applied to this repository and not something that can be turned off here — which is why
+a policy written from AWS's documented example could never have matched.
+
+To read the live policy back:
+
+```
+aws iam get-role --role-name climate-project-github-deploy-prod \
+  --query 'Role.AssumeRolePolicyDocument.Statement[].Condition' --output json
+```
+
+This requires credentials for the production account (`AWS_ACCOUNT_ID` repo variable,
+`747814092517`). `scripts/verify-oidc-trust-subs.py` asserts, credential-free and on every PR
+via the `deploy-path-lint` CI job, that the template still renders exactly those four subs; if
+you change the trust policy on purpose, update the expected set there in the same commit.
+
+Note that the resource names in the table below are **live infrastructure identifiers** and
+still use the pre-rename `climate-project-api` prefix deliberately — renaming them orphans the
+deployed stacks. Only the GitHub repository reference changed.
 
 Tracking issue: https://github.com/TIMSInternational/organizational-climate-platform/issues/68
 
