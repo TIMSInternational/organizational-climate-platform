@@ -349,6 +349,7 @@ app.MapMicroclimateEndpoints();
 app.MapMicroclimateTemplateEndpoints();
 app.MapReportEndpoints();
 app.MapBenchmarkEndpoints();
+app.MapDemographicSnapshotEndpoints();
 
 app.Run();
 
