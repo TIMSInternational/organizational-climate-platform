@@ -55,7 +55,7 @@ public static class SurveyEndpoints
         => currentUser.Role == Roles.SuperAdmin
            || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
 
-    private static async Task<Guid?> ResolveActingUserIdAsync(
+    internal static async Task<Guid?> ResolveActingUserIdAsync(
         CurrentUser currentUser,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
