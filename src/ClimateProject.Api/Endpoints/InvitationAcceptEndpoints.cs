@@ -109,6 +109,28 @@ public static class InvitationAcceptEndpoints
         };
         db.Users.Add(user);
 
+        // Carry the demographics pre-assigned on the invitation across to the new
+        // user. They were already validated against the company's demographic fields
+        // when the invitation was created, so they are copied verbatim -- re-running
+        // validation here would strand a member whose company deactivated a field
+        // between invitation and acceptance, and their next profile update reconciles
+        // it anyway.
+        var preassigned = await db.UserInvitationDemographics
+            .Where(d => d.InvitationId == invitation.Id)
+            .ToListAsync(cancellationToken);
+
+        foreach (var value in preassigned)
+        {
+            db.UserDemographics.Add(new UserDemographic
+            {
+                UserId = user.Id,
+                DemographicFieldId = value.DemographicFieldId,
+                Value = value.Value,
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+        }
+
         invitation.Status = InvitationValidation.StatusAccepted;
         invitation.AcceptedAt = now;
 
@@ -120,7 +142,7 @@ public static class InvitationAcceptEndpoints
             NodoId: user.NodoId,
             Email: user.Email,
             Name: user.Name,
-            CompanyId: user.CompanyId.ToString(),
+            CompanyId: user.CompanyId?.ToString() ?? string.Empty,
             IsActive: user.IsActive));
 
         return Results.Json(new TokenResponse(jwt), statusCode: 201);

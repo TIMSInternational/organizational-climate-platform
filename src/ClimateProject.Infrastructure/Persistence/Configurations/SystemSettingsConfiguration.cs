@@ -25,7 +25,8 @@ public class SystemSettingsConfiguration : IEntityTypeConfiguration<SystemSettin
 
         builder.Property(s => s.LoginEnabled).HasColumnName("login_enabled").IsRequired().HasDefaultValue(true);
         builder.Property(s => s.MaintenanceMode).HasColumnName("maintenance_mode").IsRequired().HasDefaultValue(false);
-        builder.Property(s => s.MaintenanceMessage).HasColumnName("maintenance_message").HasMaxLength(500);
+        builder.Property(s => s.MaintenanceMessageEn).HasColumnName("maintenance_message_en").HasMaxLength(500);
+        builder.Property(s => s.MaintenanceMessageEs).HasColumnName("maintenance_message_es").HasMaxLength(500);
         builder.Property(s => s.MaxLoginAttempts).HasColumnName("max_login_attempts").IsRequired().HasDefaultValue(5);
         builder.Property(s => s.SessionTimeoutMinutes).HasColumnName("session_timeout_minutes").IsRequired().HasDefaultValue(60);
         builder.Property(s => s.CreatedAt).HasColumnName("created_at").IsRequired();

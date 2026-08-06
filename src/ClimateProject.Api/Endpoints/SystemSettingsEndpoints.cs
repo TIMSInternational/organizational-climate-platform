@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Localization;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
@@ -17,11 +18,20 @@ public static class SystemSettingsEndpoints
         group.MapPut("", UpdateAsync);
     }
 
-    private static SystemSettingsDetail ToDetail(SystemSettings s)
-        => new(s.LoginEnabled, s.MaintenanceMode, s.MaintenanceMessage, s.MaxLoginAttempts, s.SessionTimeoutMinutes,
+    // System settings are platform-wide: there is no company whose language could be
+    // the content language, so the message is treated as authored in both and resolved
+    // straight against the requested locale.
+    private static SystemSettingsDetail ToDetail(SystemSettings s, string? lang)
+    {
+        var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
+        var message = LocalizedContent.Resolve(s.MaintenanceMessageEn, s.MaintenanceMessageEs, locale, ContentLanguages.Both);
+
+        return new SystemSettingsDetail(
+            s.LoginEnabled, s.MaintenanceMode, message.Text, s.MaxLoginAttempts, s.SessionTimeoutMinutes,
             new PasswordPolicyDto(s.PasswordPolicy.MinLength, s.PasswordPolicy.RequireUppercase, s.PasswordPolicy.RequireLowercase, s.PasswordPolicy.RequireNumbers, s.PasswordPolicy.RequireSpecialChars),
             new SystemEmailSettingsDto(s.EmailSettings.SmtpEnabled, s.EmailSettings.FromEmail, s.EmailSettings.SmtpHost, s.EmailSettings.SmtpPort),
-            s.UpdatedAt);
+            s.UpdatedAt, locale, message.IsFallback);
+    }
 
     private static async Task<SystemSettings> GetOrCreateAsync(ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
@@ -71,6 +81,7 @@ public static class SystemSettingsEndpoints
     }
 
     private static async Task<IResult> GetAsync(
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -82,11 +93,12 @@ public static class SystemSettingsEndpoints
         }
 
         var settings = await GetOrCreateAsync(db, cancellationToken);
-        return Results.Ok(ToDetail(settings));
+        return Results.Ok(ToDetail(settings, lang));
     }
 
     private static async Task<IResult> UpdateAsync(
         UpdateSystemSettingsRequest request,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -101,7 +113,17 @@ public static class SystemSettingsEndpoints
 
         if (request.LoginEnabled.HasValue) settings.LoginEnabled = request.LoginEnabled.Value;
         if (request.MaintenanceMode.HasValue) settings.MaintenanceMode = request.MaintenanceMode.Value;
-        if (request.MaintenanceMessage is not null) settings.MaintenanceMessage = request.MaintenanceMessage;
+        if (request.MaintenanceMessage is not null)
+        {
+            if (!request.MaintenanceMessage.TryResolve(ContentLanguages.English, "maintenanceMessage", out var messageEn, out var messageEs, out var messageError))
+            {
+                return Results.Json(new { message = messageError }, statusCode: 400);
+            }
+
+            if (messageEn is not null) settings.MaintenanceMessageEn = messageEn;
+            if (messageEs is not null) settings.MaintenanceMessageEs = messageEs;
+        }
+
         if (request.MaxLoginAttempts.HasValue) settings.MaxLoginAttempts = request.MaxLoginAttempts.Value;
         if (request.SessionTimeoutMinutes.HasValue) settings.SessionTimeoutMinutes = request.SessionTimeoutMinutes.Value;
 
@@ -125,6 +147,6 @@ public static class SystemSettingsEndpoints
         settings.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(ToDetail(settings));
+        return Results.Ok(ToDetail(settings, lang));
     }
 }

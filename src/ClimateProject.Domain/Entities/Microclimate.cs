@@ -3,8 +3,17 @@ namespace ClimateProject.Domain.Entities;
 public class Microclimate
 {
     public Guid Id { get; set; }
-    public required string Title { get; set; }
-    public string? Description { get; set; }
+    public string? TitleEn { get; set; }
+    public string? TitleEs { get; set; }
+    public string? DescriptionEn { get; set; }
+    public string? DescriptionEs { get; set; }
+
+    /// <summary>
+    /// 'es' | 'en' | 'both'. Defaults to the owning company's language. Per
+    /// microclimate-req.md:40's "Language: Spanish | English | Both" field, which
+    /// legacy rendered in the wizard and never persisted.
+    /// </summary>
+    public string Language { get; set; } = "en";
     public Guid CompanyId { get; set; }
     public Guid CreatedBy { get; set; }
     public Guid? TemplateId { get; set; }

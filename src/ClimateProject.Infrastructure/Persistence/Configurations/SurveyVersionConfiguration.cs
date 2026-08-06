@@ -12,8 +12,10 @@ public class SurveyVersionConfiguration : IEntityTypeConfiguration<SurveyVersion
         builder.HasKey(v => v.Id);
         builder.Property(v => v.SurveyId).HasColumnName("survey_id").IsRequired();
         builder.Property(v => v.VersionNumber).HasColumnName("version_number").IsRequired();
-        builder.Property(v => v.Title).HasColumnName("title").HasMaxLength(200).IsRequired();
-        builder.Property(v => v.Description).HasColumnName("description").HasMaxLength(1000);
+        builder.Property(v => v.TitleEn).HasColumnName("title_en").HasMaxLength(200);
+        builder.Property(v => v.TitleEs).HasColumnName("title_es").HasMaxLength(200);
+        builder.Property(v => v.DescriptionEn).HasColumnName("description_en").HasMaxLength(1000);
+        builder.Property(v => v.DescriptionEs).HasColumnName("description_es").HasMaxLength(1000);
         builder.Property(v => v.Changes).HasColumnName("changes").HasColumnType("text[]").IsRequired().HasDefaultValueSql("ARRAY[]::text[]");
         builder.Property(v => v.Reason).HasColumnName("reason").HasMaxLength(500).IsRequired();
         builder.Property(v => v.CreatedBy).HasColumnName("created_by").IsRequired();

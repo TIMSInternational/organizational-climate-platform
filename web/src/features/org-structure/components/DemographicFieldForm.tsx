@@ -27,7 +27,7 @@ export default function DemographicFieldForm({ initialValues, submitLabel, onSub
     field: initialValues?.field ?? '',
     label: initialValues?.label ?? '',
     type: initialValues?.type ?? 'text',
-    optionsText: (initialValues?.options ?? []).join(', '),
+    optionsText: (initialValues?.options ?? []).map((o) => o.label ?? o.value).join(', '),
     required: initialValues?.required ?? false,
     order: initialValues?.order ?? 0,
     isActive: initialValues?.isActive ?? true,

@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Localization;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
@@ -66,7 +67,7 @@ public class DemographicFieldEndpointsTests : IAsyncLifetime
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var createResponse = await client.PostAsJsonAsync("/admin/demographic-fields", new CreateDemographicFieldRequest(
-            _companyAId, "gender", "Gender", "select", new List<string> { "Male", "Female", "Other" }, true, 1));
+            _companyAId, "gender", "Gender", "select", [new(null, "Male"), new(null, "Female"), new(null, "Other")], true, 1));
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
         var created = await createResponse.Content.ReadFromJsonAsync<DemographicFieldDetail>();
 
@@ -148,5 +149,60 @@ public class DemographicFieldEndpointsTests : IAsyncLifetime
 
         var listResponse = await client.GetAsync($"/admin/demographic-fields?companyId={_companyAId}");
         Assert.Equal(HttpStatusCode.Forbidden, listResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_demographic_answer_is_validated_against_the_option_value_not_its_label()
+    {
+        // Same rule as question options, deliberately -- one rule rather than two.
+        // A person's demographic is stored as the option's stable value, so a
+        // bilingual company filtering a dashboard by "Ventas"/"Sales" does not split
+        // its own headcount in half the moment the labels are translated (#195).
+        var client = _factory.CreateClient();
+        var adminToken = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var createResponse = await client.PostAsJsonAsync("/admin/demographic-fields", new CreateDemographicFieldRequest(
+            _companyAId,
+            "department",
+            LocalizedInput.FromLocales(new Dictionary<string, string?> { ["en"] = "Department", ["es"] = "Departamento" }),
+            "select",
+            [
+                new DemographicFieldOptionInput("sales", LocalizedInput.FromLocales(new Dictionary<string, string?> { ["en"] = "Sales", ["es"] = "Ventas" })),
+                new DemographicFieldOptionInput("engineering", LocalizedInput.FromLocales(new Dictionary<string, string?> { ["en"] = "Engineering", ["es"] = "Ingeniería" })),
+            ],
+            true,
+            1));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var spanish = await (await client.GetAsync($"/admin/demographic-fields?companyId={_companyAId}&lang=es"))
+            .Content.ReadFromJsonAsync<DemographicFieldListResponse>();
+        var field = Assert.Single(spanish!.Fields, f => f.Field == "department");
+        Assert.Equal("Departamento", field.Label);
+        Assert.NotNull(field.Options);
+        var firstOption = field.Options.First();
+        Assert.Equal("Ventas", firstOption.Label);
+        // One value behind two labels.
+        Assert.Equal("sales", firstOption.Value);
+
+        var employeeClient = _factory.CreateClient();
+        await SignUpAndGetTokenAsync(employeeClient, Roles.Employee, _companyADomain, _companyAId);
+        Guid employeeId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            employeeId = (await db.Users.OrderByDescending(u => u.CreatedAt)
+                .FirstAsync(u => u.CompanyId == _companyAId && u.Role == Roles.Employee)).Id;
+        }
+
+        var byValue = await client.PutAsJsonAsync($"/admin/users/{employeeId}",
+            new UpdateUserRequest(null, null, null, null, new Dictionary<string, string?> { ["department"] = "sales" }));
+        Assert.Equal(HttpStatusCode.OK, byValue.StatusCode);
+
+        // The label is not an allowed answer, so a client that renders "Ventas" and
+        // posts it back cannot quietly store a second value for the same department.
+        var byLabel = await client.PutAsJsonAsync($"/admin/users/{employeeId}",
+            new UpdateUserRequest(null, null, null, null, new Dictionary<string, string?> { ["department"] = "Ventas" }));
+        Assert.Equal(HttpStatusCode.BadRequest, byLabel.StatusCode);
     }
 }

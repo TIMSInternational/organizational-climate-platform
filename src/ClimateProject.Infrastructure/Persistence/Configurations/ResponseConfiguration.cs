@@ -15,6 +15,7 @@ public class ResponseConfiguration : IEntityTypeConfiguration<Response>
         builder.Property(r => r.SessionId).HasColumnName("session_id").HasMaxLength(200).IsRequired();
         builder.Property(r => r.CompanyId).HasColumnName("company_id").IsRequired();
         builder.Property(r => r.DepartmentId).HasColumnName("department_id");
+        builder.Property(r => r.Language).HasColumnName("language").HasMaxLength(10).IsRequired().HasDefaultValue("en");
         builder.Property(r => r.IsComplete).HasColumnName("is_complete").IsRequired().HasDefaultValue(false);
         builder.Property(r => r.IsAnonymous).HasColumnName("is_anonymous").IsRequired().HasDefaultValue(false);
         builder.Property(r => r.StartTime).HasColumnName("start_time").IsRequired();

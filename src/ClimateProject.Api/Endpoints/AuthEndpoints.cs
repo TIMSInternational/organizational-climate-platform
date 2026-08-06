@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Localization;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -55,7 +56,7 @@ public static class AuthEndpoints
             return Results.Json(new ErrorResponse("Invalid email or password"), statusCode: 401);
         }
 
-        var gate = await CheckSystemSettingsGateAsync(db, user.Role, cancellationToken);
+        var gate = await CheckSystemSettingsGateAsync(db, user.Role, cancellationToken, user.Preferences.Language);
         if (gate is not null)
         {
             return gate;
@@ -70,7 +71,7 @@ public static class AuthEndpoints
             NodoId: user.NodoId,
             Email: user.Email,
             Name: user.Name,
-            CompanyId: user.CompanyId.ToString(),
+            CompanyId: user.CompanyId?.ToString() ?? string.Empty,
             IsActive: user.IsActive));
 
         return Results.Ok(new TokenResponse(token));
@@ -148,7 +149,7 @@ public static class AuthEndpoints
             NodoId: user.NodoId,
             Email: user.Email,
             Name: user.Name,
-            CompanyId: user.CompanyId.ToString(),
+            CompanyId: user.CompanyId?.ToString() ?? string.Empty,
             IsActive: user.IsActive));
 
         return Results.Json(new TokenResponse(token), statusCode: 201);
@@ -226,7 +227,7 @@ public static class AuthEndpoints
             NodoId: user.NodoId,
             Email: user.Email,
             Name: user.Name,
-            CompanyId: user.CompanyId.ToString(),
+            CompanyId: user.CompanyId?.ToString() ?? string.Empty,
             IsActive: user.IsActive));
 
         return Results.Ok(new TokenResponse(token));
@@ -259,7 +260,7 @@ public static class AuthEndpoints
             NodoId: user.NodoId,
             Email: user.Email,
             Name: user.Name,
-            CompanyId: user.CompanyId.ToString(),
+            CompanyId: user.CompanyId?.ToString() ?? string.Empty,
             IsActive: user.IsActive));
 
         return Results.Ok(new TokenResponse(token));
@@ -282,9 +283,19 @@ public static class AuthEndpoints
         // the legacy User.canAccessCompany behavior (super_admin can access any
         // company). Returns 404 -- not 403 -- on a tenant mismatch so this endpoint
         // doesn't leak the existence of users in other companies.
+        //
+        // Compares Guids, not strings. This used to read `u.CompanyId.ToString() ==
+        // currentUser.CompanyId`; once User.CompanyId became Guid? (#191) that receiver is
+        // Nullable<Guid>, whose ToString() is a DIFFERENT method that EF cannot translate --
+        // it would have thrown "could not be translated" at runtime, not compile time.
+        // Parsing the claim up front also means a company-less super_admin (claim is
+        // string.Empty) yields null here, so the tenant branch matches nothing at all
+        // instead of matching every company-less row.
+        var actingCompanyId = CompanyScope.OwnCompanyId(currentUser);
         var user = await db.Users.FirstOrDefaultAsync(
             u => u.Id == request.UserId
-                && (currentUser.Role == Roles.SuperAdmin || u.CompanyId.ToString() == currentUser.CompanyId),
+                && (currentUser.Role == Roles.SuperAdmin
+                    || (actingCompanyId != null && u.CompanyId == actingCompanyId)),
             cancellationToken);
         if (user is null)
         {
@@ -307,10 +318,18 @@ public static class AuthEndpoints
     // currentUserRole is null for a brand-new signup (no existing user yet) or an
     // unresolved Google sign-in -- in both cases there is no SuperAdmin to bypass
     // the gate with.
+    /// <param name="locale">
+    /// The caller's display preference, when one is known. The maintenance message is
+    /// authored content (#195), so it is resolved rather than emitted verbatim.
+    /// Signup and Google sign-in have no user yet and therefore no preference: they
+    /// get the English text, which is exactly what the single-column version always
+    /// emitted, rather than a guess.
+    /// </param>
     private static async Task<IResult?> CheckSystemSettingsGateAsync(
         ClimateProjectDbContext db,
         string? currentUserRole,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? locale = null)
     {
         var settings = await db.SystemSettings.FirstOrDefaultAsync(cancellationToken);
         if (settings is null || currentUserRole == Roles.SuperAdmin)
@@ -321,7 +340,7 @@ public static class AuthEndpoints
         if (settings.MaintenanceMode)
         {
             return Results.Json(
-                new ErrorResponse(settings.MaintenanceMessage ?? "The system is currently under maintenance. Please try again later."),
+                new ErrorResponse(LocalizedContent.ResolveText(settings.MaintenanceMessageEn, settings.MaintenanceMessageEs, locale, ContentLanguages.Both) ?? "The system is currently under maintenance. Please try again later."),
                 statusCode: 503);
         }
 

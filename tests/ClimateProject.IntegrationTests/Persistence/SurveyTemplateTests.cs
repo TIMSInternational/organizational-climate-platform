@@ -38,7 +38,7 @@ public class SurveyTemplateTests(PostgresContainerFixture postgres)
 
         db.TemplateQuestions.Add(new TemplateQuestion
         {
-            Id = Guid.NewGuid(), TemplateId = template.Id, Text = "How satisfied are you?", Type = "likert",
+            Id = Guid.NewGuid(), TemplateId = template.Id, TextEn = "How satisfied are you?", Type = "likert",
             ScaleMin = 1, ScaleMax = 5, Order = 0,
         });
         await db.SaveChangesAsync();
@@ -106,7 +106,7 @@ public class SurveyTemplateTests(PostgresContainerFixture postgres)
         var minimalQuestionId = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO template_questions ("Id", template_id, text, type, "order")
+             INSERT INTO template_questions ("Id", template_id, text_en, type, "order")
              VALUES ({minimalQuestionId}, {minimalTemplateId}, {"Q?"}, {"open_ended"}, {0})
              """);
 
@@ -121,7 +121,7 @@ public class SurveyTemplateTests(PostgresContainerFixture postgres)
 
         var loadedQuestion = await readDb.TemplateQuestions.SingleAsync(q => q.Id == minimalQuestionId);
         Assert.True(loadedQuestion.CommentRequired);
-        Assert.Equal("Please explain your answer:", loadedQuestion.CommentPrompt);
+        Assert.Equal("Please explain your answer:", loadedQuestion.CommentPromptEn);
         Assert.False(loadedQuestion.Required);
     }
 }

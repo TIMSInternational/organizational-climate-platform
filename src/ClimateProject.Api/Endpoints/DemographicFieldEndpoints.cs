@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Localization;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
@@ -22,35 +23,113 @@ public static class DemographicFieldEndpoints
         => currentUser.Role == Roles.SuperAdmin
            || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
 
-    private static DemographicFieldDetail ToDetail(DemographicField f)
-        => new(f.Id, f.CompanyId, f.Field, f.Label, f.Type, f.Options, f.Required, f.Order, f.IsActive);
-
-    private static bool IsValidCreate(CreateDemographicFieldRequest request, out string? error)
+    // A demographic field has no language of its own: demographics are defined once per
+    // company, so the company's language is the content language. That is also why
+    // there is no per-field publish gate -- there is nothing to publish.
+    private static DemographicFieldDetail ToDetail(
+        DemographicField f,
+        IReadOnlyList<DemographicFieldOption> options,
+        string? lang,
+        string companyLanguage)
     {
-        if (string.IsNullOrWhiteSpace(request.Field) || string.IsNullOrWhiteSpace(request.Label))
+        var locale = ContentLanguages.NormaliseLocale(lang)
+                     ?? ContentLanguages.SingleLocaleOf(companyLanguage)
+                     ?? ContentLanguages.FallbackLocale;
+
+        var fallbackFields = new List<string>();
+        var label = LocalizedContent.Resolve(f.LabelEn, f.LabelEs, locale, companyLanguage);
+        if (label.IsFallback) fallbackFields.Add("label");
+
+        List<DemographicFieldOptionDto>? optionDtos = null;
+        if (options.Count > 0)
         {
-            error = "Field and label are required";
-            return false;
+            optionDtos = [];
+            foreach (var option in options.OrderBy(o => o.Order))
+            {
+                var optionLabel = LocalizedContent.Resolve(option.LabelEn, option.LabelEs, locale, companyLanguage);
+                if (optionLabel.IsFallback) fallbackFields.Add($"options[{option.Order}].label");
+                optionDtos.Add(new DemographicFieldOptionDto(option.Order, option.Value, optionLabel.Text));
+            }
         }
 
-        if (!DemographicFieldValidation.ValidTypes.Contains(request.Type))
-        {
-            error = $"Invalid type: {request.Type}";
-            return false;
-        }
+        return new DemographicFieldDetail(
+            f.Id, f.CompanyId, f.Field, label.Text, f.Type, optionDtos,
+            f.Required, f.Order, f.IsActive, locale, fallbackFields);
+    }
 
-        if (request.Type == "select" && (request.Options is null || request.Options.Count == 0))
-        {
-            error = "Select fields require at least one option";
-            return false;
-        }
+    private static async Task<string> LoadCompanyLanguageAsync(
+        ClimateProjectDbContext db,
+        Guid companyId,
+        CancellationToken cancellationToken)
+    {
+        var language = await db.Companies
+            .Where(c => c.Id == companyId)
+            .Select(c => c.Settings.Language)
+            .FirstOrDefaultAsync(cancellationToken);
 
+        return ContentLanguages.NormaliseLanguage(language) ?? ContentLanguages.FallbackLocale;
+    }
+
+    // Builds the option rows for a field, deriving the stable value from the label when
+    // the caller did not supply one (see MicroclimateContent.DeriveOptionValue for why
+    // the value is the label text rather than an opaque id).
+    private static bool TryBuildOptions(
+        List<DemographicFieldOptionInput>? inputs,
+        string companyLanguage,
+        out List<DemographicFieldOption> options,
+        out string? error)
+    {
+        options = [];
         error = null;
+
+        var order = 0;
+        foreach (var input in inputs ?? [])
+        {
+            string? labelEn = null;
+            string? labelEs = null;
+            if (input.Label is not null
+                && !input.Label.TryResolve(companyLanguage, $"options[{order}].label", out labelEn, out labelEs, out error))
+            {
+                return false;
+            }
+
+            var value = MicroclimateContent.DeriveOptionValue(input.Value, labelEn, labelEs);
+            if (value is null)
+            {
+                error = $"Option {order} needs a value or a label";
+                return false;
+            }
+
+            if (value.Length > DemographicValueValidation.MaxValueLength)
+            {
+                // The value is what lands in user_demographics.value, so it has to fit
+                // that column -- rejecting here gives a 400 instead of a truncation/500.
+                error = $"Option {order} value exceeds {DemographicValueValidation.MaxValueLength} characters";
+                return false;
+            }
+
+            if (options.Any(o => string.Equals(o.Value, value, StringComparison.Ordinal)))
+            {
+                error = $"Duplicate option value '{value}'";
+                return false;
+            }
+
+            options.Add(new DemographicFieldOption
+            {
+                Order = order,
+                Value = value,
+                LabelEn = labelEn,
+                LabelEs = labelEs,
+            });
+            order++;
+        }
+
         return true;
     }
 
     private static async Task<IResult> ListAsync(
         Guid companyId,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -61,17 +140,31 @@ public static class DemographicFieldEndpoints
             return Results.Forbid();
         }
 
+        var companyLanguage = await LoadCompanyLanguageAsync(db, companyId, cancellationToken);
+
         var fields = await db.DemographicFields
             .Where(f => f.CompanyId == companyId)
             .OrderBy(f => f.Order)
-            .Select(f => new DemographicFieldDetail(f.Id, f.CompanyId, f.Field, f.Label, f.Type, f.Options, f.Required, f.Order, f.IsActive))
             .ToListAsync(cancellationToken);
 
-        return Results.Ok(new DemographicFieldListResponse(fields));
+        var fieldIds = fields.Select(f => f.Id).ToList();
+        var optionsByField = (await db.DemographicFieldOptions
+                .Where(o => fieldIds.Contains(o.DemographicFieldId))
+                .OrderBy(o => o.Order)
+                .ToListAsync(cancellationToken))
+            .GroupBy(o => o.DemographicFieldId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<DemographicFieldOption>)g.ToList());
+
+        var details = fields
+            .Select(f => ToDetail(f, optionsByField.GetValueOrDefault(f.Id, []), lang, companyLanguage))
+            .ToList();
+
+        return Results.Ok(new DemographicFieldListResponse(details));
     }
 
     private static async Task<IResult> CreateAsync(
         CreateDemographicFieldRequest request,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -82,9 +175,36 @@ public static class DemographicFieldEndpoints
             return Results.Forbid();
         }
 
-        if (!IsValidCreate(request, out var error))
+        var companyLanguage = await LoadCompanyLanguageAsync(db, request.CompanyId, cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(request.Field) || request.Label is null)
         {
-            return Results.Json(new { message = error }, statusCode: 400);
+            return Results.Json(new { message = "Field and label are required" }, statusCode: 400);
+        }
+
+        if (!request.Label.TryResolve(companyLanguage, "label", out var labelEn, out var labelEs, out var labelError))
+        {
+            return Results.Json(new { message = labelError }, statusCode: 400);
+        }
+
+        if (string.IsNullOrWhiteSpace(labelEn) && string.IsNullOrWhiteSpace(labelEs))
+        {
+            return Results.Json(new { message = "Field and label are required" }, statusCode: 400);
+        }
+
+        if (!DemographicFieldValidation.ValidTypes.Contains(request.Type))
+        {
+            return Results.Json(new { message = $"Invalid type: {request.Type}" }, statusCode: 400);
+        }
+
+        if (!TryBuildOptions(request.Options, companyLanguage, out var options, out var optionError))
+        {
+            return Results.Json(new { message = optionError }, statusCode: 400);
+        }
+
+        if (request.Type == "select" && options.Count == 0)
+        {
+            return Results.Json(new { message = "Select fields require at least one option" }, statusCode: 400);
         }
 
         var fieldKey = request.Field.Trim();
@@ -107,9 +227,9 @@ public static class DemographicFieldEndpoints
             Id = Guid.NewGuid(),
             CompanyId = request.CompanyId,
             Field = fieldKey,
-            Label = request.Label.Trim(),
+            LabelEn = labelEn?.Trim(),
+            LabelEs = labelEs?.Trim(),
             Type = request.Type,
-            Options = request.Options,
             Required = request.Required,
             Order = request.Order,
             IsActive = true,
@@ -118,14 +238,21 @@ public static class DemographicFieldEndpoints
         };
 
         db.DemographicFields.Add(field);
+        foreach (var option in options)
+        {
+            option.DemographicFieldId = field.Id;
+            db.DemographicFieldOptions.Add(option);
+        }
+
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Json(ToDetail(field), statusCode: 201);
+        return Results.Json(ToDetail(field, options, lang, companyLanguage), statusCode: 201);
     }
 
     private static async Task<IResult> UpdateAsync(
         Guid id,
         UpdateDemographicFieldRequest request,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -142,8 +269,41 @@ public static class DemographicFieldEndpoints
             return Results.Forbid();
         }
 
-        if (!string.IsNullOrWhiteSpace(request.Label)) field.Label = request.Label.Trim();
-        if (request.Options is not null) field.Options = request.Options;
+        var companyLanguage = await LoadCompanyLanguageAsync(db, field.CompanyId, cancellationToken);
+
+        if (request.Label is not null)
+        {
+            if (!request.Label.TryResolve(companyLanguage, "label", out var labelEn, out var labelEs, out var labelError))
+            {
+                return Results.Json(new { message = labelError }, statusCode: 400);
+            }
+
+            if (!string.IsNullOrWhiteSpace(labelEn)) field.LabelEn = labelEn.Trim();
+            if (!string.IsNullOrWhiteSpace(labelEs)) field.LabelEs = labelEs.Trim();
+        }
+
+        var existingOptions = await db.DemographicFieldOptions
+            .Where(o => o.DemographicFieldId == field.Id)
+            .OrderBy(o => o.Order)
+            .ToListAsync(cancellationToken);
+
+        if (request.Options is not null)
+        {
+            if (!TryBuildOptions(request.Options, companyLanguage, out var options, out var optionError))
+            {
+                return Results.Json(new { message = optionError }, statusCode: 400);
+            }
+
+            db.DemographicFieldOptions.RemoveRange(existingOptions);
+            foreach (var option in options)
+            {
+                option.DemographicFieldId = field.Id;
+                db.DemographicFieldOptions.Add(option);
+            }
+
+            existingOptions = options;
+        }
+
         if (request.Required.HasValue) field.Required = request.Required.Value;
         if (request.Order.HasValue) field.Order = request.Order.Value;
         if (request.IsActive.HasValue) field.IsActive = request.IsActive.Value;
@@ -151,6 +311,6 @@ public static class DemographicFieldEndpoints
         field.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(ToDetail(field));
+        return Results.Ok(ToDetail(field, existingOptions, lang, companyLanguage));
     }
 }

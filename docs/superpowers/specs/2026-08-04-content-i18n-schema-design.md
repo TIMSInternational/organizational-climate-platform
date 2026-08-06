@@ -1,10 +1,12 @@
 # Content i18n schema design (#195)
 
-**Status: scope settled 2026-08-04; one question still with the client.** The representation below
-is implementable as-is. Two open items from the first draft are now decided — the options child
-table is **approved scope**, and Tier 2 is **deferred to #210** — so what remains before the
-migration is written is the *third-language* question in
-[Question for the client](#question-for-the-client), which only the client can answer.
+**Status: implemented 2026-08-05.** Every open question is closed and the schema below has landed
+as migration `AddContentI18n`. There is no external client — the three questions in
+[Question for the client](#question-for-the-client) were Federico's own calls and are answered on
+#195: **Spanish + English, with a third language possible later for new content only**, and
+**language is company-level with `both` as an explicit per-survey override**. The paired-column
+design is unchanged by those answers, which is exactly what the
+no-`En`/`Es`-on-read-DTOs constraint bought.
 
 #195 is **P0**, `parity-gap`, `batch:2-foundation-b`, milestone *M4 - Surveys*. On the
 `parity-gap` label: it is correct that a pre-cutover parity audit must not miss this, but see
@@ -779,14 +781,50 @@ constraints *within* and *across* batches do follow from the design, though:
 - [x] Missing-content validation + fallback specified, traced to the requirement's wording
 - [x] Tier 2 scope decided — deferred to #210, filed rather than omitted
 - [x] Options representation decided — child table with a stable locale-independent value, approved
-- [ ] Client answers the three questions
-- [ ] Migration added (see [Migration shape](#migration-shape); EF migration gap tracked as #204)
-- [ ] `question_options` child tables added and `SubmitResponseAsync` switched to stable values
-- [ ] `question_responses.response_value` backfilled to stable values, with unmatched rows reported
-- [ ] Validation + fallback implemented and tested
-- [ ] A survey authored and rendered in both ES and EN with no untranslated strings
-- [ ] **The same answer submitted from an ES session and an EN session stores one identical value**
-- [ ] #58 unblocked (design above), #154(F) unblocked (rules above)
+- [x] The three questions answered — recorded on #195, 2026-08-05
+- [x] Migration added — `AddContentI18n`, hand-written renames (see the note below)
+- [x] Option child tables added for all five collections and `SubmitResponseAsync` switched to
+      stable values
+- [x] `question_responses.response_value` needs **no** backfill — see the correction below
+- [x] Validation + fallback implemented and tested (`ContentPublishValidation`, `LocalizedContent`)
+- [x] A microclimate authored and rendered in both ES and EN with no untranslated strings
+- [x] **The same answer submitted from an ES session and an EN session stores one identical value**
+- [x] #58 unblocked (design above), #154(F) unblocked (rules above)
+
+---
+
+## Corrections found while implementing
+
+Three things this document got wrong or under-stated. Recorded here rather than silently fixed,
+because each one changed the work.
+
+**1. `Response.Language` did not exist and had to be added.** Several notes read as "keep
+`Response.Language`". There was no such column — `src/ClimateProject.Domain/Entities/Response.cs`
+had no language field of any kind. Taken literally, "keep" would have meant doing nothing, and the
+live word cloud would have gone on counting `"trabajo"` and `"work"` separately with nothing
+recording respondent language. It is added by `AddContentI18n`.
+
+**2. The `question_responses` backfill is unnecessary, not merely trivial.**
+[Migration shape](#migration-shape) budgets "1 data migration" to rewrite `response_value` to
+stable option values. Because the migration sets each new `question_options.value` to the existing
+option text **verbatim**, every `response_value` written so far already equals its option's new
+value. No rows move, and nothing can be dropped. The one-line consequence for #154 is unchanged:
+this equality only holds while no bilingual option exists, so the response load still has to be
+sequenced after this migration.
+
+**3. `dotnet ef migrations add` cannot be trusted for this diff.** EF pairs a dropped column with an
+added one positionally and inferred renames including `settings_invitation_custom_subject` →
+`title_es` and `scale_label_max` → `scale_label_min_en`. Every one of those silently relocates
+authored content into the wrong column, and none of them would fail a test — the schema is valid
+either way. `AddContentI18n`'s `Up`/`Down` are hand-written and 1:1; only EF's own
+`CreateTable`/`CreateIndex` calls are kept, so the model snapshot stays authoritative.
+
+**4. The blast radius is 4 backend files *and* 8 web files.**
+[Not in #195, and each changes the work](#not-in-195-and-each-changes-the-work) counts 2 endpoint
+files and 2 DTO files, which is right for `src/` and omits `web/`. Options changing from
+`string[]` to `{ value, label }[]` reaches the microclimate respond page, the microclimate and
+demographic-field forms, and their API clients. Still small, still far smaller than it will be
+after Batch 3 — but it is 12 files, not 4.
 
 ---
 

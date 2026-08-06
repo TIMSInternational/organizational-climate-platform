@@ -30,14 +30,14 @@ public class SurveyAuditLogAndResponseTests(PostgresContainerFixture postgres)
 
         var survey = new Survey
         {
-            Id = Guid.NewGuid(), CompanyId = company.Id, CreatedBy = user.Id, Title = "Survey", Type = "custom",
+            Id = Guid.NewGuid(), CompanyId = company.Id, CreatedBy = user.Id, TitleEn = "Survey", Type = "custom",
             StartDate = DateTimeOffset.UtcNow, EndDate = DateTimeOffset.UtcNow.AddDays(7),
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };
         db.Surveys.Add(survey);
         await db.SaveChangesAsync();
 
-        var question = new Question { Id = Guid.NewGuid(), SurveyId = survey.Id, Text = "Q1?", Type = "open_ended", Order = 0 };
+        var question = new Question { Id = Guid.NewGuid(), SurveyId = survey.Id, TextEn = "Q1?", Type = "open_ended", Order = 0 };
         db.Questions.Add(question);
         await db.SaveChangesAsync();
 

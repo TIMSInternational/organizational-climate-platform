@@ -30,7 +30,7 @@ public class SurveyDistributionAndInvitationTests(PostgresContainerFixture postg
 
         var survey = new Survey
         {
-            Id = Guid.NewGuid(), CompanyId = company.Id, CreatedBy = user.Id, Title = "Survey", Type = "custom",
+            Id = Guid.NewGuid(), CompanyId = company.Id, CreatedBy = user.Id, TitleEn = "Survey", Type = "custom",
             StartDate = DateTimeOffset.UtcNow, EndDate = DateTimeOffset.UtcNow.AddDays(7),
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };

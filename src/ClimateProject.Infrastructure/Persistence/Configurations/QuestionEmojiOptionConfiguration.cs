@@ -13,7 +13,8 @@ public class QuestionEmojiOptionConfiguration : IEntityTypeConfiguration<Questio
         builder.Property(e => e.QuestionId).HasColumnName("question_id");
         builder.Property(e => e.Order).HasColumnName("order");
         builder.Property(e => e.Emoji).HasColumnName("emoji").HasMaxLength(10).IsRequired();
-        builder.Property(e => e.Label).HasColumnName("label").HasMaxLength(100).IsRequired();
+        builder.Property(e => e.LabelEn).HasColumnName("label_en").HasMaxLength(100);
+        builder.Property(e => e.LabelEs).HasColumnName("label_es").HasMaxLength(100);
         builder.Property(e => e.Value).HasColumnName("value").IsRequired();
 
         builder.HasOne<Question>().WithMany().HasForeignKey(e => e.QuestionId);

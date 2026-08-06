@@ -12,8 +12,11 @@ public class SurveyConfiguration : IEntityTypeConfiguration<Survey>
         builder.HasKey(s => s.Id);
         builder.Property(s => s.CompanyId).HasColumnName("company_id").IsRequired();
         builder.Property(s => s.CreatedBy).HasColumnName("created_by").IsRequired();
-        builder.Property(s => s.Title).HasColumnName("title").HasMaxLength(200).IsRequired();
-        builder.Property(s => s.Description).HasColumnName("description").HasMaxLength(1000);
+        builder.Property(s => s.TitleEn).HasColumnName("title_en").HasMaxLength(200);
+        builder.Property(s => s.TitleEs).HasColumnName("title_es").HasMaxLength(200);
+        builder.Property(s => s.DescriptionEn).HasColumnName("description_en").HasMaxLength(1000);
+        builder.Property(s => s.DescriptionEs).HasColumnName("description_es").HasMaxLength(1000);
+        builder.Property(s => s.Language).HasColumnName("language").HasMaxLength(10).IsRequired().HasDefaultValue("en");
         builder.Property(s => s.Type).HasColumnName("type").HasMaxLength(30).IsRequired();
         builder.Property(s => s.StartDate).HasColumnName("start_date").IsRequired();
         builder.Property(s => s.EndDate).HasColumnName("end_date").IsRequired();
@@ -39,10 +42,12 @@ public class SurveyConfiguration : IEntityTypeConfiguration<Survey>
             settings.Property(x => x.NotificationSendInvitations).HasColumnName("settings_notification_send_invitations").IsRequired().HasDefaultValue(true);
             settings.Property(x => x.NotificationSendReminders).HasColumnName("settings_notification_send_reminders").IsRequired().HasDefaultValue(true);
             settings.Property(x => x.NotificationReminderFrequencyDays).HasColumnName("settings_notification_reminder_frequency_days").IsRequired().HasDefaultValue(3);
-            settings.Property(x => x.InvitationCustomMessage).HasColumnName("settings_invitation_custom_message").HasMaxLength(1000);
+            settings.Property(x => x.InvitationCustomMessageEn).HasColumnName("settings_invitation_custom_message_en").HasMaxLength(1000);
+            settings.Property(x => x.InvitationCustomMessageEs).HasColumnName("settings_invitation_custom_message_es").HasMaxLength(1000);
             settings.Property(x => x.InvitationIncludeCredentials).HasColumnName("settings_invitation_include_credentials").IsRequired().HasDefaultValue(false);
             settings.Property(x => x.InvitationSendImmediately).HasColumnName("settings_invitation_send_immediately").IsRequired().HasDefaultValue(false);
-            settings.Property(x => x.InvitationCustomSubject).HasColumnName("settings_invitation_custom_subject").HasMaxLength(200);
+            settings.Property(x => x.InvitationCustomSubjectEn).HasColumnName("settings_invitation_custom_subject_en").HasMaxLength(200);
+            settings.Property(x => x.InvitationCustomSubjectEs).HasColumnName("settings_invitation_custom_subject_es").HasMaxLength(200);
             settings.Property(x => x.InvitationBrandingEnabled).HasColumnName("settings_invitation_branding_enabled").IsRequired().HasDefaultValue(false);
         });
     }
