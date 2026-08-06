@@ -8,6 +8,7 @@ import { decodeJwtPayload } from '../auth/jwt'
 import { useTranslation } from '../i18n'
 import { SkipLink } from '../components/ui'
 import { MobileNav, ShellControls } from '../components/layout'
+import { NotificationBell } from '../features/notifications/components/NotificationBell'
 
 /**
  * The app shell: sidebar, mobile navigation, and the scrolling content column.
@@ -89,10 +90,30 @@ export default function AdminLayout() {
           )}
         </aside>
 
-        {/* The scroll container. `min-w-0` so a wide child (a table, a chart)
-            scrolls inside this column instead of stretching the flex row and
-            pushing the sidebar off-screen. */}
-        <main id="main" className="min-w-0 flex-1 overflow-y-auto p-gutter">
+        {/* The content column: a fixed header strip over the scrolling `<main>`.
+            `min-w-0` sits here, on the flex *child*, so a wide table inside the
+            column scrolls rather than stretching the row and pushing the sidebar
+            off-screen — it moved out from `<main>` when this wrapper appeared. */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* #99 puts the notification bell back in the shell. It is a `<header>`
+              outside `<main>` on purpose: the bell is chrome, not page content,
+              so the skip link's `#main` target must still skip past it, and the
+              bell must not scroll away with the page. `shrink-0` keeps the strip
+              from being squeezed by a tall page.
+
+              Deliberately NOT in `PageTopBar`: that is per-page (title,
+              breadcrumbs, actions), so a bell there would appear once per page
+              that happens to render one and vanish on the pages that do not.
+              Deliberately not in `ShellControls` either — that lives in the
+              sidebar footer, which is hidden while the rail is collapsed and
+              hidden entirely below `md`, which is exactly where an unread badge
+              needs to be visible. */}
+          <header className="flex shrink-0 items-center justify-end border-b border-line-default bg-surface-panel px-gutter py-1">
+            <NotificationBell />
+          </header>
+
+          {/* The scroll container. */}
+          <main id="main" className="min-w-0 flex-1 overflow-y-auto p-gutter">
           {/* Legacy AppShell inset its content by 12px and put it on a panel:
               `background: var(--admin-bg-panel)`, `1px solid
               var(--admin-border-panel)`, `borderRadius: 8`.
@@ -120,10 +141,11 @@ export default function AdminLayout() {
               inline SVG) still scrolls inside the card rather than escaping its
               border. Deliberately not removed: it costs nothing and the failure it
               catches is invisible to happy-dom. */}
-          <div className="mx-auto w-full max-w-content overflow-x-auto rounded-xl border border-line-panel bg-surface-panel p-panel pb-20 md:pb-panel">
-            <Outlet />
-          </div>
-        </main>
+            <div className="mx-auto w-full max-w-content overflow-x-auto rounded-xl border border-line-panel bg-surface-panel p-panel pb-20 md:pb-panel">
+              <Outlet />
+            </div>
+          </main>
+        </div>
       </div>
 
       <MobileNav sections={sections} footer={<ShellControls onSignOut={handleSignOut} />} />

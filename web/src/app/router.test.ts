@@ -51,6 +51,10 @@ describe('router', () => {
     expect(paths).toContain('/admin/companies/:id')
     expect(paths).toContain('/action-plans')
     expect(paths).toContain('/microclimates')
+    // #99. Behind RequireAuth like the rest, but with no role gate of its own:
+    // /notifications/mine authorizes per user, so every authenticated role can
+    // load their own inbox and the nav offers it to all of them.
+    expect(paths).toContain('/notifications')
   })
 
   it('has an error element so a thrown render does not blank the page', () => {

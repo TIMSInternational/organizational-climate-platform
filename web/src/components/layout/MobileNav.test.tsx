@@ -41,11 +41,22 @@ function companyAdminSections() {
 }
 
 describe('MobileNav', () => {
-  it('renders nothing for a role with no admin pages', () => {
-    // buildNavSections returns [] for employee/supervisor/leader. An empty bar
-    // pinned over the bottom of the page would steal 56px for nothing.
-    const { container } = renderNav(buildNavSections('employee', COMPANY))
+  it('renders nothing when there are no sections at all', () => {
+    // An empty bar pinned over the bottom of the page would steal 56px for
+    // nothing. Passed directly rather than via buildNavSections: since #99 gave
+    // every role a Notifications entry, no role produces `[]` any more, but this
+    // component must still cope with an empty list.
+    const { container } = renderNav([])
     expect(container.querySelector('nav')).toBeNull()
+  })
+
+  it('gives a role with no admin pages a bar with just their inbox', () => {
+    renderNav(buildNavSections('employee', COMPANY))
+    const bar = screen.getByRole('navigation')
+    // The "More" drawer trigger is always present; the one destination is the inbox.
+    const links = within(bar).getAllByRole('link')
+    expect(links).toHaveLength(1)
+    expect(links[0].getAttribute('href')).toBe('/notifications')
   })
 
   it('fills its tab slots with leaf destinations, never with a group toggle', () => {

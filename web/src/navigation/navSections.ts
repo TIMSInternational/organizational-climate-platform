@@ -1,4 +1,4 @@
-import { Shield, Building2, Settings, Users, Tags, Target, Waves } from 'lucide-react'
+import { Shield, Building2, Settings, Users, Tags, Target, Waves, Bell } from 'lucide-react'
 
 export interface NavItem {
   /**
@@ -45,6 +45,19 @@ export interface NavSection {
 // would be silently scoped to whatever company their own user row happens to
 // point at, not shown a genuine cross-company view. Add it back once #57
 // (cross-cutting company-context selector) lands.
+//
+// Notifications (#99) is the one entry every role gets, including the roles that
+// previously got an empty array. `/notifications/mine` authorizes per **user**,
+// not per company or per role -- any authenticated caller can load their own
+// inbox, and a CompanyAdmin calling it gets their own, not their tenant's. So it
+// is the first entry that satisfies the role-awareness rule for `employee`,
+// `supervisor` and `leader`, and the reason the fallback stopped being `[]`.
+const NOTIFICATIONS_ITEM: NavItem = {
+  labelKey: 'notifications.title',
+  href: '/notifications',
+  icon: Bell,
+}
+
 export function buildNavSections(role: string | undefined, companyId: string | undefined): NavSection[] {
   if (role === 'super_admin') {
     return [
@@ -60,6 +73,7 @@ export function buildNavSections(role: string | undefined, companyId: string | u
               { labelKey: 'navigation.systemSettings', href: '/admin/system-settings', icon: Settings },
             ],
           },
+          NOTIFICATIONS_ITEM,
         ],
       },
     ]
@@ -90,12 +104,15 @@ export function buildNavSections(role: string | undefined, companyId: string | u
             href: '/microclimates',
             icon: Waves,
           },
+          NOTIFICATIONS_ITEM,
         ],
       },
     ]
   }
 
-  return []
+  // Every other role -- and a company_admin whose token carries no companyId.
+  // Previously `[]`; now the one page they can all load. See NOTIFICATIONS_ITEM.
+  return [{ titleKey: '', items: [NOTIFICATIONS_ITEM] }]
 }
 
 /**
