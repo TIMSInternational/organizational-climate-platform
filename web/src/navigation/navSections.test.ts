@@ -89,12 +89,32 @@ describe('buildNavSections', () => {
     expect(links.some((href) => href.endsWith('/analytics'))).toBe(false)
   })
 
-  it('returns no nav for a company_admin with no companyId claim', () => {
-    expect(buildNavSections('company_admin', undefined)).toEqual([])
+  it('gives a company_admin with no companyId claim only the Notifications link', () => {
+    // Replaces an earlier `toEqual([])`. Every company-scoped href this branch could
+    // have built would have been `/admin/companies/undefined/...`, so the empty array
+    // was right until #99 -- but /notifications needs no companyId at all, so the
+    // fallback is now that one row rather than nothing.
+    expect(hrefs(buildNavSections('company_admin', undefined))).toEqual(['/notifications'])
   })
 
-  it.each(['employee', 'supervisor', 'leader', undefined])('returns no nav for %s (no admin page exists for this role yet)', (role) => {
-    expect(buildNavSections(role, 'company-1')).toEqual([])
+  it.each(['employee', 'supervisor', 'leader', undefined])('gives %s only the Notifications link (no admin page exists for this role yet)', (role) => {
+    expect(hrefs(buildNavSections(role, 'company-1'))).toEqual(['/notifications'])
+  })
+
+  it('gives every role a Notifications link, because /notifications/mine authorizes per user rather than per role', () => {
+    for (const role of ['super_admin', 'company_admin', 'employee', 'supervisor', 'leader', undefined]) {
+      expect(hrefs(buildNavSections(role, 'company-1')), `${role} has no notifications link`).toContain(
+        '/notifications',
+      )
+    }
+  })
+
+  it('puts Notifications last for an admin, so it does not displace their primary pages', () => {
+    // The mobile tab bar takes the first four leaves (see leafNavItems). A
+    // company_admin's four are their own company's pages; Notifications sits
+    // behind "More" rather than pushing one of them off the bar.
+    const links = hrefs(buildNavSections('company_admin', 'company-1'))
+    expect(links[links.length - 1]).toBe('/notifications')
   })
 })
 
@@ -159,6 +179,8 @@ describe('leafNavItems', () => {
       // would take the fourth mobile tab slot away from Action Plans.
       '/admin/companies/company-1/reports',
       '/admin/companies/company-1/analytics',
+      // Last, for the same four-slot reason -- see 'puts Notifications last' above.
+      '/notifications',
     ])
     expect(leaves.every((item) => !item.sub?.length)).toBe(true)
   })
@@ -169,10 +191,13 @@ describe('leafNavItems', () => {
       '/admin/companies',
       '/admin/system-settings',
       '/analytics/benchmarks',
+      '/notifications',
     ])
   })
 
-  it('is empty for a role with no nav', () => {
-    expect(leafNavItems(buildNavSections('employee', 'company-1'))).toEqual([])
+  it('gives a role with no admin pages exactly one leaf, so the mobile bar has something to render', () => {
+    expect(leafNavItems(buildNavSections('employee', 'company-1')).map((item) => item.href)).toEqual([
+      '/notifications',
+    ])
   })
 })

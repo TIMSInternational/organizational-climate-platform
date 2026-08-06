@@ -932,7 +932,20 @@
       "alwaysSentDescription": "Los mensajes de inicio de sesión, contraseña y seguridad de la cuenta siempre se envían. No tienen configuración, porque desactivarlos te dejaría sin forma de recuperar tu cuenta.",
       "saved": "Se guardaron tus preferencias de notificaciones.",
       "loadError": "No se pudieron cargar tus preferencias de notificaciones."
-    }
+    },
+    "inboxDescription": "Todo lo que la plataforma te ha enviado.",
+    "unreadOnly": "Solo no leídas",
+    "unread": "No leída",
+    "read": "Leída",
+    "titleColumn": "Título",
+    "messageColumn": "Mensaje",
+    "receivedColumn": "Recibida",
+    "noUnread": "No tienes notificaciones sin leer",
+    "loadFailed": "No se pudieron cargar tus notificaciones.",
+    "bellLabel": "Notificaciones",
+    "bellLabelWithUnread": "Notificaciones, {count} sin leer",
+    "unreadHeading": "Notificaciones sin leer",
+    "viewAll": "Ver todas las notificaciones"
   },
   "reports": {
     "newReport": "Nuevo informe",

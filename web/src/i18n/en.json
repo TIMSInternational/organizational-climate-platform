@@ -932,7 +932,20 @@
       "alwaysSentDescription": "Sign-in, password and account-security messages are always sent. There is no setting for them, because turning them off would leave you unable to recover your account.",
       "saved": "Your notification preferences were saved.",
       "loadError": "Your notification preferences could not be loaded."
-    }
+    },
+    "inboxDescription": "Everything the platform has sent you.",
+    "unreadOnly": "Unread only",
+    "unread": "Unread",
+    "read": "Read",
+    "titleColumn": "Title",
+    "messageColumn": "Message",
+    "receivedColumn": "Received",
+    "noUnread": "You have no unread notifications",
+    "loadFailed": "Your notifications could not be loaded.",
+    "bellLabel": "Notifications",
+    "bellLabelWithUnread": "Notifications, {count} unread",
+    "unreadHeading": "Unread notifications",
+    "viewAll": "View all notifications"
   },
   "reports": {
     "newReport": "New report",
