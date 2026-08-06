@@ -14,6 +14,7 @@ import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetai
 import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
 import MicroclimateDetailPage from '../features/microclimates/pages/MicroclimateDetailPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
+import NotificationPreferencesPage from '../features/notifications/pages/NotificationPreferencesPage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
 import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
 import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
@@ -93,6 +94,9 @@ export const router = createBrowserRouter([
               { path: '/action-plans/:id', element: <ActionPlanDetailPage /> },
               { path: '/microclimates', element: <MicroclimatesListPage /> },
               { path: '/microclimates/:id', element: <MicroclimateDetailPage /> },
+              // Not under /admin: every authenticated role owns their own preferences,
+              // and the API behind this page takes no user id at all (#103).
+              { path: '/settings/notifications', element: <NotificationPreferencesPage /> },
               // Self-service, so no role gate beyond RequireAuth: /notifications/mine
               // is scoped per user and every authenticated role can load it.
               { path: '/notifications', element: <NotificationsInboxPage /> },

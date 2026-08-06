@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { LogOut } from 'lucide-react'
+import { Link } from 'react-router'
+import { BellRing, LogOut } from 'lucide-react'
 import { useTranslation, LanguageSwitcher } from '../../i18n'
 import { readAdminThemeMode, setAdminThemeMode, type AdminThemeMode } from '../../theme/adminTheme'
 
@@ -79,12 +80,19 @@ export interface ShellControlsProps {
 }
 
 /**
- * Language, theme and sign out.
+ * Language, theme, notification preferences and sign out.
  *
  * One component rendered in two places — the desktop sidebar footer and the
  * mobile drawer — because the sidebar is `hidden` below `md`. Duplicating the
  * three controls in `AdminLayout` and `MobileNav` is how one of them ends up
  * missing a control that the other has.
+ *
+ * Notification preferences (#103) live here rather than in `navSections`
+ * deliberately. That module is role-aware and returns nothing at all for
+ * employees, supervisors and leaders, so a nav entry would hide the page from
+ * exactly the people whose own preferences it manages. This block is the shell's
+ * per-account surface — language, theme, sign out — and the page belongs beside
+ * them, on every role.
  */
 export function ShellControls({ onSignOut }: ShellControlsProps) {
   const { t } = useTranslation()
@@ -103,6 +111,10 @@ export function ShellControls({ onSignOut }: ShellControlsProps) {
     >
       <LanguageSwitcher />
       <ThemeSwitcher />
+      <Link to="/settings/notifications" className="flex items-center gap-inline text-sm text-fg-secondary hover:text-fg-primary">
+        <BellRing aria-hidden="true" className="nav-icon" />
+        {t('notifications.preferences.title')}
+      </Link>
       <button type="button" onClick={onSignOut}>
         <LogOut aria-hidden="true" className="nav-icon" />
         {t('shell.signOut')}
