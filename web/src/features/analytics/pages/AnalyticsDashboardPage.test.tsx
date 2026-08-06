@@ -161,6 +161,29 @@ describe('AnalyticsDashboardPage', () => {
     expect(urls.some((url) => url.endsWith('/admin/ai-insights/i1/acknowledge'))).toBe(true)
   })
 
+  it('keeps the insights list on screen when one acknowledge fails', async () => {
+    // Routing the failure into `insightsError` would replace a table that loaded fine
+    // with "AI insights are not available", blaming the endpoint for a single row's
+    // failed write and throwing away the rest of the list.
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse([insightRow()]))
+    renderPage()
+
+    await screen.findByText('Engagement is falling in Sales')
+
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ message: 'Insight not found' }, 404))
+    await userEvent.click(screen.getByRole('button', { name: 'Acknowledge' }))
+
+    expect(await screen.findByText('Insight not found')).toBeTruthy()
+    expect(screen.getByText('Engagement is falling in Sales')).toBeTruthy()
+    expect(screen.queryByText('AI insights are not available')).toBeNull()
+    // And the row is actionable again rather than stuck disabled.
+    expect((screen.getByRole('button', { name: 'Acknowledge' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+  })
+
   it('tells a super_admin that platform-wide benchmarks are excluded from this view', async () => {
     // The backend filter is an exact match for a SuperAdmin, so globals drop out --
     // whereas a CompanyAdmin always gets globals plus their own. Saying so beats

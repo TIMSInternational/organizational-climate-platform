@@ -63,6 +63,7 @@ export default function AnalyticsDashboardPage() {
   const [insightsLoading, setInsightsLoading] = useState(true)
   const [insightsError, setInsightsError] = useState<string | null>(null)
   const [acknowledgingId, setAcknowledgingId] = useState<string | undefined>(undefined)
+  const [acknowledgeError, setAcknowledgeError] = useState<string | null>(null)
 
   // `useCallback` for the same reason as ReportsListPage: the lint budget is exactly
   // full, so a new exhaustive-deps warning fails CI. `t` is stable per locale.
@@ -99,11 +100,16 @@ export default function AnalyticsDashboardPage() {
 
   async function handleAcknowledge(insight: AIInsightListItem) {
     setAcknowledgingId(insight.id)
+    setAcknowledgeError(null)
     try {
       await acknowledgeAIInsight(baseUrl, insight.id)
       await reloadInsights()
     } catch (err) {
-      setInsightsError(err instanceof Error ? err.message : t('errors.generic'))
+      // Its OWN error state, not `insightsError`. Reusing that one would replace the
+      // whole table with "AI insights are not available" -- throwing away a list that
+      // loaded perfectly well, and blaming the wrong thing -- because one row's write
+      // failed. The list stays; the message sits above it.
+      setAcknowledgeError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setAcknowledgingId(undefined)
     }
@@ -190,6 +196,11 @@ export default function AnalyticsDashboardPage() {
         />
       ) : (
         <LoadingRegion loading={insightsLoading} label={t('common.loading')}>
+          {acknowledgeError && (
+            <Alert variant="destructive" className="mb-panel-gap">
+              <AlertDescription>{acknowledgeError}</AlertDescription>
+            </Alert>
+          )}
           {insightsLoading ? (
             <SkeletonText lines={3} />
           ) : (
