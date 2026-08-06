@@ -111,6 +111,31 @@ describe('ReportsListPage', () => {
     expect(table?.parentElement?.getAttribute('data-slot')).toBe('table-container')
   })
 
+  it('shows the same labels the create form offered, not the raw wire values', async () => {
+    // The form's dropdown says "Summary" / "PDF"; a row that then said `summary` /
+    // `pdf` reads as though the choice was not saved -- and in Spanish it would still
+    // say `summary` next to a form that said "Resumen".
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse([reportRow({ type: 'executive', format: 'csv' })]),
+    )
+    renderPage()
+
+    await screen.findByText('Q3 climate summary')
+    expect(screen.getByText('Executive')).toBeTruthy()
+    expect(screen.getByText('CSV')).toBeTruthy()
+    expect(screen.queryByText('executive')).toBeNull()
+  })
+
+  it('falls back to the server value for a type it ships no label for', async () => {
+    // `type` and `format` are unvalidated free text on the wire, so an unknown value
+    // must render as itself rather than as a missing catalogue key.
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([reportRow({ type: 'bespoke' })]))
+    renderPage()
+
+    await screen.findByText('Q3 climate summary')
+    expect(screen.getByText('bespoke')).toBeTruthy()
+  })
+
   it('only offers Download for a completed report, because the backend 400s otherwise', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       jsonResponse([

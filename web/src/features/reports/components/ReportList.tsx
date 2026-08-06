@@ -37,6 +37,38 @@ const STATUS_KEYS: Record<string, string> = {
   failed: 'reports.statusFailed',
 }
 
+/**
+ * The same lookup for `type` and `format`, so a row reads the way the create form's
+ * dropdown read when it was filled in. Without this the form offers "Summary" and the
+ * table then shows `summary` — and in Spanish the form offers "Resumen" and the table
+ * still shows `summary`, which looks like the choice was not saved.
+ *
+ * Both columns are free text on the wire (`CreateReportRequest` validates neither), so an
+ * unknown value falls back to the raw string rather than to a missing key.
+ */
+const TYPE_KEYS: Record<string, string> = {
+  summary: 'reports.type_summary',
+  detailed: 'reports.type_detailed',
+  comparison: 'reports.type_comparison',
+  executive: 'reports.type_executive',
+}
+
+const FORMAT_KEYS: Record<string, string> = {
+  pdf: 'reports.format_pdf',
+  excel: 'reports.format_excel',
+  csv: 'reports.format_csv',
+}
+
+/** `t(key)` when the value is one we ship a label for, otherwise the server's own value. */
+function label(
+  translate: (key: string) => string,
+  keys: Record<string, string>,
+  value: string,
+): string {
+  const key = keys[value]
+  return key ? translate(key) : value
+}
+
 interface ReportListProps {
   reports: readonly ReportListItem[]
   /** `undefined` while a download is in flight for that id, so the row can disable itself. */
@@ -74,17 +106,14 @@ export default function ReportList({ reports, downloadingId, onDownload }: Repor
       </thead>
       <tbody>
         {reports.map((report) => {
-          const statusKey = STATUS_KEYS[report.status]
           const isCompleted = report.status === 'completed'
           return (
             <tr key={report.id}>
               <td>{report.title}</td>
-              <td>{report.type}</td>
-              <td>{report.format}</td>
+              <td>{label(t, TYPE_KEYS, report.type)}</td>
+              <td>{label(t, FORMAT_KEYS, report.format)}</td>
               <td>
-                <Badge variant="secondary">
-                  {statusKey ? t(statusKey) : report.status}
-                </Badge>
+                <Badge variant="secondary">{label(t, STATUS_KEYS, report.status)}</Badge>
               </td>
               <td>{new Date(report.createdAt).toLocaleDateString(locale)}</td>
               <td>
