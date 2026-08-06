@@ -1216,6 +1216,17 @@ public static class SurveyEndpoints
             survey.Settings.InvitationSendImmediately,
             survey.Settings.InvitationBrandingEnabled);
 
+        // ResolvedLocale names the language the caller is actually READING, not the one
+        // they asked for. A Spanish-only survey fetched with ?lang=en comes back in
+        // Spanish; reporting "en" there would be precisely the silent substitution the
+        // paired columns and FallbackFields exist to prevent, and it would contradict
+        // LocalizedText.ResolvedLocale ("the locale Text is actually written in"). The
+        // title is the survey's identifying content, so it names the payload as a whole;
+        // FallbackFields still carries the per-field detail for anything that diverges.
+        var resolvedLocale = LocalizedContent
+            .Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language)
+            .ResolvedLocale ?? locale;
+
         return new SurveyDetail(
             survey.Id,
             SurveyContent.Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language, "title", fallbackFields),
@@ -1225,7 +1236,7 @@ public static class SurveyEndpoints
             survey.Type,
             survey.Status,
             survey.Language,
-            locale,
+            resolvedLocale,
             fallbackFields,
             survey.StartDate,
             survey.EndDate,

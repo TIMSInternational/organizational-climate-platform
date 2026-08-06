@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Surveys;
@@ -401,7 +402,11 @@ public class SurveyDuplicationEndpointTests : IAsyncLifetime
         {
             ResponseId = response.Id,
             QuestionId = questionId,
-            ResponseValue = answerValue,
+            // response_value is jsonb (QuestionResponseConfiguration), so a bare option
+            // value is not valid JSON -- Postgres rejects it with 22P02. Encoding it here
+            // keeps the join this test asserts on honest: both rows must serialise the
+            // stable locale-independent value identically, which is the whole property.
+            ResponseValue = JsonSerializer.Serialize(answerValue),
         });
         await db.SaveChangesAsync();
         return response.Id;

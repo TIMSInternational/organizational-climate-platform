@@ -24,8 +24,40 @@ internal sealed class SurveyTestHarness(AuthWebApplicationFactory factory, strin
 
     public string EmailDomain { get; } = emailDomain;
 
+    /// <summary>
+    /// Creates the company that owns <see cref="EmailDomain"/>, if it does not exist yet.
+    ///
+    /// <c>/auth/signup</c> resolves the caller's company by email domain and returns
+    /// <b>404</b> when no company matches (AuthEndpoints: "No company found for this email
+    /// domain"). Every seeded tenant deliberately gets its own <c>{guid}.tenant.test</c>
+    /// domain so the filtered unique index on <c>companies.email_domain</c> stays satisfied
+    /// across the two tenants each test needs — which leaves the signup domain itself
+    /// homeless. This company exists purely so signup succeeds; <see cref="TokenAsync"/>
+    /// immediately re-homes the user onto whichever tenant the test actually wants, so it
+    /// never participates in a cross-tenant assertion.
+    /// </summary>
+    private Task EnsureSignupHomeAsync()
+        => WithDbAsync(async db =>
+        {
+            if (await db.Companies.AnyAsync(c => c.EmailDomain == EmailDomain))
+            {
+                return;
+            }
+
+            db.Companies.Add(new Company
+            {
+                Id = Guid.NewGuid(),
+                Name = "Signup Home",
+                EmailDomain = EmailDomain,
+                CreatedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        });
+
     public async Task<string> TokenAsync(string role, Guid? companyId, Guid? departmentId = null)
     {
+        await EnsureSignupHomeAsync();
+
         var client = Factory.CreateClient();
         var email = $"{Guid.NewGuid():N}@{EmailDomain}";
         var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "a-good-password"));
@@ -145,6 +177,18 @@ internal sealed class SurveyTestHarness(AuthWebApplicationFactory factory, strin
     public static LocalizedInput Both(string en, string es)
         => LocalizedInput.FromLocales(new Dictionary<string, string?> { ["en"] = en, ["es"] = es });
 
+    /// <summary>
+    /// The default question has to follow the survey's language, not just the title.
+    ///
+    /// <see cref="LocalizedInput.TryResolve"/> rejects a bare string outright when the
+    /// content is authored in <c>both</c> — deliberately, because attributing an
+    /// unlabelled string to one column is precisely the silent content-mangling #195
+    /// designed the paired columns to prevent. So a caller that asks for
+    /// <c>language: both</c> and lets the questions default would get a 400 from the
+    /// endpoint doing its job, not from a bug. Defaulting the question bilingually keeps
+    /// these tests about what they are actually asserting (title resolution, search,
+    /// duplication) instead of about question validation.
+    /// </summary>
     public static CreateSurveyRequest MinimalRequest(
         Guid companyId,
         LocalizedInput? title = null,
@@ -158,7 +202,15 @@ internal sealed class SurveyTestHarness(AuthWebApplicationFactory factory, strin
             StartDate: DateTimeOffset.UtcNow.AddDays(-1),
             EndDate: DateTimeOffset.UtcNow.AddDays(14),
             DepartmentIds: departmentIds,
-            Questions: questions ?? [new CreateSurveyQuestionInput(LocalizedInput.FromBare("How are you feeling?"), "open_ended", Order: 0)],
+            Questions: questions ??
+            [
+                new CreateSurveyQuestionInput(
+                    language == ContentLanguages.Both
+                        ? Both("How are you feeling?", "¿Cómo te sientes?")
+                        : LocalizedInput.FromBare("How are you feeling?"),
+                    "open_ended",
+                    Order: 0),
+            ],
             Language: language);
 
     public static async Task<SurveyDetail> CreateSurveyAsync(HttpClient client, CreateSurveyRequest request)
