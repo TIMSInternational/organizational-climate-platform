@@ -26,13 +26,37 @@ namespace ClimateProject.IntegrationTests.Support;
 /// standalone. The trade-off is that it serialises them against each other but not
 /// against the Postgres collection.
 ///
-/// Honest caveat: the flake could not be reproduced locally -- 15 runs of these
-/// three classes and 8 runs including Postgres-collection host boots all passed, on
-/// a machine much less contended than a 2-core CI runner. So this is a targeted
-/// mitigation of an identified structural hazard, not a fix verified against a
-/// reproduction. If the flake recurs, the next step is folding the host-booting
-/// Postgres classes into one collection too, so that *no* two host boots ever
-/// overlap.
+/// Original caveat, now resolved: the flake could not be reproduced locally, so this
+/// collection was a targeted mitigation of an identified hazard rather than a verified
+/// fix, and the next step recorded here was "fold the host-booting Postgres classes
+/// into one collection too, so that *no* two host boots ever overlap."
+///
+/// <para>
+/// <b>2026-08-06 -- reproduced, and that next step was only half right.</b> The
+/// reproduction condition is machine <i>load</i>, which is why an idle dev machine never
+/// showed it and a 2-core CI runner did: with an unrelated Testcontainers suite saturating
+/// the box, these three classes failed <b>2 runs in 5</b>; idle, <b>0 in 15</b>. Crucially
+/// that failing run had <i>only this collection</i> executing -- three classes that xUnit
+/// already runs one after another. So a second host boot is not necessary to trigger it,
+/// and folding collections together could never have been sufficient on its own.
+/// </para>
+/// <para>
+/// There are two independent triggers, and both are now addressed:
+/// </para>
+/// <para>
+/// 1. <b>Concurrent host boots</b> -- what the CORS-log evidence above shows. This
+///    collection stops the three classes overlapping each other, and
+///    <c>Support/AssemblyParallelism.cs</c> now stops them overlapping the seventy
+///    host-booting classes in the "Postgres" collection, which was the remaining gap this
+///    file named. Cost measured at roughly five seconds.<br/>
+/// 2. <b>The capture handshake itself</b>, which races under load even with a single boot
+///    in flight -- handled in <c>StartupValidationTests.IsHostCaptureRace</c>, where the
+///    mechanism and the reason a retry cannot mask a real regression are written down.
+/// </para>
+/// <para>
+/// Keep this collection even though (1) now also holds at assembly level: it is the thing
+/// that keeps these three serial if anyone ever re-enables parallelization.
+/// </para>
 /// </summary>
 [CollectionDefinition("AppHost")]
 public class AppHostCollection;
