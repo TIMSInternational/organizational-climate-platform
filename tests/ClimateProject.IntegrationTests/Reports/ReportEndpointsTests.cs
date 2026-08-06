@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Reports;
@@ -69,6 +70,68 @@ public class ReportEndpointsTests : IAsyncLifetime
         Assert.Equal("completed", created!.Status);
         Assert.NotNull(created.ReportOutput);
     }
+
+    /// <summary>
+    /// req(#152): a generated report must actually render the AI insights that exist for the
+    /// company. The legacy generator read <c>AIInsight</c> through a rival model shape and the
+    /// section came back empty with no error, so this asserts on the insight's own prose and its
+    /// 0-100 confidence surviving the whole round trip -- rows in, report output out.
+    /// </summary>
+    [Fact]
+    public async Task A_generated_report_renders_the_companys_AI_insights_and_no_one_elses()
+    {
+        var otherCompanyId = Guid.NewGuid();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            db.Companies.Add(new Company
+            {
+                Id = otherCompanyId, Name = "Other Co", EmailDomain = $"other-{Guid.NewGuid():N}.test",
+                CreatedAt = DateTimeOffset.UtcNow,
+            });
+            db.AIInsights.AddRange(
+                NewInsight(_companyId, "Elevated attrition risk in Engineering", confidenceScore: 87),
+                NewInsight(_companyId, "Stale insight", expiresAt: DateTimeOffset.UtcNow.AddDays(-1)),
+                NewInsight(otherCompanyId, "Another tenant's insight"));
+            await db.SaveChangesAsync();
+        }
+
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync("/admin/reports", new CreateReportRequest(
+            "Q3 Climate Report", null, "climate_summary", _companyId, "pdf", null));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<ReportDetail>();
+        var document = JsonSerializer.Deserialize<ReportOutputDocument>(created!.ReportOutput!, JsonSerializerOptions.Web);
+
+        var item = Assert.Single(document!.AiInsights);
+        Assert.Equal("Elevated attrition risk in Engineering", item.Title);
+        Assert.Equal("Engagement scores trending down over the last 3 cycles", item.Description);
+        Assert.Equal(87, item.ConfidenceScore);
+        Assert.Equal(["Engineering", "QA"], item.AffectedSegments);
+        Assert.Equal(["Schedule 1:1s", "Review workload distribution"], item.RecommendedActions);
+    }
+
+    private static AIInsight NewInsight(Guid companyId, string title, int confidenceScore = 87, DateTimeOffset? expiresAt = null)
+        => new()
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyId,
+            Type = "risk",
+            Category = "attrition",
+            Title = title,
+            Description = "Engagement scores trending down over the last 3 cycles",
+            ConfidenceScore = confidenceScore,
+            Priority = "high",
+            AffectedSegments = ["Engineering", "QA"],
+            RecommendedActions = ["Schedule 1:1s", "Review workload distribution"],
+            ExpiresAt = expiresAt,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        };
 
     [Fact]
     public async Task Download_increments_count_only_when_completed()
