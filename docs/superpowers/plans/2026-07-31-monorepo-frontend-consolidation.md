@@ -718,6 +718,15 @@ Via the Supabase dashboard (or `supabase projects create`), create a new project
 
 From the Supabase project's **Settings → Database → Connection string**, copy the **URI** format connection string using the **Transaction** pooler mode (port `6543`) — this is the right mode for a container workload that opens/closes connections per request rather than holding long-lived ones.
 
+> **⚠️ CORRECTION (#220) — this step is wrong, and it is where the production defect came from.**
+> The premise is false: this is *not* a workload that opens and closes a connection per request.
+> It is a long-running ASP.NET Core service whose Npgsql client-side pool deliberately holds
+> connections open across statements, which is exactly what Supavisor's transaction mode cannot
+> support. Following this step produced a live service where five of ten `/ready` probes hung.
+> **Use the session pooler, port `5432`** — same host, same credentials. Left in place rather
+> than edited away because this plan is the historical record of how the value was chosen. See
+> `infra/aws/README.md` → "Connection pooling and the connection budget".
+
 - [ ] **Step 3: Store the connection string in AWS Secrets Manager**
 
 ```bash
