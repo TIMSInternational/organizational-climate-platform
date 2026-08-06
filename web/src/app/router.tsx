@@ -14,6 +14,8 @@ import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetai
 import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
 import MicroclimateDetailPage from '../features/microclimates/pages/MicroclimateDetailPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
+import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
+import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
 import ReportsListPage from '../features/reports/pages/ReportsListPage'
 import AnalyticsDashboardPage from '../features/analytics/pages/AnalyticsDashboardPage'
 import { getToken } from '../auth/token'
@@ -90,6 +92,8 @@ export const router = createBrowserRouter([
               { path: '/action-plans/:id', element: <ActionPlanDetailPage /> },
               { path: '/microclimates', element: <MicroclimatesListPage /> },
               { path: '/microclimates/:id', element: <MicroclimateDetailPage /> },
+              { path: '/analytics/benchmarks', element: <BenchmarksPage /> },
+              { path: '/analytics/ai-insights', element: <AIInsightsPage /> },
             ],
           },
         ],
