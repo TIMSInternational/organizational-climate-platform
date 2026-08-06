@@ -26,7 +26,7 @@ error minutes in:
 | `CORS_ALLOWED_ORIGIN` | variable | Exact production frontend origin |
 | `CORS_ALLOWED_WILDCARD_ORIGIN` | variable | Vercel preview pattern |
 | `TRACKING_JWT_SECRET_ARN` | variable | Secrets Manager ARN |
-| `DATABASE_CONNECTION_STRING_SECRET_ARN` | variable | Secrets Manager ARN (runtime; transaction pooler, 6543) |
+| `DATABASE_CONNECTION_STRING_SECRET_ARN` | variable | Secrets Manager ARN (runtime). The secret it points at currently holds a **port 6543** string, which is **wrong** — see "Connection pooling" below. It should be the session pooler, 5432, same as the migration string. |
 | `INTERNAL_API_KEY_SECRET_ARN` | variable | Secrets Manager ARN |
 | `MIGRATION_DATABASE_CONNECTION_STRING` | **secret** | **Session pooler: the same host as the runtime string, port 5432, username `postgres.<project-ref>`.** Not 6543, and **not** `db.<project-ref>.supabase.co` — that host is IPv6-only and unreachable from GitHub Actions. See below. |
 
@@ -43,11 +43,15 @@ presents the wrong answer prominently and earlier revisions of this file recomme
 Supabase exposes the database three ways. Two of them are the **same pooler host** on two
 ports, distinguished only by mode:
 
-| Endpoint | Host | Port | Mode | Usable for EF migrations? |
-|---|---|---|---|---|
-| Transaction pooler | `aws-0-<region>.pooler.supabase.com` | 6543 | multiplexes sessions across backends | **No** — see below |
-| **Session pooler** | `aws-0-<region>.pooler.supabase.com` | **5432** | one dedicated backend per session | **Yes — use this** |
-| "Direct connection" | `db.<project-ref>.supabase.co` | 5432 | straight to Postgres | Works locally, **never from CI** |
+| Endpoint | Host | Port | Mode | For EF migrations? | For the runtime service? |
+|---|---|---|---|---|---|
+| Transaction pooler | `aws-0-<region>.pooler.supabase.com` | 6543 | multiplexes sessions across backends | **No** — see below | **No** — see "Connection pooling" below (#220) |
+| **Session pooler** | `aws-0-<region>.pooler.supabase.com` | **5432** | one dedicated backend per session | **Yes — use this** | **Yes — use this** |
+| "Direct connection" | `db.<project-ref>.supabase.co` | 5432 | straight to Postgres | Works locally, **never from CI** | Works locally, **never from CI** |
+
+Both connection strings therefore want the **same endpoint**: the session pooler on 5432.
+They stay two separate values only because they live in two different secret stores and can
+carry different pool settings, not because they point anywhere different.
 
 Both failure modes are guarded in `deploy-prod.yml`, and they fail for unrelated reasons:
 
@@ -154,6 +158,85 @@ still use the pre-rename `climate-project-api` prefix deliberately — renaming 
 deployed stacks. Only the GitHub repository reference changed.
 
 Tracking issue: https://github.com/TIMSInternational/organizational-climate-platform/issues/68
+
+## Connection pooling and the connection budget
+
+Two separate things went wrong here, and they are easy to conflate because they share a
+symptom. Tracking issue: #220.
+
+### Symptom
+
+`/ready` — which round-trips Postgres — alternated **200, timeout, 200, timeout** across ten
+consecutive probes of the live service: five of ten hung. `/health` returned 200 on every
+probe throughout, because `/health` is a static literal that opens no connection. Anything
+gating on `/health` therefore called this service healthy while half its database-touching
+requests were hanging. This is the same class of blind spot #189 fixed at startup, appearing
+again at steady state.
+
+### Cause 1 — the runtime string points at the transaction pooler (**still open**, owner-gated)
+
+Port 6543 is Supavisor's **transaction** pooler. Transaction mode assigns a different backend
+to each statement. That is right for short-lived serverless clients that connect, run one
+statement and disconnect; it is wrong for a long-running ASP.NET Core service, whose Npgsql
+client-side pool holds connections open across statements and expects session state to persist
+between them. The two pooling models fight, and the visible result is intermittent hangs.
+
+The fix is to change that connection string's port from **6543 to 5432** — the session pooler.
+Same host, same password, same `postgres.<project-ref>` username; **only the port changes**,
+exactly as for the migration string described above. The value lives in **AWS Secrets Manager**
+as `climate-project-api/prod/database-connection-string`, so it cannot be fixed by any change
+to this repository and needs someone with write access to that secret.
+
+Until it is fixed, the API logs a **startup warning** naming #220 whenever it sees port 6543
+(`DatabaseConnectionStringPolicy`, wired up in `src/ClimateProject.Api/Program.cs`). It is
+deliberately a warning rather than a hard startup failure: the live secret still says 6543, and
+a hard guard shipped today would stop production booting on the next deploy — converting an
+intermittently-slow service into a fully-down one, to complain about a value that deploy cannot
+change. **Once the secret is flipped and a deploy comes up green, harden the warning into a
+throw** so the port cannot silently regress. The `TODO(#220)` in `Program.cs` marks the spot.
+
+### Cause 2 — the pool was unbounded (**fixed in this repository**)
+
+Nothing set Npgsql's `Maximum Pool Size`, so it took the driver default of **100 per
+instance**. Pools are per-process, and `climate-project-api-prod-service.yml` sets no
+`AutoScalingConfigurationArn`, so the service runs on App Runner's **default autoscaling
+configuration**: `MinSize` 1, `MaxSize` **25**. Worst-case demand is therefore
+`instances x pool size` with nothing else bounding it:
+
+| Instances (App Runner) | Max pool size (Npgsql) | Worst-case server connections |
+|---|---|---|
+| 1 (`MinSize`, idle) | 100 (old default) | 100 |
+| 25 (`MaxSize`, peak) | 100 (old default) | **2500** |
+| 1 (`MinSize`, idle) | **10 (current)** | 10 |
+| 25 (`MaxSize`, peak) | **10 (current)** | **250** |
+
+2500 is far past what a Supabase pooler will accept on any small plan, so at even moderate
+scale-out the service would exhaust the pooler and new connections would queue until they timed
+out — the same symptom as cause 1, from an unrelated direction. `DatabaseConnectionStringPolicy`
+now applies a `Maximum Pool Size` of **10**, bringing peak demand to **250**.
+
+**Confirm the actual ceiling before trusting the bottom row.** Supabase's pooler client limit
+varies by compute size and is not a fixed published constant; read it from the project's
+dashboard (Database → Connection pooling) or `SHOW max_connections`. 250 is chosen to sit under
+the smallest plausible configured limit with headroom for migrations, `psql` sessions and the
+Supabase dashboard's own connections, which also draw on the same budget.
+
+Three knobs move these numbers, and changing any one requires rechecking the others:
+
+- **Pool size** — `DatabaseConnectionStringPolicy.DefaultMaxPoolSize`
+  (`src/ClimateProject.Infrastructure/Persistence/DatabaseConnectionStringPolicy.cs`). A unit
+  test asserts the `25 x DefaultMaxPoolSize <= 250` budget, so raising it fails the build until
+  this section is revisited.
+- **Instance ceiling** — currently App Runner's implicit default of 25. Adding an explicit
+  `AWS::AppRunner::AutoScalingConfiguration` with a smaller `MaxSize` would buy room for a
+  larger pool, and would make the ceiling visible in the template instead of implied by an
+  AWS default.
+- **Supabase plan** — a larger compute size raises the ceiling itself.
+
+The pool size can also be overridden **without a code change**: if the Secrets Manager
+connection string specifies `Maximum Pool Size` itself, that value is honoured and the default
+is not applied. That is deliberate, so the pool can be retuned in an incident without a
+redeploy. Both behaviours are unit-tested.
 
 ## Manual path (what actually deployed the currently-live service)
 
