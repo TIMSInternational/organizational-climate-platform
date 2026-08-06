@@ -57,6 +57,32 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             preferences.Property(p => p.Theme).HasColumnName("preferences_theme").HasConversion<string>().HasMaxLength(10).IsRequired().HasDefaultValue("light");
         });
 
+        // The six legacy notification_settings preferences (#192). Every default here is
+        // lifted verbatim from legacy User.ts NotificationSettingsSchema, and every one is
+        // a DB-level HasDefaultValue rather than only a CLR initializer -- a CLR default
+        // never reaches a row inserted by the ETL (#154) or by raw SQL, so an opt-out
+        // column with no DDL default would come back NOT NULL-violating or, worse, silently
+        // "on" for someone who had turned it off.
+        //
+        // #192's body claims owned types must not use HasDefaultValue and that defaults
+        // therefore belong on the CLR property. That is backwards: Preferences and Consent
+        // directly above are both OwnsOne and both call HasDefaultValue on every property,
+        // in production, today. OwnsOne already flattens into columns on `users`, so
+        // "flatten to six columns" and "an owned NotificationPreferences type" emit
+        // identical DDL -- the choice was made on readability alone.
+        builder.OwnsOne(u => u.Notifications, notifications =>
+        {
+            notifications.Property(n => n.EmailSurveys).HasColumnName("notifications_email_surveys").IsRequired().HasDefaultValue(true);
+            notifications.Property(n => n.EmailMicroclimates).HasColumnName("notifications_email_microclimates").IsRequired().HasDefaultValue(true);
+            notifications.Property(n => n.EmailActionPlans).HasColumnName("notifications_email_action_plans").IsRequired().HasDefaultValue(true);
+            notifications.Property(n => n.EmailReminders).HasColumnName("notifications_email_reminders").IsRequired().HasDefaultValue(true);
+            // Stored for consent fidelity, held off #97's API surface until #82 settles the
+            // PWA question -- there is no push infrastructure and no device-token storage in
+            // this repo, so the API must not advertise a channel with no delivery path.
+            notifications.Property(n => n.PushNotifications).HasColumnName("notifications_push").IsRequired().HasDefaultValue(false);
+            notifications.Property(n => n.DigestFrequency).HasColumnName("notifications_digest_frequency").HasConversion<string>().HasMaxLength(20).IsRequired().HasDefaultValue("weekly");
+        });
+
         builder.OwnsOne(u => u.Consent, consent =>
         {
             consent.Property(c => c.Essential).HasColumnName("consent_essential").IsRequired().HasDefaultValue(true);
