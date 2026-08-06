@@ -348,6 +348,7 @@ app.MapMicroclimateEndpoints();
 app.MapMicroclimateTemplateEndpoints();
 app.MapReportEndpoints();
 app.MapBenchmarkEndpoints();
+app.MapNotificationPreferenceEndpoints();
 
 app.Run();
 
