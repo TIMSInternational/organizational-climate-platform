@@ -4,6 +4,7 @@ using System.Text.Json;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Domain.Entities;
+using ClimateProject.Infrastructure.Notifications;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -35,12 +36,9 @@ public static class NotificationEndpoints
     private const int MaxBulkRecipients = 500;
 
     /// <summary>Notifications one <c>/process</c> sweep will attempt. Bounded so the request stays inside a sane timeout; call it again for more.</summary>
-    private const int ProcessBatchSize = 200;
+    private const int ProcessBatchSize = NotificationDelivery.DefaultBatchSize;
 
-    private const int FailureReasonMaxLength = 1000;
     private const int TitleMaxLength = 500;
-
-    private const string LogCategory = "ClimateProject.Api.Notifications";
 
     public static void MapNotificationEndpoints(this WebApplication app)
     {
@@ -301,54 +299,12 @@ public static class NotificationEndpoints
             return Results.Forbid();
         }
 
-        var now = UtcNow();
-        var query = db.Notifications.Where(n =>
-            NotificationStatuses.Retryable.Contains(n.Status)
-            && n.ScheduledFor <= now
-            && n.RetryCount < n.MaxRetries);
+        // The sweep itself belongs to NotificationDelivery, which the scheduled worker (#101)
+        // also calls. Everything above this line is what actually belongs to the endpoint.
+        var result = await NotificationDelivery.ProcessDueAsync(
+            db, sender, loggerFactory, companyId, UtcNow(), ProcessBatchSize, cancellationToken);
 
-        if (companyId is not null)
-        {
-            query = query.Where(n => n.CompanyId == companyId.Value);
-        }
-
-        var due = await query
-            .OrderBy(n => n.ScheduledFor)
-            .Take(ProcessBatchSize)
-            .ToListAsync(cancellationToken);
-
-        if (due.Count == 0)
-        {
-            return Results.Ok(new NotificationProcessResult(0, 0, 0, 0));
-        }
-
-        var recipientIds = due.Select(n => n.UserId).Distinct().ToList();
-        var preferences = await db.Users
-            .Where(u => recipientIds.Contains(u.Id))
-            .ToDictionaryAsync(u => u.Id, u => u.Notifications, cancellationToken);
-
-        var attempted = 0;
-        foreach (var notification in due)
-        {
-            if (!preferences.TryGetValue(notification.UserId, out var recipientPreferences))
-            {
-                // Cannot happen while the user_id FK holds; skipping rather than assuming a
-                // default preference set, because assuming would mean mailing someone whose
-                // opt-outs we could not read.
-                continue;
-            }
-
-            attempted++;
-            await AttemptDeliveryAsync(notification, recipientPreferences, sender, loggerFactory, UtcNow(), cancellationToken);
-        }
-
-        await db.SaveChangesAsync(cancellationToken);
-
-        return Results.Ok(new NotificationProcessResult(
-            attempted,
-            due.Count(n => n.Status == NotificationStatuses.Sent),
-            due.Count(n => n.Status == NotificationStatuses.Cancelled),
-            due.Count(n => n.Status == NotificationStatuses.Failed)));
+        return Results.Ok(result);
     }
 
     private static async Task<IResult> ListMineAsync(
@@ -603,105 +559,24 @@ public static class NotificationEndpoints
     /// Deliver now if the notification is due now; otherwise leave it
     /// <see cref="NotificationStatuses.Pending"/> for <c>POST /notifications/process</c>.
     ///
-    /// A future-dated notification deliberately does **not** get its consent decision made
-    /// here: preferences are consulted at delivery time, so a recipient who opts out between
-    /// scheduling and sending is honoured.
+    /// Forwards to <see cref="NotificationDelivery"/>, which is where the consent check,
+    /// the status bookkeeping and the retry accounting live now that the scheduled worker
+    /// (#101) runs the same rules. See the type-level note there for why they moved.
     /// </summary>
-    private static async Task DeliverIfDueAsync(
+    private static Task DeliverIfDueAsync(
         Notification notification,
         NotificationPreferences preferences,
         INotificationSender sender,
         ILoggerFactory loggerFactory,
         DateTimeOffset now,
         CancellationToken cancellationToken)
-    {
-        if (notification.ScheduledFor > now) return;
-
-        await AttemptDeliveryAsync(notification, preferences, sender, loggerFactory, now, cancellationToken);
-    }
-
-    private static async Task AttemptDeliveryAsync(
-        Notification notification,
-        NotificationPreferences preferences,
-        INotificationSender sender,
-        ILoggerFactory loggerFactory,
-        DateTimeOffset now,
-        CancellationToken cancellationToken)
-    {
-        var decision = NotificationDispatchPolicy.Decide(notification.Channel, notification.Type, preferences);
-        if (!decision.ShouldDeliver)
-        {
-            // "cancelled", never "failed": nothing broke, the recipient asked not to receive
-            // this. Marking it failed would put it back in the retry sweep and mail them anyway.
-            notification.Status = NotificationStatuses.Cancelled;
-            notification.FailureReason = Truncate(decision.SuppressionReason);
-            notification.UpdatedAt = now;
-            return;
-        }
-
-        NotificationDeliveryResult result;
-        try
-        {
-            result = await sender.SendAsync(notification, cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            // A sender that throws must not take the whole batch down with it, and must not
-            // leave the row claiming "sent". The exception text is logged, never echoed to
-            // the caller or stored -- a provider exception routinely carries endpoint URLs
-            // and credentials.
-            loggerFactory.CreateLogger(LogCategory).LogError(
-                exception,
-                "Notification sender threw while delivering notification {NotificationId} via {Channel}.",
-                notification.Id,
-                notification.Channel);
-            result = NotificationDeliveryResult.Failure("The delivery provider reported an unexpected error.");
-        }
-
-        if (result.Delivered)
-        {
-            notification.Status = NotificationStatuses.Sent;
-            notification.SentAt = now;
-            notification.FailedAt = null;
-            notification.FailureReason = null;
-        }
-        else
-        {
-            notification.Status = NotificationStatuses.Failed;
-            notification.FailedAt = now;
-            notification.FailureReason = Truncate(result.FailureReason) ?? "Delivery failed.";
-            notification.RetryCount++;
-        }
-
-        notification.UpdatedAt = now;
-    }
+        => NotificationDelivery.DeliverIfDueAsync(
+            notification, preferences, sender, loggerFactory, now, cancellationToken);
 
     /// <summary>
-    /// UTC now, truncated to microseconds -- the precision Postgres <c>timestamptz</c>
-    /// actually stores.
-    ///
-    /// A .NET tick is 100ns, so an untruncated timestamp written here comes back from a
-    /// later read up to nine ticks smaller than the value this endpoint echoed in its
-    /// response. That made <c>POST /notifications/{id}/read</c> look non-idempotent: the
-    /// first call returned its in-memory <c>OpenedAt</c> and every later call returned the
-    /// round-tripped one, so a client diffing the two saw the "first opened at" timestamp
-    /// move. It was never actually moving in the database -- but a response that does not
-    /// equal what was stored is a bug whichever way round it is. Truncating at the source
-    /// makes what we return equal to what we persist, for every timestamp on this surface.
-    /// Caught by CI, not by reasoning: it needs a real Postgres round trip to show up.
+    /// UTC now, truncated to the microsecond precision Postgres <c>timestamptz</c> stores.
+    /// See <see cref="NotificationDelivery.UtcNow"/> for the round-tripping bug that makes
+    /// this necessary on every timestamp this endpoint writes.
     /// </summary>
-    private static DateTimeOffset UtcNow()
-    {
-        var now = DateTimeOffset.UtcNow;
-        return now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMicrosecond));
-    }
-
-    private static string? Truncate(string? value)
-        => value is null || value.Length <= FailureReasonMaxLength
-            ? value
-            : value[..FailureReasonMaxLength];
+    private static DateTimeOffset UtcNow() => NotificationDelivery.UtcNow();
 }
