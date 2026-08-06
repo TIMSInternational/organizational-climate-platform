@@ -22,23 +22,39 @@ namespace ClimateProject.IntegrationTests.Notifications;
 public class NotificationEndpointsTests : IAsyncLifetime
 {
     private readonly PostgresContainerFixture _postgres;
-    private readonly AuthWebApplicationFactory _factory;
     private readonly string _companyDomain = $"notif-{Guid.NewGuid():N}.test";
     private readonly string _otherCompanyDomain = $"notif-other-{Guid.NewGuid():N}.test";
+    private AuthWebApplicationFactory? _defaultFactory;
     private Guid _companyId;
     private Guid _otherCompanyId;
 
-    public NotificationEndpointsTests(PostgresContainerFixture postgres)
-    {
-        _postgres = postgres;
-        _factory = new AuthWebApplicationFactory(postgres.ConnectionString);
-    }
+    public NotificationEndpointsTests(PostgresContainerFixture postgres) => _postgres = postgres;
+
+    /// <summary>
+    /// **Exactly one application host per test, never more.**
+    ///
+    /// Two tests here need a customised host (a failing sender; a command-counting
+    /// interceptor). The obvious shape -- a shared default factory plus a second one inside
+    /// those tests -- boots two or three hosts per test, and concurrent
+    /// <c>WebApplicationFactory&lt;Program&gt;</c> boots are the identified cause of the
+    /// spurious <c>ObjectDisposedException</c> in <c>StartupValidationTests</c> (see
+    /// <c>AppHostCollection</c>, which serialises the AppHost classes against each other but
+    /// *not* against this Postgres collection). Tripling this class's host boots reproduced
+    /// exactly that failure on CI.
+    ///
+    /// So the default factory is lazy and the two customised tests never touch it, while
+    /// migrations and seeding go through a bare DbContext -- the way the Persistence tests
+    /// already do -- rather than through a host of their own.
+    /// </summary>
+    private AuthWebApplicationFactory Factory => _defaultFactory ??= new AuthWebApplicationFactory(_postgres.ConnectionString);
+
+    private ClimateProjectDbContext CreateContext() => new(
+        new DbContextOptionsBuilder<ClimateProjectDbContext>().UseNpgsql(_postgres.ConnectionString).Options);
 
     public async Task InitializeAsync()
     {
-        await _factory.ApplyMigrationsAsync();
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        await using var db = CreateContext();
+        await db.Database.MigrateAsync();
 
         var company = new Company { Id = Guid.NewGuid(), Name = "Notif Co", EmailDomain = _companyDomain, CreatedAt = DateTimeOffset.UtcNow };
         var otherCompany = new Company { Id = Guid.NewGuid(), Name = "Other Co", EmailDomain = _otherCompanyDomain, CreatedAt = DateTimeOffset.UtcNow };
@@ -50,7 +66,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
 
     public Task DisposeAsync()
     {
-        _factory.Dispose();
+        _defaultFactory?.Dispose();
         return Task.CompletedTask;
     }
 
@@ -61,9 +77,8 @@ public class NotificationEndpointsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, signup.StatusCode);
 
         Guid userId;
-        using (var scope = _factory.Services.CreateScope())
+        await using (var db = CreateContext())
         {
-            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
             var user = await db.Users.FirstAsync(u => u.Email == email);
             user.Role = role;
             await db.SaveChangesAsync();
@@ -77,7 +92,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
 
     private async Task<HttpClient> AuthenticatedClientAsync(string role, string? domain = null)
     {
-        var client = _factory.CreateClient();
+        var client = Factory.CreateClient();
         var (token, _) = await SignUpAndGetTokenAsync(client, role, domain);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
@@ -85,8 +100,8 @@ public class NotificationEndpointsTests : IAsyncLifetime
 
     private async Task WithDbAsync(Func<ClimateProjectDbContext, Task> action)
     {
-        using var scope = _factory.Services.CreateScope();
-        await action(scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>());
+        await using var db = CreateContext();
+        await action(db);
     }
 
     private static CreateNotificationRequest Request(
@@ -102,7 +117,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
     public async Task CompanyAdmin_can_dispatch_without_a_template_and_it_is_sent_immediately()
     {
         var adminClient = await AuthenticatedClientAsync(Roles.CompanyAdmin);
-        var (_, recipientId) = await SignUpAndGetTokenAsync(_factory.CreateClient(), Roles.Employee);
+        var (_, recipientId) = await SignUpAndGetTokenAsync(Factory.CreateClient(), Roles.Employee);
 
         var response = await adminClient.PostAsJsonAsync("/notifications", Request(recipientId, _companyId));
 
@@ -119,7 +134,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
     public async Task Dispatch_also_works_with_a_template_and_rejects_another_tenants_template()
     {
         var adminClient = await AuthenticatedClientAsync(Roles.CompanyAdmin);
-        var (_, recipientId) = await SignUpAndGetTokenAsync(_factory.CreateClient(), Roles.Employee);
+        var (_, recipientId) = await SignUpAndGetTokenAsync(Factory.CreateClient(), Roles.Employee);
 
         var ownTemplateId = Guid.NewGuid();
         var foreignTemplateId = Guid.NewGuid();
@@ -162,11 +177,11 @@ public class NotificationEndpointsTests : IAsyncLifetime
         // cannot mark it read -- the self-service rule is per-user, not per-company.
         var adminClient = await AuthenticatedClientAsync(Roles.CompanyAdmin);
 
-        var userAClient = _factory.CreateClient();
+        var userAClient = Factory.CreateClient();
         var (userAToken, userAId) = await SignUpAndGetTokenAsync(userAClient, Roles.Employee);
         userAClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", userAToken);
 
-        var userBClient = _factory.CreateClient();
+        var userBClient = Factory.CreateClient();
         var (userBToken, _) = await SignUpAndGetTokenAsync(userBClient, Roles.Employee);
         userBClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", userBToken);
 
@@ -198,7 +213,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
     public async Task An_admin_of_another_company_cannot_dispatch_into_this_one()
     {
         var foreignAdmin = await AuthenticatedClientAsync(Roles.CompanyAdmin, _otherCompanyDomain);
-        var (_, recipientId) = await SignUpAndGetTokenAsync(_factory.CreateClient(), Roles.Employee);
+        var (_, recipientId) = await SignUpAndGetTokenAsync(Factory.CreateClient(), Roles.Employee);
 
         var response = await foreignAdmin.PostAsJsonAsync("/notifications", Request(recipientId, _companyId));
 
@@ -209,7 +224,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
     public async Task An_email_opt_out_suppresses_delivery_and_is_recorded_as_cancelled_not_failed()
     {
         var adminClient = await AuthenticatedClientAsync(Roles.CompanyAdmin);
-        var (_, recipientId) = await SignUpAndGetTokenAsync(_factory.CreateClient(), Roles.Employee);
+        var (_, recipientId) = await SignUpAndGetTokenAsync(Factory.CreateClient(), Roles.Employee);
 
         await WithDbAsync(async db =>
         {
@@ -245,7 +260,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
     public async Task A_scheduled_notification_stays_pending_until_process_runs_and_honours_an_opt_out_taken_meanwhile()
     {
         var adminClient = await AuthenticatedClientAsync(Roles.CompanyAdmin);
-        var (_, recipientId) = await SignUpAndGetTokenAsync(_factory.CreateClient(), Roles.Employee);
+        var (_, recipientId) = await SignUpAndGetTokenAsync(Factory.CreateClient(), Roles.Employee);
 
         var scheduled = await adminClient.PostAsJsonAsync("/notifications", Request(
             recipientId, _companyId, NotificationTypes.DeadlineReminder, NotificationChannels.Email,
@@ -286,9 +301,9 @@ public class NotificationEndpointsTests : IAsyncLifetime
     public async Task Bulk_dispatch_reports_unknown_and_cross_tenant_recipients_without_failing_the_batch()
     {
         var adminClient = await AuthenticatedClientAsync(Roles.CompanyAdmin);
-        var (_, firstId) = await SignUpAndGetTokenAsync(_factory.CreateClient(), Roles.Employee);
-        var (_, secondId) = await SignUpAndGetTokenAsync(_factory.CreateClient(), Roles.Employee);
-        var (_, foreignId) = await SignUpAndGetTokenAsync(_factory.CreateClient(), Roles.Employee, _otherCompanyDomain);
+        var (_, firstId) = await SignUpAndGetTokenAsync(Factory.CreateClient(), Roles.Employee);
+        var (_, secondId) = await SignUpAndGetTokenAsync(Factory.CreateClient(), Roles.Employee);
+        var (_, foreignId) = await SignUpAndGetTokenAsync(Factory.CreateClient(), Roles.Employee, _otherCompanyDomain);
         var strangerId = Guid.NewGuid();
 
         var response = await adminClient.PostAsJsonAsync("/notifications/bulk", new CreateBulkNotificationRequest(
@@ -323,20 +338,22 @@ public class NotificationEndpointsTests : IAsyncLifetime
         // The N+1 acceptance criterion, asserted as a property rather than an absolute count:
         // whatever the handler costs for one recipient, it must cost exactly the same for
         // five. A per-recipient SELECT or SaveChanges would break this immediately.
-        var setupClient = _factory.CreateClient();
-        var (adminToken, _) = await SignUpAndGetTokenAsync(setupClient, Roles.CompanyAdmin);
+        // The counting factory is the ONLY host this test boots -- the shared `Factory` is
+        // deliberately never touched here. See the comment on that property.
+        var counter = new CommandCountingInterceptor();
+        using var countingFactory = new CountingWebApplicationFactory(_postgres.ConnectionString, counter);
+
+        var (adminToken, _) = await SignUpAndGetTokenAsync(countingFactory.CreateClient(), Roles.CompanyAdmin);
 
         var oneRecipient = new List<Guid>();
         var fiveRecipients = new List<Guid>();
         for (var i = 0; i < 5; i++)
         {
-            var (_, id) = await SignUpAndGetTokenAsync(_factory.CreateClient(), Roles.Employee);
+            var (_, id) = await SignUpAndGetTokenAsync(countingFactory.CreateClient(), Roles.Employee);
             fiveRecipients.Add(id);
             if (i == 0) oneRecipient.Add(id);
         }
 
-        var counter = new CommandCountingInterceptor();
-        using var countingFactory = new CountingWebApplicationFactory(_postgres.ConnectionString, counter);
         var client = countingFactory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
 
@@ -367,13 +384,14 @@ public class NotificationEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task A_failing_sender_records_the_failure_and_process_retries_it()
     {
-        var setupClient = _factory.CreateClient();
-        var (adminToken, _) = await SignUpAndGetTokenAsync(setupClient, Roles.CompanyAdmin);
-        var (_, recipientId) = await SignUpAndGetTokenAsync(_factory.CreateClient(), Roles.Employee);
-
+        // Likewise the only host this test boots.
         using var failingFactory = new StubSenderWebApplicationFactory(
             _postgres.ConnectionString,
             new FailingNotificationSender());
+
+        var (adminToken, _) = await SignUpAndGetTokenAsync(failingFactory.CreateClient(), Roles.CompanyAdmin);
+        var (_, recipientId) = await SignUpAndGetTokenAsync(failingFactory.CreateClient(), Roles.Employee);
+
         var client = failingFactory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
 
@@ -406,7 +424,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
     public async Task An_undeliverable_channel_is_rejected_rather_than_reported_as_sent(string channel)
     {
         var adminClient = await AuthenticatedClientAsync(Roles.CompanyAdmin);
-        var (_, recipientId) = await SignUpAndGetTokenAsync(_factory.CreateClient(), Roles.Employee);
+        var (_, recipientId) = await SignUpAndGetTokenAsync(Factory.CreateClient(), Roles.Employee);
 
         var response = await adminClient.PostAsJsonAsync("/notifications", Request(
             recipientId, _companyId, NotificationTypes.SystemNotification, channel));
@@ -418,7 +436,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
     public async Task An_unknown_type_or_malformed_data_is_rejected_with_a_message_not_a_500()
     {
         var adminClient = await AuthenticatedClientAsync(Roles.CompanyAdmin);
-        var (_, recipientId) = await SignUpAndGetTokenAsync(_factory.CreateClient(), Roles.Employee);
+        var (_, recipientId) = await SignUpAndGetTokenAsync(Factory.CreateClient(), Roles.Employee);
 
         var badType = await adminClient.PostAsJsonAsync("/notifications", new CreateNotificationRequest(
             recipientId, _companyId, "not_a_type", NotificationChannels.InApp, null, "T", "M"));
@@ -433,7 +451,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task Self_service_preferences_expose_five_and_a_partial_update_leaves_the_rest_alone()
     {
-        var client = _factory.CreateClient();
+        var client = Factory.CreateClient();
         var (token, userId) = await SignUpAndGetTokenAsync(client, Roles.Employee);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
@@ -485,7 +503,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task An_invalid_digest_frequency_is_rejected_and_changes_nothing()
     {
-        var client = _factory.CreateClient();
+        var client = Factory.CreateClient();
         var (token, userId) = await SignUpAndGetTokenAsync(client, Roles.Employee);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
@@ -505,7 +523,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
     public async Task An_employee_cannot_reach_the_admin_dispatch_or_list_surface()
     {
         var employeeClient = await AuthenticatedClientAsync(Roles.Employee);
-        var (_, recipientId) = await SignUpAndGetTokenAsync(_factory.CreateClient(), Roles.Employee);
+        var (_, recipientId) = await SignUpAndGetTokenAsync(Factory.CreateClient(), Roles.Employee);
 
         Assert.Equal(HttpStatusCode.Forbidden,
             (await employeeClient.GetAsync($"/notifications?companyId={_companyId}")).StatusCode);
@@ -519,7 +537,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
     public async Task The_admin_list_is_scoped_to_the_company_and_filterable_by_status()
     {
         var adminClient = await AuthenticatedClientAsync(Roles.CompanyAdmin);
-        var (_, recipientId) = await SignUpAndGetTokenAsync(_factory.CreateClient(), Roles.Employee);
+        var (_, recipientId) = await SignUpAndGetTokenAsync(Factory.CreateClient(), Roles.Employee);
 
         var created = await (await adminClient.PostAsJsonAsync("/notifications", Request(recipientId, _companyId)))
             .Content.ReadFromJsonAsync<NotificationDetail>();

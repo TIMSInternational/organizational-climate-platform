@@ -186,7 +186,7 @@ public static class NotificationEndpoints
             return Results.Json(new { message = "Recipient not found in this company" }, statusCode: 400);
         }
 
-        var now = DateTimeOffset.UtcNow;
+        var now = UtcNow();
         var notification = NewNotification(request.UserId, request.CompanyId, content, request.TemplateId, request.ScheduledFor, now);
         db.Notifications.Add(notification);
 
@@ -248,7 +248,7 @@ public static class NotificationEndpoints
         var known = recipients.Select(u => u.Id).ToHashSet();
         var unknown = requestedIds.Where(id => !known.Contains(id)).ToList();
 
-        var now = DateTimeOffset.UtcNow;
+        var now = UtcNow();
         var created = new List<Notification>(recipients.Count);
         foreach (var recipient in recipients)
         {
@@ -301,7 +301,7 @@ public static class NotificationEndpoints
             return Results.Forbid();
         }
 
-        var now = DateTimeOffset.UtcNow;
+        var now = UtcNow();
         var query = db.Notifications.Where(n =>
             NotificationStatuses.Retryable.Contains(n.Status)
             && n.ScheduledFor <= now
@@ -339,7 +339,7 @@ public static class NotificationEndpoints
             }
 
             attempted++;
-            await AttemptDeliveryAsync(notification, recipientPreferences, sender, loggerFactory, DateTimeOffset.UtcNow, cancellationToken);
+            await AttemptDeliveryAsync(notification, recipientPreferences, sender, loggerFactory, UtcNow(), cancellationToken);
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -395,8 +395,10 @@ public static class NotificationEndpoints
         // Per-user, not per-company. A CompanyAdmin is not privileged here.
         if (notification.UserId != userId.Value) return Results.Forbid();
 
+        var now = UtcNow();
+
         // Idempotent: re-reading does not move the timestamp, so "first opened at" stays true.
-        notification.OpenedAt ??= DateTimeOffset.UtcNow;
+        notification.OpenedAt ??= now;
 
         // "opened" is a later state than "sent"/"delivered", so it may advance those -- but it
         // must never overwrite "failed" or "cancelled", which record why a delivery did not
@@ -406,7 +408,7 @@ public static class NotificationEndpoints
             notification.Status = NotificationStatuses.Opened;
         }
 
-        notification.UpdatedAt = DateTimeOffset.UtcNow;
+        notification.UpdatedAt = now;
         await db.SaveChangesAsync(cancellationToken);
 
         return Results.Ok(DetailOf(notification));
@@ -453,8 +455,9 @@ public static class NotificationEndpoints
 
         // These are consent flags in everything but name, so a change to one is a change to
         // what the user has agreed to receive -- stamped the same way UserConsent changes are.
-        user.ConsentUpdatedAt = DateTimeOffset.UtcNow;
-        user.UpdatedAt = DateTimeOffset.UtcNow;
+        var now = UtcNow();
+        user.ConsentUpdatedAt = now;
+        user.UpdatedAt = now;
         await db.SaveChangesAsync(cancellationToken);
 
         return Results.Ok(NotificationPreferenceUpdate.ToResponse(user.Notifications));
@@ -675,6 +678,26 @@ public static class NotificationEndpoints
         }
 
         notification.UpdatedAt = now;
+    }
+
+    /// <summary>
+    /// UTC now, truncated to microseconds -- the precision Postgres <c>timestamptz</c>
+    /// actually stores.
+    ///
+    /// A .NET tick is 100ns, so an untruncated timestamp written here comes back from a
+    /// later read up to nine ticks smaller than the value this endpoint echoed in its
+    /// response. That made <c>POST /notifications/{id}/read</c> look non-idempotent: the
+    /// first call returned its in-memory <c>OpenedAt</c> and every later call returned the
+    /// round-tripped one, so a client diffing the two saw the "first opened at" timestamp
+    /// move. It was never actually moving in the database -- but a response that does not
+    /// equal what was stored is a bug whichever way round it is. Truncating at the source
+    /// makes what we return equal to what we persist, for every timestamp on this surface.
+    /// Caught by CI, not by reasoning: it needs a real Postgres round trip to show up.
+    /// </summary>
+    private static DateTimeOffset UtcNow()
+    {
+        var now = DateTimeOffset.UtcNow;
+        return now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMicrosecond));
     }
 
     private static string? Truncate(string? value)
