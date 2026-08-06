@@ -302,7 +302,6 @@
     "cancelled": "Cancelado",
     "value": "Valor",
     "noCompanyAssociated": "No hay ninguna empresa asociada a su cuenta.",
-    "superAdminScopedBrowsingUnavailable": "La navegación por empresa para SuperAdmin en {feature} aún no está disponible; consulte el issue #57.",
     "newField": "Nuevo Campo",
     "newCompany": "Nueva Empresa",
     "createField": "Crear Campo",
@@ -322,6 +321,13 @@
     "sending": "Enviando…",
     "allStatuses": "Todos los Estados",
     "noneTopLevel": "Ninguno (nivel superior)"
+  },
+  "companyContext": {
+    "label": "Contexto de empresa",
+    "noneSelected": "Ninguna empresa seleccionada",
+    "chooseACompany": "Elija una empresa",
+    "chooseACompanyDescription": "Esta p\u00e1gina muestra una empresa a la vez. Elija una en el selector de empresa de la parte superior de la pantalla para continuar.",
+    "loadFailed": "No se pudieron cargar las empresas"
   },
   "dashboard": {
     "title": "Panel de Control",

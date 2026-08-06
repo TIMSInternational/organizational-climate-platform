@@ -130,6 +130,50 @@ public class ActionPlanEndpointsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, crossGet.StatusCode);
     }
 
+    /// <summary>
+    /// #124's privilege check, on the exact parameter the new company-context selector
+    /// drives.
+    /// </summary>
+    /// <remarks>
+    /// The web app's SuperAdmin company selector works by sending an explicit
+    /// <c>?companyId=</c> on endpoints that already took one. That is only safe because
+    /// the parameter is not an override: <c>CanAccessCompany</c> short-circuits on
+    /// SuperAdmin and otherwise compares the caller's own claim to the requested id, so a
+    /// CompanyAdmin supplying someone else's id is refused rather than scoped to it.
+    /// <para>
+    /// The neighbouring <c>CompanyAdmin_cannot_create_or_read_plans_in_another_company</c>
+    /// covers POST and GET-by-id; this covers the LIST route, which is the one the
+    /// selector actually drives and the one where a leak would return another tenant's
+    /// whole plan set rather than a single row.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task CompanyAdmin_cannot_list_another_companys_plans_via_the_companyId_parameter()
+    {
+        var client = _factory.CreateClient();
+        var tokenA = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var tokenB = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyBDomain, _companyBId);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenB);
+        var createResponse = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "B's only plan", "desc", _companyBId, null, DateTimeOffset.UtcNow.AddDays(10), "low", null, null, null, null, null, null));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenA);
+
+        // Refused outright -- not silently rewritten to A's own company, which would
+        // return an empty list and read as "B has no plans".
+        var crossList = await client.GetAsync($"/action-plans?companyId={_companyBId}");
+        Assert.Equal(HttpStatusCode.Forbidden, crossList.StatusCode);
+
+        // And the same caller is still served their own company, so the guard is not
+        // simply refusing everything.
+        var ownList = await client.GetAsync($"/action-plans?companyId={_companyAId}");
+        Assert.Equal(HttpStatusCode.OK, ownList.StatusCode);
+        var plans = (await ownList.Content.ReadFromJsonAsync<ActionPlanListResponse>())!.ActionPlans;
+        Assert.DoesNotContain(plans, p => p.CompanyId == _companyBId);
+    }
+
     [Fact]
     public async Task CompanyAdmin_can_update_status_and_priority()
     {
