@@ -12,7 +12,9 @@ export interface User {
 }
 
 export interface UserDetail extends User {
-  companyId: string
+  // Null for a user with no tenant -- a global super_admin. The API's UserDetail.CompanyId
+  // became Guid? in #191, so this can genuinely arrive as null.
+  companyId: string | null
   managerId: string | null
 }
 

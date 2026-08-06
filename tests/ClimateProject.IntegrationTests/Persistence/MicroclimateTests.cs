@@ -60,7 +60,7 @@ public class MicroclimateTests(PostgresContainerFixture postgres)
         var microclimate = new Microclimate
         {
             Id = Guid.NewGuid(),
-            Title = "Q3 Pulse Check",
+            TitleEn = "Q3 Pulse Check",
             CompanyId = company.Id,
             CreatedBy = creator.Id,
             TemplateId = template.Id,
@@ -112,7 +112,7 @@ public class MicroclimateTests(PostgresContainerFixture postgres)
         var now = DateTimeOffset.UtcNow;
         var microclimate = new Microclimate
         {
-            Id = Guid.NewGuid(), Title = "Uses Template", CompanyId = company.Id, CreatedBy = creator.Id,
+            Id = Guid.NewGuid(), TitleEn = "Uses Template", CompanyId = company.Id, CreatedBy = creator.Id,
             TemplateId = template.Id,
             Scheduling = new MicroclimateScheduling { StartTime = now, EndTime = now.AddMinutes(30) },
             CreatedAt = now, UpdatedAt = now,
@@ -139,7 +139,7 @@ public class MicroclimateTests(PostgresContainerFixture postgres)
         var now = DateTimeOffset.UtcNow;
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO microclimates ("Id", title, company_id, created_by, scheduling_start_time, scheduling_end_time, created_at, updated_at)
+             INSERT INTO microclimates ("Id", title_en, company_id, created_by, scheduling_start_time, scheduling_end_time, created_at, updated_at)
              VALUES ({minimalId}, {"Minimal"}, {company.Id}, {creator.Id}, {now}, {now.AddMinutes(30)}, {now}, {now})
              """);
 

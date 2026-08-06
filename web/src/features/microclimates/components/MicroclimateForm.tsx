@@ -36,9 +36,17 @@ export default function MicroclimateForm({ templates = [], onSubmit }: Microclim
     setValues({ ...values, questions: values.questions.map((q, i) => (i === index ? question : q)) })
   }
 
+  // Each comma-separated entry becomes one option whose stable value is derived
+  // server-side from the label it is authored with. A single-language author never
+  // sees the value; it exists so the same choice stays one value once the question
+  // is translated (#195).
   function updateOptions(index: number, raw: string) {
     setOptionsDraft({ ...optionsDraft, [index]: raw })
-    const options = raw.split(',').map((o) => o.trim()).filter(Boolean)
+    const options = raw
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean)
+      .map((label) => ({ label }))
     updateQuestion(index, { ...values.questions[index], options: options.length > 0 ? options : undefined })
   }
 
@@ -114,7 +122,7 @@ export default function MicroclimateForm({ templates = [], onSubmit }: Microclim
       <h3>{t('surveys.questions')}</h3>
       {values.questions.map((question, index) => (
         <div key={index}>
-          <input placeholder={t('surveys.questionText')} value={question.text} onChange={(e) => updateQuestion(index, { ...question, text: e.target.value })} />
+          <input placeholder={t('surveys.questionText')} value={typeof question.text === 'string' ? question.text : ''} onChange={(e) => updateQuestion(index, { ...question, text: e.target.value })} />
           <select value={question.type} onChange={(e) => updateQuestion(index, { ...question, type: e.target.value })}>
             {QUESTION_TYPES.map((t) => (
               <option key={t} value={t}>{t}</option>
@@ -125,7 +133,7 @@ export default function MicroclimateForm({ templates = [], onSubmit }: Microclim
               {t('microclimates.optionsCommaSeparatedMin2')}
               <input
                 placeholder={t('users.optionsExample')}
-                value={optionsDraft[index] ?? (question.options ?? []).join(', ')}
+                value={optionsDraft[index] ?? (question.options ?? []).map((o) => o.label).join(', ')}
                 onChange={(e) => updateOptions(index, e.target.value)}
               />
             </label>

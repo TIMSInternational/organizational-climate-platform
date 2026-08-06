@@ -12,7 +12,8 @@ public sealed record InvitationDetail(
     DateTimeOffset ExpiresAt,
     DateTimeOffset? SentAt,
     DateTimeOffset? AcceptedAt,
-    int ReminderCount);
+    int ReminderCount,
+    IReadOnlyDictionary<string, string> Demographics);
 
 public sealed record InvitationListResponse(IReadOnlyList<InvitationDetail> Invitations);
 
@@ -21,11 +22,16 @@ public sealed record CreateInvitationRequest(
     string Email,
     Guid CompanyId,
     Guid? DepartmentId,
-    string Role);
+    string Role,
+    // Pre-assigned at invitation time -- most companies pre-load their roster from
+    // CSV/Excel with demographics already attached. Partial by design: required
+    // fields are not enforced until the member's own profile update.
+    Dictionary<string, string?>? Demographics = null);
 
 public sealed record CreateShareableLinkRequest(
     Guid CompanyId,
     Guid? DepartmentId,
-    string Role);
+    string Role,
+    Dictionary<string, string?>? Demographics = null);
 
 public sealed record AcceptInvitationRequest(string? Email, string Name, string Password);

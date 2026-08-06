@@ -30,7 +30,7 @@ public class SurveyDraftAndVersionTests(PostgresContainerFixture postgres)
 
         var survey = new Survey
         {
-            Id = Guid.NewGuid(), CompanyId = company.Id, CreatedBy = user.Id, Title = "Survey", Type = "custom",
+            Id = Guid.NewGuid(), CompanyId = company.Id, CreatedBy = user.Id, TitleEn = "Survey", Type = "custom",
             StartDate = DateTimeOffset.UtcNow, EndDate = DateTimeOffset.UtcNow.AddDays(7),
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };
@@ -74,7 +74,7 @@ public class SurveyDraftAndVersionTests(PostgresContainerFixture postgres)
 
         var version = new SurveyVersion
         {
-            Id = Guid.NewGuid(), SurveyId = survey.Id, VersionNumber = 1, Title = survey.Title,
+            Id = Guid.NewGuid(), SurveyId = survey.Id, VersionNumber = 1, TitleEn = survey.TitleEn,
             Changes = ["Initial version"], Reason = "Created", CreatedBy = user.Id,
             QuestionsSnapshot = "[]", SettingsSnapshot = "{}",
             CreatedAt = DateTimeOffset.UtcNow,
@@ -90,7 +90,7 @@ public class SurveyDraftAndVersionTests(PostgresContainerFixture postgres)
 
         db.SurveyVersions.Add(new SurveyVersion
         {
-            Id = Guid.NewGuid(), SurveyId = survey.Id, VersionNumber = 1, Title = survey.Title,
+            Id = Guid.NewGuid(), SurveyId = survey.Id, VersionNumber = 1, TitleEn = survey.TitleEn,
             Reason = "Duplicate version number", CreatedBy = user.Id,
             CreatedAt = DateTimeOffset.UtcNow,
         });

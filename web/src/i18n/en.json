@@ -802,7 +802,8 @@
     "loadingLiveResults": "Loading live results…",
     "liveResultsOnlyWhenActive": "Live results are only available while this microclimate is active.",
     "responsesLabel": "Responses:",
-    "engagementLabel": "Engagement:"
+    "engagementLabel": "Engagement:",
+    "untitled": "Untitled microclimate"
   },
   "navigation": {
     "dashboard": "Dashboard",

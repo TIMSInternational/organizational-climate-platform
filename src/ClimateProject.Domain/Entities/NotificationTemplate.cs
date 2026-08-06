@@ -6,10 +6,17 @@ public class NotificationTemplate
     public required string Name { get; set; }
     public required string Type { get; set; }
     public required string Channel { get; set; }
-    public string? Subject { get; set; }
-    public required string Title { get; set; }
-    public required string Content { get; set; }
-    public string? HtmlContent { get; set; }
+    // These are the emails a bilingual workforce receives, which puts them in Tier 1
+    // alongside survey content. In scope for the schema, deferred for the UI --
+    // #97 defines the notification surface and owns the editor.
+    public string? SubjectEn { get; set; }
+    public string? SubjectEs { get; set; }
+    public string? TitleEn { get; set; }
+    public string? TitleEs { get; set; }
+    public string? ContentEn { get; set; }
+    public string? ContentEs { get; set; }
+    public string? HtmlContentEn { get; set; }
+    public string? HtmlContentEs { get; set; }
     public Guid? CompanyId { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsDefault { get; set; }

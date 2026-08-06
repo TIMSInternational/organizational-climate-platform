@@ -266,4 +266,126 @@ public class InvitationEndpointsTests : IAsyncLifetime
         var leaderListResponse = await client.GetAsync($"/admin/invitations?companyId={_companyAId}");
         Assert.Equal(HttpStatusCode.Forbidden, leaderListResponse.StatusCode);
     }
+
+    private async Task<Guid> SeedDemographicFieldAsync(Guid companyId, string field, string type, List<string>? options, bool required = false)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var now = DateTimeOffset.UtcNow;
+        var definition = new DemographicField
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyId,
+            Field = field,
+            LabelEn = field,
+            Type = type,
+            Required = required,
+            Order = 0,
+            IsActive = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.DemographicFields.Add(definition);
+        DemographicOptionSeed.Add(db, definition.Id, options);
+        await db.SaveChangesAsync();
+        return definition.Id;
+    }
+
+    [Fact]
+    public async Task An_invitation_can_pre_assign_demographics_that_are_stored_normalised()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var fieldId = await SeedDemographicFieldAsync(_companyAId, "work_mode", "select", ["remote", "onsite"]);
+
+        var response = await client.PostAsJsonAsync("/admin/invitations", new CreateInvitationRequest(
+            InvitationType: InvitationValidation.TypeEmployeeDirect,
+            Email: "preassigned@invitee.test",
+            CompanyId: _companyAId,
+            DepartmentId: null,
+            Role: Roles.Employee,
+            Demographics: new Dictionary<string, string?> { ["work_mode"] = "remote" }));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<InvitationDetail>();
+        Assert.Equal("remote", created!.Demographics["work_mode"]);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var row = await db.UserInvitationDemographics.SingleAsync(d => d.InvitationId == created.Id);
+        Assert.Equal(fieldId, row.DemographicFieldId);
+        Assert.Equal("remote", row.Value);
+
+        var list = await client.GetAsync($"/admin/invitations?companyId={_companyAId}");
+        var listed = await list.Content.ReadFromJsonAsync<InvitationListResponse>();
+        var listedInvitation = Assert.Single(listed!.Invitations, i => i.Id == created.Id);
+        Assert.Equal("remote", listedInvitation.Demographics["work_mode"]);
+    }
+
+    [Fact]
+    public async Task An_invitation_is_rejected_when_a_pre_assigned_demographic_is_invalid()
+    {
+        // The reason UserInvitation.Demographics had to go too: this value could
+        // previously be written unchecked and only became a problem long after the
+        // roster upload that produced it.
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        await SeedDemographicFieldAsync(_companyAId, "work_mode", "select", ["remote", "onsite"]);
+
+        var response = await client.PostAsJsonAsync("/admin/invitations", new CreateInvitationRequest(
+            InvitationType: InvitationValidation.TypeEmployeeDirect,
+            Email: "bad-demographic@invitee.test",
+            CompanyId: _companyAId,
+            DepartmentId: null,
+            Role: Roles.Employee,
+            Demographics: new Dictionary<string, string?> { ["work_mode"] = "hybrid" }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.False(await db.UserInvitations.AnyAsync(i => i.Email == "bad-demographic@invitee.test"));
+    }
+
+    [Fact]
+    public async Task An_invitation_may_omit_a_required_demographic()
+    {
+        // Companion to the rejection above: pre-assignment is partial by design --
+        // the roster only knows some fields, and the member fills the rest in later.
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        await SeedDemographicFieldAsync(_companyAId, "work_mode", "select", ["remote", "onsite"], required: true);
+
+        var response = await client.PostAsJsonAsync("/admin/invitations", new CreateInvitationRequest(
+            InvitationType: InvitationValidation.TypeEmployeeDirect,
+            Email: "partial-demographic@invitee.test",
+            CompanyId: _companyAId,
+            DepartmentId: null,
+            Role: Roles.Employee,
+            Demographics: null));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_shareable_link_validates_its_pre_assigned_demographics_too()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        await SeedDemographicFieldAsync(_companyAId, "work_mode", "select", ["remote", "onsite"]);
+
+        var rejected = await client.PostAsJsonAsync("/admin/invitations/shareable-link",
+            new CreateShareableLinkRequest(_companyAId, null, Roles.Employee, new Dictionary<string, string?> { ["work_mode"] = "hybrid" }));
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+
+        var accepted = await client.PostAsJsonAsync("/admin/invitations/shareable-link",
+            new CreateShareableLinkRequest(_companyAId, null, Roles.Employee, new Dictionary<string, string?> { ["work_mode"] = "onsite" }));
+        Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
+        var link = await accepted.Content.ReadFromJsonAsync<InvitationDetail>();
+        Assert.Equal("onsite", link!.Demographics["work_mode"]);
+    }
 }

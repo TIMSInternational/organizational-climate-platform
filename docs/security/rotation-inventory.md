@@ -75,10 +75,34 @@ Consequences to plan for:
 
 | Item | Where | Notes | Rotated? |
 |---|---|---|---|
-| Supabase Postgres password | Secrets Manager (`DatabaseConnectionStringSecretArn`) → env `ConnectionStrings__ClimateProject` | Supabase project `organizational-climate-platform`, `us-east-1` (README). **Two places hold this password, and rotating one is the classic miss.** Runtime uses the **transaction pooler, port 6543** (Secrets Manager). EF migrations use the **session pooler** — *same host*, port **5432**, username `postgres.<project-ref>` — held separately as the `MIGRATION_DATABASE_CONNECTION_STRING` **secret on the `production` GitHub environment**, not in Secrets Manager. Same password, two strings, two systems: update and verify **both** or migrations break later, in a different session, looking unrelated. Do **not** rotate the migration string onto `db.<project-ref>.supabase.co` (the dashboard's "direct connection") — that host is **IPv6-only and unreachable from GitHub Actions**; `deploy-prod.yml` now rejects it outright (#212). | ☐ |
+| Supabase Postgres password | Secrets Manager (`DatabaseConnectionStringSecretArn`) → env `ConnectionStrings__ClimateProject` | Supabase project `organizational-climate-platform`, `us-east-1` (README). **Two places hold this password, and rotating one is the classic miss.** Runtime currently uses the **transaction pooler, port 6543** (Secrets Manager) — **this is a defect, not the design; see the warning below.** EF migrations use the **session pooler** — *same host*, port **5432**, username `postgres.<project-ref>` — held separately as the `MIGRATION_DATABASE_CONNECTION_STRING` **secret on the `production` GitHub environment**, not in Secrets Manager. Same password, two strings, two systems: update and verify **both** or migrations break later, in a different session, looking unrelated. **Both strings should be on port 5432**; whoever rotates this password is the most likely person to fix the runtime port at the same time, since they are rewriting the value anyway. Do **not** rotate the migration string onto `db.<project-ref>.supabase.co` (the dashboard's "direct connection") — that host is **IPv6-only and unreachable from GitHub Actions**; `deploy-prod.yml` now rejects it outright (#212). | ☐ |
 | Supabase `service_role` key | Supabase dashboard | **Verify whether it is used at all.** No reference found anywhere in this repo — the .NET stack connects over Postgres, not the Supabase REST API. If genuinely unused, mark N/A with that reason rather than rotating it. | ☐ |
 | Supabase `anon` key | Supabase dashboard | Same — no reference in this repo. Likely legacy-only or unused. | ☐ |
 | MongoDB Atlas credentials / connection string | Legacy Vercel env (`MONGODB_URI`) | **Legacy-only.** The new stack is Postgres; no Mongo driver or connection string exists in this repo. Still must be rotated — the legacy build could read it — but it does not touch the new stack. Consider whether the Atlas cluster should simply be decommissioned instead, which is strictly better than rotating a credential for a database nothing should use again. | ☐ |
+
+> **The runtime port is wrong today (#220).** Earlier revisions of this file recorded
+> "transaction pooler, port 6543" for the runtime path as if it were the intended
+> configuration. It is not — it is the bug. Supavisor's **transaction** mode hands a different
+> backend to each statement, which a client-side pool like Npgsql's cannot work with: Npgsql
+> holds connections open across statements and expects session state to survive between them.
+> Measured on the live service: ten consecutive probes of `/ready` (which round-trips Postgres)
+> alternated perfectly — 200, timeout, 200, timeout — five of ten hanging, while `/health`
+> returned 200 every time because it is a static literal that opens no connection.
+>
+> The runtime string wants the **session pooler on port 5432**, exactly like the migration
+> string: same host, same password, same `postgres.<project-ref>` username, only the port
+> differs. Do **not** "fix" it by moving to `db.<project-ref>.supabase.co` — that host is
+> IPv6-only, as the migration-string note above explains.
+>
+> The value lives in AWS Secrets Manager as
+> `climate-project-api/prod/database-connection-string` and can only be changed by someone
+> with write access to that secret. It is **not** fixed by anything in this repository. What
+> the repository does do, as of #220: `DatabaseConnectionStringPolicy` bounds the Npgsql pool
+> and logs a startup **warning** naming this issue whenever it sees port 6543. That guard is
+> deliberately a warning and not a hard startup failure, because the live secret still says
+> 6543 and a hard failure would stop production booting on the next deploy. Once the secret is
+> flipped and a deploy comes up green, harden it into a throw — the `TODO(#220)` in
+> `src/ClimateProject.Api/Program.cs` marks the spot.
 
 ### C. Internal service auth
 

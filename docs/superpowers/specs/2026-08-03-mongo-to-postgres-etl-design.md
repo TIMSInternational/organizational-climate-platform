@@ -293,7 +293,7 @@ into a column whose contents no longer evaluate.
 | `department_id` (String) | `DepartmentId` (`Guid?`) | resolve; dangling → report |
 | `manager_id` (String) | `ManagerId` (`Guid?`) | second pass; #150 notes the FK is missing |
 | `preferences.{language,timezone,dashboard_layout,theme}` | `Preferences.*` | direct |
-| `preferences.notification_settings.*` (6 fields) | — | ⚠️ **#192** — no target home |
+| `preferences.notification_settings.*` (6 fields) | `Notifications` (6 fields) | direct, 1:1 — **#192** resolved. Flattened one level: legacy nests these under `preferences`, the target hangs them off `User` beside `Consent`. All six carry over, including `push_notifications`, which is stored but not yet exposed by the API (#82). Leave every field the ETL cannot read at its DDL default — the four `email_*` are opt-outs real users have set, and writing a value the legacy doc did not contain re-subscribes them |
 | `demographics` (schemaless) | `Demographics` (`string?`) | ⚠️ **#193** |
 | `consent_preferences` (6 fields) | `Consent` (6 fields) | direct, 1:1 |
 | `consent_updated_at` | `ConsentUpdatedAt` | direct |

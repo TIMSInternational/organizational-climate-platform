@@ -4,17 +4,53 @@ public class Question
 {
     public Guid Id { get; set; }
     public Guid SurveyId { get; set; }
-    public required string Text { get; set; }
+    public string? TextEn { get; set; }
+    public string? TextEs { get; set; }
     public required string Type { get; set; }
-    public string[]? Options { get; set; }
     public int? ScaleMin { get; set; }
     public int? ScaleMax { get; set; }
-    public string? ScaleLabelMin { get; set; }
-    public string? ScaleLabelMax { get; set; }
+    public string? ScaleLabelMinEn { get; set; }
+    public string? ScaleLabelMinEs { get; set; }
+    public string? ScaleLabelMaxEn { get; set; }
+    public string? ScaleLabelMaxEs { get; set; }
     public bool CommentRequired { get; set; } = true;
-    public string CommentPrompt { get; set; } = "Please explain your answer:";
-    public string? BinaryCommentConfig { get; set; }
+
+    // Was one column with an English string as its DATABASE default, so a
+    // Spanish-only survey got an English prompt out of the DDL itself (#195's one
+    // live defect rather than a gap). Now one column per language, each with a
+    // default in its own language.
+    public string CommentPromptEn { get; set; } = "Please explain your answer:";
+    public string CommentPromptEs { get; set; } = "Por favor explica tu respuesta:";
+
+    public string? BinaryCommentConfigEn { get; set; }
+    public string? BinaryCommentConfigEs { get; set; }
     public bool Required { get; set; }
     public int Order { get; set; }
     public string? Category { get; set; }
+}
+
+/// <summary>
+/// Options moved out of a <c>text[]</c> column and into rows carrying a stable,
+/// locale-independent <see cref="Value"/> (#195).
+///
+/// Two defects made this mandatory rather than tidy. Index-aligned
+/// <c>options_en</c>/<c>options_es</c> arrays cannot be constrained to the same
+/// length, so a one-element drift silently renumbers every respondent's answer. And
+/// more seriously, answers are stored by the option's own text: with per-language
+/// text, two respondents choosing the same option in different languages store two
+/// unrelated strings, splitting every distribution, chart, benchmark and export --
+/// with no error and with row counts that reconcile exactly.
+///
+/// <see cref="Value"/> is what lands in <c>question_responses.response_value</c>; the
+/// labels are display only. <c>QuestionTypes.YesNo</c> already worked this way
+/// (comparing to the codes "yes"/"no"), so this is the grain of the codebase, not a
+/// new invention.
+/// </summary>
+public class QuestionOption
+{
+    public Guid QuestionId { get; set; }
+    public int Order { get; set; }
+    public required string Value { get; set; }
+    public string? LabelEn { get; set; }
+    public string? LabelEs { get; set; }
 }

@@ -802,7 +802,8 @@
     "loadingLiveResults": "Cargando resultados en vivo…",
     "liveResultsOnlyWhenActive": "Los resultados en vivo solo están disponibles mientras este microclima está activo.",
     "responsesLabel": "Respuestas:",
-    "engagementLabel": "Participación:"
+    "engagementLabel": "Participación:",
+    "untitled": "Microclima sin título"
   },
   "navigation": {
     "dashboard": "Panel de Control",

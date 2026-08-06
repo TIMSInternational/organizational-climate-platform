@@ -37,8 +37,15 @@ var builder = WebApplication.CreateBuilder(args);
 // IConfiguration read the comment above requires: the Configure delegate runs from the
 // options-validation hosted service *after* builder.Build(), which is late enough for
 // WebApplicationFactory's in-memory overrides to be visible.
+//
+// The connection string is additionally passed through DatabaseConnectionStringPolicy, which
+// bounds the Npgsql pool and reports on the pooler port (#220). Both belong here rather than
+// in the AddDbContext delegate below for the same reason the guard above does: this runs once,
+// at startup, where its warning is visible in the deploy's logs.
+const string DatabaseStartupLogCategory = "ClimateProject.Api.Database";
+
 builder.Services.AddOptions<DatabaseOptions>()
-    .Configure<IConfiguration>((options, configuration) =>
+    .Configure<IConfiguration, ILoggerFactory>((options, configuration, loggerFactory) =>
     {
         var connectionString = configuration.GetConnectionString("ClimateProject");
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -46,7 +53,47 @@ builder.Services.AddOptions<DatabaseOptions>()
             throw new InvalidOperationException("Missing ConnectionStrings:ClimateProject configuration.");
         }
 
-        options.ConnectionString = connectionString;
+        var policy = DatabaseConnectionStringPolicy.Apply(connectionString);
+        var logger = loggerFactory.CreateLogger(DatabaseStartupLogCategory);
+
+        if (policy.UsesTransactionPoolerPort)
+        {
+            // WARNING, NOT A HARD FAILURE -- DELIBERATELY. THE LIVE SECRET STILL SAYS 6543.
+            //
+            // Every other startup guard in this file throws, because #189 established that a
+            // deploy which boots misconfigured is worse than one that refuses to boot. This
+            // one is the exception, and only because of ordering: the fix is a value in AWS
+            // Secrets Manager (climate-project-api/prod/database-connection-string), not a
+            // value in this repository, and it has not been changed yet. Throwing here would
+            // mean the next deploy of *this commit* fails its App Runner health check and
+            // rolls back -- turning a service that is intermittently slow into one that is
+            // entirely down, in order to complain about a value the deploy cannot fix.
+            //
+            // TODO(#220): once the secret is flipped from 6543 to 5432 and a deploy has come
+            // up green on it, harden this into a throw like the guards above, so the port
+            // cannot silently regress. That change is safe only in that order.
+            logger.LogWarning(
+                "Database connection string uses port {Port}, the Supabase Supavisor TRANSACTION " +
+                "pooler. This service holds pooled connections open across statements, which " +
+                "transaction mode cannot support: it is the cause of the intermittent /ready " +
+                "timeouts in issue #220. Expected port {ExpectedPort} (the SESSION pooler -- same " +
+                "host, same credentials). Fix the Secrets Manager value " +
+                "'climate-project-api/prod/database-connection-string'; it cannot be fixed from " +
+                "this repository.",
+                policy.Port,
+                DatabaseConnectionStringPolicy.SupavisorSessionPoolerPort);
+        }
+
+        if (policy.MaxPoolSizeApplied)
+        {
+            logger.LogInformation(
+                "Applied default Npgsql Maximum Pool Size of {MaxPoolSize}; the connection string " +
+                "did not specify one (#220). Set 'Maximum Pool Size' in the connection string to " +
+                "override.",
+                policy.MaxPoolSize);
+        }
+
+        options.ConnectionString = policy.ConnectionString;
     })
     .ValidateOnStart();
 

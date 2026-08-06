@@ -31,7 +31,7 @@ public class MicroclimateAiInsightTests(PostgresContainerFixture postgres)
         var now = DateTimeOffset.UtcNow;
         var microclimate = new Microclimate
         {
-            Id = Guid.NewGuid(), Title = "Pulse", CompanyId = company.Id, CreatedBy = creator.Id,
+            Id = Guid.NewGuid(), TitleEn = "Pulse", CompanyId = company.Id, CreatedBy = creator.Id,
             Scheduling = new MicroclimateScheduling { StartTime = now, EndTime = now.AddMinutes(30) },
             CreatedAt = now, UpdatedAt = now,
         };
