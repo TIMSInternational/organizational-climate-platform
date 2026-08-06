@@ -342,6 +342,7 @@ app.MapDemographicFieldEndpoints();
 app.MapBulkImportEndpoints();
 app.MapActionPlanEndpoints();
 app.MapActionPlanTemplateEndpoints();
+app.MapNotificationTemplateEndpoints();
 app.MapTrackingPickerEndpoints();
 app.MapTrackingInternalEndpoints();
 app.MapMicroclimateEndpoints();
