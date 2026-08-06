@@ -27,7 +27,7 @@ describe('notificationPreferences api client', () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(preferences), { status: 200 }))
     const result = await getNotificationPreferences(baseUrl)
 
-    expect(fetch).toHaveBeenCalledWith(`${baseUrl}/me/notification-preferences`, expect.anything())
+    expect(fetch).toHaveBeenCalledWith(`${baseUrl}/notifications/preferences`, expect.anything())
     expect(result).toEqual(preferences)
   })
 

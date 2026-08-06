@@ -34,8 +34,16 @@ export interface NotificationPreferences {
  * preferences because there is nothing to address but their own. Company scoping is
  * irrelevant here: this is a per-person rule, so even a CompanyAdmin has no path to a
  * colleague's opt-outs.
+ *
+ * This is #97's endpoint, not a second one. #97 and #103 were built in parallel and both
+ * shipped a self-service preferences API — #97 at this path with partial-update semantics,
+ * #103 at `/me/notification-preferences` with full-replacement semantics. Two live routes
+ * for one resource, disagreeing about what an omitted field means, is worse than either
+ * alone, so #97's kept the surface (it owns dispatch, which consults the same preferences
+ * at delivery time) and this page points at it. A full payload is a valid partial one, so
+ * the page's behaviour is unchanged.
  */
-const PATH = '/me/notification-preferences'
+const PATH = '/notifications/preferences'
 
 export async function getNotificationPreferences(baseUrl: string): Promise<NotificationPreferences> {
   const response = await authFetch(`${baseUrl}${PATH}`)

@@ -15,6 +15,10 @@ import MicroclimatesListPage from '../features/microclimates/pages/Microclimates
 import MicroclimateDetailPage from '../features/microclimates/pages/MicroclimateDetailPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
 import NotificationPreferencesPage from '../features/notifications/pages/NotificationPreferencesPage'
+import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
+import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
+import ReportsListPage from '../features/reports/pages/ReportsListPage'
+import AnalyticsDashboardPage from '../features/analytics/pages/AnalyticsDashboardPage'
 import { getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import { resolveInitialRoute } from './resolveInitialRoute'
@@ -82,6 +86,8 @@ export const router = createBrowserRouter([
               { path: '/admin/companies/:id', element: <CompanyDetailPage /> },
               { path: '/admin/companies/:companyId/users', element: <UsersListPage /> },
               { path: '/admin/companies/:companyId/demographic-fields', element: <DemographicFieldsPage /> },
+              { path: '/admin/companies/:companyId/reports', element: <ReportsListPage /> },
+              { path: '/admin/companies/:companyId/analytics', element: <AnalyticsDashboardPage /> },
               { path: '/admin/system-settings', element: <SystemSettingsPage /> },
               { path: '/action-plans', element: <ActionPlansListPage /> },
               { path: '/action-plans/:id', element: <ActionPlanDetailPage /> },
@@ -90,6 +96,8 @@ export const router = createBrowserRouter([
               // Not under /admin: every authenticated role owns their own preferences,
               // and the API behind this page takes no user id at all (#103).
               { path: '/settings/notifications', element: <NotificationPreferencesPage /> },
+              { path: '/analytics/benchmarks', element: <BenchmarksPage /> },
+              { path: '/analytics/ai-insights', element: <AIInsightsPage /> },
             ],
           },
         ],
