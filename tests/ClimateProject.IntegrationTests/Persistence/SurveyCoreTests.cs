@@ -44,7 +44,7 @@ public class SurveyCoreTests(PostgresContainerFixture postgres)
             Id = Guid.NewGuid(),
             CompanyId = company.Id,
             CreatedBy = user.Id,
-            Title = "Q3 Climate Survey",
+            TitleEn = "Q3 Climate Survey",
             Type = "general_climate",
             StartDate = DateTimeOffset.UtcNow,
             EndDate = DateTimeOffset.UtcNow.AddDays(14),
@@ -78,16 +78,16 @@ public class SurveyCoreTests(PostgresContainerFixture postgres)
 
         var survey = new Survey
         {
-            Id = Guid.NewGuid(), CompanyId = company.Id, CreatedBy = user.Id, Title = "Pulse", Type = "custom",
+            Id = Guid.NewGuid(), CompanyId = company.Id, CreatedBy = user.Id, TitleEn = "Pulse", Type = "custom",
             StartDate = DateTimeOffset.UtcNow, EndDate = DateTimeOffset.UtcNow.AddDays(7),
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };
         db.Surveys.Add(survey);
         await db.SaveChangesAsync();
 
-        var trigger = new Question { Id = Guid.NewGuid(), SurveyId = survey.Id, Text = "Are you satisfied?", Type = "yes_no", Order = 0 };
-        var target = new Question { Id = Guid.NewGuid(), SurveyId = survey.Id, Text = "Why not?", Type = "open_ended", Order = 1 };
-        var emojiQuestion = new Question { Id = Guid.NewGuid(), SurveyId = survey.Id, Text = "How do you feel?", Type = "emoji_scale", Order = 2 };
+        var trigger = new Question { Id = Guid.NewGuid(), SurveyId = survey.Id, TextEn = "Are you satisfied?", Type = "yes_no", Order = 0 };
+        var target = new Question { Id = Guid.NewGuid(), SurveyId = survey.Id, TextEn = "Why not?", Type = "open_ended", Order = 1 };
+        var emojiQuestion = new Question { Id = Guid.NewGuid(), SurveyId = survey.Id, TextEn = "How do you feel?", Type = "emoji_scale", Order = 2 };
         db.Questions.AddRange(trigger, target, emojiQuestion);
         await db.SaveChangesAsync();
 
@@ -101,8 +101,8 @@ public class SurveyCoreTests(PostgresContainerFixture postgres)
             TargetQuestionId = target.Id,
         });
         db.QuestionEmojiOptions.AddRange(
-            new QuestionEmojiOption { QuestionId = emojiQuestion.Id, Order = 0, Emoji = "😀", Label = "Great", Value = 5 },
-            new QuestionEmojiOption { QuestionId = emojiQuestion.Id, Order = 1, Emoji = "😢", Label = "Bad", Value = 1 });
+            new QuestionEmojiOption { QuestionId = emojiQuestion.Id, Order = 0, Emoji = "😀", LabelEn = "Great", Value = 5 },
+            new QuestionEmojiOption { QuestionId = emojiQuestion.Id, Order = 1, Emoji = "😢", LabelEn = "Bad", Value = 1 });
         await db.SaveChangesAsync();
 
         await using var readDb = CreateContext();
@@ -130,14 +130,14 @@ public class SurveyCoreTests(PostgresContainerFixture postgres)
         var now = DateTimeOffset.UtcNow;
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO surveys ("Id", company_id, created_by, title, type, start_date, end_date, created_at, updated_at)
+             INSERT INTO surveys ("Id", company_id, created_by, title_en, type, start_date, end_date, created_at, updated_at)
              VALUES ({minimalSurveyId}, {company.Id}, {user.Id}, {"Minimal Survey"}, {"custom"}, {now}, {now.AddDays(7)}, {now}, {now})
              """);
 
         var minimalQuestionId = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO questions ("Id", survey_id, text, type, "order")
+             INSERT INTO questions ("Id", survey_id, text_en, type, "order")
              VALUES ({minimalQuestionId}, {minimalSurveyId}, {"Minimal question?"}, {"open_ended"}, {0})
              """);
 
@@ -160,7 +160,7 @@ public class SurveyCoreTests(PostgresContainerFixture postgres)
 
         var loadedQuestion = await readDb.Questions.SingleAsync(q => q.Id == minimalQuestionId);
         Assert.True(loadedQuestion.CommentRequired);
-        Assert.Equal("Please explain your answer:", loadedQuestion.CommentPrompt);
+        Assert.Equal("Please explain your answer:", loadedQuestion.CommentPromptEn);
         Assert.False(loadedQuestion.Required);
     }
 }

@@ -5,7 +5,10 @@ public class SystemSettings
     public Guid Id { get; set; }
     public bool LoginEnabled { get; set; } = true;
     public bool MaintenanceMode { get; set; }
-    public string? MaintenanceMessage { get; set; }
+    // Shown to every user regardless of locale, so it is respondent-facing content
+    // and gets the same treatment as everything else (#195).
+    public string? MaintenanceMessageEn { get; set; }
+    public string? MaintenanceMessageEs { get; set; }
     public int MaxLoginAttempts { get; set; } = 5;
     public int SessionTimeoutMinutes { get; set; } = 60;
     public PasswordPolicy PasswordPolicy { get; set; } = new();

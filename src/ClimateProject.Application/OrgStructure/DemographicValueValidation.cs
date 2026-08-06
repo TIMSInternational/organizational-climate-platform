@@ -6,6 +6,12 @@ namespace ClimateProject.Application.OrgStructure;
 // needs. Kept as an Application-layer record (rather than taking the Domain
 // entity) so the validator stays a pure function with no EF/materialisation
 // assumptions and can be unit-tested without a database.
+/// <param name="Options">
+/// The allowed answers, which are the options' stable locale-independent VALUES, never
+/// their display labels (#195). Validating against a label would make the same answer
+/// store two different strings depending on the admin's browser language, and every
+/// dashboard filter, group-by and export would split accordingly and silently.
+/// </param>
 public sealed record DemographicFieldDefinition(
     Guid Id,
     string Field,

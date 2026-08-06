@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router'
 import { getMicroclimatePublic, submitResponse, type PublicMicroclimateDetail, type Question } from '../api/microclimates'
 import { useTranslation } from '../../../i18n'
+import { detectLocale } from '../../../i18n/locale'
 
 function QuestionInput({
   question,
@@ -24,18 +25,20 @@ function QuestionInput({
         return <p role="alert">{t('microclimates.questionHasNoOptions')}</p>
       }
       return (
-        <div role="radiogroup" aria-label={question.text}>
+        <div role="radiogroup" aria-label={question.text ?? undefined}>
           {question.options.map((option) => (
-            <label key={option}>
+            <label key={option.value}>
               <input
                 type="radio"
                 name={question.id}
-                value={option}
-                checked={value === option}
+                // The stable value, never the label. Submitting the label is what
+                // splits one answer into two across languages (#195).
+                value={option.value}
+                checked={value === option.value}
                 required={question.required}
                 onChange={(e) => onChange(e.target.value)}
               />
-              {option}
+              {option.label ?? option.value}
             </label>
           ))}
         </div>
@@ -45,20 +48,23 @@ function QuestionInput({
     // different things (agreement vs quality), not because they look different.
     case 'likert':
     case 'rating': {
-      const scale = question.options && question.options.length > 0 ? question.options : ['1', '2', '3', '4', '5']
+      const scale =
+        question.options && question.options.length > 0
+          ? question.options
+          : ['1', '2', '3', '4', '5'].map((n, order) => ({ order, value: n, label: n }))
       return (
-        <div role="radiogroup" aria-label={question.text}>
+        <div role="radiogroup" aria-label={question.text ?? undefined}>
           {scale.map((option) => (
-            <label key={option}>
+            <label key={option.value}>
               <input
                 type="radio"
                 name={question.id}
-                value={option}
-                checked={value === option}
+                value={option.value}
+                checked={value === option.value}
                 required={question.required}
                 onChange={(e) => onChange(e.target.value)}
               />
-              {option}
+              {option.label ?? option.value}
             </label>
           ))}
         </div>
@@ -66,7 +72,7 @@ function QuestionInput({
     }
     case 'yes_no':
       return (
-        <div role="radiogroup" aria-label={question.text}>
+        <div role="radiogroup" aria-label={question.text ?? undefined}>
           {['yes', 'no'].map((option) => (
             <label key={option}>
               <input
@@ -120,12 +126,17 @@ export default function MicroclimateRespondPage() {
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
+  // An invited respondent has no stored preference and no authenticated locale, so
+  // the language they are served has to come from the request itself -- exactly the
+  // `?lang=` parameter web/src/i18n/README.md anticipated for this one public route.
+  const locale = detectLocale()
+
   useEffect(() => {
     if (!id) return
-    getMicroclimatePublic(baseUrl, id)
+    getMicroclimatePublic(baseUrl, id, locale)
       .then(setMicroclimate)
       .catch((err) => setError(toPageError(err)))
-  }, [id, baseUrl])
+  }, [id, baseUrl, locale])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -133,7 +144,9 @@ export default function MicroclimateRespondPage() {
     setError(null)
     setSubmitting(true)
     try {
-      await submitResponse(baseUrl, id, answers)
+      // Send the locale actually rendered, not the browser's current preference:
+      // they are the same here, but the server records what the respondent saw.
+      await submitResponse(baseUrl, id, answers, microclimate?.resolvedLocale ?? locale)
       setSubmitted(true)
     } catch (err) {
       setError(toPageError(err))

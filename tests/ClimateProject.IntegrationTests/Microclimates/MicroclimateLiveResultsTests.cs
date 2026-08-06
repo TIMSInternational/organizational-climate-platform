@@ -237,7 +237,7 @@ public class MicroclimateLiveResultsTests : IAsyncLifetime
 
         var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
             "Multiple choice validation", null, _companyId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 4, true, null,
-            new List<CreateQuestionInput> { new("Pick one", "multiple_choice", ["Red", "Green", "Blue"], true, 1) }));
+            new List<CreateQuestionInput> { new("Pick one", "multiple_choice", [new(null, "Red"), new(null, "Green"), new(null, "Blue")], true, 1) }));
         var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
         await client.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
         var choiceQuestionId = created.Questions.Single().Id;

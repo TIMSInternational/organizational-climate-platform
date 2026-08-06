@@ -314,9 +314,8 @@ public class InvitationAcceptEndpointTests : IAsyncLifetime
                 Id = Guid.NewGuid(),
                 CompanyId = _companyId,
                 Field = "work_mode",
-                Label = "Work mode",
+                LabelEn = "Work mode",
                 Type = "select",
-                Options = ["remote", "onsite"],
                 Required = false,
                 Order = 0,
                 IsActive = true,
@@ -324,6 +323,7 @@ public class InvitationAcceptEndpointTests : IAsyncLifetime
                 UpdatedAt = now,
             };
             seedDb.DemographicFields.Add(field);
+            DemographicOptionSeed.Add(seedDb, field.Id, ["remote", "onsite"]);
             seedDb.UserInvitationDemographics.Add(new UserInvitationDemographic
             {
                 InvitationId = invitation.Id,

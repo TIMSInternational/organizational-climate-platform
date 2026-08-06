@@ -255,9 +255,8 @@ public class UserEndpointsTests : IAsyncLifetime
             Id = Guid.NewGuid(),
             CompanyId = companyId,
             Field = field,
-            Label = field,
+            LabelEn = field,
             Type = type,
-            Options = options,
             Required = required,
             Order = 0,
             IsActive = true,
@@ -265,6 +264,7 @@ public class UserEndpointsTests : IAsyncLifetime
             UpdatedAt = now,
         };
         db.DemographicFields.Add(definition);
+        DemographicOptionSeed.Add(db, definition.Id, options);
         await db.SaveChangesAsync();
         return definition.Id;
     }

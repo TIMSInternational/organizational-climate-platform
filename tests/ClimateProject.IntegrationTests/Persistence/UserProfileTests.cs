@@ -60,11 +60,12 @@ public class UserProfileTests(PostgresContainerFixture postgres)
         // user_demographics keyed by the company's demographic_fields definition.
         var siteLocation = new DemographicField
         {
-            Id = Guid.NewGuid(), CompanyId = company.Id, Field = "site_location", Label = "Site location",
-            Type = "select", Options = ["Remote", "Onsite"], Required = false, Order = 0,
+            Id = Guid.NewGuid(), CompanyId = company.Id, Field = "site_location", LabelEn = "Site location",
+            Type = "select", Required = false, Order = 0,
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };
         db.DemographicFields.Add(siteLocation);
+        DemographicOptionSeed.Add(db, siteLocation.Id, ["Remote", "Onsite"]);
         db.UserDemographics.Add(new UserDemographic
         {
             UserId = employee.Id, DemographicFieldId = siteLocation.Id, Value = "Remote",
@@ -116,7 +117,7 @@ public class UserProfileTests(PostgresContainerFixture postgres)
         };
         var field = new DemographicField
         {
-            Id = Guid.NewGuid(), CompanyId = company.Id, Field = "tenure", Label = "Tenure",
+            Id = Guid.NewGuid(), CompanyId = company.Id, Field = "tenure", LabelEn = "Tenure",
             Type = "text", Required = false, Order = 0,
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };

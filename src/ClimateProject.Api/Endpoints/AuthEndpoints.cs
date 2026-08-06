@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Localization;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -55,7 +56,7 @@ public static class AuthEndpoints
             return Results.Json(new ErrorResponse("Invalid email or password"), statusCode: 401);
         }
 
-        var gate = await CheckSystemSettingsGateAsync(db, user.Role, cancellationToken);
+        var gate = await CheckSystemSettingsGateAsync(db, user.Role, cancellationToken, user.Preferences.Language);
         if (gate is not null)
         {
             return gate;
@@ -317,10 +318,18 @@ public static class AuthEndpoints
     // currentUserRole is null for a brand-new signup (no existing user yet) or an
     // unresolved Google sign-in -- in both cases there is no SuperAdmin to bypass
     // the gate with.
+    /// <param name="locale">
+    /// The caller's display preference, when one is known. The maintenance message is
+    /// authored content (#195), so it is resolved rather than emitted verbatim.
+    /// Signup and Google sign-in have no user yet and therefore no preference: they
+    /// get the English text, which is exactly what the single-column version always
+    /// emitted, rather than a guess.
+    /// </param>
     private static async Task<IResult?> CheckSystemSettingsGateAsync(
         ClimateProjectDbContext db,
         string? currentUserRole,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? locale = null)
     {
         var settings = await db.SystemSettings.FirstOrDefaultAsync(cancellationToken);
         if (settings is null || currentUserRole == Roles.SuperAdmin)
@@ -331,7 +340,7 @@ public static class AuthEndpoints
         if (settings.MaintenanceMode)
         {
             return Results.Json(
-                new ErrorResponse(settings.MaintenanceMessage ?? "The system is currently under maintenance. Please try again later."),
+                new ErrorResponse(LocalizedContent.ResolveText(settings.MaintenanceMessageEn, settings.MaintenanceMessageEs, locale, ContentLanguages.Both) ?? "The system is currently under maintenance. Please try again later."),
                 statusCode: 503);
         }
 

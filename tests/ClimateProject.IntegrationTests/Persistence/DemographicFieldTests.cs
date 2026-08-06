@@ -36,22 +36,39 @@ public class DemographicFieldTests(PostgresContainerFixture postgres)
             Id = Guid.NewGuid(),
             CompanyId = company.Id,
             Field = "gender",
-            Label = "Gender",
+            LabelEn = "Gender",
             Type = "select",
-            Options = ["Male", "Female", "Non-binary", "Prefer not to say"],
             Required = true,
             Order = 1,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
         };
         db.DemographicFields.Add(field);
+        // Options are rows, not an array column (#195): each carries a stable
+        // locale-independent value beside its per-language labels.
+        string[] values = ["Male", "Female", "Non-binary", "Prefer not to say"];
+        for (var order = 0; order < values.Length; order++)
+        {
+            db.DemographicFieldOptions.Add(new DemographicFieldOption
+            {
+                DemographicFieldId = field.Id,
+                Order = order,
+                Value = values[order],
+                LabelEn = values[order],
+            });
+        }
+
         await db.SaveChangesAsync();
 
         await using var readDb = CreateContext();
         var loaded = await readDb.DemographicFields.SingleAsync(f => f.Id == field.Id);
         Assert.Equal("select", loaded.Type);
-        Assert.NotNull(loaded.Options);
-        Assert.Equal(4, loaded.Options!.Count);
+        var options = await readDb.DemographicFieldOptions
+            .Where(o => o.DemographicFieldId == field.Id)
+            .OrderBy(o => o.Order)
+            .ToListAsync();
+        Assert.Equal(4, options.Count);
+        Assert.Equal(values, options.Select(o => o.Value));
         Assert.True(loaded.Required);
     }
 
@@ -64,14 +81,14 @@ public class DemographicFieldTests(PostgresContainerFixture postgres)
 
         db.DemographicFields.Add(new DemographicField
         {
-            Id = Guid.NewGuid(), CompanyId = company.Id, Field = "tenure", Label = "Tenure", Type = "text",
+            Id = Guid.NewGuid(), CompanyId = company.Id, Field = "tenure", LabelEn = "Tenure", Type = "text",
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         });
         await db.SaveChangesAsync();
 
         db.DemographicFields.Add(new DemographicField
         {
-            Id = Guid.NewGuid(), CompanyId = company.Id, Field = "tenure", Label = "Tenure Duplicate", Type = "text",
+            Id = Guid.NewGuid(), CompanyId = company.Id, Field = "tenure", LabelEn = "Tenure Duplicate", Type = "text",
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         });
 
@@ -89,7 +106,7 @@ public class DemographicFieldTests(PostgresContainerFixture postgres)
         var now = DateTimeOffset.UtcNow;
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO demographic_fields ("Id", company_id, field, label, type, created_at, updated_at)
+             INSERT INTO demographic_fields ("Id", company_id, field, label_en, type, created_at, updated_at)
              VALUES ({minimalFieldId}, {company.Id}, {"location"}, {"Location"}, {"text"}, {now}, {now})
              """);
 
@@ -98,6 +115,6 @@ public class DemographicFieldTests(PostgresContainerFixture postgres)
         Assert.False(loaded.Required);
         Assert.Equal(0, loaded.Order);
         Assert.True(loaded.IsActive);
-        Assert.Null(loaded.Options);
+        Assert.Empty(await readDb.DemographicFieldOptions.Where(o => o.DemographicFieldId == minimalFieldId).ToListAsync());
     }
 }

@@ -15,11 +15,13 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<UserInvitationDemographic> UserInvitationDemographics => Set<UserInvitationDemographic>();
     public DbSet<Survey> Surveys => Set<Survey>();
     public DbSet<Question> Questions => Set<Question>();
+    public DbSet<QuestionOption> QuestionOptions => Set<QuestionOption>();
     public DbSet<QuestionConditionalLogic> QuestionConditionalLogics => Set<QuestionConditionalLogic>();
     public DbSet<QuestionEmojiOption> QuestionEmojiOptions => Set<QuestionEmojiOption>();
     public DbSet<SurveyDepartmentTarget> SurveyDepartmentTargets => Set<SurveyDepartmentTarget>();
     public DbSet<SurveyTemplate> SurveyTemplates => Set<SurveyTemplate>();
     public DbSet<TemplateQuestion> TemplateQuestions => Set<TemplateQuestion>();
+    public DbSet<TemplateQuestionOption> TemplateQuestionOptions => Set<TemplateQuestionOption>();
     public DbSet<SurveyDraft> SurveyDrafts => Set<SurveyDraft>();
     public DbSet<SurveyVersion> SurveyVersions => Set<SurveyVersion>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
@@ -31,9 +33,11 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<ResponseDemographic> ResponseDemographics => Set<ResponseDemographic>();
     public DbSet<MicroclimateTemplate> MicroclimateTemplates => Set<MicroclimateTemplate>();
     public DbSet<MicroclimateTemplateQuestion> MicroclimateTemplateQuestions => Set<MicroclimateTemplateQuestion>();
+    public DbSet<MicroclimateTemplateQuestionOption> MicroclimateTemplateQuestionOptions => Set<MicroclimateTemplateQuestionOption>();
     public DbSet<Microclimate> Microclimates => Set<Microclimate>();
     public DbSet<MicroclimateDepartmentTarget> MicroclimateDepartmentTargets => Set<MicroclimateDepartmentTarget>();
     public DbSet<MicroclimateQuestion> MicroclimateQuestions => Set<MicroclimateQuestion>();
+    public DbSet<MicroclimateQuestionOption> MicroclimateQuestionOptions => Set<MicroclimateQuestionOption>();
     public DbSet<MicroclimateAiInsight> MicroclimateAiInsights => Set<MicroclimateAiInsight>();
     public DbSet<MicroclimateInvitation> MicroclimateInvitations => Set<MicroclimateInvitation>();
     public DbSet<ActionPlanTemplate> ActionPlanTemplates => Set<ActionPlanTemplate>();
@@ -53,6 +57,7 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<AnalyticsTimeSeries> AnalyticsTimeSeries => Set<AnalyticsTimeSeries>();
     public DbSet<AIInsight> AIInsights => Set<AIInsight>();
     public DbSet<DemographicField> DemographicFields => Set<DemographicField>();
+    public DbSet<DemographicFieldOption> DemographicFieldOptions => Set<DemographicFieldOption>();
     public DbSet<DemographicSnapshot> DemographicSnapshots => Set<DemographicSnapshot>();
     public DbSet<DemographicSnapshotEntry> DemographicSnapshotEntries => Set<DemographicSnapshotEntry>();
     public DbSet<DemographicSnapshotChange> DemographicSnapshotChanges => Set<DemographicSnapshotChange>();

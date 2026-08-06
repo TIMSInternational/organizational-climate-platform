@@ -21,8 +21,23 @@ internal static class DemographicValueStore
             .OrderBy(f => f.Order)
             .ToListAsync(cancellationToken);
 
+        // Allowed values are the options' stable VALUES, never their labels (#195).
+        // A submitted demographic is stored as that value, so validating against the
+        // label would make the same answer store two different strings depending on
+        // which language the admin's browser happened to be in -- and every dashboard
+        // filter, group-by and export would split accordingly, silently.
+        var fieldIds = fields.Select(f => f.Id).ToList();
+        var optionValues = (await db.DemographicFieldOptions
+                .Where(o => fieldIds.Contains(o.DemographicFieldId))
+                .OrderBy(o => o.Order)
+                .Select(o => new { o.DemographicFieldId, o.Value })
+                .ToListAsync(cancellationToken))
+            .GroupBy(o => o.DemographicFieldId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(o => o.Value).ToList());
+
         return fields
-            .Select(f => new DemographicFieldDefinition(f.Id, f.Field, f.Type, f.Options, f.Required, f.IsActive))
+            .Select(f => new DemographicFieldDefinition(
+                f.Id, f.Field, f.Type, optionValues.GetValueOrDefault(f.Id), f.Required, f.IsActive))
             .ToList();
     }
 

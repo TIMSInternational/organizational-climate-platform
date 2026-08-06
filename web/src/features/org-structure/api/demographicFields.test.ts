@@ -21,7 +21,7 @@ describe('demographicFields api client', () => {
   it('creates a field', async () => {
     const created = { id: 'f1', companyId: 'c1', field: 'gender', label: 'Gender', type: 'select', options: ['A', 'B'], required: true, order: 1, isActive: true }
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(created), { status: 201 }))
-    const result = await createDemographicField(baseUrl, { companyId: 'c1', field: 'gender', label: 'Gender', type: 'select', options: ['A', 'B'], required: true, order: 1 })
+    const result = await createDemographicField(baseUrl, { companyId: 'c1', field: 'gender', label: 'Gender', type: 'select', options: [{ label: 'A' }, { label: 'B' }], required: true, order: 1 })
     expect(fetch).toHaveBeenCalledWith(`${baseUrl}/admin/demographic-fields`, expect.objectContaining({ method: 'POST' }))
     expect(result).toEqual(created)
   })
