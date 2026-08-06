@@ -11,6 +11,8 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<User> Users => Set<User>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<UserInvitation> UserInvitations => Set<UserInvitation>();
+    public DbSet<UserDemographic> UserDemographics => Set<UserDemographic>();
+    public DbSet<UserInvitationDemographic> UserInvitationDemographics => Set<UserInvitationDemographic>();
     public DbSet<Survey> Surveys => Set<Survey>();
     public DbSet<Question> Questions => Set<Question>();
     public DbSet<QuestionConditionalLogic> QuestionConditionalLogics => Set<QuestionConditionalLogic>();

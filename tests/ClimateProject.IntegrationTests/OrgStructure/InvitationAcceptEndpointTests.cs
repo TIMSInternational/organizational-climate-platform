@@ -298,4 +298,53 @@ public class InvitationAcceptEndpointTests : IAsyncLifetime
             new AcceptInvitationRequest(Email: "literally-anything@example.test", Name: "Anyone", Password: "a-good-password"));
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Accepting_an_invitation_carries_its_pre_assigned_demographics_onto_the_new_user()
+    {
+        var invitation = await CreateDirectInvitationAsync("carryover@example.test");
+
+        Guid fieldId;
+        using (var seedScope = _factory.Services.CreateScope())
+        {
+            var seedDb = seedScope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var now = DateTimeOffset.UtcNow;
+            var field = new DemographicField
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _companyId,
+                Field = "work_mode",
+                Label = "Work mode",
+                Type = "select",
+                Options = ["remote", "onsite"],
+                Required = false,
+                Order = 0,
+                IsActive = true,
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            seedDb.DemographicFields.Add(field);
+            seedDb.UserInvitationDemographics.Add(new UserInvitationDemographic
+            {
+                InvitationId = invitation.Id,
+                DemographicFieldId = field.Id,
+                Value = "remote",
+            });
+            await seedDb.SaveChangesAsync();
+            fieldId = field.Id;
+        }
+
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync(
+            $"/invitations/{invitation.InvitationToken}/accept",
+            new AcceptInvitationRequest(Email: null, Name: "Carry Over", Password: "a-good-password"));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var user = await db.Users.FirstAsync(u => u.Email == "carryover@example.test");
+        var carried = await db.UserDemographics.SingleAsync(d => d.UserId == user.Id);
+        Assert.Equal(fieldId, carried.DemographicFieldId);
+        Assert.Equal("remote", carried.Value);
+    }
 }

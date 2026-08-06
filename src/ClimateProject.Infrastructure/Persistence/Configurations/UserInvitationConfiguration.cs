@@ -26,7 +26,6 @@ public class UserInvitationConfiguration : IEntityTypeConfiguration<UserInvitati
         builder.Property(i => i.LastReminderSentAt).HasColumnName("last_reminder_sent_at");
         builder.Property(i => i.Metadata).HasColumnName("metadata").HasColumnType("jsonb");
         builder.Property(i => i.InvitationData).HasColumnName("invitation_data").HasColumnType("jsonb");
-        builder.Property(i => i.Demographics).HasColumnName("demographics").HasColumnType("jsonb");
 
         builder.HasIndex(i => i.InvitationToken).IsUnique();
         builder.HasOne<Company>().WithMany().HasForeignKey(i => i.CompanyId);

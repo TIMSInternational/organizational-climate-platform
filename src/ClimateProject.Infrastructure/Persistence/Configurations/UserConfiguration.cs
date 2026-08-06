@@ -22,7 +22,6 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.IsActive).HasColumnName("is_active").IsRequired();
         builder.Property(u => u.LastLoginAt).HasColumnName("last_login_at");
         builder.Property(u => u.ConsentUpdatedAt).HasColumnName("consent_updated_at");
-        builder.Property(u => u.Demographics).HasColumnName("demographics").HasColumnType("jsonb");
         builder.Property(u => u.CreatedAt).HasColumnName("created_at").IsRequired();
         builder.Property(u => u.UpdatedAt).HasColumnName("updated_at").IsRequired();
         builder.HasIndex(u => u.Email).IsUnique();

@@ -17,7 +17,6 @@ public class User
     public DateTimeOffset? ConsentUpdatedAt { get; set; }
     public UserPreferences Preferences { get; set; } = new();
     public UserConsent Consent { get; set; } = new();
-    public string? Demographics { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

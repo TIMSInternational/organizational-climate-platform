@@ -25,9 +25,9 @@ public static class InvitationEndpoints
         => currentUser.Role == Roles.SuperAdmin
            || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
 
-    private static InvitationDetail ToDetail(UserInvitation i)
+    private static InvitationDetail ToDetail(UserInvitation i, IReadOnlyDictionary<string, string> demographics)
         => new(i.Id, i.Email, i.CompanyId, i.DepartmentId, i.InvitationType, i.Role, i.Status,
-               i.InvitationToken, i.ExpiresAt, i.SentAt, i.AcceptedAt, i.ReminderCount);
+               i.InvitationToken, i.ExpiresAt, i.SentAt, i.AcceptedAt, i.ReminderCount, demographics);
 
     // UserInvitation.InvitedBy is a FK to Users.Id (a Guid) -- it is NOT the JWT's `sub`
     // claim. Task 1 changes `sub` to prefer PersonaExternalId (an arbitrary legacy string,
@@ -97,6 +97,18 @@ public static class InvitationEndpoints
             }
         }
 
+        // Demographics are pre-assigned here, not at acceptance: the roster upload
+        // that produces these invitations already carries them. Validating at this
+        // point is the whole reason #193 drops user_invitations.demographics too --
+        // an unvalidated blob here would just defer the failure to acceptance, by
+        // which time nobody is looking at the CSV any more.
+        var invitationDefinitions = await DemographicValueStore.LoadDefinitionsAsync(db, request.CompanyId, cancellationToken);
+        var invitationDemographics = DemographicValueValidation.Validate(request.Demographics, invitationDefinitions, enforceRequired: false);
+        if (!invitationDemographics.IsValid)
+        {
+            return Results.Json(new { message = string.Join("; ", invitationDemographics.Errors) }, statusCode: 400);
+        }
+
         var now = DateTimeOffset.UtcNow;
         var invitedBy = await ResolveActingUserIdAsync(currentUser, db, cancellationToken);
         var invitation = new UserInvitation
@@ -115,12 +127,13 @@ public static class InvitationEndpoints
         };
 
         db.UserInvitations.Add(invitation);
+        DemographicValueStore.AddForInvitation(db, invitation.Id, invitationDemographics.Values);
         await emailSender.SendAsync(invitation, cancellationToken);
         invitation.Status = InvitationValidation.StatusSent;
         invitation.SentAt = now;
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Json(ToDetail(invitation), statusCode: 201);
+        return Results.Json(ToDetail(invitation, DemographicValueStore.ToMap(invitationDemographics.Values)), statusCode: 201);
     }
 
     private static async Task<IResult> CreateShareableLinkAsync(
@@ -153,6 +166,13 @@ public static class InvitationEndpoints
             }
         }
 
+        var linkDefinitions = await DemographicValueStore.LoadDefinitionsAsync(db, request.CompanyId, cancellationToken);
+        var linkDemographics = DemographicValueValidation.Validate(request.Demographics, linkDefinitions, enforceRequired: false);
+        if (!linkDemographics.IsValid)
+        {
+            return Results.Json(new { message = string.Join("; ", linkDemographics.Errors) }, statusCode: 400);
+        }
+
         var now = DateTimeOffset.UtcNow;
         var invitedBy = await ResolveActingUserIdAsync(currentUser, db, cancellationToken);
         var invitation = new UserInvitation
@@ -172,9 +192,10 @@ public static class InvitationEndpoints
         };
 
         db.UserInvitations.Add(invitation);
+        DemographicValueStore.AddForInvitation(db, invitation.Id, linkDemographics.Values);
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Json(ToDetail(invitation), statusCode: 201);
+        return Results.Json(ToDetail(invitation, DemographicValueStore.ToMap(linkDemographics.Values)), statusCode: 201);
     }
 
     private static async Task<IResult> ResendAsync(
@@ -212,7 +233,8 @@ public static class InvitationEndpoints
         await emailSender.SendAsync(invitation, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(ToDetail(invitation));
+        var demographics = await DemographicValueStore.LoadForInvitationsAsync(db, [invitation.Id], cancellationToken);
+        return Results.Ok(ToDetail(invitation, demographics.GetValueOrDefault(invitation.Id, DemographicValueStore.Empty)));
     }
 
     private static async Task<IResult> ListAsync(
@@ -227,12 +249,19 @@ public static class InvitationEndpoints
             return Results.Forbid();
         }
 
-        var invitations = await db.UserInvitations
+        var rows = await db.UserInvitations
             .Where(i => i.CompanyId == companyId)
             .OrderByDescending(i => i.SentAt ?? DateTimeOffset.MinValue)
-            .Select(i => new InvitationDetail(i.Id, i.Email, i.CompanyId, i.DepartmentId, i.InvitationType, i.Role, i.Status,
-                i.InvitationToken, i.ExpiresAt, i.SentAt, i.AcceptedAt, i.ReminderCount))
             .ToListAsync(cancellationToken);
+
+        // One extra round trip for the whole page rather than N: the normalised
+        // rows are fetched in bulk and stitched in memory.
+        var demographicsByInvitation = await DemographicValueStore.LoadForInvitationsAsync(
+            db, rows.Select(i => i.Id).ToList(), cancellationToken);
+
+        var invitations = rows
+            .Select(i => ToDetail(i, demographicsByInvitation.GetValueOrDefault(i.Id, DemographicValueStore.Empty)))
+            .ToList();
 
         return Results.Ok(new InvitationListResponse(invitations));
     }

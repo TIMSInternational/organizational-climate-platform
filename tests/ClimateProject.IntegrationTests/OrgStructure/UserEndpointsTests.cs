@@ -244,4 +244,175 @@ public class UserEndpointsTests : IAsyncLifetime
         var roleResponse = await client.PutAsJsonAsync($"/admin/users/{employeeId}/role", new UpdateUserRoleRequest("not_a_real_role"));
         Assert.Equal(HttpStatusCode.BadRequest, roleResponse.StatusCode);
     }
+
+    private async Task<Guid> SeedDemographicFieldAsync(Guid companyId, string field, string type, List<string>? options, bool required = false)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var now = DateTimeOffset.UtcNow;
+        var definition = new DemographicField
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyId,
+            Field = field,
+            Label = field,
+            Type = type,
+            Options = options,
+            Required = required,
+            Order = 0,
+            IsActive = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.DemographicFields.Add(definition);
+        await db.SaveChangesAsync();
+        return definition.Id;
+    }
+
+    [Fact]
+    public async Task CompanyAdmin_can_set_a_users_demographics_and_read_them_back()
+    {
+        var client = _factory.CreateClient();
+        var (adminToken, _) = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var (_, employeeId) = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+        var fieldId = await SeedDemographicFieldAsync(_companyAId, "work_mode", "select", ["remote", "onsite"]);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var updateResponse = await client.PutAsJsonAsync(
+            $"/admin/users/{employeeId}",
+            new UpdateUserRequest(null, null, null, null, new Dictionary<string, string?> { ["work_mode"] = "remote" }));
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        var updated = await updateResponse.Content.ReadFromJsonAsync<UserDetail>();
+        Assert.Equal("remote", updated!.Demographics["work_mode"]);
+
+        var getResponse = await client.GetAsync($"/admin/users/{employeeId}");
+        var fetched = await getResponse.Content.ReadFromJsonAsync<UserDetail>();
+        Assert.Equal("remote", fetched!.Demographics["work_mode"]);
+
+        // Stored as a row keyed by the field definition, not as a blob.
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var row = await db.UserDemographics.SingleAsync(d => d.UserId == employeeId);
+        Assert.Equal(fieldId, row.DemographicFieldId);
+        Assert.Equal("remote", row.Value);
+    }
+
+    [Fact]
+    public async Task Update_rejects_a_demographic_value_outside_the_fields_configured_options()
+    {
+        var client = _factory.CreateClient();
+        var (adminToken, _) = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var (_, employeeId) = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+        await SeedDemographicFieldAsync(_companyAId, "work_mode", "select", ["remote", "onsite"]);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var response = await client.PutAsJsonAsync(
+            $"/admin/users/{employeeId}",
+            new UpdateUserRequest(null, null, null, null, new Dictionary<string, string?> { ["work_mode"] = "hybrid" }));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.Empty(await db.UserDemographics.Where(d => d.UserId == employeeId).ToListAsync());
+    }
+
+    [Fact]
+    public async Task Update_rejects_a_demographic_key_the_company_has_not_defined()
+    {
+        var client = _factory.CreateClient();
+        var (adminToken, _) = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var (_, employeeId) = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var response = await client.PutAsJsonAsync(
+            $"/admin/users/{employeeId}",
+            new UpdateUserRequest(null, null, null, null, new Dictionary<string, string?> { ["not_a_field"] = "x" }));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Users_can_be_filtered_by_a_demographic_field_value()
+    {
+        // The capability the jsonb blob could not provide at all, and the reason
+        // #193 exists: req.md 2.2 requires every custom demographic to be filterable.
+        var client = _factory.CreateClient();
+        var (adminToken, _) = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var (_, remoteId) = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+        var (_, onsiteId) = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+        await SeedDemographicFieldAsync(_companyAId, "work_mode", "select", ["remote", "onsite"]);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        await client.PutAsJsonAsync($"/admin/users/{remoteId}", new UpdateUserRequest(null, null, null, null, new Dictionary<string, string?> { ["work_mode"] = "remote" }));
+        await client.PutAsJsonAsync($"/admin/users/{onsiteId}", new UpdateUserRequest(null, null, null, null, new Dictionary<string, string?> { ["work_mode"] = "onsite" }));
+
+        var filtered = await client.GetAsync($"/admin/users?companyId={_companyAId}&demographicField=work_mode&demographicValue=remote");
+        Assert.Equal(HttpStatusCode.OK, filtered.StatusCode);
+        var list = await filtered.Content.ReadFromJsonAsync<UserListResponse>();
+        Assert.Contains(list!.Users, u => u.Id == remoteId);
+        Assert.DoesNotContain(list.Users, u => u.Id == onsiteId);
+
+        // Field with no value constraint returns everyone who answered it at all.
+        var anyValue = await client.GetAsync($"/admin/users?companyId={_companyAId}&demographicField=work_mode");
+        var anyList = await anyValue.Content.ReadFromJsonAsync<UserListResponse>();
+        Assert.Contains(anyList!.Users, u => u.Id == remoteId);
+        Assert.Contains(anyList.Users, u => u.Id == onsiteId);
+
+        var valueWithoutField = await client.GetAsync($"/admin/users?companyId={_companyAId}&demographicValue=remote");
+        Assert.Equal(HttpStatusCode.BadRequest, valueWithoutField.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_later_update_replaces_the_full_demographic_set_but_omitting_the_property_leaves_it_alone()
+    {
+        var client = _factory.CreateClient();
+        var (adminToken, _) = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var (_, employeeId) = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+        await SeedDemographicFieldAsync(_companyAId, "work_mode", "select", ["remote", "onsite"]);
+        await SeedDemographicFieldAsync(_companyAId, "tenure", "text", null);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        await client.PutAsJsonAsync(
+            $"/admin/users/{employeeId}",
+            new UpdateUserRequest(null, null, null, null, new Dictionary<string, string?> { ["work_mode"] = "remote", ["tenure"] = "2 years" }));
+
+        // A non-null map is the complete set: dropping "tenure" clears that answer.
+        var replaced = await client.PutAsJsonAsync(
+            $"/admin/users/{employeeId}",
+            new UpdateUserRequest(null, null, null, null, new Dictionary<string, string?> { ["work_mode"] = "onsite" }));
+        var afterReplace = await replaced.Content.ReadFromJsonAsync<UserDetail>();
+        Assert.Equal("onsite", afterReplace!.Demographics["work_mode"]);
+        Assert.False(afterReplace.Demographics.ContainsKey("tenure"));
+
+        // Companion: a null map means "not part of this request" and must not wipe anything.
+        var renamed = await client.PutAsJsonAsync($"/admin/users/{employeeId}", new UpdateUserRequest("Renamed", null, null, null));
+        var afterRename = await renamed.Content.ReadFromJsonAsync<UserDetail>();
+        Assert.Equal("Renamed", afterRename!.Name);
+        Assert.Equal("onsite", afterRename.Demographics["work_mode"]);
+    }
+
+    [Fact]
+    public async Task A_full_profile_update_must_supply_every_required_demographic()
+    {
+        var client = _factory.CreateClient();
+        var (adminToken, _) = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var (_, employeeId) = await SignUpAndGetTokenAsync(client, Roles.Employee, _companyADomain, _companyAId);
+        await SeedDemographicFieldAsync(_companyAId, "work_mode", "select", ["remote", "onsite"], required: true);
+        await SeedDemographicFieldAsync(_companyAId, "tenure", "text", null);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var missingRequired = await client.PutAsJsonAsync(
+            $"/admin/users/{employeeId}",
+            new UpdateUserRequest(null, null, null, null, new Dictionary<string, string?> { ["tenure"] = "2 years" }));
+        Assert.Equal(HttpStatusCode.BadRequest, missingRequired.StatusCode);
+
+        var withRequired = await client.PutAsJsonAsync(
+            $"/admin/users/{employeeId}",
+            new UpdateUserRequest(null, null, null, null, new Dictionary<string, string?> { ["tenure"] = "2 years", ["work_mode"] = "remote" }));
+        Assert.Equal(HttpStatusCode.OK, withRequired.StatusCode);
+    }
 }

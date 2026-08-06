@@ -17,7 +17,7 @@ public class UserProfileTests(PostgresContainerFixture postgres)
     }
 
     [Fact]
-    public async Task User_profile_fields_department_link_and_demographics_jsonb_round_trip()
+    public async Task User_profile_fields_department_link_and_normalised_demographics_round_trip()
     {
         await using var db = CreateContext();
         await db.Database.MigrateAsync();
@@ -44,10 +44,25 @@ public class UserProfileTests(PostgresContainerFixture postgres)
             ConsentUpdatedAt = DateTimeOffset.UtcNow,
             Preferences = new UserPreferences { Theme = "dark" },
             Consent = new UserConsent { Analytics = true },
-            Demographics = """{"tenure_months": 18, "site_location": "Remote"}""",
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };
         db.Users.Add(employee);
+        await db.SaveChangesAsync();
+
+        // Demographics are no longer a jsonb blob on users: each answer is a row in
+        // user_demographics keyed by the company's demographic_fields definition.
+        var siteLocation = new DemographicField
+        {
+            Id = Guid.NewGuid(), CompanyId = company.Id, Field = "site_location", Label = "Site location",
+            Type = "select", Options = ["Remote", "Onsite"], Required = false, Order = 0,
+            CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        db.DemographicFields.Add(siteLocation);
+        db.UserDemographics.Add(new UserDemographic
+        {
+            UserId = employee.Id, DemographicFieldId = siteLocation.Id, Value = "Remote",
+            CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        });
         await db.SaveChangesAsync();
 
         await using var readDb = CreateContext();
@@ -57,7 +72,87 @@ public class UserProfileTests(PostgresContainerFixture postgres)
         Assert.Equal("dark", loaded.Preferences.Theme);
         Assert.True(loaded.Consent.Analytics);
         Assert.True(loaded.Consent.Essential);
-        Assert.Contains("Remote", loaded.Demographics);
+
+        var demographics = await readDb.UserDemographics.Where(d => d.UserId == employee.Id).ToListAsync();
+        var single = Assert.Single(demographics);
+        Assert.Equal(siteLocation.Id, single.DemographicFieldId);
+        Assert.Equal("Remote", single.Value);
+    }
+
+    [Fact]
+    public async Task A_user_can_hold_only_one_answer_per_demographic_field()
+    {
+        // The composite primary key is what replaces the jsonb object's implicit
+        // "one value per key" guarantee. Without it, normalising would be a
+        // regression: two rows for the same field would make every dashboard
+        // filter and export double-count that user.
+        await using var db = CreateContext();
+        await db.Database.MigrateAsync();
+
+        var company = new Company { Id = Guid.NewGuid(), Name = "Dup Co", CreatedAt = DateTimeOffset.UtcNow };
+        db.Companies.Add(company);
+        await db.SaveChangesAsync();
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(), CompanyId = company.Id, Email = "dup@dup.test", Name = "Dup",
+            Role = "employee", CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        var field = new DemographicField
+        {
+            Id = Guid.NewGuid(), CompanyId = company.Id, Field = "tenure", Label = "Tenure",
+            Type = "text", Required = false, Order = 0,
+            CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        db.Users.Add(user);
+        db.DemographicFields.Add(field);
+        db.UserDemographics.Add(new UserDemographic
+        {
+            UserId = user.Id, DemographicFieldId = field.Id, Value = "2 years",
+            CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        // A second context so the duplicate reaches Postgres rather than being caught
+        // by the first context's change tracker.
+        await using var secondDb = CreateContext();
+        secondDb.UserDemographics.Add(new UserDemographic
+        {
+            UserId = user.Id, DemographicFieldId = field.Id, Value = "3 years",
+            CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        });
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => secondDb.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task A_demographic_answer_cannot_reference_a_field_that_does_not_exist()
+    {
+        // The other half of what the blob could not do: a jsonb key was free text,
+        // so a typo'd or retired field name persisted silently. The FK makes an
+        // unmapped answer impossible at the storage layer.
+        await using var db = CreateContext();
+        await db.Database.MigrateAsync();
+
+        var company = new Company { Id = Guid.NewGuid(), Name = "FK Co", CreatedAt = DateTimeOffset.UtcNow };
+        db.Companies.Add(company);
+        await db.SaveChangesAsync();
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(), CompanyId = company.Id, Email = "fk@fk.test", Name = "FK",
+            Role = "employee", CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        db.UserDemographics.Add(new UserDemographic
+        {
+            UserId = user.Id, DemographicFieldId = Guid.NewGuid(), Value = "whatever",
+            CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        });
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
     }
 
     [Fact]
@@ -89,7 +184,7 @@ public class UserProfileTests(PostgresContainerFixture postgres)
         Assert.Null(loaded.DepartmentId);
         Assert.Null(loaded.ManagerId);
         Assert.Null(loaded.ConsentUpdatedAt);
-        Assert.Null(loaded.Demographics);
+        Assert.Empty(await readDb.UserDemographics.Where(d => d.UserId == minimalUserId).ToListAsync());
         Assert.Equal("en", loaded.Preferences.Language);
         Assert.Equal("UTC", loaded.Preferences.Timezone);
         Assert.Equal("default", loaded.Preferences.DashboardLayout);

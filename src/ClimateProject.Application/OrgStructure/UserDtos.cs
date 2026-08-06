@@ -22,12 +22,17 @@ public sealed record UserDetail(
     Guid? ManagerId,
     bool IsActive,
     DateTimeOffset? LastLoginAt,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    IReadOnlyDictionary<string, string> Demographics);
 
 public sealed record UpdateUserRequest(
     string? Name,
     Guid? DepartmentId,
     Guid? ManagerId,
-    bool? IsActive);
+    bool? IsActive,
+    // Null means "leave demographics alone"; a non-null map REPLACES the user's
+    // full demographic set (an omitted or blank key clears that answer), which is
+    // why required-field enforcement applies here and not at invitation time.
+    Dictionary<string, string?>? Demographics = null);
 
 public sealed record UpdateUserRoleRequest(string Role);

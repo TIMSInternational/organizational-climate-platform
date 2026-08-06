@@ -26,13 +26,15 @@ public static class UserEndpoints
     private static UserListItem ToListItem(User u)
         => new(u.Id, u.Email, u.Name, u.Role, u.DepartmentId, u.IsActive, u.LastLoginAt, u.CreatedAt);
 
-    private static UserDetail ToDetail(User u)
-        => new(u.Id, u.CompanyId, u.Email, u.Name, u.Role, u.DepartmentId, u.ManagerId, u.IsActive, u.LastLoginAt, u.CreatedAt);
+    private static UserDetail ToDetail(User u, IReadOnlyDictionary<string, string> demographics)
+        => new(u.Id, u.CompanyId, u.Email, u.Name, u.Role, u.DepartmentId, u.ManagerId, u.IsActive, u.LastLoginAt, u.CreatedAt, demographics);
 
     private static async Task<IResult> ListAsync(
         Guid companyId,
         Guid? departmentId,
         string? role,
+        string? demographicField,
+        string? demographicValue,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -52,6 +54,33 @@ public static class UserEndpoints
         if (!string.IsNullOrWhiteSpace(role))
         {
             query = query.Where(u => u.Role == role);
+        }
+
+        // The reason #193 exists: with demographics living in a jsonb blob, "show me
+        // everyone in this company whose <custom field> is <value>" -- required for
+        // every dashboard filter and export in req.md 2.2 -- had no server-side
+        // answer. Now it is a join over user_demographics, index-backed by
+        // IX_user_demographics_demographic_field_id_value.
+        if (!string.IsNullOrWhiteSpace(demographicValue) && string.IsNullOrWhiteSpace(demographicField))
+        {
+            return Results.Json(new { message = "demographicValue requires demographicField" }, statusCode: 400);
+        }
+
+        if (!string.IsNullOrWhiteSpace(demographicField))
+        {
+            var fieldKey = demographicField.Trim();
+            var fieldIds = db.DemographicFields
+                .Where(f => f.CompanyId == companyId && f.Field == fieldKey)
+                .Select(f => f.Id);
+
+            var matches = db.UserDemographics.Where(d => fieldIds.Contains(d.DemographicFieldId));
+            if (!string.IsNullOrWhiteSpace(demographicValue))
+            {
+                var wanted = demographicValue.Trim();
+                matches = matches.Where(d => d.Value == wanted);
+            }
+
+            query = query.Where(u => matches.Select(d => d.UserId).Contains(u.Id));
         }
 
         var users = await query
@@ -80,7 +109,8 @@ public static class UserEndpoints
             return Results.Forbid();
         }
 
-        return Results.Ok(ToDetail(user));
+        var demographics = await DemographicValueStore.LoadForUserAsync(db, user.Id, cancellationToken);
+        return Results.Ok(ToDetail(user, demographics));
     }
 
     private static async Task<IResult> UpdateAsync(
@@ -145,10 +175,31 @@ public static class UserEndpoints
             user.IsActive = request.IsActive.Value;
         }
 
-        user.UpdatedAt = DateTimeOffset.UtcNow;
+        var now = DateTimeOffset.UtcNow;
+        IReadOnlyDictionary<string, string> demographics;
+
+        if (request.Demographics is null)
+        {
+            // Omitted entirely: leave the existing answers untouched, just echo them.
+            demographics = await DemographicValueStore.LoadForUserAsync(db, user.Id, cancellationToken);
+        }
+        else
+        {
+            var definitions = await DemographicValueStore.LoadDefinitionsAsync(db, user.CompanyId, cancellationToken);
+            var validation = DemographicValueValidation.Validate(request.Demographics, definitions, enforceRequired: true);
+            if (!validation.IsValid)
+            {
+                return Results.Json(new { message = string.Join("; ", validation.Errors) }, statusCode: 400);
+            }
+
+            await DemographicValueStore.ReplaceForUserAsync(db, user.Id, validation.Values, now, cancellationToken);
+            demographics = DemographicValueStore.ToMap(validation.Values);
+        }
+
+        user.UpdatedAt = now;
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(ToDetail(user));
+        return Results.Ok(ToDetail(user, demographics));
     }
 
     private static async Task<IResult> UpdateRoleAsync(
@@ -179,6 +230,7 @@ public static class UserEndpoints
         user.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(ToDetail(user));
+        var demographics = await DemographicValueStore.LoadForUserAsync(db, user.Id, cancellationToken);
+        return Results.Ok(ToDetail(user, demographics));
     }
 }
