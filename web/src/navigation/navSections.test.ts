@@ -38,6 +38,32 @@ describe('buildNavSections', () => {
     expect(links).toContain('/action-plans')
   })
 
+  /**
+   * Benchmarks is the one analytics page a SuperAdmin does get, and the contrast
+   * with Action Plans above is deliberate. `GET /admin/benchmarks` returns every
+   * tenant's rows plus the global ones for this role, so the page is a real
+   * cross-company view rather than a silently single-company one.
+   */
+  it('gives a super_admin a Benchmarks link, because that page has a genuine cross-company view', () => {
+    expect(hrefs(buildNavSections('super_admin', 'company-1'))).toContain('/analytics/benchmarks')
+  })
+
+  /**
+   * AI Insights takes a required company id, and since #191 a global
+   * super_admin's `companyId` claim is the empty string (`User.CompanyId` is
+   * `Guid?`). An entry here would lead to a page that can only say "no company
+   * associated".
+   */
+  it('does not give a super_admin an AI Insights link -- that endpoint requires a company id', () => {
+    expect(hrefs(buildNavSections('super_admin', 'company-1'))).not.toContain('/analytics/ai-insights')
+  })
+
+  it('gives a company_admin both analytics pages', () => {
+    const links = hrefs(buildNavSections('company_admin', 'company-1'))
+    expect(links).toContain('/analytics/benchmarks')
+    expect(links).toContain('/analytics/ai-insights')
+  })
+
   it('gives a company_admin links scoped to their own company only', () => {
     const links = hrefs(buildNavSections('company_admin', 'company-1'))
     expect(links).toContain('/admin/companies/company-1')
@@ -46,10 +72,28 @@ describe('buildNavSections', () => {
     expect(links).not.toContain('/admin/system-settings')
   })
 
+  it('gives a company_admin Reports and Analytics links scoped to their own company', () => {
+    const links = hrefs(buildNavSections('company_admin', 'company-1'))
+    expect(links).toContain('/admin/companies/company-1/reports')
+    expect(links).toContain('/admin/companies/company-1/analytics')
+  })
+
+  it('does not give a super_admin Reports or Analytics links -- their sections carry no company id', () => {
+    // Unlike Action Plans, these two pages are NOT unsafe for a SuperAdmin: they take
+    // their company from the URL, and ReportEndpoints/BenchmarkEndpoints admit a
+    // SuperAdmin for any company. They are absent here for the plainer reason asserted
+    // just above -- a super_admin's nav is deliberately company-agnostic, so there is
+    // no id to interpolate. A SuperAdmin reaches them from CompanyDetailPage.
+    const links = hrefs(buildNavSections('super_admin', 'company-1'))
+    expect(links.some((href) => href.endsWith('/reports'))).toBe(false)
+    expect(links.some((href) => href.endsWith('/analytics'))).toBe(false)
+  })
+
   it('gives a company_admin with no companyId claim only the Notifications link', () => {
-    // Was `toEqual([])` before #99. Every company-scoped href it could have built
-    // would have been `/admin/companies/undefined/...`, so the empty array was
-    // right -- but /notifications needs no companyId at all.
+    // Replaces an earlier `toEqual([])`. Every company-scoped href this branch could
+    // have built would have been `/admin/companies/undefined/...`, so the empty array
+    // was right until #99 -- but /notifications needs no companyId at all, so the
+    // fallback is now that one row rather than nothing.
     expect(hrefs(buildNavSections('company_admin', undefined))).toEqual(['/notifications'])
   })
 
@@ -128,6 +172,14 @@ describe('leafNavItems', () => {
       '/admin/companies/company-1/demographic-fields',
       '/action-plans',
       '/microclimates',
+      '/analytics/benchmarks',
+      '/analytics/ai-insights',
+      // After the top-level rows, not inside the admin group: `leafNavItems` puts a
+      // group's children ahead of everything that follows it, so grouping these two
+      // would take the fourth mobile tab slot away from Action Plans.
+      '/admin/companies/company-1/reports',
+      '/admin/companies/company-1/analytics',
+      // Last, for the same four-slot reason -- see 'puts Notifications last' above.
       '/notifications',
     ])
     expect(leaves.every((item) => !item.sub?.length)).toBe(true)
@@ -138,6 +190,7 @@ describe('leafNavItems', () => {
     expect(leaves.map((item) => item.href)).toEqual([
       '/admin/companies',
       '/admin/system-settings',
+      '/analytics/benchmarks',
       '/notifications',
     ])
   })

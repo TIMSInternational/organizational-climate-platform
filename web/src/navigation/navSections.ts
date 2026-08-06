@@ -1,4 +1,17 @@
-import { Shield, Building2, Settings, Users, Tags, Target, Waves, Bell } from 'lucide-react'
+import {
+  Shield,
+  Building2,
+  Settings,
+  Users,
+  Tags,
+  Target,
+  Waves,
+  Gauge,
+  Sparkles,
+  FileText,
+  ChartColumn,
+  Bell,
+} from 'lucide-react'
 
 export interface NavItem {
   /**
@@ -73,6 +86,19 @@ export function buildNavSections(role: string | undefined, companyId: string | u
               { labelKey: 'navigation.systemSettings', href: '/admin/system-settings', icon: Settings },
             ],
           },
+          // Benchmarks IS offered to a SuperAdmin, unlike Action Plans above.
+          // `GET /admin/benchmarks` returns every tenant's benchmarks plus the
+          // global ones for this role, so the page is a real cross-company view
+          // rather than a silent single-company one -- the missing #57 picker is
+          // not load-bearing here (see BenchmarksPage.tsx).
+          {
+            labelKey: 'navigation.benchmarks',
+            href: '/analytics/benchmarks',
+            icon: Gauge,
+          },
+          // Last on purpose: `leafNavItems` feeds the first four leaves to the mobile
+          // tab bar, so Notifications sits behind "More" instead of displacing a
+          // primary page. navSections.test.ts pins this position.
           NOTIFICATIONS_ITEM,
         ],
       },
@@ -104,6 +130,48 @@ export function buildNavSections(role: string | undefined, companyId: string | u
             href: '/microclimates',
             icon: Waves,
           },
+          {
+            labelKey: 'navigation.benchmarks',
+            href: '/analytics/benchmarks',
+            icon: Gauge,
+          },
+          // AI Insights is CompanyAdmin-only, and deliberately not in the
+          // SuperAdmin section above. `GET /admin/ai-insights` takes a required
+          // company id, and since #191 a global SuperAdmin's `companyId` claim is
+          // the empty string (`User.CompanyId` is `Guid?`, NULL meaning no
+          // tenant) -- so the page would have nothing to ask for. Revisit with
+          // #57's company selector.
+          {
+            labelKey: 'navigation.aiInsights',
+            href: '/analytics/ai-insights',
+            icon: Sparkles,
+          },
+          // Reports and Analytics are top-level destinations rather than children of
+          // "Company Administration", for two reasons. They are work surfaces like
+          // Action Plans and Microclimates, not configuration like Users and
+          // Demographic fields -- and `leafNavItems` flattens a group's children ahead
+          // of the top-level rows that follow it, so putting them in the group would
+          // push Action Plans off the four-slot mobile tab bar (MobileNav.test.tsx
+          // records that ordering consequence, and it is not this issue's to change).
+          //
+          // Unlike Action Plans, they carry NO silent-scoping hazard: they take their
+          // company from the URL, not from a claim. They are absent from the
+          // super_admin branch only because a super_admin's sections deliberately
+          // contain no company id to interpolate; that role reaches them from the
+          // company it opened, via CompanyDetailPage.
+          {
+            labelKey: 'navigation.reports',
+            href: `/admin/companies/${companyId}/reports`,
+            icon: FileText,
+          },
+          {
+            labelKey: 'navigation.analytics',
+            href: `/admin/companies/${companyId}/analytics`,
+            icon: ChartColumn,
+          },
+          // Last on purpose -- see the super_admin branch. A company_admin's first
+          // four leaves are their own company's pages; Notifications must not push
+          // one of them off the mobile tab bar.
           NOTIFICATIONS_ITEM,
         ],
       },

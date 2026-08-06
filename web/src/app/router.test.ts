@@ -55,6 +55,10 @@ describe('router', () => {
     // /notifications/mine authorizes per user, so every authenticated role can
     // load their own inbox and the nav offers it to all of them.
     expect(paths).toContain('/notifications')
+    expect(paths).toContain('/analytics/benchmarks')
+    expect(paths).toContain('/analytics/ai-insights')
+    expect(paths).toContain('/admin/companies/:companyId/reports')
+    expect(paths).toContain('/admin/companies/:companyId/analytics')
   })
 
   it('has an error element so a thrown render does not blank the page', () => {
