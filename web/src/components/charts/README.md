@@ -126,9 +126,49 @@ well as `ui/`, and a raw hex fails the build.
 - **Never a dual-axis chart.** Two measures of different scale are two charts, small
   multiples, or indexed to a common base.
 - **Text wears text tokens, never the series colour.** Values, labels and legend text stay
-  in `--admin-font-*`; the coloured swatch beside them carries identity.
+  in `--admin-font-*`; the coloured swatch beside them carries identity. The one carve-out
+  is text drawn *inside* a sequential swatch — see the paired ink below.
 - **Identity is never colour-alone.** For ≥2 series a legend is always present, and ≤4
   series are also directly labelled.
+
+## Text on a swatch: the paired sequential ink (#208)
+
+`HeatMap showValues` paints the number *on* the ramp, so the ramp is that text's
+background. One ink cannot serve a ramp — a ramp spans light to dark by definition — and
+the measurement said so: `--admin-font-primary` on dark-mode `seq-7` was **1.56:1**, with
+3 of 11 rendered cells under 3:1.
+
+So each step has a paired ink, `--admin-chart-seq-N-ink`, in both theme blocks. Reach for
+them through `sequentialPair(fraction)`, which returns `{ fill, ink }` from a single step
+calculation; `sequentialColor` and `sequentialInk` exist for the cases that genuinely need
+one of the two. Never index `SEQUENTIAL_COLORS` and `SEQUENTIAL_INKS` separately — that is
+how a fill gets paired with an ink nobody measured against it.
+
+Two ink values do all the work, and the flip point differs per theme because the ramp is
+selected per theme rather than flipped: light flips at step 7, dark at step 5. Both are
+outside the ramp on purpose — `#0d9488` is the pinch point in *both* themes, and the
+darkest ramp step (`#042f2e`) only reaches 3.86:1 against it.
+
+| step | light fill | light ink | ratio | dark fill | dark ink | ratio |
+|---|---|---|---|---|---|---|
+| 1 | `#ccfbf1` | `#02100f` | 17.20:1 | `#042f2e` | `#f0fdfa` | 13.87:1 |
+| 2 | `#99f6e4` | `#02100f` | 15.37:1 | `#134e4a` | `#f0fdfa` | 9.09:1 |
+| 3 | `#5eead4` | `#02100f` | 13.10:1 | `#115e59` | `#f0fdfa` | 7.27:1 |
+| 4 | `#2dd4bf` | `#02100f` | 10.41:1 | `#0f766e` | `#f0fdfa` | 5.25:1 |
+| 5 | `#14b8a6` | `#02100f` | 7.79:1 | `#0d9488` | `#02100f` | 5.18:1 |
+| 6 | `#0d9488` | `#02100f` | 5.18:1 | `#14b8a6` | `#02100f` | 7.79:1 |
+| 7 | `#0f766e` | `#f0fdfa` | 5.25:1 | `#2dd4bf` | `#02100f` | 10.41:1 |
+
+Re-measure rather than adjust by eye, and check **both** themes — a one-theme failure is
+this project's recurring blind spot (#80 shipped four light-mode-only AA failures while
+the dark palette passed all four):
+
+```
+npm run check:contrast          # or: node scripts/check-seq-contrast.mjs
+```
+
+`styles/seqInkContrast.test.ts` runs that same script, so a nudge to any of these hexes —
+ink *or* fill — fails the build rather than silently making a cell unreadable.
 
 ## Bars start at zero. Lines do not.
 
@@ -254,11 +294,6 @@ Spanish.
 
 ## Still open
 
-- **A paired ink token per sequential ramp step**, so `HeatMap.showValues` can default to
-  on — filed as **#208** with the measured contrast figures. The ramp is *selected* per
-  theme rather than flipped, so no single ink works against both ends: dark mode measures
-  **1.56:1** at worst, with 3 of 11 cells below 3:1. Until then the prop defaults to off
-  and the value is always in the cell's accessible name, so nothing is hidden.
 - **`SentimentVisualization` has no real data source.** Sentiment needs an AI provider,
   which is #67. It renders `sentimentStub` — deliberately a separate module, so
   `grep sentimentStub` finds every caller and deleting it turns a survivor into a compile

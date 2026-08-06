@@ -201,7 +201,7 @@
     "galleryDonut": "The same split, as a donut",
     "galleryPieFolded": "Nine departments, folded into six slices",
     "galleryHeatMap": "Score by department and quarter",
-    "galleryHeatMapValues": "The same grid with values shown",
+    "galleryHeatMapValues": "The same grid with values hidden",
     "galleryWords": "Most frequent words",
     "galleryWordsByCategory": "Coloured by category",
     "galleryWordsBySentiment": "Coloured by sentiment, and selectable",

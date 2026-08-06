@@ -11,6 +11,7 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "lint": "oxlint --max-warnings 10",
+    "check:contrast": "node scripts/check-seq-contrast.mjs",
     "preview": "vite preview",
     "test": "vitest run"
   },

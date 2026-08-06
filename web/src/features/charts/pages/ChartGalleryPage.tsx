@@ -136,10 +136,11 @@ export default function ChartGalleryPage() {
       </Section>
 
       <Section title={t('charts.gallerySectionHeatMap')}>
+        {/* Values are on by default since #208. Toggle the theme above with this
+            rendered: the ink flips with the fill, so every number stays legible
+            at both ends of the ramp in both themes. */}
         <HeatMap data={HEATMAP} title={t('charts.galleryHeatMap')} />
-        {/* showValues is off by default because the ramp inverts between themes --
-            toggle the theme above with this rendered to see why. */}
-        <HeatMap data={HEATMAP} showValues title={t('charts.galleryHeatMapValues')} />
+        <HeatMap data={HEATMAP} showValues={false} title={t('charts.galleryHeatMapValues')} />
       </Section>
 
       <Section title={t('charts.gallerySectionWords')}>
