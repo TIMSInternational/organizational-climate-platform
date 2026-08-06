@@ -1,5 +1,6 @@
 import type { Department } from '../api/departments'
 import { useTranslation } from '../../../i18n'
+import { Table } from '../../../components/ui'
 
 export default function DepartmentList({ departments, onEdit }: { departments: Department[]; onEdit: (department: Department) => void }) {
   const { t } = useTranslation()
@@ -11,7 +12,7 @@ export default function DepartmentList({ departments, onEdit }: { departments: D
   const byId = new Map(departments.map((d) => [d.id, d]))
 
   return (
-    <table>
+    <Table>
       <thead>
         <tr>
           <th>{t('departments.name')}</th>
@@ -32,6 +33,6 @@ export default function DepartmentList({ departments, onEdit }: { departments: D
           </tr>
         ))}
       </tbody>
-    </table>
+    </Table>
   )
 }

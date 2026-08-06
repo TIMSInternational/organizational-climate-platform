@@ -101,17 +101,25 @@ export default function AdminLayout() {
               monitor. `pb-20 md:pb-panel` clears the mobile tab bar, which is
               `fixed` and would otherwise cover the last ~56px of every page.
 
-              `overflow-x-auto` is load-bearing, and measured rather than guessed:
-              index.css gives every `table` `width: 100%` and every `th`
-              `white-space: nowrap`, so a table's *min-content* width exceeds the
-              panel on a phone. With the panel at `overflow-x: visible` the table
-              rendered up to 150px past the panel's own rounded border and
+              `overflow-x-auto` was added here as the *table* fix and is no longer
+              that. It was measured rather than guessed: index.css used to give
+              every `table` `width: 100%` and every `th` `white-space: nowrap`, so a
+              table's *min-content* width exceeded the panel on a phone and the
+              table rendered up to 150px past the panel's own rounded border and
               background — reachable, because `main`'s `overflow-y: auto` computes
               `overflow-x` to `auto`, but visibly outside the card. Measured in
               Chrome at 320px and 390px on Users, Companies, Action Plans and
-              Demographic fields. Scoping the scroll to the panel keeps the frame
-              intact. Same class of defect as the #79 HeatMap, and the same root
-              cause: the global `table { width: 100% }`. */}
+              Demographic fields; same class of defect as the #79 HeatMap, and the
+              same root cause.
+
+              #218 moved that root cause out of the element layer: `w-full` and the
+              nowrap header now live in `ui/table.tsx`, next to the
+              `overflow-x-auto` container they need, and every table in the app goes
+              through it. The rule is kept here as a *generic* guard, not a
+              table-specific workaround — anything too wide (a long pre, a wide
+              inline SVG) still scrolls inside the card rather than escaping its
+              border. Deliberately not removed: it costs nothing and the failure it
+              catches is invisible to happy-dom. */}
           <div className="mx-auto w-full max-w-content overflow-x-auto rounded-xl border border-line-panel bg-surface-panel p-panel pb-20 md:pb-panel">
             <Outlet />
           </div>

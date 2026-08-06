@@ -49,7 +49,8 @@ without naming a single value, and a token change moves all twelve at once.
 
 Consequences for new work:
 
-- **Prefer plain semantic markup.** A `<table>` is already dense and themed.
+- **Prefer plain semantic markup.** A `<table>` is already dense and themed —
+  but wrap it in `<Table>` (`components/ui`); see "Tables" below.
 - **Reach for a utility** (`p-card`, `text-fg-secondary`, `bg-surface-panel`)
   when you need something the element layer cannot express.
 - **Use `var(--admin-*)` directly** for inline styles in layout/shell code, as
@@ -70,6 +71,84 @@ the utility compiles" circular: it compiled because the doc mentioned it.
 
 The class names in the tables below are therefore documentation only. They exist
 in the bundle when, and only when, a `.ts`/`.tsx` file uses them.
+
+## Tables
+
+**Decision (#218): the `ui/table.tsx` primitive owns table width and the scroll
+container. The element layer owns cell styling only.** Written down here so it is
+not re-litigated per page.
+
+`table { width: 100% }` and `th { white-space: nowrap }` used to be element rules,
+copied from `ui/table.tsx` along with the padding and colour. They are the one part
+of that component that does not survive the copy. In the component they sit *inside*
+`<div data-slot="table-container" class="overflow-x-auto">`, so a table wider than
+its parent scrolls. As element rules they arrive without the container: the table is
+told to fill its parent and forbidden to shrink, so it renders outside it.
+
+That shipped twice, and each time was patched at the call site rather than at the
+cause — which is why it shipped a second time:
+
+| | Symptom | Local patch |
+| --- | --- | --- |
+| #79 | `HeatMap` stretched until its coloured cells were stranded against the right edge — a grid you cannot read a row off | `w-auto` + a local `overflow-x-auto` wrapper |
+| #80 | Tables rendered **up to 150px outside the content panel** at 320/390px on Users, Companies, Action Plans, Demographic fields | `overflow-x-auto` on the `AdminLayout` panel |
+
+Of the three options on #218, this is option 2 ("make the primitive own the scroll")
+plus the half of option 1 it implies. Option 3 (a lint rule around the global) keeps
+the trap and adds a rule to remember it by. Option 2 matches how this repo already
+absorbs shared behaviour into `ui/`, and gives one place to change.
+
+What that means when you write a table:
+
+- **Use `<Table>` from `components/ui`.** Plain `<thead>/<tr>/<th>/<td>` children are
+  fine and still get their padding, type and rules from the element layer — the
+  classless pages do exactly that. You are wrapping for the container, not opting
+  into a component API.
+- **A bare `<table>` fails the build.** `tableOverflow.test.ts` sweeps every `.tsx`.
+- **Full width is `Table`'s default**; `<Table className="w-auto">` shrink-wraps
+  (`HeatMap` is the one caller that wants that).
+- **`th` wraps by default now.** `TableHead` opts back into `whitespace-nowrap`,
+  which is safe because its container scrolls.
+- `th, td` carry `overflow-wrap: break-word` as the last line of defence: an
+  unbreakable run — an email, a UUID, a URL — is the one thing that can still push a
+  table past `max-width: 100%`. It only breaks a word that cannot fit a line of its
+  own, so prose wraps as before.
+
+`AdminLayout`'s panel keeps its `overflow-x-auto`. It is no longer the table fix, and
+is documented there as a generic guard for anything else too wide to fit the card.
+
+### Layout and overflow are browser-verified only
+
+`happy-dom` computes no layout, so **width, overflow, clipping and horizontal scroll
+are unobservable to the test suite**. Both defects above were found by rendering in a
+real browser, and neither was visible to a green suite of 750+ tests. Do not read a
+passing run as coverage of them.
+
+`tableOverflow.test.ts` gets as close as the environment allows: it compiles the real
+`index.css` through the real Tailwind compiler, puts the output in the document and
+asserts what a `<th>` *computes* to. That pins the declarations — the width is not
+100%, the header is not nowrap, the container is `overflow-x: auto` — and it pins that
+every table goes through the primitive. It does not, and cannot, prove that a wide
+table stays inside its card.
+
+That was measured separately, in headless Chrome driven over CDP at **320px and
+390px**, in **both themes** (theme is checked because #80's four contrast failures were
+light-mode-only while the dark palette passed all four — see
+`components/layout/README.md`). The page under test was the built
+`dist/assets/index-*.css` over a replica of `AdminLayout`'s `main` + panel, holding a
+seven-column users table with a 52-character email — not the running app, which needs
+an API and a session. Both themes measured identically at both widths, as layout
+should:
+
+| | Panel overflows | Table's own container scrolls | `th` | Table / panel |
+| --- | --- | --- | --- | --- |
+| Bare `<table>` + the old globals | **yes** | — | `nowrap` | 784px / 294px |
+| …plus #80's panel `overflow-x-auto` | **yes** (the whole panel scrolls, `<h1>` and all) | — | `nowrap` | 784px / 294px |
+| `<Table>` + this layer | no | **yes** | `normal` | 752px / 294px |
+
+The document never scrolled horizontally in any of the six runs, and with `<Table>` the
+table's painted right edge sits 17px *inside* the panel border (its padding) instead of
+past it.
 
 ## Naming
 
@@ -318,8 +397,8 @@ rather than the eye.
 | `input`, `select` | h 32px, pad 0 12px, r 4px, 13px | `ui/input.tsx` `h-8 px-3 rounded-[4px] text-[13px]`; `ui/select.tsx` idem |
 | `label > input` full width | `width: 100%` | `ui/input.tsx` `w-full`, scoped to the form row |
 | `textarea` | min-h 80px, pad 8px 12px | `ui/textarea.tsx` `min-h-[80px] px-3 py-2` |
-| `table` | 13px, `w-full` | `ui/table.tsx` `w-full text-[13px]` |
-| `th` | pad 8px 12px, 12px, 500, tertiary | `ui/table.tsx` `px-3 py-2 text-xs font-medium text-muted-foreground` |
+| `table` | 13px (**not** `w-full` — see Tables) | `ui/table.tsx` `w-full text-[13px]` |
+| `th` | pad 8px 12px, 12px, 500, tertiary (**not** nowrap — see Tables) | `ui/table.tsx` `px-3 py-2 text-xs font-medium text-muted-foreground` |
 | `td` | pad 10px 12px, inherits colour | `ui/table.tsx` `px-3 py-2.5` |
 | `tr` | bottom rule + hover fill | `ui/table.tsx` `border-b hover:bg-accent/60` |
 | `[role=alert]` | pad 12px 16px, r 8px, 14px | `ui/alert.tsx` `rounded-lg border px-4 py-3 text-sm` |
@@ -334,6 +413,8 @@ rather than the eye.
 
 | Rule | Legacy | Here | Why |
 | --- | --- | --- | --- |
+| `table` width, `th` nowrap | element rules | on `ui/table.tsx` instead | An element rule cannot bring the scroll container the pair needs — see Tables (#218) |
+| `th`, `td` `overflow-wrap` | — | `break-word` | Last line of defence for a bare table: an unbreakable email/UUID/URL is the only thing that can still exceed `max-width: 100%` |
 | Focus ring | `hsl(<hex>)` on the lightest font colour | 2px blue accent | The legacy declaration was invalid CSS; no ring rendered anywhere |
 | `[role=alert]` fill | `bg-card` | soft red accent + hairline | An alert on a card has to be distinguishable from the card |
 | `small` colour | inherited | `--admin-font-tertiary` | Only used for meta text here |

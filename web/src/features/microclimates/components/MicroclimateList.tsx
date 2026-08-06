@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import type { Microclimate } from '../api/microclimates'
 import { useTranslation } from '../../../i18n'
+import { Table } from '../../../components/ui'
 
 export default function MicroclimateList({ microclimates }: { microclimates: Microclimate[] }) {
   const { t } = useTranslation()
@@ -10,7 +11,7 @@ export default function MicroclimateList({ microclimates }: { microclimates: Mic
   }
 
   return (
-    <table>
+    <Table>
       <thead>
         <tr>
           <th>{t('users.title')}</th>
@@ -27,6 +28,6 @@ export default function MicroclimateList({ microclimates }: { microclimates: Mic
           </tr>
         ))}
       </tbody>
-    </table>
+    </Table>
   )
 }

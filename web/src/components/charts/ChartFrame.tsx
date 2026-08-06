@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from '../../i18n'
+import { Table } from '../ui'
 import type { ChartDatum, ChartSeries } from './types'
 
 interface ChartFrameProps {
@@ -101,7 +102,7 @@ function ChartTable({
   return (
     <details>
       <summary className="cursor-pointer text-sm text-fg-secondary">{t('charts.showTable')}</summary>
-      <table className="w-full text-sm">
+      <Table className="text-sm">
         <caption className="sr-only">{t('charts.tableCaption')}</caption>
         <thead>
           <tr>
@@ -129,7 +130,7 @@ function ChartTable({
             </tr>
           ))}
         </tbody>
-      </table>
+      </Table>
     </details>
   )
 }

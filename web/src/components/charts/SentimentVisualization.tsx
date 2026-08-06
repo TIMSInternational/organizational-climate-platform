@@ -1,4 +1,5 @@
 import { useTranslation } from '../../i18n'
+import { Table } from '../ui'
 import { formatMetric } from './formatMetric'
 import { DIVERGING_COLORS, divergingColor } from './palette'
 import { sentimentBreakdown, type SentimentCounts } from './sentiment'
@@ -136,7 +137,7 @@ export default function SentimentVisualization({
               ))}
           </div>
 
-          <table>
+          <Table>
             <caption className="sr-only">{t('charts.sentimentTableCaption')}</caption>
             <thead>
               <tr>
@@ -163,7 +164,7 @@ export default function SentimentVisualization({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Table>
 
           <p className="m-0 flex items-center gap-2 text-sm">
             <span className="text-fg-secondary">{t('charts.netSentiment')}</span>
