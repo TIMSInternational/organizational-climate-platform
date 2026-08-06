@@ -350,6 +350,7 @@ app.MapDemographicFieldEndpoints();
 app.MapBulkImportEndpoints();
 app.MapActionPlanEndpoints();
 app.MapActionPlanTemplateEndpoints();
+app.MapNotificationTemplateEndpoints();
 app.MapTrackingPickerEndpoints();
 app.MapTrackingInternalEndpoints();
 app.MapMicroclimateEndpoints();
@@ -357,6 +358,7 @@ app.MapMicroclimateTemplateEndpoints();
 app.MapReportEndpoints();
 app.MapBenchmarkEndpoints();
 app.MapNotificationEndpoints();
+app.MapDemographicSnapshotEndpoints();
 
 app.Run();
 
