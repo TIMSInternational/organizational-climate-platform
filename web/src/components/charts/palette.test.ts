@@ -8,12 +8,16 @@ import {
   DIVERGING_COLORS,
   MAX_SERIES,
   SEQUENTIAL_COLORS,
+  SEQUENTIAL_INKS,
   SERIES_COLORS,
   divergingColor,
   sequentialColor,
+  sequentialInk,
+  sequentialPair,
   seriesColor,
   seriesColorFor,
 } from './palette'
+import { measureSeqInkContrast } from '../../test/seqInkContrast'
 
 /**
  * #79. Two kinds of claim are pinned here.
@@ -209,6 +213,105 @@ describe('sequentialColor', () => {
     const seen = [0, 0.2, 0.4, 0.6, 0.8, 1].map(sequentialColor)
     const indices = seen.map((c) => SEQUENTIAL_COLORS.indexOf(c as (typeof SEQUENTIAL_COLORS)[number]))
     expect(indices).toEqual([...indices].sort((a, b) => a - b))
+  })
+})
+
+/**
+ * #208. The ramp is only half of a heatmap cell that shows its value; the other
+ * half is the ink drawn on top of it.
+ *
+ * These assertions are about the **module**, not the stylesheet: that what
+ * `sequentialPair` hands a caller is a fill and an ink that were measured against
+ * each other. `styles/seqInkContrast.test.ts` measures the stylesheet.
+ */
+describe('sequential paired ink', () => {
+  const measured = measureSeqInkContrast()
+
+  it('has exactly one ink per ramp step', () => {
+    expect(SEQUENTIAL_INKS).toHaveLength(SEQUENTIAL_COLORS.length)
+  })
+
+  it('exposes only var() references, as the rest of the module does', () => {
+    for (const value of SEQUENTIAL_INKS) {
+      expect(value).toMatch(/^var\(--admin-chart-seq-\d-ink\)$/)
+    }
+  })
+
+  it('references properties tokens.css declares in both themes', () => {
+    // A typo'd var() name renders as *nothing* rather than as an error, and an
+    // ink that renders as nothing is the exact bug this issue is about.
+    for (const [index, value] of SEQUENTIAL_INKS.entries()) {
+      const name = /^var\((--[\w-]+)\)$/.exec(value)![1]
+      expect(light(name)).toMatch(/^#[0-9a-f]{6}$/)
+      expect(dark(name)).toMatch(/^#[0-9a-f]{6}$/)
+      // Index alignment is the load-bearing property: ink i must name step i+1.
+      expect(name).toBe(`--admin-chart-seq-${index + 1}-ink`)
+    }
+  })
+
+  it('exposes each ink as a Tailwind colour alongside its fill', () => {
+    for (let step = 1; step <= SEQUENTIAL_INKS.length; step += 1) {
+      expect(themeCss).toContain(`--color-chart-seq-${step}-ink: var(--admin-chart-seq-${step}-ink);`)
+    }
+  })
+
+  it('clears WCAG AA for small text at every step of both themes', () => {
+    // Measured by scripts/check-seq-contrast.mjs over the real tokens.css, per
+    // step and per theme -- never as one aggregate, because a single worst-case
+    // number lets a light-mode regression hide behind dark-mode headroom (#80
+    // shipped four light-mode-only AA failures exactly that way).
+    expect(measured.rows).toHaveLength(2 * SEQUENTIAL_COLORS.length)
+    expect(
+      measured.rows.filter((row) => !row.passes).map((row) => `${row.theme} seq-${row.step}`),
+      'run `node scripts/check-seq-contrast.mjs` for the full table',
+    ).toEqual([])
+  })
+
+  it('measures the pairing sequentialPair actually returns', () => {
+    // The assertion above measures tokens.css. This one closes the loop: for
+    // every fraction, the fill and ink the module hands out are the same pairing
+    // that was measured. A misaligned list would pass the first and fail here.
+    for (const [index, row] of measured.rows.filter((row) => row.theme === 'light').entries()) {
+      const fraction = (index + 0.5) / SEQUENTIAL_COLORS.length
+      expect(sequentialPair(fraction)).toEqual({
+        fill: `var(--admin-chart-seq-${row.step})`,
+        ink: `var(--admin-chart-seq-${row.step}-ink)`,
+      })
+    }
+  })
+})
+
+describe('sequentialInk and sequentialPair', () => {
+  it('lands on the same step as sequentialColor for every fraction', () => {
+    // The bug the shared step calculation exists to prevent: two independent
+    // roundings can disagree at a bucket boundary and pair an ink with a fill it
+    // was never measured against.
+    for (let n = 0; n <= 200; n += 1) {
+      const fraction = n / 200
+      const step = SEQUENTIAL_COLORS.indexOf(
+        sequentialColor(fraction) as (typeof SEQUENTIAL_COLORS)[number],
+      )
+      expect(sequentialInk(fraction)).toBe(SEQUENTIAL_INKS[step])
+      expect(sequentialPair(fraction)).toEqual({
+        fill: SEQUENTIAL_COLORS[step],
+        ink: SEQUENTIAL_INKS[step],
+      })
+    }
+  })
+
+  it('clamps out-of-range and NaN input the way the fill does', () => {
+    expect(sequentialInk(-0.2)).toBe(SEQUENTIAL_INKS[0])
+    expect(sequentialInk(1.4)).toBe(SEQUENTIAL_INKS[SEQUENTIAL_INKS.length - 1])
+    expect(sequentialInk(Number.NaN)).toBe(SEQUENTIAL_INKS[0])
+    expect(sequentialPair(Number.NaN).fill).toBe(SEQUENTIAL_COLORS[0])
+  })
+
+  it('reaches both ends of the ink list', () => {
+    // Guard the guard: an ink list that returned index 0 for everything would
+    // satisfy the alignment test above.
+    expect(sequentialInk(0)).toBe(SEQUENTIAL_INKS[0])
+    expect(sequentialInk(1)).toBe(SEQUENTIAL_INKS[SEQUENTIAL_INKS.length - 1])
+    expect(sequentialInk(0)).not.toBe(sequentialInk(1))
   })
 })
 

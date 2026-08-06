@@ -39,9 +39,12 @@ export {
   DIVERGING_COLORS,
   MAX_SERIES,
   SEQUENTIAL_COLORS,
+  SEQUENTIAL_INKS,
   SERIES_COLORS,
   divergingColor,
   sequentialColor,
+  sequentialInk,
+  sequentialPair,
   seriesColor,
   seriesColorFor,
 } from './palette'

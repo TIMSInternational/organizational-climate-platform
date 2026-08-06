@@ -36,6 +36,15 @@ function token(name: string): string {
   return match[1].trim()
 }
 
+/** Value of a custom property inside the dark palette block. */
+function darkToken(name: string): string {
+  const body = /:root\[data-admin-theme='dark'\]\s*\{([\s\S]*?)\n\}/m.exec(stripComments(tokensCss))
+  if (!body) throw new Error('tokens.css has no dark palette block')
+  const match = new RegExp(`^\\s*${name}:\\s*([^;]+);`, 'm').exec(body[1])
+  if (!match) throw new Error(`token ${name} is not declared in the dark block`)
+  return match[1].trim()
+}
+
 describe('the fixtures themselves', () => {
   it('are the stylesheets as authored, not a stub or a compiled copy', () => {
     // Vitest returns an empty string for CSS imports unless `test.css` is on.
@@ -161,6 +170,61 @@ describe('colour palette', () => {
     expect(tokensCss).toMatch(/:root\[data-admin-theme='dark'\]/)
     // src/theme/adminTheme.ts is what sets it; asserted there in full.
     expect(adminThemeSource).toContain("'data-admin-theme'")
+  })
+})
+
+/**
+ * #208. The ramp gained a paired ink per step so a value can be painted inside a
+ * heatmap cell and stay legible.
+ *
+ * The *values* are pinned here; whether they are legible is measured in
+ * `seqInkContrast.test.ts`, which runs `scripts/check-seq-contrast.mjs` over this
+ * same file. Two different claims, deliberately in two places: this one catches a
+ * value changing at all, that one catches a value changing into something
+ * unreadable.
+ */
+describe('sequential ramp paired ink', () => {
+  const steps = [1, 2, 3, 4, 5, 6, 7]
+
+  it('declares an ink for every step of both themes', () => {
+    expect(steps.map((n) => token(`--admin-chart-seq-${n}-ink`))).toEqual([
+      '#02100f',
+      '#02100f',
+      '#02100f',
+      '#02100f',
+      '#02100f',
+      '#02100f',
+      '#f0fdfa',
+    ])
+    expect(steps.map((n) => darkToken(`--admin-chart-seq-${n}-ink`))).toEqual([
+      '#f0fdfa',
+      '#f0fdfa',
+      '#f0fdfa',
+      '#f0fdfa',
+      '#02100f',
+      '#02100f',
+      '#02100f',
+    ])
+  })
+
+  it('draws its inks from outside the ramp', () => {
+    // Not a stylistic preference: #0d9488 sits in the middle of the ramp in both
+    // themes, and the deepest step of the ramp itself (#042f2e) measures 3.86:1
+    // against it -- a fail. An ink taken from the ramp cannot clear AA.
+    const ramp = new Set([
+      ...steps.map((n) => token(`--admin-chart-seq-${n}`)),
+      ...steps.map((n) => darkToken(`--admin-chart-seq-${n}`)),
+    ])
+    for (const n of steps) {
+      expect(ramp.has(token(`--admin-chart-seq-${n}-ink`))).toBe(false)
+      expect(ramp.has(darkToken(`--admin-chart-seq-${n}-ink`))).toBe(false)
+    }
+  })
+
+  it('exposes each ink as a utility, next to the fill it belongs to', () => {
+    for (const n of steps) {
+      expect(themeCss).toContain(`--color-chart-seq-${n}-ink: var(--admin-chart-seq-${n}-ink);`)
+    }
   })
 })
 

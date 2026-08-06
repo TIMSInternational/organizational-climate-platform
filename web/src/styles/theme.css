@@ -74,6 +74,17 @@
   --color-chart-seq-6: var(--admin-chart-seq-6);
   --color-chart-seq-7: var(--admin-chart-seq-7);
 
+  /* The ink that goes with each step, so `text-chart-seq-4-ink` is a real
+     utility and never has to be guessed. Paired: step N's ink belongs to step
+     N's fill and to no other, which is the whole point (#208). */
+  --color-chart-seq-1-ink: var(--admin-chart-seq-1-ink);
+  --color-chart-seq-2-ink: var(--admin-chart-seq-2-ink);
+  --color-chart-seq-3-ink: var(--admin-chart-seq-3-ink);
+  --color-chart-seq-4-ink: var(--admin-chart-seq-4-ink);
+  --color-chart-seq-5-ink: var(--admin-chart-seq-5-ink);
+  --color-chart-seq-6-ink: var(--admin-chart-seq-6-ink);
+  --color-chart-seq-7-ink: var(--admin-chart-seq-7-ink);
+
   --color-chart-div-neg-2: var(--admin-chart-div-neg-2);
   --color-chart-div-neg-1: var(--admin-chart-div-neg-1);
   --color-chart-div-mid: var(--admin-chart-div-mid);

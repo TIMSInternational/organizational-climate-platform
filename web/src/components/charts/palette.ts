@@ -33,7 +33,9 @@
  *   charts, or indexed to a common base.
  * - **Text wears text tokens, never the series colour.** Values, labels and
  *   legend text stay in `--admin-font-*`; the coloured swatch beside them
- *   carries identity.
+ *   carries identity. The one carve-out is text drawn *inside* a sequential
+ *   swatch, which wears the paired `--admin-chart-seq-N-ink` — see
+ *   {@link SEQUENTIAL_INKS}.
  */
 
 /** Categorical series colours, in assignment order. Do not reorder. */
@@ -57,6 +59,31 @@ export const SEQUENTIAL_COLORS = [
   'var(--admin-chart-seq-5)',
   'var(--admin-chart-seq-6)',
   'var(--admin-chart-seq-7)',
+] as const
+
+/**
+ * The ink to write ON each sequential step — index-aligned with
+ * {@link SEQUENTIAL_COLORS}.
+ *
+ * `SEQUENTIAL_INKS[i]` belongs to `SEQUENTIAL_COLORS[i]` and to nothing else.
+ * Prefer {@link sequentialPair} over indexing these two lists yourself; the pair
+ * is the unit, and picking a fill from one and an ink from another is the exact
+ * mistake this exists to make impossible (#208).
+ *
+ * These are the one deliberate exception to "text wears text tokens": a value
+ * painted inside a coloured swatch is not text on a surface, and
+ * `--admin-font-primary` measured **1.56:1** against dark-mode `seq-7`. Text
+ * anywhere else in a chart — axis labels, legend text, the scale endpoints —
+ * still wears `--admin-font-*`.
+ */
+export const SEQUENTIAL_INKS = [
+  'var(--admin-chart-seq-1-ink)',
+  'var(--admin-chart-seq-2-ink)',
+  'var(--admin-chart-seq-3-ink)',
+  'var(--admin-chart-seq-4-ink)',
+  'var(--admin-chart-seq-5-ink)',
+  'var(--admin-chart-seq-6-ink)',
+  'var(--admin-chart-seq-7-ink)',
 ] as const
 
 /**
@@ -117,15 +144,42 @@ export function seriesColorFor(key: string, keys: readonly string[]): string {
  * rounding error at the edge should not blank a heatmap cell.
  */
 export function sequentialColor(fraction: number): string {
-  if (Number.isNaN(fraction)) {
-    return SEQUENTIAL_COLORS[0]
-  }
+  return SEQUENTIAL_COLORS[sequentialStep(fraction)]
+}
+
+/**
+ * The ramp step a 0..1 magnitude falls on.
+ *
+ * Both {@link sequentialColor} and {@link sequentialInk} go through this, so a
+ * fill and its ink cannot land on different steps — the bug they would have if
+ * each rounded independently.
+ *
+ * Clamps rather than throwing: magnitudes are usually computed from data and a
+ * rounding error at the edge should not blank a heatmap cell.
+ */
+function sequentialStep(fraction: number): number {
+  if (Number.isNaN(fraction)) return 0
   const clamped = Math.min(1, Math.max(0, fraction))
-  const index = Math.min(
-    SEQUENTIAL_COLORS.length - 1,
-    Math.floor(clamped * SEQUENTIAL_COLORS.length),
-  )
-  return SEQUENTIAL_COLORS[index]
+  return Math.min(SEQUENTIAL_COLORS.length - 1, Math.floor(clamped * SEQUENTIAL_COLORS.length))
+}
+
+/** The ink for the step a 0..1 magnitude falls on. See {@link SEQUENTIAL_INKS}. */
+export function sequentialInk(fraction: number): string {
+  return SEQUENTIAL_INKS[sequentialStep(fraction)]
+}
+
+/**
+ * The fill and its ink together — the form to reach for when drawing text on a
+ * sequential swatch.
+ *
+ * Returning the pair rather than exposing two lookups is the point: a caller
+ * that computes the fraction twice, or calls `sequentialColor(f)` beside
+ * `SEQUENTIAL_INKS[3]`, can pair a fill with an ink that was never measured
+ * against it. One call, one step, one measured pairing.
+ */
+export function sequentialPair(fraction: number): { fill: string; ink: string } {
+  const step = sequentialStep(fraction)
+  return { fill: SEQUENTIAL_COLORS[step], ink: SEQUENTIAL_INKS[step] }
 }
 
 /**

@@ -1,5 +1,5 @@
 import { useTranslation } from '../../i18n'
-import { SEQUENTIAL_COLORS, sequentialColor } from './palette'
+import { SEQUENTIAL_COLORS, sequentialPair } from './palette'
 import type { ChartStateProps } from './types'
 
 export interface HeatMapCell {
@@ -15,12 +15,9 @@ interface HeatMapProps extends ChartStateProps {
   /**
    * Render the number inside each cell.
    *
-   * Off by default, and that is a considered default rather than laziness: the
-   * sequential ramp runs light-to-dark in light mode and **dark-to-light in dark
-   * mode**, so a single ink colour is legible against one end of the ramp and not
-   * the other. Getting it right needs a paired ink token per ramp step, which is
-   * not in the token layer yet. Until then the value is always in the cell's
-   * accessible name, so nothing is hidden from assistive tech.
+   * On by default since #208 added a paired ink token per ramp step. Turn it off
+   * for a dense grid where the numbers would not fit; the value stays in the
+   * cell's accessible name either way, so nothing is hidden from assistive tech.
    */
   showValues?: boolean
 }
@@ -48,7 +45,7 @@ export default function HeatMap({
   data,
   title,
   isLoading = false,
-  showValues = false,
+  showValues = true,
 }: HeatMapProps) {
   const { t } = useTranslation()
 
@@ -142,16 +139,24 @@ export default function HeatMap({
                         return <td key={x} className="h-8 w-12" />
                       }
                       const fraction = span === 0 ? 1 : (value - min) / span
+                      // Fill and ink come out of one call so they cannot land on
+                      // different ramp steps -- the ink is only measured against
+                      // the fill it ships with (#208).
+                      const { fill, ink } = sequentialPair(fraction)
                       return (
                         <td
                           key={x}
                           className="h-8 w-12 text-center"
-                          style={{ backgroundColor: sequentialColor(fraction) }}
+                          // `color` is set even when the value is hidden: it is
+                          // inherited, and a future child drawn in this cell should
+                          // start from the ink that matches the fill rather than
+                          // from the page's text colour.
+                          style={{ backgroundColor: fill, color: ink }}
                           // The number reaches assistive tech and find-in-page even
                           // when it is not painted into the cell.
                           aria-label={`${y}, ${x}: ${value}`}
                         >
-                          {showValues ? <span className="text-fg-primary">{value}</span> : null}
+                          {showValues ? <span>{value}</span> : null}
                         </td>
                       )
                     })}

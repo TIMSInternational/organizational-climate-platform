@@ -3,7 +3,7 @@ import type { ReactElement } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TranslationProvider } from '../../i18n'
 import HeatMap, { type HeatMapCell } from './HeatMap'
-import { SEQUENTIAL_COLORS } from './palette'
+import { SEQUENTIAL_COLORS, SEQUENTIAL_INKS } from './palette'
 
 afterEach(cleanup)
 
@@ -152,23 +152,95 @@ describe('HeatMap', () => {
     it('labels the endpoints so the spread is readable', () => {
       // Without endpoints the ramp says "more" and "less" but not "more than what"
       // -- a 2-point spread and a 40-point one look identical.
-      render(<HeatMap data={data} />)
+      //
+      // Values are turned off here only to make the query unambiguous: since #208
+      // they are painted by default, so `40` and `100` also appear in their own
+      // cells and `getByText` would find two of each. The test below asserts that
+      // duplication deliberately rather than leaving it to a confusing failure.
+      render(<HeatMap data={data} showValues={false} />)
       expect(screen.getByText('40')).toBeTruthy()
       expect(screen.getByText('100')).toBeTruthy()
+    })
+
+    it('keeps its endpoints when the cells also show their values', () => {
+      render(<HeatMap data={data} />)
+      // One in the min/max cell, one in the legend. The legend still earns its
+      // place with values on: it names the range, which no single cell does.
+      expect(screen.getAllByText('40')).toHaveLength(2)
+      expect(screen.getAllByText('100')).toHaveLength(2)
     })
   })
 
   describe('values in cells', () => {
-    it('hides them by default', () => {
-      // The ramp inverts between light and dark mode, so one ink colour cannot be
-      // legible against both ends. Off until the token layer has a paired ink.
+    it('shows them by default', () => {
+      // Default flipped to on in #208, once the token layer gained a paired ink
+      // per ramp step. Before that a single ink measured 1.56:1 against dark-mode
+      // seq-7, so the safe default was to paint nothing.
       render(<HeatMap data={data} />)
+      expect(cell('Sales', 'Q1').textContent).toBe('60')
+    })
+
+    it('can be turned off for a grid too dense to fit them', () => {
+      render(<HeatMap data={data} showValues={false} />)
       expect(cell('Sales', 'Q1').textContent).toBe('')
     })
 
-    it('shows them when asked', () => {
-      render(<HeatMap data={data} showValues />)
-      expect(cell('Sales', 'Q1').textContent).toBe('60')
+    it('still names the cell when the value is not painted', () => {
+      // Turning the values off must not remove them from assistive tech.
+      render(<HeatMap data={data} showValues={false} />)
+      expect(screen.getByLabelText('Sales, Q1: 60')).toBeTruthy()
+    })
+
+    /**
+     * The ink is the point of #208: the value wears the ink token paired with the
+     * fill it sits on, never one ink for the whole ramp.
+     *
+     * happy-dom does no layout and resolves no custom property, so these assert
+     * the *pairing* — that the cell asked for step N's ink and step N's fill —
+     * and `styles/seqInkContrast.test.ts` asserts that pairing is legible. Neither
+     * alone is worth much; a className assertion would be worth nothing at all.
+     */
+    it('inks each value with the token paired to its own ramp step', () => {
+      render(<HeatMap data={data} />)
+      for (const { x, y } of data) {
+        const td = cell(y, x)
+        const step = SEQUENTIAL_COLORS.indexOf(
+          td.style.backgroundColor as (typeof SEQUENTIAL_COLORS)[number],
+        )
+        expect(step, `${y}/${x} has no recognised ramp fill`).toBeGreaterThanOrEqual(0)
+        expect(td.style.color).toBe(SEQUENTIAL_INKS[step])
+      }
+    })
+
+    it('uses more than one ink across a spread of values', () => {
+      // Guard the guard: a component that hardcoded SEQUENTIAL_INKS[0] would pass
+      // the pairing test above for a dataset that happened to sit in one bucket.
+      render(<HeatMap data={data} />)
+      const inks = new Set(data.map(({ x, y }) => cell(y, x).style.color))
+      expect(inks.size).toBeGreaterThan(1)
+    })
+
+    it('sets the ink on the cell so anything drawn inside it inherits', () => {
+      // On the <td>, not on the <span>: the fill is on the <td>, so the ink that
+      // matches it has to be the inherited colour for that whole cell.
+      render(<HeatMap data={data} showValues={false} />)
+      expect(cell('Sales', 'Q1').style.color).toMatch(/^var\(--admin-chart-seq-\d-ink\)$/)
+    })
+
+    it('leaves a gap cell without an ink, as it has no fill', () => {
+      const { container } = render(
+        <HeatMap
+          data={[
+            { x: 'Q1', y: 'Sales', value: 60 },
+            { x: 'Q2', y: 'Support', value: 80 },
+          ]}
+        />,
+      )
+      const gaps = [...container.querySelectorAll('td')].filter(
+        (td) => td.style.backgroundColor === '',
+      )
+      expect(gaps.length).toBeGreaterThan(0)
+      for (const gap of gaps) expect(gap.style.color).toBe('')
     })
   })
 

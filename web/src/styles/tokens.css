@@ -245,6 +245,38 @@
   --admin-chart-seq-6: #0d9488;
   --admin-chart-seq-7: #0f766e;
 
+  /* PAIRED INK, ONE PER RAMP STEP (#208).
+     Text painted ON a ramp swatch -- the number inside a HeatMap cell -- wears
+     the ink token that matches the fill it sits on. Never a single ink for the
+     whole ramp: a ramp spans light to dark by definition, so one ink is legible
+     against one end of it and not the other. Measured before this existed:
+     #ebebeb on dark-mode seq-7 was 1.56:1, i.e. invisible.
+
+     The ink flips from near-black to near-white at the step where the fill gets
+     too dark for black, and that step differs per theme -- 7 here, 5 in dark --
+     which is exactly why the pairing has to be a token rather than a rule of
+     thumb in a component.
+
+     Two values do all the work, and both are outside the ramp on purpose: an ink
+     drawn from the ramp itself cannot clear 4.5:1 against the ramp's middle.
+     #0d9488 is the pinch point in BOTH themes -- the deepest teal that still
+     clears it is #042f2e at 3.86:1, a fail -- so the dark ink is a near-black
+     with a teal cast rather than a ramp step.
+
+     Every pairing is >= 5.18:1 against WCAG AA's 4.5:1 for small text. Do not
+     nudge a hex here or in the ramp above by eye; re-measure:
+
+       node scripts/check-seq-contrast.mjs
+
+     which styles/seqInkContrast.test.ts also runs, so a nudge fails the build. */
+  --admin-chart-seq-1-ink: #02100f;
+  --admin-chart-seq-2-ink: #02100f;
+  --admin-chart-seq-3-ink: #02100f;
+  --admin-chart-seq-4-ink: #02100f;
+  --admin-chart-seq-5-ink: #02100f;
+  --admin-chart-seq-6-ink: #02100f;
+  --admin-chart-seq-7-ink: #f0fdfa;
+
   /* Diverging: two hues plus a NEUTRAL GRAY midpoint, never a hue at the
      middle. For sentiment and any above/below-benchmark comparison. */
   --admin-chart-div-neg-2: #b91c1c;
@@ -357,6 +389,19 @@
   --admin-chart-seq-5: #0d9488;
   --admin-chart-seq-6: #14b8a6;
   --admin-chart-seq-7: #2dd4bf;
+
+  /* Paired ink, mirroring the light block. The ramp is selected per theme rather
+     than flipped, so the ink flip lands on a different step: dark's fills are
+     already dark at seq-1, so steps 1-4 take the light ink and 5-7 the dark one.
+     Same two values as light mode, in the opposite order -- and the same pinch
+     point, seq-5 #0d9488, at 5.18:1. */
+  --admin-chart-seq-1-ink: #f0fdfa;
+  --admin-chart-seq-2-ink: #f0fdfa;
+  --admin-chart-seq-3-ink: #f0fdfa;
+  --admin-chart-seq-4-ink: #f0fdfa;
+  --admin-chart-seq-5-ink: #02100f;
+  --admin-chart-seq-6-ink: #02100f;
+  --admin-chart-seq-7-ink: #02100f;
 
   --admin-chart-div-neg-2: #f87171;
   --admin-chart-div-neg-1: #7f1d1d;

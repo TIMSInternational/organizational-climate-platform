@@ -313,6 +313,31 @@ describe('utility existence', () => {
     }
   })
 
+  /**
+   * The paired sequential inks (#208), checked as utilities.
+   *
+   * `theme.css` mapping `--color-chart-seq-4-ink` onto the token is only half a
+   * wiring job: if the namespace is wrong the utility silently compiles to
+   * nothing, which is precisely the failure documented at the top of this file
+   * and precisely the failure #208 is about — invisible text. Nothing in `src`
+   * writes these classes today (HeatMap sets the ink as an inline custom-property
+   * reference, so fill and ink come from one call and cannot drift apart), so the
+   * sweep above would never reach them. They are exposed for callers, so the
+   * exposure is what gets checked.
+   */
+  it('compiles a text utility for every sequential ink', () => {
+    const steps = [1, 2, 3, 4, 5, 6, 7]
+    const inks = steps.map((step) => `text-chart-seq-${step}-ink`)
+    const fills = steps.map((step) => `bg-chart-seq-${step}`)
+
+    expect(nonCompiling(inks), 'theme.css does not expose an ink for every step').toEqual([])
+    // The fill beside it, so a failure above is legible as "the ink is missing"
+    // rather than "the whole chart namespace is missing".
+    expect(nonCompiling(fills)).toEqual([])
+    // Guard the guard: an eighth step does not exist, so it must not resolve.
+    expect(nonCompiling(['text-chart-seq-8-ink'])).toEqual(['text-chart-seq-8-ink'])
+  })
+
   it('does not descend into cva variant tables', () => {
     // The exclusion that removed the largest group of false positives. If this
     // regresses, `destructive` and `sm` start reading as broken classes.
