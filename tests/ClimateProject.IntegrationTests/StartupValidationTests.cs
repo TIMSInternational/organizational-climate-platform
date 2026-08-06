@@ -45,6 +45,14 @@ namespace ClimateProject.IntegrationTests;
 [Collection("AppHost")]
 public class StartupValidationTests
 {
+    /// <summary>
+    /// How many times to re-attempt a host capture that lost the teardown race. Five, because
+    /// the observed rate under heavy load was roughly one attempt in four, which puts five
+    /// consecutive losses far below the noise floor of the suite it lives in -- while still
+    /// being a bounded number that fails loudly rather than looping.
+    /// </summary>
+    private const int HostCaptureAttempts = 5;
+
     private const string ValidConnectionString = "Host=localhost;Database=unused;Username=unused;Password=unused";
     private const string ValidTrackingJwtSecret = "integration-test-tracking-jwt-secret-32-bytes-min";
     private const string ValidInternalApiKey = "integration-test-internal-api-key";
@@ -126,6 +134,29 @@ public class StartupValidationTests
     /// </remarks>
     private static Exception? CaptureStartupException(Dictionary<string, string?> configuration)
     {
+        Exception? captured = null;
+
+        for (var attempt = 1; attempt <= HostCaptureAttempts; attempt++)
+        {
+            captured = CaptureStartupExceptionOnce(configuration);
+
+            if (!IsHostCaptureRace(captured))
+            {
+                return captured;
+            }
+        }
+
+        // Never silently pass. If every attempt lost the race we have learned nothing about
+        // the guard under test, and saying so is the only honest outcome.
+        Assert.Fail(
+            $"The host-capture handshake lost its race on all {HostCaptureAttempts} attempts, so the "
+            + "startup guard could not be observed. This is infrastructure, not the guard: see "
+            + $"{nameof(IsHostCaptureRace)}. Last exception: {captured}");
+        return captured;
+    }
+
+    private static Exception? CaptureStartupExceptionOnce(Dictionary<string, string?> configuration)
+    {
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(configuration));
@@ -135,6 +166,43 @@ public class StartupValidationTests
         // HttpClient. That is what separates "failed at startup" from "failed on first request".
         return Record.Exception(() => factory.CreateClient());
     }
+
+    /// <summary>
+    /// True for the one failure that means "we never got to see the guard", as opposed to
+    /// "the guard did not fire".
+    ///
+    /// <para>
+    /// Program.cs uses top-level statements, so <c>WebApplicationFactory</c> cannot call a
+    /// builder method -- it goes through <c>HostFactoryResolver</c>, which runs the entry point
+    /// on a background thread and hands the captured <c>IHost</c> to a <c>DeferredHost</c>.
+    /// These tests deliberately configure the app to <b>throw during startup</b>, so two threads
+    /// then race: the entry point tearing the half-built host down, and
+    /// <c>DeferredHost.StartAsync</c> reading <c>_host.Services</c> to start it. When teardown
+    /// wins, the caller gets <c>ObjectDisposedException: 'IServiceProvider'</c> instead of the
+    /// real validation failure -- the guard did fire, we just could not see it.
+    /// </para>
+    /// <para>
+    /// Why a retry is safe here, which is the part worth checking before touching this:
+    /// it can only ever convert *this* signature into another attempt. A guard that has been
+    /// deleted produces <b>no exception at all</b>, and a guard that fires for the wrong reason
+    /// produces a real exception with the wrong text; neither matches, so both still fail on the
+    /// first attempt. The "delete .ValidateOnStart() and watch 6 of 9 fail" experiment described
+    /// above therefore still holds -- re-run it if you change this.
+    /// </para>
+    /// <para>
+    /// Measured 2026-08-06. The flake had been CI-only and was documented in
+    /// <c>Support/AppHostCollection.cs</c> as never reproducible locally. It reproduces under
+    /// load: with an unrelated Testcontainers suite saturating the machine, these three classes
+    /// failed <b>2 runs in 5</b>; on an idle machine, <b>0 in 15</b>. That is also why the
+    /// AppHost collection alone was not enough -- it serialises these three against each other,
+    /// but this race needs no second host at all, only a slow enough machine. A 2-core CI runner
+    /// running the full suite is exactly that.
+    /// </para>
+    /// </summary>
+    private static bool IsHostCaptureRace(Exception? exception)
+        => exception is ObjectDisposedException disposed
+           && (disposed.ObjectName == "IServiceProvider"
+               || disposed.Message.Contains("IServiceProvider", StringComparison.Ordinal));
 
     private static void AssertFailsStartupMentioning(
         Dictionary<string, string?> configuration,
