@@ -115,16 +115,22 @@ public static class TrackingInternalEndpoints
 
         var usersById = users.ToDictionary(u => u.Id);
 
-        // The real user->department link is User.DepartmentId, not the never-populated
-        // User.NodoId column (no code path in this repo writes NodoId -- confirmed dead,
-        // tracked for removal in climate-project#73). Resolve nodo_id via the department the
-        // user belongs to, using the same TrackingIdentifiers convention the /nodos endpoint
-        // uses, so a persona's nodo_id always joins to a nodo_id present in that endpoint's
-        // response. Users with no DepartmentId (the common case for plain /auth/signup and
-        // Google login, which never set it) fall back to a deterministic per-company
-        // synthetic nodo_id below, rather than an empty string: climate-tracking's
-        // PersonaDto.NodoId is non-nullable and used for tablero authorization scoping, so it
-        // must never be empty.
+        // The real user->department link is User.DepartmentId. The User.NodoId column this
+        // used to be tempting to read was never written by any code path and has now been
+        // dropped outright (#151). Resolve nodo_id via the department the user belongs to,
+        // using the same TrackingIdentifiers convention the /nodos endpoint uses, so a
+        // persona's nodo_id always joins to a nodo_id present in that endpoint's response.
+        // Users with no DepartmentId (the common case for plain /auth/signup and Google
+        // login, which never set it) fall back to a deterministic per-company synthetic
+        // nodo_id, rather than an empty string: climate-tracking's PersonaDto.NodoId is
+        // non-nullable and used for tablero authorization scoping, so it must never be empty.
+        //
+        // The call below is deliberately TrackingIdentifiers.NodoIdForUser rather than an
+        // inline conditional: the nodoId JWT claim is minted from the very same method (via
+        // NodoClaimResolver), and climate-tracking compares the two against each other --
+        // its persona cache is filled from this endpoint while its authorization reads the
+        // claim. Sharing one method is what makes that comparison sound; two copies of the
+        // same conditional is exactly how they drifted apart in the first place.
         var departmentIds = users
             .Where(u => u.DepartmentId.HasValue)
             .Select(u => u.DepartmentId!.Value)
@@ -138,9 +144,9 @@ public static class TrackingInternalEndpoints
             PersonaId: TrackingIdentifiers.ExternalPersonaId(u),
             NombreCompleto: u.Name,
             Correo: u.Email,
-            NodoId: u.DepartmentId.HasValue && departmentsById.TryGetValue(u.DepartmentId.Value, out var department)
-                ? TrackingIdentifiers.ExternalNodoId(department)
-                : TrackingIdentifiers.UnassignedNodoId(companyGuid),
+            NodoId: TrackingIdentifiers.NodoIdForUser(
+                u.DepartmentId.HasValue && departmentsById.TryGetValue(u.DepartmentId.Value, out var department) ? department : null,
+                companyGuid),
             ManagerId: u.ManagerId.HasValue && usersById.TryGetValue(u.ManagerId.Value, out var manager)
                 ? TrackingIdentifiers.ExternalPersonaId(manager)
                 : null,
