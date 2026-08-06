@@ -903,7 +903,20 @@
     "microclimateInvitation": "Invitación a Microclima",
     "actionPlanUpdate": "Actualización de Plan de Acción",
     "newResponse": "Nueva Respuesta",
-    "reportReady": "Informe Listo"
+    "reportReady": "Informe Listo",
+    "inboxDescription": "Todo lo que la plataforma te ha enviado.",
+    "unreadOnly": "Solo no leídas",
+    "unread": "No leída",
+    "read": "Leída",
+    "titleColumn": "Título",
+    "messageColumn": "Mensaje",
+    "receivedColumn": "Recibida",
+    "noUnread": "No tienes notificaciones sin leer",
+    "loadFailed": "No se pudieron cargar tus notificaciones.",
+    "bellLabel": "Notificaciones",
+    "bellLabelWithUnread": "Notificaciones, {count} sin leer",
+    "unreadHeading": "Notificaciones sin leer",
+    "viewAll": "Ver todas las notificaciones"
   },
   "reports": {
     "newReport": "Nuevo informe",

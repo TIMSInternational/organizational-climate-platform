@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -12,7 +12,41 @@ afterEach(() => {
   clearToken()
   localStorage.removeItem(ADMIN_THEME_STORAGE_KEY)
   document.documentElement.removeAttribute(ADMIN_THEME_ATTRIBUTE)
+  vi.restoreAllMocks()
 })
+
+/**
+ * The shell now mounts the #99 notification bell, which polls on mount. Stubbed
+ * for every test in this file so the shell's own assertions are not racing a real
+ * network call.
+ */
+function stubUnread(count: number): void {
+  const notifications = Array.from({ length: count }, (_, index) => ({
+    id: `n${index}`,
+    userId: 'u1',
+    companyId: 'c1',
+    type: 'survey_invitation',
+    channel: 'in_app',
+    priority: 'medium',
+    status: 'sent',
+    title: `Notification ${index}`,
+    message: 'body',
+    data: null,
+    templateId: null,
+    scheduledFor: '2026-08-01T09:00:00Z',
+    sentAt: '2026-08-01T09:00:01Z',
+    deliveredAt: null,
+    openedAt: null,
+    failedAt: null,
+    failureReason: null,
+    retryCount: 0,
+    createdAt: '2026-08-01T09:00:00Z',
+  }))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(new Response(JSON.stringify({ notifications }), { status: 200 })),
+  )
+}
 
 /** An unsigned JWT carrying just the claims the shell reads. */
 function tokenFor(claims: Record<string, unknown>): string {
@@ -45,6 +79,7 @@ function renderShell(initialPath = '/action-plans') {
 describe('AdminLayout', () => {
   beforeEach(() => {
     setToken(tokenFor({ role: 'company_admin', companyId: 'c1' }))
+    stubUnread(0)
   })
 
   it('renders the routed page inside a landmark the skip link can reach', () => {
@@ -72,10 +107,13 @@ describe('AdminLayout', () => {
     expect(screen.getByRole('button', { name: /Company Administration/ })).toBeTruthy()
   })
 
-  it('shows no nav rows for a role that has no admin pages', () => {
+  it('shows no admin nav rows for a role that has no admin pages', () => {
     setToken(tokenFor({ role: 'employee', companyId: 'c1' }))
     renderShell()
     expect(screen.queryByRole('button', { name: /Administration/ })).toBeNull()
+    // Since #99 this role is no longer given an *empty* nav — it gets the one
+    // page it can load, its own inbox.
+    expect(screen.getAllByRole('link', { name: 'Notifications' }).length).toBeGreaterThan(0)
   })
 
   it('collapses and expands the sidebar, and says which it will do', async () => {
@@ -144,6 +182,60 @@ describe('AdminLayout', () => {
     const aside = document.querySelector('aside')!
     expect(aside.className).toContain('hidden')
     expect(aside.className).toContain('md:flex')
+  })
+
+  /**
+   * #99 puts the notification bell back in the shell.
+   *
+   * Not into `PageTopBar`: despite the name, the current `PageTopBar` is the port
+   * of the legacy `Navbar.tsx` (title / breadcrumbs / actions) and is rendered
+   * *by a page*, so a bell there would appear only on pages that happen to render
+   * one. The legacy 19-line `layout/PageTopBar.tsx` that did render a bell is the
+   * component #80 deliberately did not port, for want of a data source.
+   */
+  describe('the notification bell', () => {
+    it('renders in the shell, so it is on every page rather than per page', async () => {
+      renderShell()
+      expect(await screen.findByRole('button', { name: /^Notifications/ })).toBeTruthy()
+    })
+
+    it('carries the unread count in its accessible name', async () => {
+      stubUnread(3)
+      renderShell()
+      expect(await screen.findByRole('button', { name: 'Notifications, 3 unread' })).toBeTruthy()
+    })
+
+    it('sits in a header outside main, so the skip link still skips it', async () => {
+      // `#main` is the skip target. A bell inside it would be the first thing a
+      // keyboard user landed on after choosing to skip the chrome.
+      renderShell()
+      const bell = await screen.findByRole('button', { name: /^Notifications/ })
+      const main = document.getElementById('main')!
+      expect(main.contains(bell)).toBe(false)
+      expect(bell.closest('header')).not.toBeNull()
+    })
+
+    it('is reachable by keyboard, after the skip link and the sidebar', async () => {
+      // #80 shipped a grouped nav row whose chevron was unreachable by keyboard
+      // entirely. Focus order is asserted, not assumed.
+      renderShell()
+      const bell = await screen.findByRole('button', { name: /^Notifications/ })
+      const skip = screen.getByRole('link', { name: 'Skip to content' })
+      expect(skip.compareDocumentPosition(bell) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+      bell.focus()
+      expect(document.activeElement).toBe(bell)
+    })
+
+    it('stays visible when the sidebar is collapsed, unlike the sidebar-footer controls', async () => {
+      // The theme/language/sign-out block is hidden on a collapsed rail. An
+      // unread badge that disappears with it would be worse than no badge.
+      stubUnread(2)
+      renderShell()
+      await screen.findByRole('button', { name: 'Notifications, 2 unread' })
+      await userEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
+      expect(screen.getByRole('button', { name: 'Notifications, 2 unread' })).toBeTruthy()
+    })
   })
 
   it('offers the theme control the token layer has always had no UI for', async () => {

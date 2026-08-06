@@ -903,7 +903,20 @@
     "microclimateInvitation": "Microclimate Invitation",
     "actionPlanUpdate": "Action Plan Update",
     "newResponse": "New Response",
-    "reportReady": "Report Ready"
+    "reportReady": "Report Ready",
+    "inboxDescription": "Everything the platform has sent you.",
+    "unreadOnly": "Unread only",
+    "unread": "Unread",
+    "read": "Read",
+    "titleColumn": "Title",
+    "messageColumn": "Message",
+    "receivedColumn": "Received",
+    "noUnread": "You have no unread notifications",
+    "loadFailed": "Your notifications could not be loaded.",
+    "bellLabel": "Notifications",
+    "bellLabelWithUnread": "Notifications, {count} unread",
+    "unreadHeading": "Unread notifications",
+    "viewAll": "View all notifications"
   },
   "reports": {
     "newReport": "New report",

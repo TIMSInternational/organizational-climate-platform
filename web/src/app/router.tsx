@@ -14,6 +14,7 @@ import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetai
 import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
 import MicroclimateDetailPage from '../features/microclimates/pages/MicroclimateDetailPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
+import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
 import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
 import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
 import ReportsListPage from '../features/reports/pages/ReportsListPage'
@@ -92,6 +93,9 @@ export const router = createBrowserRouter([
               { path: '/action-plans/:id', element: <ActionPlanDetailPage /> },
               { path: '/microclimates', element: <MicroclimatesListPage /> },
               { path: '/microclimates/:id', element: <MicroclimateDetailPage /> },
+              // Self-service, so no role gate beyond RequireAuth: /notifications/mine
+              // is scoped per user and every authenticated role can load it.
+              { path: '/notifications', element: <NotificationsInboxPage /> },
               { path: '/analytics/benchmarks', element: <BenchmarksPage /> },
               { path: '/analytics/ai-insights', element: <AIInsightsPage /> },
             ],
