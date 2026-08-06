@@ -309,11 +309,32 @@
        td    -> `px-3 py-2.5 align-middle` (12px/10px, inherits colour)
        tr    -> `border-b hover:bg-accent/60`
      `--admin-font-tertiary` is the token the legacy shell mapped
-     `--muted-foreground` to inside the admin shell. */
+     `--muted-foreground` to inside the admin shell.
+
+     TWO RULES DELIBERATELY DO NOT LIVE HERE (#218): `table { width: 100% }`
+     and `th { white-space: nowrap }`. In ui/table.tsx the `w-full` is on the
+     table *inside* `<div data-slot="table-container" class="overflow-x-auto">`
+     and the nowrap is on `TableHead` inside that same container, so the pair is
+     safe: the table may exceed the viewport because something scrolls before
+     the page does. An element rule cannot bring the container with it, so
+     copying only the two declarations reproduced the width without the scroll —
+     a table that is told to fill its container and forbidden to shrink, which
+     overflows. That defect was found and locally patched twice (#79's HeatMap
+     stranded its cells at the right edge; #80 measured tables up to 150px
+     outside the content panel at 320/390px on four pages) before being fixed
+     here. Full width plus scrolling is `ui/table.tsx`'s job now, and
+     `src/styles/tableOverflow.test.ts` pins both halves.
+
+     What is left is the *cell* styling — padding, type, colour, rules — which
+     is what makes the classless pages look like the design system, and which
+     no container is needed for. */
   table {
-    width: 100%;
     border-collapse: collapse;
     font-size: var(--admin-text-base);
+    /* A bare `<table>` sizes to its content and stops at its container instead
+       of being stretched past it. `max-width` cannot beat a table's min-content
+       width on its own, which is why the `overflow-wrap` below matters. */
+    max-width: 100%;
   }
 
   th,
@@ -322,6 +343,13 @@
     vertical-align: middle;
     line-height: var(--admin-leading-snug);
     border-bottom: 1px solid var(--admin-border-light);
+    /* Last line of defence for the classless pages: an unbreakable run — an
+       email address, a UUID, a URL — is the one thing that can still push a
+       table past `max-width: 100%`. `break-word` only breaks a word that cannot
+       fit on a line of its own, so ordinary prose wraps exactly as before.
+       Inside ui/table.tsx a `TableHead` is `whitespace-nowrap` and so opts back
+       out; its container is what scrolls. */
+    overflow-wrap: break-word;
   }
 
   th {
@@ -329,7 +357,6 @@
     font-size: var(--admin-text-sm);
     font-weight: var(--admin-weight-medium);
     color: var(--admin-font-tertiary);
-    white-space: nowrap;
   }
 
   td {

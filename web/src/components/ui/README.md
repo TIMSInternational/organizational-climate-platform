@@ -183,6 +183,19 @@ Ported: `table` · `tabs` · `pagination` · `accordion` · `collapsible` · `br
 
 ## Added, because #77 asked for it
 
+`table` **owns table width and the scroll container** (#218). `Table` renders
+`<div data-slot="table-container" class="w-full overflow-x-auto">` around a `w-full`
+table, and `TableHead` is `whitespace-nowrap`. Those two declarations are only safe
+together — see "Tables" in `src/styles/README.md` for why they are no longer element
+rules, and what shipped twice while they were.
+
+**Anything that renders a table goes through `Table`**, including the classless pages:
+plain `<thead>/<tr>/<th>/<td>` children still get their padding, type and rules from
+the base element layer, so a page gains the container without restating its markup.
+`src/styles/tableOverflow.test.ts` sweeps for a bare `<table>` and fails the build on
+one; `HeatMap` is the one caller that opts out of full width, with
+`<Table className="w-auto">`.
+
 `table` gained **sort and empty-state support**; the legacy table had neither.
 `TableSortHeader` sets `aria-sort` on the `<th>` — the part a hand-rolled sort control
 almost always misses, and without which a screen-reader user cannot tell which column

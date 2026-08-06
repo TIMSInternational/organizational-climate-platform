@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import type { Company } from '../api/companies'
 import { useTranslation } from '../../../i18n'
+import { Table } from '../../../components/ui'
 
 export default function CompanyList({ companies }: { companies: Company[] }) {
   const { t } = useTranslation()
@@ -10,7 +11,7 @@ export default function CompanyList({ companies }: { companies: Company[] }) {
   }
 
   return (
-    <table>
+    <Table>
       <thead>
         <tr>
           <th>{t('departments.name')}</th>
@@ -31,6 +32,6 @@ export default function CompanyList({ companies }: { companies: Company[] }) {
           </tr>
         ))}
       </tbody>
-    </table>
+    </Table>
   )
 }

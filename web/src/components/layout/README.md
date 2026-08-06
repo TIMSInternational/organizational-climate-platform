@@ -117,10 +117,14 @@ themes and both languages.
    survives review. The icons keep the accent hue legitimately — a graphic is held to
    1.4.11's 3:1, which #2E9098 clears.
 2. **Tables rendered up to 150px outside the content panel** at 320–390px on Users,
-   Companies, Action Plans and Demographic fields. Cause: `index.css` gives every
-   `table` `width: 100%` and every `th` `white-space: nowrap`, so min-content exceeds
-   the panel. Fixed by `overflow-x-auto` on the panel, which scopes the scroll inside
-   the card. Same root cause as the #79 HeatMap defect.
+   Companies, Action Plans and Demographic fields. Cause: `index.css` gave every
+   `table` `width: 100%` and every `th` `white-space: nowrap`, so min-content exceeded
+   the panel. Fixed here by `overflow-x-auto` on the panel, which scopes the scroll
+   inside the card. Same root cause as the #79 HeatMap defect — **which is why it was
+   only the second symptom**. #218 moved the cause: both declarations now live in
+   `ui/table.tsx` next to the container they need, every table goes through that
+   primitive, and the panel rule is kept only as a generic guard for other wide
+   content. See "Tables" in `styles/README.md`.
 3. **The drawer's close button sat on the first nav row's disclosure chevron** at
    390px. Fixed with `pt-10` on the drawer, rather than moving the button, which is
    shared #76 surface.

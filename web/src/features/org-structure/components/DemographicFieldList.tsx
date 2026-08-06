@@ -1,5 +1,6 @@
 import type { DemographicField } from '../api/demographicFields'
 import { useTranslation } from '../../../i18n'
+import { Table } from '../../../components/ui'
 
 export default function DemographicFieldList({ fields, onEdit }: { fields: DemographicField[]; onEdit: (field: DemographicField) => void }) {
   const { t } = useTranslation()
@@ -9,7 +10,7 @@ export default function DemographicFieldList({ fields, onEdit }: { fields: Demog
   }
 
   return (
-    <table>
+    <Table>
       <thead>
         <tr>
           {/* Field key is shown so an admin can see which keys are already taken --
@@ -35,6 +36,6 @@ export default function DemographicFieldList({ fields, onEdit }: { fields: Demog
           </tr>
         ))}
       </tbody>
-    </table>
+    </Table>
   )
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { bulkImportUsers, type BulkImportResponse } from '../api/bulkImport'
 import { useTranslation } from '../../../i18n'
+import { Table } from '../../../components/ui'
 
 interface BulkImportPanelProps {
   baseUrl: string
@@ -70,7 +71,7 @@ export default function BulkImportPanel({ baseUrl, companyId, onImported }: Bulk
               total: result.rows.length,
             })}
           </p>
-          <table>
+          <Table>
             <thead>
               <tr>
                 <th>{t('users.row')}</th>
@@ -91,7 +92,7 @@ export default function BulkImportPanel({ baseUrl, companyId, onImported }: Bulk
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Table>
         </>
       )}
     </div>

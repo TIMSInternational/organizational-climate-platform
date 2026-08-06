@@ -10,11 +10,30 @@ import { cn } from '../../lib/cn'
  * `index.css` already styles bare `table`/`th`/`td` for the twelve existing pages,
  * so these parts add structure and the scroll container rather than restating the
  * element rules.
+ *
+ * ## This component owns table width, because only it can (#218)
+ *
+ * `width: 100%` on a table is only safe next to something that scrolls. The base
+ * layer used to carry both `table { width: 100% }` and `th { white-space: nowrap }`
+ * as element rules, which is the same pair `Table` and `TableHead` use — but an
+ * element rule cannot bring the container with it, so a table wider than its
+ * parent had nowhere to go and rendered outside it. That defect was found twice
+ * (#79 HeatMap, #80's four pages, each patched locally) before the rules moved
+ * here. The base layer now styles cells only; **anything that renders a table
+ * goes through `Table`**, which is enforced by `src/styles/tableOverflow.test.ts`
+ * rather than left to memory.
+ *
+ * You may pass plain `<thead>/<tr>/<th>/<td>` as children — the base layer still
+ * styles them, so a classless page gains the container without restating its
+ * markup. The `Table*` parts below are for tables that need more than the
+ * element layer gives.
  */
 export function Table({ className, ...props }: ComponentProps<'table'>) {
   return (
     // The wrapper is what scrolls: a wide table must not make the page scroll
-    // sideways.
+    // sideways. `w-full` sits on the table rather than the base layer for the
+    // reason in the block above; pass `className="w-auto"` for a table that
+    // should shrink-wrap instead (HeatMap does).
     <div data-slot="table-container" className="w-full overflow-x-auto">
       <table
         data-slot="table"

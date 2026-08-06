@@ -254,11 +254,15 @@ colour. All five are fixed, each now with a regression test.
    catch this: it rejects raw *values*, not names that do not exist. Now guarded by
    [`styles/utilityExistence.test.ts`](../../styles/utilityExistence.test.ts), which
    resolves every class in every `.tsx` through the real Tailwind compiler.
-2. **`HeatMap` was stretched across the content width.** `index.css` sets
+2. **`HeatMap` was stretched across the content width.** `index.css` set
    `table { width: 100% }`, which gave the row-label column all the slack and stranded
    the coloured cells against the right edge — a grid you could not read a row off. Fixed
    with `w-auto` *and* a block wrapper; neither alone is enough, because the `<figure>`
-   is a flex column and stretched the table again.
+   is a flex column and stretched the table again. #218 later found the same global was
+   the cause of #80's overflow too and moved it into `ui/table.tsx`; the local wrapper
+   here is now `Table`'s own container, so this is `<Table className="w-auto">`. Every
+   chart table (`HeatMap`, `ChartFrame`'s data table, `SentimentVisualization`) goes
+   through that primitive — see "Tables" in [`styles/README.md`](../../styles/README.md).
 3. **`usePolling` skipped its first fetch on every effect restart.** The in-flight guard
    was a `useRef`, shared across runs, so an incoming run saw the outgoing run's request
    still pending and waited a whole interval instead of fetching. React 19 StrictMode
