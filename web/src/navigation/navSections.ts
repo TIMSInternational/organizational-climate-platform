@@ -1,4 +1,4 @@
-import { Shield, Building2, Settings, Users, Tags, Target, Waves } from 'lucide-react'
+import { Shield, Building2, Settings, Users, Tags, Target, Waves, Gauge, Sparkles } from 'lucide-react'
 
 export interface NavItem {
   /**
@@ -60,6 +60,16 @@ export function buildNavSections(role: string | undefined, companyId: string | u
               { labelKey: 'navigation.systemSettings', href: '/admin/system-settings', icon: Settings },
             ],
           },
+          // Benchmarks IS offered to a SuperAdmin, unlike Action Plans above.
+          // `GET /admin/benchmarks` returns every tenant's benchmarks plus the
+          // global ones for this role, so the page is a real cross-company view
+          // rather than a silent single-company one -- the missing #57 picker is
+          // not load-bearing here (see BenchmarksPage.tsx).
+          {
+            labelKey: 'navigation.benchmarks',
+            href: '/analytics/benchmarks',
+            icon: Gauge,
+          },
         ],
       },
     ]
@@ -89,6 +99,22 @@ export function buildNavSections(role: string | undefined, companyId: string | u
             labelKey: 'navigation.microclimates',
             href: '/microclimates',
             icon: Waves,
+          },
+          {
+            labelKey: 'navigation.benchmarks',
+            href: '/analytics/benchmarks',
+            icon: Gauge,
+          },
+          // AI Insights is CompanyAdmin-only, and deliberately not in the
+          // SuperAdmin section above. `GET /admin/ai-insights` takes a required
+          // company id, and since #191 a global SuperAdmin's `companyId` claim is
+          // the empty string (`User.CompanyId` is `Guid?`, NULL meaning no
+          // tenant) -- so the page would have nothing to ask for. Revisit with
+          // #57's company selector.
+          {
+            labelKey: 'navigation.aiInsights',
+            href: '/analytics/ai-insights',
+            icon: Sparkles,
           },
         ],
       },

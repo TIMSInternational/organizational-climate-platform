@@ -51,6 +51,8 @@ describe('router', () => {
     expect(paths).toContain('/admin/companies/:id')
     expect(paths).toContain('/action-plans')
     expect(paths).toContain('/microclimates')
+    expect(paths).toContain('/analytics/benchmarks')
+    expect(paths).toContain('/analytics/ai-insights')
   })
 
   it('has an error element so a thrown render does not blank the page', () => {
