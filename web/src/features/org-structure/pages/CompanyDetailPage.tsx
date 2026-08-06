@@ -118,6 +118,10 @@ export default function CompanyDetailPage() {
           <>
             <Link to={`/admin/companies/${id}/users`}>{t('dashboard.manageUsers')}</Link>
             <Link to={`/admin/companies/${id}/demographic-fields`}>{t('dashboard.manageDemographicFields')}</Link>
+            {/* The only path a super_admin has to these two pages: their nav sections
+                carry no company id, by design (navSections.ts). */}
+            <Link to={`/admin/companies/${id}/reports`}>{t('dashboard.viewReports')}</Link>
+            <Link to={`/admin/companies/${id}/analytics`}>{t('dashboard.viewAnalytics')}</Link>
           </>
         }
       />

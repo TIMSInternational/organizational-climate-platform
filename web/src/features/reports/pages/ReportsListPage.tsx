@@ -1,0 +1,178 @@
+import { useCallback, useEffect, useState } from 'react'
+import { useParams } from 'react-router'
+import {
+  createReport,
+  downloadReport,
+  listReports,
+  type ReportListItem,
+} from '../api/reports'
+import ReportForm, { type ReportFormValues } from '../components/ReportForm'
+import ReportList from '../components/ReportList'
+import { useTranslation } from '../../../i18n'
+import { PageTopBar } from '../../../components/layout'
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  LoadingRegion,
+  NetworkError,
+  SkeletonText,
+} from '../../../components/ui'
+
+/**
+ * Reports for one company.
+ *
+ * ## The SuperAdmin scoping trap, and why this page does not have it
+ *
+ * #94 warns that these pages repeat the Action Plans problem: a SuperAdmin landing on a
+ * page with no company picker is silently scoped to whatever company their own user row
+ * points at, which *looks* like a cross-company view and is not. `ActionPlansListPage`
+ * and `MicroclimatesListPage` block SuperAdmin outright for exactly that reason.
+ *
+ * This page takes its company from the **URL**, `/admin/companies/:companyId/reports`, the
+ * same way `UsersListPage` and `DemographicFieldsPage` already do — so there is no implicit
+ * scope to be wrong about. A SuperAdmin here is looking at the company named in the address
+ * bar because they navigated to it, and the backend agrees: `ReportEndpoints.CanAccessCompany`
+ * admits a SuperAdmin for any company and a CompanyAdmin only for their own. Blocking
+ * SuperAdmin as well would be cargo-culting the workaround without the defect.
+ *
+ * That is also why the nav entry (`navSections.ts`) exists only on the `company_admin`
+ * branch: a SuperAdmin's nav carries no company id at all — asserted in `navSections.test.ts`
+ * — so there is nothing to interpolate. A SuperAdmin reaches this page from the company they
+ * opened, via `CompanyDetailPage`.
+ *
+ * ## Rendering is stubbed backend-side
+ *
+ * `CreateAsync` marks a report `completed` immediately and stores a JSON-encoded placeholder
+ * string; `DownloadAsync` increments a counter and returns the record. Nothing produces a
+ * file. The banner says so rather than letting an admin conclude their download failed.
+ */
+export default function ReportsListPage() {
+  const { t } = useTranslation()
+  const { companyId } = useParams<{ companyId: string }>()
+  const baseUrl = import.meta.env.VITE_API_BASE_URL as string
+  const [reports, setReports] = useState<ReportListItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [downloadingId, setDownloadingId] = useState<string | undefined>(undefined)
+  const [downloadNotice, setDownloadNotice] = useState<string | null>(null)
+
+  // `useCallback` rather than a plain function plus a deps-array lie: the web lint
+  // budget is `--max-warnings 10` and it is exactly full, so a new
+  // `react-hooks(exhaustive-deps)` warning fails CI. `t` is stable per locale
+  // (TranslationProvider memoises it), so this refetches on a language switch and at
+  // no other time.
+  const reload = useCallback(async () => {
+    if (!companyId) return
+    setLoading(true)
+    setError(null)
+    try {
+      setReports(await listReports(baseUrl, companyId))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('errors.generic'))
+    } finally {
+      setLoading(false)
+    }
+  }, [baseUrl, companyId, t])
+
+  useEffect(() => {
+    reload()
+  }, [reload])
+
+  async function handleCreate(values: ReportFormValues) {
+    if (!companyId) return
+    await createReport(baseUrl, {
+      title: values.title,
+      // Omitted rather than sent as `''`: `Description` is nullable on the entity, and an
+      // empty string would read as "described, with nothing" in every later consumer.
+      ...(values.description.trim() ? { description: values.description.trim() } : {}),
+      type: values.type,
+      companyId,
+      format: values.format,
+    })
+    setShowCreateForm(false)
+    await reload()
+  }
+
+  async function handleDownload(report: ReportListItem) {
+    setDownloadingId(report.id)
+    setDownloadNotice(null)
+    try {
+      // The response is the full `ReportDetail`, and `downloadCount` is the only place it
+      // is observable: the list projection (`ReportListItem`) does not carry it, so a
+      // reload would throw the number away. #93's PR documents that the plan's sketch had
+      // this wrong and typed the list as the detail.
+      const detail = await downloadReport(baseUrl, report.id)
+      setDownloadNotice(
+        t('reports.downloadRecorded', { title: detail.title, count: detail.downloadCount }),
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('errors.generic'))
+    } finally {
+      setDownloadingId(undefined)
+    }
+  }
+
+  if (!companyId) {
+    return <p role="alert">{t('common.noCompanyAssociated')}</p>
+  }
+
+  return (
+    <div>
+      <PageTopBar
+        title={t('navigation.reports')}
+        description={t('navigation.reportsDesc')}
+        // `/admin/companies/:companyId` is loadable by a super_admin and by that
+        // company's own company_admin -- precisely who can load this page -- so the
+        // crumb never points somewhere the viewer would be 403'd. A crumb to
+        // /admin/companies would, since that page is SuperAdmin-only. Same reasoning
+        // as UsersListPage.
+        breadcrumbs={[
+          { label: t('navigation.companySettings'), href: `/admin/companies/${companyId}` },
+          { label: t('navigation.reports') },
+        ]}
+        actions={
+          <Button type="button" onClick={() => setShowCreateForm((value) => !value)}>
+            {showCreateForm ? t('common.cancel') : t('reports.newReport')}
+          </Button>
+        }
+      />
+
+      <Alert className="mb-panel-gap">
+        <AlertDescription>{t('reports.generationStubbed')}</AlertDescription>
+      </Alert>
+
+      {showCreateForm && <ReportForm onSubmit={handleCreate} />}
+
+      {/* `role="status"`, not `alert`: recording a download is not an error, and the
+          count is the only feedback there is, since no file arrives. */}
+      {downloadNotice && <p role="status">{downloadNotice}</p>}
+
+      {error ? (
+        <NetworkError
+          title={t('errors.generic')}
+          description={error}
+          onRetry={reload}
+          retryText={t('common.retry')}
+        />
+      ) : (
+        // `LoadingRegion` already announces `common.loading` in an sr-only live
+        // region, so the visible placeholder is a skeleton rather than a second copy
+        // of the same word — one announcement, and a shape that shows where the rows
+        // will land.
+        <LoadingRegion loading={loading} label={t('common.loading')}>
+          {loading ? (
+            <SkeletonText lines={4} />
+          ) : (
+            <ReportList
+              reports={reports}
+              downloadingId={downloadingId}
+              onDownload={handleDownload}
+            />
+          )}
+        </LoadingRegion>
+      )}
+    </div>
+  )
+}

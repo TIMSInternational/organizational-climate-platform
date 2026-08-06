@@ -88,8 +88,12 @@ describe('BenchmarksPage scope handling', () => {
 
     const globalRow = (await screen.findByText('Industry average')).closest('tr')!
     const ownRow = screen.getByText('Our 2026 baseline').closest('tr')!
-    expect(globalRow.textContent).toContain('Global')
-    expect(ownRow.textContent).toContain('Company')
+    // BenchmarkList renders the shared analytics.scope* labels rather than a
+    // benchmarks-only pair: #94's AnalyticsDashboardPage and this page render the
+    // same component, so one vocabulary keeps the two surfaces from disagreeing
+    // about what a platform-wide benchmark is called.
+    expect(globalRow.textContent).toContain('Platform-wide')
+    expect(ownRow.textContent).toContain('This company')
   })
 
   /**

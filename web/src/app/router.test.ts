@@ -53,6 +53,8 @@ describe('router', () => {
     expect(paths).toContain('/microclimates')
     expect(paths).toContain('/analytics/benchmarks')
     expect(paths).toContain('/analytics/ai-insights')
+    expect(paths).toContain('/admin/companies/:companyId/reports')
+    expect(paths).toContain('/admin/companies/:companyId/analytics')
   })
 
   it('has an error element so a thrown render does not blank the page', () => {
