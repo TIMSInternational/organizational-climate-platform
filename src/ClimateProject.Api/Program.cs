@@ -3,8 +3,10 @@ using ClimateProject.Api.Endpoints;
 using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Cors;
+using ClimateProject.Application.Notifications;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Infrastructure.Auth;
+using ClimateProject.Infrastructure.Notifications;
 using ClimateProject.Infrastructure.OrgStructure;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -211,6 +213,12 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
 builder.Services.AddScoped<IInvitationEmailSender, LoggingInvitationEmailSender>();
 
+// The notification delivery seam (#97). LoggingNotificationSender delivers nothing and
+// reports success, which is what lets the entire dispatch path -- authorization, tenancy,
+// consent suppression, persistence, retry accounting -- be built and tested before any
+// mail/SMS provider exists. Swapping this one line for a real sender is the whole of #100.
+builder.Services.AddScoped<INotificationSender, LoggingNotificationSender>();
+
 builder.Services.AddOpenApi();
 
 // POST /microclimates/{id}/responses is the app's only unauthenticated write surface (approved
@@ -348,6 +356,7 @@ app.MapMicroclimateEndpoints();
 app.MapMicroclimateTemplateEndpoints();
 app.MapReportEndpoints();
 app.MapBenchmarkEndpoints();
+app.MapNotificationEndpoints();
 
 app.Run();
 
