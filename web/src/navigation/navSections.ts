@@ -1,4 +1,4 @@
-import { Shield, Building2, Settings, Users, Tags, Target, Waves } from 'lucide-react'
+import { Shield, Building2, Settings, Users, Tags, Target, Waves, FileText, ChartColumn } from 'lucide-react'
 
 export interface NavItem {
   /**
@@ -89,6 +89,29 @@ export function buildNavSections(role: string | undefined, companyId: string | u
             labelKey: 'navigation.microclimates',
             href: '/microclimates',
             icon: Waves,
+          },
+          // Reports and Analytics are top-level destinations rather than children of
+          // "Company Administration", for two reasons. They are work surfaces like
+          // Action Plans and Microclimates, not configuration like Users and
+          // Demographic fields -- and `leafNavItems` flattens a group's children ahead
+          // of the top-level rows that follow it, so putting them in the group would
+          // push Action Plans off the four-slot mobile tab bar (MobileNav.test.tsx
+          // records that ordering consequence, and it is not this issue's to change).
+          //
+          // Unlike Action Plans, they carry NO silent-scoping hazard: they take their
+          // company from the URL, not from a claim. They are absent from the
+          // super_admin branch only because a super_admin's sections deliberately
+          // contain no company id to interpolate; that role reaches them from the
+          // company it opened, via CompanyDetailPage.
+          {
+            labelKey: 'navigation.reports',
+            href: `/admin/companies/${companyId}/reports`,
+            icon: FileText,
+          },
+          {
+            labelKey: 'navigation.analytics',
+            href: `/admin/companies/${companyId}/analytics`,
+            icon: ChartColumn,
           },
         ],
       },
