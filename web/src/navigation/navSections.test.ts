@@ -46,6 +46,23 @@ describe('buildNavSections', () => {
     expect(links).not.toContain('/admin/system-settings')
   })
 
+  it('gives a company_admin Reports and Analytics links scoped to their own company', () => {
+    const links = hrefs(buildNavSections('company_admin', 'company-1'))
+    expect(links).toContain('/admin/companies/company-1/reports')
+    expect(links).toContain('/admin/companies/company-1/analytics')
+  })
+
+  it('does not give a super_admin Reports or Analytics links -- their sections carry no company id', () => {
+    // Unlike Action Plans, these two pages are NOT unsafe for a SuperAdmin: they take
+    // their company from the URL, and ReportEndpoints/BenchmarkEndpoints admit a
+    // SuperAdmin for any company. They are absent here for the plainer reason asserted
+    // just above -- a super_admin's nav is deliberately company-agnostic, so there is
+    // no id to interpolate. A SuperAdmin reaches them from CompanyDetailPage.
+    const links = hrefs(buildNavSections('super_admin', 'company-1'))
+    expect(links.some((href) => href.endsWith('/reports'))).toBe(false)
+    expect(links.some((href) => href.endsWith('/analytics'))).toBe(false)
+  })
+
   it('returns no nav for a company_admin with no companyId claim', () => {
     expect(buildNavSections('company_admin', undefined)).toEqual([])
   })
@@ -109,6 +126,11 @@ describe('leafNavItems', () => {
       '/admin/companies/company-1/demographic-fields',
       '/action-plans',
       '/microclimates',
+      // After the top-level rows, not inside the admin group: `leafNavItems` puts a
+      // group's children ahead of everything that follows it, so grouping these two
+      // would take the fourth mobile tab slot away from Action Plans.
+      '/admin/companies/company-1/reports',
+      '/admin/companies/company-1/analytics',
     ])
     expect(leaves.every((item) => !item.sub?.length)).toBe(true)
   })
