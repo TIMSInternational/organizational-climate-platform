@@ -3,7 +3,16 @@ namespace ClimateProject.Domain.Entities;
 public class User
 {
     public Guid Id { get; set; }
-    public Guid CompanyId { get; set; }
+
+    // NULL means global scope: the user belongs to no tenant. Today that is only ever a
+    // super_admin, who by definition operates across every company. A sentinel "system"
+    // company was deliberately rejected (#191) -- it would have to be excluded by hand from
+    // every company list, user count, benchmark aggregate and tracking sync, and one missed
+    // exclusion silently corrupts cross-tenant analytics. NULL-as-global is also already
+    // this repo's established meaning for the same idea: Benchmark, SurveyTemplate,
+    // ActionPlanTemplate, NotificationTemplate and MicroclimateTemplate all use
+    // `CompanyId == null` for globally-visible, SuperAdmin-only-to-write rows.
+    public Guid? CompanyId { get; set; }
     public required string Email { get; set; }
     public required string Name { get; set; }
     public string? PasswordHash { get; set; }

@@ -10,7 +10,8 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
     {
         builder.ToTable("users");
         builder.HasKey(u => u.Id);
-        builder.Property(u => u.CompanyId).HasColumnName("company_id").IsRequired();
+        // Nullable: NULL means "no tenant / global scope" -- see User.CompanyId (#191).
+        builder.Property(u => u.CompanyId).HasColumnName("company_id");
         builder.Property(u => u.Email).HasColumnName("email").HasMaxLength(255).IsRequired();
         builder.Property(u => u.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
         builder.Property(u => u.PasswordHash).HasColumnName("password_hash");
@@ -35,7 +36,16 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         // Company.EmailDomain precedent.
         builder.HasIndex(u => u.PersonaExternalId).IsUnique().HasFilter("persona_external_id IS NOT NULL");
 
-        builder.HasOne<Company>().WithMany().HasForeignKey(u => u.CompanyId);
+        // OnDelete is now PINNED rather than left to EF's default, because the default
+        // FLIPS when an FK becomes optional: a required FK defaults to Cascade, an optional
+        // one to ClientSetNull (NO ACTION at the DB). Cascade is the established behavior
+        // -- ActionPlanTests.Deleting_company_cascades_delete_of_its_action_plans documents
+        // it explicitly -- and silently downgrading it would turn "delete a company" into an
+        // FK-violation error the moment the company has users. SetNull would be actively
+        // worse: deleting a company would PROMOTE every one of its users, company_admins
+        // included, to global scope, which is a tenant-isolation hole. A company-less
+        // super_admin has no company row to be deleted, so Cascade never reaches them.
+        builder.HasOne<Company>().WithMany().HasForeignKey(u => u.CompanyId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<Department>().WithMany().HasForeignKey(u => u.DepartmentId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<User>().WithMany().HasForeignKey(u => u.ManagerId).OnDelete(DeleteBehavior.Restrict);
 

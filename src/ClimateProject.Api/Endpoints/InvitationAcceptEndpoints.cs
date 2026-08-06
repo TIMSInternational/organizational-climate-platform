@@ -142,7 +142,7 @@ public static class InvitationAcceptEndpoints
             NodoId: user.NodoId,
             Email: user.Email,
             Name: user.Name,
-            CompanyId: user.CompanyId.ToString(),
+            CompanyId: user.CompanyId?.ToString() ?? string.Empty,
             IsActive: user.IsActive));
 
         return Results.Json(new TokenResponse(jwt), statusCode: 201);

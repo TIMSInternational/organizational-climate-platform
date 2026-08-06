@@ -146,7 +146,16 @@ public static class TrackingInternalEndpoints
                 : null,
             Rol: u.Role,
             Activo: u.IsActive,
-            CompanyId: u.CompanyId.ToString()))
+            // companyGuid, not u.CompanyId. Since #191 User.CompanyId is nullable, and
+            // `u.CompanyId?.ToString() ?? ""` would emit an empty company_id -- which
+            // climate-tracking's MatchingTenantHandler compares verbatim against its
+            // configured ExpectedCompanyId, so a blank value is a broken tenant key, not a
+            // harmless one. It cannot arise anyway: the Where above filters on
+            // `u.CompanyId == companyGuid`, which excludes NULL, so every row here provably
+            // belongs to companyGuid. Company-less super_admins are therefore absent from
+            // the persona sync entirely -- correct, they are platform operators, not survey
+            // participants of any tenant.
+            CompanyId: companyGuid.ToString()))
             .ToList();
 
         return Results.Json(new Envelope<PersonasData>(true, new PersonasData(personas)), SnakeCaseOptions);

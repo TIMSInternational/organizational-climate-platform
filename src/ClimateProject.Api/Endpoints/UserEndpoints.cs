@@ -19,9 +19,13 @@ public static class UserEndpoints
         group.MapPut("/{id:guid}/role", UpdateRoleAsync);
     }
 
-    private static bool CanAccessCompany(CurrentUser currentUser, Guid companyId)
-        => currentUser.Role == Roles.SuperAdmin
-           || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
+    // Takes Guid? rather than Guid because two of the three call sites below pass
+    // user.CompanyId, which is nullable since #191. A null target is global scope and is
+    // SuperAdmin-only -- see CompanyScope.CanAccess. Callers passing a plain Guid (the
+    // companyId query parameter on ListAsync) still bind here via implicit conversion and
+    // are completely unaffected.
+    private static bool CanAccessCompany(CurrentUser currentUser, Guid? companyId)
+        => CompanyScope.CanAccess(currentUser, companyId);
 
     private static UserListItem ToListItem(User u)
         => new(u.Id, u.Email, u.Name, u.Role, u.DepartmentId, u.IsActive, u.LastLoginAt, u.CreatedAt);
@@ -45,6 +49,10 @@ public static class UserEndpoints
             return Results.Forbid();
         }
 
+        // companyId is a non-nullable parameter, so this translates to a plain
+        // `company_id = @p` and NULL rows never match. That is the intended outcome of
+        // #191: a company-less super_admin belongs to no tenant, so they must not turn up
+        // in any single company's user list.
         var query = db.Users.Where(u => u.CompanyId == companyId);
         if (departmentId.HasValue)
         {
@@ -143,6 +151,17 @@ public static class UserEndpoints
             return Results.Forbid();
         }
 
+        // Department and manager are org-chart links, and an org chart belongs to a
+        // company. A user with no company (a global super_admin, #191) has none, so say so
+        // outright instead of falling through to the "must exist in the same company" 400
+        // below -- which would be technically true and completely unhelpful.
+        if (user.CompanyId is null && (request.DepartmentId.HasValue || request.ManagerId.HasValue))
+        {
+            return Results.Json(
+                new { message = "User has no company; department and manager cannot be assigned" },
+                statusCode: 400);
+        }
+
         if (!string.IsNullOrWhiteSpace(request.Name))
         {
             user.Name = request.Name.Trim();
@@ -183,9 +202,21 @@ public static class UserEndpoints
             // Omitted entirely: leave the existing answers untouched, just echo them.
             demographics = await DemographicValueStore.LoadForUserAsync(db, user.Id, cancellationToken);
         }
+        else if (user.CompanyId is not { } demographicsCompanyId)
+        {
+            // Demographic fields are defined per company, so a user with no company (#191)
+            // has no field set to answer. Without this the load below would return an empty
+            // definition set and validation would reject every submitted key as an unknown
+            // field -- a confusing way to say "this user cannot have demographics at all".
+            // Nothing has been persisted at this point: SaveChangesAsync is only called at
+            // the end of the method.
+            return Results.Json(
+                new { message = "User has no company; demographics cannot be assigned" },
+                statusCode: 400);
+        }
         else
         {
-            var definitions = await DemographicValueStore.LoadDefinitionsAsync(db, user.CompanyId, cancellationToken);
+            var definitions = await DemographicValueStore.LoadDefinitionsAsync(db, demographicsCompanyId, cancellationToken);
             var validation = DemographicValueValidation.Validate(request.Demographics, definitions, enforceRequired: true);
             if (!validation.IsValid)
             {
@@ -224,6 +255,20 @@ public static class UserEndpoints
         if (user is null)
         {
             return Results.Json(new { message = "User not found" }, statusCode: 404);
+        }
+
+        // A company-less user (#191) may only hold super_admin. Every other role is
+        // tenant-scoped, and demoting a global super_admin in place would mint the one
+        // combination the codebase is not written for: a company_admin whose companyId
+        // claim is blank. BenchmarkEndpoints.ListAsync would then hit
+        // `Guid.Parse(currentUser.CompanyId)` -- safe today only because the SuperAdmin
+        // branch short-circuits before it -- and throw a 500. Blocking it here closes the
+        // hole at its only source rather than patching each downstream reader.
+        if (user.CompanyId is null && request.Role != Roles.SuperAdmin)
+        {
+            return Results.Json(
+                new { message = "User has no company; only super_admin is valid without one" },
+                statusCode: 400);
         }
 
         user.Role = request.Role;

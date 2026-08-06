@@ -70,7 +70,7 @@ public static class AuthEndpoints
             NodoId: user.NodoId,
             Email: user.Email,
             Name: user.Name,
-            CompanyId: user.CompanyId.ToString(),
+            CompanyId: user.CompanyId?.ToString() ?? string.Empty,
             IsActive: user.IsActive));
 
         return Results.Ok(new TokenResponse(token));
@@ -148,7 +148,7 @@ public static class AuthEndpoints
             NodoId: user.NodoId,
             Email: user.Email,
             Name: user.Name,
-            CompanyId: user.CompanyId.ToString(),
+            CompanyId: user.CompanyId?.ToString() ?? string.Empty,
             IsActive: user.IsActive));
 
         return Results.Json(new TokenResponse(token), statusCode: 201);
@@ -226,7 +226,7 @@ public static class AuthEndpoints
             NodoId: user.NodoId,
             Email: user.Email,
             Name: user.Name,
-            CompanyId: user.CompanyId.ToString(),
+            CompanyId: user.CompanyId?.ToString() ?? string.Empty,
             IsActive: user.IsActive));
 
         return Results.Ok(new TokenResponse(token));
@@ -259,7 +259,7 @@ public static class AuthEndpoints
             NodoId: user.NodoId,
             Email: user.Email,
             Name: user.Name,
-            CompanyId: user.CompanyId.ToString(),
+            CompanyId: user.CompanyId?.ToString() ?? string.Empty,
             IsActive: user.IsActive));
 
         return Results.Ok(new TokenResponse(token));
@@ -282,9 +282,19 @@ public static class AuthEndpoints
         // the legacy User.canAccessCompany behavior (super_admin can access any
         // company). Returns 404 -- not 403 -- on a tenant mismatch so this endpoint
         // doesn't leak the existence of users in other companies.
+        //
+        // Compares Guids, not strings. This used to read `u.CompanyId.ToString() ==
+        // currentUser.CompanyId`; once User.CompanyId became Guid? (#191) that receiver is
+        // Nullable<Guid>, whose ToString() is a DIFFERENT method that EF cannot translate --
+        // it would have thrown "could not be translated" at runtime, not compile time.
+        // Parsing the claim up front also means a company-less super_admin (claim is
+        // string.Empty) yields null here, so the tenant branch matches nothing at all
+        // instead of matching every company-less row.
+        var actingCompanyId = CompanyScope.OwnCompanyId(currentUser);
         var user = await db.Users.FirstOrDefaultAsync(
             u => u.Id == request.UserId
-                && (currentUser.Role == Roles.SuperAdmin || u.CompanyId.ToString() == currentUser.CompanyId),
+                && (currentUser.Role == Roles.SuperAdmin
+                    || (actingCompanyId != null && u.CompanyId == actingCompanyId)),
             cancellationToken);
         if (user is null)
         {

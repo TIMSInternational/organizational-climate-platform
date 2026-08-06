@@ -14,7 +14,8 @@ public sealed record UserListResponse(IReadOnlyList<UserListItem> Users);
 
 public sealed record UserDetail(
     Guid Id,
-    Guid CompanyId,
+    // Null for a user with no tenant -- a global super_admin (#191).
+    Guid? CompanyId,
     string Email,
     string Name,
     string Role,

@@ -116,6 +116,41 @@ public class JwtTokenServiceTests
     }
 
     [Fact]
+    public void Company_less_super_admin_round_trips_as_an_empty_companyId_claim()
+    {
+        // #191 made User.CompanyId nullable, and AuthEndpoints emits
+        // `user.CompanyId?.ToString() ?? string.Empty` for it. This proves the resulting
+        // token still carries a companyId claim -- omitting it entirely would be the
+        // tempting alternative -- and that reading it back yields exactly the
+        // string.Empty that GetCurrentUser already defaults a missing claim to. That
+        // equivalence is what lets every existing guard keep working untouched.
+        var service = CreateService();
+        var token = service.IssueToken(SampleClaims with { Role = Roles.SuperAdmin, CompanyId = string.Empty });
+
+        var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
+        var principal = handler.ValidateToken(
+            token,
+            new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestSecret)),
+                ValidateIssuer = false,
+                ValidateAudience = false,
+                ValidateLifetime = true,
+                NameClaimType = "sub",
+            },
+            out _);
+
+        Assert.Contains(principal.Claims, c => c.Type == "companyId");
+
+        var currentUser = principal.GetCurrentUser();
+        Assert.Equal(string.Empty, currentUser.CompanyId);
+        Assert.Equal(Roles.SuperAdmin, currentUser.Role);
+        Assert.True(CompanyScope.CanAccess(currentUser, Guid.NewGuid()));
+        Assert.True(CompanyScope.CanAccess(currentUser, null));
+    }
+
+    [Fact]
     public void Constructor_throws_when_TrackingJwtSecret_is_empty_string()
     {
         // appsettings.json ships "TrackingJwtSecret": "" as a placeholder. An
