@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import type { ActionPlan } from '../api/actionPlans'
 import { useTranslation } from '../../../i18n'
+import { Table } from '../../../components/ui'
 
 // dueDate is a calendar date, not a moment -- the API sends it as a UTC-midnight
 // instant (see actionPlans.ts's normalizeDueDate). Formatting with the *local*
@@ -19,7 +20,7 @@ export default function ActionPlanList({ plans }: { plans: ActionPlan[] }) {
   }
 
   return (
-    <table>
+    <Table>
       <thead>
         <tr>
           <th>{t('users.title')}</th>
@@ -38,6 +39,6 @@ export default function ActionPlanList({ plans }: { plans: ActionPlan[] }) {
           </tr>
         ))}
       </tbody>
-    </table>
+    </Table>
   )
 }

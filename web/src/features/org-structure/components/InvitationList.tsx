@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Invitation } from '../api/invitations'
 import { useTranslation } from '../../../i18n'
+import { Table } from '../../../components/ui'
 
 interface InvitationListProps {
   invitations: Invitation[]
@@ -31,7 +32,7 @@ export default function InvitationList({ invitations, onResend }: InvitationList
   return (
     <>
       {error && <p role="alert">{error}</p>}
-      <table>
+      <Table>
         <thead>
           <tr>
             <th>{t('users.email')}</th>
@@ -58,7 +59,7 @@ export default function InvitationList({ invitations, onResend }: InvitationList
             </tr>
           ))}
         </tbody>
-      </table>
+      </Table>
     </>
   )
 }

@@ -1,5 +1,6 @@
 import type { User } from '../api/users'
 import { useTranslation } from '../../../i18n'
+import { Table } from '../../../components/ui'
 
 export default function UserList({ users, onEdit }: { users: User[]; onEdit: (user: User) => void }) {
   const { t } = useTranslation()
@@ -9,7 +10,7 @@ export default function UserList({ users, onEdit }: { users: User[]; onEdit: (us
   }
 
   return (
-    <table>
+    <Table>
       <thead>
         <tr>
           <th>{t('users.name')}</th>
@@ -30,6 +31,6 @@ export default function UserList({ users, onEdit }: { users: User[]; onEdit: (us
           </tr>
         ))}
       </tbody>
-    </table>
+    </Table>
   )
 }
