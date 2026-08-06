@@ -1012,15 +1012,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
-                    b.Property<string>("Label")
-                        .IsRequired()
+                    b.Property<string>("LabelEn")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
-                        .HasColumnName("label");
+                        .HasColumnName("label_en");
 
-                    b.PrimitiveCollection<List<string>>("Options")
-                        .HasColumnType("text[]")
-                        .HasColumnName("options");
+                    b.Property<string>("LabelEs")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("label_es");
 
                     b.Property<int>("Order")
                         .ValueGeneratedOnAdd()
@@ -1052,6 +1052,40 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasIndex("CompanyId", "Order");
 
                     b.ToTable("demographic_fields", (string)null);
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.DemographicFieldOption", b =>
+                {
+                    b.Property<Guid>("DemographicFieldId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("demographic_field_id");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer")
+                        .HasColumnName("order");
+
+                    b.Property<string>("LabelEn")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("label_en");
+
+                    b.Property<string>("LabelEs")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("label_es");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("value");
+
+                    b.HasKey("DemographicFieldId", "Order");
+
+                    b.HasIndex("DemographicFieldId", "Value")
+                        .IsUnique();
+
+                    b.ToTable("demographic_field_options", (string)null);
                 });
 
             modelBuilder.Entity("ClimateProject.Domain.Entities.DemographicSnapshot", b =>
@@ -1305,10 +1339,23 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
-                    b.Property<string>("Description")
+                    b.Property<string>("DescriptionEn")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
-                        .HasColumnName("description");
+                        .HasColumnName("description_en");
+
+                    b.Property<string>("DescriptionEs")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("description_es");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValue("en")
+                        .HasColumnName("language");
 
                     b.Property<double>("ParticipationRate")
                         .ValueGeneratedOnAdd()
@@ -1346,11 +1393,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("template_id");
 
-                    b.Property<string>("Title")
-                        .IsRequired()
+                    b.Property<string>("TitleEn")
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)")
-                        .HasColumnName("title");
+                        .HasColumnName("title_en");
+
+                    b.Property<string>("TitleEs")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("title_es");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -1530,10 +1581,6 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("microclimate_id");
 
-                    b.PrimitiveCollection<string[]>("Options")
-                        .HasColumnType("text[]")
-                        .HasColumnName("options");
-
                     b.Property<int>("Order")
                         .HasColumnType("integer")
                         .HasColumnName("question_order");
@@ -1544,11 +1591,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasDefaultValue(true)
                         .HasColumnName("required");
 
-                    b.Property<string>("Text")
-                        .IsRequired()
+                    b.Property<string>("TextEn")
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)")
-                        .HasColumnName("text");
+                        .HasColumnName("text_en");
+
+                    b.Property<string>("TextEs")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("text_es");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -1561,6 +1612,40 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasIndex("MicroclimateId");
 
                     b.ToTable("microclimate_questions", (string)null);
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.MicroclimateQuestionOption", b =>
+                {
+                    b.Property<Guid>("MicroclimateQuestionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("microclimate_question_id");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer")
+                        .HasColumnName("order");
+
+                    b.Property<string>("LabelEn")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("label_en");
+
+                    b.Property<string>("LabelEs")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("label_es");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("value");
+
+                    b.HasKey("MicroclimateQuestionId", "Order");
+
+                    b.HasIndex("MicroclimateQuestionId", "Value")
+                        .IsUnique();
+
+                    b.ToTable("microclimate_question_options", (string)null);
                 });
 
             modelBuilder.Entity("ClimateProject.Domain.Entities.MicroclimateTemplate", b =>
@@ -1650,10 +1735,6 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("category");
 
-                    b.PrimitiveCollection<string[]>("Options")
-                        .HasColumnType("text[]")
-                        .HasColumnName("options");
-
                     b.Property<int>("Order")
                         .HasColumnType("integer")
                         .HasColumnName("question_order");
@@ -1668,11 +1749,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("template_id");
 
-                    b.Property<string>("Text")
-                        .IsRequired()
+                    b.Property<string>("TextEn")
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)")
-                        .HasColumnName("text");
+                        .HasColumnName("text_en");
+
+                    b.Property<string>("TextEs")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("text_es");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -1685,6 +1770,40 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasIndex("TemplateId");
 
                     b.ToTable("microclimate_template_questions", (string)null);
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.MicroclimateTemplateQuestionOption", b =>
+                {
+                    b.Property<Guid>("MicroclimateTemplateQuestionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("microclimate_template_question_id");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer")
+                        .HasColumnName("order");
+
+                    b.Property<string>("LabelEn")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("label_en");
+
+                    b.Property<string>("LabelEs")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("label_es");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("value");
+
+                    b.HasKey("MicroclimateTemplateQuestionId", "Order");
+
+                    b.HasIndex("MicroclimateTemplateQuestionId", "Value")
+                        .IsUnique();
+
+                    b.ToTable("microclimate_template_question_options", (string)null);
                 });
 
             modelBuilder.Entity("ClimateProject.Domain.Entities.Notification", b =>
@@ -1856,10 +1975,13 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
-                    b.Property<string>("Content")
-                        .IsRequired()
+                    b.Property<string>("ContentEn")
                         .HasColumnType("text")
-                        .HasColumnName("content");
+                        .HasColumnName("content_en");
+
+                    b.Property<string>("ContentEs")
+                        .HasColumnType("text")
+                        .HasColumnName("content_es");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -1869,9 +1991,13 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
-                    b.Property<string>("HtmlContent")
+                    b.Property<string>("HtmlContentEn")
                         .HasColumnType("text")
-                        .HasColumnName("html_content");
+                        .HasColumnName("html_content_en");
+
+                    b.Property<string>("HtmlContentEs")
+                        .HasColumnType("text")
+                        .HasColumnName("html_content_es");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
@@ -1891,16 +2017,25 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("name");
 
-                    b.Property<string>("Subject")
+                    b.Property<string>("SubjectEn")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
-                        .HasColumnName("subject");
+                        .HasColumnName("subject_en");
 
-                    b.Property<string>("Title")
-                        .IsRequired()
+                    b.Property<string>("SubjectEs")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
-                        .HasColumnName("title");
+                        .HasColumnName("subject_es");
+
+                    b.Property<string>("TitleEn")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("title_en");
+
+                    b.Property<string>("TitleEs")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("title_es");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -1976,32 +2111,40 @@ namespace ClimateProject.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("BinaryCommentConfig")
+                    b.Property<string>("BinaryCommentConfigEn")
                         .HasColumnType("jsonb")
-                        .HasColumnName("binary_comment_config");
+                        .HasColumnName("binary_comment_config_en");
+
+                    b.Property<string>("BinaryCommentConfigEs")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("binary_comment_config_es");
 
                     b.Property<string>("Category")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("category");
 
-                    b.Property<string>("CommentPrompt")
+                    b.Property<string>("CommentPromptEn")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
                         .HasDefaultValue("Please explain your answer:")
-                        .HasColumnName("comment_prompt");
+                        .HasColumnName("comment_prompt_en");
+
+                    b.Property<string>("CommentPromptEs")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasDefaultValue("Por favor explica tu respuesta:")
+                        .HasColumnName("comment_prompt_es");
 
                     b.Property<bool>("CommentRequired")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true)
                         .HasColumnName("comment_required");
-
-                    b.PrimitiveCollection<string[]>("Options")
-                        .HasColumnType("text[]")
-                        .HasColumnName("options");
 
                     b.Property<int>("Order")
                         .HasColumnType("integer")
@@ -2013,15 +2156,25 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("required");
 
-                    b.Property<string>("ScaleLabelMax")
+                    b.Property<string>("ScaleLabelMaxEn")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
-                        .HasColumnName("scale_label_max");
+                        .HasColumnName("scale_label_max_en");
 
-                    b.Property<string>("ScaleLabelMin")
+                    b.Property<string>("ScaleLabelMaxEs")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
-                        .HasColumnName("scale_label_min");
+                        .HasColumnName("scale_label_max_es");
+
+                    b.Property<string>("ScaleLabelMinEn")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("scale_label_min_en");
+
+                    b.Property<string>("ScaleLabelMinEs")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("scale_label_min_es");
 
                     b.Property<int?>("ScaleMax")
                         .HasColumnType("integer")
@@ -2035,11 +2188,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("survey_id");
 
-                    b.Property<string>("Text")
-                        .IsRequired()
+                    b.Property<string>("TextEn")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
-                        .HasColumnName("text");
+                        .HasColumnName("text_en");
+
+                    b.Property<string>("TextEs")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("text_es");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -2107,11 +2264,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("character varying(10)")
                         .HasColumnName("emoji");
 
-                    b.Property<string>("Label")
-                        .IsRequired()
+                    b.Property<string>("LabelEn")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
-                        .HasColumnName("label");
+                        .HasColumnName("label_en");
+
+                    b.Property<string>("LabelEs")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("label_es");
 
                     b.Property<int>("Value")
                         .HasColumnType("integer")
@@ -2120,6 +2281,40 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasKey("QuestionId", "Order");
 
                     b.ToTable("question_emoji_options", (string)null);
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.QuestionOption", b =>
+                {
+                    b.Property<Guid>("QuestionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("question_id");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer")
+                        .HasColumnName("order");
+
+                    b.Property<string>("LabelEn")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("label_en");
+
+                    b.Property<string>("LabelEs")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("label_es");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("value");
+
+                    b.HasKey("QuestionId", "Order");
+
+                    b.HasIndex("QuestionId", "Value")
+                        .IsUnique();
+
+                    b.ToTable("question_options", (string)null);
                 });
 
             modelBuilder.Entity("ClimateProject.Domain.Entities.QuestionResponse", b =>
@@ -2333,6 +2528,14 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("is_complete");
 
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValue("en")
+                        .HasColumnName("language");
+
                     b.Property<string>("SessionId")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -2416,14 +2619,27 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
-                    b.Property<string>("Description")
+                    b.Property<string>("DescriptionEn")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
-                        .HasColumnName("description");
+                        .HasColumnName("description_en");
+
+                    b.Property<string>("DescriptionEs")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description_es");
 
                     b.Property<DateTimeOffset>("EndDate")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("end_date");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValue("en")
+                        .HasColumnName("language");
 
                     b.Property<int>("ResponseCount")
                         .ValueGeneratedOnAdd()
@@ -2447,11 +2663,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("target_audience_count");
 
-                    b.Property<string>("Title")
-                        .IsRequired()
+                    b.Property<string>("TitleEn")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
-                        .HasColumnName("title");
+                        .HasColumnName("title_en");
+
+                    b.Property<string>("TitleEs")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title_es");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -2974,10 +3194,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("demographics_snapshot");
 
-                    b.Property<string>("Description")
+                    b.Property<string>("DescriptionEn")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
-                        .HasColumnName("description");
+                        .HasColumnName("description_en");
+
+                    b.Property<string>("DescriptionEs")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description_es");
 
                     b.Property<string>("QuestionsSnapshot")
                         .HasColumnType("jsonb")
@@ -2997,11 +3222,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("survey_id");
 
-                    b.Property<string>("Title")
-                        .IsRequired()
+                    b.Property<string>("TitleEn")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
-                        .HasColumnName("title");
+                        .HasColumnName("title_en");
+
+                    b.Property<string>("TitleEs")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title_es");
 
                     b.Property<int>("VersionNumber")
                         .HasColumnType("integer")
@@ -3033,10 +3262,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasDefaultValue(true)
                         .HasColumnName("login_enabled");
 
-                    b.Property<string>("MaintenanceMessage")
+                    b.Property<string>("MaintenanceMessageEn")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
-                        .HasColumnName("maintenance_message");
+                        .HasColumnName("maintenance_message_en");
+
+                    b.Property<string>("MaintenanceMessageEs")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("maintenance_message_es");
 
                     b.Property<bool>("MaintenanceMode")
                         .ValueGeneratedOnAdd()
@@ -3080,32 +3314,40 @@ namespace ClimateProject.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("BinaryCommentConfig")
+                    b.Property<string>("BinaryCommentConfigEn")
                         .HasColumnType("jsonb")
-                        .HasColumnName("binary_comment_config");
+                        .HasColumnName("binary_comment_config_en");
+
+                    b.Property<string>("BinaryCommentConfigEs")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("binary_comment_config_es");
 
                     b.Property<string>("Category")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("category");
 
-                    b.Property<string>("CommentPrompt")
+                    b.Property<string>("CommentPromptEn")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
                         .HasDefaultValue("Please explain your answer:")
-                        .HasColumnName("comment_prompt");
+                        .HasColumnName("comment_prompt_en");
+
+                    b.Property<string>("CommentPromptEs")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasDefaultValue("Por favor explica tu respuesta:")
+                        .HasColumnName("comment_prompt_es");
 
                     b.Property<bool>("CommentRequired")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true)
                         .HasColumnName("comment_required");
-
-                    b.PrimitiveCollection<string[]>("Options")
-                        .HasColumnType("text[]")
-                        .HasColumnName("options");
 
                     b.Property<int>("Order")
                         .HasColumnType("integer")
@@ -3117,15 +3359,25 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("required");
 
-                    b.Property<string>("ScaleLabelMax")
+                    b.Property<string>("ScaleLabelMaxEn")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
-                        .HasColumnName("scale_label_max");
+                        .HasColumnName("scale_label_max_en");
 
-                    b.Property<string>("ScaleLabelMin")
+                    b.Property<string>("ScaleLabelMaxEs")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
-                        .HasColumnName("scale_label_min");
+                        .HasColumnName("scale_label_max_es");
+
+                    b.Property<string>("ScaleLabelMinEn")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("scale_label_min_en");
+
+                    b.Property<string>("ScaleLabelMinEs")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("scale_label_min_es");
 
                     b.Property<int?>("ScaleMax")
                         .HasColumnType("integer")
@@ -3139,11 +3391,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("template_id");
 
-                    b.Property<string>("Text")
-                        .IsRequired()
+                    b.Property<string>("TextEn")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
-                        .HasColumnName("text");
+                        .HasColumnName("text_en");
+
+                    b.Property<string>("TextEs")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("text_es");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -3158,13 +3414,47 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.ToTable("template_questions", (string)null);
                 });
 
+            modelBuilder.Entity("ClimateProject.Domain.Entities.TemplateQuestionOption", b =>
+                {
+                    b.Property<Guid>("TemplateQuestionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("template_question_id");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer")
+                        .HasColumnName("order");
+
+                    b.Property<string>("LabelEn")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("label_en");
+
+                    b.Property<string>("LabelEs")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("label_es");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("value");
+
+                    b.HasKey("TemplateQuestionId", "Order");
+
+                    b.HasIndex("TemplateQuestionId", "Value")
+                        .IsUnique();
+
+                    b.ToTable("template_question_options", (string)null);
+                });
+
             modelBuilder.Entity("ClimateProject.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("CompanyId")
+                    b.Property<Guid?>("CompanyId")
                         .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
@@ -3175,10 +3465,6 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
-
-                    b.Property<string>("Demographics")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("demographics");
 
                     b.Property<Guid?>("DepartmentId")
                         .HasColumnType("uuid")
@@ -3250,6 +3536,37 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("ClimateProject.Domain.Entities.UserDemographic", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<Guid>("DemographicFieldId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("demographic_field_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("value");
+
+                    b.HasKey("UserId", "DemographicFieldId");
+
+                    b.HasIndex("DemographicFieldId", "Value");
+
+                    b.ToTable("user_demographics", (string)null);
+                });
+
             modelBuilder.Entity("ClimateProject.Domain.Entities.UserInvitation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3263,10 +3580,6 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uuid")
                         .HasColumnName("company_id");
-
-                    b.Property<string>("Demographics")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("demographics");
 
                     b.Property<Guid?>("DepartmentId")
                         .HasColumnType("uuid")
@@ -3345,6 +3658,29 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasIndex("InvitedBy");
 
                     b.ToTable("user_invitations", (string)null);
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.UserInvitationDemographic", b =>
+                {
+                    b.Property<Guid>("InvitationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invitation_id");
+
+                    b.Property<Guid>("DemographicFieldId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("demographic_field_id");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("value");
+
+                    b.HasKey("InvitationId", "DemographicFieldId");
+
+                    b.HasIndex("DemographicFieldId", "Value");
+
+                    b.ToTable("user_invitation_demographics", (string)null);
                 });
 
             modelBuilder.Entity("ClimateProject.Domain.Entities.AIInsight", b =>
@@ -3681,6 +4017,15 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasOne("ClimateProject.Domain.Entities.Company", null)
                         .WithMany()
                         .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.DemographicFieldOption", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.DemographicField", null)
+                        .WithMany()
+                        .HasForeignKey("DemographicFieldId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -4079,6 +4424,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ClimateProject.Domain.Entities.MicroclimateQuestionOption", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.MicroclimateQuestion", null)
+                        .WithMany()
+                        .HasForeignKey("MicroclimateQuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ClimateProject.Domain.Entities.MicroclimateTemplate", b =>
                 {
                     b.HasOne("ClimateProject.Domain.Entities.Company", null)
@@ -4148,6 +4502,15 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasOne("ClimateProject.Domain.Entities.MicroclimateTemplate", null)
                         .WithMany()
                         .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.MicroclimateTemplateQuestionOption", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.MicroclimateTemplateQuestion", null)
+                        .WithMany()
+                        .HasForeignKey("MicroclimateTemplateQuestionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -4277,6 +4640,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ClimateProject.Domain.Entities.QuestionOption", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.Question", null)
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ClimateProject.Domain.Entities.QuestionResponse", b =>
                 {
                     b.HasOne("ClimateProject.Domain.Entities.Question", null)
@@ -4384,15 +4756,25 @@ namespace ClimateProject.Infrastructure.Migrations
                                 .HasDefaultValue(false)
                                 .HasColumnName("settings_invitation_branding_enabled");
 
-                            b1.Property<string>("InvitationCustomMessage")
+                            b1.Property<string>("InvitationCustomMessageEn")
                                 .HasMaxLength(1000)
                                 .HasColumnType("character varying(1000)")
-                                .HasColumnName("settings_invitation_custom_message");
+                                .HasColumnName("settings_invitation_custom_message_en");
 
-                            b1.Property<string>("InvitationCustomSubject")
+                            b1.Property<string>("InvitationCustomMessageEs")
+                                .HasMaxLength(1000)
+                                .HasColumnType("character varying(1000)")
+                                .HasColumnName("settings_invitation_custom_message_es");
+
+                            b1.Property<string>("InvitationCustomSubjectEn")
                                 .HasMaxLength(200)
                                 .HasColumnType("character varying(200)")
-                                .HasColumnName("settings_invitation_custom_subject");
+                                .HasColumnName("settings_invitation_custom_subject_en");
+
+                            b1.Property<string>("InvitationCustomSubjectEs")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)")
+                                .HasColumnName("settings_invitation_custom_subject_es");
 
                             b1.Property<bool>("InvitationIncludeCredentials")
                                 .ValueGeneratedOnAdd()
@@ -4758,13 +5140,21 @@ namespace ClimateProject.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ClimateProject.Domain.Entities.TemplateQuestionOption", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.TemplateQuestion", null)
+                        .WithMany()
+                        .HasForeignKey("TemplateQuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ClimateProject.Domain.Entities.User", b =>
                 {
                     b.HasOne("ClimateProject.Domain.Entities.Company", null)
                         .WithMany()
                         .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("ClimateProject.Domain.Entities.Department", null)
                         .WithMany()
@@ -4775,6 +5165,57 @@ namespace ClimateProject.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("ManagerId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsOne("ClimateProject.Domain.Entities.NotificationPreferences", "Notifications", b1 =>
+                        {
+                            b1.Property<Guid>("UserId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("DigestFrequency")
+                                .IsRequired()
+                                .ValueGeneratedOnAdd()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)")
+                                .HasDefaultValue("weekly")
+                                .HasColumnName("notifications_digest_frequency");
+
+                            b1.Property<bool>("EmailActionPlans")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(true)
+                                .HasColumnName("notifications_email_action_plans");
+
+                            b1.Property<bool>("EmailMicroclimates")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(true)
+                                .HasColumnName("notifications_email_microclimates");
+
+                            b1.Property<bool>("EmailReminders")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(true)
+                                .HasColumnName("notifications_email_reminders");
+
+                            b1.Property<bool>("EmailSurveys")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(true)
+                                .HasColumnName("notifications_email_surveys");
+
+                            b1.Property<bool>("PushNotifications")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(false)
+                                .HasColumnName("notifications_push");
+
+                            b1.HasKey("UserId");
+
+                            b1.ToTable("users");
+
+                            b1.WithOwner()
+                                .HasForeignKey("UserId");
+                        });
 
                     b.OwnsOne("ClimateProject.Domain.Entities.UserConsent", "Consent", b1 =>
                         {
@@ -4873,7 +5314,25 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.Navigation("Consent")
                         .IsRequired();
 
+                    b.Navigation("Notifications")
+                        .IsRequired();
+
                     b.Navigation("Preferences")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.UserDemographic", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.DemographicField", null)
+                        .WithMany()
+                        .HasForeignKey("DemographicFieldId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ClimateProject.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
@@ -4894,6 +5353,21 @@ namespace ClimateProject.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("InvitedBy")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.UserInvitationDemographic", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.DemographicField", null)
+                        .WithMany()
+                        .HasForeignKey("DemographicFieldId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ClimateProject.Domain.Entities.UserInvitation", null)
+                        .WithMany()
+                        .HasForeignKey("InvitationId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

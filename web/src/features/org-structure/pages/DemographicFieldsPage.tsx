@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router'
-import { listDemographicFields, createDemographicField, updateDemographicField, type DemographicField } from '../api/demographicFields'
+import { listDemographicFields, createDemographicField, updateDemographicField, type DemographicField, type DemographicFieldOptionInput } from '../api/demographicFields'
 import DemographicFieldList from '../components/DemographicFieldList'
 import DemographicFieldForm, { type DemographicFieldFormValues } from '../components/DemographicFieldForm'
 import { useTranslation } from '../../../i18n'
@@ -30,9 +30,12 @@ export default function DemographicFieldsPage() {
     reload()
   }, [companyId])
 
-  function parseOptions(optionsText: string): string[] | undefined {
+  // Each entry becomes an option whose stable value is derived server-side from the
+  // label. A single-language admin never sees the value; it exists so the same choice
+  // stays one value once the labels are translated (#195).
+  function parseOptions(optionsText: string): DemographicFieldOptionInput[] | undefined {
     const trimmed = optionsText.split(',').map((o) => o.trim()).filter(Boolean)
-    return trimmed.length > 0 ? trimmed : undefined
+    return trimmed.length > 0 ? trimmed.map((label) => ({ label })) : undefined
   }
 
   async function handleCreate(values: DemographicFieldFormValues) {

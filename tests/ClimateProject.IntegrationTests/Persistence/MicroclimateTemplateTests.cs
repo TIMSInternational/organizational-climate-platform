@@ -64,7 +64,7 @@ public class MicroclimateTemplateTests(PostgresContainerFixture postgres)
         {
             Id = Guid.NewGuid(),
             TemplateId = template.Id,
-            Text = "How are you feeling this week?",
+            TextEn = "How are you feeling this week?",
             Type = "emoji_rating",
             Order = 1,
             Category = "mood",

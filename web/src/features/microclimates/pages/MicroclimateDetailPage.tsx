@@ -48,13 +48,18 @@ export default function MicroclimateDetailPage() {
     return <p>{t('common.loading')}</p>
   }
 
+  // A resolved title can be null when the microclimate has no text in any language --
+  // the resolver returns null rather than an empty string or a key path, so the caller
+  // decides what to show (#195, and #78's raw-key-path bug it exists to avoid).
+  const title = microclimate.title ?? t('microclimates.untitled')
+
   return (
     <div>
       <PageTopBar
-        title={microclimate.title}
+        title={title}
         breadcrumbs={[
           { label: t('navigation.microclimates'), href: '/microclimates' },
-          { label: microclimate.title },
+          { label: title },
         ]}
       />
       <label>

@@ -9,11 +9,34 @@ Parameters:
   GitHubRepository:
     Type: String
     Default: TIMSInternational/organizational-climate-platform
+    AllowedPattern: ^[^/]+/[^/]+$
     Description: GitHub owner/repository allowed to assume the deploy role.
   GitHubBranch:
     Type: String
     Default: main
     Description: GitHub branch allowed to assume the deploy role.
+  GitHubOwnerId:
+    Type: String
+    Default: "305569681"
+    AllowedPattern: ^[0-9]+$
+    Description: >-
+      Immutable numeric GitHub account ID of the repository owner
+      (TIMSInternational). GitHub embeds this in the OIDC subject claim, and
+      unlike the owner *name* it never changes — not on an org rename, not on a
+      repository transfer within the org. Re-derive with
+      `gh api /repos/TIMSInternational/organizational-climate-platform --jq
+      .owner.id`, or read it out of the sub template returned by
+      `gh api /repos/{owner}/{repo}/actions/oidc/customization/sub`.
+  GitHubRepositoryId:
+    Type: String
+    Default: "1317724282"
+    AllowedPattern: ^[0-9]+$
+    Description: >-
+      Immutable numeric GitHub repository ID. Same story as GitHubOwnerId: it
+      survives repository renames, which the name-based form does not.
+      Re-derive with `gh api
+      /repos/TIMSInternational/organizational-climate-platform --jq .id`, or read
+      it out of `gh api /repos/{owner}/{repo}/actions/oidc/customization/sub`.
 
 Resources:
   ClimateProjectApiRepository:
@@ -97,7 +120,45 @@ Resources:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
               StringLike:
+                # ---------------------------------------------------------------
+                # FOUR subs, deliberately. DO NOT delete the ID-qualified pair.
+                # ---------------------------------------------------------------
+                # GitHub issues OIDC tokens whose `sub` claim follows this
+                # repository's configured sub_claim_prefix, and that prefix is the
+                # ID-qualified form:
+                #
+                #   repo:OWNER@<ownerId>/REPO@<repoId>:ref:refs/heads/main
+                #
+                # not the bare `repo:OWNER/REPO:...` form AWS's own documentation
+                # still shows. A policy carrying only the name-based pair can
+                # therefore never match any token this repository presents — which
+                # is exactly how the first production deploy failed at
+                # `sts:AssumeRoleWithWebIdentity`. The ID-qualified entries are what
+                # make deploys work today; removing them breaks every deploy
+                # immediately, with a denial that looks like a credentials problem.
+                #
+                # The name-based pair is kept as well, so this template reproduces
+                # the live `climate-project-github-deploy-prod` trust policy exactly
+                # (verified against IAM, 2026-08-05) and so the role keeps working if
+                # GitHub ever reverts a repository to the unqualified prefix. Both
+                # forms are scoped to the same repo, same branch and same
+                # environment, so trusting both grants nothing extra.
+                #
+                # Owner and repository IDs are immutable, so the ID-qualified form is
+                # also the one that survives a repo or org rename — the failure mode
+                # #68 was opened about. See infra/aws/README.md.
+                #
+                # `scripts/verify-oidc-trust-subs.py` (CI job `deploy-path-lint`)
+                # fails if any of the four goes missing.
                 token.actions.githubusercontent.com:sub:
+                  - !Sub
+                    - repo:${Owner}@${GitHubOwnerId}/${Repo}@${GitHubRepositoryId}:ref:refs/heads/${GitHubBranch}
+                    - Owner: !Select [0, !Split ["/", !Ref GitHubRepository]]
+                      Repo: !Select [1, !Split ["/", !Ref GitHubRepository]]
+                  - !Sub
+                    - repo:${Owner}@${GitHubOwnerId}/${Repo}@${GitHubRepositoryId}:environment:production
+                    - Owner: !Select [0, !Split ["/", !Ref GitHubRepository]]
+                      Repo: !Select [1, !Split ["/", !Ref GitHubRepository]]
                   - !Sub repo:${GitHubRepository}:ref:refs/heads/${GitHubBranch}
                   - !Sub repo:${GitHubRepository}:environment:production
       Policies:

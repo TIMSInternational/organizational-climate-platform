@@ -31,7 +31,7 @@ public class MicroclimateQuestionTests(PostgresContainerFixture postgres)
         var now = DateTimeOffset.UtcNow;
         var microclimate = new Microclimate
         {
-            Id = Guid.NewGuid(), Title = "Pulse", CompanyId = company.Id, CreatedBy = creator.Id,
+            Id = Guid.NewGuid(), TitleEn = "Pulse", CompanyId = company.Id, CreatedBy = creator.Id,
             Scheduling = new MicroclimateScheduling { StartTime = now, EndTime = now.AddMinutes(30) },
             CreatedAt = now, UpdatedAt = now,
         };
@@ -51,19 +51,36 @@ public class MicroclimateQuestionTests(PostgresContainerFixture postgres)
         {
             Id = Guid.NewGuid(),
             MicroclimateId = microclimate.Id,
-            Text = "How satisfied are you this week?",
+            TextEn = "How satisfied are you this week?",
             Type = "multiple_choice",
-            Options = ["Very", "Somewhat", "Not really"],
             Order = 1,
         };
         db.MicroclimateQuestions.Add(question);
+        // Options are rows carrying a stable, locale-independent value (#195) -- what a
+        // respondent submits and what question_responses stores, never the label.
+        string[] optionValues = ["Very", "Somewhat", "Not really"];
+        for (var order = 0; order < optionValues.Length; order++)
+        {
+            db.MicroclimateQuestionOptions.Add(new MicroclimateQuestionOption
+            {
+                MicroclimateQuestionId = question.Id,
+                Order = order,
+                Value = optionValues[order],
+                LabelEn = optionValues[order],
+            });
+        }
+
         await db.SaveChangesAsync();
 
         await using var readDb = CreateContext();
         var loaded = await readDb.MicroclimateQuestions.SingleAsync(q => q.Id == question.Id);
         Assert.Equal(microclimate.Id, loaded.MicroclimateId);
         Assert.Equal("multiple_choice", loaded.Type);
-        Assert.Equal(["Very", "Somewhat", "Not really"], loaded.Options!);
+        var loadedOptions = await readDb.MicroclimateQuestionOptions
+            .Where(o => o.MicroclimateQuestionId == question.Id)
+            .OrderBy(o => o.Order)
+            .ToListAsync();
+        Assert.Equal(optionValues, loadedOptions.Select(o => o.Value));
         Assert.True(loaded.Required);
         Assert.Equal(1, loaded.Order);
     }
@@ -77,7 +94,7 @@ public class MicroclimateQuestionTests(PostgresContainerFixture postgres)
 
         var question = new MicroclimateQuestion
         {
-            Id = Guid.NewGuid(), MicroclimateId = microclimate.Id, Text = "Q", Type = "open_ended", Order = 1,
+            Id = Guid.NewGuid(), MicroclimateId = microclimate.Id, TextEn = "Q", Type = "open_ended", Order = 1,
         };
         db.MicroclimateQuestions.Add(question);
         await db.SaveChangesAsync();
@@ -99,13 +116,13 @@ public class MicroclimateQuestionTests(PostgresContainerFixture postgres)
         var minimalId = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO microclimate_questions ("Id", microclimate_id, text, type, question_order)
+             INSERT INTO microclimate_questions ("Id", microclimate_id, text_en, type, question_order)
              VALUES ({minimalId}, {microclimate.Id}, {"Minimal question"}, {"likert"}, {1})
              """);
 
         await using var readDb = CreateContext();
         var loaded = await readDb.MicroclimateQuestions.SingleAsync(q => q.Id == minimalId);
         Assert.True(loaded.Required);
-        Assert.Null(loaded.Options);
+        Assert.Empty(await readDb.MicroclimateQuestionOptions.Where(o => o.MicroclimateQuestionId == minimalId).ToListAsync());
     }
 }

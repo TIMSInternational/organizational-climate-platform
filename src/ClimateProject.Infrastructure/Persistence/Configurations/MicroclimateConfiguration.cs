@@ -10,8 +10,11 @@ public class MicroclimateConfiguration : IEntityTypeConfiguration<Microclimate>
     {
         builder.ToTable("microclimates");
         builder.HasKey(m => m.Id);
-        builder.Property(m => m.Title).HasColumnName("title").HasMaxLength(150).IsRequired();
-        builder.Property(m => m.Description).HasColumnName("description").HasMaxLength(500);
+        builder.Property(m => m.TitleEn).HasColumnName("title_en").HasMaxLength(150);
+        builder.Property(m => m.TitleEs).HasColumnName("title_es").HasMaxLength(150);
+        builder.Property(m => m.DescriptionEn).HasColumnName("description_en").HasMaxLength(500);
+        builder.Property(m => m.DescriptionEs).HasColumnName("description_es").HasMaxLength(500);
+        builder.Property(m => m.Language).HasColumnName("language").HasMaxLength(10).IsRequired().HasDefaultValue("en");
         builder.Property(m => m.CompanyId).HasColumnName("company_id").IsRequired();
         builder.Property(m => m.CreatedBy).HasColumnName("created_by").IsRequired();
         builder.Property(m => m.TemplateId).HasColumnName("template_id");

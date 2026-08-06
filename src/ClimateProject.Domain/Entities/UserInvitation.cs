@@ -19,5 +19,4 @@ public class UserInvitation
     public DateTimeOffset? LastReminderSentAt { get; set; }
     public string? Metadata { get; set; }
     public string? InvitationData { get; set; }
-    public string? Demographics { get; set; }
 }

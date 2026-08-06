@@ -43,10 +43,10 @@ public class NotificationTemplateTests(PostgresContainerFixture postgres)
             Name = "Survey Invitation - Company Branded",
             Type = "survey_invitation",
             Channel = "email",
-            Subject = "You're invited: {{survey_name}}",
-            Title = "New survey",
-            Content = "Hi {{user_name}}, please complete {{survey_name}}.",
-            HtmlContent = "<p>Hi {{user_name}}, please complete {{survey_name}}.</p>",
+            SubjectEn = "You're invited: {{survey_name}}",
+            TitleEn = "New survey",
+            ContentEn = "Hi {{user_name}}, please complete {{survey_name}}.",
+            HtmlContentEn = "<p>Hi {{user_name}}, please complete {{survey_name}}.</p>",
             CompanyId = company.Id,
             IsActive = true,
             IsDefault = false,
@@ -107,7 +107,7 @@ public class NotificationTemplateTests(PostgresContainerFixture postgres)
         var now = DateTimeOffset.UtcNow;
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO notification_templates ("Id", name, type, channel, title, content, created_by, created_at, updated_at)
+             INSERT INTO notification_templates ("Id", name, type, channel, title_en, content_en, created_by, created_at, updated_at)
              VALUES ({minimalTemplateId}, {"Minimal Template"}, {"system_notification"}, {"in_app"}, {"Notice"}, {"Body text"}, {creator.Id}, {now}, {now})
              """);
 
@@ -123,7 +123,7 @@ public class NotificationTemplateTests(PostgresContainerFixture postgres)
         Assert.True(loadedTemplate.IsActive);
         Assert.False(loadedTemplate.IsDefault);
         Assert.Null(loadedTemplate.CompanyId);
-        Assert.Null(loadedTemplate.Subject);
+        Assert.Null(loadedTemplate.SubjectEn);
 
         var loadedVariable = await readDb.NotificationTemplateVariables.SingleAsync(v => v.Id == minimalVariableId);
         Assert.False(loadedVariable.Required);
@@ -140,7 +140,7 @@ public class NotificationTemplateTests(PostgresContainerFixture postgres)
         var template = new NotificationTemplate
         {
             Id = Guid.NewGuid(), Name = "Deadline reminder", Type = "deadline_reminder", Channel = "in_app",
-            Title = "Deadline approaching", Content = "Your deadline is near.", CreatedBy = creator.Id,
+            TitleEn = "Deadline approaching", ContentEn = "Your deadline is near.", CreatedBy = creator.Id,
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };
         db.NotificationTemplates.Add(template);

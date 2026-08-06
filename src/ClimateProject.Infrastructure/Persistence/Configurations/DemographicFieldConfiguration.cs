@@ -12,9 +12,9 @@ public class DemographicFieldConfiguration : IEntityTypeConfiguration<Demographi
         builder.HasKey(f => f.Id);
         builder.Property(f => f.CompanyId).HasColumnName("company_id").IsRequired();
         builder.Property(f => f.Field).HasColumnName("field").HasMaxLength(100).IsRequired();
-        builder.Property(f => f.Label).HasColumnName("label").HasMaxLength(200).IsRequired();
+        builder.Property(f => f.LabelEn).HasColumnName("label_en").HasMaxLength(200);
+        builder.Property(f => f.LabelEs).HasColumnName("label_es").HasMaxLength(200);
         builder.Property(f => f.Type).HasColumnName("type").HasMaxLength(20).IsRequired();
-        builder.Property(f => f.Options).HasColumnName("options").HasColumnType("text[]");
         builder.Property(f => f.Required).HasColumnName("required").IsRequired().HasDefaultValue(false);
         builder.Property(f => f.Order).HasColumnName("order").IsRequired().HasDefaultValue(0);
         builder.Property(f => f.IsActive).HasColumnName("is_active").IsRequired().HasDefaultValue(true);
