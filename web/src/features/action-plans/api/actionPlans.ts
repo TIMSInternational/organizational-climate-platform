@@ -120,8 +120,36 @@ function normalizeDueDate(dueDate: string): string {
   return DATE_ONLY_PATTERN.test(dueDate) ? `${dueDate}T00:00:00.000Z` : dueDate
 }
 
-export async function listActionPlans(baseUrl: string, companyId: string): Promise<ActionPlan[]> {
-  const response = await authFetch(`${baseUrl}/action-plans?companyId=${companyId}`)
+/**
+ * The filters `ActionPlanEndpoints.ListAsync` applies **in the database**.
+ *
+ * Deliberately only these two. The endpoint's signature is
+ * `(Guid companyId, Guid? departmentId, string? status)` and nothing else — there
+ * is no priority parameter and no search parameter, so adding either here would
+ * put a field on the query string that the server silently ignores, which is worse
+ * than not offering it. Those two filters are applied client-side by the list page,
+ * which is exact rather than approximate because this endpoint returns the complete
+ * result set (no `Take`, no paging) — see `ActionPlanFilters` for the reasoning.
+ */
+export interface ActionPlanListFilters {
+  /** One of `ActionPlanValidation.ValidStatuses`. Empty/undefined means no filter. */
+  status?: string
+  departmentId?: string
+}
+
+export async function listActionPlans(
+  baseUrl: string,
+  companyId: string,
+  filters: ActionPlanListFilters = {},
+): Promise<ActionPlan[]> {
+  const query = new URLSearchParams({ companyId })
+  // Empty strings are dropped rather than sent: the server treats a whitespace
+  // status as "no filter" (`IsNullOrWhiteSpace`), but `departmentId` is a
+  // `Guid?` and an empty one is a 400 from model binding, not an absent filter.
+  if (filters.status) query.set('status', filters.status)
+  if (filters.departmentId) query.set('departmentId', filters.departmentId)
+
+  const response = await authFetch(`${baseUrl}/action-plans?${query.toString()}`)
   const body = (await response.json()) as { actionPlans: ActionPlan[] }
   return body.actionPlans
 }
