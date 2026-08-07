@@ -23,6 +23,35 @@ namespace ClimateProject.Api.Infrastructure;
 public sealed class DatabaseOptions
 {
     public string ConnectionString { get; set; } = string.Empty;
+
+    // The remaining properties are what DatabaseConnectionStringPolicy decided about the
+    // string above, captured once at startup so that GET /admin/system/status can report it
+    // (#147). They are stored rather than recomputed on demand for two reasons: the policy is
+    // not idempotent in what it *reports* (re-applying it to an already-bounded string would
+    // claim the pool size was operator-supplied), and recomputing would mean an endpoint
+    // handling the raw connection string. None of these is a secret -- a port number and a
+    // pool bound carry no host, database, username or password -- and nothing anywhere
+    // exposes ConnectionString itself.
+
+    /// <summary>Effective Postgres port, either as configured or Npgsql's default.</summary>
+    public int Port { get; set; }
+
+    /// <summary>
+    /// <see langword="true"/> when <see cref="Port"/> is Supabase Supavisor's transaction
+    /// pooler, which this service must not use. Reported at startup as a warning and, since
+    /// #147, on the diagnostics endpoint too -- the warning is only visible to whoever reads
+    /// the deploy logs, and #220 went unnoticed for exactly that reason.
+    /// </summary>
+    public bool UsesTransactionPoolerPort { get; set; }
+
+    /// <summary>Effective Npgsql maximum pool size.</summary>
+    public int MaxPoolSize { get; set; }
+
+    /// <summary>
+    /// <see langword="true"/> when the connection string did not specify a pool bound and the
+    /// policy default was applied; <see langword="false"/> when an operator set one.
+    /// </summary>
+    public bool MaxPoolSizeDefaulted { get; set; }
 }
 
 /// <summary>
