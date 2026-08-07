@@ -84,6 +84,13 @@ describe('router', () => {
     expect(paths).toContain('/admin/companies/:id')
     expect(paths).toContain('/action-plans')
     expect(paths).toContain('/microclimates')
+    // #127-#129. `/new` and `/analytics` are declared before `/:id` for readability;
+    // react-router ranks a static segment above a dynamic one regardless, so neither
+    // could ever be parsed as a microclimate id.
+    expect(paths).toContain('/microclimates/new')
+    expect(paths).toContain('/microclimates/analytics')
+    expect(paths).toContain('/microclimates/:id/live')
+    expect(paths).toContain('/microclimates/:id/results')
     // #99. Behind RequireAuth like the rest, but with no role gate of its own:
     // /notifications/mine authorizes per user, so every authenticated role can
     // load their own inbox and the nav offers it to all of them.
