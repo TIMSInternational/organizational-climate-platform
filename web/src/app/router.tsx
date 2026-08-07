@@ -19,6 +19,7 @@ import NotificationsInboxPage from '../features/notifications/pages/Notification
 import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
 import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
 import ReportsListPage from '../features/reports/pages/ReportsListPage'
+import SurveyResultsPage from '../features/surveys/pages/SurveyResultsPage'
 import AnalyticsDashboardPage from '../features/analytics/pages/AnalyticsDashboardPage'
 import { getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
@@ -94,6 +95,10 @@ export const router = createBrowserRouter([
               { path: '/action-plans/:id', element: <ActionPlanDetailPage /> },
               { path: '/microclimates', element: <MicroclimatesListPage /> },
               { path: '/microclimates/:id', element: <MicroclimateDetailPage /> },
+              // No nav entry, deliberately: this is a per-survey destination reached from
+              // a survey, not a place in the sidebar. `/surveys` and `/surveys/:id` are
+              // #109's; this route only needs to exist beneath one of them.
+              { path: '/surveys/:id/results', element: <SurveyResultsPage /> },
               // Not under /admin: every authenticated role owns their own preferences,
               // and the API behind this page takes no user id at all (#103).
               { path: '/settings/notifications', element: <NotificationPreferencesPage /> },
