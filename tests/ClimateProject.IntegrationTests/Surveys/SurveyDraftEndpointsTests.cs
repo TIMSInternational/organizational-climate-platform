@@ -165,8 +165,44 @@ public class SurveyDraftEndpointsTests : IAsyncLifetime
         Assert.Equal(3, restored.CurrentStep);
         Assert.Equal("questions[1].text", restored.LastEditedField);
         Assert.NotNull(restored.Content);
-        Assert.Equal(wizardState, restored.Content!.Value.GetRawText());
+
+        // Compared as JSON, not as text. draft_data is jsonb: Postgres reparses and re-renders
+        // it on storage rather than preserving the bytes it was handed, so what comes back is
+        // semantically identical and textually different (notably a space after each colon).
+        // "Opaque wizard state survives a recovery intact" is a statement about the value, and
+        // asserting it on the raw text instead makes the test fail on the storage engine's
+        // formatting rather than on the behaviour it is guarding.
+        Assert.Equal(CanonicalJson(wizardState), CanonicalJson(restored.Content!.Value.GetRawText()));
     }
+
+    /// <summary>
+    /// A rendering that depends on nothing but the JSON's content — no whitespace, and no key
+    /// order.
+    ///
+    /// Postgres <c>jsonb</c> preserves neither. It reparses on storage and re-renders with a
+    /// space after each colon, and it orders object keys by length then bytewise, so
+    /// <c>{"step":…,"questions":…,"scroll":…,"touched":…}</c> comes back as
+    /// <c>step, scroll, touched, questions</c>. Both are round-trip artefacts of the storage
+    /// engine, and neither says anything about whether the draft survived intact — which is the
+    /// only thing these tests are asserting.
+    /// </summary>
+    private static string CanonicalJson(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return Canonicalise(document.RootElement);
+    }
+
+    private static string Canonicalise(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Object => "{"
+            + string.Join(",", element.EnumerateObject()
+                .OrderBy(property => property.Name, StringComparer.Ordinal)
+                .Select(property => $"{JsonSerializer.Serialize(property.Name)}:{Canonicalise(property.Value)}"))
+            + "}",
+        // Array order is meaningful — question order is the survey's order — so it is preserved.
+        JsonValueKind.Array => "[" + string.Join(",", element.EnumerateArray().Select(Canonicalise)) + "]",
+        _ => element.GetRawText(),
+    };
 
     [Fact]
     public async Task Latest_returns_the_most_recently_touched_draft_across_sessions()
@@ -368,10 +404,15 @@ public class SurveyDraftEndpointsTests : IAsyncLifetime
         Assert.Equal(2, stored.AutoSaveCount);
 
         // One of the two payloads survived whole. Neither half-applied nor merged.
-        Assert.True(
-            stored.DraftData!.Contains("\"from\":\"one\"", StringComparison.Ordinal)
-            ^ stored.DraftData.Contains("\"from\":\"two\"", StringComparison.Ordinal),
-            $"draft_data interleaved two writes: {stored.DraftData}");
+        //
+        // Asserted structurally rather than by substring. draft_data is jsonb, and Postgres
+        // reparses and re-renders jsonb on storage rather than keeping the bytes it was given
+        // -- so the row comes back as {"content": {"from": "two"}}, with a space after the
+        // colon, and a search for "from":"two" finds neither payload. That made this report
+        // "interleaved" for a row that was in fact perfectly intact.
+        using var document = JsonDocument.Parse(stored.DraftData!);
+        var from = document.RootElement.GetProperty("content").GetProperty("from").GetString();
+        Assert.Contains(from, new[] { "one", "two" });
     }
 
     [Fact]

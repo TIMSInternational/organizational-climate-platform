@@ -33,5 +33,36 @@ public class DepartmentConfiguration : IEntityTypeConfiguration<Department>
 
         builder.HasOne<Company>().WithMany().HasForeignKey(d => d.CompanyId);
         builder.HasOne<Department>().WithMany().HasForeignKey(d => d.ParentDepartmentId).OnDelete(DeleteBehavior.Restrict);
+
+        // manager_id pointed at users with no constraint at all (#150), so a department could
+        // name a manager who had been deleted -- nothing prevented it and nothing detected it.
+        //
+        // SetNull, chosen deliberately rather than taken from EF's default (an optional FK
+        // defaults to ClientSetNull, i.e. NO ACTION at the DB, which enforces nothing once the
+        // row leaves the change tracker):
+        //   * Cascade is obviously wrong -- deleting a person would delete the department they
+        //     ran, taking its hierarchy, its surveys' scoping and its action plans with it.
+        //   * Restrict is what UserConfiguration uses for the User -> User self-reference, but
+        //     that is a different shape of relationship. There, blocking the delete protects a
+        //     reporting chain from being silently severed mid-tree. Here the dependent is a
+        //     department, an org-structure row that is *expected* to outlive any individual
+        //     manager, and Restrict would make erasing a manager fail outright -- exactly the
+        //     GDPR-erasure problem #144 has to solve. The closer precedent is the mirror-image
+        //     FK one file over: User.DepartmentId -> Department is SetNull, a nullable pointer
+        //     between the two entities that nulls rather than blocks.
+        //   * SetNull therefore keeps the invariant that matters -- manager_id is either NULL
+        //     or a live user, never a dangling id -- while leaving erasure unblocked.
+        //
+        // ManagerId is Guid?, so the FK is optional. Confirmed rather than assumed: the
+        // generated migration adds the constraint and its index only, with no AlterColumn
+        // promoting manager_id to NOT NULL, and a test pins that a department with no manager
+        // still saves.
+        //
+        // This closes a users <-> departments FK cycle (users.department_id -> departments,
+        // departments.manager_id -> users). Postgres allows it, and both directions are
+        // SET NULL so neither can chain into a delete. It does mean a single SaveChanges that
+        // inserts a user and a department pointing at each other must be split in two, which
+        // is what the seeding order in TrackingInternalEndpointsTests already does.
+        builder.HasOne<User>().WithMany().HasForeignKey(d => d.ManagerId).OnDelete(DeleteBehavior.SetNull);
     }
 }

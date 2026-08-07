@@ -3,9 +3,11 @@ using ClimateProject.Api.Endpoints;
 using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Cors;
+using ClimateProject.Application.Email;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Infrastructure.Auth;
+using ClimateProject.Infrastructure.Email;
 using ClimateProject.Infrastructure.Notifications;
 using ClimateProject.Infrastructure.OrgStructure;
 using ClimateProject.Infrastructure.Persistence;
@@ -211,13 +213,55 @@ builder.Services.AddOptions<CorsOptions>()
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
-builder.Services.AddScoped<IInvitationEmailSender, LoggingInvitationEmailSender>();
 
-// The notification delivery seam (#97). LoggingNotificationSender delivers nothing and
-// reports success, which is what lets the entire dispatch path -- authorization, tenancy,
-// consent suppression, persistence, retry accounting -- be built and tested before any
-// mail/SMS provider exists. Swapping this one line for a real sender is the whole of #100.
-builder.Services.AddScoped<INotificationSender, LoggingNotificationSender>();
+// Mail provider configuration (#100). Conditionally required, in the shape #189 established
+// for GoogleClientId: nothing is mandatory while Email:Provider is 'none' (local dev, CI and
+// the integration suite all run that way and must keep starting), but selecting a provider
+// makes the settings it cannot work without mandatory -- and a half-configured provider then
+// fails the host at startup rather than booting into a service that reports every notification
+// as sent and delivers none. See EmailOptions for the full rule.
+builder.Services.AddOptions<EmailOptions>()
+    .Configure<IConfiguration, ILoggerFactory>((options, configuration, loggerFactory) =>
+    {
+        configuration.GetSection("Email").Bind(options);
+
+        if (options.Validate() is { } error)
+        {
+            throw new InvalidOperationException(error);
+        }
+
+        EmailDeliveryStartupReport.Write(
+            loggerFactory.CreateLogger(EmailDeliveryStartupReport.LogCategory),
+            options);
+    })
+    .ValidateOnStart();
+
+// Unwrapped so Infrastructure can take EmailOptions directly and stay free of an options
+// dependency. Resolved lazily like every other options read in this file, so
+// WebApplicationFactory's in-memory overrides are still honoured.
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<EmailOptions>>().Value);
+
+// Singleton, and that is load-bearing: the rate limiter paces sends process-wide, so a
+// per-request instance would pace nothing. See EmailSendRateLimiter.
+builder.Services.AddSingleton(sp => new EmailSendRateLimiter(sp.GetRequiredService<EmailOptions>().MaxSendsPerSecond));
+builder.Services.AddScoped<IEmailTransport, SmtpEmailTransport>();
+
+// The two delivery seams (#97 left both stubbed; #100 fills them in). Resolved from
+// configuration rather than registered as a fixed type -- a factory rather than an `if` over
+// builder.Configuration, because reading configuration eagerly here would capture appsettings
+// values before test-time overrides are applied, the same reason the connection string at the
+// top of this file is read lazily.
+//
+// Unconfigured keeps the logging stubs, which deliver nothing and report success. That state
+// is announced by a startup WARNING (EmailDeliveryStartupReport) so it cannot be mistaken for
+// working delivery.
+builder.Services.AddScoped<IInvitationEmailSender>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
+    ? ActivatorUtilities.CreateInstance<EmailInvitationEmailSender>(sp)
+    : ActivatorUtilities.CreateInstance<LoggingInvitationEmailSender>(sp));
+
+builder.Services.AddScoped<INotificationSender>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
+    ? ActivatorUtilities.CreateInstance<EmailNotificationSender>(sp)
+    : ActivatorUtilities.CreateInstance<LoggingNotificationSender>(sp));
 
 builder.Services.AddOpenApi();
 
@@ -355,10 +399,13 @@ app.MapTrackingPickerEndpoints();
 app.MapTrackingInternalEndpoints();
 app.MapSurveyEndpoints();
 app.MapSurveyDraftEndpoints();
+app.MapSurveyHistoryEndpoints();
+app.MapSurveyTemplateEndpoints();
 app.MapMicroclimateEndpoints();
 app.MapMicroclimateTemplateEndpoints();
 app.MapReportEndpoints();
 app.MapBenchmarkEndpoints();
+app.MapAnalyticsInsightEndpoints();
 app.MapNotificationEndpoints();
 app.MapDemographicSnapshotEndpoints();
 

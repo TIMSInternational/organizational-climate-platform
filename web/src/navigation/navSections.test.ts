@@ -28,9 +28,30 @@ describe('buildNavSections', () => {
     expect(links.some((href) => href.includes('company-1'))).toBe(false)
   })
 
-  it('does not give a super_admin an Action Plans link -- that page has no company-picker and would silently mis-scope', () => {
+  /**
+   * The inverse of what this test used to assert.
+   *
+   * It read `expect(links).not.toContain('/action-plans')`, because the page had
+   * no company-picker and a SuperAdmin landing there would have been silently
+   * scoped to whatever company their own user row pointed at. #124 built the
+   * picker (`company-context/`), so the entry is restored -- and the property
+   * that made withholding it correct is now asserted where it actually lives,
+   * in `company-context/companyContext.test.ts`: a SuperAdmin with no selection
+   * resolves to `needs-selection`, never to a company.
+   */
+  it('gives a super_admin Action Plans, Microclimates and AI Insights, now that a company-context selector exists', () => {
     const links = hrefs(buildNavSections('super_admin', 'company-1'))
-    expect(links).not.toContain('/action-plans')
+    expect(links).toContain('/action-plans')
+    expect(links).toContain('/microclimates')
+    expect(links).toContain('/analytics/ai-insights')
+  })
+
+  it('still gives a super_admin no company-scoped URL, even though they now reach company-scoped pages', () => {
+    // The company comes from the selector, not from the href. If a company id
+    // ever appeared in one of these links it would be the SuperAdmin's *own*
+    // claim interpolated in -- the exact silent scoping #124 removed.
+    const links = hrefs(buildNavSections('super_admin', 'company-1'))
+    expect(links.some((href) => href.includes('company-1'))).toBe(false)
   })
 
   it('gives a company_admin an Action Plans link scoped to their own company session', () => {
@@ -51,11 +72,21 @@ describe('buildNavSections', () => {
   /**
    * AI Insights takes a required company id, and since #191 a global
    * super_admin's `companyId` claim is the empty string (`User.CompanyId` is
-   * `Guid?`). An entry here would lead to a page that can only say "no company
-   * associated".
+   * `Guid?`). That is why this entry used to be withheld from the role: the page
+   * could only ever have said "no company associated". #124's selector is what
+   * supplies the id the claim cannot -- see the restored-entries test above.
    */
-  it('does not give a super_admin an AI Insights link -- that endpoint requires a company id', () => {
-    expect(hrefs(buildNavSections('super_admin', 'company-1'))).not.toContain('/analytics/ai-insights')
+  it('keeps Benchmarks on a super_admin mobile tab bar, so the restored entries do not displace it', () => {
+    // `leafNavItems` -- not `hrefs` -- is what MobileNav reads, and it takes the
+    // first four. The group's two children come first, so Benchmarks holds the
+    // third slot and the three #124 entries have to be appended after it.
+    const leaves = leafNavItems(buildNavSections('super_admin', 'company-1')).map((item) => item.href)
+    expect(leaves.slice(0, 4)).toEqual([
+      '/admin/companies',
+      '/admin/system-settings',
+      '/analytics/benchmarks',
+      '/action-plans',
+    ])
   })
 
   it('gives a company_admin both analytics pages', () => {
@@ -112,9 +143,14 @@ describe('buildNavSections', () => {
   it('puts Notifications last for an admin, so it does not displace their primary pages', () => {
     // The mobile tab bar takes the first four leaves (see leafNavItems). A
     // company_admin's four are their own company's pages; Notifications sits
-    // behind "More" rather than pushing one of them off the bar.
-    const links = hrefs(buildNavSections('company_admin', 'company-1'))
-    expect(links[links.length - 1]).toBe('/notifications')
+    // behind "More" rather than pushing one of them off the bar. Asserted for
+    // both admin roles: #124 appended three entries to the super_admin branch,
+    // and appending them *after* NOTIFICATIONS_ITEM is the obvious way to get
+    // this wrong.
+    for (const role of ['company_admin', 'super_admin']) {
+      const links = hrefs(buildNavSections(role, 'company-1'))
+      expect(links[links.length - 1], `${role} does not end on notifications`).toBe('/notifications')
+    }
   })
 })
 
@@ -191,6 +227,11 @@ describe('leafNavItems', () => {
       '/admin/companies',
       '/admin/system-settings',
       '/analytics/benchmarks',
+      // Restored by #124. They sit after Benchmarks rather than before it so the
+      // four-slot mobile tab bar keeps the three rows it already had.
+      '/action-plans',
+      '/microclimates',
+      '/analytics/ai-insights',
       '/notifications',
     ])
   })

@@ -19,14 +19,22 @@ namespace ClimateProject.Infrastructure.Notifications;
 /// place to put that. Id, recipient, channel and type are enough to follow a dispatch through
 /// the logs, and none of them is content.
 ///
-/// Replacing this is the whole of #100: register a real sender in <c>Program.cs</c>; nothing
-/// upstream changes.
+/// **It is still the default, and that is deliberate (#100).** A real
+/// <see cref="EmailNotificationSender"/> now exists, but it is only registered when a mail
+/// provider is actually configured -- local development, CI and the integration suite all run
+/// with none, and refusing to start there would be wrong. What #100 changed is that the
+/// unconfigured state is announced loudly at startup by <c>EmailDeliveryStartupReport</c>
+/// instead of being visible only to whoever reads these per-send lines.
 /// </summary>
 public class LoggingNotificationSender(ILogger<LoggingNotificationSender> logger) : INotificationSender
 {
-    public Task<NotificationDeliveryResult> SendAsync(Notification notification, CancellationToken cancellationToken)
+    public Task<NotificationDeliveryResult> SendAsync(
+        Notification notification,
+        NotificationRecipient recipient,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(notification);
+        ArgumentNullException.ThrowIfNull(recipient);
         cancellationToken.ThrowIfCancellationRequested();
 
         logger.LogInformation(
@@ -34,7 +42,7 @@ public class LoggingNotificationSender(ILogger<LoggingNotificationSender> logger
             "to user {UserId} via {Channel} at priority {Priority}. No message was actually sent.",
             notification.Id,
             notification.Type,
-            notification.UserId,
+            recipient.UserId,
             notification.Channel,
             notification.Priority);
 
