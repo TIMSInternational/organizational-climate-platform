@@ -1,37 +1,38 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { listActionPlans, createActionPlan, type ActionPlan, type CreateActionPlanInput } from '../api/actionPlans'
 import { listActionPlanTemplates, type ActionPlanTemplate } from '../api/actionPlanTemplates'
 import ActionPlanList from '../components/ActionPlanList'
 import ActionPlanFilters, { type ActionPlanFiltersValue } from '../components/ActionPlanFilters'
 import ActionPlanForm, { type ActionPlanFormValues } from '../components/ActionPlanForm'
-import { getToken } from '../../../auth/token'
-import { decodeJwtPayload } from '../../../auth/jwt'
+import { useCompanyScope } from '../../../company-context'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
+import { EmptyState } from '../../../components/ui'
 
-// This slice has no company-picker UI yet (org-structure's admin shell doesn't
-// expose a "current company" concept for a SuperAdmin browsing across
-// companies). CompanyAdmin's own companyId comes straight off their JWT
-// claims -- the same source AdminLayout.tsx already uses for nav/routing --
-// so every CompanyAdmin sees and creates action plans for their own company,
-// not a globally-configured one.
+// Company scope comes from `useCompanyScope()` (#124), not from the JWT claim
+// this page used to read directly.
 //
-// SuperAdmin is deliberately NOT routed down the same "use claims.companyId"
-// path. Unlike CompanyAdmin, SuperAdmin *does* always carry a companyId claim
-// (JwtTokenService emits it unconditionally off the non-nullable User.CompanyId
-// column) -- so falling through to that path wouldn't error, it would quietly
-// scope a SuperAdmin to whatever single company their own user row happens to
-// point at, with no picker and no indication anything was scoped at all,
-// including any plan they went on to create. Block it explicitly instead until
-// #57 (cross-cutting company-context selector) lands.
+// The comment that stood here said SuperAdmin was blocked outright because
+// "SuperAdmin *does* always carry a companyId claim (JwtTokenService emits it
+// unconditionally off the non-nullable User.CompanyId column)", so falling
+// through to the claim would have scoped them to whatever single company their
+// own user row pointed at, silently. Both halves of that have moved:
+//
+//   - #191 made `User.CompanyId` a `Guid?`, so a global SuperAdmin's claim is now
+//     the empty string rather than a real company. The claim is no longer a wrong
+//     answer; it is no answer at all.
+//   - #124 supplies the picker the block was waiting for. `resolveCompanyScope`
+//     is where the "never fall back to a SuperAdmin's own claim" rule now lives,
+//     for every page at once instead of once per page.
+//
+// So the role is no longer blocked. It is asked. A SuperAdmin with nothing
+// selected gets `status: 'needs-selection'` and the prompt below -- never a
+// company chosen for them.
 export default function ActionPlansListPage() {
   const { t } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const token = getToken()
-  const claims = token ? decodeJwtPayload(token) : null
-  const role = typeof claims?.role === 'string' ? claims.role : undefined
-  const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
-  const isSuperAdmin = role === 'super_admin'
+  const scope = useCompanyScope()
+  const companyId = scope.companyId
   const [plans, setPlans] = useState<ActionPlan[]>([])
   const [templates, setTemplates] = useState<ActionPlanTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -39,8 +40,16 @@ export default function ActionPlansListPage() {
   const [filters, setFilters] = useState<ActionPlanFiltersValue>({ status: '' })
   const [showCreateForm, setShowCreateForm] = useState(false)
 
-  async function reload() {
-    if (!companyId || isSuperAdmin) return
+  // `useCallback` + `[reload]` rather than the `[]` this page used to run on:
+  // the company can now change *while the page is mounted*, and a mount-only
+  // effect would leave company A's plans on screen under a header that says
+  // company B -- a half-applied scope switch, which is the same class of lie the
+  // silent scoping was.
+  const reload = useCallback(async () => {
+    if (!companyId) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -55,16 +64,16 @@ export default function ActionPlansListPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [baseUrl, companyId, t])
 
   useEffect(() => {
-    reload()
-  }, [])
+    void reload()
+  }, [reload])
 
   const filtered = plans.filter((plan) => !filters.status || plan.status === filters.status)
 
   async function handleCreate(values: ActionPlanFormValues) {
-    if (!companyId || isSuperAdmin) return
+    if (!companyId) return
     const input: CreateActionPlanInput = {
       title: values.title,
       description: values.description,
@@ -82,15 +91,16 @@ export default function ActionPlansListPage() {
     await reload()
   }
 
-  if (isSuperAdmin) {
+  if (scope.status === 'needs-selection') {
     return (
-      <p role="alert">
-        {t('common.superAdminScopedBrowsingUnavailable', { feature: t('navigation.actionPlans') })}
-      </p>
+      <EmptyState
+        title={t('companyContext.chooseACompany')}
+        description={t('companyContext.chooseACompanyDescription')}
+      />
     )
   }
 
-  if (!companyId) {
+  if (scope.status === 'no-company') {
     return <p role="alert">{t('common.noCompanyAssociated')}</p>
   }
 

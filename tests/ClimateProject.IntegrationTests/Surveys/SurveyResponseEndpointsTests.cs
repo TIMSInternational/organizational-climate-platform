@@ -655,7 +655,12 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
             IsComplete: false));
         Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
 
-        var rows = await _harness.WithDbAsync(db => db.QuestionResponses.AsNoTracking().ToListAsync());
+        // Scoped to this survey. The Postgres collection shares one database across every
+        // test class, so an unscoped sweep sees sibling tests' rows and Assert.Single fails
+        // on their data rather than on this behaviour.
+        var rows = await _harness.WithDbAsync(db => db.QuestionResponses.AsNoTracking()
+            .Where(qr => db.Responses.Any(r => r.Id == qr.ResponseId && r.SurveyId == survey.Id))
+            .ToListAsync());
         Assert.Equal("\"hybrid\"", Assert.Single(rows).ResponseValue);
     }
 
@@ -682,7 +687,7 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
         var http = await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(Answers: []));
 
         Assert.Equal(HttpStatusCode.BadRequest, http.StatusCode);
-        Assert.Empty(await _harness.WithDbAsync(db => db.Responses.ToListAsync()));
+        Assert.Empty(await _harness.WithDbAsync(db => db.Responses.Where(r => r.SurveyId == survey.Id).ToListAsync()));
     }
 
     // ------------------------------------------------------------------
@@ -704,7 +709,7 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
             Answers: [new SurveyAnswerInput(survey.Questions[0].Id, "remote")]));
 
         Assert.Equal(HttpStatusCode.BadRequest, http.StatusCode);
-        Assert.Empty(await _harness.WithDbAsync(db => db.Responses.ToListAsync()));
+        Assert.Empty(await _harness.WithDbAsync(db => db.Responses.Where(r => r.SurveyId == survey.Id).ToListAsync()));
     }
 
     [Fact]

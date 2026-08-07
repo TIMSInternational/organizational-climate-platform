@@ -5,12 +5,14 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { TranslationProvider } from '../i18n'
 import { setToken, clearToken } from '../auth/token'
 import { ADMIN_THEME_ATTRIBUTE, ADMIN_THEME_STORAGE_KEY } from '../theme/adminTheme'
+import { COMPANY_CONTEXT_STORAGE_KEY } from '../company-context'
 import AdminLayout from './AdminLayout'
 
 afterEach(() => {
   cleanup()
   clearToken()
   localStorage.removeItem(ADMIN_THEME_STORAGE_KEY)
+  localStorage.removeItem(COMPANY_CONTEXT_STORAGE_KEY)
   document.documentElement.removeAttribute(ADMIN_THEME_ATTRIBUTE)
   vi.restoreAllMocks()
 })
@@ -235,6 +237,66 @@ describe('AdminLayout', () => {
       await screen.findByRole('button', { name: 'Notifications, 2 unread' })
       await userEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
       expect(screen.getByRole('button', { name: 'Notifications, 2 unread' })).toBeTruthy()
+    })
+  })
+
+  /**
+   * #124's company-context selector, asserted from the shell rather than from the
+   * component, because "it is on every page" is a property of where it is mounted.
+   */
+  describe('the company-context selector', () => {
+    function stubShellFetch(): void {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockImplementation((input: RequestInfo | URL) => {
+          const url = String(input)
+          const body = url.includes('/admin/companies')
+            ? { companies: [{ id: 'co-a', name: 'Acme Holdings', emailDomain: null, industry: null, size: null, country: null, subscriptionTier: null, createdAt: '2026-01-01T00:00:00Z' }] }
+            : { notifications: [] }
+          return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
+        }),
+      )
+    }
+
+    it('is in the shell header for a super_admin, so it is legible from every page', async () => {
+      setToken(tokenFor({ role: 'super_admin', companyId: '' }))
+      stubShellFetch()
+      renderShell()
+
+      const picker = await screen.findByRole('combobox', { name: 'Company context' })
+      // Chrome, not page content: outside `#main` so the skip link still skips it,
+      // and in the same strip as the bell so it survives a collapsed rail and the
+      // sub-`md` layout where the sidebar footer is gone entirely.
+      expect(document.getElementById('main')!.contains(picker)).toBe(false)
+      expect(picker.closest('header')).not.toBeNull()
+    })
+
+    it('stays visible when the sidebar is collapsed', async () => {
+      setToken(tokenFor({ role: 'super_admin', companyId: '' }))
+      stubShellFetch()
+      renderShell()
+
+      await screen.findByRole('combobox', { name: 'Company context' })
+      await userEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
+      expect(screen.getByRole('combobox', { name: 'Company context' })).toBeTruthy()
+    })
+
+    it('is absent for a company_admin, whose scope is their own claim', () => {
+      // The default token for this file is already company_admin.
+      renderShell()
+      expect(screen.queryByRole('combobox', { name: 'Company context' })).toBeNull()
+    })
+
+    it('drops the selection on sign out, so the next person does not inherit it', async () => {
+      localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'co-a')
+      setToken(tokenFor({ role: 'super_admin', companyId: '' }))
+      stubShellFetch()
+      renderShell()
+
+      await screen.findByRole('combobox', { name: 'Company context' })
+      await userEvent.click(screen.getAllByRole('button', { name: /Sign out/ })[0])
+      await waitFor(() => expect(screen.getByText('login page')).toBeTruthy())
+      expect(localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBeNull()
     })
   })
 

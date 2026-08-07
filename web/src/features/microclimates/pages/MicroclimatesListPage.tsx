@@ -1,37 +1,26 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { listMicroclimates, createMicroclimate, type Microclimate } from '../api/microclimates'
 import { listMicroclimateTemplates, type MicroclimateTemplate } from '../api/microclimateTemplates'
 import MicroclimateList from '../components/MicroclimateList'
 import MicroclimateFilters, { type MicroclimateFiltersValue } from '../components/MicroclimateFilters'
 import MicroclimateForm, { type MicroclimateFormValues } from '../components/MicroclimateForm'
-import { getToken } from '../../../auth/token'
-import { decodeJwtPayload } from '../../../auth/jwt'
+import { useCompanyScope } from '../../../company-context'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
+import { EmptyState } from '../../../components/ui'
 
-// This slice has no company-picker UI yet (org-structure's admin shell doesn't
-// expose a "current company" concept for a SuperAdmin browsing across
-// companies). CompanyAdmin's own companyId comes straight off their JWT
-// claims -- the same source AdminLayout.tsx already uses for nav/routing --
-// so every CompanyAdmin sees and creates microclimates for their own company,
-// not a globally-configured one.
-//
-// SuperAdmin is deliberately NOT routed down the same "use claims.companyId"
-// path. Unlike CompanyAdmin, SuperAdmin *does* always carry a companyId claim
-// (JwtTokenService emits it unconditionally off the non-nullable User.CompanyId
-// column) -- so falling through to that path wouldn't error, it would quietly
-// scope a SuperAdmin to whatever single company their own user row happens to
-// point at, with no picker and no indication anything was scoped at all,
-// including any microclimate they went on to create. Block it explicitly
-// instead until #57 (cross-cutting company-context selector) lands.
+// Company scope comes from `useCompanyScope()` (#124), not from the JWT claim
+// this page used to read directly. See `company-context/companyContext.ts` for
+// the rule, and `ActionPlansListPage` for the same note at length: the block that
+// stood here was waiting on a picker, and rested on a premise (#191 made
+// `User.CompanyId` nullable, so a global SuperAdmin's claim is `''`, not a real
+// company) that has since moved. A SuperAdmin is now asked which company they
+// mean rather than blocked -- and never given one by default.
 export default function MicroclimatesListPage() {
   const { t } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const token = getToken()
-  const claims = token ? decodeJwtPayload(token) : null
-  const role = typeof claims?.role === 'string' ? claims.role : undefined
-  const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
-  const isSuperAdmin = role === 'super_admin'
+  const scope = useCompanyScope()
+  const companyId = scope.companyId
   const [microclimates, setMicroclimates] = useState<Microclimate[]>([])
   const [templates, setTemplates] = useState<MicroclimateTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -39,8 +28,14 @@ export default function MicroclimatesListPage() {
   const [filters, setFilters] = useState<MicroclimateFiltersValue>({ status: '' })
   const [showCreateForm, setShowCreateForm] = useState(false)
 
-  async function reload() {
-    if (!companyId || isSuperAdmin) return
+  // `useCallback` + `[reload]` rather than the mount-only `[]` this page used to
+  // run on: the company can now change while the page is mounted, and stale rows
+  // under a switched context is the same lie as silent scoping.
+  const reload = useCallback(async () => {
+    if (!companyId) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -55,16 +50,16 @@ export default function MicroclimatesListPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [baseUrl, companyId, t])
 
   useEffect(() => {
-    reload()
-  }, [])
+    void reload()
+  }, [reload])
 
   const filtered = microclimates.filter((m) => !filters.status || m.status === filters.status)
 
   async function handleCreate(values: MicroclimateFormValues) {
-    if (!companyId || isSuperAdmin) return
+    if (!companyId) return
     await createMicroclimate(baseUrl, {
       title: values.title,
       companyId,
@@ -79,15 +74,16 @@ export default function MicroclimatesListPage() {
     await reload()
   }
 
-  if (isSuperAdmin) {
+  if (scope.status === 'needs-selection') {
     return (
-      <p role="alert">
-        {t('common.superAdminScopedBrowsingUnavailable', { feature: t('navigation.microclimates') })}
-      </p>
+      <EmptyState
+        title={t('companyContext.chooseACompany')}
+        description={t('companyContext.chooseACompanyDescription')}
+      />
     )
   }
 
-  if (!companyId) {
+  if (scope.status === 'no-company') {
     return <p role="alert">{t('common.noCompanyAssociated')}</p>
   }
 

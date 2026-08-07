@@ -291,6 +291,55 @@ public class StartupValidationTests
             ValidConfiguration(("GoogleClientId", null), ("GoogleAuth:Required", "true")),
             "GoogleClientId");
 
+    /// <summary>
+    /// Mail configuration is conditionally required in the same shape GoogleClientId is
+    /// (#100). Local development, CI and this very suite all run with no provider, so absent
+    /// mail configuration must start cleanly -- the whole integration suite would otherwise
+    /// stop booting.
+    /// </summary>
+    [Fact]
+    public void Missing_email_configuration_does_not_fail_startup()
+    {
+        Assert.Null(CaptureStartupException(ValidConfiguration(("Email:Provider", null))));
+    }
+
+    /// <summary>
+    /// The case this guard exists for. A provider selected but a required value forgotten is
+    /// not "mail is off": it is a service that boots, reports healthy, marks every
+    /// notification <c>sent</c>, and delivers nothing -- the #189 failure one setting further
+    /// along.
+    /// </summary>
+    [Fact]
+    public void Half_configured_email_fails_startup_rather_than_silently_dropping_mail() =>
+        AssertFailsStartupMentioning(
+            ValidConfiguration(
+                ("Email:Provider", "smtp"),
+                ("Email:SmtpHost", "smtp.example.com"),
+                ("Email:AppBaseUrl", "https://app.example.com")),
+            "Email:FromAddress");
+
+    /// <summary>
+    /// A fully configured provider starts. It never connects here -- nothing is sent during
+    /// host start -- so this asserts the configuration path, not deliverability.
+    ///
+    /// <para>
+    /// Only three email cases live in this class, and that is deliberate: every host boot here
+    /// is a boot of the structural hazard <c>AppHostCollection</c> documents, so what belongs
+    /// in an integration test is that <c>EmailOptions.Validate</c> is <em>reached at startup</em>
+    /// and that a valid configuration boots. Which individual setting produces which message is
+    /// exhaustively covered by <c>EmailOptionsTests</c>, which needs no host at all.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Fully_configured_email_starts_cleanly()
+    {
+        Assert.Null(CaptureStartupException(ValidConfiguration(
+            ("Email:Provider", "smtp"),
+            ("Email:SmtpHost", "smtp.example.com"),
+            ("Email:FromAddress", "no-reply@example.com"),
+            ("Email:AppBaseUrl", "https://app.example.com"))));
+    }
+
     private static bool ExceptionChainMentions(Exception? exception, string text)
     {
         for (var current = exception; current is not null; current = current.InnerException)
