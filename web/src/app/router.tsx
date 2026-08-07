@@ -19,6 +19,9 @@ import NotificationsInboxPage from '../features/notifications/pages/Notification
 import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
 import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
 import ReportsListPage from '../features/reports/pages/ReportsListPage'
+import SurveysListPage from '../features/surveys/pages/SurveysListPage'
+import SurveyDetailPage from '../features/surveys/pages/SurveyDetailPage'
+import MySurveysPage from '../features/surveys/pages/MySurveysPage'
 import AnalyticsDashboardPage from '../features/analytics/pages/AnalyticsDashboardPage'
 import { getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
@@ -94,6 +97,17 @@ export const router = createBrowserRouter([
               { path: '/action-plans/:id', element: <ActionPlanDetailPage /> },
               { path: '/microclimates', element: <MicroclimatesListPage /> },
               { path: '/microclimates/:id', element: <MicroclimateDetailPage /> },
+              { path: '/surveys', element: <SurveysListPage /> },
+              // Before `/surveys/:id` for readability only -- react-router ranks a
+              // static segment above a dynamic one regardless of declaration order,
+              // so `/surveys/my` could never be swallowed as an id. (The API relies
+              // on the same property, via the `:guid` route constraint.)
+              //
+              // Not gated beyond RequireAuth: `/surveys/my` scopes itself to the
+              // caller's own user row and reads no role claim, so employee,
+              // supervisor and leader can all load it. See MySurveysPage.tsx.
+              { path: '/surveys/my', element: <MySurveysPage /> },
+              { path: '/surveys/:id', element: <SurveyDetailPage /> },
               // Not under /admin: every authenticated role owns their own preferences,
               // and the API behind this page takes no user id at all (#103).
               { path: '/settings/notifications', element: <NotificationPreferencesPage /> },

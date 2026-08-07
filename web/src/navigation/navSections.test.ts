@@ -120,16 +120,25 @@ describe('buildNavSections', () => {
     expect(links.some((href) => href.endsWith('/analytics'))).toBe(false)
   })
 
-  it('gives a company_admin with no companyId claim only the Notifications link', () => {
+  it('gives a company_admin with no companyId claim only the per-user links', () => {
     // Replaces an earlier `toEqual([])`. Every company-scoped href this branch could
     // have built would have been `/admin/companies/undefined/...`, so the empty array
-    // was right until #99 -- but /notifications needs no companyId at all, so the
-    // fallback is now that one row rather than nothing.
-    expect(hrefs(buildNavSections('company_admin', undefined))).toEqual(['/notifications'])
+    // was right until #99 -- but neither /notifications nor /surveys/my needs a
+    // companyId at all, so the fallback is now those two rows rather than nothing.
+    expect(hrefs(buildNavSections('company_admin', undefined))).toEqual([
+      '/surveys/my',
+      '/notifications',
+    ])
   })
 
-  it.each(['employee', 'supervisor', 'leader', undefined])('gives %s only the Notifications link (no admin page exists for this role yet)', (role) => {
-    expect(hrefs(buildNavSections(role, 'company-1'))).toEqual(['/notifications'])
+  it.each(['employee', 'supervisor', 'leader', undefined])('gives %s only the per-user links (no admin page exists for this role yet)', (role) => {
+    // Both endpoints behind these resolve the caller's OWN user row and read no role
+    // claim, which is precisely what makes them loadable by a role with no admin
+    // surface. Anything company- or role-scoped would 403 here.
+    expect(hrefs(buildNavSections(role, 'company-1'))).toEqual([
+      '/surveys/my',
+      '/notifications',
+    ])
   })
 
   it('gives every role a Notifications link, because /notifications/mine authorizes per user rather than per role', () => {
@@ -208,6 +217,10 @@ describe('leafNavItems', () => {
       '/admin/companies/company-1/demographic-fields',
       '/action-plans',
       '/microclimates',
+      // After Microclimates, a peer work surface -- and deliberately NOT before
+      // Action Plans, which would take Action Plans' fourth mobile tab slot. The
+      // first four leaves above are unchanged by #109.
+      '/surveys',
       '/analytics/benchmarks',
       '/analytics/ai-insights',
       // After the top-level rows, not inside the admin group: `leafNavItems` puts a
@@ -232,12 +245,25 @@ describe('leafNavItems', () => {
       '/action-plans',
       '/microclimates',
       '/analytics/ai-insights',
+      // A super_admin gets the survey listing because `ListAsync` applies no company
+      // predicate for them -- a genuine cross-company view, the same reason
+      // Benchmarks is here. Appended last of the destinations so #124's pinned first
+      // four leaves are untouched.
+      '/surveys',
       '/notifications',
     ])
   })
 
-  it('gives a role with no admin pages exactly one leaf, so the mobile bar has something to render', () => {
+  it('does not offer a super_admin the respondent listing, which would always be empty for them', () => {
+    // `User.CompanyId` is NULL for a global super_admin (#191), so `/surveys/my`
+    // correctly returns an empty list rather than an error. An always-empty page is
+    // not a destination, so it belongs to the fallback branch and not this one.
+    expect(hrefs(buildNavSections('super_admin', 'company-1'))).not.toContain('/surveys/my')
+  })
+
+  it('gives a role with no admin pages exactly its two per-user leaves, so the mobile bar has something to render', () => {
     expect(leafNavItems(buildNavSections('employee', 'company-1')).map((item) => item.href)).toEqual([
+      '/surveys/my',
       '/notifications',
     ])
   })
