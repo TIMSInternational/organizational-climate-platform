@@ -240,7 +240,16 @@ public class DigestScheduleTests
         Assert.Equal(ambiguous, TimeZoneInfo.ConvertTime(first, newYork).DateTime);
 
         // The earlier of the two, i.e. still on daylight time: a digest is never late.
-        Assert.Equal(TimeSpan.FromHours(-4), first.Offset);
+        //
+        // Asserted on the INSTANT rather than on first.Offset. ToUtc now returns an actual
+        // UTC instant (Offset always zero) because Npgsql refuses a non-zero offset for a
+        // timestamptz column and every caller persists this value -- so the offset no longer
+        // carries the information this assertion is about, and checking it for -04:00 would
+        // only be re-asserting the bug. The instant still distinguishes the two candidates
+        // exactly: 01:30 on daylight time (UTC-4) is 05:30Z, whereas the later 01:30 on
+        // standard time (UTC-5) would be 06:30Z.
+        Assert.Equal(TimeSpan.Zero, first.Offset);
+        Assert.Equal(new DateTimeOffset(2026, 11, 1, 5, 30, 0, TimeSpan.Zero), first);
     }
 
     [Fact]
