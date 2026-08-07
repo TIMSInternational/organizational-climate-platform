@@ -405,6 +405,7 @@ app.MapNotificationTemplateEndpoints();
 app.MapTrackingPickerEndpoints();
 app.MapTrackingInternalEndpoints();
 app.MapSurveyEndpoints();
+app.MapSurveyDraftEndpoints();
 app.MapSurveyResultsEndpoints();
 app.MapSurveyHistoryEndpoints();
 app.MapSurveyTemplateEndpoints();

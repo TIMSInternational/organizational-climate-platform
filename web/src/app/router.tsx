@@ -18,9 +18,11 @@ import SurveyRespondPage from '../features/surveys/pages/SurveyRespondPage'
 import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespondPage'
 import NotificationPreferencesPage from '../features/notifications/pages/NotificationPreferencesPage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
+import SurveyDistributionPage from '../features/surveys/pages/SurveyDistributionPage'
 import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
 import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
 import ReportsListPage from '../features/reports/pages/ReportsListPage'
+import SurveyResultsPage from '../features/surveys/pages/SurveyResultsPage'
 import SurveysListPage from '../features/surveys/pages/SurveysListPage'
 import SurveyDetailPage from '../features/surveys/pages/SurveyDetailPage'
 import MySurveysPage from '../features/surveys/pages/MySurveysPage'
@@ -127,12 +129,19 @@ export const router = createBrowserRouter([
               // survey's department targets itself, so every role that can be sent a
               // survey can load this.
               { path: '/surveys/:id/respond', element: <SurveyRespondPage /> },
+              // No nav entry, deliberately: this is a per-survey destination reached from
+              // a survey, not a place in the sidebar. `/surveys` and `/surveys/:id` are
+              // #109's; this route only needs to exist beneath one of them.
+              { path: '/surveys/:id/results', element: <SurveyResultsPage /> },
               // Not under /admin: every authenticated role owns their own preferences,
               // and the API behind this page takes no user id at all (#103).
               { path: '/settings/notifications', element: <NotificationPreferencesPage /> },
               // Self-service, so no role gate beyond RequireAuth: /notifications/mine
               // is scoped per user and every authenticated role can load it.
               { path: '/notifications', element: <NotificationsInboxPage /> },
+              // Reached from a survey, not from the sidebar: distribution is an action on
+              // one survey rather than a destination, so it gets a route and no nav entry.
+              { path: '/surveys/:surveyId/distribution', element: <SurveyDistributionPage /> },
               { path: '/analytics/benchmarks', element: <BenchmarksPage /> },
               { path: '/analytics/ai-insights', element: <AIInsightsPage /> },
             ],
