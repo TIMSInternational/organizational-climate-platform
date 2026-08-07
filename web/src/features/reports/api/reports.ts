@@ -34,9 +34,10 @@ export interface Report {
   status: string
   format: string
   /**
-   * Report rendering is stubbed backend-side: creation completes synchronously and
-   * stores a JSON-encoded placeholder string, not a rendered document. Treat this as
-   * opaque text until a real rendering engine lands.
+   * A JSON-encoded `ReportOutputDocument` (ReportAIInsights.cs), camelCase:
+   * `{ generationNote, aiInsights }`. Aggregation is still stubbed backend-side (#88) --
+   * `generationNote` says so -- but `aiInsights` is real, so this is no longer an opaque
+   * placeholder string. It is still not a rendered document; do not display it raw.
    */
   reportOutput: string | null
   downloadCount: number

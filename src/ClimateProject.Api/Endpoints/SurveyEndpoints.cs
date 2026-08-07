@@ -55,7 +55,10 @@ public static class SurveyEndpoints
         => currentUser.Role == Roles.SuperAdmin
            || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
 
-    private static async Task<Guid?> ResolveActingUserIdAsync(
+    // internal so SurveyAuditTrail resolves the actor the same way every write path here
+    // already does -- two resolution rules would mean an audit row attributed to a
+    // different user than the one the foreign key on created_by points at.
+    internal static async Task<Guid?> ResolveActingUserIdAsync(
         CurrentUser currentUser,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -84,7 +87,7 @@ public static class SurveyEndpoints
     // surveys.created_by is NOT NULL with a RESTRICT foreign key, so an unresolvable
     // acting user must be a 400 here rather than Guid.Empty and an opaque 500 out of the
     // DbUpdateException handler.
-    private static IResult ActingUserRequired()
+    internal static IResult ActingUserRequired()
         => Results.Json(new { message = "The authenticated user has no matching user record" }, statusCode: 400);
 
     // ------------------------------------------------------------------
@@ -235,6 +238,7 @@ public static class SurveyEndpoints
         CreateSurveyRequest request,
         string? lang,
         ClaimsPrincipal principal,
+        HttpContext http,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
@@ -324,8 +328,8 @@ public static class SurveyEndpoints
             return Results.Json(new { message = $"Two questions share order {duplicateOrder.Key}" }, statusCode: 400);
         }
 
-        var actingUserId = await ResolveActingUserIdAsync(currentUser, db, cancellationToken);
-        if (actingUserId is null)
+        var actor = await SurveyAuditTrail.ResolveActorAsync(currentUser, http, db, cancellationToken);
+        if (actor is null)
         {
             return ActingUserRequired();
         }
@@ -335,7 +339,7 @@ public static class SurveyEndpoints
         {
             Id = Guid.NewGuid(),
             CompanyId = request.CompanyId,
-            CreatedBy = actingUserId.Value,
+            CreatedBy = actor.UserId,
             TitleEn = titleEn?.Trim(),
             TitleEs = titleEs?.Trim(),
             DescriptionEn = descriptionEn,
@@ -367,6 +371,8 @@ public static class SurveyEndpoints
         }
 
         AddQuestions(db, survey.Id, prepared);
+
+        SurveyAuditTrail.Record(db, survey.Id, SurveyAuditActions.Created, SurveyAuditEntityTypes.Survey, actor, now);
 
         await db.SaveChangesAsync(cancellationToken);
 
@@ -408,6 +414,7 @@ public static class SurveyEndpoints
         UpdateSurveyRequest request,
         string? lang,
         ClaimsPrincipal principal,
+        HttpContext http,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
@@ -421,6 +428,16 @@ public static class SurveyEndpoints
         if (!CanAdminister(currentUser, survey.CompanyId))
         {
             return Results.Forbid();
+        }
+
+        // Resolved before the mutation, and a hard requirement: survey_audit_logs.user_id
+        // is NOT NULL with a RESTRICT foreign key, so a change nobody can be held to is a
+        // change that cannot be recorded -- and an unrecordable change to a survey is worse
+        // than a rejected one. Same 400 POST /surveys has always returned.
+        var actor = await SurveyAuditTrail.ResolveActorAsync(currentUser, http, db, cancellationToken);
+        if (actor is null)
+        {
+            return ActingUserRequired();
         }
 
         // Anonymous is classed as CONTENT, not as a setting. Flipping it changes how every
@@ -483,6 +500,12 @@ public static class SurveyEndpoints
                 new { message = "StartDate cannot be changed once the survey is active." },
                 statusCode: 409);
         }
+
+        // Captured after every guard has passed and before the first mutation, so the audit
+        // entry can say what actually CHANGED rather than what the request mentioned. A PUT
+        // that resends the same title is not a change, and a history full of no-ops is a
+        // history nobody reads.
+        var contentBefore = await SurveyAuditTrail.LoadContentAsync(db, survey, cancellationToken);
 
         if (request.Language is not null)
         {
@@ -604,8 +627,22 @@ public static class SurveyEndpoints
             AddQuestions(db, survey.Id, prepared);
         }
 
-        survey.UpdatedAt = DateTimeOffset.UtcNow;
+        var updatedAt = DateTimeOffset.UtcNow;
+        survey.UpdatedAt = updatedAt;
         await db.SaveChangesAsync(cancellationToken);
+
+        // Read back rather than diffed in memory: the question rows are replaced wholesale,
+        // so the post-state only exists once it has been written. Hence the second save --
+        // a cost paid on updates only, and only when something actually moved.
+        var contentAfter = await SurveyAuditTrail.LoadContentAsync(db, survey, cancellationToken);
+        var changedFields = SurveyVersioning.Diff(contentBefore, contentAfter);
+        if (changedFields.Count > 0)
+        {
+            SurveyAuditTrail.Record(
+                db, survey.Id, SurveyAuditActions.Updated, SurveyAuditEntityTypes.Survey, actor, updatedAt,
+                new SurveyAuditChangeSet(Fields: changedFields));
+            await db.SaveChangesAsync(cancellationToken);
+        }
 
         return Results.Ok(await ToDetailAsync(survey, db, lang, cancellationToken));
     }
@@ -619,6 +656,7 @@ public static class SurveyEndpoints
         UpdateSurveyStatusRequest request,
         string? lang,
         ClaimsPrincipal principal,
+        HttpContext http,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
@@ -634,7 +672,15 @@ public static class SurveyEndpoints
             return Results.Forbid();
         }
 
-        var transitionError = await ApplyStatusAsync(db, survey, request.Status, cancellationToken);
+        // Publishing writes a survey_versions row whose created_by is NOT NULL with a
+        // RESTRICT foreign key, so the actor has to resolve before the transition, not after.
+        var actor = await SurveyAuditTrail.ResolveActorAsync(currentUser, http, db, cancellationToken);
+        if (actor is null)
+        {
+            return ActingUserRequired();
+        }
+
+        var transitionError = await ApplyStatusAsync(db, survey, request.Status, actor, cancellationToken);
         if (transitionError is not null)
         {
             return transitionError;
@@ -654,6 +700,7 @@ public static class SurveyEndpoints
         ClimateProjectDbContext db,
         Survey survey,
         string? requestedStatus,
+        SurveyActor actor,
         CancellationToken cancellationToken)
     {
         if (!SurveyStatuses.IsValid(requestedStatus))
@@ -686,6 +733,26 @@ public static class SurveyEndpoints
             return null;
         }
 
+        // The freeze, restated on the lifecycle path. SurveyStatuses already makes 'draft'
+        // unreachable from anything that accepts responses, so this can only fire on a row
+        // whose status and responses disagree with the transition map -- a legacy import, a
+        // manual UPDATE, a future edge added to the map. It is the same belt-and-braces
+        // UpdateAsync applies to a draft that somehow has responses, and it is the guard
+        // that survives someone deciding 'active -> draft' would be convenient: the content
+        // a response was collected against must not become editable again.
+        if (SurveyStatuses.AllowsContentEdit(target) && await HasResponsesAsync(db, survey, cancellationToken))
+        {
+            return Results.Json(
+                new
+                {
+                    message = $"This survey has responses, so it cannot return to '{target}' where its content would be editable. "
+                              + "Duplicate it instead -- the copy keeps every option's stable value, so its responses still aggregate with this one's.",
+                    from = survey.Status,
+                    to = target,
+                },
+                statusCode: 409);
+        }
+
         if (SurveyStatuses.IsPublish(survey.Status, target))
         {
             var questions = await db.Questions.Where(x => x.SurveyId == survey.Id).ToListAsync(cancellationToken);
@@ -714,10 +781,29 @@ public static class SurveyEndpoints
                     new { message = ContentPublishValidation.Describe(missing), missingTranslations = missing },
                     statusCode: 400);
             }
+
+            // Snapshot AFTER the gate and before the status moves. This is the moment the
+            // content becomes visible to respondents and therefore the moment it stops
+            // being editable -- so the snapshot taken here is, and stays, an exact copy of
+            // whatever every response to this survey was collected against.
+            //
+            // Only on IsPublish, which is 'draft -> scheduled|active'. 'scheduled -> active'
+            // deliberately does not re-snapshot: the gate already ran on the way into
+            // scheduled and the content has been frozen ever since, so a second row would
+            // be a duplicate of the first with a later timestamp.
+            await SurveyAuditTrail.CaptureVersionAsync(
+                db, survey, questions, options, actor, DateTimeOffset.UtcNow, cancellationToken);
         }
 
+        var from = survey.Status;
+        var changedAt = DateTimeOffset.UtcNow;
         survey.Status = target;
-        survey.UpdatedAt = DateTimeOffset.UtcNow;
+        survey.UpdatedAt = changedAt;
+
+        SurveyAuditTrail.Record(
+            db, survey.Id, SurveyAuditActions.StatusChanged, SurveyAuditEntityTypes.Status, actor, changedAt,
+            new SurveyAuditChangeSet(From: from, To: target));
+
         return null;
     }
 
@@ -781,6 +867,7 @@ public static class SurveyEndpoints
         DuplicateSurveyRequest? request,
         string? lang,
         ClaimsPrincipal principal,
+        HttpContext http,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
@@ -811,8 +898,8 @@ public static class SurveyEndpoints
             return Results.Json(new { message = "StartDate must be before EndDate" }, statusCode: 400);
         }
 
-        var actingUserId = await ResolveActingUserIdAsync(currentUser, db, cancellationToken);
-        if (actingUserId is null)
+        var actor = await SurveyAuditTrail.ResolveActorAsync(currentUser, http, db, cancellationToken);
+        if (actor is null)
         {
             return ActingUserRequired();
         }
@@ -829,11 +916,12 @@ public static class SurveyEndpoints
         // Detached from the change tracker before anything is added: the copy's rows are
         // brand-new instances, and the source's rows must not be marked modified by having
         // been read.
+        var duplicatedAt = DateTimeOffset.UtcNow;
         var copy = SurveyDuplication.Duplicate(
             source,
             Guid.NewGuid(),
-            actingUserId.Value,
-            DateTimeOffset.UtcNow,
+            actor.UserId,
+            duplicatedAt,
             Guid.NewGuid,
             new SurveyDuplicateOptions(titleEn, titleEs, startDate, endDate));
 
@@ -843,6 +931,17 @@ public static class SurveyEndpoints
         db.QuestionOptions.AddRange(copy.Options);
         db.QuestionEmojiOptions.AddRange(copy.EmojiOptions);
         db.QuestionConditionalLogics.AddRange(copy.ConditionalLogic);
+
+        // Two entries, one per survey. The source's history has to show that a copy was
+        // taken from it -- a closed survey whose wording reappears in a new draft is a fact
+        // about the closed one too -- and the copy's history has to start at its creation
+        // like any other survey's, or a duplicate would be the one survey with no origin.
+        SurveyAuditTrail.Record(
+            db, survey.Id, SurveyAuditActions.Duplicated, SurveyAuditEntityTypes.Survey, actor, duplicatedAt,
+            entityId: copy.Survey.Id.ToString());
+        SurveyAuditTrail.Record(
+            db, copy.Survey.Id, SurveyAuditActions.Created, SurveyAuditEntityTypes.Survey, actor, duplicatedAt,
+            entityId: survey.Id.ToString());
 
         await db.SaveChangesAsync(cancellationToken);
 
@@ -856,6 +955,7 @@ public static class SurveyEndpoints
     private static async Task<IResult> BulkAsync(
         BulkSurveyActionRequest request,
         ClaimsPrincipal principal,
+        HttpContext http,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
@@ -863,6 +963,12 @@ public static class SurveyEndpoints
         if (!Roles.Admin.Contains(currentUser.Role))
         {
             return Results.Forbid();
+        }
+
+        var actor = await SurveyAuditTrail.ResolveActorAsync(currentUser, http, db, cancellationToken);
+        if (actor is null)
+        {
+            return ActingUserRequired();
         }
 
         var action = request.Action?.Trim().ToLowerInvariant();
@@ -905,8 +1011,8 @@ public static class SurveyEndpoints
             // that PUT /status would have refused.
             IResult? error = action switch
             {
-                SurveyValidation.BulkActionArchive => await ApplyStatusAsync(db, survey, SurveyStatuses.Archived, cancellationToken),
-                SurveyValidation.BulkActionClose => await ApplyStatusAsync(db, survey, SurveyStatuses.Closed, cancellationToken),
+                SurveyValidation.BulkActionArchive => await ApplyStatusAsync(db, survey, SurveyStatuses.Archived, actor, cancellationToken),
+                SurveyValidation.BulkActionClose => await ApplyStatusAsync(db, survey, SurveyStatuses.Closed, actor, cancellationToken),
                 _ => await DeleteSurveyAsync(db, survey, cancellationToken),
             };
 

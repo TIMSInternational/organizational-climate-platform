@@ -302,7 +302,6 @@
     "cancelled": "Cancelled",
     "value": "Value",
     "noCompanyAssociated": "No company is associated with your account.",
-    "superAdminScopedBrowsingUnavailable": "SuperAdmin company-scoped browsing for {feature} is not available yet -- see issue #57.",
     "newField": "New field",
     "newCompany": "New company",
     "createField": "Create field",
@@ -322,6 +321,13 @@
     "sending": "Sending…",
     "allStatuses": "All statuses",
     "noneTopLevel": "None (top-level)"
+  },
+  "companyContext": {
+    "label": "Company context",
+    "noneSelected": "No company selected",
+    "chooseACompany": "Choose a company",
+    "chooseACompanyDescription": "This page shows one company at a time. Pick one from the company selector at the top of the screen to continue.",
+    "loadFailed": "Companies could not be loaded"
   },
   "dashboard": {
     "title": "Dashboard",

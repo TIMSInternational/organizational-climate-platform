@@ -382,12 +382,13 @@ public class NotificationEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_failing_sender_records_the_failure_and_process_retries_it()
+    public async Task A_transient_failure_backs_off_before_process_retries_it()
     {
         // Likewise the only host this test boots.
         using var failingFactory = new StubSenderWebApplicationFactory(
             _postgres.ConnectionString,
-            new FailingNotificationSender());
+            new ScriptedNotificationSender(
+                NotificationDeliveryResult.Failure(ScriptedNotificationSender.TransientReason)));
 
         var (adminToken, _) = await SignUpAndGetTokenAsync(failingFactory.CreateClient(), Roles.CompanyAdmin);
         var (_, recipientId) = await SignUpAndGetTokenAsync(failingFactory.CreateClient(), Roles.Employee);
@@ -403,11 +404,35 @@ public class NotificationEndpointsTests : IAsyncLifetime
         Assert.NotNull(failed.FailedAt);
         Assert.Null(failed.SentAt);
         Assert.Equal(1, failed.RetryCount);
-        Assert.Equal(FailingNotificationSender.Reason, failed.FailureReason);
+        Assert.Equal(ScriptedNotificationSender.TransientReason, failed.FailureReason);
 
-        // A failed row is retryable while it has retries left, so the sweep picks it up again.
+        // #100: a row that has just failed is NOT retried on the next sweep. Before the
+        // backoff, /process would immediately re-attempt it -- which against a real provider
+        // means hammering a host that has just said "not now" with the exact traffic it
+        // refused. The row is still `failed` and still retryable; it is simply not yet due.
+        var tooSoon = await client.PostAsync($"/notifications/process?companyId={_companyId}", null);
+        var tooSoonResult = (await tooSoon.Content.ReadFromJsonAsync<NotificationProcessResult>())!;
+        Assert.Equal(0, tooSoonResult.Attempted);
+
+        await WithDbAsync(async db =>
+        {
+            var unchanged = await db.Notifications.AsNoTracking().FirstAsync(n => n.Id == failed.Id);
+            Assert.Equal(1, unchanged.RetryCount);
+        });
+
+        // Backdating FailedAt past the first-retry delay is how the passage of time is
+        // simulated -- the backoff is derived from FailedAt and RetryCount rather than stored
+        // in a next_attempt_at column, so moving FailedAt is exactly equivalent to waiting.
+        await WithDbAsync(async db =>
+        {
+            var row = await db.Notifications.FirstAsync(n => n.Id == failed.Id);
+            row.FailedAt = DateTimeOffset.UtcNow - NotificationRetryPolicy.FirstRetryDelay - TimeSpan.FromSeconds(30);
+            await db.SaveChangesAsync();
+        });
+
         var processed = await client.PostAsync($"/notifications/process?companyId={_companyId}", null);
         var result = (await processed.Content.ReadFromJsonAsync<NotificationProcessResult>())!;
+        Assert.Equal(1, result.Attempted);
         Assert.Equal(1, result.Failed);
 
         await WithDbAsync(async db =>
@@ -416,6 +441,68 @@ public class NotificationEndpointsTests : IAsyncLifetime
             Assert.Equal(2, reloaded.RetryCount);
             Assert.Equal(NotificationStatuses.Failed, reloaded.Status);
         });
+    }
+
+    [Fact]
+    public async Task A_permanent_failure_is_dead_lettered_and_never_retried_and_the_sender_gets_the_recipients_address()
+    {
+        var sender = new ScriptedNotificationSender(
+            NotificationDeliveryResult.PermanentFailure(ScriptedNotificationSender.PermanentReason));
+
+        // The only host this test boots.
+        using var bouncingFactory = new StubSenderWebApplicationFactory(_postgres.ConnectionString, sender);
+
+        var (adminToken, _) = await SignUpAndGetTokenAsync(bouncingFactory.CreateClient(), Roles.CompanyAdmin);
+        var (_, recipientId) = await SignUpAndGetTokenAsync(bouncingFactory.CreateClient(), Roles.Employee);
+
+        string recipientEmail = string.Empty;
+        await WithDbAsync(async db =>
+        {
+            var user = await db.Users.FirstAsync(u => u.Id == recipientId);
+            user.Preferences.Language = "es";
+            await db.SaveChangesAsync();
+            recipientEmail = user.Email;
+        });
+
+        var client = bouncingFactory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var response = await client.PostAsJsonAsync("/notifications", Request(recipientId, _companyId));
+        var bounced = (await response.Content.ReadFromJsonAsync<NotificationDetail>())!;
+
+        Assert.Equal(NotificationStatuses.Failed, bounced.Status);
+        Assert.Equal(ScriptedNotificationSender.PermanentReason, bounced.FailureReason);
+
+        // Dead-lettered by exhausting the retry budget in one step rather than by inventing a
+        // status: the row stays `failed` and stays visible in GET /notifications?status=failed,
+        // but /process can never pick it up again however long anyone waits. Retrying a hard
+        // bounce is how a sending domain's reputation gets burned.
+        await WithDbAsync(async db =>
+        {
+            var row = await db.Notifications.AsNoTracking().FirstAsync(n => n.Id == bounced.Id);
+            Assert.Equal(row.MaxRetries, row.RetryCount);
+
+            // Backdate well past every backoff step: the reason it is not retried must be the
+            // exhausted budget, not the delay.
+            var tracked = await db.Notifications.FirstAsync(n => n.Id == bounced.Id);
+            tracked.FailedAt = DateTimeOffset.UtcNow - TimeSpan.FromDays(1);
+            await db.SaveChangesAsync();
+        });
+
+        var swept = await client.PostAsync($"/notifications/process?companyId={_companyId}", null);
+        Assert.Equal(0, (await swept.Content.ReadFromJsonAsync<NotificationProcessResult>())!.Attempted);
+
+        // Still listed, so a failed send is visible rather than lost.
+        var failedList = await client.GetFromJsonAsync<NotificationListResponse>(
+            $"/notifications?companyId={_companyId}&status={NotificationStatuses.Failed}");
+        Assert.Contains(failedList!.Notifications, n => n.Id == bounced.Id);
+
+        // The seam carried the address and the recipient's own language, which is the whole
+        // reason NotificationRecipient exists -- a notification row has neither.
+        var seen = Assert.Single(sender.Recipients);
+        Assert.Equal(recipientId, seen.UserId);
+        Assert.Equal(recipientEmail, seen.EmailAddress);
+        Assert.Equal("es", seen.Language);
     }
 
     [Theory]
@@ -556,13 +643,37 @@ public class NotificationEndpointsTests : IAsyncLifetime
             (await adminClient.GetAsync($"/notifications?companyId={_otherCompanyId}")).StatusCode);
     }
 
-    /// <summary>Always fails, so the failure branch of the dispatch path is reachable in a test.</summary>
-    private sealed class FailingNotificationSender : INotificationSender
+    /// <summary>
+    /// Returns a scripted outcome and records who it was asked to deliver to, so the failure
+    /// branches of the dispatch path are reachable in a test and the recipient handed across
+    /// the seam can be asserted on.
+    ///
+    /// Recording the recipient is not incidental: before #100 the seam took only a
+    /// <c>Notification</c>, which carries a user id and no address, so a sender physically
+    /// could not deliver anything. What this pins is that the dispatch path resolves the
+    /// recipient itself -- address and language included -- rather than leaving the sender to
+    /// query for it.
+    /// </summary>
+    private sealed class ScriptedNotificationSender(NotificationDeliveryResult result) : INotificationSender
     {
-        public const string Reason = "Stub provider refused the recipient.";
+        public const string TransientReason = "Stub provider refused the recipient.";
+        public const string PermanentReason = "Stub provider hard-bounced the recipient.";
 
-        public Task<NotificationDeliveryResult> SendAsync(Notification notification, CancellationToken cancellationToken)
-            => Task.FromResult(NotificationDeliveryResult.Failure(Reason));
+        private readonly List<NotificationRecipient> _recipients = [];
+
+        public IReadOnlyList<NotificationRecipient> Recipients
+        {
+            get { lock (_recipients) { return [.. _recipients]; } }
+        }
+
+        public Task<NotificationDeliveryResult> SendAsync(
+            Notification notification,
+            NotificationRecipient recipient,
+            CancellationToken cancellationToken)
+        {
+            lock (_recipients) { _recipients.Add(recipient); }
+            return Task.FromResult(result);
+        }
     }
 
     private sealed class StubSenderWebApplicationFactory(string connectionString, INotificationSender sender)

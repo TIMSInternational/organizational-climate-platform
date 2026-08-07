@@ -155,18 +155,11 @@ internal static class SurveyContent
     /// #195's migration applied to the old <c>text[]</c> options, which is what keeps
     /// existing <c>response_value</c> rows matching without a data backfill.
     /// </summary>
+    /// <remarks>
+    /// Moved to <see cref="SurveyValidation.DeriveOptionValue"/> by #107 so the survey and
+    /// survey-template write paths share one implementation; kept here as a delegating
+    /// alias so existing call sites read the same.
+    /// </remarks>
     public static string? DeriveOptionValue(string? explicitValue, string? labelEn, string? labelEs)
-    {
-        if (!string.IsNullOrWhiteSpace(explicitValue))
-        {
-            return explicitValue.Trim();
-        }
-
-        if (!string.IsNullOrWhiteSpace(labelEn))
-        {
-            return labelEn.Trim();
-        }
-
-        return string.IsNullOrWhiteSpace(labelEs) ? null : labelEs.Trim();
-    }
+        => SurveyValidation.DeriveOptionValue(explicitValue, labelEn, labelEs);
 }

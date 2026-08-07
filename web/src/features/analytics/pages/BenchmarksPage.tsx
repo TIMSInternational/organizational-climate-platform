@@ -32,16 +32,19 @@ import { EmptyState, ErrorState } from '../../../components/ui'
 /**
  * List, compare and trend the benchmarks the caller may read.
  *
- * ## Why this page is open to a SuperAdmin when `/action-plans` is not
+ * ## Why this page ignores the company-context selector
  *
- * `ActionPlansListPage` blocks SuperAdmin outright, because
- * `GET /admin/action-plans` requires a company id and a SuperAdmin has no picker
- * to choose one with — they would be silently scoped to whatever company their
- * own user row points at. `GET /admin/benchmarks` has no such requirement: for a
- * SuperAdmin it returns *every* benchmark across every tenant unless a
- * `companyId` filter is supplied. So a SuperAdmin here gets a genuine
- * cross-company view rather than an unmarked accidental one, and blocking them
- * would be copying the precedent past the reason for it.
+ * Every other company-scoped page reads `useCompanyScope()` (#124) and asks a
+ * SuperAdmin which company they mean. This one deliberately does not, and keeps
+ * reading the role/claim pair directly.
+ *
+ * `GET /admin/action-plans` requires a company id, so before #124 a SuperAdmin
+ * there was either blocked or silently scoped to whatever company their own user
+ * row points at. `GET /admin/benchmarks` has no such requirement: for a SuperAdmin
+ * it returns *every* benchmark across every tenant unless a `companyId` filter is
+ * supplied. So a SuperAdmin here already had a genuine cross-company view, which
+ * is the thing the selector protects elsewhere — narrowing it to the selected
+ * company would destroy it. See `benchmarkScope.ts`'s `newBenchmarkCompanyId`.
  *
  * ## Selection drives everything below the table
  *
