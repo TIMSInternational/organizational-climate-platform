@@ -98,6 +98,13 @@ builder.Services.AddOptions<DatabaseOptions>()
         }
 
         options.ConnectionString = policy.ConnectionString;
+
+        // Carry the policy's findings forward so GET /admin/system/status can report them
+        // (#147). The warning above only reaches whoever reads the deploy logs.
+        options.Port = policy.Port;
+        options.UsesTransactionPoolerPort = policy.UsesTransactionPoolerPort;
+        options.MaxPoolSize = policy.MaxPoolSize;
+        options.MaxPoolSizeDefaulted = policy.MaxPoolSizeApplied;
     })
     .ValidateOnStart();
 
@@ -406,6 +413,8 @@ app.MapTrackingPickerEndpoints();
 app.MapTrackingInternalEndpoints();
 app.MapSurveyEndpoints();
 app.MapSurveyResponseEndpoints();
+app.MapSurveyResultsEndpoints();
+app.MapSurveyHistoryEndpoints();
 app.MapSurveyTemplateEndpoints();
 app.MapMicroclimateEndpoints();
 app.MapMicroclimateTemplateEndpoints();
@@ -414,6 +423,7 @@ app.MapBenchmarkEndpoints();
 app.MapAnalyticsInsightEndpoints();
 app.MapNotificationEndpoints();
 app.MapDemographicSnapshotEndpoints();
+app.MapSystemStatusEndpoints();
 
 app.Run();
 

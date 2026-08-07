@@ -196,7 +196,15 @@ internal sealed class SurveyTestHarness(AuthWebApplicationFactory factory, strin
         string? language = null,
         List<Guid>? departmentIds = null)
         => new(
-            Title: title ?? LocalizedInput.FromBare("Q3 Climate Survey"),
+            // The default title follows the survey's language for the same reason the default
+            // question below does: LocalizedInput.TryResolve rejects a bare string outright when
+            // the content is authored in 'both', because attributing an unlabelled string to one
+            // column is the silent content-mangling #195's paired columns exist to prevent. A
+            // caller that asks for language: both and lets the title default would otherwise get
+            // a 400 from the endpoint doing its job.
+            Title: title ?? (language == ContentLanguages.Both
+                ? Both("Q3 Climate Survey", "Encuesta de clima Q3")
+                : LocalizedInput.FromBare("Q3 Climate Survey")),
             CompanyId: companyId,
             Type: "general_climate",
             StartDate: DateTimeOffset.UtcNow.AddDays(-1),
