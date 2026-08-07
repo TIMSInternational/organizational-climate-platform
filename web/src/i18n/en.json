@@ -80,7 +80,7 @@
     "notesHint": "Required. This is the entry recorded against the plan.",
     "notesPlaceholder": "What moved since the last update, and why.",
     "targetIs": "Target: {target}",
-    "statusUpdateHint": "Free text, for example: blocked, on track.",
+    "statusUpdateHint": "Where this objective stands right now.",
     "percentageRange": "Enter a whole number between 0 and 100.",
     "noMeasures": "No KPIs or objectives",
     "noMeasuresDescription": "You can still record a progress note against this plan.",

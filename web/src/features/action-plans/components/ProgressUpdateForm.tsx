@@ -1,14 +1,17 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { Kpi, Objective, KpiUpdateInput, ObjectiveUpdateInput } from '../api/actionPlans'
-import { useTranslation } from '../../../i18n'
+import { useTranslation, type TranslateFn } from '../../../i18n'
+import { ACTION_PLAN_STATUSES, statusLabel } from '../actionPlanVocabulary'
 import {
   Alert,
   AlertDescription,
   Button,
   EmptyState,
   SectionLabel,
+  SelectField,
   TextField,
   TextareaField,
+  type FieldOption,
 } from '../../../components/ui'
 
 export interface ProgressUpdateFormValues {
@@ -22,6 +25,24 @@ interface ProgressUpdateFormProps {
   objectives: readonly Objective[]
   onSubmit: (values: ProgressUpdateFormValues) => Promise<void>
   disabled?: boolean
+}
+
+/**
+ * The five known statuses, plus `current` when it is not one of them.
+ *
+ * An option list that omits the value the select is set to makes the control render
+ * blank and silently rewrite the row on the next submit. Radix would also have no
+ * item to match, so the trigger would fall back to its placeholder.
+ */
+function statusOptions(t: TranslateFn, current: string): FieldOption[] {
+  const options: FieldOption[] = ACTION_PLAN_STATUSES.map((value) => ({
+    value,
+    label: statusLabel(t, value),
+  }))
+  if (current && !options.some((option) => option.value === current)) {
+    options.push({ value: current, label: current })
+  }
+  return options
 }
 
 /** The numeric fields are held as text — see `ActionPlanForm`'s `KpiDraft` for why. */
@@ -191,14 +212,28 @@ export default function ProgressUpdateForm({
           <SectionLabel>{t('actionPlans.objectives')}</SectionLabel>
           {objectives.map((objective) => (
             <div key={objective.id} className="grid items-start gap-inline md:grid-cols-2">
-              <TextField
+              {/* A picker over free text, even though `RecordProgressAsync` accepts
+                  any string for `StatusUpdate` and validates nothing.
+
+                  The server's permissiveness is not a reason to expose it: a status
+                  invented here renders through `statusLabel`'s raw fallback, so it
+                  is the one value on this page that shows up untranslated in both
+                  languages. Constraining the *input* to the vocabulary the rest of
+                  the product speaks is what keeps that from happening.
+
+                  The current value is added back as an option when it is not one of
+                  the five, so a row already carrying `blocked_on_vendor` keeps it
+                  rather than being silently rewritten by rendering a select whose
+                  value does not exist in its own option list. */}
+              <SelectField
                 label={objective.description}
                 description={t('actionPlans.statusUpdateHint')}
-                value={objectiveStatuses[objective.id] ?? ''}
+                value={objectiveStatuses[objective.id] ?? objective.currentStatus}
                 onChange={(value) =>
                   setObjectiveStatuses((current) => ({ ...current, [objective.id]: value }))
                 }
                 disabled={disabled}
+                options={statusOptions(t, objectiveStatuses[objective.id] ?? objective.currentStatus)}
               />
               <TextField
                 type="number"

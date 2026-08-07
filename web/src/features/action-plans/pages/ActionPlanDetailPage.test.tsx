@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router'
 import { TranslationProvider } from '../../../i18n'
@@ -271,6 +271,19 @@ describe('ActionPlanDetailPage', () => {
 
     // Free text on the wire, so the honest render is the server's own string --
     // never a missing key path, and never a status this page made up.
-    expect(await screen.findByText('blocked_on_vendor')).toBeTruthy()
+    await screen.findByRole('heading', { name: 'Raise engagement' })
+    // Located by content, not by index: the page renders three tables (at a
+    // glance, KPIs, objectives) and an index would silently follow the wrong one.
+    const objectives = screen
+      .getAllByRole('table')
+      .find((table) => table.textContent?.includes('Ship the intranet refresh'))!
+    expect(within(objectives).getByText('blocked_on_vendor')).toBeTruthy()
+
+    // And the progress form's status picker is *set* to it rather than falling back
+    // to its placeholder. A select whose value is absent from its own option list
+    // renders blank and rewrites the row on the next submit -- which would mean
+    // opening this page silently discarded a status the server had accepted.
+    const picker = screen.getByRole('combobox', { name: /Ship the intranet refresh/ })
+    expect(picker.textContent).toContain('blocked_on_vendor')
   })
 })

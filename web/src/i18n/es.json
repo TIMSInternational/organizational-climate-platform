@@ -80,7 +80,7 @@
     "notesHint": "Obligatorio. Esta es la entrada que queda registrada en el plan.",
     "notesPlaceholder": "Qué avanzó desde la última actualización, y por qué.",
     "targetIs": "Objetivo: {target}",
-    "statusUpdateHint": "Texto libre, por ejemplo: bloqueado, en curso.",
+    "statusUpdateHint": "En qué punto se encuentra este objetivo ahora.",
     "percentageRange": "Ingrese un número entero entre 0 y 100.",
     "noMeasures": "Sin KPIs ni objetivos",
     "noMeasuresDescription": "Aun así puede registrar una nota de progreso en este plan.",
