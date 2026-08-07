@@ -302,8 +302,15 @@ describe('AdminLayout', () => {
 
   it('offers the theme control the token layer has always had no UI for', async () => {
     renderShell()
-    const picker = screen.getAllByRole('combobox', { name: 'Theme' })[0]
-    await userEvent.selectOptions(picker, 'dark')
+
+    // Reached through the sidebar's user menu now, not a `<select>` in the rail.
+    // The ForMaps port moved language and theme behind the account button: two
+    // captioned selects did not fit a 220px column and turned the foot of the
+    // navigation into a settings form. The assertion is unchanged -- what the
+    // control writes is what matters -- only the route to it.
+    await userEvent.click(screen.getAllByRole('button', { name: /Ana|Account/i })[0])
+    await userEvent.click(await screen.findByRole('menuitem', { name: /Theme/ }))
+    await userEvent.click(await screen.findByRole('menuitemradio', { name: /Dark/ }))
 
     expect(document.documentElement.getAttribute(ADMIN_THEME_ATTRIBUTE)).toBe('dark')
     expect(localStorage.getItem(ADMIN_THEME_STORAGE_KEY)).toBe('dark')

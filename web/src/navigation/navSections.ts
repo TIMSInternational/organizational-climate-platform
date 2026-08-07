@@ -32,7 +32,11 @@ export interface NavItem {
    */
   labelKey: string
   href: string
-  icon: React.ComponentType<{ className?: string }>
+  // Typed as an SVG component rather than `{ className?: string }`: the sub-item
+  // rows style their glyph inline (size and colour flip with the active state),
+  // and the narrower type rejected `style` and `aria-hidden`. Every icon passed
+  // here is a lucide component, which takes the full SVG prop set.
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
   badge?: string
   sub?: NavItem[]
 }

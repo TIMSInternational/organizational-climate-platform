@@ -4,11 +4,67 @@ import { ChevronRight } from 'lucide-react'
 import { useTranslation } from '../i18n'
 import type { NavSection, NavItem as NavItemType } from './navSections'
 
-function matchesRoute(pathname: string, href: string) {
+/**
+ * The tree elbow beside a sub-item, ported from the ForMaps sidebar
+ * (`StudentSidebar.tsx`) so the two products' rails are the same shape.
+ *
+ * Geometry is theirs exactly: a 16x28 box, 1px rules seated at `left: 4`, the
+ * corner at `top: 14` -- the vertical middle of a 28px row -- and a continuation
+ * stub below it for every item except the last, so the run of children reads as
+ * one bracket rather than as detached ticks.
+ *
+ * `isActive` lights the run down to the selected child, which is why the caller
+ * passes `subActive || index <= selectedSubIndex` rather than just `subActive`.
+ */
+function SubItemBreadcrumb({ isLast, isActive }: { isLast: boolean; isActive: boolean }) {
+  const lineColor = 'var(--admin-border-default)'
+  const activeColor = 'var(--admin-font-tertiary)'
+  return (
+    <div aria-hidden="true" style={{ position: 'relative', width: 16, height: 28, flexShrink: 0, marginLeft: 8 }}>
+      <div style={{ position: 'absolute', left: 4, top: 0, width: 1, height: 14, background: isActive ? activeColor : lineColor }} />
+      <div style={{ position: 'absolute', left: 4, top: 14, width: 8, height: 1, background: isActive ? activeColor : lineColor, borderBottomLeftRadius: 2 }} />
+      {!isLast && <div style={{ position: 'absolute', left: 4, top: 14, width: 1, height: 14, background: lineColor }} />}
+    </div>
+  )
+}
+
+/**
+ * Does `pathname` sit under `href` at all?
+ *
+ * Segment-aware: `/surveys` must not claim `/surveys-archive`, which a bare
+ * `startsWith` would. Being *under* a row is necessary but not sufficient for the
+ * row to light up -- see `activeHref`.
+ */
+function isUnder(pathname: string, href: string) {
   if (href === '/dashboard') {
     return pathname === '/dashboard' || pathname === '/'
   }
-  return pathname.startsWith(href)
+  return pathname === href || pathname.startsWith(`${href}/`)
+}
+
+/**
+ * The one row that should read as active: the **longest** href the current path
+ * sits under.
+ *
+ * A plain prefix test lit two rows at once. `/admin/companies/{id}` (Company
+ * Settings) is a prefix of `/admin/companies/{id}/demographic-fields`, so opening
+ * Demographic fields filled both -- invisible while "active" was a shade of text,
+ * obvious once it became a filled pill.
+ *
+ * ForMaps hits the same thing and answers it by naming the offending parents in
+ * `isActive` one at a time (`if (href === "/dashboard/assessments") return
+ * pathname === href`). That works for their tree and needs a new line for every
+ * parent that later gains a child. Deriving it instead means nothing to maintain:
+ * the most specific matching row wins, which is the rule those exceptions were
+ * approximating anyway.
+ */
+function activeHref(pathname: string, sections: NavSection[]): string | null {
+  const hrefs = sections.flatMap((section) =>
+    section.items.flatMap((item) => [item.href, ...(item.sub?.map((sub) => sub.href) ?? [])]),
+  )
+  return hrefs
+    .filter((href) => isUnder(pathname, href))
+    .reduce<string | null>((best, href) => (best === null || href.length > best.length ? href : best), null)
 }
 
 export interface RoleBasedNavProps {
@@ -28,11 +84,13 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
   const { t } = useTranslation()
   const location = useLocation()
   const pathname = location.pathname
+  // Resolved once for the whole rail: which single row wins the current path.
+  const selectedHref = activeHref(pathname, sections)
   const [expanded, setExpanded] = useState<string[]>(() => {
     const initiallyExpanded: string[] = []
     for (const section of sections) {
       for (const item of section.items) {
-        if (item.sub?.some((sub) => matchesRoute(pathname, sub.href))) {
+        if (item.sub?.some((sub) => sub.href === selectedHref)) {
           initiallyExpanded.push(item.labelKey)
         }
       }
@@ -47,10 +105,13 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
   }
 
   function renderItem(item: NavItemType) {
-    const isActive = matchesRoute(pathname, item.href)
+    const isActive = item.href === selectedHref
     // While collapsed a grouped row is a plain link (see `collapsed` above), so
     // it gets a leaf's selected styling too.
     const hasSub = Boolean(item.sub?.length) && !collapsed
+    // How far down the run of children the elbow should read as "active". ForMaps
+    // lights every rung above the selected one, so the bracket leads the eye to it.
+    const selectedSubIndex = item.sub ? item.sub.findIndex((sub) => sub.href === selectedHref) : -1
     const isExpanded = expanded.includes(item.labelKey)
     const label = t(item.labelKey)
 
@@ -153,40 +214,51 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
           )}
         </div>
         {hasSub && isExpanded && (
-          <div>
-            {item.sub!.map((sub) => (
-              <div key={sub.labelKey} style={{ display: 'flex', alignItems: 'center' }}>
+          // Ported from ForMaps `StudentSidebar.tsx`: elbow, then the child's own
+          // icon in a 16px box, then the label. 28px rows, 13px/500 text, and the
+          // active child filled with the accent -- the same treatment the parent
+          // rows get, so a selected child does not look like a different control.
+          <div style={{ display: 'flex', flexDirection: 'column', marginTop: 2 }}>
+            {item.sub!.map((sub, index) => {
+              const subActive = sub.href === selectedHref
+              const isLast = index === item.sub!.length - 1
+              const SubIcon = sub.icon
+              return (
                 <Link
+                  key={sub.labelKey}
                   to={sub.href}
                   onClick={onNavigate}
                   title={t(sub.labelKey)}
                   style={{
-                    flex: 1,
-                    minWidth: 0,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 'var(--admin-size-inline-gap)',
-                    // Indented by one icon plus the row gap, so the sub-item's own
-                    // glyph lands under its parent's label rather than under the
-                    // parent's icon -- the ForMaps sub-nav shape.
-                    marginLeft: `calc(var(--admin-size-icon) + var(--admin-size-inline-gap))`,
-                    padding: `var(--admin-space-4) var(--admin-space-8)`,
-                    borderRadius: 'var(--admin-radius-md)',
-                    fontSize: 'var(--admin-text-sm)',
+                    gap: 8,
+                    height: 28,
+                    padding: '0 4px 0 0',
+                    borderRadius: 4,
+                    fontSize: 13,
+                    fontWeight: 500,
                     textDecoration: 'none',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    color: matchesRoute(pathname, sub.href)
-                      ? 'var(--admin-font-primary)'
-                      : 'var(--admin-font-secondary)',
+                    transition: 'background var(--admin-duration-fast) var(--admin-ease-out)',
+                    color: subActive ? 'var(--admin-font-on-accent)' : 'var(--admin-font-secondary)',
+                    background: subActive ? 'var(--admin-accent-blue)' : 'transparent',
                   }}
                 >
-                  {sub.icon ? <sub.icon aria-hidden="true" className="nav-icon" /> : null}
-                  {t(sub.labelKey)}
+                  <SubItemBreadcrumb isLast={isLast} isActive={subActive || index <= selectedSubIndex} />
+                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, flexShrink: 0 }}>
+                    {SubIcon ? (
+                      <SubIcon
+                        aria-hidden="true"
+                        style={{ width: 14, height: 14, color: subActive ? 'var(--admin-font-on-accent)' : 'var(--admin-font-tertiary)' }}
+                      />
+                    ) : null}
+                  </span>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {t(sub.labelKey)}
+                  </span>
                 </Link>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -194,9 +266,14 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
   }
 
   return (
-    <nav aria-label={t('shell.mainNavigation')}>
+    <nav
+      aria-label={t('shell.mainNavigation')}
+      // ForMaps `StudentSidebar` nav padding, verbatim: the rail's own gutter
+      // rather than the shell's, so the rows sit where theirs do.
+      style={{ flex: 1, overflowY: 'auto', padding: collapsed ? '4px 6px 8px 6px' : '4px 8px 8px 8px' }}
+    >
       {sections.map((section, index) => (
-        <div key={section.titleKey || index} style={{ marginBottom: 'var(--admin-size-panel-gap)' }}>
+        <div key={section.titleKey || index} style={{ marginBottom: 8 }}>
           {section.titleKey && !collapsed && (
             <div className="nav-section-title">{t(section.titleKey)}</div>
           )}

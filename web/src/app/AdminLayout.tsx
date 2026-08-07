@@ -7,7 +7,7 @@ import { clearToken, getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import { useTranslation } from '../i18n'
 import { SkipLink } from '../components/ui'
-import { CompanyContextSwitcher, MobileNav, ShellControls } from '../components/layout'
+import { CompanyContextSwitcher, MobileNav, ShellControls, SidebarUserMenu } from '../components/layout'
 import { CompanyContextProvider, writeSelectedCompanyId } from '../company-context'
 import { NotificationBell } from '../features/notifications/components/NotificationBell'
 
@@ -72,7 +72,11 @@ function AdminShell() {
 
       <div className="flex min-h-0 flex-1">
         <aside
-          className="hidden shrink-0 flex-col overflow-y-auto border-r border-line-default bg-surface-panel p-gutter md:flex"
+          // Transparent, not a panel. The ForMaps rail has no background of its
+          // own -- it sits on the page surface, and only the content column is a
+          // card. A filled rail plus a filled content panel reads as two competing
+          // surfaces with a seam down the middle.
+          className="hidden shrink-0 flex-col overflow-y-auto md:flex"
           style={{
             width: collapsed
               ? 'var(--admin-size-sidebar-collapsed)'
@@ -99,14 +103,19 @@ function AdminShell() {
 
           <RoleBasedNav sections={sections} collapsed={collapsed} />
 
-          {/* `mt-auto` pins the controls to the bottom of the rail, as the legacy
-              Sidebar's user block was. Hidden while collapsed: a 52px rail cannot
-              hold a `<select>`, and the legacy rail hid them too. */}
-          {!collapsed && (
-            <div className="mt-auto">
-              <ShellControls onSignOut={handleSignOut} />
-            </div>
-          )}
+          {/* `mt-auto` pins the block to the bottom of the rail. Unlike the
+              `ShellControls` it replaced, it renders while collapsed too — the
+              avatar alone fits a 52px rail, and clicking it expands rather than
+              opening a menu with nowhere to go. `ShellControls` is still what the
+              mobile drawer uses, where there is no rail and the controls need to
+              be visible rather than behind a menu. */}
+          <div className="mt-auto">
+            <SidebarUserMenu
+              onSignOut={handleSignOut}
+              collapsed={collapsed}
+              onExpand={() => setCollapsed(false)}
+            />
+          </div>
         </aside>
 
         {/* The content column: a fixed header strip over the scrolling `<main>`.

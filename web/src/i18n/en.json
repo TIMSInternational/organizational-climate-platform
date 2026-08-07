@@ -141,6 +141,8 @@
   "auth": {
     "signIn": "Sign In",
     "signOut": "Sign Out",
+    "settings": "Settings",
+    "account": "Account",
     "signUp": "Sign Up",
     "email": "Email",
     "password": "Password",
@@ -768,6 +770,7 @@
     "failedToExportCsv": "Failed to export CSV. Please try again."
   },
   "language": {
+    "menuLabel": "Language",
     "english": "English",
     "spanish": "Spanish",
     "switchLanguage": "Switch Language",
