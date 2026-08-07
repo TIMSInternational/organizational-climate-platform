@@ -141,6 +141,8 @@
   "auth": {
     "signIn": "Iniciar Sesión",
     "signOut": "Cerrar Sesión",
+    "settings": "Configuración",
+    "account": "Cuenta",
     "signUp": "Registrarse",
     "email": "Correo Electrónico",
     "password": "Contraseña",
@@ -768,6 +770,7 @@
     "failedToExportCsv": "Error al exportar CSV. Por favor intente de nuevo."
   },
   "language": {
+    "menuLabel": "Idioma",
     "english": "Inglés",
     "spanish": "Español",
     "switchLanguage": "Cambiar Idioma",
@@ -1015,6 +1018,9 @@
     "backToMicroclimate": "Volver a la sesión"
   },
   "navigation": {
+    "sectionAdministration": "Administración",
+    "sectionWorkspace": "Espacio de trabajo",
+    "sectionCommunication": "Comunicación",
     "dashboard": "Panel de Control",
     "dashboardDesc": "Resumen principal e indicadores clave",
     "overview": "Resumen",
@@ -1490,6 +1496,7 @@
     "createShareableLink": "Crear Enlace Compartible",
     "linkAcceptOnce": "Enlace (uso único):",
     "noDemographicFieldsYet": "Aún no se han definido campos demográficos.",
+    "noDemographicFieldsDescription": "Los campos demográficos permiten agrupar los resultados por atributos como antigüedad, ubicación o equipo. Agrega uno para empezar a segmentar tus informes.",
     "optionsCommaSeparated": "Opciones (separadas por comas)",
     "optionsExample": "p. ej. Rojo, Verde, Azul",
     "csvColumnsHint": "Columnas del CSV: nombre, correo electrónico, rol, departamento. No se admiten comas dentro de un campo.",

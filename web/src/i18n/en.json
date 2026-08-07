@@ -141,6 +141,8 @@
   "auth": {
     "signIn": "Sign In",
     "signOut": "Sign Out",
+    "settings": "Settings",
+    "account": "Account",
     "signUp": "Sign Up",
     "email": "Email",
     "password": "Password",
@@ -768,6 +770,7 @@
     "failedToExportCsv": "Failed to export CSV. Please try again."
   },
   "language": {
+    "menuLabel": "Language",
     "english": "English",
     "spanish": "Spanish",
     "switchLanguage": "Switch Language",
@@ -1015,6 +1018,9 @@
     "backToMicroclimate": "Back to the session"
   },
   "navigation": {
+    "sectionAdministration": "Administration",
+    "sectionWorkspace": "Workspace",
+    "sectionCommunication": "Communication",
     "dashboard": "Dashboard",
     "dashboardDesc": "Main overview and KPIs",
     "overview": "Overview",
@@ -1490,6 +1496,7 @@
     "createShareableLink": "Create shareable link",
     "linkAcceptOnce": "Link (accept-once):",
     "noDemographicFieldsYet": "No demographic fields defined yet.",
+    "noDemographicFieldsDescription": "Demographic fields let you group survey results by attributes like tenure, location or team. Add one to start segmenting your reports.",
     "optionsCommaSeparated": "Options (comma-separated)",
     "optionsExample": "e.g. Red, Green, Blue",
     "csvColumnsHint": "CSV columns: name, email, role, department. Embedded commas inside a field are not supported.",
