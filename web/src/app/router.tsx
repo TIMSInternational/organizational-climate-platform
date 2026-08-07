@@ -14,6 +14,8 @@ import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetai
 import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
 import MicroclimateDetailPage from '../features/microclimates/pages/MicroclimateDetailPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
+import SurveyRespondPage from '../features/surveys/pages/SurveyRespondPage'
+import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespondPage'
 import NotificationPreferencesPage from '../features/notifications/pages/NotificationPreferencesPage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
 import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
@@ -76,6 +78,12 @@ export const router = createBrowserRouter([
       { path: '/login', element: <LoginPage /> },
       { path: '/accept-invitation/:token', element: <AcceptInvitationPage /> },
       { path: '/microclimates/:id/respond', element: <MicroclimateRespondPage /> },
+      // Public by design (#120), same placement and same reason as the microclimate
+      // respond route above it: an anonymous survey is answered by people who have no
+      // account, so `RequireAuth` here would send every one of them to a login page
+      // they cannot pass. The server still refuses this route for any survey that is
+      // not both anonymous and open.
+      { path: '/survey/:id', element: <PublicSurveyRespondPage /> },
       ...devOnlyRoutes,
       {
         element: <RequireAuth />,
@@ -94,6 +102,11 @@ export const router = createBrowserRouter([
               { path: '/action-plans/:id', element: <ActionPlanDetailPage /> },
               { path: '/microclimates', element: <MicroclimatesListPage /> },
               { path: '/microclimates/:id', element: <MicroclimateDetailPage /> },
+              // The authenticated half of #120. No role gate beyond RequireAuth: the
+              // respond endpoint resolves the caller's own user row and checks the
+              // survey's department targets itself, so every role that can be sent a
+              // survey can load this.
+              { path: '/surveys/:id/respond', element: <SurveyRespondPage /> },
               // Not under /admin: every authenticated role owns their own preferences,
               // and the API behind this page takes no user id at all (#103).
               { path: '/settings/notifications', element: <NotificationPreferencesPage /> },
