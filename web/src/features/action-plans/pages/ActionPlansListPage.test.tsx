@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import ActionPlansListPage from './ActionPlansListPage'
+import type { ActionPlan } from '../api/actionPlans'
 import { TranslationProvider } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
@@ -108,5 +110,190 @@ describe('ActionPlansListPage company scoping', () => {
       'No company is associated with your account.',
     )
     expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * The listing surface itself: filtering, states, and the create flow.
+ *
+ * Separate from the scoping block above because these assume a company is already
+ * resolved -- a `company_admin` whose claim names one -- and are about what the page
+ * does *with* the rows rather than about which rows it is allowed to ask for.
+ */
+function plan(overrides: Partial<ActionPlan> = {}): ActionPlan {
+  return {
+    id: 'p1',
+    title: 'Raise engagement',
+    companyId: 'their-co',
+    departmentId: null,
+    dueDate: '2026-12-01T00:00:00.000Z',
+    status: 'not_started',
+    priority: 'high',
+    createdAt: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }
+}
+
+/** A fresh `Response` per call — a body can only be read once. */
+function routePlans(plans: ActionPlan[]) {
+  vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.includes('/action-plan-templates')) {
+      return Promise.resolve(new Response(JSON.stringify({ templates: [] }), { status: 200 }))
+    }
+    if (init?.method === 'POST') {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            ...plan({ id: 'new-1', title: 'Reduce attrition' }),
+            description: 'd',
+            createdBy: 'u1',
+            tags: [],
+            templateId: null,
+            kpis: [],
+            objectives: [],
+          }),
+          { status: 201 },
+        ),
+      )
+    }
+    return Promise.resolve(new Response(JSON.stringify({ actionPlans: plans }), { status: 200 }))
+  })
+}
+
+function planUrls(): string[] {
+  return vi
+    .mocked(fetch)
+    .mock.calls.map((call) => String(call[0]))
+    .filter((url) => url.includes('/action-plans?'))
+}
+
+describe('ActionPlansListPage listing surface', () => {
+  beforeEach(() => {
+    setToken(tokenFor({ role: 'company_admin', companyId: 'their-co' }))
+  })
+
+  it('renders translated status and priority rather than the wire enums', async () => {
+    routePlans([plan()])
+    renderPage()
+
+    expect(await screen.findByText('Raise engagement')).toBeTruthy()
+    expect(screen.queryByText('not_started')).toBeNull()
+    // Scoped to the table: the filter selects legitimately carry the same labels as
+    // their <option> text, so an unscoped query matches those too.
+    const row = within(screen.getByRole('table'))
+    expect(row.getByText('Not Started')).toBeTruthy()
+    expect(row.getByText('High')).toBeTruthy()
+  })
+
+  it('asks the server for a status filter instead of narrowing the array', async () => {
+    // `ListAsync` already applies this predicate in the database. Filtering the
+    // fetched array instead would be a second implementation of a rule the server
+    // owns, and would silently become "filters the current page" the day this
+    // endpoint grows paging.
+    routePlans([plan()])
+    renderPage()
+    await screen.findByText('Raise engagement')
+
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'in_progress')
+
+    await waitFor(() => {
+      expect(planUrls().some((url) => url.includes('status=in_progress'))).toBe(true)
+    })
+  })
+
+  it('narrows priority and search in the browser, with no extra request', async () => {
+    // `ListAsync` has no parameter for either, so a query-string field would be
+    // silently ignored. Exact rather than approximate only because that endpoint
+    // returns the company's complete set in one response.
+    routePlans([plan(), plan({ id: 'p2', title: 'Reduce attrition', priority: 'low' })])
+    renderPage()
+    await screen.findByText('Raise engagement')
+    const requestsBefore = planUrls().length
+
+    await userEvent.selectOptions(screen.getByLabelText('Priority'), 'low')
+    expect(screen.queryByText('Raise engagement')).toBeNull()
+    expect(screen.getByText('Reduce attrition')).toBeTruthy()
+
+    await userEvent.selectOptions(screen.getByLabelText('Priority'), '')
+    await userEvent.type(screen.getByLabelText('Search'), 'engage')
+    expect(screen.getByText('Raise engagement')).toBeTruthy()
+    expect(screen.queryByText('Reduce attrition')).toBeNull()
+
+    expect(planUrls().length).toBe(requestsBefore)
+  })
+
+  it('tells an empty company how to start, and a filtered one to adjust', async () => {
+    routePlans([])
+    renderPage()
+
+    expect(await screen.findByText('No action plans found.')).toBeTruthy()
+    expect(screen.getByText('Create the first action plan for this company.')).toBeTruthy()
+
+    await userEvent.type(screen.getByLabelText('Search'), 'nothing matches this')
+    expect(screen.getByText('Try adjusting the filters above.')).toBeTruthy()
+  })
+
+  it('offers a retry when the listing fails to load', async () => {
+    routePlans([plan()])
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: 'Service unavailable' }), { status: 503 }),
+    )
+    renderPage()
+
+    const retry = await screen.findByRole('button', { name: 'Retry' })
+    expect(screen.getByText('Service unavailable')).toBeTruthy()
+
+    await userEvent.click(retry)
+    expect(await screen.findByText('Raise engagement')).toBeTruthy()
+  })
+
+  it('creates a plan and confirms it by name with a link to it', async () => {
+    routePlans([plan()])
+    renderPage()
+    await screen.findByText('Raise engagement')
+
+    await userEvent.click(screen.getByRole('button', { name: 'New action plan' }))
+    await userEvent.type(screen.getByLabelText(/Plan Title/), 'Reduce attrition')
+    await userEvent.type(screen.getByLabelText(/Description/), 'Cut voluntary exits')
+    fireEvent.change(screen.getByLabelText('Due Date'), { target: { value: '2026-12-01' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Create Action Plan' }))
+
+    const post = await waitFor(() => {
+      const call = vi.mocked(fetch).mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
+      expect(call).toBeTruthy()
+      return call!
+    })
+    const body = JSON.parse((post[1] as RequestInit).body as string)
+    expect(body.title).toBe('Reduce attrition')
+    expect(body.companyId).toBe('their-co')
+    // The wire format `normalizeDueDate` pins: a bare date-only string would
+    // deserialize as midnight in the server process's own offset.
+    expect(body.dueDate).toBe('2026-12-01T00:00:00.000Z')
+    // `CreateAsync` forces Status = "not_started", so the client never sends one.
+    expect(body.status).toBeUndefined()
+
+    const confirmation = await screen.findByText(/Action plan .*Reduce attrition.* created\./)
+    expect(confirmation).toBeTruthy()
+  })
+
+  it('refuses to submit a blank KPI row, which the server would happily persist', async () => {
+    // `CreateAsync` takes `request.Kpis` as given -- and there is no endpoint that
+    // deletes a KPI, so a nameless row is permanent.
+    routePlans([plan()])
+    renderPage()
+    await screen.findByText('Raise engagement')
+
+    await userEvent.click(screen.getByRole('button', { name: 'New action plan' }))
+    await userEvent.type(screen.getByLabelText(/Plan Title/), 'Reduce attrition')
+    await userEvent.type(screen.getByLabelText(/Description/), 'Cut voluntary exits')
+    fireEvent.change(screen.getByLabelText('Due Date'), { target: { value: '2026-12-01' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Add KPI' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Create Action Plan' }))
+
+    expect(await screen.findByText('This field is required')).toBeTruthy()
+    expect(
+      vi.mocked(fetch).mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST'),
+    ).toBe(false)
   })
 })

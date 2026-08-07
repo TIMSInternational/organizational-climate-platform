@@ -58,6 +58,15 @@ import {
  * progress form *does* refetch, because `RecordProgressAsync` returns only the
  * update it wrote and says nothing about the new KPI and objective values.
  *
+ * ## The progress bars, measured
+ *
+ * `<Progress>` fills `--admin-accent-blue` over `--admin-bg-icon-box`: **3.31:1 in
+ * light, 3.80:1 in dark**, so both clear WCAG 1.4.11's 3:1 for a non-text UI
+ * component — computed with the same relative-luminance routine
+ * `styles/badgeVariantContrast.test.ts` uses. The bar is never the only carrier of
+ * the value either: the percentage is rendered as text beside every one of them,
+ * which is what 1.4.1 asks for and what makes a zero-length bar readable at all.
+ *
  * ## Load errors blank the page; action errors never do
  *
  * A refused status change or a rejected progress update has to be readable *next to*

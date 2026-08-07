@@ -23,6 +23,25 @@ describe('actionPlans api client', () => {
     expect(result).toEqual([detail])
   })
 
+  it('puts the status filter on the query string, where ListAsync applies it', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ actionPlans: [] }), { status: 200 }))
+    await listActionPlans(baseUrl, 'c1', { status: 'in_progress', departmentId: 'd1' })
+    expect(fetch).toHaveBeenCalledWith(
+      `${baseUrl}/action-plans?companyId=c1&status=in_progress&departmentId=d1`,
+      expect.anything(),
+    )
+  })
+
+  it('omits an empty filter rather than sending a blank one', async () => {
+    // Not cosmetic for departmentId: the server binds it as a `Guid?`, and an empty
+    // string is a 400 from model binding rather than "no filter". An empty status is
+    // merely ignored (`IsNullOrWhiteSpace`), but sending either is a request that
+    // does not say what it means.
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ actionPlans: [] }), { status: 200 }))
+    await listActionPlans(baseUrl, 'c1', { status: '', departmentId: '' })
+    expect(fetch).toHaveBeenCalledWith(`${baseUrl}/action-plans?companyId=c1`, expect.anything())
+  })
+
   it('creates an action plan', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 201 }))
     const result = await createActionPlan(baseUrl, { title: 'Plan', description: 'desc', companyId: 'c1', dueDate: '2026-12-01', priority: 'medium' })
