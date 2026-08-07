@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
+import { MessageSquare, Users, UserMinus, Percent } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import {
@@ -290,11 +291,14 @@ export default function MicroclimateLivePage() {
               </>
             )}
 
+            {/* No `title` on the panel: the <H2> above already carries it, and
+                passing both drew "Live Word Cloud" twice — the same duplication
+                fixed on the results page. `MicroclimateWordPanel.title` is optional
+                precisely so a caller with its own heading can leave it off. */}
             <H2>{t('microclimates.liveWordCloud')}</H2>
             <MicroclimateWordPanel
               words={live.wordCloud}
               responseCount={live.responseCount}
-              title={t('microclimates.liveWordCloud')}
             />
 
             <H2>{t('microclimates.sentimentAnalysis')}</H2>
@@ -319,14 +323,25 @@ function liveKpis(
   t: (key: string, params?: Record<string, string | number>) => string,
 ): Kpi[] {
   const kpis: Kpi[] = [
-    { id: 'responses', label: t('microclimates.kpiResponses'), value: live.responseCount },
-    { id: 'target', label: t('microclimates.kpiTarget'), value: live.targetParticipantCount },
+    {
+      id: 'responses',
+      label: t('microclimates.kpiResponses'),
+      value: live.responseCount,
+      icon: MessageSquare,
+    },
+    {
+      id: 'target',
+      label: t('microclimates.kpiTarget'),
+      value: live.targetParticipantCount,
+      icon: Users,
+    },
     {
       id: 'outstanding',
       label: t('microclimates.kpiOutstanding'),
       // Never negative: an anonymous link can be answered by more people than were
       // expected, and "-3 yet to respond" is not a fact about anything.
       value: Math.max(0, live.targetParticipantCount - live.responseCount),
+      icon: UserMinus,
     },
   ]
 
@@ -337,6 +352,7 @@ function liveKpis(
       label: t('microclimates.kpiParticipation'),
       value: rate,
       format: { kind: 'percentage' },
+      icon: Percent,
     })
   }
 
