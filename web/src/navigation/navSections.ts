@@ -351,6 +351,43 @@ export function leafNavItems(sections: NavSection[]): NavItem[] {
 }
 
 /**
+ * The Notifications row, carrying the caller's unread tally.
+ *
+ * ## Why this is the only badged row
+ *
+ * ForMaps' brand notes describe nav badges ("yellow pills for counts"), but **none
+ * of their five live sidebars renders one** — Student, Counselor, SchoolAdmin,
+ * Admin and Parent all pass counts nowhere. So there is no badge to port, and the
+ * `badge` field here plus `.nav-badge` in `index.css` were built for a legacy nav
+ * that had no counterpart either. Inventing counts to fill them would put a number
+ * beside "Action Plans" that is either a second copy of one already on the page or
+ * a fresh request per rail render.
+ *
+ * Notifications is different: the shell already polls that number for the bell, it
+ * is not otherwise visible while the bell's dropdown is closed, and it is the one
+ * count that means "there is something here you have not seen". So exactly one row
+ * gets a badge, from data that already exists.
+ *
+ * Capped at "99+": the label box in a 220px rail is 151px, and a four-digit count
+ * pushes the row's text into an ellipsis to make room for a number nobody reads
+ * precisely.
+ *
+ * Returns the sections unchanged at zero — an empty pill reading "0" is noise, and
+ * a badge's whole job is to be absent when there is nothing to say.
+ */
+export function withUnreadBadge(sections: NavSection[], unreadCount: number): NavSection[] {
+  if (unreadCount <= 0) return sections
+
+  const badge = unreadCount > 99 ? '99+' : String(unreadCount)
+  return sections.map((section) => ({
+    ...section,
+    items: section.items.map((item) =>
+      item.href === NOTIFICATIONS_ITEM.href ? { ...item, badge } : item,
+    ),
+  }))
+}
+
+/**
  * Does `pathname` sit under `href` at all?
  *
  * Segment-aware: `/surveys` must not claim `/surveys-archive`, which a bare

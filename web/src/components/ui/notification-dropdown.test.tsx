@@ -38,6 +38,24 @@ describe('NotificationDropdown', () => {
     expect(screen.getByText('1')).toBeTruthy()
   })
 
+  /**
+   * Capped at the same 99 the sidebar's `.nav-badge` uses, so the two places the
+   * shell shows this number cannot print different ones. Rendered in Chrome at 150
+   * unread before the cap existed: the rail said "99+" and the bell said "150".
+   */
+  it('caps the count so the rail and the bell agree, and the badge stays on the icon', () => {
+    const many = Array.from({ length: 150 }, (_, index) => ({ id: String(index), title: 'x' }))
+    render(<Example notifications={many} />)
+    expect(screen.getByText('99+')).toBeTruthy()
+    expect(screen.queryByText('150')).toBeNull()
+  })
+
+  it('does not cap a count that fits', () => {
+    const some = Array.from({ length: 99 }, (_, index) => ({ id: String(index), title: 'x' }))
+    render(<Example notifications={some} />)
+    expect(screen.getByText('99')).toBeTruthy()
+  })
+
   it('shows no count badge when everything is read', () => {
     render(<Example notifications={[{ id: '1', title: 'x', read: true }]} />)
     expect(screen.queryByText('1')).toBeNull()

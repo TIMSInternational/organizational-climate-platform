@@ -116,7 +116,16 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
             {label}
           </span>
         )}
-        {!collapsed && item.badge && <span className="nav-badge">{item.badge}</span>}
+        {/* `data-active` so the badge can invert on a filled row. Without it the
+            pill is `--admin-accent-blue` on `--admin-accent-bg-blue`, an 8%-alpha
+            tint of that same colour — over the solid accent fill of a selected row
+            that is teal text on teal, which is unreadable at exactly the moment
+            the count matters most. */}
+        {!collapsed && item.badge && (
+          <span className="nav-badge" data-active={isActive && !hasSub}>
+            {item.badge}
+          </span>
+        )}
       </>
     )
 

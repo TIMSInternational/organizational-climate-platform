@@ -5,6 +5,7 @@ import {
   isUnder,
   leafNavItems,
   sectionTitleKeyForPath,
+  withUnreadBadge,
   type NavSection,
 } from './navSections'
 import { CATALOGUES, LOCALES } from '../i18n/locale'
@@ -385,5 +386,45 @@ describe('activeHref', () => {
 
   it('returns null where no row matches', () => {
     expect(activeHref('/dev/chart-gallery', sections)).toBeNull()
+  })
+})
+
+describe('withUnreadBadge', () => {
+  const sections = buildNavSections('company_admin', 'company-1')
+
+  function badges(decorated: NavSection[]) {
+    return decorated
+      .flatMap((section) => section.items)
+      .filter((item) => item.badge !== undefined)
+      .map((item) => [item.href, item.badge])
+  }
+
+  it('badges the notifications row and nothing else', () => {
+    expect(badges(withUnreadBadge(sections, 3))).toEqual([['/notifications', '3']])
+  })
+
+  it('renders no badge at zero, rather than a pill reading 0', () => {
+    expect(badges(withUnreadBadge(sections, 0))).toEqual([])
+    expect(withUnreadBadge(sections, 0)).toBe(sections)
+  })
+
+  it('caps a large count so it cannot push the row label into an ellipsis', () => {
+    expect(badges(withUnreadBadge(sections, 99))).toEqual([['/notifications', '99']])
+    expect(badges(withUnreadBadge(sections, 100))).toEqual([['/notifications', '99+']])
+    expect(badges(withUnreadBadge(sections, 4321))).toEqual([['/notifications', '99+']])
+  })
+
+  it('does not mutate the sections it was given', () => {
+    const before = buildNavSections('company_admin', 'company-1')
+    withUnreadBadge(before, 7)
+    expect(badges(before)).toEqual([])
+  })
+
+  it('badges the row for every role, since every role has notifications', () => {
+    for (const role of ['super_admin', 'company_admin', 'employee', 'supervisor', 'leader']) {
+      expect(badges(withUnreadBadge(buildNavSections(role, 'company-1'), 2))).toEqual([
+        ['/notifications', '2'],
+      ])
+    }
   })
 })

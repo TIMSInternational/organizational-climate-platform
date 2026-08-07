@@ -70,7 +70,14 @@ export function NotificationDropdown({
               aria-hidden="true"
               className="absolute -top-1 -right-1 min-w-4 px-1 py-0 text-2xs"
             >
-              {unread}
+              {/* Capped, and capped at the same 99 the sidebar's `.nav-badge` uses
+                  (`withUnreadBadge` in navigation/navSections.ts). Rendered in
+                  Chrome at 150 unread: the rail said "99+" and this said "150",
+                  two numbers for one fact a screen apart — and an uncapped
+                  three-digit count on a 32px icon button overhangs the bell on
+                  both sides. The precise figure is on the trigger's accessible
+                  name, which the caller builds from the real count. */}
+              {unread > 99 ? '99+' : unread}
             </Badge>
           )}
         </Button>

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Outlet, useNavigate } from 'react-router'
 import RoleBasedNav from '../navigation/RoleBasedNav'
-import { buildNavSections } from '../navigation/navSections'
+import { buildNavSections, withUnreadBadge } from '../navigation/navSections'
 import { clearToken, getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import { useTranslation } from '../i18n'
@@ -53,6 +53,7 @@ function AdminShell() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const [collapsed, setCollapsed] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
 
   function handleSignOut() {
     clearToken()
@@ -68,7 +69,10 @@ function AdminShell() {
   const claims = token ? decodeJwtPayload(token) : null
   const role = typeof claims?.role === 'string' ? claims.role : undefined
   const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
-  const sections = buildNavSections(role, companyId)
+  // The bell owns the poll; the rail just reads the number it reports, so the two
+  // can never disagree and nothing is fetched twice. See `withUnreadBadge` for why
+  // Notifications is the only badged row.
+  const sections = withUnreadBadge(buildNavSections(role, companyId), unreadCount)
 
   return (
     <div className="flex h-dvh flex-col bg-surface-outer">
@@ -159,7 +163,7 @@ function AdminShell() {
                 by dispatching a window event rather than by holding shared state —
                 see `CommandPalette.tsx`. */}
             <SearchTrigger />
-            <NotificationBell />
+            <NotificationBell onUnreadCountChange={setUnreadCount} />
           </header>
 
           {/* The scroll container. */}
