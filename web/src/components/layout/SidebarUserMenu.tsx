@@ -154,8 +154,25 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
               <span style={{ display: 'block', fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {name ?? t('shell.account')}
               </span>
+              {/* Truncated like the name above it. Without this the role wrapped to
+                  two lines in Spanish -- "Administrador de Empresa" is wider than
+                  the 150px this column has in a 220px rail -- which grew the block
+                  and pushed it into the Settings/Sign-out row beneath. Rendered in
+                  Chrome at 1440x900 with `preferredLocale=es`. */}
               {roleKey ? (
-                <span style={{ display: 'block', fontSize: 10, color: 'var(--admin-font-tertiary)' }}>{t(roleKey)}</span>
+                <span
+                  title={t(roleKey)}
+                  style={{
+                    display: 'block',
+                    fontSize: 10,
+                    color: 'var(--admin-font-tertiary)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {t(roleKey)}
+                </span>
               ) : null}
             </span>
             <ChevronDown aria-hidden="true" style={{ width: 12, height: 12, color: 'var(--admin-font-section-label)', flexShrink: 0 }} />
@@ -164,21 +181,34 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
       </button>
 
       {!collapsed && (
+        // ForMaps' Settings/Sign-out row, with one thing theirs does not need. Their
+        // two labels are "Settings" and "Sign out"; the Spanish pair is
+        // "Configuración" and "Cerrar sesión", which at 12px plus two 14px glyphs
+        // and their gaps overruns the 212px this row has and wrapped each control
+        // onto its own line, straight through the user block above. Both labels now
+        // shrink and ellipsise, with `title` making the full text recoverable — the
+        // same treatment `RoleBasedNav` gives its rows, and for the same reason.
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '4px 4px 0' }}>
           <Link
             to="/settings/notifications"
-            style={{ ...ROW, width: 'auto', gap: 6, height: 28, padding: '0 8px', fontSize: 12, textDecoration: 'none' }}
+            title={t('shell.settings')}
+            style={{ ...ROW, width: 'auto', minWidth: 0, gap: 6, height: 28, padding: '0 8px', fontSize: 12, textDecoration: 'none' }}
           >
-            <Settings aria-hidden="true" style={{ width: 14, height: 14, color: 'var(--admin-font-tertiary)' }} />
-            <span>{t('shell.settings')}</span>
+            <Settings aria-hidden="true" style={{ width: 14, height: 14, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {t('shell.settings')}
+            </span>
           </Link>
           <button
             type="button"
             onClick={onSignOut}
-            style={{ ...ROW, width: 'auto', gap: 6, height: 28, padding: '0 8px', fontSize: 12, marginLeft: 'auto' }}
+            title={t('shell.signOut')}
+            style={{ ...ROW, width: 'auto', minWidth: 0, gap: 6, height: 28, padding: '0 8px', fontSize: 12, marginLeft: 'auto' }}
           >
-            <LogOut aria-hidden="true" style={{ width: 14, height: 14, color: 'var(--admin-font-tertiary)' }} />
-            <span>{t('shell.signOut')}</span>
+            <LogOut aria-hidden="true" style={{ width: 14, height: 14, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {t('shell.signOut')}
+            </span>
           </button>
         </div>
       )}

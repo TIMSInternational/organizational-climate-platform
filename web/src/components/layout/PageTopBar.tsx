@@ -145,7 +145,10 @@ export function PageTopBar({
               utility to say so, and `m-0` because index.css gives every `p` a
               bottom margin that would push it off the heading it belongs to. */}
           {eyebrowText && (
-            <p className="m-0 text-2xs font-bold uppercase tracking-eyebrow text-fg-label">
+            <p
+              data-slot="page-eyebrow"
+              className="m-0 text-2xs font-bold uppercase tracking-eyebrow text-fg-label"
+            >
               {eyebrowText}
             </p>
           )}
