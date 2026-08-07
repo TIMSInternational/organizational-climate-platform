@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ClimateProject.Infrastructure.Migrations
 {
     [DbContext(typeof(ClimateProjectDbContext))]
-    partial class ClimateProjectDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260806195145_DropDeadUserNodoIdColumn")]
+    partial class DropDeadUserNodoIdColumn
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1315,8 +1318,6 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CompanyId");
-
-                    b.HasIndex("ManagerId");
 
                     b.HasIndex("ParentDepartmentId");
 
@@ -4115,11 +4116,6 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasForeignKey("CompanyId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("ClimateProject.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("ManagerId")
-                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("ClimateProject.Domain.Entities.Department", null)
                         .WithMany()
