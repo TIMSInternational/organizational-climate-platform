@@ -15,6 +15,8 @@ import {
 } from '../actionPlanFilterState'
 import ActionPlanForm, { type ActionPlanFormValues } from '../components/ActionPlanForm'
 import { useCompanyScope } from '../../../company-context'
+import { Target, Loader, CircleCheck, TriangleAlert } from 'lucide-react'
+import { KPIDisplay } from '../../../components/charts'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import {
@@ -51,7 +53,7 @@ import {
 // selected gets `status: 'needs-selection'` and the prompt below -- never a
 // company chosen for them.
 export default function ActionPlansListPage() {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const scope = useCompanyScope()
   const companyId = scope.companyId
@@ -209,6 +211,47 @@ export default function ActionPlansListPage() {
             />
           </CardContent>
         </Card>
+      )}
+
+      {/* A KPI band ahead of the filters, matching the ForMaps admin shell: the
+          shape of the workload is read before it is filtered. Counts come from the
+          unfiltered `plans`, deliberately — a band that moved with the filter would
+          be describing the filter rather than the company. */}
+      {!loading && !loadError && plans.length > 0 && (
+        <div className="mb-panel-gap">
+          <KPIDisplay
+            columns={4}
+            locale={locale}
+            kpis={[
+              { id: 'total', label: t('actionPlans.kpiTotalPlans'), value: plans.length, icon: Target },
+              {
+                id: 'in-progress',
+                label: t('actionPlans.kpiInProgress'),
+                value: plans.filter((plan) => plan.status === 'in_progress').length,
+                icon: Loader,
+              },
+              {
+                id: 'completed',
+                label: t('actionPlans.kpiCompleted'),
+                value: plans.filter((plan) => plan.status === 'completed').length,
+                icon: CircleCheck,
+              },
+              {
+                id: 'overdue',
+                label: t('actionPlans.kpiOverdue'),
+                // Past its due date and not finished. `completed` is excluded rather
+                // than counted late: a plan delivered after its date is done, and
+                // showing it as overdue would tell someone to chase it.
+                value: plans.filter(
+                  (plan) => plan.status !== 'completed' && new Date(plan.dueDate) < new Date(),
+                ).length,
+                icon: TriangleAlert,
+                // Up is bad here, so the change indicator must not paint a rise green.
+                higherIsBetter: false,
+              },
+            ]}
+          />
+        </div>
       )}
 
       <ActionPlanFilters

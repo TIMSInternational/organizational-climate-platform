@@ -1,5 +1,9 @@
 {
   "actionPlans": {
+    "kpiTotalPlans": "Planes de acción",
+    "kpiInProgress": "En progreso",
+    "kpiCompleted": "Completados",
+    "kpiOverdue": "Vencidos",
     "title": "Planes de Acción",
     "actionPlans": "Planes de Acción",
     "createActionPlan": "Crear Plan de Acción",
@@ -727,6 +731,9 @@
     "newDepartment": "Nuevo Departamento",
     "noDepartmentsYet": "Aún no hay departamentos.",
     "summaryLine": "{total} departamentos · {active} activos · {employees} empleados asignados",
+    "kpiTotalDepartments": "Departamentos",
+    "kpiActiveDepartments": "Activos",
+    "kpiAssignedEmployees": "Empleados asignados",
     "parentLockedOnEdit": "El departamento padre no se puede cambiar una vez creado el departamento.",
     "inactiveHidesFromAssignment": "Los departamentos inactivos se conservan, pero no se ofrecen al asignar personas."
   },

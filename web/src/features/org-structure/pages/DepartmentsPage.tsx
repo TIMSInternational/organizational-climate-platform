@@ -7,6 +7,8 @@ import {
 } from '../api/departments'
 import DepartmentList from '../components/DepartmentList'
 import DepartmentForm, { type DepartmentFormValues } from '../components/DepartmentForm'
+import { Network, CircleCheck, Users } from 'lucide-react'
+import { KPIDisplay } from '../../../components/charts'
 import { useCompanyScope } from '../../../company-context'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
@@ -64,7 +66,7 @@ import {
  * memory regardless.
  */
 export default function DepartmentsPage() {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const scope = useCompanyScope()
   const companyId = scope.companyId
@@ -262,13 +264,37 @@ export default function DepartmentsPage() {
               {/* Counts come from the full list, not the filtered one: they
                   describe the company, and a summary that moved as you typed in
                   the search box would be describing the search instead. */}
-              <p className="mb-panel-gap text-sm text-fg-secondary">
-                {t('departments.summaryLine', {
-                  total: departments.length,
-                  active: activeCount,
-                  employees: employeeCount,
-                })}
-              </p>
+              {/* The ForMaps admin shell leads a data view with a KPI band rather
+                  than a sentence, so the three numbers that describe the company are
+                  the first thing read. `summaryLine` is kept in the catalogue and
+                  used as the band's accessible summary — the figures are unchanged,
+                  only their presentation. */}
+              <div className="mb-panel-gap">
+                <KPIDisplay
+                  columns={3}
+                  locale={locale}
+                  kpis={[
+                    {
+                      id: 'total',
+                      label: t('departments.kpiTotalDepartments'),
+                      value: departments.length,
+                      icon: Network,
+                    },
+                    {
+                      id: 'active',
+                      label: t('departments.kpiActiveDepartments'),
+                      value: activeCount,
+                      icon: CircleCheck,
+                    },
+                    {
+                      id: 'employees',
+                      label: t('departments.kpiAssignedEmployees'),
+                      value: employeeCount,
+                      icon: Users,
+                    },
+                  ]}
+                />
+              </div>
 
               <div className="mb-panel-gap flex flex-wrap items-end gap-inline">
                 <label className="grid gap-1">
