@@ -1015,7 +1015,11 @@
     "analyticsParticipation": "Participation",
     "columnParticipation": "Participation",
     "wordColumn": "Word",
-    "backToMicroclimate": "Back to the session"
+    "backToMicroclimate": "Back to the session",
+    "journeyTitle": "Session journey",
+    "journeyLabel": "Microclimate lifecycle",
+    "journeyDraft": "Questions and audience are set. Nothing is being collected yet.",
+    "journeyActive": "Open for responses."
   },
   "navigation": {
     "sectionAdministration": "Administration",

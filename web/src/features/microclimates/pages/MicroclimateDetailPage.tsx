@@ -3,7 +3,8 @@ import { Link, useParams } from 'react-router'
 import { getMicroclimate, updateMicroclimate, type MicroclimateDetail } from '../api/microclimates'
 import MicroclimateContentNotice from '../components/MicroclimateContentNotice'
 import { useTranslation } from '../../../i18n'
-import { PageTopBar } from '../../../components/layout'
+import { JourneyTimeline, PageTopBar } from '../../../components/layout'
+import { microclimateJourney } from '../microclimateJourney'
 import {
   Alert,
   AlertDescription,
@@ -181,6 +182,26 @@ export default function MicroclimateDetailPage() {
           <AlertDescription>{actionError}</AlertDescription>
         </Alert>
       )}
+
+      {/* ForMaps' journey timeline. Theirs is a student's to-do list; the honest
+          analogue here is the session's own state machine, which is the one thing
+          on this page a reader wants at a glance and which the status badge alone
+          cannot say — a badge reading "Active" does not tell you that collection
+          started on the 4th and stops on the 11th, nor that closing is one-way.
+          Above the table on purpose: the table is the detail, this is the shape. */}
+      <div className="mb-section">
+        <JourneyTimeline
+          title={t('microclimates.journeyTitle')}
+          label={t('microclimates.journeyLabel')}
+          steps={microclimateJourney(
+            t,
+            microclimate.status,
+            microclimate.startTime,
+            microclimate.endTime,
+            locale,
+          )}
+        />
+      </div>
 
       <H2>{t('microclimates.atAGlance')}</H2>
       <Table>

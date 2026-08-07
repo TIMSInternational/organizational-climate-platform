@@ -36,5 +36,12 @@ export {
   OPEN_COMMAND_PALETTE_EVENT,
   type CommandPaletteProps,
 } from './CommandPalette'
+export { QuickActions, type QuickAction, type QuickActionsProps } from './QuickActions'
+export {
+  JourneyTimeline,
+  type JourneyStep,
+  type JourneyStatus,
+  type JourneyTimelineProps,
+} from './JourneyTimeline'
 export { SidebarBrand, type SidebarBrandProps } from './SidebarBrand'
 export { SidebarUserMenu } from './SidebarUserMenu'
