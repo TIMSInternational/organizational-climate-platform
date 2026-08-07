@@ -18,8 +18,11 @@ import MicroclimateDetailPage from '../features/microclimates/pages/Microclimate
 import MicroclimateLivePage from '../features/microclimates/pages/MicroclimateLivePage'
 import MicroclimateResultsPage from '../features/microclimates/pages/MicroclimateResultsPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
+import SurveyRespondPage from '../features/surveys/pages/SurveyRespondPage'
+import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespondPage'
 import NotificationPreferencesPage from '../features/notifications/pages/NotificationPreferencesPage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
+import SurveyDistributionPage from '../features/surveys/pages/SurveyDistributionPage'
 import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
 import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
 import ReportsListPage from '../features/reports/pages/ReportsListPage'
@@ -86,6 +89,12 @@ export const router = createBrowserRouter([
       { path: '/login', element: <LoginPage /> },
       { path: '/accept-invitation/:token', element: <AcceptInvitationPage /> },
       { path: '/microclimates/:id/respond', element: <MicroclimateRespondPage /> },
+      // Public by design (#120), same placement and same reason as the microclimate
+      // respond route above it: an anonymous survey is answered by people who have no
+      // account, so `RequireAuth` here would send every one of them to a login page
+      // they cannot pass. The server still refuses this route for any survey that is
+      // not both anonymous and open.
+      { path: '/survey/:id', element: <PublicSurveyRespondPage /> },
       ...devOnlyRoutes,
       {
         element: <RequireAuth />,
@@ -130,6 +139,11 @@ export const router = createBrowserRouter([
               { path: '/surveys/templates', element: <SurveyTemplatesPage /> },
               { path: '/surveys/templates/:id', element: <SurveyTemplateDetailPage /> },
               { path: '/surveys/:id', element: <SurveyDetailPage /> },
+              // The authenticated half of #120. No role gate beyond RequireAuth: the
+              // respond endpoint resolves the caller's own user row and checks the
+              // survey's department targets itself, so every role that can be sent a
+              // survey can load this.
+              { path: '/surveys/:id/respond', element: <SurveyRespondPage /> },
               // No nav entry, deliberately: this is a per-survey destination reached from
               // a survey, not a place in the sidebar. `/surveys` and `/surveys/:id` are
               // #109's; this route only needs to exist beneath one of them.
@@ -140,6 +154,9 @@ export const router = createBrowserRouter([
               // Self-service, so no role gate beyond RequireAuth: /notifications/mine
               // is scoped per user and every authenticated role can load it.
               { path: '/notifications', element: <NotificationsInboxPage /> },
+              // Reached from a survey, not from the sidebar: distribution is an action on
+              // one survey rather than a destination, so it gets a route and no nav entry.
+              { path: '/surveys/:surveyId/distribution', element: <SurveyDistributionPage /> },
               { path: '/analytics/benchmarks', element: <BenchmarksPage /> },
               { path: '/analytics/ai-insights', element: <AIInsightsPage /> },
             ],
