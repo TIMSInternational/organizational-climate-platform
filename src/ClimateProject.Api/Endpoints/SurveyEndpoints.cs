@@ -55,7 +55,7 @@ public static class SurveyEndpoints
         => currentUser.Role == Roles.SuperAdmin
            || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
 
-    private static async Task<Guid?> ResolveActingUserIdAsync(
+    internal static async Task<Guid?> ResolveActingUserIdAsync(
         CurrentUser currentUser,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -84,7 +84,7 @@ public static class SurveyEndpoints
     // surveys.created_by is NOT NULL with a RESTRICT foreign key, so an unresolvable
     // acting user must be a 400 here rather than Guid.Empty and an opaque 500 out of the
     // DbUpdateException handler.
-    private static IResult ActingUserRequired()
+    internal static IResult ActingUserRequired()
         => Results.Json(new { message = "The authenticated user has no matching user record" }, statusCode: 400);
 
     // ------------------------------------------------------------------

@@ -46,6 +46,33 @@ public static class SurveyValidation
     public const int TitleMaxLength = 200;
 
     /// <summary>
+    /// Derives an option's stable value when the caller did not supply one: the English
+    /// label, else the Spanish one. Identical to the microclimate rule and to the rule
+    /// #195's migration applied to the old <c>text[]</c> options, which is what keeps
+    /// existing <c>response_value</c> rows matching without a data backfill.
+    ///
+    /// Lives here rather than beside one endpoint because both the survey and the survey
+    /// *template* write paths must derive the same value from the same labels -- two
+    /// implementations of this rule would let a template and a survey disagree about an
+    /// option's identity, which is the silent aggregation split the stable value exists
+    /// to prevent.
+    /// </summary>
+    public static string? DeriveOptionValue(string? explicitValue, string? labelEn, string? labelEs)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitValue))
+        {
+            return explicitValue.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(labelEn))
+        {
+            return labelEn.Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(labelEs) ? null : labelEs.Trim();
+    }
+
+    /// <summary>
     /// Appends the locale-appropriate copy suffix, leaving an unauthored column null and
     /// trimming to the column's length so a long title's duplicate does not fail on a
     /// database constraint the caller cannot see.
