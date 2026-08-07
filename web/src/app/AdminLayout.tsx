@@ -167,7 +167,13 @@ function AdminShell() {
               inline SVG) still scrolls inside the card rather than escaping its
               border. Deliberately not removed: it costs nothing and the failure it
               catches is invisible to happy-dom. */}
-            <div className="mx-auto w-full max-w-content overflow-x-auto rounded-xl border border-line-panel bg-surface-panel p-panel pb-20 md:pb-panel">
+            {/* `min-h-full` so the panel is at least as tall as the column it sits
+                in. Without it a short page — an empty state, a four-row table —
+                rendered as a stub card stranded at the top of a large grey field,
+                which reads as content that failed to load rather than as a page
+                with little on it. The panel is the page's surface, so it should be
+                the height of the page. */}
+            <div className="mx-auto min-h-full w-full max-w-content overflow-x-auto rounded-xl border border-line-panel bg-surface-panel p-panel pb-20 md:pb-panel">
               <Outlet />
             </div>
           </main>

@@ -4,62 +4,6 @@ import { ChevronRight } from 'lucide-react'
 import { useTranslation } from '../i18n'
 import type { NavSection, NavItem as NavItemType } from './navSections'
 
-function SubItemBreadcrumb({ isLast, isActive }: { isLast: boolean; isActive: boolean }) {
-  const lineColor = 'var(--admin-border-default)'
-  const activeColor = 'var(--admin-font-tertiary)'
-  const midline = 'calc(var(--admin-size-control-md) / 2)'
-  return (
-    // The elbow is drawn on the nav row's own geometry: the box is one icon wide
-    // and one control tall, and the corner sits at half a control height — the
-    // vertical centre of the row — so the elbow keeps meeting the label mid-line
-    // if the control height ever changes.
-    <div
-      aria-hidden="true"
-      style={{
-        position: 'relative',
-        width: 'var(--admin-size-icon)',
-        height: 'var(--admin-size-control-md)',
-        flexShrink: 0,
-        marginLeft: 'var(--admin-size-inline-gap)',
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          left: 'var(--admin-space-4)',
-          top: 0,
-          width: 'var(--admin-space-1)',
-          height: midline,
-          background: isActive ? activeColor : lineColor,
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          left: 'var(--admin-space-4)',
-          top: midline,
-          width: 'var(--admin-space-8)',
-          height: 'var(--admin-space-1)',
-          background: isActive ? activeColor : lineColor,
-          borderBottomLeftRadius: 'var(--admin-radius-sm)',
-        }}
-      />
-      {!isLast && (
-        <div
-          style={{
-            position: 'absolute',
-            left: 'var(--admin-space-4)',
-            top: midline,
-            width: 'var(--admin-space-1)',
-            height: midline,
-            background: lineColor,
-          }}
-        />
-      )}
-    </div>
-  )
-}
-
 function matchesRoute(pathname: string, href: string) {
   if (href === '/dashboard') {
     return pathname === '/dashboard' || pathname === '/'
@@ -210,9 +154,8 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
         </div>
         {hasSub && isExpanded && (
           <div>
-            {item.sub!.map((sub, index) => (
+            {item.sub!.map((sub) => (
               <div key={sub.labelKey} style={{ display: 'flex', alignItems: 'center' }}>
-                <SubItemBreadcrumb isLast={index === item.sub!.length - 1} isActive={matchesRoute(pathname, sub.href)} />
                 <Link
                   to={sub.href}
                   onClick={onNavigate}
@@ -220,6 +163,13 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
                   style={{
                     flex: 1,
                     minWidth: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--admin-size-inline-gap)',
+                    // Indented by one icon plus the row gap, so the sub-item's own
+                    // glyph lands under its parent's label rather than under the
+                    // parent's icon -- the ForMaps sub-nav shape.
+                    marginLeft: `calc(var(--admin-size-icon) + var(--admin-size-inline-gap))`,
                     padding: `var(--admin-space-4) var(--admin-space-8)`,
                     borderRadius: 'var(--admin-radius-md)',
                     fontSize: 'var(--admin-text-sm)',
@@ -232,6 +182,7 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
                       : 'var(--admin-font-secondary)',
                   }}
                 >
+                  {sub.icon ? <sub.icon aria-hidden="true" className="nav-icon" /> : null}
                   {t(sub.labelKey)}
                 </Link>
               </div>

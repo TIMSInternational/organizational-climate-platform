@@ -1493,6 +1493,7 @@
     "createShareableLink": "Create shareable link",
     "linkAcceptOnce": "Link (accept-once):",
     "noDemographicFieldsYet": "No demographic fields defined yet.",
+    "noDemographicFieldsDescription": "Demographic fields let you group survey results by attributes like tenure, location or team. Add one to start segmenting your reports.",
     "optionsCommaSeparated": "Options (comma-separated)",
     "optionsExample": "e.g. Red, Green, Blue",
     "csvColumnsHint": "CSV columns: name, email, role, department. Embedded commas inside a field are not supported.",

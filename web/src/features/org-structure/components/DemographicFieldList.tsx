@@ -1,12 +1,25 @@
 import type { DemographicField } from '../api/demographicFields'
 import { useTranslation } from '../../../i18n'
-import { Table } from '../../../components/ui'
+import { Table, EmptyState } from '../../../components/ui'
+import { Tags } from 'lucide-react'
 
 export default function DemographicFieldList({ fields, onEdit }: { fields: DemographicField[]; onEdit: (field: DemographicField) => void }) {
   const { t } = useTranslation()
 
   if (fields.length === 0) {
-    return <p>{t('users.noDemographicFieldsYet')}</p>
+    // A designed state rather than one sentence. A bare <p> in an otherwise empty
+    // panel reads as a page that failed to load, not as "there is nothing here
+    // yet" -- and it gave no clue what a demographic field is for or why anyone
+    // would add one. No action is passed: the page's own "New field" button is
+    // already in the header directly above this, and a second button would be two
+    // controls for one job.
+    return (
+      <EmptyState
+        icon={<Tags className="size-6" aria-hidden="true" />}
+        title={t('users.noDemographicFieldsYet')}
+        description={t('users.noDemographicFieldsDescription')}
+      />
+    )
   }
 
   return (

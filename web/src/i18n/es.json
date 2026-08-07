@@ -1493,6 +1493,7 @@
     "createShareableLink": "Crear Enlace Compartible",
     "linkAcceptOnce": "Enlace (uso único):",
     "noDemographicFieldsYet": "Aún no se han definido campos demográficos.",
+    "noDemographicFieldsDescription": "Los campos demográficos permiten agrupar los resultados por atributos como antigüedad, ubicación o equipo. Agrega uno para empezar a segmentar tus informes.",
     "optionsCommaSeparated": "Opciones (separadas por comas)",
     "optionsExample": "p. ej. Rojo, Verde, Azul",
     "csvColumnsHint": "Columnas del CSV: nombre, correo electrónico, rol, departamento. No se admiten comas dentro de un campo.",

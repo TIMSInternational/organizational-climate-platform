@@ -29,7 +29,7 @@ const THEME_LABEL_KEY: Record<AdminThemeMode, string> = {
  * keyboard and screen-reader behaviour with no work, and it is already styled by
  * the element layer in index.css.
  */
-export function ThemeSwitcher() {
+export function ThemeSwitcher({ compact = false }: { compact?: boolean } = {}) {
   const { t } = useTranslation()
   // Read once on mount rather than every render: `localStorage` is the source of
   // truth, but reading it in a render body makes the component impure.
@@ -46,7 +46,7 @@ export function ThemeSwitcher() {
         color: 'var(--admin-font-secondary)',
       }}
     >
-      <span>{t('shell.theme')}</span>
+      {compact ? null : <span>{t('shell.theme')}</span>}
       <select
         value={mode}
         aria-label={t('shell.theme')}
@@ -168,13 +168,31 @@ export function ShellControls({ onSignOut }: ShellControlsProps) {
       }}
     >
       <SidebarUser />
-      <LanguageSwitcher />
-      <ThemeSwitcher />
-      <Link to="/settings/notifications" className="flex items-center gap-inline text-sm text-fg-secondary hover:text-fg-primary">
+
+      {/* The two pickers share one row, captions off. Stacked with their captions
+          they occupied four lines of a 230px rail — "Select Language" alone wrapped
+          onto its own — and the foot of the navigation read as a settings form
+          rather than as part of the shell. `min-w-0` lets each select shrink to its
+          half instead of forcing the row wider than the rail. */}
+      <div className="flex w-full min-w-0 items-center gap-inline [&>label]:min-w-0 [&_select]:w-full">
+        <LanguageSwitcher compact />
+        <ThemeSwitcher compact />
+      </div>
+
+      {/* Both rows share the nav items' shape, so the foot of the rail reads as
+          navigation rather than as two unrelated controls. */}
+      <Link
+        to="/settings/notifications"
+        className="flex w-full items-center gap-inline rounded-md px-2 py-1 text-sm text-fg-secondary no-underline hover:bg-state-hover hover:text-fg-primary"
+      >
         <BellRing aria-hidden="true" className="nav-icon" />
         {t('notifications.preferences.title')}
       </Link>
-      <button type="button" onClick={onSignOut}>
+      <button
+        type="button"
+        onClick={onSignOut}
+        className="flex w-full items-center gap-inline rounded-md border-none bg-transparent px-2 py-1 text-left text-sm text-fg-secondary hover:bg-state-hover hover:text-fg-primary"
+      >
         <LogOut aria-hidden="true" className="nav-icon" />
         {t('shell.signOut')}
       </button>
