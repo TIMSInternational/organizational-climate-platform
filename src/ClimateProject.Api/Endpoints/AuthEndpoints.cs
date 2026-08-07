@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.RegularExpressions;
+using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Domain.Entities;
@@ -68,7 +69,7 @@ public static class AuthEndpoints
         var token = jwtTokenService.IssueToken(new TokenClaims(
             Sub: user.PersonaExternalId ?? user.Id.ToString(),
             Role: user.Role,
-            NodoId: user.NodoId,
+            NodoId: await NodoClaimResolver.ResolveAsync(db, user, cancellationToken),
             Email: user.Email,
             Name: user.Name,
             CompanyId: user.CompanyId?.ToString() ?? string.Empty,
@@ -146,7 +147,7 @@ public static class AuthEndpoints
         var token = jwtTokenService.IssueToken(new TokenClaims(
             Sub: user.PersonaExternalId ?? user.Id.ToString(),
             Role: user.Role,
-            NodoId: user.NodoId,
+            NodoId: await NodoClaimResolver.ResolveAsync(db, user, cancellationToken),
             Email: user.Email,
             Name: user.Name,
             CompanyId: user.CompanyId?.ToString() ?? string.Empty,
@@ -224,7 +225,7 @@ public static class AuthEndpoints
         var token = jwtTokenService.IssueToken(new TokenClaims(
             Sub: user.PersonaExternalId ?? user.Id.ToString(),
             Role: user.Role,
-            NodoId: user.NodoId,
+            NodoId: await NodoClaimResolver.ResolveAsync(db, user, cancellationToken),
             Email: user.Email,
             Name: user.Name,
             CompanyId: user.CompanyId?.ToString() ?? string.Empty,
@@ -257,7 +258,7 @@ public static class AuthEndpoints
         var token = jwtTokenService.IssueToken(new TokenClaims(
             Sub: user.PersonaExternalId ?? user.Id.ToString(),
             Role: user.Role,
-            NodoId: user.NodoId,
+            NodoId: await NodoClaimResolver.ResolveAsync(db, user, cancellationToken),
             Email: user.Email,
             Name: user.Name,
             CompanyId: user.CompanyId?.ToString() ?? string.Empty,
