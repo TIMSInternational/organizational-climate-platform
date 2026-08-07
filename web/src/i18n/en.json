@@ -1196,7 +1196,13 @@
     "openMenu": "Open menu",
     "mainNavigation": "Main navigation",
     "skipToContent": "Skip to content",
-    "breadcrumb": "Breadcrumb"
+    "breadcrumb": "Breadcrumb",
+    "search": "Search",
+    "commandKey": "Cmd+K",
+    "escapeKey": "ESC",
+    "commandPalette": "Command palette",
+    "commandPaletteHint": "Type to filter, then press Enter to open a page.",
+    "commandPaletteEmpty": "No results found."
   },
   "success": {
     "saved": "Saved successfully",

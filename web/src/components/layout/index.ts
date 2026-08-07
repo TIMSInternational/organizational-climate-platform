@@ -30,4 +30,11 @@ export {
 } from './DashboardGrid'
 export { ShellControls, ThemeSwitcher, type ShellControlsProps } from './ShellControls'
 export { CompanyContextSwitcher } from './CompanyContextSwitcher'
+export {
+  CommandPalette,
+  SearchTrigger,
+  OPEN_COMMAND_PALETTE_EVENT,
+  type CommandPaletteProps,
+} from './CommandPalette'
+export { SidebarBrand, type SidebarBrandProps } from './SidebarBrand'
 export { SidebarUserMenu } from './SidebarUserMenu'

@@ -1196,7 +1196,13 @@
     "openMenu": "Abrir menú",
     "mainNavigation": "Navegación principal",
     "skipToContent": "Saltar al contenido",
-    "breadcrumb": "Ruta de navegación"
+    "breadcrumb": "Ruta de navegación",
+    "search": "Buscar",
+    "commandKey": "Cmd+K",
+    "escapeKey": "ESC",
+    "commandPalette": "Paleta de comandos",
+    "commandPaletteHint": "Escribe para filtrar y pulsa Intro para abrir una página.",
+    "commandPaletteEmpty": "No se encontraron resultados."
   },
   "success": {
     "saved": "Guardado exitosamente",

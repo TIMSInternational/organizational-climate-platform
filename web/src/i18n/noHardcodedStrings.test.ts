@@ -72,6 +72,12 @@ function isCopyProp(name: string): boolean {
 const ALLOWED = new Set([
   'Organizational Climate Platform', // the product name, not translated
   'acme.com', // example domain, mirrors dashboard.domainPlaceholder
+  // The two halves of the sidebar wordmark (`SidebarBrand.tsx`). One word split
+  // for the two-tone treatment, i.e. a logotype rather than copy — the seam is a
+  // property of the drawn mark, not of the language. Same reason as the product
+  // name above.
+  'CLIMA',
+  'TE',
 ])
 
 /**
