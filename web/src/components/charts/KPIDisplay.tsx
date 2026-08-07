@@ -24,6 +24,20 @@ export interface Kpi {
    * paints rising attrition green.
    */
   higherIsBetter?: boolean
+  /**
+   * A glyph for the corner of the card, matching the ForMaps admin shell this
+   * product's chrome is modelled on.
+   *
+   * Supplied per KPI by the caller and **never defaulted** — which is the whole
+   * difference from the legacy `icon` prop removed below. That one took a name
+   * from a fixed map of five and fell back to `Target`, so every card carried the
+   * same glyph and it told the reader nothing about which KPI they were looking
+   * at. An icon here has to be chosen for the metric it sits on, or left off.
+   *
+   * `aria-hidden` at the render site: the label already names the metric, so the
+   * icon is decoration and announcing it would just repeat the heading.
+   */
+  icon?: React.ComponentType<{ className?: string }>
 }
 
 interface KPIDisplayProps {
@@ -118,7 +132,21 @@ function KpiCard({ kpi, locale }: { kpi: Kpi; locale?: string }) {
   return (
     <Card>
       <CardContent className="flex flex-col gap-2">
-        <h4 className="text-sm font-medium text-fg-secondary">{kpi.label}</h4>
+        {/* Label and icon share a row, icon flush right — the ForMaps KPI card.
+            `items-start` rather than `items-center` so a label that wraps to two
+            lines keeps the glyph pinned to the first, instead of drifting to the
+            vertical middle of the pair. */}
+        <div className="flex items-start justify-between gap-2">
+          <h4 className="text-sm font-medium text-fg-secondary">{kpi.label}</h4>
+          {kpi.icon ? (
+            // The tinted square behind the glyph is `--admin-bg-icon-box`, the
+            // token that already exists for exactly this; no colour literal, so
+            // tokenDiscipline stays satisfied and both themes follow the palette.
+            <span className="flex size-icon-box shrink-0 items-center justify-center rounded-lg bg-surface-icon-box text-fg-tertiary">
+              <kpi.icon aria-hidden="true" className="size-icon" />
+            </span>
+          ) : null}
+        </div>
 
         <Counter value={kpi.value} formatValue={render} locale={locale} />
 

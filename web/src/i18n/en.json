@@ -1,5 +1,9 @@
 {
   "actionPlans": {
+    "kpiTotalPlans": "Action plans",
+    "kpiInProgress": "In progress",
+    "kpiCompleted": "Completed",
+    "kpiOverdue": "Overdue",
     "title": "Action Plans",
     "actionPlans": "Action Plans",
     "createActionPlan": "Create Action Plan",
@@ -727,6 +731,9 @@
     "newDepartment": "New department",
     "noDepartmentsYet": "No departments yet.",
     "summaryLine": "{total} departments · {active} active · {employees} employees assigned",
+    "kpiTotalDepartments": "Departments",
+    "kpiActiveDepartments": "Active",
+    "kpiAssignedEmployees": "Employees assigned",
     "parentLockedOnEdit": "The parent department cannot be changed after a department is created.",
     "inactiveHidesFromAssignment": "Inactive departments stay on record but are not offered when assigning people."
   },
