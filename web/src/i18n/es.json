@@ -869,6 +869,7 @@
     "scheduledStartTime": "Hora de Inicio Programada",
     "refreshStatus": "Actualizar Estado",
     "liveParticipation": "Participación en Vivo",
+    "liveProgressTitle": "Avance hacia la meta",
     "liveWordCloud": "Nube de Palabras en Vivo",
     "liveResponseData": "Datos de Respuesta en Vivo",
     "liveAiInsights": "Información de IA en Vivo",
