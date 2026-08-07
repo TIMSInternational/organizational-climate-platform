@@ -1,11 +1,37 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router'
-import { login } from './api'
+import { Link, useNavigate } from 'react-router'
+import { AuthRequestError, login } from './api'
+import { AuthShell } from './AuthShell'
+import { AuthPending } from './AuthPending'
+import { pageWorthyReason } from './authReason'
 import { setToken } from './token'
 import { decodeJwtPayload } from './jwt'
 import { resolveInitialRoute } from '../app/resolveInitialRoute'
 import { useTranslation } from '../i18n'
+import { Alert, AlertDescription, Button, TextField } from '../components/ui'
 
+/**
+ * Sign in.
+ *
+ * ## What changed here with #81
+ *
+ * The form itself is unchanged in behaviour; what it *shows* is not. It was a
+ * bare unstyled `<form>` with a `<p role="alert">`, and it now renders in
+ * `AuthShell` alongside the four other auth states, so the pages a demo hits when
+ * something goes sideways look like one product.
+ *
+ * More importantly, a failure is now triaged rather than flattened:
+ *
+ * - **403 / 503** are platform conditions (`SystemSettings.LoginEnabled`,
+ *   `MaintenanceMode`) that no amount of retyping fixes. They take the whole page
+ *   — `/auth/error` — and carry the server's own message, which for maintenance
+ *   is localized authored content (#195). Before this, `auth/api.ts` discarded
+ *   the body and threw `Login failed: 503`.
+ * - **401** stays here, next to the fields, because it is about this attempt.
+ *   Note the server answers 401 identically for a wrong password and a
+ *   deactivated account, on purpose; this page does not try to tell them apart
+ *   (see `AccountInactivePage`).
+ */
 export default function LoginPage() {
   const { t } = useTranslation()
   const [email, setEmail] = useState('')
@@ -30,27 +56,65 @@ export default function LoginPage() {
       const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
       navigate(resolveInitialRoute(role, companyId))
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      const status = err instanceof AuthRequestError ? err.status : 0
+      const message = err instanceof Error && err.message ? err.message : t('errors.generic')
+
+      const reason = pageWorthyReason(status)
+      if (reason) {
+        navigate(`/auth/error?reason=${reason}`, { state: { message } })
+        return
+      }
+
+      // 401's body is "Invalid email or password" — the server's wording, no
+      // longer a literal reconstructed on this side.
+      setError(status === 401 ? t('auth.loginError') : message)
     } finally {
       setSubmitting(false)
     }
   }
 
+  if (submitting) {
+    return <AuthPending label={t('auth.signingIn')} />
+  }
+
   return (
-    <form onSubmit={handleSubmit}>
-      <h1>{t('auth.signIn')}</h1>
-      {error && <p role="alert">{error}</p>}
-      <label>
-        {t('auth.email')}
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-      </label>
-      <label>
-        {t('auth.password')}
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-      </label>
-      <button type="submit" disabled={submitting}>
-        {submitting ? t('auth.signingIn') : t('auth.signIn')}
-      </button>
-    </form>
+    <AuthShell
+      title={t('auth.signIn')}
+      description={t('auth.welcome')}
+      footer={
+        <>
+          <span className="text-fg-secondary">{t('auth.dontHaveAccount')}</span>
+          <Link to="/register">{t('auth.createAccount')}</Link>
+        </>
+      }
+    >
+      {error && (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <form className="grid gap-panel-gap" onSubmit={handleSubmit}>
+        <TextField
+          label={t('auth.email')}
+          type="email"
+          value={email}
+          required
+          placeholder={t('auth.emailPlaceholder')}
+          onChange={setEmail}
+        />
+        <TextField
+          label={t('auth.password')}
+          type="password"
+          value={password}
+          required
+          placeholder={t('auth.passwordPlaceholder')}
+          onChange={setPassword}
+        />
+        <Button type="submit" variant="primary">
+          {t('auth.signIn')}
+        </Button>
+      </form>
+    </AuthShell>
   )
 }

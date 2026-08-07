@@ -36,6 +36,16 @@ describe('router', () => {
     expect(paths).toContain('/accept-invitation/:token')
     expect(paths).toContain('/microclimates/:id/respond')
     expect(paths).toContain('/survey/:id')
+
+    // #81's auth states. Each is a state the app is in BECAUSE there is no usable
+    // session, so putting any of them behind RequireAuth would redirect it to
+    // /login and lose the reason it exists. /auth/inactive is the subtle one --
+    // its visitor does hold a token, and it is public because RequireAuth is what
+    // sends them there; a guard that redirects into itself is a loop.
+    expect(paths).toContain('/register')
+    expect(paths).toContain('/auth/error')
+    expect(paths).toContain('/auth/inactive')
+    expect(paths).toContain('/auth/success')
   })
 
   /**
@@ -86,6 +96,9 @@ describe('router', () => {
     // resolves the caller's own user row and checks the survey's department targets
     // itself, so every role that can be sent a survey can load this.
     expect(paths).toContain('/surveys/:id/respond')
+    // #142. Flat rather than nested under a company: the page takes its company
+    // from company-context, so one route serves super_admin and company_admin.
+    expect(paths).toContain('/departments')
   })
 
   it('has an error element so a thrown render does not blank the page', () => {

@@ -160,7 +160,30 @@
     "accountCreatedDetail": "Your account has been created successfully. Your administrator will be in touch with next steps.",
     "emailForShareableLink": "Email (only needed for a shareable link)",
     "signingIn": "Signing in…",
-    "creatingAccount": "Creating account…"
+    "creatingAccount": "Creating account…",
+    "registerDetail": "Create an account with your work email address.",
+    "companyFromDomain": "You will join the organization registered to {domain}. This is decided by your email address and cannot be changed here.",
+    "companyFromDomainHint": "Use your work email — the organization you join is decided by its domain.",
+    "acceptInvitationDetail": "Set a name and a password to finish creating your account.",
+    "invitationRequiredTitle": "An invitation is needed for this address",
+    "invitationRequiredDetail": "Ask an administrator at your organization to invite you. They can send an invitation link, or register your email domain so that anyone with an address at it can sign up.",
+    "accountCreatedFor": "Welcome, {name}. Your account is ready.",
+    "accountCreatedRoleNote": "You have been added as an employee. An administrator can change your role and department later.",
+    "joinedOrganization": "Organization",
+    "continueToApp": "Continue",
+    "backToSignIn": "Back to sign in",
+    "errorTitle": "Sign-in is unavailable",
+    "errorDetail": "We could not complete sign-in. Please try again in a moment.",
+    "loginDisabledTitle": "Sign-in is turned off",
+    "loginDisabledDetail": "An administrator has disabled sign-in for this platform. It will come back on without any action from you.",
+    "maintenanceTitle": "Under maintenance",
+    "maintenanceDetail": "The platform is being worked on right now. Please try again shortly.",
+    "sessionExpiredTitle": "Session ended",
+    "accountInactiveTitle": "This account has been deactivated",
+    "accountInactiveDetail": "Your access has been turned off, so the application cannot load anything for you.",
+    "accountInactiveNextSteps": "Contact an administrator at your organization to have your account reactivated. Your data has not been deleted.",
+    "pendingDetail": "This only takes a moment.",
+    "pendingHint": "Contacting the server…"
   },
   "charts": {
     "noData": "No data to display",
@@ -702,7 +725,10 @@
     "averageUsersPerDepartment": "Average Users per Department",
     "maxHierarchyDepth": "Max Hierarchy Depth",
     "newDepartment": "New department",
-    "noDepartmentsYet": "No departments yet."
+    "noDepartmentsYet": "No departments yet.",
+    "summaryLine": "{total} departments · {active} active · {employees} employees assigned",
+    "parentLockedOnEdit": "The parent department cannot be changed after a department is created.",
+    "inactiveHidesFromAssignment": "Inactive departments stay on record but are not offered when assigning people."
   },
   "errors": {
     "generic": "An error occurred. Please try again.",
