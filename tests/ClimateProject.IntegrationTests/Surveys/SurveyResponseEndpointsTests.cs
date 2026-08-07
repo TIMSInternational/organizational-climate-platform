@@ -386,8 +386,16 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
         Assert.Equal(1, await _harness.WithDbAsync(db => db.Responses.CountAsync(r => r.SurveyId == survey.Id)));
 
         // And the first answer stands: a completed response is never rewritten.
+        //
+        // Scoped to THIS survey's question. An unfiltered FirstAsync() reads whichever
+        // question_responses row the database happens to return first, which -- in an
+        // assembly that shares one Postgres container across test classes -- is some
+        // earlier test's answer, not this one's. That is what made this assertion fail
+        // with Actual: "Great experience", a value no line of this test ever writes.
+        // QuestionId is a fresh guid per survey, so it scopes the read exactly.
         var stored = await _harness.WithDbAsync(db => db.QuestionResponses
             .AsNoTracking()
+            .Where(qr => qr.QuestionId == survey.Questions[0].Id)
             .Select(qr => qr.ResponseValue)
             .FirstAsync());
         Assert.Equal("\"remote\"", stored);
