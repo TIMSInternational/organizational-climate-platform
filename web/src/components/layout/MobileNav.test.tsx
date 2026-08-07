@@ -50,13 +50,18 @@ describe('MobileNav', () => {
     expect(container.querySelector('nav')).toBeNull()
   })
 
-  it('gives a role with no admin pages a bar with just their inbox', () => {
+  it('gives a role with no admin pages a bar with their own two per-user pages', () => {
     renderNav(buildNavSections('employee', COMPANY))
     const bar = screen.getByRole('navigation')
-    // The "More" drawer trigger is always present; the one destination is the inbox.
+    // The "More" drawer trigger is always present; the destinations are the two
+    // pages that authorize per *user* rather than per role -- their assigned
+    // surveys (#109) and their inbox (#99). Work destination first, inbox second.
     const links = within(bar).getAllByRole('link')
-    expect(links).toHaveLength(1)
-    expect(links[0].getAttribute('href')).toBe('/notifications')
+    expect(links).toHaveLength(2)
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/surveys/my',
+      '/notifications',
+    ])
   })
 
   it('fills its tab slots with leaf destinations, never with a group toggle', () => {
