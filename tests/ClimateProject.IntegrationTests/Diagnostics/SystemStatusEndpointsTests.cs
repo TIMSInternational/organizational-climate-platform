@@ -250,6 +250,19 @@ public class SystemStatusEndpointsTests : IAsyncLifetime
     {
         // A deployment that has legitimately never sent a notification must not report
         // degraded from the moment it is installed -- "never-run" is context, not an alarm.
+
+        // /admin/system/status reports the whole deployment, so unlike a per-tenant endpoint
+        // there is no scoping that makes "the queue is empty" true while other rows exist. The
+        // only honest way to assert the empty case is to empty it. Every class in this assembly
+        // shares one Postgres container and by the time this runs, sibling classes have left
+        // notifications behind -- which is why this read "degraded" in CI while passing in
+        // isolation. Safe to delete here: the "Postgres" collection runs its classes serially,
+        // and every test that cares about a notification creates its own.
+        await using (var cleanup = CreateContext())
+        {
+            await cleanup.Notifications.ExecuteDeleteAsync();
+        }
+
         var client = Factory.CreateClient();
         var (token, _) = await SignUpAndGetTokenAsync(client, Roles.SuperAdmin);
 
