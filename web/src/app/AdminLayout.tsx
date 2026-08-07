@@ -7,7 +7,8 @@ import { clearToken, getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import { useTranslation } from '../i18n'
 import { SkipLink } from '../components/ui'
-import { MobileNav, ShellControls } from '../components/layout'
+import { CompanyContextSwitcher, MobileNav, ShellControls } from '../components/layout'
+import { CompanyContextProvider, writeSelectedCompanyId } from '../company-context'
 import { NotificationBell } from '../features/notifications/components/NotificationBell'
 
 /**
@@ -29,12 +30,30 @@ import { NotificationBell } from '../features/notifications/components/Notificat
  * so the mobile URL bar collapsing does not leave the tab bar off-screen.
  */
 export default function AdminLayout() {
+  // A thin wrapper so `AdminShell` below keeps its original shape rather than
+  // gaining a level of indentation across 120 lines of JSX. #124's provider has to
+  // sit outside the whole shell, not just `<main>`: the header's company switcher
+  // writes the context and the routed page reads it, so a provider inside the
+  // scroll container would put the writer outside the tree of readers.
+  return (
+    <CompanyContextProvider>
+      <AdminShell />
+    </CompanyContextProvider>
+  )
+}
+
+function AdminShell() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const [collapsed, setCollapsed] = useState(false)
 
   function handleSignOut() {
     clearToken()
+    // #124: the company context is a per-*person* choice, and this browser is
+    // about to be handed to whoever logs in next. Leaving it behind would greet a
+    // second SuperAdmin with the first one's tenant already selected, which is the
+    // silent scoping this feature exists to prevent, arrived at from a new angle.
+    writeSelectedCompanyId(null)
     navigate('/login')
   }
 
@@ -108,7 +127,14 @@ export default function AdminLayout() {
               sidebar footer, which is hidden while the rail is collapsed and
               hidden entirely below `md`, which is exactly where an unread badge
               needs to be visible. */}
-          <header className="flex shrink-0 items-center justify-end border-b border-line-default bg-surface-panel px-gutter py-1">
+          <header className="flex shrink-0 items-center justify-end gap-gutter border-b border-line-default bg-surface-panel px-gutter py-1">
+            {/* #124's company-context selector. Renders `null` for every role but
+                SuperAdmin, so the strip is unchanged for everyone else — the bell
+                stays flush right and nothing shifts. It is here rather than in
+                `ShellControls` for the reason that block is hidden on a collapsed
+                rail and below `md`: a global scope switch that disappears while
+                the pages it scopes stay visible is worse than none. */}
+            <CompanyContextSwitcher />
             <NotificationBell />
           </header>
 

@@ -53,11 +53,20 @@ export interface NavSection {
 // - Any other role (employee/supervisor/leader): no admin pages exist for them
 //   yet (see postAcceptRoute.ts) -- empty nav, not a broken link.
 //
-// Action Plans is intentionally NOT in the SuperAdmin section: /action-plans has
-// no company-picker (see ActionPlansListPage.tsx), so a SuperAdmin landing on it
-// would be silently scoped to whatever company their own user row happens to
-// point at, not shown a genuine cross-company view. Add it back once #57
-// (cross-cutting company-context selector) lands.
+// Action Plans, Microclimates and AI Insights ARE in the SuperAdmin section, as
+// of #124. They were withheld because those pages had no company-picker, so a
+// SuperAdmin landing on one would have been silently scoped to whatever company
+// their own user row happened to point at (Action Plans, Microclimates) or would
+// have had nothing at all to ask the API for, since #191 makes a global
+// SuperAdmin's companyId claim the empty string (AI Insights).
+//
+// The picker now exists: `company-context/` holds one selection for the whole
+// shell, `components/layout/CompanyContextSwitcher.tsx` renders it in the header
+// for this role only, and `resolveCompanyScope` is where the rule that a
+// SuperAdmin's company is their *explicit selection and never their claim* lives.
+// A SuperAdmin who has selected nothing lands on "choose a company", which is the
+// outcome these entries were held back to avoid getting wrong -- so the reason to
+// withhold them is gone, and with it the reason to make the pages unreachable.
 //
 // Notifications (#99) is the one entry every role gets, including the roles that
 // previously got an empty array. `/notifications/mine` authorizes per **user**,
@@ -86,15 +95,38 @@ export function buildNavSections(role: string | undefined, companyId: string | u
               { labelKey: 'navigation.systemSettings', href: '/admin/system-settings', icon: Settings },
             ],
           },
-          // Benchmarks IS offered to a SuperAdmin, unlike Action Plans above.
-          // `GET /admin/benchmarks` returns every tenant's benchmarks plus the
-          // global ones for this role, so the page is a real cross-company view
-          // rather than a silent single-company one -- the missing #57 picker is
-          // not load-bearing here (see BenchmarksPage.tsx).
+          // Benchmarks was offered to a SuperAdmin even before #124, and stays
+          // exactly where it was. `GET /admin/benchmarks` returns every tenant's
+          // benchmarks plus the global ones for this role, so the page is a real
+          // cross-company view rather than a silent single-company one -- the
+          // picker was never load-bearing here (see BenchmarksPage.tsx), and
+          // #124 deliberately does NOT push the selected company onto it. Forcing
+          // one company onto the one genuinely cross-company page would be the
+          // selector breaking the case it was built to protect.
+          //
+          // Its position also matters: it is third, so the four-slot mobile tab
+          // bar still offers Companies / System settings / Benchmarks, unchanged
+          // by the three entries appended below.
           {
             labelKey: 'navigation.benchmarks',
             href: '/analytics/benchmarks',
             icon: Gauge,
+          },
+          // Restored by #124 -- see the block comment above.
+          {
+            labelKey: 'navigation.actionPlans',
+            href: '/action-plans',
+            icon: Target,
+          },
+          {
+            labelKey: 'navigation.microclimates',
+            href: '/microclimates',
+            icon: Waves,
+          },
+          {
+            labelKey: 'navigation.aiInsights',
+            href: '/analytics/ai-insights',
+            icon: Sparkles,
           },
           // Last on purpose: `leafNavItems` feeds the first four leaves to the mobile
           // tab bar, so Notifications sits behind "More" instead of displacing a
@@ -135,12 +167,11 @@ export function buildNavSections(role: string | undefined, companyId: string | u
             href: '/analytics/benchmarks',
             icon: Gauge,
           },
-          // AI Insights is CompanyAdmin-only, and deliberately not in the
-          // SuperAdmin section above. `GET /admin/ai-insights` takes a required
-          // company id, and since #191 a global SuperAdmin's `companyId` claim is
-          // the empty string (`User.CompanyId` is `Guid?`, NULL meaning no
-          // tenant) -- so the page would have nothing to ask for. Revisit with
-          // #57's company selector.
+          // AI Insights, for a CompanyAdmin, takes its company from their own
+          // claim. `GET /admin/ai-insights` requires a company id, and this is the
+          // role that always has one. A SuperAdmin now gets this entry too (see
+          // the branch above): #124's selector supplies the id their claim cannot,
+          // and until they choose one the page says so rather than guessing.
           {
             labelKey: 'navigation.aiInsights',
             href: '/analytics/ai-insights',
