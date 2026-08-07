@@ -170,12 +170,7 @@ export default function MicroclimateResultsPage() {
       />
 
       <H2>{t('microclimates.participationRate')}</H2>
-      <KPIDisplay
-        kpis={resultsKpis(live, t)}
-        columns={4}
-        locale={locale}
-        title={t('microclimates.participationRate')}
-      />
+      <KPIDisplay kpis={resultsKpis(live, t)} columns={4} locale={locale} />
 
       <div className="mt-panel-gap flex flex-wrap items-center gap-inline">
         <span className="text-fg-secondary">{t('microclimates.kpiEngagement')}</span>
@@ -191,7 +186,7 @@ export default function MicroclimateResultsPage() {
           description={t('microclimates.targetParticipantsHint')}
         />
       ) : (
-        <PieChart data={slices} donut title={t('microclimates.resultsSplitTitle')} />
+        <PieChart data={slices} donut />
       )}
 
       <H2>{t('microclimates.resultsWordsTitle')}</H2>
@@ -202,7 +197,6 @@ export default function MicroclimateResultsPage() {
         words={live.wordCloud}
         responseCount={live.responseCount}
         variant="bars"
-        title={t('microclimates.resultsWordsTitle')}
       />
 
       <H2>{t('microclimates.resultsQuestionsTitle')}</H2>

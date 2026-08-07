@@ -18,8 +18,15 @@ interface MicroclimateWordPanelProps {
   words: readonly WordCloudEntry[]
   /** The session's own response total. The suppression floor is about people, not words. */
   responseCount: number
-  /** Already-translated heading, passed to the chart for its accessible name. */
-  title: string
+  /**
+   * Already-translated heading, passed to the chart for its accessible name.
+   *
+   * Optional, because a caller that already renders its own section heading above
+   * this panel must be able to leave it off. Passing it in that case drew the same
+   * words twice — once as the page's `<H2>` and again as the chart's `<figcaption>`.
+   * The live view has no heading of its own and does pass one.
+   */
+  title?: string
   /**
    * `cloud` while the session is running — the ranking is glanceable and the panel
    * does not change height as words arrive. `bars` on the results page, where the
