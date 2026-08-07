@@ -229,6 +229,10 @@ describe('leafNavItems', () => {
       // would take the fourth mobile tab slot away from Action Plans.
       '/admin/companies/company-1/reports',
       '/admin/companies/company-1/analytics',
+      // #142. Top-level rather than inside the admin group, and appended after the
+      // existing rows: nested, it would flatten ahead of Action Plans and take its
+      // fourth mobile tab slot.
+      '/departments',
       // Last, for the same four-slot reason -- see 'puts Notifications last' above.
       '/notifications',
     ])
@@ -252,7 +256,33 @@ describe('leafNavItems', () => {
       // four leaves are untouched.
       '/surveys',
       '/surveys/templates',
+      // #142, appended for the same reason as the two above.
+      '/departments',
       '/notifications',
+    ])
+  })
+
+  /**
+   * The pin behind both `toEqual`s above, stated once as its own assertion.
+   *
+   * The two lists are long enough that appending to them is easy and reordering
+   * them is easy by accident. What actually matters is the first four leaves of
+   * each role: `MobileNav` renders exactly those as the bottom tab bar. This
+   * fails loudly if a future entry is inserted rather than appended, without
+   * anyone having to notice which of thirteen hrefs moved.
+   */
+  it('keeps the four mobile tab slots each role already had', () => {
+    expect(leafNavItems(buildNavSections('super_admin', 'company-1')).slice(0, 4).map((item) => item.href)).toEqual([
+      '/admin/companies',
+      '/admin/system-settings',
+      '/analytics/benchmarks',
+      '/action-plans',
+    ])
+    expect(leafNavItems(buildNavSections('company_admin', 'company-1')).slice(0, 4).map((item) => item.href)).toEqual([
+      '/admin/companies/company-1',
+      '/admin/companies/company-1/users',
+      '/admin/companies/company-1/demographic-fields',
+      '/action-plans',
     ])
   })
 

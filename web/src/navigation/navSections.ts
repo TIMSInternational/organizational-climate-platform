@@ -14,6 +14,7 @@ import {
   ClipboardList,
   Inbox,
   LayoutTemplate,
+  Network,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -122,6 +123,25 @@ const SURVEY_TEMPLATES_ITEM: NavItem = {
   icon: LayoutTemplate,
 }
 
+// Departments (#142). Admin-only: `/admin/departments` allows a super_admin
+// always and a company_admin on their own company, and 403s everyone else, so it
+// belongs to the two admin branches and not the fallback.
+//
+// No companyId is interpolated even though the endpoint *requires* one — the page
+// takes it from `company-context` (#124), which is what lets a single entry serve
+// a super_admin (their explicit selection) and a company_admin (their claim)
+// without two different hrefs.
+//
+// Appended immediately before NOTIFICATIONS_ITEM in both branches, and
+// deliberately NOT inside the company_admin group's `sub`: `leafNavItems` flattens
+// a group's children ahead of the top-level rows that follow it, so a nested entry
+// would become the fourth leaf and take Action Plans' mobile tab slot.
+const DEPARTMENTS_ITEM: NavItem = {
+  labelKey: 'navigation.departments',
+  href: '/departments',
+  icon: Network,
+}
+
 export function buildNavSections(role: string | undefined, companyId: string | undefined): NavSection[] {
   if (role === 'super_admin') {
     return [
@@ -181,6 +201,7 @@ export function buildNavSections(role: string | undefined, companyId: string | u
           // load-bearing here.
           SURVEYS_ITEM,
           SURVEY_TEMPLATES_ITEM,
+          DEPARTMENTS_ITEM,
           // Last on purpose: `leafNavItems` feeds the first four leaves to the mobile
           // tab bar, so Notifications sits behind "More" instead of displacing a
           // primary page. navSections.test.ts pins this position.
@@ -258,6 +279,7 @@ export function buildNavSections(role: string | undefined, companyId: string | u
             href: `/admin/companies/${companyId}/analytics`,
             icon: ChartColumn,
           },
+          DEPARTMENTS_ITEM,
           // Last on purpose -- see the super_admin branch. A company_admin's first
           // four leaves are their own company's pages; Notifications must not push
           // one of them off the mobile tab bar.

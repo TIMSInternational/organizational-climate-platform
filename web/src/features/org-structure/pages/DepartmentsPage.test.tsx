@@ -1,0 +1,283 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router'
+import DepartmentsPage from './DepartmentsPage'
+import { TranslationProvider } from '../../../i18n'
+import { setToken, clearToken } from '../../../auth/token'
+import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
+import type { Department } from '../api/departments'
+
+function tokenFor(claims: Record<string, unknown>): string {
+  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  return `header.${body}.signature`
+}
+
+const OWN = 'company-1'
+
+function department(overrides: Partial<Department> = {}): Department {
+  return {
+    id: 'd1',
+    companyId: OWN,
+    name: 'Engineering',
+    description: 'Builds the product',
+    parentDepartmentId: null,
+    isActive: true,
+    employeeCount: 12,
+    ...overrides,
+  }
+}
+
+function renderPage() {
+  return render(
+    <TranslationProvider>
+      <MemoryRouter>
+        <CompanyContextProvider>
+          <DepartmentsPage />
+        </CompanyContextProvider>
+      </MemoryRouter>
+    </TranslationProvider>,
+  )
+}
+
+/** Answers the list endpoint with whatever `rows()` currently returns. */
+function serveList(rows: () => Department[]) {
+  vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+    if (/\/admin\/departments\?/.test(String(input))) {
+      return Promise.resolve(new Response(JSON.stringify({ departments: rows() }), { status: 200 }))
+    }
+    return Promise.resolve(new Response(null, { status: 404 }))
+  })
+}
+
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn())
+  setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+})
+
+afterEach(() => {
+  cleanup()
+  clearToken()
+  localStorage.removeItem(COMPANY_CONTEXT_STORAGE_KEY)
+  vi.unstubAllGlobals()
+})
+
+describe('DepartmentsPage scoping', () => {
+  it('asks the API for the company_admin own company, taken from the claim', async () => {
+    serveList(() => [department()])
+
+    renderPage()
+
+    expect(await screen.findByText('Engineering')).toBeTruthy()
+    const urls = vi.mocked(fetch).mock.calls.map((call) => String(call[0]))
+    expect(urls.some((url) => url.includes(`companyId=${OWN}`))).toBe(true)
+  })
+
+  it('refuses to guess a company for a super_admin who has selected none', async () => {
+    // `GET /admin/departments` takes companyId as a REQUIRED query parameter, so
+    // there is no cross-company answer to fall back on. Ask, do not guess (#124).
+    clearToken()
+    setToken(tokenFor({ role: 'super_admin', companyId: '' }))
+    serveList(() => [department()])
+
+    renderPage()
+
+    expect(await screen.findByText('Choose a company')).toBeTruthy()
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+  })
+
+  it('never falls back to a super_admin own companyId claim', async () => {
+    clearToken()
+    setToken(tokenFor({ role: 'super_admin', companyId: 'their-own-row' }))
+    serveList(() => [department()])
+
+    renderPage()
+
+    expect(await screen.findByText('Choose a company')).toBeTruthy()
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+  })
+
+  it('loads the company a super_admin selected', async () => {
+    clearToken()
+    setToken(tokenFor({ role: 'super_admin', companyId: '' }))
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'chosen-co')
+    serveList(() => [department({ companyId: 'chosen-co', name: 'Operations' })])
+
+    renderPage()
+
+    expect(await screen.findByText('Operations')).toBeTruthy()
+    const urls = vi.mocked(fetch).mock.calls.map((call) => String(call[0]))
+    expect(urls.some((url) => url.includes('companyId=chosen-co'))).toBe(true)
+  })
+})
+
+describe('DepartmentsPage states', () => {
+  it('separates a 200-with-no-rows from a failed request', async () => {
+    serveList(() => [])
+    renderPage()
+
+    expect(await screen.findByText('No departments yet.')).toBeTruthy()
+    expect(screen.queryByText('Failed to load departments. Please try again.')).toBeNull()
+  })
+
+  it('shows an error with a retry, not an empty state, when the request fails', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ message: 'Forbidden' }), { status: 403 }))
+
+    renderPage()
+
+    expect(await screen.findByText('Failed to load departments. Please try again.')).toBeTruthy()
+    expect(screen.queryByText('No departments yet.')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+  })
+
+  it('re-requests the list when retried', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ message: 'Forbidden' }), { status: 403 }))
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Retry' }))
+
+    await waitFor(() => {
+      expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThan(1)
+    })
+  })
+})
+
+describe('DepartmentsPage listing', () => {
+  it('renders rows in the Table primitive with a resolved parent name', async () => {
+    serveList(() => [
+      department({ id: 'parent', name: 'Engineering' }),
+      department({ id: 'child', name: 'Platform', parentDepartmentId: 'parent', employeeCount: 4 }),
+    ])
+
+    renderPage()
+
+    const row = (await screen.findByText('Platform')).closest('tr')
+    expect(row).toBeTruthy()
+    // The name, never the raw GUID.
+    expect(within(row!).getByText('Engineering')).toBeTruthy()
+    expect(within(row!).queryByText('parent')).toBeNull()
+  })
+
+  it('labels an inactive department in words, not by colour alone', async () => {
+    serveList(() => [department({ isActive: false })])
+
+    renderPage()
+
+    const row = (await screen.findByText('Engineering')).closest('tr')
+    expect(within(row!).getByText('Inactive')).toBeTruthy()
+  })
+
+  it('keeps a hidden parent name resolvable while filtering', async () => {
+    // The parent is inactive and the toggle hides it, but the child still knows
+    // whose child it is — resolving against the visible rows alone would blank it.
+    serveList(() => [
+      department({ id: 'parent', name: 'Engineering', isActive: false }),
+      department({ id: 'child', name: 'Platform', parentDepartmentId: 'parent' }),
+    ])
+
+    renderPage()
+    await screen.findByText('Platform')
+    await userEvent.click(screen.getByLabelText('Show inactive'))
+
+    const row = screen.getByText('Platform').closest('tr')
+    expect(within(row!).getByText('Engineering')).toBeTruthy()
+  })
+
+  it('filters by search and says so rather than claiming there are none', async () => {
+    serveList(() => [
+      department({ id: 'a', name: 'Engineering' }),
+      department({ id: 'b', name: 'Finance' }),
+    ])
+
+    renderPage()
+    await screen.findByText('Engineering')
+    await userEvent.type(screen.getByLabelText('Search'), 'zzz')
+
+    expect(await screen.findByText('No departments found')).toBeTruthy()
+    // Not the "nothing exists yet" copy — the company has two departments.
+    expect(screen.queryByText('No departments yet.')).toBeNull()
+  })
+})
+
+describe('DepartmentsPage create and edit', () => {
+  it('creates a department and reloads the list', async () => {
+    const rows: Department[] = []
+    vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        const created = department({ id: 'new', name: 'Finance', description: '', employeeCount: 0 })
+        rows.push(created)
+        return Promise.resolve(new Response(JSON.stringify(created), { status: 201 }))
+      }
+      return Promise.resolve(new Response(JSON.stringify({ departments: rows }), { status: 200 }))
+    })
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'New department' }))
+    await userEvent.type(screen.getByLabelText(/Name/), 'Finance')
+    await userEvent.click(screen.getByRole('button', { name: 'Create Department' }))
+
+    expect(await screen.findByText('Finance')).toBeTruthy()
+
+    const post = vi.mocked(fetch).mock.calls.find((call) => call[1]?.method === 'POST')
+    expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({ companyId: OWN, name: 'Finance', isActive: true })
+  })
+
+  it('omits an empty description rather than sending a zero-length one', async () => {
+    vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return Promise.resolve(new Response(JSON.stringify(department()), { status: 201 }))
+      }
+      return Promise.resolve(new Response(JSON.stringify({ departments: [] }), { status: 200 }))
+    })
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'New department' }))
+    await userEvent.type(screen.getByLabelText(/Name/), 'Finance')
+    await userEvent.click(screen.getByRole('button', { name: 'Create Department' }))
+
+    await waitFor(() => {
+      expect(vi.mocked(fetch).mock.calls.some((call) => call[1]?.method === 'POST')).toBe(true)
+    })
+    const post = vi.mocked(fetch).mock.calls.find((call) => call[1]?.method === 'POST')
+    expect(Object.hasOwn(JSON.parse(String(post?.[1]?.body)), 'description')).toBe(false)
+  })
+
+  it('surfaces the server validation message instead of a generic one', async () => {
+    vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return Promise.resolve(
+          new Response(JSON.stringify({ message: 'Department with this name already exists at this level' }), { status: 400 }),
+        )
+      }
+      return Promise.resolve(new Response(JSON.stringify({ departments: [department()] }), { status: 200 }))
+    })
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'New department' }))
+    await userEvent.type(screen.getByLabelText(/Name/), 'Engineering')
+    await userEvent.click(screen.getByRole('button', { name: 'Create Department' }))
+
+    expect(await screen.findByText('Department with this name already exists at this level')).toBeTruthy()
+  })
+
+  it('sends only the three fields PUT accepts, and locks the parent selector', async () => {
+    vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return Promise.resolve(new Response(JSON.stringify(department({ name: 'Engineering & Platform' })), { status: 200 }))
+      }
+      return Promise.resolve(new Response(JSON.stringify({ departments: [department()] }), { status: 200 }))
+    })
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+
+    // `UpdateDepartmentRequest` has no ParentDepartmentId field, so offering an
+    // editable control here would silently discard the change.
+    expect(screen.getByLabelText('Parent Department')).toHaveProperty('disabled', true)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    const put = vi.mocked(fetch).mock.calls.find((call) => call[1]?.method === 'PUT')
+    expect(Object.keys(JSON.parse(String(put?.[1]?.body))).sort()).toEqual(['description', 'isActive', 'name'])
+  })
+})

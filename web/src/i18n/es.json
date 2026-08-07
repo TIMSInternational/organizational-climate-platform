@@ -669,7 +669,10 @@
     "averageUsersPerDepartment": "Usuarios Promedio por Departamento",
     "maxHierarchyDepth": "Profundidad Máxima de Jerarquía",
     "newDepartment": "Nuevo Departamento",
-    "noDepartmentsYet": "Aún no hay departamentos."
+    "noDepartmentsYet": "Aún no hay departamentos.",
+    "summaryLine": "{total} departamentos · {active} activos · {employees} empleados asignados",
+    "parentLockedOnEdit": "El departamento padre no se puede cambiar una vez creado el departamento.",
+    "inactiveHidesFromAssignment": "Los departamentos inactivos se conservan, pero no se ofrecen al asignar personas."
   },
   "errors": {
     "generic": "Ocurrió un error. Por favor intenta nuevamente.",

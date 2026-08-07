@@ -669,7 +669,10 @@
     "averageUsersPerDepartment": "Average Users per Department",
     "maxHierarchyDepth": "Max Hierarchy Depth",
     "newDepartment": "New department",
-    "noDepartmentsYet": "No departments yet."
+    "noDepartmentsYet": "No departments yet.",
+    "summaryLine": "{total} departments · {active} active · {employees} employees assigned",
+    "parentLockedOnEdit": "The parent department cannot be changed after a department is created.",
+    "inactiveHidesFromAssignment": "Inactive departments stay on record but are not offered when assigning people."
   },
   "errors": {
     "generic": "An error occurred. Please try again.",

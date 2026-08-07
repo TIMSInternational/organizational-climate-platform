@@ -9,6 +9,7 @@ import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage
 import UsersListPage from '../features/org-structure/pages/UsersListPage'
 import SystemSettingsPage from '../features/org-structure/pages/SystemSettingsPage'
 import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
+import DepartmentsPage from '../features/org-structure/pages/DepartmentsPage'
 import ActionPlansListPage from '../features/action-plans/pages/ActionPlansListPage'
 import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetailPage'
 import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
@@ -96,6 +97,10 @@ export const router = createBrowserRouter([
               { path: '/admin/companies/:companyId/reports', element: <ReportsListPage /> },
               { path: '/admin/companies/:companyId/analytics', element: <AnalyticsDashboardPage /> },
               { path: '/admin/system-settings', element: <SystemSettingsPage /> },
+              // Flat, with no company id in the path (#142), like /surveys and
+              // /action-plans: the page takes its company from `company-context`,
+              // so one route and one nav entry serve both admin roles.
+              { path: '/departments', element: <DepartmentsPage /> },
               { path: '/action-plans', element: <ActionPlansListPage /> },
               { path: '/action-plans/:id', element: <ActionPlanDetailPage /> },
               { path: '/microclimates', element: <MicroclimatesListPage /> },
