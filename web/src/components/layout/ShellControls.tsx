@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { BellRing, LogOut } from 'lucide-react'
 import { useTranslation, LanguageSwitcher } from '../../i18n'
+import { Avatar, AvatarFallback } from '../ui/avatar'
+import { getToken } from '../../auth/token'
+import { decodeJwtPayload } from '../../auth/jwt'
 import { readAdminThemeMode, setAdminThemeMode, type AdminThemeMode } from '../../theme/adminTheme'
 
 const THEME_MODES: readonly AdminThemeMode[] = ['light', 'dark', 'system']
@@ -75,6 +78,61 @@ export function ThemeSwitcher() {
   )
 }
 
+/**
+ * Who is signed in, at the foot of the rail — the ForMaps sidebar's user block.
+ *
+ * Reads the JWT rather than taking props, for the same reason `AdminLayout` does:
+ * the claims are the only thing that knows, there is no `/auth/me` on this API, and
+ * threading name and role down through the shell would mean two components could
+ * disagree about who is signed in.
+ *
+ * The role vocabulary is snake_case on the wire (`company_admin`) and camelCase in
+ * the catalogue (`users.companyAdmin`), so it is mapped explicitly rather than
+ * transformed — an unrecognised role then renders nothing instead of a half-built
+ * key like `users.some_new_role` appearing in the sidebar.
+ */
+const ROLE_LABEL_KEY: Record<string, string> = {
+  super_admin: 'users.superAdmin',
+  company_admin: 'users.companyAdmin',
+  leader: 'users.leader',
+  supervisor: 'users.supervisor',
+  employee: 'users.employee',
+}
+
+function SidebarUser() {
+  const { t } = useTranslation()
+  const token = getToken()
+  const claims = token ? decodeJwtPayload(token) : null
+  const name = typeof claims?.name === 'string' ? claims.name : undefined
+  const role = typeof claims?.role === 'string' ? claims.role : undefined
+
+  // No name means no block. A tile showing a blank initial over an empty line is
+  // worse than nothing there, and says less than the sign-out button below it.
+  if (!name) return null
+
+  const roleKey = role ? ROLE_LABEL_KEY[role] : undefined
+
+  return (
+    <div className="flex w-full items-center gap-inline">
+      <Avatar className="size-icon-box shrink-0">
+        {/* The initial, not an image: there is no avatar upload in this product,
+            so an <AvatarImage> would always fall through to this anyway. */}
+        <AvatarFallback className="text-2xs font-semibold">
+          {name.trim().charAt(0).toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+      <span className="flex min-w-0 flex-col">
+        {/* `truncate` on both: the rail is a fixed width and a long name has to
+            clip rather than widen it or wrap into the controls below. */}
+        <span className="truncate text-sm font-medium text-fg-primary">{name}</span>
+        {roleKey ? (
+          <span className="truncate text-2xs text-fg-tertiary">{t(roleKey)}</span>
+        ) : null}
+      </span>
+    </div>
+  )
+}
+
 export interface ShellControlsProps {
   onSignOut: () => void
 }
@@ -109,6 +167,7 @@ export function ShellControls({ onSignOut }: ShellControlsProps) {
         borderTop: '1px solid var(--admin-border-light)',
       }}
     >
+      <SidebarUser />
       <LanguageSwitcher />
       <ThemeSwitcher />
       <Link to="/settings/notifications" className="flex items-center gap-inline text-sm text-fg-secondary hover:text-fg-primary">
