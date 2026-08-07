@@ -17,7 +17,11 @@ public class User
     public required string Name { get; set; }
     public string? PasswordHash { get; set; }
     public required string Role { get; set; }
-    public string? NodoId { get; set; }
+
+    // There is deliberately no NodoId here. The dropped nodo_id column (#151) was written by
+    // nothing and read only to mint the nodoId JWT claim, which was therefore always empty.
+    // A user's node is DepartmentId; the tracking-facing nodo_id is DERIVED from it by
+    // TrackingIdentifiers, never stored, so it cannot fall out of sync with the department.
     public string? PersonaExternalId { get; set; }
     public Guid? DepartmentId { get; set; }
     public Guid? ManagerId { get; set; }

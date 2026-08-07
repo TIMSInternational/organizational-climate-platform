@@ -29,3 +29,4 @@ export {
   type GridGap,
 } from './DashboardGrid'
 export { ShellControls, ThemeSwitcher, type ShellControlsProps } from './ShellControls'
+export { CompanyContextSwitcher } from './CompanyContextSwitcher'

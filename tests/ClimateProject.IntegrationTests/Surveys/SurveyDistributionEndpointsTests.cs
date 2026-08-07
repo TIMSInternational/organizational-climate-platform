@@ -563,7 +563,16 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
             client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [employee], ExpiresInDays: 365));
 
         var invitation = await InvitationRowAsync(result.InvitationIds[0]);
-        Assert.Equal(survey.EndDate, invitation.ExpiresAt);
+
+        // Compared at microsecond precision, not exactly. Postgres 'timestamptz' stores
+        // microseconds while .NET DateTimeOffset ticks are 100ns, so a value that has been
+        // through the database and one that has not can differ in the last digit --
+        // 2026-08-20T23:10:30.2969884 vs ...2969880. survey.EndDate comes back from the create
+        // response, invitation.ExpiresAt is read from the row, so exactly one side is
+        // truncated. The clamp this test is about is a whole-day rule; sub-microsecond
+        // equality was never the property, and asserting it makes the test fail on storage
+        // precision rather than on behaviour.
+        Assert.Equal(survey.EndDate, invitation.ExpiresAt, TimeSpan.FromMicroseconds(1));
     }
 
     [Fact]

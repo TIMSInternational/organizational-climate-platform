@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ClimateProject.Api.Endpoints;
+using ClimateProject.Application.ActionPlans;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Reports;
@@ -415,5 +416,46 @@ public class CompanyLessSuperAdminTests : IAsyncLifetime
 
         var globalScope = await client.PostAsJsonAsync("/auth/admin/reset-credentials", new ResetCredentialsRequest(superAdminId));
         Assert.Equal(HttpStatusCode.NotFound, globalScope.StatusCode);
+    }
+
+    /// <summary>
+    /// The server half of #124: a company-less super_admin can drive a company-scoped
+    /// endpoint by naming the company explicitly, for any company they choose.
+    /// </summary>
+    /// <remarks>
+    /// This is what the web app's new company-context selector relies on. The selector
+    /// does not invent an override parameter -- it fills in the <c>companyId</c> these
+    /// endpoints already required, which the caller's own claim can no longer supply now
+    /// that it is <see cref="string.Empty"/>. The companion guard lives beside the
+    /// endpoint it protects, as
+    /// <c>ActionPlanEndpointsTests.CompanyAdmin_cannot_list_another_companys_plans_via_the_companyId_parameter</c>:
+    /// the same parameter refuses a CompanyAdmin who names someone else's company.
+    /// </remarks>
+    [Fact]
+    public async Task Company_less_super_admin_can_list_action_plans_for_any_company_they_name()
+    {
+        var client = _factory.CreateClient();
+        var (superAdminToken, _) = await SignUpAndGetTokenAsync(client, Roles.SuperAdmin, _companyADomain, companyId: null);
+        var (companyAdminBToken, _) = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyBDomain, _companyBId);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", companyAdminBToken);
+        var created = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            "B's plan", "desc", _companyBId, null, DateTimeOffset.UtcNow.AddDays(10), "low", null, null, null, null, null, null));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", superAdminToken);
+
+        var listB = await client.GetAsync($"/action-plans?companyId={_companyBId}");
+        Assert.Equal(HttpStatusCode.OK, listB.StatusCode);
+        var plansB = (await listB.Content.ReadFromJsonAsync<ActionPlanListResponse>())!.ActionPlans;
+        Assert.Contains(plansB, p => p.CompanyId == _companyBId);
+
+        // And the *other* company, from the same session: the selector switches context
+        // without re-authenticating, so both must work for one token.
+        var listA = await client.GetAsync($"/action-plans?companyId={_companyAId}");
+        Assert.Equal(HttpStatusCode.OK, listA.StatusCode);
+        Assert.DoesNotContain(
+            (await listA.Content.ReadFromJsonAsync<ActionPlanListResponse>())!.ActionPlans,
+            p => p.CompanyId == _companyBId);
     }
 }

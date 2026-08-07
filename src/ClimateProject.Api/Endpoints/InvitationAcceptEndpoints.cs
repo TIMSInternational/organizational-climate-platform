@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Domain.Entities;
@@ -139,7 +140,7 @@ public static class InvitationAcceptEndpoints
         var jwt = jwtTokenService.IssueToken(new TokenClaims(
             Sub: user.PersonaExternalId ?? user.Id.ToString(),
             Role: user.Role,
-            NodoId: user.NodoId,
+            NodoId: await NodoClaimResolver.ResolveAsync(db, user, cancellationToken),
             Email: user.Email,
             Name: user.Name,
             CompanyId: user.CompanyId?.ToString() ?? string.Empty,

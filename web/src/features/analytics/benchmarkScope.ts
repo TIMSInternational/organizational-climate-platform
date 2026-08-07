@@ -71,12 +71,19 @@ export function readableBenchmarks<T extends BenchmarkListItem>(scope: Benchmark
  *
  * A CompanyAdmin can only ever create rows for their own company, so the id comes
  * off their token rather than off a form field. A SuperAdmin creates **global**
- * rows (`null`): they are the only role permitted to, and the alternative —
- * letting a SuperAdmin pick an arbitrary tenant — needs a company picker this app
- * does not have yet. `ActionPlansListPage` blocks SuperAdmin outright for the same
- * missing picker; here there is a genuine SuperAdmin-shaped action available
- * without one, so the page offers that instead of nothing. Revisit when #57
- * (cross-cutting company-context selector) lands.
+ * rows (`null`): they are the only role permitted to, and a global row is the
+ * SuperAdmin-shaped action here.
+ *
+ * #124 landed the company-context selector this used to be waiting on, and this
+ * function deliberately **does not read it**. Benchmarks is the one page whose
+ * SuperAdmin view is genuinely cross-company — `GET /admin/benchmarks` returns
+ * every tenant's rows for this role, which is why `navSections.ts` offered it to a
+ * SuperAdmin all along while withholding Action Plans. Piping the selected company
+ * in here would narrow that view to one tenant and turn a SuperAdmin's creates
+ * into single-company rows, i.e. the selector breaking the exact case it exists to
+ * protect. If a SuperAdmin ever needs to author a benchmark *for* one company,
+ * that is a deliberate choice on this page (a scope field on the form), not a
+ * silent consequence of the header dropdown.
  *
  * Returns `undefined` for a caller who may not create at all, so the page can
  * hide the form rather than build a request the API will refuse.

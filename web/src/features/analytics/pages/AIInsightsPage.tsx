@@ -9,8 +9,7 @@ import {
 import InsightList from '../components/InsightList'
 import InsightDetailPanel from '../components/InsightDetailPanel'
 import { getUser } from '../../org-structure/api/users'
-import { getToken } from '../../../auth/token'
-import { decodeJwtPayload } from '../../../auth/jwt'
+import { useCompanyScope } from '../../../company-context'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { Button, EmptyState, ErrorState } from '../../../components/ui'
@@ -48,15 +47,13 @@ import { Button, EmptyState, ErrorState } from '../../../components/ui'
 export default function AIInsightsPage() {
   const { t } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const token = getToken()
-  const claims = token ? decodeJwtPayload(token) : null
-  // An empty string, not a missing claim, is what a global super-admin carries:
-  // since #191 `User.CompanyId` is `Guid?` and `AuthEndpoints` emits
-  // `user.CompanyId?.ToString() ?? string.Empty`. Normalising here keeps every
-  // downstream check a plain `companyId ?` rather than one that has to remember
-  // that `''` is a third state.
-  const rawCompanyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
-  const companyId = rawCompanyId ? rawCompanyId : undefined
+  // #124. The `''`-vs-missing normalisation this page used to do inline now lives
+  // once, in `company-context/companyContext.ts`, along with the rule that a
+  // SuperAdmin's company is their explicit selection and never their own claim.
+  // That rule is what makes this page reachable for a super_admin at all --
+  // `navSections.ts` withheld it precisely because there was nothing to ask for.
+  const scope = useCompanyScope()
+  const companyId = scope.companyId
 
   const [insights, setInsights] = useState<AIInsightListItem[]>([])
   const [selected, setSelected] = useState<AIInsight | null>(null)
@@ -138,7 +135,16 @@ export default function AIInsightsPage() {
     }
   }
 
-  if (!companyId) {
+  if (scope.status === 'needs-selection') {
+    return (
+      <EmptyState
+        title={t('companyContext.chooseACompany')}
+        description={t('companyContext.chooseACompanyDescription')}
+      />
+    )
+  }
+
+  if (scope.status === 'no-company') {
     return <p role="alert">{t('common.noCompanyAssociated')}</p>
   }
 
