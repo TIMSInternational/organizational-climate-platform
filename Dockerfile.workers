@@ -1,0 +1,45 @@
+# syntax=docker/dockerfile:1
+#
+# The scheduler image. Deliberately separate from `Dockerfile`, which publishes the API only,
+# because the two are different processes with different entrypoints -- not because they are
+# different codebases. They share the solution, the DbContext, the notification sender and the
+# dispatch rules; only the host differs.
+#
+# Nothing builds this yet. Where the scheduler runs at cutover is #164's decision, and there
+# are two supported answers: deploy this image as its own App Runner service, or call
+# `AddClimateProjectScheduling` from the API host and deploy nothing new. Both are correct --
+# the advisory lease in `PostgresAdvisoryJobLease` makes the instance count irrelevant, so the
+# choice is about operational cost rather than correctness. See
+# `SchedulingServiceCollectionExtensions`.
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+ARG COMMIT_SHA=unknown
+ARG BUILD_TIMESTAMP=unknown
+
+COPY . .
+RUN dotnet restore ClimateProject.slnx
+RUN dotnet publish src/ClimateProject.Workers/ClimateProject.Workers.csproj \
+    --configuration Release \
+    --output /app/publish \
+    --no-restore \
+    /p:UseAppHost=false \
+    "/p:CommitSha=${COMMIT_SHA}" \
+    "/p:BuildTimestamp=${BUILD_TIMESTAMP}"
+
+# The runtime image, not the aspnet one: this host serves no HTTP. It also must not be an
+# Alpine variant -- digests are scheduled in each recipient's own timezone, and Alpine ships
+# without tzdata, so every IANA zone id would silently resolve to UTC and every non-UTC user
+# would get their digest at the wrong hour with no error anywhere.
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
+WORKDIR /app
+
+ENV DOTNET_ENVIRONMENT=Production
+ENV DOTNET_EnableDiagnostics=0
+
+COPY --from=build /app/publish .
+
+USER $APP_UID
+
+ENTRYPOINT ["dotnet", "ClimateProject.Workers.dll"]
