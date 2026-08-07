@@ -1,6 +1,9 @@
 import { Fragment, type ReactNode } from 'react'
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { useTranslation } from '../../i18n'
+import { getToken } from '../../auth/token'
+import { decodeJwtPayload } from '../../auth/jwt'
+import { buildNavSections, sectionTitleKeyForPath } from '../../navigation/navSections'
 import {
   Badge,
   Breadcrumb,
@@ -55,6 +58,16 @@ export interface PageBreadcrumb {
 export interface PageTopBarProps {
   /** Already-translated. Rendered as the page's `<h1>`. */
   title: string
+  /**
+   * The small-caps line over the title — ForMaps prints "STUDENT PORTAL" there.
+   *
+   * Already translated. **Normally omitted**: left off, the component names the
+   * area itself from the nav section the current route sits in, which is right
+   * for all 27 callers and stays right when a nav entry changes group. Pass it
+   * only where a page belongs somewhere the nav does not say, and pass `null` to
+   * suppress it — `undefined` means "derive it", which is not the same request.
+   */
+  eyebrow?: string | null
   /** Optional supporting line under the title. */
   description?: string
   /**
@@ -75,6 +88,7 @@ export interface PageTopBarProps {
 
 export function PageTopBar({
   title,
+  eyebrow,
   description,
   breadcrumbs,
   breadcrumbLabel,
@@ -82,6 +96,9 @@ export function PageTopBar({
   actions,
 }: PageTopBarProps) {
   const { t } = useTranslation()
+  const derivedEyebrow = useSectionEyebrow()
+  // `undefined` means derive; `null` means the caller asked for none.
+  const eyebrowText = eyebrow === undefined ? derivedEyebrow : eyebrow
 
   return (
     <div data-slot="page-top-bar" className="mb-section flex flex-col gap-inline">
@@ -122,6 +139,16 @@ export function PageTopBar({
           line. Without it the row overflows the panel horizontally. */}
       <div className="flex flex-wrap items-center justify-between gap-inline">
         <div className="min-w-0 flex-1">
+          {/* ForMaps' page eyebrow: `text-[10px] uppercase tracking-[0.2em]
+              font-bold` in the muted tone, on its own line above the title. A
+              `<p>` rather than a `<span>` so it is a block without needing a
+              utility to say so, and `m-0` because index.css gives every `p` a
+              bottom margin that would push it off the heading it belongs to. */}
+          {eyebrowText && (
+            <p className="m-0 text-2xs font-bold uppercase tracking-eyebrow text-fg-label">
+              {eyebrowText}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-inline">
             {/* No bottom margin: index.css gives every `h1` `margin-bottom: 8px`,
                 which would double up with this container's `gap`. */}
@@ -145,4 +172,31 @@ export function PageTopBar({
       <Separator />
     </div>
   )
+}
+
+/**
+ * The area the open page sits in, translated — or `null` where the nav does not
+ * cover the route.
+ *
+ * Reads the JWT the same way `AdminLayout` and `SidebarUserMenu` do, rather than
+ * taking role and company as props: the eyebrow has to be right on all 27 callers
+ * without any of them being edited, and threading two claims through 27 call
+ * sites is exactly the per-page duplication deriving it was meant to avoid.
+ *
+ * Needs a router, like the breadcrumbs above it already did — `useLocation`
+ * throws outside one, so this adds no constraint the component did not have.
+ * Returns `null` for a signed-out render (no token, so no sections) and for any
+ * route the nav does not cover, which is the honest answer in both cases.
+ */
+function useSectionEyebrow(): string | null {
+  const { t } = useTranslation()
+  const { pathname } = useLocation()
+
+  const token = getToken()
+  const claims = token ? decodeJwtPayload(token) : null
+  const role = typeof claims?.role === 'string' ? claims.role : undefined
+  const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
+
+  const titleKey = sectionTitleKeyForPath(pathname, buildNavSections(role, companyId))
+  return titleKey ? t(titleKey) : null
 }

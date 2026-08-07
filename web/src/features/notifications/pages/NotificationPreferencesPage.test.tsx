@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, cleanup, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 import { TranslationProvider } from '../../../i18n'
 import NotificationPreferencesPage from './NotificationPreferencesPage'
 import {
@@ -25,10 +26,24 @@ const SAVED: NotificationPreferences = {
   digestFrequency: 'monthly',
 }
 
+/**
+ * A router, like every other page test in the repo has. This file was the one
+ * exception, and only because the page happens to pass `PageTopBar` no
+ * breadcrumbs — the `<Link>`s that need a router are inside that block. The page
+ * eyebrow reads the current path, so the header now needs one unconditionally,
+ * which is what the other 26 page tests were already providing.
+ *
+ * `initialEntries` is the page's real route, so the eyebrow resolves to the
+ * Communication group rather than to nothing.
+ */
 function renderPage() {
+  const router = createMemoryRouter(
+    [{ path: '/settings/notifications', element: <NotificationPreferencesPage /> }],
+    { initialEntries: ['/settings/notifications'] },
+  )
   return render(
     <TranslationProvider>
-      <NotificationPreferencesPage />
+      <RouterProvider router={router} />
     </TranslationProvider>,
   )
 }

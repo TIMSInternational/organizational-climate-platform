@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { buildNavSections, leafNavItems, type NavSection } from './navSections'
+import {
+  activeHref,
+  buildNavSections,
+  isUnder,
+  leafNavItems,
+  sectionTitleKeyForPath,
+  type NavSection,
+} from './navSections'
 import { CATALOGUES, LOCALES } from '../i18n/locale'
 import { createTranslator } from '../i18n/translate'
 
@@ -298,5 +305,85 @@ describe('leafNavItems', () => {
       '/surveys/my',
       '/notifications',
     ])
+  })
+})
+
+describe('sectionTitleKeyForPath', () => {
+  const sections = buildNavSections('company_admin', 'company-1')
+
+  it('names the group a page sits in, which is what the page eyebrow prints', () => {
+    expect(sectionTitleKeyForPath('/admin/companies/company-1/users', sections)).toBe(
+      'navigation.sectionAdministration',
+    )
+    expect(sectionTitleKeyForPath('/action-plans', sections)).toBe('navigation.sectionWorkspace')
+    expect(sectionTitleKeyForPath('/notifications', sections)).toBe(
+      'navigation.sectionCommunication',
+    )
+  })
+
+  /**
+   * The bug `activeHref` exists for, asserted on the eyebrow rather than on the
+   * rail. `/admin/companies/company-1` is a prefix of
+   * `.../demographic-fields`, so a plain `startsWith` matches both — and both are
+   * in the same group here, which is exactly why this needs a case where the two
+   * candidates disagree. `/surveys` (Workspace) is a prefix of nothing in
+   * Administration, so the discriminating pair is a sub-route of a *detail* page:
+   * `/action-plans/abc` sits under `/action-plans` and under nothing else.
+   */
+  it('resolves a detail route to its list page group rather than to no group', () => {
+    expect(sectionTitleKeyForPath('/action-plans/abc-123', sections)).toBe(
+      'navigation.sectionWorkspace',
+    )
+    expect(sectionTitleKeyForPath('/surveys/abc-123/results', sections)).toBe(
+      'navigation.sectionWorkspace',
+    )
+  })
+
+  it('prints no eyebrow for a route the nav does not cover, rather than guessing one', () => {
+    expect(sectionTitleKeyForPath('/dev/chart-gallery', sections)).toBeNull()
+    expect(sectionTitleKeyForPath('/login', sections)).toBeNull()
+  })
+
+  it('is empty for a role with no sections at all, so a signed-out header prints nothing', () => {
+    expect(sectionTitleKeyForPath('/action-plans', buildNavSections(undefined, undefined))).toBeNull()
+  })
+})
+
+/**
+ * `activeHref` and `isUnder` moved here from `RoleBasedNav` when the page eyebrow
+ * needed the same answer. Asserted directly, because the two properties they exist
+ * for are both invisible from the eyebrow: the groups a mis-resolved path lands in
+ * happen to be the same one.
+ *
+ * Both cases below were confirmed to fail when the property is removed — reverting
+ * `longest` to `shortest` and `isUnder` to a bare `startsWith` each turns exactly
+ * one of them red, and neither turned anything else in the 1557-test suite red
+ * before this block existed.
+ */
+describe('activeHref', () => {
+  const sections = buildNavSections('company_admin', 'company-1')
+
+  it('picks the longest matching row, so a child page does not also light its parent', () => {
+    // `/admin/companies/company-1` (Company Settings) is a string prefix of this
+    // path, and both are nav rows. The more specific one wins.
+    expect(activeHref('/admin/companies/company-1/demographic-fields', sections)).toBe(
+      '/admin/companies/company-1/demographic-fields',
+    )
+    expect(activeHref('/admin/companies/company-1/users', sections)).toBe(
+      '/admin/companies/company-1/users',
+    )
+    // The parent still wins on its own path.
+    expect(activeHref('/admin/companies/company-1', sections)).toBe('/admin/companies/company-1')
+  })
+
+  it('matches on whole segments, so /surveys does not claim /surveys-archive', () => {
+    expect(isUnder('/surveys-archive', '/surveys')).toBe(false)
+    expect(isUnder('/action-plansX', '/action-plans')).toBe(false)
+    expect(isUnder('/surveys/my', '/surveys')).toBe(true)
+    expect(isUnder('/surveys', '/surveys')).toBe(true)
+  })
+
+  it('returns null where no row matches', () => {
+    expect(activeHref('/dev/chart-gallery', sections)).toBeNull()
   })
 })

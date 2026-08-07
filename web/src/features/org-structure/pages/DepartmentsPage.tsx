@@ -291,6 +291,14 @@ export default function DepartmentsPage() {
                       label: t('departments.kpiAssignedEmployees'),
                       value: employeeCount,
                       icon: Users,
+                      // The only card in this band with somewhere else to go: the
+                      // two department counts are counting the very list below
+                      // them, but the people are on the users page. `companyId` is
+                      // non-null here — the whole panel is behind a guard for it.
+                      action: {
+                        label: t('dashboard.manageUsers'),
+                        href: `/admin/companies/${companyId}/users`,
+                      },
                     },
                   ]}
                 />

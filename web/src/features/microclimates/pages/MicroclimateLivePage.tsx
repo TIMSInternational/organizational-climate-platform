@@ -242,7 +242,7 @@ export default function MicroclimateLivePage() {
         {(live: LiveResults) => (
           <div className="flex flex-col gap-panel-gap">
             <KPIDisplay
-              kpis={liveKpis(live, t)}
+              kpis={liveKpis(live, t, `/microclimates/${id}/results`)}
               columns={4}
               locale={locale}
               title={t('microclimates.liveParticipation')}
@@ -321,6 +321,7 @@ export default function MicroclimateLivePage() {
 function liveKpis(
   live: LiveResults,
   t: (key: string, params?: Record<string, string | number>) => string,
+  resultsHref: string,
 ): Kpi[] {
   const kpis: Kpi[] = [
     {
@@ -328,6 +329,12 @@ function liveKpis(
       label: t('microclimates.kpiResponses'),
       value: live.responseCount,
       icon: MessageSquare,
+      // The ForMaps KPI card's "Continue →" — the one card here with a genuine next
+      // step. The live page is a running count; the settled breakdown of what those
+      // responses said is the results page, and this is the only route out of the
+      // band to it. The other three cards are re-cuts of the same number and get no
+      // link: a card that offers one is asserting the destination adds something.
+      action: { label: t('microclimates.results'), href: resultsHref },
     },
     {
       id: 'target',

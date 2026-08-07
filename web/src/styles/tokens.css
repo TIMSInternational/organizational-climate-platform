@@ -76,6 +76,13 @@
   --admin-tracking-normal: 0;
   --admin-tracking-label: 0.06em; /* uppercase section labels — legacy
                                      RoleBasedNav `tracking-[0.06em]` */
+  --admin-tracking-eyebrow: 0.2em; /* the page eyebrow over an <h1> — ForMaps
+                                      `dashboard/page.tsx` `tracking-[0.2em]`.
+                                      Deliberately much wider than the sidebar's
+                                      section label: at 10px over a 24px heading
+                                      the letter-spacing is what separates the two
+                                      lines, since the size difference alone reads
+                                      as a subtitle that lost its font. */
 
   /* -- Space scale -------------------------------------------------------
      ⚠ THE NUMBER IN THE NAME IS THE PIXEL COUNT, NOT A STEP INDEX.
