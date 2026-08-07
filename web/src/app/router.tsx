@@ -21,6 +21,11 @@ import NotificationsInboxPage from '../features/notifications/pages/Notification
 import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
 import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
 import ReportsListPage from '../features/reports/pages/ReportsListPage'
+import SurveysListPage from '../features/surveys/pages/SurveysListPage'
+import SurveyDetailPage from '../features/surveys/pages/SurveyDetailPage'
+import MySurveysPage from '../features/surveys/pages/MySurveysPage'
+import SurveyTemplatesPage from '../features/surveys/pages/SurveyTemplatesPage'
+import SurveyTemplateDetailPage from '../features/surveys/pages/SurveyTemplateDetailPage'
 import AnalyticsDashboardPage from '../features/analytics/pages/AnalyticsDashboardPage'
 import { getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
@@ -102,6 +107,21 @@ export const router = createBrowserRouter([
               { path: '/action-plans/:id', element: <ActionPlanDetailPage /> },
               { path: '/microclimates', element: <MicroclimatesListPage /> },
               { path: '/microclimates/:id', element: <MicroclimateDetailPage /> },
+              { path: '/surveys', element: <SurveysListPage /> },
+              // Before `/surveys/:id` for readability only -- react-router ranks a
+              // static segment above a dynamic one regardless of declaration order,
+              // so `/surveys/my` could never be swallowed as an id. (The API relies
+              // on the same property, via the `:guid` route constraint.)
+              //
+              // Not gated beyond RequireAuth: `/surveys/my` scopes itself to the
+              // caller's own user row and reads no role claim, so employee,
+              // supervisor and leader can all load it. See MySurveysPage.tsx.
+              { path: '/surveys/my', element: <MySurveysPage /> },
+              // Same static-beats-dynamic ranking as `/surveys/my`, so `templates`
+              // is never parsed as a survey id.
+              { path: '/surveys/templates', element: <SurveyTemplatesPage /> },
+              { path: '/surveys/templates/:id', element: <SurveyTemplateDetailPage /> },
+              { path: '/surveys/:id', element: <SurveyDetailPage /> },
               // The authenticated half of #120. No role gate beyond RequireAuth: the
               // respond endpoint resolves the caller's own user row and checks the
               // survey's department targets itself, so every role that can be sent a
