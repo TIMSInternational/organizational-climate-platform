@@ -35,6 +35,29 @@ describe('router', () => {
     expect(paths).toContain('/login')
     expect(paths).toContain('/accept-invitation/:token')
     expect(paths).toContain('/microclimates/:id/respond')
+    expect(paths).toContain('/survey/:id')
+  })
+
+  /**
+   * The check above walks the whole tree, so it proves a path exists rather than
+   * where it sits. This one is structural: a public route has to be a direct child
+   * of the root, not nested inside the pathless `RequireAuth` branch.
+   *
+   * It matters most for `/survey/:id` (#120). An anonymous survey is answered by
+   * people who have no account at all, so `RequireAuth` there would redirect every
+   * one of them to a login page they cannot pass — and the failure would be silent
+   * in every unit test that renders the page directly.
+   */
+  it('keeps the anonymous respond routes outside RequireAuth structurally', () => {
+    const topLevel = (router.routes[0].children ?? []).flatMap((route) =>
+      route.path ? [route.path] : [],
+    )
+
+    expect(topLevel).toContain('/survey/:id')
+    expect(topLevel).toContain('/microclimates/:id/respond')
+    // The authenticated twin is deliberately NOT out here: an employee answering a
+    // survey their company does not run anonymously should be sent to sign in.
+    expect(topLevel).not.toContain('/surveys/:id/respond')
   })
 
   it('registers the authenticated admin routes', () => {
@@ -59,6 +82,10 @@ describe('router', () => {
     expect(paths).toContain('/analytics/ai-insights')
     expect(paths).toContain('/admin/companies/:companyId/reports')
     expect(paths).toContain('/admin/companies/:companyId/analytics')
+    // #120's authenticated half. No role gate of its own: the respond endpoint
+    // resolves the caller's own user row and checks the survey's department targets
+    // itself, so every role that can be sent a survey can load this.
+    expect(paths).toContain('/surveys/:id/respond')
   })
 
   it('has an error element so a thrown render does not blank the page', () => {
