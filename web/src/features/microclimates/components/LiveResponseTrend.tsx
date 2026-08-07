@@ -54,10 +54,30 @@ export default function LiveResponseTrend({ responseCount, title, width }: LiveR
     // Functional update, so the effect does not have to depend on `points` and
     // therefore does not re-run itself on every append.
     setPoints((current) => {
-      const next = [
-        ...current,
-        { label: new Date().toLocaleTimeString(locale), value: responseCount },
-      ]
+      const label = new Date().toLocaleTimeString(locale)
+
+      // `label` is this chart's x-axis key (`XAxis dataKey="label"` in LineChart), and
+      // a formatted clock time is only unique to the second. Appending blindly lets two
+      // points share a key, which React reports as "Encountered two children with the
+      // same key" and recharts draws as one category holding two values.
+      //
+      // A second is not a rare collision here. React's StrictMode double-invokes this
+      // effect on mount, so it happened on every single page load in development. In
+      // production the same thing happens whenever two responses land inside the same
+      // second -- which for a live pulse view is the event it exists to show, not an
+      // edge case. Switching UI language mid-session is a third route, since `locale`
+      // is a dependency.
+      //
+      // The last point wins rather than being dropped: a point means "the total was N
+      // at time T", so when two changes share a T the newer total is the accurate one
+      // to draw there. That keeps labels unique without inventing a fake timestamp,
+      // and leaves the "a point per change" rule above intact.
+      const last = current.at(-1)
+      const next =
+        last?.label === label
+          ? [...current.slice(0, -1), { label, value: responseCount }]
+          : [...current, { label, value: responseCount }]
+
       return next.slice(-MAX_POINTS)
     })
   }, [responseCount, locale])
