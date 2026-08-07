@@ -1,13 +1,35 @@
-import { useCallback, useEffect, useState } from 'react'
-import { listActionPlans, createActionPlan, type ActionPlan, type CreateActionPlanInput } from '../api/actionPlans'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router'
+import {
+  listActionPlans,
+  createActionPlan,
+  type ActionPlan,
+  type CreateActionPlanInput,
+} from '../api/actionPlans'
 import { listActionPlanTemplates, type ActionPlanTemplate } from '../api/actionPlanTemplates'
 import ActionPlanList from '../components/ActionPlanList'
-import ActionPlanFilters, { type ActionPlanFiltersValue } from '../components/ActionPlanFilters'
+import ActionPlanFilters from '../components/ActionPlanFilters'
+import {
+  EMPTY_ACTION_PLAN_FILTERS,
+  type ActionPlanFiltersValue,
+} from '../actionPlanFilterState'
 import ActionPlanForm, { type ActionPlanFormValues } from '../components/ActionPlanForm'
 import { useCompanyScope } from '../../../company-context'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
-import { EmptyState } from '../../../components/ui'
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  EmptyState,
+  LoadingRegion,
+  NetworkError,
+  SkeletonText,
+} from '../../../components/ui'
 
 // Company scope comes from `useCompanyScope()` (#124), not from the JWT claim
 // this page used to read directly.
@@ -36,9 +58,17 @@ export default function ActionPlansListPage() {
   const [plans, setPlans] = useState<ActionPlan[]>([])
   const [templates, setTemplates] = useState<ActionPlanTemplate[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [filters, setFilters] = useState<ActionPlanFiltersValue>({ status: '' })
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [filters, setFilters] = useState<ActionPlanFiltersValue>(EMPTY_ACTION_PLAN_FILTERS)
   const [showCreateForm, setShowCreateForm] = useState(false)
+  // The plan the viewer just created, so the confirmation can name it and link to
+  // it. Cleared when the form is reopened.
+  const [created, setCreated] = useState<{ id: string; title: string } | null>(null)
+
+  // Destructured so the fetch depends on the *status* filter alone. Depending on
+  // the whole `filters` object would refetch on every keystroke in the search box,
+  // which is neither wanted nor needed -- search is narrowed client-side.
+  const { status: statusFilter } = filters
 
   // `useCallback` + `[reload]` rather than the `[]` this page used to run on:
   // the company can now change *while the page is mounted*, and a mount-only
@@ -51,26 +81,52 @@ export default function ActionPlansListPage() {
       return
     }
     setLoading(true)
-    setError(null)
+    setLoadError(null)
     try {
-      const [plansResult, templatesResult] = await Promise.all([
-        listActionPlans(baseUrl, companyId),
-        listActionPlanTemplates(baseUrl, companyId),
-      ])
-      setPlans(plansResult)
-      setTemplates(templatesResult)
+      setPlans(await listActionPlans(baseUrl, companyId, { status: statusFilter }))
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setLoadError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setLoading(false)
     }
-  }, [baseUrl, companyId, t])
+  }, [baseUrl, companyId, statusFilter, t])
 
   useEffect(() => {
     void reload()
   }, [reload])
 
-  const filtered = plans.filter((plan) => !filters.status || plan.status === filters.status)
+  // Templates are fetched separately, and a failure here is deliberately silent.
+  // They feed one optional field of the create form; blanking the whole listing
+  // because the template catalogue was unreachable would be a much worse outcome
+  // than the picker simply not appearing (`ActionPlanForm` hides it when empty).
+  const loadTemplates = useCallback(async () => {
+    if (!companyId) return
+    try {
+      setTemplates(await listActionPlanTemplates(baseUrl, companyId))
+    } catch {
+      setTemplates([])
+    }
+  }, [baseUrl, companyId])
+
+  useEffect(() => {
+    void loadTemplates()
+  }, [loadTemplates])
+
+  /**
+   * Priority and title search, narrowed here rather than on the wire.
+   *
+   * `ListAsync` takes no parameter for either, and returns the company's complete
+   * set in one response, so this is exact — see `ActionPlanFilters` for the full
+   * reasoning and for what must change if that endpoint ever grows paging.
+   */
+  const visible = useMemo(() => {
+    const needle = filters.q.trim().toLocaleLowerCase()
+    return plans.filter(
+      (plan) =>
+        (!filters.priority || plan.priority === filters.priority) &&
+        (!needle || plan.title.toLocaleLowerCase().includes(needle)),
+    )
+  }, [plans, filters.priority, filters.q])
 
   async function handleCreate(values: ActionPlanFormValues) {
     if (!companyId) return
@@ -86,8 +142,13 @@ export default function ActionPlansListPage() {
     if (values.templateId) {
       input.templateId = values.templateId
     }
-    await createActionPlan(baseUrl, input)
+    // Deliberately not caught: `ActionPlanForm` awaits this call and renders the
+    // rejection itself, next to the fields that are still filled in. Catching it
+    // here would swallow the server's message and close a form whose contents the
+    // user would then have to retype.
+    const plan = await createActionPlan(baseUrl, input)
     setShowCreateForm(false)
+    setCreated({ id: plan.id, title: plan.title })
     await reload()
   }
 
@@ -104,24 +165,81 @@ export default function ActionPlansListPage() {
     return <p role="alert">{t('common.noCompanyAssociated')}</p>
   }
 
-  if (error) {
-    return <p role="alert">{error}</p>
-  }
-
   return (
     <div>
       <PageTopBar
         title={t('navigation.actionPlans')}
         description={t('navigation.actionPlansDesc')}
         actions={
-          <button onClick={() => setShowCreateForm((v) => !v)}>
+          <Button
+            type="button"
+            variant={showCreateForm ? 'outline' : 'default'}
+            onClick={() => {
+              setCreated(null)
+              setShowCreateForm((open) => !open)
+            }}
+          >
             {showCreateForm ? t('common.cancel') : t('common.newActionPlan')}
-          </button>
+          </Button>
         }
       />
-      <ActionPlanFilters value={filters} onChange={setFilters} />
-      {showCreateForm && <ActionPlanForm templates={templates} onSubmit={handleCreate} />}
-      {loading ? <p>{t('common.loading')}</p> : <ActionPlanList plans={filtered} />}
+
+      {/* A plain `Alert`, not `destructive`: this is the good outcome. The link is
+          the point -- a new plan is created with no KPI values recorded yet, so the
+          next thing the user wants is its detail page. */}
+      {created && (
+        <Alert role="status" className="mb-panel-gap">
+          <AlertDescription>
+            {t('actionPlans.createdSuccess', { title: created.title })}{' '}
+            <Link to={`/action-plans/${created.id}`}>{t('common.viewDetails')}</Link>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {showCreateForm && (
+        <Card className="mb-panel-gap">
+          <CardHeader>
+            <CardTitle>{t('actionPlans.createActionPlan')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ActionPlanForm
+              templates={templates}
+              onSubmit={handleCreate}
+              onCancel={() => setShowCreateForm(false)}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      <ActionPlanFilters
+        value={filters}
+        onChange={setFilters}
+        resultCount={visible.length}
+        disabled={loading}
+      />
+
+      {loadError ? (
+        <NetworkError
+          title={t('errors.generic')}
+          description={loadError}
+          onRetry={reload}
+          retryText={t('common.retry')}
+        />
+      ) : (
+        // `LoadingRegion` already announces `common.loading` in an sr-only live
+        // region, so the visible placeholder is a skeleton rather than a second
+        // copy of the same word.
+        <LoadingRegion loading={loading} label={t('common.loading')}>
+          {loading ? (
+            <SkeletonText lines={4} />
+          ) : (
+            <ActionPlanList
+              plans={visible}
+              filtered={Boolean(filters.status || filters.priority || filters.q.trim())}
+            />
+          )}
+        </LoadingRegion>
+      )}
     </div>
   )
 }
