@@ -16,6 +16,7 @@ import MicroclimateDetailPage from '../features/microclimates/pages/Microclimate
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
 import NotificationPreferencesPage from '../features/notifications/pages/NotificationPreferencesPage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
+import SurveyDistributionPage from '../features/surveys/pages/SurveyDistributionPage'
 import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
 import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
 import ReportsListPage from '../features/reports/pages/ReportsListPage'
@@ -100,6 +101,9 @@ export const router = createBrowserRouter([
               // Self-service, so no role gate beyond RequireAuth: /notifications/mine
               // is scoped per user and every authenticated role can load it.
               { path: '/notifications', element: <NotificationsInboxPage /> },
+              // Reached from a survey, not from the sidebar: distribution is an action on
+              // one survey rather than a destination, so it gets a route and no nav entry.
+              { path: '/surveys/:surveyId/distribution', element: <SurveyDistributionPage /> },
               { path: '/analytics/benchmarks', element: <BenchmarksPage /> },
               { path: '/analytics/ai-insights', element: <AIInsightsPage /> },
             ],
