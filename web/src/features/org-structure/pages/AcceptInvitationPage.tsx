@@ -1,11 +1,38 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
+import { CheckCircle2Icon } from 'lucide-react'
 import { acceptInvitation } from '../api/acceptInvitation'
 import { setToken } from '../../../auth/token'
 import { decodeJwtPayload } from '../../../auth/jwt'
+import { AuthShell } from '../../../auth/AuthShell'
+import { AuthPending } from '../../../auth/AuthPending'
 import { resolvePostAcceptRoute } from './postAcceptRoute'
 import { useTranslation } from '../../../i18n'
+import { Alert, AlertDescription, Button, TextField } from '../../../components/ui'
 
+/** `SystemSettings.PasswordPolicy.MinLength` defaults to 8; the server is authoritative. */
+const DEFAULT_MIN_PASSWORD_LENGTH = 8
+
+/**
+ * Accept an invitation and set a password.
+ *
+ * ## Why it moved into `AuthShell` (#81)
+ *
+ * This is an unauthenticated page in the same flow as sign-in and registration,
+ * and it looked nothing like either of them. It is also the *only* way most users
+ * of this product are created — the self-service `/register` path works solely
+ * for email domains a company has already registered — so it is the page a demo
+ * is most likely to walk through.
+ *
+ * ## The success branch, and why it is still here
+ *
+ * `resolvePostAcceptRoute` now has a real destination for employee, supervisor
+ * and leader (`/surveys/my`, #109), so almost every accepted invitation
+ * navigates. What is left is the genuinely destination-less case — a token whose
+ * claims carry no company, or a role this client does not recognise — and for
+ * that, confirming success in place still beats navigating into a page that will
+ * 403 on its first fetch.
+ */
 export default function AcceptInvitationPage() {
   const { t } = useTranslation()
   const { token } = useParams<{ token: string }>()
@@ -35,8 +62,8 @@ export default function AcceptInvitationPage() {
       if (destination) {
         navigate(destination)
       } else {
-        // No admin page this role can load yet -- stay put and confirm success
-        // instead of navigating into a route that will 403 on its first fetch.
+        // No page this role can load -- stay put and confirm success instead of
+        // navigating into a route that will 403 on its first fetch.
         setAccountCreated(true)
       }
     } catch (err) {
@@ -46,34 +73,67 @@ export default function AcceptInvitationPage() {
     }
   }
 
+  if (submitting) {
+    return <AuthPending label={t('auth.creatingAccount')} />
+  }
+
   if (accountCreated) {
     return (
-      <div>
-        <h1>{t('auth.accountCreated')}</h1>
-        <p>{t('auth.accountCreatedDetail')}</p>
-      </div>
+      <AuthShell
+        title={t('auth.accountCreated')}
+        description={t('auth.accountCreatedDetail')}
+        banner={<CheckCircle2Icon aria-hidden="true" className="size-6 text-accent-green" />}
+        footer={<Link to="/login">{t('auth.backToSignIn')}</Link>}
+      >
+        <p className="text-sm text-fg-secondary">{t('auth.accountCreatedRoleNote')}</p>
+      </AuthShell>
     )
   }
 
   return (
-    <div>
-      <h1>{t('auth.acceptInvitation')}</h1>
-      <form onSubmit={handleSubmit}>
-        {error && <p role="alert">{error}</p>}
-        <label>
-          {t('auth.emailForShareableLink')}
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </label>
-        <label>
-          {t('users.name')}
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
-        </label>
-        <label>
-          {t('auth.password')}
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
-        </label>
-        <button type="submit" disabled={submitting}>{submitting ? t('auth.creatingAccount') : t('auth.createAccount')}</button>
+    <AuthShell
+      title={t('auth.acceptInvitation')}
+      description={t('auth.acceptInvitationDetail')}
+      footer={
+        <>
+          <span className="text-fg-secondary">{t('auth.alreadyHaveAccount')}</span>
+          <Link to="/login">{t('auth.signIn')}</Link>
+        </>
+      }
+    >
+      {error && (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <form className="grid gap-panel-gap" onSubmit={handleSubmit}>
+        {/* Optional: a personal invitation already carries the address, and only
+            a shareable link needs one supplied. */}
+        <TextField
+          label={t('auth.emailForShareableLink')}
+          type="email"
+          value={email}
+          onChange={setEmail}
+        />
+        <TextField label={t('users.name')} value={name} required onChange={setName} />
+        <TextField
+          label={t('auth.password')}
+          type="password"
+          value={password}
+          required
+          placeholder={t('auth.passwordPlaceholder')}
+          description={t('validation.passwordTooShort')}
+          onChange={setPassword}
+        />
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={password.length > 0 && password.length < DEFAULT_MIN_PASSWORD_LENGTH}
+        >
+          {t('auth.createAccount')}
+        </Button>
       </form>
-    </div>
+    </AuthShell>
   )
 }

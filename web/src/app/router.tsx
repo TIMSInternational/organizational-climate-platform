@@ -1,5 +1,9 @@
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
 import LoginPage from '../auth/LoginPage'
+import RegisterPage from '../auth/RegisterPage'
+import AuthErrorPage from '../auth/AuthErrorPage'
+import AccountInactivePage from '../auth/AccountInactivePage'
+import AuthSuccessPage from '../auth/AuthSuccessPage'
 import AcceptInvitationPage from '../features/org-structure/pages/AcceptInvitationPage'
 import RequireAuth from './RequireAuth'
 import AdminLayout from './AdminLayout'
@@ -81,6 +85,18 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <HomeRedirect /> },
       { path: '/login', element: <LoginPage /> },
+      // #81's auth states. All four sit OUTSIDE RequireAuth, beside /login, and
+      // must: each of them is a state the app is in precisely because there is no
+      // usable session, so putting them behind the gate would redirect them to
+      // /login and lose the reason.
+      //
+      // /auth/inactive is the one exception worth naming -- its visitor DOES hold
+      // a token. It is still public because RequireAuth is what sends them here,
+      // and a guard that redirects into itself is a loop.
+      { path: '/register', element: <RegisterPage /> },
+      { path: '/auth/error', element: <AuthErrorPage /> },
+      { path: '/auth/inactive', element: <AccountInactivePage /> },
+      { path: '/auth/success', element: <AuthSuccessPage /> },
       { path: '/accept-invitation/:token', element: <AcceptInvitationPage /> },
       { path: '/microclimates/:id/respond', element: <MicroclimateRespondPage /> },
       ...devOnlyRoutes,
