@@ -31,6 +31,31 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
             .UseNpgsql(postgres.ConnectionString)
             .Options);
 
+    /// <summary>
+    /// A migrated context over an <b>empty</b> database.
+    ///
+    /// <para>These three sweeps are deployment-wide by design -- they take no company id,
+    /// because a scheduler that only swept one tenant would be the wrong thing. So every
+    /// assertion on a sweep's own counters (<c>Examined</c>, <c>Raised</c>,
+    /// <c>UsersExamined</c>, <c>Fired</c>) is a statement about the whole database, and any
+    /// row left behind by an earlier test is inside the measurement. These tests shared one
+    /// Postgres container not only with the other classes in this assembly but with each
+    /// other, so eleven of them read another test's data -- <c>Assert.Equal(0, Examined)</c>
+    /// against 547 leftover rows.</para>
+    ///
+    /// <para><c>TRUNCATE companies CASCADE</c> rather than a hand-ordered delete list: every
+    /// application table chains a foreign key back to <c>companies</c>, so one statement
+    /// clears them all in the right order and cannot drift out of date as tables are added.
+    /// <c>__EFMigrationsHistory</c> has no such key and is deliberately left alone -- the
+    /// schema stays migrated, only the data goes.</para>
+    /// </summary>
+    private async Task<ClimateProjectDbContext> FreshAsync()
+    {
+        var db = await MigratedAsync(CreateContext());
+        await db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE companies CASCADE");
+        return db;
+    }
+
     private static async Task<ClimateProjectDbContext> MigratedAsync(ClimateProjectDbContext db)
     {
         await db.Database.MigrateAsync();
@@ -105,7 +130,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task An_outstanding_invitation_gets_exactly_one_reminder_however_many_times_the_sweep_runs()
     {
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id);
@@ -154,7 +179,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
         // Not cosmetic: it is what makes a duplicate insert a primary key violation. If the job
         // ever generated a random id, every other guarantee here would still pass while the
         // actual protection was gone.
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id);
@@ -185,7 +210,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
         // The proof behind "double-send under multiple instances proven impossible". Two
         // instances that both somehow got past the lease would each build this row; the second
         // INSERT cannot land, because the id is a function of what the notification is.
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id);
@@ -221,7 +246,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task A_completed_invitation_is_not_reminded()
     {
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id);
@@ -248,7 +273,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task A_closed_survey_produces_no_reminders()
     {
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id);
@@ -274,7 +299,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task Reminders_switched_off_on_the_survey_are_honoured_in_the_query()
     {
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id);
@@ -299,7 +324,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task Reminder_copy_is_written_in_the_recipients_language()
     {
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var spanish = NewUser(company.Id, language: "es");
@@ -335,7 +360,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     {
         // The reminder job raises `pending`; NotificationDelivery is what sends. This asserts
         // the handoff, which is the reason the reminder job does not talk to a sender itself.
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id);
@@ -372,7 +397,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task A_reminder_to_a_recipient_who_opted_out_is_cancelled_not_sent()
     {
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id);
@@ -408,7 +433,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task A_user_set_to_never_gets_no_digest_however_much_activity_they_have()
     {
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id, digestFrequency: NotificationPreferenceValidation.DigestNever);
@@ -429,7 +454,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task A_daily_digest_is_raised_once_per_local_day_no_matter_how_often_the_sweep_runs()
     {
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id, NotificationPreferenceValidation.DigestDaily, timezone: "America/Bogota");
@@ -468,7 +493,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     {
         // "You have 0 new notifications" is a mail that trains the recipient to ignore the next
         // one.
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id, NotificationPreferenceValidation.DigestDaily);
@@ -486,7 +511,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task A_digest_does_not_count_previous_digests_or_suppressed_notifications()
     {
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id, NotificationPreferenceValidation.DigestDaily);
@@ -519,7 +544,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task Two_users_in_different_timezones_get_digests_for_their_own_day()
     {
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var bogota = NewUser(company.Id, NotificationPreferenceValidation.DigestDaily, "America/Bogota");
@@ -555,7 +580,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
         // notifications.company_id is a non-nullable FK, so a global-scope user (#191) has no
         // row shape that could hold their digest. Selecting them would throw on save and take
         // the whole sweep down.
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var superAdmin = new User
         {
@@ -585,7 +610,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task A_due_recurring_report_fires_once_and_advances_its_schedule()
     {
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany("America/Bogota");
         var user = NewUser(company.Id);
@@ -624,7 +649,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task A_long_dormant_schedule_fires_once_rather_than_backfilling()
     {
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id);
@@ -647,7 +672,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task An_invalid_recurrence_pattern_stops_re_firing_without_discarding_the_admins_intent()
     {
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id);
@@ -686,7 +711,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     {
         // The reason the advance is not committed first as an optimistic claim: doing so would
         // turn every transient generation failure into a silently skipped report.
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id);
@@ -756,7 +781,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
         // Advisory locks taken with the xact variant are released by commit, by rollback and by
         // the connection dropping -- which is the whole reason there is no expiry to tune and no
         // stale-lease cleanup to forget.
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
         var lease = new PostgresAdvisoryJobLease(db);
         var key = DeterministicNotificationId.LockKey(WorkerJobs.ScheduledReports);
 
@@ -791,7 +816,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     {
         // "Took the lease" and "the work landed" have to be the same event; if they were not,
         // the next holder could re-do work the previous one had already done but not committed.
-        await using var db = await MigratedAsync(CreateContext());
+        await using var db = await FreshAsync();
 
         var company = NewCompany();
         var user = NewUser(company.Id);

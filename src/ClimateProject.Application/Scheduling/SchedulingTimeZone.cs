@@ -103,9 +103,14 @@ public static class SchedulingTimeZone
                 }
             }
 
-            return new DateTimeOffset(unspecified, earliest);
+            // .ToUniversalTime(): same instant, Offset=0. The method is named ToUtc and its
+            // callers persist the result, and Npgsql refuses any DateTimeOffset whose offset is
+            // not zero for a `timestamp with time zone` column -- "Cannot write DateTimeOffset
+            // with Offset=-05:00:00". Returning the value still carrying the zone's offset made
+            // every digest and scheduled report in a non-UTC zone throw on write.
+            return new DateTimeOffset(unspecified, earliest).ToUniversalTime();
         }
 
-        return new DateTimeOffset(unspecified, zone.GetUtcOffset(unspecified));
+        return new DateTimeOffset(unspecified, zone.GetUtcOffset(unspecified)).ToUniversalTime();
     }
 }

@@ -174,7 +174,13 @@ public static class InvitationReminderJob
                 () =>
                 {
                     row.Invitation.ReminderCount = decision.ReminderNumber;
-                    row.Invitation.LastReminderSent = decision.DueAt;
+                    // `now`, not decision.DueAt. DueAt is when the reminder BECAME due, which
+                    // for a backlogged invitation is in the past -- and recording that as the
+                    // last send makes the next one already due at the same instant, so every
+                    // sweep fires another until it "catches up". That is a burst of reminders
+                    // arriving at the recipient seconds apart, and it is what broke the
+                    // acceptance criterion that a second tick sends nothing extra.
+                    row.Invitation.LastReminderSent = nowUtc;
                     row.Invitation.UpdatedAt = nowUtc;
                 }));
         }
@@ -284,7 +290,13 @@ public static class InvitationReminderJob
                 () =>
                 {
                     row.Invitation.ReminderCount = decision.ReminderNumber;
-                    row.Invitation.LastReminderSent = decision.DueAt;
+                    // `now`, not decision.DueAt. DueAt is when the reminder BECAME due, which
+                    // for a backlogged invitation is in the past -- and recording that as the
+                    // last send makes the next one already due at the same instant, so every
+                    // sweep fires another until it "catches up". That is a burst of reminders
+                    // arriving at the recipient seconds apart, and it is what broke the
+                    // acceptance criterion that a second tick sends nothing extra.
+                    row.Invitation.LastReminderSent = nowUtc;
                     row.Invitation.UpdatedAt = nowUtc;
                 }));
         }
