@@ -77,13 +77,25 @@ public static class ReportEndpoints
         db.Reports.Add(report);
         await db.SaveChangesAsync(cancellationToken);
 
-        // Stub: no real rendering engine yet -- completes synchronously and instantly.
+        // Aggregation is still stubbed (#88) -- generation completes synchronously and instantly.
+        // The AI insights section is real: it is read through ReportAIInsights, the one path
+        // (#152) so that a report never silently omits insights by reading the wrong entity.
+        var insights = await ReportAIInsights
+            .ForCompany(db.AIInsights.AsNoTracking(), report.CompanyId, now)
+            .ToListAsync(cancellationToken);
+
         report.Status = "completed";
         report.GenerationCompletedAt = DateTimeOffset.UtcNow;
         // ReportOutput is mapped as jsonb (ReportConfiguration.cs) -- Npgsql requires the
-        // stored text to already be valid JSON, so the stub message must be serialized
-        // (same pattern as MicroclimateEndpoints.cs's WordCloudData), not assigned raw.
-        report.ReportOutput = JsonSerializer.Serialize("Report generation is stubbed -- no real rendering yet.");
+        // stored text to already be valid JSON, so the document must be serialized (same
+        // pattern as MicroclimateEndpoints.cs's WordCloudData), not assigned raw.
+        // JsonSerializerOptions.Web so the stored document is camelCase like every other
+        // payload this API hands a browser -- reportOutput is delivered verbatim to the web app.
+        report.ReportOutput = JsonSerializer.Serialize(
+            new ReportOutputDocument(
+                "Report aggregation is stubbed -- only the AI insights section is real.",
+                ReportAIInsights.ToSection(insights)),
+            JsonSerializerOptions.Web);
         report.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
