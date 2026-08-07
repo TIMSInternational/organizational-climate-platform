@@ -413,6 +413,7 @@ app.MapTrackingPickerEndpoints();
 app.MapTrackingInternalEndpoints();
 app.MapSurveyEndpoints();
 app.MapSurveyResponseEndpoints();
+app.MapSurveyDistributionEndpoints();
 app.MapSurveyDraftEndpoints();
 app.MapSurveyResultsEndpoints();
 app.MapSurveyHistoryEndpoints();
