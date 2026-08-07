@@ -5,6 +5,10 @@ import { MemoryRouter } from 'react-router'
 import AIInsightsPage from './AIInsightsPage'
 import { TranslationProvider } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
+import {
+  CompanyContextProvider,
+  COMPANY_CONTEXT_STORAGE_KEY,
+} from '../../../company-context'
 import type { AIInsight, AIInsightListItem } from '../api/insights'
 
 function tokenFor(claims: Record<string, unknown>): string {
@@ -48,11 +52,17 @@ function insightDetail(overrides: Partial<AIInsight> = {}): AIInsight {
   }
 }
 
+// #124: the page's company no longer comes from the JWT claim it reads itself, it
+// comes from `useCompanyScope()`. The provider is what `AdminLayout` mounts around
+// every routed page, so it has to be here too -- the hook throws outside one
+// rather than silently defaulting, on purpose.
 function renderPage() {
   return render(
     <TranslationProvider>
       <MemoryRouter>
-        <AIInsightsPage />
+        <CompanyContextProvider>
+          <AIInsightsPage />
+        </CompanyContextProvider>
       </MemoryRouter>
     </TranslationProvider>,
   )
@@ -76,6 +86,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   clearToken()
+  localStorage.removeItem(COMPANY_CONTEXT_STORAGE_KEY)
   vi.unstubAllGlobals()
 })
 
@@ -119,9 +130,56 @@ describe('AIInsightsPage degradation', () => {
     })
   })
 
-  it('refuses to guess a company for a caller with no company claim', async () => {
+  it('refuses to guess a company for a super_admin who has selected none', async () => {
+    // This used to assert an `alert` reading "no company associated", which was the
+    // only thing the page could say: since #191 a global super_admin's companyId
+    // claim is `''`, so `navSections.ts` did not even offer this page to the role.
+    // #124 turns the dead end into a question. What has NOT changed, and is the
+    // point of the test, is that no company is chosen on their behalf and no
+    // request goes out.
     clearToken()
     setToken(tokenFor({ role: 'super_admin', companyId: '' }))
+    routeFetch([[/\/admin\/ai-insights(\?|$)/, () => [listRow()]]])
+
+    renderPage()
+
+    expect(await screen.findByText('Choose a company')).toBeTruthy()
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+  })
+
+  it('never falls back to a super_admin\'s own companyId claim', async () => {
+    // A super_admin whose user row does point at a company. Before #124 the page
+    // would have used it -- silently showing one tenant's findings as though they
+    // were a platform-wide view.
+    clearToken()
+    setToken(tokenFor({ role: 'super_admin', companyId: 'their-own-row' }))
+    routeFetch([[/\/admin\/ai-insights(\?|$)/, () => [listRow()]]])
+
+    renderPage()
+
+    expect(await screen.findByText('Choose a company')).toBeTruthy()
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+  })
+
+  it('loads the company a super_admin selected, and asks the API for that one', async () => {
+    clearToken()
+    setToken(tokenFor({ role: 'super_admin', companyId: '' }))
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'chosen-co')
+    routeFetch([[/\/admin\/ai-insights(\?|$)/, () => [listRow({ companyId: 'chosen-co' })]]])
+
+    renderPage()
+
+    expect(await screen.findByText('Engagement is falling in Support')).toBeTruthy()
+    const urls = vi.mocked(fetch).mock.calls.map((call) => String(call[0]))
+    expect(urls.some((url) => url.includes('companyId=chosen-co'))).toBe(true)
+  })
+
+  it('still refuses to guess for a company_admin whose token names no tenant', async () => {
+    // The other empty state, kept distinct: there is nothing for this role to pick
+    // from, so "choose a company" would be a dead end. `GET /admin/companies` is
+    // SuperAdmin-only.
+    clearToken()
+    setToken(tokenFor({ role: 'company_admin', companyId: '' }))
     routeFetch([[/\/admin\/ai-insights(\?|$)/, () => [listRow()]]])
 
     renderPage()

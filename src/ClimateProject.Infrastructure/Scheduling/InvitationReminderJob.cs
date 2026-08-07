@@ -84,19 +84,41 @@ public static class InvitationReminderJob
         //
         // Only `active` surveys: a scheduled survey is not open yet, and a closed one cannot
         // accept the response the reminder would be asking for.
-        var candidates = await db.SurveyInvitations
-            .Where(invitation => invitation.CompletedAt == null && invitation.ExpiresAt > nowUtc)
-            .Join(
-                db.Surveys.Where(survey =>
-                    survey.Status == SurveyStatuses.Active
-                    && survey.EndDate > nowUtc
-                    && survey.Settings.NotificationSendReminders),
-                invitation => invitation.SurveyId,
-                survey => survey.Id,
-                (invitation, survey) => new SurveyReminderRow(invitation, survey))
-            .OrderBy(row => row.Invitation.CreatedAt)
-            .Take(batchSize)
+        //
+        // Two queries rather than one Join, deliberately. `Settings` is an OWNED type, and inside
+        // a Join's inner query EF renders it as EF.Property<SurveySettings>(s, "Settings") and
+        // then fails to translate the whole expression at run time -- it compiles, and it throws
+        // InvalidOperationException the first time the sweep runs. In a plain Where over
+        // DbSet<Survey> the same property is just a column on `surveys`, which translates fine.
+        //
+        // The first query is bounded by the number of *currently active* surveys with reminders
+        // enabled (tens, not thousands), so materialising it is cheap; the batch bound that
+        // matters stays on the invitations, which is the table that actually grows.
+        var openSurveys = await db.Surveys
+            .Where(survey =>
+                survey.Status == SurveyStatuses.Active
+                && survey.EndDate > nowUtc
+                && survey.Settings.NotificationSendReminders)
             .ToListAsync(cancellationToken);
+
+        if (openSurveys.Count == 0)
+        {
+            return new ReminderSweepResult(0, 0);
+        }
+
+        var surveysById = openSurveys.ToDictionary(survey => survey.Id);
+        var openSurveyIds = surveysById.Keys.ToList();
+
+        var candidates = (await db.SurveyInvitations
+            .Where(invitation =>
+                invitation.CompletedAt == null
+                && invitation.ExpiresAt > nowUtc
+                && openSurveyIds.Contains(invitation.SurveyId))
+            .OrderBy(invitation => invitation.CreatedAt)
+            .Take(batchSize)
+            .ToListAsync(cancellationToken))
+            .Select(invitation => new SurveyReminderRow(invitation, surveysById[invitation.SurveyId]))
+            .ToList();
 
         if (candidates.Count == 0)
         {
@@ -174,18 +196,34 @@ public static class InvitationReminderJob
         // repository reads or writes. So reminders are on by default here, at the survey
         // default cadence. Microclimates are short-lived by design (hours to days), which the
         // reminder cap and the "not past EndTime" bound keep this from abusing.
-        var candidates = await db.MicroclimateInvitations
-            .Where(invitation => invitation.CompletedAt == null && invitation.ExpiresAt > nowUtc)
-            .Join(
-                db.Microclimates.Where(microclimate =>
-                    microclimate.Status == MicroclimateActive
-                    && microclimate.Scheduling.EndTime > nowUtc),
-                invitation => invitation.MicroclimateId,
-                microclimate => microclimate.Id,
-                (invitation, microclimate) => new MicroclimateReminderRow(invitation, microclimate))
-            .OrderBy(row => row.Invitation.CreatedAt)
-            .Take(batchSize)
+        // Same two-query shape, and for the same reason as the survey sweep above:
+        // `Scheduling` is an owned type, and filtering through it inside a Join's inner query
+        // produces an expression EF cannot translate at run time.
+        var openMicroclimates = await db.Microclimates
+            .Where(microclimate =>
+                microclimate.Status == MicroclimateActive
+                && microclimate.Scheduling.EndTime > nowUtc)
             .ToListAsync(cancellationToken);
+
+        if (openMicroclimates.Count == 0)
+        {
+            return new ReminderSweepResult(0, 0);
+        }
+
+        var microclimatesById = openMicroclimates.ToDictionary(microclimate => microclimate.Id);
+        var openMicroclimateIds = microclimatesById.Keys.ToList();
+
+        var candidates = (await db.MicroclimateInvitations
+            .Where(invitation =>
+                invitation.CompletedAt == null
+                && invitation.ExpiresAt > nowUtc
+                && openMicroclimateIds.Contains(invitation.MicroclimateId))
+            .OrderBy(invitation => invitation.CreatedAt)
+            .Take(batchSize)
+            .ToListAsync(cancellationToken))
+            .Select(invitation =>
+                new MicroclimateReminderRow(invitation, microclimatesById[invitation.MicroclimateId]))
+            .ToList();
 
         if (candidates.Count == 0)
         {

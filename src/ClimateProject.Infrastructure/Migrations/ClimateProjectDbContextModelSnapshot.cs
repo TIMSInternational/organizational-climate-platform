@@ -1316,6 +1316,8 @@ namespace ClimateProject.Infrastructure.Migrations
 
                     b.HasIndex("CompanyId");
 
+                    b.HasIndex("ManagerId");
+
                     b.HasIndex("ParentDepartmentId");
 
                     b.ToTable("departments", (string)null);
@@ -3494,11 +3496,6 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("name");
 
-                    b.Property<string>("NodoId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("nodo_id");
-
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text")
                         .HasColumnName("password_hash");
@@ -4118,6 +4115,11 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasForeignKey("CompanyId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("ClimateProject.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ManagerId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("ClimateProject.Domain.Entities.Department", null)
                         .WithMany()

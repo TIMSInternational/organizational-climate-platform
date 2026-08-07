@@ -68,10 +68,12 @@ public static class NotificationDelivery
         ArgumentNullException.ThrowIfNull(db);
         ArgumentOutOfRangeException.ThrowIfLessThan(batchSize, 1);
 
-        var query = db.Notifications.Where(n =>
-            NotificationStatuses.Retryable.Contains(n.Status)
-            && n.ScheduledFor <= now
-            && n.RetryCount < n.MaxRetries);
+        // Due-ness -- retryable status, scheduled time reached, retry budget left, and (#100)
+        // the backoff since the last failure elapsed -- lives in NotificationRetryPolicy so the
+        // endpoint's sweep, this one and the unit tests that pin the rule cannot drift apart.
+        // Restating the predicate here is exactly the second divergent answer this class exists
+        // to prevent.
+        var query = db.Notifications.Where(NotificationRetryPolicy.DueAt(now));
 
         if (companyId is not null)
         {
@@ -89,14 +91,18 @@ public static class NotificationDelivery
         }
 
         var recipientIds = due.Select(n => n.UserId).Distinct().ToList();
-        var preferences = await db.Users
+
+        // The whole user row, not just its preferences: a real sender (#100) needs the address
+        // and the language as well as the opt-outs, and the preferences are owned columns on
+        // this same row -- so this is the identical single query it was before.
+        var recipients = await db.Users
             .Where(u => recipientIds.Contains(u.Id))
-            .ToDictionaryAsync(u => u.Id, u => u.Notifications, cancellationToken);
+            .ToDictionaryAsync(u => u.Id, cancellationToken);
 
         var attempted = 0;
         foreach (var notification in due)
         {
-            if (!preferences.TryGetValue(notification.UserId, out var recipientPreferences))
+            if (!recipients.TryGetValue(notification.UserId, out var recipient))
             {
                 // Cannot happen while the user_id FK holds; skipping rather than assuming a
                 // default preference set, because assuming would mean mailing someone whose
@@ -105,7 +111,7 @@ public static class NotificationDelivery
             }
 
             attempted++;
-            await AttemptDeliveryAsync(notification, recipientPreferences, sender, loggerFactory, UtcNow(), cancellationToken);
+            await AttemptDeliveryAsync(notification, recipient, sender, loggerFactory, UtcNow(), cancellationToken);
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -127,7 +133,7 @@ public static class NotificationDelivery
     /// </summary>
     public static async Task DeliverIfDueAsync(
         Notification notification,
-        NotificationPreferences preferences,
+        User recipient,
         INotificationSender sender,
         ILoggerFactory loggerFactory,
         DateTimeOffset now,
@@ -137,15 +143,21 @@ public static class NotificationDelivery
 
         if (notification.ScheduledFor > now) return;
 
-        await AttemptDeliveryAsync(notification, preferences, sender, loggerFactory, now, cancellationToken);
+        await AttemptDeliveryAsync(notification, recipient, sender, loggerFactory, now, cancellationToken);
     }
 
     /// <summary>
     /// One delivery attempt, with its consent check and its status bookkeeping.
     /// </summary>
+    /// <param name="recipient">
+    /// The whole user row rather than just its preferences (#100): the consent decision needs
+    /// the opt-outs, and a real sender needs the address and language that sit on the same row.
+    /// Both are read here, at delivery time, which is what makes an opt-out taken between
+    /// scheduling and sending take effect.
+    /// </param>
     public static async Task AttemptDeliveryAsync(
         Notification notification,
-        NotificationPreferences preferences,
+        User recipient,
         INotificationSender sender,
         ILoggerFactory loggerFactory,
         DateTimeOffset now,
@@ -155,7 +167,7 @@ public static class NotificationDelivery
         ArgumentNullException.ThrowIfNull(sender);
         ArgumentNullException.ThrowIfNull(loggerFactory);
 
-        var decision = NotificationDispatchPolicy.Decide(notification.Channel, notification.Type, preferences);
+        var decision = NotificationDispatchPolicy.Decide(notification.Channel, notification.Type, recipient.Notifications);
         if (!decision.ShouldDeliver)
         {
             // "cancelled", never "failed": nothing broke, the recipient asked not to receive
@@ -169,7 +181,7 @@ public static class NotificationDelivery
         NotificationDeliveryResult result;
         try
         {
-            result = await sender.SendAsync(notification, cancellationToken);
+            result = await sender.SendAsync(notification, NotificationRecipient.From(recipient), cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -201,7 +213,16 @@ public static class NotificationDelivery
             notification.Status = NotificationStatuses.Failed;
             notification.FailedAt = now;
             notification.FailureReason = Truncate(result.FailureReason) ?? "Delivery failed.";
-            notification.RetryCount++;
+
+            // The dead letter (#100). A permanent failure -- the address does not exist, the
+            // mailbox is closed, the provider suppressed it -- is retired by exhausting
+            // RetryCount rather than by inventing a status: the row stays `failed` and stays
+            // visible through GET /notifications?status=failed, but no sweep will pick it up
+            // again. Retrying a hard bounce is how a sending domain's reputation gets burned,
+            // and no number of attempts changes a 550.
+            notification.RetryCount = result.Permanent
+                ? notification.MaxRetries
+                : notification.RetryCount + 1;
         }
 
         notification.UpdatedAt = now;

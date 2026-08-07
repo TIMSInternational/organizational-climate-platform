@@ -36,9 +36,12 @@ public static class NotificationEndpoints
     private const int MaxBulkRecipients = 500;
 
     /// <summary>Notifications one <c>/process</c> sweep will attempt. Bounded so the request stays inside a sane timeout; call it again for more.</summary>
-    private const int ProcessBatchSize = NotificationDelivery.DefaultBatchSize;
+    private const int ProcessBatchSize = 200;
 
+    private const int FailureReasonMaxLength = 1000;
     private const int TitleMaxLength = 500;
+
+    private const string LogCategory = "ClimateProject.Api.Notifications";
 
     public static void MapNotificationEndpoints(this WebApplication app)
     {
@@ -188,7 +191,7 @@ public static class NotificationEndpoints
         var notification = NewNotification(request.UserId, request.CompanyId, content, request.TemplateId, request.ScheduledFor, now);
         db.Notifications.Add(notification);
 
-        await DeliverIfDueAsync(notification, recipient.Notifications, sender, loggerFactory, now, cancellationToken);
+        await DeliverIfDueAsync(notification, recipient, sender, loggerFactory, now, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
 
         return Results.Json(DetailOf(notification), statusCode: 201);
@@ -252,7 +255,7 @@ public static class NotificationEndpoints
         {
             var notification = NewNotification(recipient.Id, request.CompanyId, content, request.TemplateId, request.ScheduledFor, now);
             created.Add(notification);
-            await DeliverIfDueAsync(notification, recipient.Notifications, sender, loggerFactory, now, cancellationToken);
+            await DeliverIfDueAsync(notification, recipient, sender, loggerFactory, now, cancellationToken);
         }
 
         db.Notifications.AddRange(created);
@@ -299,8 +302,10 @@ public static class NotificationEndpoints
             return Results.Forbid();
         }
 
-        // The sweep itself belongs to NotificationDelivery, which the scheduled worker (#101)
-        // also calls. Everything above this line is what actually belongs to the endpoint.
+        // The sweep itself is NotificationDelivery's (#101): the scheduled worker calls the
+        // same method, and two implementations of "may we email this person" is the one place
+        // in this codebase where divergence is worse than being wrong once. What stays here is
+        // what is genuinely the endpoint's -- authorization above, and the HTTP shape below.
         var result = await NotificationDelivery.ProcessDueAsync(
             db, sender, loggerFactory, companyId, UtcNow(), ProcessBatchSize, cancellationToken);
 
@@ -559,24 +564,44 @@ public static class NotificationEndpoints
     /// Deliver now if the notification is due now; otherwise leave it
     /// <see cref="NotificationStatuses.Pending"/> for <c>POST /notifications/process</c>.
     ///
-    /// Forwards to <see cref="NotificationDelivery"/>, which is where the consent check,
-    /// the status bookkeeping and the retry accounting live now that the scheduled worker
-    /// (#101) runs the same rules. See the type-level note there for why they moved.
+    /// A future-dated notification deliberately does **not** get its consent decision made
+    /// here: preferences are consulted at delivery time, so a recipient who opts out between
+    /// scheduling and sending is honoured.
     /// </summary>
-    private static Task DeliverIfDueAsync(
+    private static async Task DeliverIfDueAsync(
         Notification notification,
-        NotificationPreferences preferences,
+        User recipient,
         INotificationSender sender,
         ILoggerFactory loggerFactory,
         DateTimeOffset now,
         CancellationToken cancellationToken)
-        => NotificationDelivery.DeliverIfDueAsync(
-            notification, preferences, sender, loggerFactory, now, cancellationToken);
+    {
+        await NotificationDelivery.DeliverIfDueAsync(
+            notification, recipient, sender, loggerFactory, now, cancellationToken);
+    }
 
     /// <summary>
-    /// UTC now, truncated to the microsecond precision Postgres <c>timestamptz</c> stores.
-    /// See <see cref="NotificationDelivery.UtcNow"/> for the round-tripping bug that makes
-    /// this necessary on every timestamp this endpoint writes.
+    /// UTC now, truncated to microseconds -- the precision Postgres <c>timestamptz</c>
+    /// actually stores.
+    ///
+    /// A .NET tick is 100ns, so an untruncated timestamp written here comes back from a
+    /// later read up to nine ticks smaller than the value this endpoint echoed in its
+    /// response. That made <c>POST /notifications/{id}/read</c> look non-idempotent: the
+    /// first call returned its in-memory <c>OpenedAt</c> and every later call returned the
+    /// round-tripped one, so a client diffing the two saw the "first opened at" timestamp
+    /// move. It was never actually moving in the database -- but a response that does not
+    /// equal what was stored is a bug whichever way round it is. Truncating at the source
+    /// makes what we return equal to what we persist, for every timestamp on this surface.
+    /// Caught by CI, not by reasoning: it needs a real Postgres round trip to show up.
     /// </summary>
-    private static DateTimeOffset UtcNow() => NotificationDelivery.UtcNow();
+    private static DateTimeOffset UtcNow()
+    {
+        var now = DateTimeOffset.UtcNow;
+        return now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMicrosecond));
+    }
+
+    private static string? Truncate(string? value)
+        => value is null || value.Length <= FailureReasonMaxLength
+            ? value
+            : value[..FailureReasonMaxLength];
 }

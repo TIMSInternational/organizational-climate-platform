@@ -128,10 +128,17 @@ public static class InvitationEndpoints
 
         db.UserInvitations.Add(invitation);
         DemographicValueStore.AddForInvitation(db, invitation.Id, invitationDemographics.Values);
-        await emailSender.SendAsync(invitation, cancellationToken);
         invitation.Status = InvitationValidation.StatusSent;
         invitation.SentAt = now;
+
+        // Committed before the mail goes out (#100). Under the logging stub the order did not
+        // matter; with a real provider it does, in one direction only -- mailing first and
+        // saving second can put a token in someone's inbox that no row ever backed, and a
+        // recipient clicking a link that 404s cannot tell that from an invitation that was
+        // never sent. Saving first can only produce the opposite: a committed invitation whose
+        // mail failed, which is logged and is exactly what POST /invitations/{id}/resend is for.
         await db.SaveChangesAsync(cancellationToken);
+        await emailSender.SendAsync(invitation, cancellationToken);
 
         return Results.Json(ToDetail(invitation, DemographicValueStore.ToMap(invitationDemographics.Values)), statusCode: 201);
     }
@@ -230,8 +237,10 @@ public static class InvitationEndpoints
         invitation.Status = InvitationValidation.StatusSent;
         invitation.SentAt = now;
 
-        await emailSender.SendAsync(invitation, cancellationToken);
+        // Same ordering as CreateAsync, and for the same reason: the freshly rotated token must
+        // exist in the database before it is put in an inbox.
         await db.SaveChangesAsync(cancellationToken);
+        await emailSender.SendAsync(invitation, cancellationToken);
 
         var demographics = await DemographicValueStore.LoadForInvitationsAsync(db, [invitation.Id], cancellationToken);
         return Results.Ok(ToDetail(invitation, demographics.GetValueOrDefault(invitation.Id, DemographicValueStore.Empty)));
