@@ -398,6 +398,7 @@ app.MapNotificationTemplateEndpoints();
 app.MapTrackingPickerEndpoints();
 app.MapTrackingInternalEndpoints();
 app.MapSurveyEndpoints();
+app.MapSurveyHistoryEndpoints();
 app.MapSurveyTemplateEndpoints();
 app.MapMicroclimateEndpoints();
 app.MapMicroclimateTemplateEndpoints();
