@@ -290,6 +290,13 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
             }));
+
+    // POST /surveys/{id}/responses and GET /surveys/{id}/respond (#118). Its own policy
+    // rather than the microclimate one -- the partition and limits live with the
+    // endpoints, in SurveyResponseEndpoints.
+    options.AddPolicy(
+        SurveyResponseEndpoints.ResponseSubmissionRateLimiterPolicy,
+        SurveyResponseEndpoints.PartitionResponseSubmission);
 });
 
 var app = builder.Build();
@@ -405,6 +412,7 @@ app.MapNotificationTemplateEndpoints();
 app.MapTrackingPickerEndpoints();
 app.MapTrackingInternalEndpoints();
 app.MapSurveyEndpoints();
+app.MapSurveyResponseEndpoints();
 app.MapSurveyDistributionEndpoints();
 app.MapSurveyDraftEndpoints();
 app.MapSurveyResultsEndpoints();
