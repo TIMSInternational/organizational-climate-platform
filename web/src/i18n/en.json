@@ -1015,6 +1015,9 @@
     "backToMicroclimate": "Back to the session"
   },
   "navigation": {
+    "sectionAdministration": "Administration",
+    "sectionWorkspace": "Workspace",
+    "sectionCommunication": "Communication",
     "dashboard": "Dashboard",
     "dashboardDesc": "Main overview and KPIs",
     "overview": "Overview",

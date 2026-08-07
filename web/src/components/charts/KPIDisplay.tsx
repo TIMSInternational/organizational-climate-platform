@@ -1,3 +1,5 @@
+import { Link } from 'react-router'
+import { ArrowRight } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { Card, CardContent } from '../ui/card'
 import { Progress } from '../ui/progress'
@@ -38,6 +40,15 @@ export interface Kpi {
    * icon is decoration and announcing it would just repeat the heading.
    */
   icon?: React.ComponentType<{ className?: string }>
+  /**
+   * An optional way out of the card — the "Continue →" / "Add item →" link the
+   * ForMaps KPI cards carry at their foot.
+   *
+   * `label` is already translated, like every other string on this type. Omitted
+   * where the number has no obvious next step; a card that offers one is stating
+   * that the destination exists, so an empty or placeholder link is worse than none.
+   */
+  action?: { label: string; href: string }
 }
 
 interface KPIDisplayProps {
@@ -131,21 +142,18 @@ function KpiCard({ kpi, locale }: { kpi: Kpi; locale?: string }) {
 
   return (
     <Card>
-      <CardContent className="flex flex-col gap-2">
-        {/* Label and icon share a row, icon flush right — the ForMaps KPI card.
-            `items-start` rather than `items-center` so a label that wraps to two
-            lines keeps the glyph pinned to the first, instead of drifting to the
-            vertical middle of the pair. */}
-        <div className="flex items-start justify-between gap-2">
-          <h4 className="text-sm font-medium text-fg-secondary">{kpi.label}</h4>
+      <CardContent className="flex h-full flex-col gap-2">
+        {/* Icon then label, on one row, the label set as a small-caps eyebrow —
+            the ForMaps KPI card. The glyph leads rather than sitting flush right:
+            in the live product it reads as part of the label, not as decoration
+            parked in the corner. `items-center` because the two are one line. */}
+        <div className="flex items-center gap-2">
           {kpi.icon ? (
-            // The tinted square behind the glyph is `--admin-bg-icon-box`, the
-            // token that already exists for exactly this; no colour literal, so
-            // tokenDiscipline stays satisfied and both themes follow the palette.
-            <span className="flex size-icon-box shrink-0 items-center justify-center rounded-lg bg-surface-icon-box text-fg-tertiary">
-              <kpi.icon aria-hidden="true" className="size-icon" />
-            </span>
+            <kpi.icon aria-hidden="true" className="size-icon shrink-0 text-fg-tertiary" />
           ) : null}
+          <h4 className="text-2xs font-semibold uppercase tracking-label text-fg-label">
+            {kpi.label}
+          </h4>
         </div>
 
         <Counter value={kpi.value} formatValue={render} locale={locale} />
@@ -156,6 +164,20 @@ function KpiCard({ kpi, locale }: { kpi: Kpi; locale?: string }) {
 
         {kpi.previousValue !== undefined ? (
           <Change kpi={kpi} previous={kpi.previousValue} render={render} locale={locale} />
+        ) : null}
+
+        {kpi.action ? (
+          // `mt-auto` so the link sits on the card's floor whatever else the card
+          // holds — without it a card with no target bar pulls its link up and the
+          // row of cards loses its baseline. The arrow is decorative and marked so:
+          // the link text already says where it goes.
+          <Link
+            to={kpi.action.href}
+            className="mt-auto inline-flex items-center gap-1 text-sm font-medium text-accent-blue no-underline hover:underline"
+          >
+            {kpi.action.label}
+            <ArrowRight aria-hidden="true" className="size-icon" />
+          </Link>
         ) : null}
       </CardContent>
     </Card>

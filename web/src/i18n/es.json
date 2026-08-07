@@ -1015,6 +1015,9 @@
     "backToMicroclimate": "Volver a la sesión"
   },
   "navigation": {
+    "sectionAdministration": "Administración",
+    "sectionWorkspace": "Espacio de trabajo",
+    "sectionCommunication": "Comunicación",
     "dashboard": "Panel de Control",
     "dashboardDesc": "Resumen principal e indicadores clave",
     "overview": "Resumen",

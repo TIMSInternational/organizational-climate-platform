@@ -144,9 +144,17 @@ const DEPARTMENTS_ITEM: NavItem = {
 
 export function buildNavSections(role: string | undefined, companyId: string | undefined): NavSection[] {
   if (role === 'super_admin') {
+    // Three titled groups rather than one unheaded list, matching the ForMaps admin
+    // sidebar this shell is modelled on. `.nav-section-title` was ported for exactly
+    // this and had never been used, because every section shipped `titleKey: ''`.
+    //
+    // The item ORDER is byte-for-byte what it was. `leafNavItems` flattens sections
+    // in order, so splitting the list changes nothing it produces -- which matters,
+    // because the mobile tab bar takes the first four leaves and navSections.test.ts
+    // pins them. Grouping is presentational here and must stay that way.
     return [
       {
-        titleKey: '',
+        titleKey: 'navigation.sectionAdministration',
         items: [
           {
             labelKey: 'navigation.systemAdministration',
@@ -169,6 +177,11 @@ export function buildNavSections(role: string | undefined, companyId: string | u
           // Its position also matters: it is third, so the four-slot mobile tab
           // bar still offers Companies / System settings / Benchmarks, unchanged
           // by the three entries appended below.
+        ],
+      },
+      {
+        titleKey: 'navigation.sectionWorkspace',
+        items: [
           {
             labelKey: 'navigation.benchmarks',
             href: '/analytics/benchmarks',
@@ -202,19 +215,24 @@ export function buildNavSections(role: string | undefined, companyId: string | u
           SURVEYS_ITEM,
           SURVEY_TEMPLATES_ITEM,
           DEPARTMENTS_ITEM,
-          // Last on purpose: `leafNavItems` feeds the first four leaves to the mobile
-          // tab bar, so Notifications sits behind "More" instead of displacing a
-          // primary page. navSections.test.ts pins this position.
-          NOTIFICATIONS_ITEM,
         ],
+      },
+      {
+        titleKey: 'navigation.sectionCommunication',
+        // Last on purpose: `leafNavItems` feeds the first four leaves to the mobile
+        // tab bar, so Notifications sits behind "More" instead of displacing a
+        // primary page. navSections.test.ts pins this position.
+        items: [NOTIFICATIONS_ITEM],
       },
     ]
   }
 
   if (role === 'company_admin' && companyId) {
+    // Same three groups as the super_admin branch above, same rule: presentation
+    // only, item order untouched so `leafNavItems` keeps its pinned first four.
     return [
       {
-        titleKey: '',
+        titleKey: 'navigation.sectionAdministration',
         items: [
           {
             labelKey: 'navigation.companyAdministration',
@@ -226,6 +244,11 @@ export function buildNavSections(role: string | undefined, companyId: string | u
               { labelKey: 'navigation.demographicFields', href: `/admin/companies/${companyId}/demographic-fields`, icon: Tags },
             ],
           },
+        ],
+      },
+      {
+        titleKey: 'navigation.sectionWorkspace',
+        items: [
           {
             labelKey: 'navigation.actionPlans',
             href: '/action-plans',
@@ -280,11 +303,14 @@ export function buildNavSections(role: string | undefined, companyId: string | u
             icon: ChartColumn,
           },
           DEPARTMENTS_ITEM,
-          // Last on purpose -- see the super_admin branch. A company_admin's first
-          // four leaves are their own company's pages; Notifications must not push
-          // one of them off the mobile tab bar.
-          NOTIFICATIONS_ITEM,
         ],
+      },
+      {
+        titleKey: 'navigation.sectionCommunication',
+        // Last on purpose -- see the super_admin branch. A company_admin's first
+        // four leaves are their own company's pages; Notifications must not push
+        // one of them off the mobile tab bar.
+        items: [NOTIFICATIONS_ITEM],
       },
     ]
   }
@@ -297,7 +323,10 @@ export function buildNavSections(role: string | undefined, companyId: string | u
   //
   // My surveys first: it is a work destination, Notifications is an inbox. Same
   // ordering principle as the admin branches above.
-  return [{ titleKey: '', items: [MY_SURVEYS_ITEM, NOTIFICATIONS_ITEM] }]
+  return [
+    { titleKey: 'navigation.sectionWorkspace', items: [MY_SURVEYS_ITEM] },
+    { titleKey: 'navigation.sectionCommunication', items: [NOTIFICATIONS_ITEM] },
+  ]
 }
 
 /**
