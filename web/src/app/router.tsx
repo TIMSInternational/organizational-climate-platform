@@ -13,7 +13,10 @@ import ActionPlansListPage from '../features/action-plans/pages/ActionPlansListP
 import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetailPage'
 import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
 import MicroclimateCreatePage from '../features/microclimates/pages/MicroclimateCreatePage'
+import MicroclimateAnalyticsPage from '../features/microclimates/pages/MicroclimateAnalyticsPage'
 import MicroclimateDetailPage from '../features/microclimates/pages/MicroclimateDetailPage'
+import MicroclimateLivePage from '../features/microclimates/pages/MicroclimateLivePage'
+import MicroclimateResultsPage from '../features/microclimates/pages/MicroclimateResultsPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
 import NotificationPreferencesPage from '../features/notifications/pages/NotificationPreferencesPage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
@@ -105,7 +108,13 @@ export const router = createBrowserRouter([
               // one whatever the declaration order, so `new` can never be parsed as
               // a microclimate id.
               { path: '/microclimates/new', element: <MicroclimateCreatePage /> },
+              { path: '/microclimates/analytics', element: <MicroclimateAnalyticsPage /> },
               { path: '/microclimates/:id', element: <MicroclimateDetailPage /> },
+              // No nav entry, deliberately: both are per-session destinations reached
+              // from the session, not places in the sidebar. Same rule as
+              // `/surveys/:id/results`.
+              { path: '/microclimates/:id/live', element: <MicroclimateLivePage /> },
+              { path: '/microclimates/:id/results', element: <MicroclimateResultsPage /> },
               { path: '/surveys', element: <SurveysListPage /> },
               // Before `/surveys/:id` for readability only -- react-router ranks a
               // static segment above a dynamic one regardless of declaration order,

@@ -408,8 +408,8 @@ export default function MicroclimateCreatePage() {
             <p className="m-0 text-fg-secondary">{t('microclimates.questionsHint')}</p>
             {values.questions.length === 0 ? (
               <EmptyState
-                title={t('microclimates.validationQuestionsRequired')}
-                description={t('microclimates.questionsHint')}
+                title={t('microclimates.stepQuestions')}
+                description={t('microclimates.validationQuestionsRequired')}
               />
             ) : (
               values.questions.map((question, index) => (
