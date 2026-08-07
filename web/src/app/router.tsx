@@ -12,6 +12,7 @@ import DemographicFieldsPage from '../features/org-structure/pages/DemographicFi
 import ActionPlansListPage from '../features/action-plans/pages/ActionPlansListPage'
 import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetailPage'
 import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
+import MicroclimateCreatePage from '../features/microclimates/pages/MicroclimateCreatePage'
 import MicroclimateDetailPage from '../features/microclimates/pages/MicroclimateDetailPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
 import NotificationPreferencesPage from '../features/notifications/pages/NotificationPreferencesPage'
@@ -99,6 +100,11 @@ export const router = createBrowserRouter([
               { path: '/action-plans', element: <ActionPlansListPage /> },
               { path: '/action-plans/:id', element: <ActionPlanDetailPage /> },
               { path: '/microclimates', element: <MicroclimatesListPage /> },
+              // Before `/microclimates/:id` for readability only, same as
+              // `/surveys/my`: react-router ranks a static segment above a dynamic
+              // one whatever the declaration order, so `new` can never be parsed as
+              // a microclimate id.
+              { path: '/microclimates/new', element: <MicroclimateCreatePage /> },
               { path: '/microclimates/:id', element: <MicroclimateDetailPage /> },
               { path: '/surveys', element: <SurveysListPage /> },
               // Before `/surveys/:id` for readability only -- react-router ranks a
