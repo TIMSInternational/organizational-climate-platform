@@ -53,9 +53,17 @@ export async function getNotificationPreferences(baseUrl: string): Promise<Notif
 /**
  * Sends all five values, always.
  *
- * The API rejects a partial payload rather than defaulting the missing flags, so this
- * signature takes the whole object instead of a partial — an opt-out must never be
- * inferred from a field the client happened not to send.
+ * The endpoint's own semantics are *partial*: every field on
+ * `UpdateNotificationPreferencesRequest` is nullable and null means "not mentioned, leave
+ * exactly as stored" — the only reading that cannot change a choice the user did not make
+ * in this request. (An earlier version of this comment said the API rejects a partial
+ * payload; it does not, and never did.)
+ *
+ * This signature still takes the whole object rather than a `Partial`, because the form
+ * above it edits all five at once and a full payload is a valid partial one. What it must
+ * never do is compute the payload from a subset of the form's state: an opt-out inferred
+ * from a field the client happened not to send is the failure the nullable request DTO
+ * exists to prevent.
  */
 export async function updateNotificationPreferences(
   baseUrl: string,
