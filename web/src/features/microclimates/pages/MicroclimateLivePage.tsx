@@ -261,7 +261,12 @@ export default function MicroclimateLivePage() {
                   current={live.responseCount}
                   target={live.targetParticipantCount}
                   locale={locale}
-                  title={t('microclimates.liveParticipation')}
+                  // Its own heading, not `liveParticipation` again. The KPI row above
+                  // already carries that title, so reusing it rendered "Live
+                  // Participation" twice on the page, over two blocks showing much the
+                  // same numbers -- which reads as a duplicated section rather than as
+                  // a summary followed by its progress bar.
+                  title={t('microclimates.liveProgressTitle')}
                 />
 
                 <div className="flex flex-wrap items-center gap-panel-gap">

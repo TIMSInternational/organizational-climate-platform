@@ -869,6 +869,7 @@
     "scheduledStartTime": "Scheduled Start Time",
     "refreshStatus": "Refresh Status",
     "liveParticipation": "Live Participation",
+    "liveProgressTitle": "Progress toward target",
     "liveWordCloud": "Live Word Cloud",
     "liveResponseData": "Live Response Data",
     "liveAiInsights": "Live AI Insights",
