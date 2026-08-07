@@ -1154,7 +1154,22 @@
     "timeLimitMinutes": "{minutes} min limit",
     "noAssignedSurveys": "No surveys assigned to you",
     "noAssignedSurveysDescription": "When your organization assigns you a survey, it will appear here.",
-    "respondingUnavailable": "Answering surveys from this page is not available yet."
+    "respondingUnavailable": "Answering surveys from this page is not available yet.",
+    "templateName": "Template Name",
+    "templateCategory": "Category",
+    "templateScope": "Scope",
+    "templateTags": "Tags",
+    "allCategories": "All Categories",
+    "searchTemplates": "Search templates by name or description...",
+    "noTemplatesFound": "No Templates Found",
+    "globalTemplate": "Global",
+    "companyTemplate": "Company",
+    "timesUsed": "Times Used",
+    "useTemplate": "Use This Template",
+    "questionLanguage": "Language of the questions",
+    "noTemplateQuestionsDescription": "This template has no questions, so it cannot create a usable survey yet.",
+    "chooseCompanyToUseTemplate": "Choose a company from the header before creating a survey from this template.",
+    "noCompanyToUseTemplate": "Your account has no company, so it cannot create a survey from this template."
   },
   "users": {
     "userManagement": "User Management",

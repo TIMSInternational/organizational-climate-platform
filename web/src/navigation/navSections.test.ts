@@ -221,6 +221,7 @@ describe('leafNavItems', () => {
       // Action Plans, which would take Action Plans' fourth mobile tab slot. The
       // first four leaves above are unchanged by #109.
       '/surveys',
+      '/surveys/templates',
       '/analytics/benchmarks',
       '/analytics/ai-insights',
       // After the top-level rows, not inside the admin group: `leafNavItems` puts a
@@ -250,6 +251,7 @@ describe('leafNavItems', () => {
       // Benchmarks is here. Appended last of the destinations so #124's pinned first
       // four leaves are untouched.
       '/surveys',
+      '/surveys/templates',
       '/notifications',
     ])
   })

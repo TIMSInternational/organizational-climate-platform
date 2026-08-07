@@ -1154,7 +1154,22 @@
     "timeLimitMinutes": "Límite de {minutes} min",
     "noAssignedSurveys": "No tienes encuestas asignadas",
     "noAssignedSurveysDescription": "Cuando tu organización te asigne una encuesta, aparecerá aquí.",
-    "respondingUnavailable": "Responder encuestas desde esta página aún no está disponible."
+    "respondingUnavailable": "Responder encuestas desde esta página aún no está disponible.",
+    "templateName": "Nombre de la plantilla",
+    "templateCategory": "Categoría",
+    "templateScope": "Alcance",
+    "templateTags": "Etiquetas",
+    "allCategories": "Todas las categorías",
+    "searchTemplates": "Buscar plantillas por nombre o descripción...",
+    "noTemplatesFound": "No se encontraron plantillas",
+    "globalTemplate": "Global",
+    "companyTemplate": "Empresa",
+    "timesUsed": "Veces usada",
+    "useTemplate": "Usar esta plantilla",
+    "questionLanguage": "Idioma de las preguntas",
+    "noTemplateQuestionsDescription": "Esta plantilla no tiene preguntas, así que todavía no puede crear una encuesta utilizable.",
+    "chooseCompanyToUseTemplate": "Elige una empresa en la cabecera antes de crear una encuesta a partir de esta plantilla.",
+    "noCompanyToUseTemplate": "Tu cuenta no tiene empresa, así que no puede crear una encuesta a partir de esta plantilla."
   },
   "users": {
     "userManagement": "Gestión de Usuarios",

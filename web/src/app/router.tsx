@@ -22,6 +22,8 @@ import ReportsListPage from '../features/reports/pages/ReportsListPage'
 import SurveysListPage from '../features/surveys/pages/SurveysListPage'
 import SurveyDetailPage from '../features/surveys/pages/SurveyDetailPage'
 import MySurveysPage from '../features/surveys/pages/MySurveysPage'
+import SurveyTemplatesPage from '../features/surveys/pages/SurveyTemplatesPage'
+import SurveyTemplateDetailPage from '../features/surveys/pages/SurveyTemplateDetailPage'
 import AnalyticsDashboardPage from '../features/analytics/pages/AnalyticsDashboardPage'
 import { getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
@@ -107,6 +109,10 @@ export const router = createBrowserRouter([
               // caller's own user row and reads no role claim, so employee,
               // supervisor and leader can all load it. See MySurveysPage.tsx.
               { path: '/surveys/my', element: <MySurveysPage /> },
+              // Same static-beats-dynamic ranking as `/surveys/my`, so `templates`
+              // is never parsed as a survey id.
+              { path: '/surveys/templates', element: <SurveyTemplatesPage /> },
+              { path: '/surveys/templates/:id', element: <SurveyTemplateDetailPage /> },
               { path: '/surveys/:id', element: <SurveyDetailPage /> },
               // Not under /admin: every authenticated role owns their own preferences,
               // and the API behind this page takes no user id at all (#103).

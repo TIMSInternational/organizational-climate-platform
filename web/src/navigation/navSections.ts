@@ -13,6 +13,7 @@ import {
   Bell,
   ClipboardList,
   Inbox,
+  LayoutTemplate,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -109,6 +110,18 @@ const SURVEYS_ITEM: NavItem = {
   icon: ClipboardList,
 }
 
+// The template catalogue (#107's endpoints, #109's page). Admin-only, like the
+// listing above and for the same reason: `GET /survey-templates` gates on
+// `Roles.Admin` and then scopes by role -- a super_admin sees every tenant's plus the
+// global ones, a company_admin the global ones plus their own. So one entry, no
+// companyId interpolated, correct for both branches and offered to neither employee
+// nor supervisor, who would get a 403.
+const SURVEY_TEMPLATES_ITEM: NavItem = {
+  labelKey: 'navigation.surveyTemplates',
+  href: '/surveys/templates',
+  icon: LayoutTemplate,
+}
+
 export function buildNavSections(role: string | undefined, companyId: string | undefined): NavSection[] {
   if (role === 'super_admin') {
     return [
@@ -167,6 +180,7 @@ export function buildNavSections(role: string | undefined, companyId: string | u
           // genuinely cross-company shape Benchmarks has, and #124's selector is not
           // load-bearing here.
           SURVEYS_ITEM,
+          SURVEY_TEMPLATES_ITEM,
           // Last on purpose: `leafNavItems` feeds the first four leaves to the mobile
           // tab bar, so Notifications sits behind "More" instead of displacing a
           // primary page. navSections.test.ts pins this position.
@@ -205,6 +219,7 @@ export function buildNavSections(role: string | undefined, companyId: string | u
           // Action Plans, so the first four leaves are unchanged and Action Plans
           // keeps the mobile tab slot navSections.test.ts pins for it.
           SURVEYS_ITEM,
+          SURVEY_TEMPLATES_ITEM,
           {
             labelKey: 'navigation.benchmarks',
             href: '/analytics/benchmarks',
