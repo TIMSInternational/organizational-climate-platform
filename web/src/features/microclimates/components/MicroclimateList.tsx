@@ -27,6 +27,7 @@ export default function MicroclimateList({ microclimates }: { microclimates: Mic
   if (microclimates.length === 0) {
     return (
       <EmptyState
+        fill
         title={t('microclimates.noMicroclimates')}
         description={t('microclimates.createFirstMicroclimate')}
       />

@@ -27,6 +27,7 @@ export default function MySurveyList({ surveys }: MySurveyListProps) {
   if (surveys.length === 0) {
     return (
       <EmptyState
+        fill
         title={t('surveys.noAssignedSurveys')}
         description={t('surveys.noAssignedSurveysDescription')}
       />

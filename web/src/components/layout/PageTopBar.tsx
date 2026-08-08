@@ -167,7 +167,15 @@ export function PageTopBar({
               320px Spanish render to show: "Retroalimentación" is 120px at 13px
               type and the description box is 110px there, so a single unbreakable
               word pushed 10px out of its own box. */}
-          {description && <p className="mb-0 break-words text-fg-secondary">{description}</p>}
+          {/* `max-w-prose` caps the line length. The shell's content panel has no
+              width cap any more (see `AdminLayout`) because a table or a chart is
+              better for the room — but prose is not, and measured across eleven
+              viewports this line ran to 132 characters at 1280 and wider, against a
+              readable maximum of about 70. The cap is on the text, where it
+              belongs, rather than on the page around it. */}
+          {description && (
+            <p className="mb-0 max-w-prose break-words text-fg-secondary">{description}</p>
+          )}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-inline">{actions}</div>}
       </div>

@@ -157,6 +157,11 @@
 
   /* `--container-*` gives both `max-w-content` and `w-content`. */
   --container-content: var(--admin-size-content-max);
+  /* `--container-*` gives `max-w-field`, which `ui/FormField.tsx` puts on the
+     scaffold every field shares. index.css caps `label > input` for a bare
+     control; this is the same ceiling for the primitive, whose label and
+     control are siblings and so never matched that rule. */
+  --container-field: var(--admin-size-field-max);
 
   /* -- Radii ------------------------------------------------------------- */
   --radius-sm: var(--admin-radius-sm);

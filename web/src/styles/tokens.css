@@ -133,6 +133,19 @@
   --admin-size-sidebar: 220px; /* ForMaps StudentSidebar EXPANDED_W */
   --admin-size-sidebar-collapsed: 52px;
   --admin-size-content-max: 1280px;
+  /* The block a page-level empty state reserves for itself, so its message centres
+     in the screen rather than clinging to the heading with the rest of the card
+     empty beneath it. Viewport-relative because it exists to compensate for the
+     viewport: `min-h-full` on the panel means the dead space grows with the
+     display, and a fixed number that suits a 768px laptop leaves a 1440px monitor
+     looking just as empty. See `ui/error-state.tsx`. */
+  --admin-size-empty-fill: 50vh;
+  /* How wide a single form field is ever worth being. Applied by index.css to a
+     control inside a `<label>` row, which is full-bleed by design — without a
+     ceiling that made a role picker 2316px wide on a 2560 monitor once the content
+     panel stopped being capped. Not a breakpoint: the control still shrinks with
+     its container, this only stops it growing past the point of being readable. */
+  --admin-size-field-max: 32rem;
 
   /* -- Radii -------------------------------------------------------------
      4px on controls and 8px on panels are the legacy literals: ui/button.tsx

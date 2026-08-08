@@ -4,8 +4,9 @@ import SurveyList from '../components/SurveyList'
 import SurveyFilters from '../components/SurveyFilters'
 import { EMPTY_SURVEY_FILTERS, type SurveyFiltersValue } from '../surveyFilterState'
 import { useTranslation } from '../../../i18n'
+import { Link } from 'react-router'
 import { PageTopBar } from '../../../components/layout'
-import { LoadingRegion, NetworkError, SkeletonText } from '../../../components/ui'
+import { Button, LoadingRegion, NetworkError, SkeletonText } from '../../../components/ui'
 
 /**
  * Every survey the viewer may administer.
@@ -86,6 +87,14 @@ export default function SurveysListPage() {
       <PageTopBar
         title={t('navigation.surveys')}
         description={t('surveys.surveyManagementDesc')}
+        actions={
+          // The only way into the creation wizard. `POST /surveys` has existed since
+          // #104 with nothing in the frontend calling it, which is why this list has
+          // been empty in every environment.
+          <Button asChild variant="primary">
+            <Link to="/surveys/new">{t('surveys.newSurvey')}</Link>
+          </Button>
+        }
       />
 
       <SurveyFilters

@@ -33,6 +33,7 @@ import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
 import ReportsListPage from '../features/reports/pages/ReportsListPage'
 import SurveyResultsPage from '../features/surveys/pages/SurveyResultsPage'
 import SurveysListPage from '../features/surveys/pages/SurveysListPage'
+import SurveyCreatePage from '../features/surveys/pages/SurveyCreatePage'
 import SurveyDetailPage from '../features/surveys/pages/SurveyDetailPage'
 import MySurveysPage from '../features/surveys/pages/MySurveysPage'
 import SurveyTemplatesPage from '../features/surveys/pages/SurveyTemplatesPage'
@@ -146,6 +147,10 @@ export const router = createBrowserRouter([
               { path: '/microclimates/:id/live', element: <MicroclimateLivePage /> },
               { path: '/microclimates/:id/results', element: <MicroclimateResultsPage /> },
               { path: '/surveys', element: <SurveysListPage /> },
+              // Before `/surveys/:id` for the same static-beats-dynamic reason the
+              // two entries below record: `new` is a literal segment and could never
+              // be read as a survey id, so the order is readability only.
+              { path: '/surveys/new', element: <SurveyCreatePage /> },
               // Before `/surveys/:id` for readability only -- react-router ranks a
               // static segment above a dynamic one regardless of declaration order,
               // so `/surveys/my` could never be swallowed as an id. (The API relies
