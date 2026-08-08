@@ -1015,7 +1015,11 @@
     "analyticsParticipation": "Participation",
     "columnParticipation": "Participation",
     "wordColumn": "Word",
-    "backToMicroclimate": "Back to the session"
+    "backToMicroclimate": "Back to the session",
+    "journeyTitle": "Session journey",
+    "journeyLabel": "Microclimate lifecycle",
+    "journeyDraft": "Questions and audience are set. Nothing is being collected yet.",
+    "journeyActive": "Open for responses."
   },
   "navigation": {
     "sectionAdministration": "Administration",
@@ -1196,7 +1200,13 @@
     "openMenu": "Open menu",
     "mainNavigation": "Main navigation",
     "skipToContent": "Skip to content",
-    "breadcrumb": "Breadcrumb"
+    "breadcrumb": "Breadcrumb",
+    "search": "Search",
+    "commandKey": "Cmd+K",
+    "escapeKey": "ESC",
+    "commandPalette": "Command palette",
+    "commandPaletteHint": "Type to filter, then press Enter to open a page.",
+    "commandPaletteEmpty": "No results found."
   },
   "success": {
     "saved": "Saved successfully",

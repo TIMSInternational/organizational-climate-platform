@@ -120,12 +120,23 @@ export default function AnalyticsDashboardPage() {
   }
 
   const outstandingInsights = insights.filter((insight) => !insight.isAcknowledged).length
+  // Each card carries the ForMaps "Continue →" link out to the page the number
+  // actually lives on. This band is a summary of two other pages and nothing else,
+  // so every card here has an unambiguous destination — which is not true of the
+  // KPI bands that sit directly above the list they count (Action Plans,
+  // Departments), where the link would point at the same screen.
   const kpis: Kpi[] = [
-    { id: 'benchmarks', label: t('analytics.kpiBenchmarks'), value: benchmarks.length },
+    {
+      id: 'benchmarks',
+      label: t('analytics.kpiBenchmarks'),
+      value: benchmarks.length,
+      action: { label: t('navigation.benchmarks'), href: '/analytics/benchmarks' },
+    },
     {
       id: 'activeBenchmarks',
       label: t('analytics.kpiActiveBenchmarks'),
       value: benchmarks.filter((benchmark) => benchmark.isActive).length,
+      action: { label: t('navigation.benchmarks'), href: '/analytics/benchmarks' },
     },
     {
       id: 'outstandingInsights',
@@ -133,6 +144,7 @@ export default function AnalyticsDashboardPage() {
       value: outstandingInsights,
       // Up is bad: an unacknowledged insight is work nobody has looked at.
       higherIsBetter: false,
+      action: { label: t('navigation.aiInsights'), href: '/analytics/ai-insights' },
     },
   ]
 

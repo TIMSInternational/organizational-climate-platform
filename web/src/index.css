@@ -445,4 +445,13 @@
     background: var(--admin-accent-bg-blue);
     border-radius: var(--admin-radius-full);
   }
+
+  /* On a selected row the fill is already `--admin-accent-blue`, so the pill above
+     would be teal text on an 8%-alpha teal tint over solid teal — invisible at the
+     one moment the count matters. Inverted: the row's own on-accent colour for the
+     digits, and a translucent white plate to lift them off the fill. */
+  .nav-badge[data-active='true'] {
+    color: var(--admin-font-on-accent);
+    background: rgb(255 255 255 / 0.22);
+  }
 }

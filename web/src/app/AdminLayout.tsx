@@ -1,13 +1,20 @@
 import { useState } from 'react'
 import { Outlet, useNavigate } from 'react-router'
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import RoleBasedNav from '../navigation/RoleBasedNav'
-import { buildNavSections } from '../navigation/navSections'
+import { buildNavSections, withUnreadBadge } from '../navigation/navSections'
 import { clearToken, getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import { useTranslation } from '../i18n'
 import { SkipLink } from '../components/ui'
-import { CompanyContextSwitcher, MobileNav, ShellControls, SidebarUserMenu } from '../components/layout'
+import {
+  CommandPalette,
+  CompanyContextSwitcher,
+  MobileNav,
+  SearchTrigger,
+  ShellControls,
+  SidebarBrand,
+  SidebarUserMenu,
+} from '../components/layout'
 import { CompanyContextProvider, writeSelectedCompanyId } from '../company-context'
 import { NotificationBell } from '../features/notifications/components/NotificationBell'
 
@@ -46,6 +53,7 @@ function AdminShell() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const [collapsed, setCollapsed] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
 
   function handleSignOut() {
     clearToken()
@@ -61,7 +69,10 @@ function AdminShell() {
   const claims = token ? decodeJwtPayload(token) : null
   const role = typeof claims?.role === 'string' ? claims.role : undefined
   const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
-  const sections = buildNavSections(role, companyId)
+  // The bell owns the poll; the rail just reads the number it reports, so the two
+  // can never disagree and nothing is fetched twice. See `withUnreadBadge` for why
+  // Notifications is the only badged row.
+  const sections = withUnreadBadge(buildNavSections(role, companyId), unreadCount)
 
   return (
     <div className="flex h-dvh flex-col bg-surface-outer">
@@ -84,22 +95,12 @@ function AdminShell() {
             transition: 'width var(--admin-duration-base) var(--admin-ease-out)',
           }}
         >
-          <div className={collapsed ? 'flex justify-center' : 'flex justify-end'}>
-            <button
-              type="button"
-              onClick={() => setCollapsed((value) => !value)}
-              aria-expanded={!collapsed}
-              aria-label={collapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}
-              title={collapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}
-              className="size-control-md justify-center rounded-md border-none bg-transparent p-0 text-fg-tertiary hover:bg-state-hover"
-            >
-              {collapsed ? (
-                <PanelLeftOpen aria-hidden="true" className="size-icon" />
-              ) : (
-                <PanelLeftClose aria-hidden="true" className="size-icon" />
-              )}
-            </button>
-          </div>
+          {/* The rail's head — mark, wordmark, collapse control. The toggle used to
+              be a lone right-aligned button floating above the first nav row; it
+              moved into `SidebarBrand` because ForMaps' bar holds both, and a rail
+              that opens with a bare chevron reads as unfinished chrome rather than
+              as the top of an application. */}
+          <SidebarBrand collapsed={collapsed} onToggleCollapsed={() => setCollapsed((value) => !value)} />
 
           <RoleBasedNav sections={sections} collapsed={collapsed} />
 
@@ -135,8 +136,21 @@ function AdminShell() {
               Deliberately not in `ShellControls` either — that lives in the
               sidebar footer, which is hidden while the rail is collapsed and
               hidden entirely below `md`, which is exactly where an unread badge
-              needs to be visible. */}
-          <header className="flex shrink-0 items-center justify-end gap-gutter border-b border-line-default bg-surface-panel px-gutter py-1">
+              needs to be visible.
+
+              Transparent and unruled, and measured against ForMaps' own top bar
+              (`components/layout/PageTopBar.tsx` there): `flex items-center
+              justify-end shrink-0`, `minHeight: 40`, `padding: 10px 12px 10px
+              16px`, and no background or border at all. It used to be
+              `bg-surface-panel` over a `border-b`, which drew a full-width rule
+              between the rail and the content card and made the strip read as a
+              third surface — rendered in Chrome, the seam was the first thing the
+              eye landed on. The bar is chrome floating in the shell's gutter; the
+              card below is the only panel. */}
+          <header
+            className="flex shrink-0 items-center justify-end gap-inline"
+            style={{ minHeight: 40, padding: '10px 12px 10px 16px' }}
+          >
             {/* #124's company-context selector. Renders `null` for every role but
                 SuperAdmin, so the strip is unchanged for everyone else — the bell
                 stays flush right and nothing shifts. It is here rather than in
@@ -144,7 +158,12 @@ function AdminShell() {
                 rail and below `md`: a global scope switch that disappears while
                 the pages it scopes stay visible is worse than none. */}
             <CompanyContextSwitcher />
-            <NotificationBell />
+            {/* ForMaps puts the search glyph and its Cmd+K chip immediately before
+                the bell in this same strip, and so does this. It opens the palette
+                by dispatching a window event rather than by holding shared state —
+                see `CommandPalette.tsx`. */}
+            <SearchTrigger />
+            <NotificationBell onUnreadCountChange={setUnreadCount} />
           </header>
 
           {/* The scroll container. */}
@@ -190,6 +209,11 @@ function AdminShell() {
       </div>
 
       <MobileNav sections={sections} footer={<ShellControls onSignOut={handleSignOut} />} />
+
+      {/* Last in the shell, outside every column, because it portals to the body
+          anyway and its Cmd+K listener is document-wide. Handed the same `sections`
+          the rail gets, so it can only ever offer this role's own destinations. */}
+      <CommandPalette sections={sections} />
     </div>
   )
 }

@@ -349,3 +349,108 @@ export function leafNavItems(sections: NavSection[]): NavItem[] {
     .flatMap((section) => section.items)
     .flatMap((item) => (item.sub?.length ? item.sub : [item]))
 }
+
+/**
+ * The Notifications row, carrying the caller's unread tally.
+ *
+ * ## Why this is the only badged row
+ *
+ * ForMaps' brand notes describe nav badges ("yellow pills for counts"), but **none
+ * of their five live sidebars renders one** — Student, Counselor, SchoolAdmin,
+ * Admin and Parent all pass counts nowhere. So there is no badge to port, and the
+ * `badge` field here plus `.nav-badge` in `index.css` were built for a legacy nav
+ * that had no counterpart either. Inventing counts to fill them would put a number
+ * beside "Action Plans" that is either a second copy of one already on the page or
+ * a fresh request per rail render.
+ *
+ * Notifications is different: the shell already polls that number for the bell, it
+ * is not otherwise visible while the bell's dropdown is closed, and it is the one
+ * count that means "there is something here you have not seen". So exactly one row
+ * gets a badge, from data that already exists.
+ *
+ * Capped at "99+": the label box in a 220px rail is 151px, and a four-digit count
+ * pushes the row's text into an ellipsis to make room for a number nobody reads
+ * precisely.
+ *
+ * Returns the sections unchanged at zero — an empty pill reading "0" is noise, and
+ * a badge's whole job is to be absent when there is nothing to say.
+ */
+export function withUnreadBadge(sections: NavSection[], unreadCount: number): NavSection[] {
+  if (unreadCount <= 0) return sections
+
+  const badge = unreadCount > 99 ? '99+' : String(unreadCount)
+  return sections.map((section) => ({
+    ...section,
+    items: section.items.map((item) =>
+      item.href === NOTIFICATIONS_ITEM.href ? { ...item, badge } : item,
+    ),
+  }))
+}
+
+/**
+ * Does `pathname` sit under `href` at all?
+ *
+ * Segment-aware: `/surveys` must not claim `/surveys-archive`, which a bare
+ * `startsWith` would. Being *under* a row is necessary but not sufficient for the
+ * row to light up — see `activeHref`.
+ */
+export function isUnder(pathname: string, href: string): boolean {
+  if (href === '/dashboard') {
+    return pathname === '/dashboard' || pathname === '/'
+  }
+  return pathname === href || pathname.startsWith(`${href}/`)
+}
+
+/**
+ * The one row that should read as active: the **longest** href the current path
+ * sits under.
+ *
+ * A plain prefix test lit two rows at once. `/admin/companies/{id}` (Company
+ * Settings) is a prefix of `/admin/companies/{id}/demographic-fields`, so opening
+ * Demographic fields filled both — invisible while "active" was a shade of text,
+ * obvious once it became a filled pill.
+ *
+ * ForMaps hits the same thing and answers it by naming the offending parents in
+ * `isActive` one at a time (`if (href === "/dashboard/assessments") return
+ * pathname === href`). That works for their tree and needs a new line for every
+ * parent that later gains a child. Deriving it instead means nothing to maintain:
+ * the most specific matching row wins, which is the rule those exceptions were
+ * approximating anyway.
+ *
+ * Lives here rather than in `RoleBasedNav`, where it was written, because the page
+ * header needs the same answer to name the area it is in — see
+ * `sectionTitleKeyForPath`. Pure, so it is asserted directly in
+ * `navSections.test.ts` without rendering a rail.
+ */
+export function activeHref(pathname: string, sections: NavSection[]): string | null {
+  const hrefs = sections.flatMap((section) =>
+    section.items.flatMap((item) => [item.href, ...(item.sub?.map((sub) => sub.href) ?? [])]),
+  )
+  return hrefs
+    .filter((href) => isUnder(pathname, href))
+    .reduce<string | null>((best, href) => (best === null || href.length > best.length ? href : best), null)
+}
+
+/**
+ * Which section of the app a path belongs to, as a catalogue key.
+ *
+ * This is what the page eyebrow says — ForMaps prints "STUDENT PORTAL" above the
+ * page title, and the equivalent here is the nav group the open page sits in
+ * ("ADMINISTRATION", "WORKSPACE", "COMMUNICATION"). Derived rather than passed per
+ * page: there are 27 `PageTopBar` callers, and a hand-written eyebrow on each is 27
+ * chances to name the wrong area and 27 more the day a nav entry moves group.
+ *
+ * `null` for a path no nav row covers (a detail route reached from a list, say),
+ * where the honest answer is to print no eyebrow rather than to guess one.
+ */
+export function sectionTitleKeyForPath(pathname: string, sections: NavSection[]): string | null {
+  const href = activeHref(pathname, sections)
+  if (href === null) return null
+
+  const section = sections.find((candidate) =>
+    candidate.items.some(
+      (item) => item.href === href || (item.sub?.some((sub) => sub.href === href) ?? false),
+    ),
+  )
+  return section?.titleKey || null
+}

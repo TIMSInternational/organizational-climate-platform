@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { DropdownMenuItem, NotificationDropdown, type NotificationItem } from '../../../components/ui'
@@ -31,11 +32,29 @@ import { formatNotificationTimestamp } from '../formatTimestamp'
  * Selecting an item marks it read and goes to the inbox, because the dropdown
  * shows a truncated `message` and the inbox is where the whole thing is legible.
  */
-export function NotificationBell() {
+export interface NotificationBellProps {
+  /**
+   * Called whenever the unread tally changes, so the shell can put the same number
+   * on the Notifications nav row.
+   *
+   * A callback rather than the shell owning the hook and passing the state down:
+   * `useUnreadNotifications` polls, and a second caller would be a second poller —
+   * two requests a minute for one number, and two places on screen 200px apart free
+   * to disagree for up to a whole interval. One poller, one number, and the rail
+   * observes it.
+   */
+  onUnreadCountChange?: (count: number) => void
+}
+
+export function NotificationBell({ onUnreadCountChange }: NotificationBellProps = {}) {
   const { t, locale } = useTranslation()
   const navigate = useNavigate()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const { unread, count } = useUnreadNotifications(baseUrl)
+
+  useEffect(() => {
+    onUnreadCountChange?.(count)
+  }, [count, onUnreadCountChange])
 
   const items: NotificationItem[] = unread.map((notification) => ({
     id: notification.id,

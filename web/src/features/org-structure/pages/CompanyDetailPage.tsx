@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { useParams } from 'react-router'
 import { getCompany, updateCompany, type CompanyDetail } from '../api/companies'
 import { listDepartments, createDepartment, updateDepartment, type Department } from '../api/departments'
 import { updateCompanySettings, type CompanySettingsResponse } from '../api/companySettings'
@@ -8,7 +8,8 @@ import CompanySettingsForm, { type CompanySettingsFormValues } from '../componen
 import DepartmentList from '../components/DepartmentList'
 import DepartmentForm, { type DepartmentFormValues } from '../components/DepartmentForm'
 import { useTranslation } from '../../../i18n'
-import { PageTopBar } from '../../../components/layout'
+import { ChartColumn, FileText, Tags, Users } from 'lucide-react'
+import { PageTopBar, QuickActions } from '../../../components/layout'
 
 export default function CompanyDetailPage() {
   const { t } = useTranslation()
@@ -112,19 +113,50 @@ export default function CompanyDetailPage() {
       {/* No breadcrumb: the only crumb above this page is /admin/companies, which
           is SuperAdmin-only, and a company_admin reaches this page as their own
           company's home. A crumb they would be 403'd on is worse than none. */}
-      <PageTopBar
-        title={company?.name ?? t('dashboard.company')}
-        actions={
-          <>
-            <Link to={`/admin/companies/${id}/users`}>{t('dashboard.manageUsers')}</Link>
-            <Link to={`/admin/companies/${id}/demographic-fields`}>{t('dashboard.manageDemographicFields')}</Link>
-            {/* The only path a super_admin has to these two pages: their nav sections
-                carry no company id, by design (navSections.ts). */}
-            <Link to={`/admin/companies/${id}/reports`}>{t('dashboard.viewReports')}</Link>
-            <Link to={`/admin/companies/${id}/analytics`}>{t('dashboard.viewAnalytics')}</Link>
-          </>
-        }
-      />
+      <PageTopBar title={company?.name ?? t('dashboard.company')} />
+
+      {/* ForMaps' quick-action tiles, and the reason this page has them: these four
+          destinations used to be four bare `<Link>`s crammed into the header's
+          `actions` slot, where they wrapped onto a second line and read as a row of
+          undifferentiated blue text beside the company name. They are the four
+          places you go *from* this page — and for a super_admin they are the only
+          path to any of them, since their nav sections carry no company id by
+          design (navSections.ts). That makes them the page's primary content, not
+          its header furniture.
+
+          `mb-section` matches the gap `PageTopBar` leaves under itself. */}
+      <div className="mb-section">
+        <QuickActions
+          columns={4}
+          title={t('dashboard.quickActions')}
+          actions={[
+            {
+              id: 'users',
+              label: t('dashboard.manageUsers'),
+              href: `/admin/companies/${id}/users`,
+              icon: Users,
+            },
+            {
+              id: 'demographic-fields',
+              label: t('dashboard.manageDemographicFields'),
+              href: `/admin/companies/${id}/demographic-fields`,
+              icon: Tags,
+            },
+            {
+              id: 'reports',
+              label: t('dashboard.viewReports'),
+              href: `/admin/companies/${id}/reports`,
+              icon: FileText,
+            },
+            {
+              id: 'analytics',
+              label: t('dashboard.viewAnalytics'),
+              href: `/admin/companies/${id}/analytics`,
+              icon: ChartColumn,
+            },
+          ]}
+        />
+      </div>
 
       {company ? (
         <>

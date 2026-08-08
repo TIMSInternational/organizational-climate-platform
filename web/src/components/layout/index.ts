@@ -30,4 +30,18 @@ export {
 } from './DashboardGrid'
 export { ShellControls, ThemeSwitcher, type ShellControlsProps } from './ShellControls'
 export { CompanyContextSwitcher } from './CompanyContextSwitcher'
+export {
+  CommandPalette,
+  SearchTrigger,
+  OPEN_COMMAND_PALETTE_EVENT,
+  type CommandPaletteProps,
+} from './CommandPalette'
+export { QuickActions, type QuickAction, type QuickActionsProps } from './QuickActions'
+export {
+  JourneyTimeline,
+  type JourneyStep,
+  type JourneyStatus,
+  type JourneyTimelineProps,
+} from './JourneyTimeline'
+export { SidebarBrand, type SidebarBrandProps } from './SidebarBrand'
 export { SidebarUserMenu } from './SidebarUserMenu'

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { ChevronRight } from 'lucide-react'
 import { useTranslation } from '../i18n'
-import type { NavSection, NavItem as NavItemType } from './navSections'
+import { activeHref, type NavSection, type NavItem as NavItemType } from './navSections'
 
 /**
  * The tree elbow beside a sub-item, ported from the ForMaps sidebar
@@ -26,45 +26,6 @@ function SubItemBreadcrumb({ isLast, isActive }: { isLast: boolean; isActive: bo
       {!isLast && <div style={{ position: 'absolute', left: 4, top: 14, width: 1, height: 14, background: lineColor }} />}
     </div>
   )
-}
-
-/**
- * Does `pathname` sit under `href` at all?
- *
- * Segment-aware: `/surveys` must not claim `/surveys-archive`, which a bare
- * `startsWith` would. Being *under* a row is necessary but not sufficient for the
- * row to light up -- see `activeHref`.
- */
-function isUnder(pathname: string, href: string) {
-  if (href === '/dashboard') {
-    return pathname === '/dashboard' || pathname === '/'
-  }
-  return pathname === href || pathname.startsWith(`${href}/`)
-}
-
-/**
- * The one row that should read as active: the **longest** href the current path
- * sits under.
- *
- * A plain prefix test lit two rows at once. `/admin/companies/{id}` (Company
- * Settings) is a prefix of `/admin/companies/{id}/demographic-fields`, so opening
- * Demographic fields filled both -- invisible while "active" was a shade of text,
- * obvious once it became a filled pill.
- *
- * ForMaps hits the same thing and answers it by naming the offending parents in
- * `isActive` one at a time (`if (href === "/dashboard/assessments") return
- * pathname === href`). That works for their tree and needs a new line for every
- * parent that later gains a child. Deriving it instead means nothing to maintain:
- * the most specific matching row wins, which is the rule those exceptions were
- * approximating anyway.
- */
-function activeHref(pathname: string, sections: NavSection[]): string | null {
-  const hrefs = sections.flatMap((section) =>
-    section.items.flatMap((item) => [item.href, ...(item.sub?.map((sub) => sub.href) ?? [])]),
-  )
-  return hrefs
-    .filter((href) => isUnder(pathname, href))
-    .reduce<string | null>((best, href) => (best === null || href.length > best.length ? href : best), null)
 }
 
 export interface RoleBasedNavProps {
@@ -155,7 +116,16 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
             {label}
           </span>
         )}
-        {!collapsed && item.badge && <span className="nav-badge">{item.badge}</span>}
+        {/* `data-active` so the badge can invert on a filled row. Without it the
+            pill is `--admin-accent-blue` on `--admin-accent-bg-blue`, an 8%-alpha
+            tint of that same colour — over the solid accent fill of a selected row
+            that is teal text on teal, which is unreadable at exactly the moment
+            the count matters most. */}
+        {!collapsed && item.badge && (
+          <span className="nav-badge" data-active={isActive && !hasSub}>
+            {item.badge}
+          </span>
+        )}
       </>
     )
 
