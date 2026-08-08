@@ -147,10 +147,26 @@ describe('AdminLayout', () => {
     expect(localStorage.getItem('climate_platform_token')).toBeNull()
   })
 
-  it('caps the content column so a table does not stretch across an ultrawide monitor', () => {
+  /**
+   * The reverse of what this used to assert, and the reason is measured.
+   *
+   * The panel was `mx-auto max-w-content` (1280px). Because the content column
+   * starts *after* the 220px rail, centring a capped card inside it walks the card
+   * away from the rail as the viewport grows: measured in Chrome, 210px of empty
+   * surface between them at 1920, 530px at 2560, 970px at 3440. The cap also bit
+   * from 1516px up, which is an ordinary laptop.
+   *
+   * A table or a chart is better for the width; it is prose that becomes
+   * unreadable, so the cap moved onto the text (`max-w-prose`, asserted below and
+   * in `PageTopBar`). happy-dom computes no layout, so — as with the
+   * `overflow-x-auto` rule beneath — this can only be asserted as the classes.
+   */
+  it('does not cap or centre the panel, so the card cannot drift away from the rail', () => {
     renderShell()
     const panel = document.getElementById('main')!.firstElementChild!
-    expect(panel.className).toContain('max-w-content')
+    expect(panel.className).not.toContain('max-w-content')
+    expect(panel.className).not.toContain('mx-auto')
+    expect(panel.className).toContain('w-full')
   })
 
   it('scrolls a too-wide table inside the panel rather than outside its border', () => {

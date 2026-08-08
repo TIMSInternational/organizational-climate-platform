@@ -15,6 +15,7 @@ export default function DemographicFieldList({ fields, onEdit }: { fields: Demog
     // controls for one job.
     return (
       <EmptyState
+        fill
         icon={<Tags className="size-6" aria-hidden="true" />}
         title={t('users.noDemographicFieldsYet')}
         description={t('users.noDemographicFieldsDescription')}
