@@ -77,7 +77,10 @@ function Field({
 }
 
 export type TextFieldProps = BaseFieldProps & {
-  type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url'
+  // `date`/`datetime-local` added for the survey wizard's schedule step. The
+  // browser supplies the picker; nothing else about the field differs, which is
+  // why this is a widened union rather than a second component.
+  type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'date' | 'datetime-local'
   placeholder?: string
   value?: string
   onChange?: (value: string) => void

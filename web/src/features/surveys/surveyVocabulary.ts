@@ -38,6 +38,48 @@ const STATUS_KEYS: Record<string, string> = {
  * The survey types the legacy product shipped. Open-ended on the wire, so this is a
  * label lookup and never a validation list — see the block comment above.
  */
+/**
+ * The survey types the wizard offers, in the order it offers them. Exported as the
+ * ordered list because a `Record` has no reliable order and the picker needs one;
+ * `TYPE_KEYS` below stays the lookup, so the two cannot disagree about membership —
+ * `surveyVocabulary.test.ts` asserts exactly that.
+ */
+export const SURVEY_TYPES = [
+  'periodic',
+  'pulse',
+  'engagement',
+  'satisfaction',
+  'onboarding',
+  'exit',
+  'custom',
+] as const
+
+export type SurveyType = (typeof SURVEY_TYPES)[number]
+
+/**
+ * `QuestionTypes.ForSurvey`, in the order the wizard offers them. Same rule as
+ * `SURVEY_TYPES`: the ordered list is exported, the lookup below stays the authority
+ * on membership.
+ */
+export const SURVEY_QUESTION_TYPES = [
+  'likert',
+  'multiple_choice',
+  'rating',
+  'yes_no',
+  'ranking',
+  'open_ended',
+] as const
+
+export type SurveyQuestionType = (typeof SURVEY_QUESTION_TYPES)[number]
+
+/** What a freshly added question is, before the author changes it. */
+export const DEFAULT_SURVEY_QUESTION_TYPE: SurveyQuestionType = 'likert'
+
+/** The two types whose answers are a list the author has to write. */
+export function needsOptions(type: string): boolean {
+  return type === 'multiple_choice' || type === 'ranking'
+}
+
 const TYPE_KEYS: Record<string, string> = {
   periodic: 'surveys.periodic',
   onboarding: 'surveys.onboarding',
