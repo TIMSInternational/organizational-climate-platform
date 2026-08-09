@@ -401,6 +401,7 @@ app.MapAuthEndpoints();
 app.MapCompanyEndpoints();
 app.MapDepartmentEndpoints();
 app.MapUserEndpoints();
+app.MapProfileEndpoints();
 app.MapInvitationEndpoints();
 app.MapInvitationAcceptEndpoints();
 app.MapSystemSettingsEndpoints();

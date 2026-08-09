@@ -8,6 +8,7 @@ import {
   Moon,
   Settings,
   Sun,
+  User,
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { LOCALES, isLocale } from '../../i18n/locale'
@@ -245,6 +246,23 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
             <div style={{ padding: '4px 4px' }}>
               {submenu === null && (
                 <>
+                  {/* #136. Inside the account menu rather than in `navSections`, for
+                      the same reason notification preferences are: that module is
+                      role-aware and returns nothing for employees, supervisors and
+                      leaders, so a nav entry would hide the page from most of the
+                      people whose own profile it is. This menu is where a reader
+                      looks for "things about me". */}
+                  <Link
+                    to="/profile"
+                    role="menuitem"
+                    style={{ ...ROW, textDecoration: 'none' }}
+                    onClick={close}
+                  >
+                    <User aria-hidden="true" style={{ width: 16, height: 16, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
+                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {t('profile.title')}
+                    </span>
+                  </Link>
                   <button type="button" role="menuitem" style={ROW} onClick={() => setSubmenu('theme')}>
                     <Moon aria-hidden="true" style={{ width: 16, height: 16, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
                     <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
