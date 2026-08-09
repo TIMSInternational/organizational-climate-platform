@@ -18,7 +18,7 @@ nothing reading them.
 
 ## Execution model — decided
 
-Four `BackgroundService` jobs in `ClimateProject.Workers`. **Every instance runs every job.**
+A `BackgroundService` per job in `ClimateProject.Workers`. **Every instance runs every job.**
 Nothing is pinned to one instance: App Runner cannot express that, and pinning would make the
 scheduler a single point of failure with no failover.
 
@@ -48,12 +48,41 @@ produces the incident.
 
 ## The jobs
 
+> **Scheduled ≠ running.** Every interval in this table describes what the workers host *would*
+> do. As of #272 that host runs nowhere: `deploy-prod.yml` builds only the root `Dockerfile`
+> (the API), nothing builds `Dockerfile.workers`, `ClimateProject.Api` has no project reference
+> to `ClimateProject.Workers`, and `infra/aws/` defines one service. **None of these jobs has
+> ever executed in production.** #275 owns fixing that; until it lands, read this table as a
+> specification, not as a description of production.
+
 | Job | Interval | Replaces |
 | --- | --- | --- |
 | `notification-dispatch` | 1 min | `api/cron/process-reminders` |
 | `invitation-reminders` | 15 min | `api/cron/send-reminders` (matches the legacy cadence exactly) |
 | `digests` | 15 min | nothing — `DigestFrequency` had no job behind it |
 | `scheduled-reports` | 5 min | `api/cron/scheduled-reports` |
+| `survey-draft-retention` | 1 hour | nothing — `DELETE /surveys/drafts/expired` had no caller (#272) |
+
+**Why an hour for draft retention.** It is the one interval nothing observable depends on.
+Drafts expire after 30 days and every draft read filters on `expires_at > now`, so an expired
+draft is already invisible; the sweep only returns the disk. Hourly keeps each tick's delete
+small — and each run is capped at `Scheduling:SurveyDraftRetentionBatchSize` rows so the first
+sweep over a backlog is not one enormous transaction under the lease. A missed tick costs
+nothing: the sweep is idempotent and deletes strictly by `expires_at`.
+
+The capped run is **unordered**. An earlier version took the oldest expiry first; nothing can
+observe that order, because every row in the set is already hidden by the read filters, and
+ordering forced a full scan plus a top-N sort where an unordered `LIMIT` lets Postgres stop at
+its capful. Progress stays monotone without it: the rows a tick takes are deleted, so no row
+can be handed back to the next tick and none can be starved.
+
+**Accepted cost: the retention predicate is unindexed (#278).** `survey_drafts` is indexed on
+`company_id` and `user_id` only, so `WHERE expires_at <= now` is a sequential scan — hourly,
+forever, on a table whose whole premise is unbounded growth (the wizard autosaves a draft row
+per authoring session since #266). Deferred, not overlooked: an index on `expires_at` needs a
+migration, migrations are rationed, and the scan is cheap while the table is small. It stops
+being cheap as the table grows, which is why it is written down here and filed rather than
+carried in someone's head.
 
 Dispatch calls `NotificationDelivery.ProcessDueAsync` — **the same method
 `POST /notifications/process` calls.** That logic was extracted out of `NotificationEndpoints`
@@ -97,9 +126,12 @@ offset zones (Kathmandu, UTC+05:45) are served at their own 08:00.
   and delivery. This is why report scheduling and report generation do not fight over a
   scheduler.
 - `INotificationSender` — unchanged; #100 still owns real delivery.
-- `Dockerfile.workers` exists but nothing builds it. #164 chooses between deploying it as its
-  own service and calling `AddClimateProjectScheduling` from the API host. Both are correct;
-  the lease makes it an operational choice, not a correctness one.
+- `Dockerfile.workers` exists but nothing builds it, so the scheduler runs nowhere — see the
+  note above the job table. **#275** chooses between deploying it as its own service and
+  calling `AddClimateProjectScheduling` from the API host. Both are correct; the lease makes it
+  an operational choice, not a correctness one. Deliberately not made by any issue that merely
+  adds a job to the host, #272 included: co-hosting in the API is a real architectural change
+  with a real cost, and it should be decided once, on purpose.
 
 ## Observability
 
