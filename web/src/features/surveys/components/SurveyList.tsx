@@ -28,6 +28,7 @@ export default function SurveyList({ surveys }: SurveyListProps) {
   if (surveys.length === 0) {
     return (
       <EmptyState
+        fill
         title={t('surveys.noSurveysFound')}
         description={t('surveys.tryAdjustingFilters')}
       />

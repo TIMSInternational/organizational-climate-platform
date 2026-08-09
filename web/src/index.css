@@ -224,11 +224,28 @@
      standalone control (the users search box in
      features/org-structure/components/UserFilters.tsx) keeps its intrinsic
      width instead of stretching the whole content column. */
+  /* `max-width` as well as `width: 100%`, and this is the fix the shell's old
+     page-level width cap was reaching for.
+
+     That cap capped the whole column, which broke the layout in a bigger way than
+     the thing it prevented (see `app/AdminLayout.tsx`). What it was actually
+     protecting against is right here: a `<select>` holding the word "Employee",
+     stretched to 2316px on a 2560 monitor because it is full-bleed inside a form
+     row that is full-bleed inside a panel that now fills the screen. Measured in
+     Chrome on the Users page at 1920, 2560 and 3440.
+
+     A field's useful width is a property of the field, not of the display, so the
+     limit belongs on the control. `--admin-size-field-max` is past the longest
+     value any of these inputs holds (an email address, a company name) and well
+     under the point where the eye loses the left edge on the way back from the
+     right. The control still shrinks to its container below that, so nothing
+     changes at any ordinary size. */
   label > input,
   label > select,
   label > textarea {
     display: block;
     width: 100%;
+    max-width: var(--admin-size-field-max);
     margin-top: var(--admin-space-4);
   }
 

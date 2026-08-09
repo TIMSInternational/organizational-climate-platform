@@ -5,7 +5,7 @@ import tokensCss from './tokens.css?raw'
 import themeCss from './theme.css?raw'
 import indexCss from '../index.css?raw'
 import adminThemeSource from '../theme/adminTheme.ts?raw'
-import adminLayoutSource from '../app/AdminLayout.tsx?raw'
+import publicSurveySource from '../features/surveys/pages/PublicSurveyRespondPage.tsx?raw'
 
 /**
  * The token layer is a port, not a design. These tests pin the two things a
@@ -142,14 +142,25 @@ describe('control density', () => {
     expect(bareControlRule![1]).not.toMatch(/width:/)
   })
 
-  it('caps the content column somewhere', () => {
+  /**
+   * The token survives; the shell is no longer one of its callers.
+   *
+   * This used to assert `adminLayoutSource` mentioned the cap. That assertion is
+   * now unrunnable as written — `AdminLayout` still *names* the token, in the
+   * comment explaining why it stopped using it, so the regex would match a
+   * comment and pass vacuously whatever the markup did. The cap's real callers are
+   * asserted instead: two standalone centred pages with no rail beside them, which
+   * is the shape a centred capped column is right for.
+   */
+  it('keeps the content cap for the pages that have no rail to drift away from', () => {
     expect(token('--admin-size-content-max')).toBe('1280px')
-    // `max-w-content` since #80, `var(--admin-size-content-max)` before it. Both
-    // are the same cap: theme.css maps `--container-content` onto the token, so
-    // the utility and the custom property cannot disagree by construction. The
-    // claim being made is that the column is capped *at all* — an uncapped one
-    // stretches a table to 3440px on an ultrawide — not which spelling is used.
-    expect(adminLayoutSource).toMatch(/max-w-content|var\(--admin-size-content-max\)/)
+    expect(publicSurveySource).toMatch(/max-w-content/)
+  })
+
+  it('reserves a viewport-relative block for a page-level empty state', () => {
+    // `ui/error-state.tsx` reads this for its `fill` variant. Viewport-relative
+    // because the dead space it compensates for grows with the display.
+    expect(token('--admin-size-empty-fill')).toBe('50vh')
   })
 })
 

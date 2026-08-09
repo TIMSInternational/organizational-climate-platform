@@ -57,7 +57,17 @@ function Field({
   )
 
   return (
-    <FormItem invalid={Boolean(error)} className={className}>
+    // `max-w-field` here, on the scaffold every field shares, rather than on the
+    // control alone. `index.css` caps `label > input`, which reaches a bare control
+    // written as a direct child of its label — but this primitive renders the label
+    // and the control as *siblings* inside `FormItem`, so that rule never applied to
+    // anything built from `TextField`/`SelectField`/`TextareaField`. Measured on the
+    // survey wizard at 2560: every field was 2256px wide, which is precisely the
+    // defect the token was introduced to fix, still present one layer up.
+    //
+    // The cap is on the wrapper so the label, the control, the description and the
+    // error message all share one measure and stay left-aligned with each other.
+    <FormItem invalid={Boolean(error)} className={cn('max-w-field', className)}>
       {labelAfterControl ? (
         // Checkbox and switch read as "[control] Label", not stacked.
         <div className="flex items-center gap-inline">
@@ -77,7 +87,10 @@ function Field({
 }
 
 export type TextFieldProps = BaseFieldProps & {
-  type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url'
+  // `date`/`datetime-local` added for the survey wizard's schedule step. The
+  // browser supplies the picker; nothing else about the field differs, which is
+  // why this is a widened union rather than a second component.
+  type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'date' | 'datetime-local'
   placeholder?: string
   value?: string
   onChange?: (value: string) => void

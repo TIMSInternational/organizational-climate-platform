@@ -171,10 +171,33 @@ function AdminShell() {
           {/* Legacy AppShell inset its content by 12px and put it on a panel:
               `background: var(--admin-bg-panel)`, `1px solid
               var(--admin-border-panel)`, `borderRadius: 8`.
-              `--admin-size-content-max` caps the column so a full-width control (a
-              search box, a table) stops growing with the viewport on an ultrawide
-              monitor. `pb-20 md:pb-panel` clears the mobile tab bar, which is
-              `fixed` and would otherwise cover the last ~56px of every page.
+              `pb-20 md:pb-panel` clears the mobile tab bar, which is `fixed` and
+              would otherwise cover the last ~56px of every page.
+
+              **No width cap, and that is a reversal.** This used to be
+              `mx-auto ... max-w-content` (1280px), to stop a full-width control
+              growing with the viewport on a large monitor. Measured across eleven
+              viewports, that cap did something worse than what it prevented: it
+              bites from 1516px up — which is a 1728 MacBook Pro and a 1920 monitor,
+              not an exotic size — and because the column starts *after* the 220px
+              rail, centring the capped card inside it pushed the card away from the
+              rail. At 2560 there were 530px of empty surface between them and at
+              3440 there were 970px, so the navigation read as belonging to nothing
+              and the page as an island.
+
+              The cap was also aimed at the wrong thing. A table, a chart or a KPI
+              row is *better* for having the width; it is prose that becomes
+              unreadable, and the same measurement put the empty-state description
+              at 132 characters per line where about 70 is the limit. So the
+              constraint moved onto the text — `max-w-prose` on the description in
+              `PageTopBar` and in `ui/error-state.tsx` — and the container fills,
+              which is also what ForMaps' own `AppShell` does (no `maxWidth`
+              anywhere in it).
+
+              `--admin-size-content-max` still exists and is still right for its two
+              remaining callers, `PublicSurveyRespondPage` and the dev chart
+              gallery: both are standalone centred pages with no rail beside them,
+              so there is nothing for a centred column to drift away from.
 
               `overflow-x-auto` was added here as the *table* fix and is no longer
               that. It was measured rather than guessed: index.css used to give
@@ -201,7 +224,7 @@ function AdminShell() {
                 which reads as content that failed to load rather than as a page
                 with little on it. The panel is the page's surface, so it should be
                 the height of the page. */}
-            <div className="mx-auto min-h-full w-full max-w-content overflow-x-auto rounded-xl border border-line-panel bg-surface-panel p-panel pb-20 md:pb-panel">
+            <div className="flex min-h-full w-full flex-col overflow-x-auto rounded-xl border border-line-panel bg-surface-panel p-panel pb-20 md:pb-panel">
               <Outlet />
             </div>
           </main>

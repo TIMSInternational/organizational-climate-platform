@@ -42,6 +42,7 @@ export default function ActionPlanList({ plans, filtered = false }: ActionPlanLi
   if (plans.length === 0) {
     return (
       <EmptyState
+        fill
         title={t('actionPlans.noActionPlansFound')}
         description={
           filtered ? t('actionPlans.tryAdjustingFilters') : t('actionPlans.createFirstPlan')

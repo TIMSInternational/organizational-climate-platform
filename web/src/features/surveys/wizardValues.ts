@@ -1,0 +1,368 @@
+import type { TranslateFn } from '../../i18n'
+import type {
+  CreateSurveyInput,
+  CreateSurveyQuestionInput,
+  LocalizedInput,
+} from './api/surveyCreate'
+import { DEFAULT_SURVEY_QUESTION_TYPE, needsOptions } from './surveyVocabulary'
+
+/**
+ * The survey creation wizard's state, and the rules that decide when a step is done.
+ *
+ * The sibling of `features/microclimates/wizardValues.ts`, deliberately: the two
+ * flows share `components/wizard/WizardStepper`, whose own docstring calls this one
+ * out by name ("#127 is the first wizard, #108 is the second"). Where the shapes can
+ * be the same they are the same, so the two wizards do not disagree about what
+ * "Continue" means.
+ *
+ * Kept out of the page for the reasons the microclimate module gives: it is the half
+ * worth testing directly — every rule below is a message an admin will read — and it
+ * is the half that has to agree with `SurveyEndpoints.CreateAsync`.
+ *
+ * ## The steps are the DTO, not a workflow somebody imagined
+ *
+ * `CreateSurveyRequest` is: title, companyId, type, startDate, endDate, description,
+ * departmentIds, questions, settings, targetAudienceCount, language. Every field
+ * appears here and nothing else does.
+ *
+ * ## Three ways this differs from the microclimate wizard, all because the DTO does
+ *
+ * - **Departments are real here.** `CreateSurveyRequest.DepartmentIds` is written by
+ *   `CreateAsync`. The microclimate wizard deliberately has no picker because its
+ *   request record has no such field and one would collect a choice and drop it.
+ * - **There is a survey `type`.** Seven of them, and it is required.
+ * - **Drafts exist.** `SurveyDraftEndpoints` (#105) is a whole autosave-and-recover
+ *   surface for surveys and nothing else, which is why this wizard can be left and
+ *   come back to and the microclimate one cannot.
+ *
+ * ## What this wizard cannot do, and does not pretend to
+ *
+ * **Launch.** `CreateSurveyRequest` has no status field and `CreateAsync` writes
+ * `draft`. Publishing is `PUT /surveys/{id}/status`, guarded by the content-i18n gate
+ * — deliberately a separate, irreversible checkpoint (`SurveyDtos.cs` says so at
+ * length). The review step states that it is about to create a draft.
+ *
+ * ## Which validations are mirrored, and which are left to the server
+ *
+ * Mirrored, because the message is better attached to the field than to a failed
+ * request: title present (in both languages when the survey is bilingual), end after
+ * start, a positive audience target when one is given, question text present, an
+ * option-based question having at least two options, and duplicate option labels.
+ *
+ * **Not** mirrored: the publish translation gate (it applies to a transition this
+ * flow never performs), department scoping and template scoping — the server checks
+ * those against rows the client cannot see, and a client copy would drift.
+ */
+
+export type ContentLanguage = 'en' | 'es' | 'both'
+
+export const CONTENT_LANGUAGES: readonly ContentLanguage[] = ['en', 'es', 'both']
+
+export interface SurveyOptionValues {
+  /** Client-side identity, so removing the second of three options does not remount the third. */
+  key: string
+  labelEn: string
+  labelEs: string
+}
+
+export interface SurveyQuestionValues {
+  key: string
+  textEn: string
+  textEs: string
+  type: string
+  required: boolean
+  options: SurveyOptionValues[]
+}
+
+export interface SurveyWizardValues {
+  language: ContentLanguage
+  titleEn: string
+  titleEs: string
+  descriptionEn: string
+  descriptionEs: string
+  type: string
+  /** `<input type="datetime-local">` text, e.g. `2026-08-07T10:30`. Local wall clock. */
+  startDate: string
+  endDate: string
+  /** Empty means "every department", which is what omitting the field asks the server for. */
+  departmentIds: string[]
+  /** Text, not a number: an empty box is a real state and `NaN` is not a value. */
+  targetAudienceCount: string
+  anonymous: boolean
+  allowPartialResponses: boolean
+  showProgress: boolean
+  questions: SurveyQuestionValues[]
+}
+
+/**
+ * The same order as the microclimate wizard's, so an admin who has made one already
+ * knows where they are in this one.
+ */
+export const SURVEY_WIZARD_STEPS = [
+  'basics',
+  'schedule',
+  'audience',
+  'questions',
+  'review',
+] as const
+
+export type SurveyWizardStepId = (typeof SURVEY_WIZARD_STEPS)[number]
+
+export function emptyOption(key: string): SurveyOptionValues {
+  return { key, labelEn: '', labelEs: '' }
+}
+
+export function emptyQuestion(key: string): SurveyQuestionValues {
+  return {
+    key,
+    textEn: '',
+    textEs: '',
+    type: DEFAULT_SURVEY_QUESTION_TYPE,
+    required: true,
+    options: [],
+  }
+}
+
+/**
+ * `language` is seeded from the company rather than defaulted to English, for the
+ * reason the microclimate module records: the server's own default is
+ * `company.Settings.Language`, and guessing differently in the form would silently
+ * disagree with a request that omitted the field.
+ */
+export function emptyWizardValues(language: ContentLanguage): SurveyWizardValues {
+  return {
+    language,
+    titleEn: '',
+    titleEs: '',
+    descriptionEn: '',
+    descriptionEs: '',
+    type: 'periodic',
+    startDate: '',
+    endDate: '',
+    departmentIds: [],
+    targetAudienceCount: '',
+    anonymous: true,
+    allowPartialResponses: true,
+    showProgress: true,
+    questions: [],
+  }
+}
+
+/** True when both language columns have to be filled in. */
+export function needsBothLanguages(language: ContentLanguage): boolean {
+  return language === 'both'
+}
+
+/**
+ * The `LocalizedInput` for a pair of language columns, or `undefined` when the survey
+ * is single-language and that column is empty.
+ *
+ * Identical to the microclimate module's, and it must stay identical: both feed the
+ * same `LocalizedInput` converter server-side, which reads a bare string as "the
+ * survey's own language" and an object as an explicit per-locale map.
+ */
+export function localizedFor(
+  language: ContentLanguage,
+  en: string,
+  es: string,
+): LocalizedInput | undefined {
+  if (language === 'both') {
+    return { en: en.trim(), es: es.trim() }
+  }
+  const single = (language === 'es' ? es : en).trim()
+  return single.length === 0 ? undefined : single
+}
+
+/**
+ * The stable value the server will derive for an option: the English label, or the
+ * Spanish one when there is no English.
+ *
+ * Reproduced rather than approximated because the duplicate check below has to
+ * compare the same strings the server will, or it flags pairs the server accepts and
+ * misses pairs it rejects.
+ */
+export function derivedOptionValue(option: SurveyOptionValues): string | null {
+  const en = option.labelEn.trim()
+  if (en.length > 0) return en
+  const es = option.labelEs.trim()
+  return es.length > 0 ? es : null
+}
+
+function isBlank(value: string): boolean {
+  return value.trim().length === 0
+}
+
+function basicsErrors(values: SurveyWizardValues, t: TranslateFn): string[] {
+  const errors: string[] = []
+  if (needsBothLanguages(values.language)) {
+    if (isBlank(values.titleEn) || isBlank(values.titleEs)) {
+      errors.push(t('surveys.validationTitleBoth'))
+    }
+  } else if (isBlank(values.language === 'es' ? values.titleEs : values.titleEn)) {
+    errors.push(t('surveys.validationTitleRequired'))
+  }
+  if (isBlank(values.type)) errors.push(t('surveys.validationTypeRequired'))
+  return errors
+}
+
+function scheduleErrors(values: SurveyWizardValues, t: TranslateFn): string[] {
+  if (isBlank(values.startDate) || isBlank(values.endDate)) {
+    return [t('surveys.validationDatesRequired')]
+  }
+  const start = new Date(values.startDate).getTime()
+  const end = new Date(values.endDate).getTime()
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return [t('surveys.validationDatesRequired')]
+  }
+  return end <= start ? [t('surveys.validationEndAfterStart')] : []
+}
+
+/**
+ * The audience step is optional in the DTO and therefore optional here: no
+ * departments means every department, and no target means the server does not record
+ * one. Only a target that was *typed* and is not a positive whole number is an error
+ * — refusing to continue because a field the admin deliberately left blank is blank
+ * is the most common way a wizard becomes a maze.
+ */
+function audienceErrors(values: SurveyWizardValues, t: TranslateFn): string[] {
+  if (isBlank(values.targetAudienceCount)) return []
+  const parsed = Number(values.targetAudienceCount)
+  return Number.isInteger(parsed) && parsed > 0 ? [] : [t('surveys.validationTargetPositive')]
+}
+
+function questionErrors(values: SurveyWizardValues, t: TranslateFn): string[] {
+  if (values.questions.length === 0) return [t('surveys.validationQuestionsRequired')]
+
+  const errors: string[] = []
+  const both = needsBothLanguages(values.language)
+
+  values.questions.forEach((question, index) => {
+    const position = index + 1
+    const textMissing = both
+      ? isBlank(question.textEn) || isBlank(question.textEs)
+      : isBlank(values.language === 'es' ? question.textEs : question.textEn)
+    if (textMissing) {
+      errors.push(t('surveys.validationQuestionText', { position }))
+    }
+
+    if (!needsOptions(question.type)) return
+
+    const values_ = question.options.map(derivedOptionValue)
+    if (values_.filter((value) => value !== null).length < 2) {
+      errors.push(t('surveys.validationQuestionOptions', { position }))
+    }
+    const seen = new Set<string>()
+    for (const value of values_) {
+      if (value === null) continue
+      if (seen.has(value)) {
+        errors.push(t('surveys.validationQuestionDuplicateOption', { position }))
+        break
+      }
+      seen.add(value)
+    }
+  })
+
+  return errors
+}
+
+/**
+ * Each step's *current* blocking problems.
+ *
+ * Derived rather than stored, so correcting a field clears its message with no extra
+ * wiring — `WizardStepper` keeps no copy of these either.
+ *
+ * The review step carries the union of the others. It is unreachable while any of
+ * them fails, so in practice it is always empty there; it exists as a backstop so
+ * `onSubmit` cannot fire on invalid values if the step list ever gains a shortcut.
+ */
+export function wizardStepErrors(
+  values: SurveyWizardValues,
+  t: TranslateFn,
+): Record<SurveyWizardStepId, string[]> {
+  const basics = basicsErrors(values, t)
+  const schedule = scheduleErrors(values, t)
+  const audience = audienceErrors(values, t)
+  const questions = questionErrors(values, t)
+
+  return {
+    basics,
+    schedule,
+    audience,
+    questions,
+    review: [...basics, ...schedule, ...audience, ...questions],
+  }
+}
+
+/** Whole days the survey is open for, or null when either end is missing or invalid. */
+export function scheduledDays(values: SurveyWizardValues): number | null {
+  if (isBlank(values.startDate) || isBlank(values.endDate)) return null
+  const start = new Date(values.startDate).getTime()
+  const end = new Date(values.endDate).getTime()
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null
+  return Math.max(1, Math.round((end - start) / 86_400_000))
+}
+
+/**
+ * The request body.
+ *
+ * Only the fields the wizard actually asked about are sent. `SurveySettingsInput`'s
+ * fifteen members are all "leave this alone when omitted", so sending the whole
+ * record with invented defaults would overwrite twelve settings this flow never
+ * showed anyone.
+ *
+ * Call it only when `wizardStepErrors(...).review` is empty — it assumes a title and
+ * both dates are present, which is exactly what that guarantees.
+ */
+export function buildCreateInput(
+  values: SurveyWizardValues,
+  companyId: string,
+): CreateSurveyInput {
+  const title = localizedFor(values.language, values.titleEn, values.titleEs)
+  const description = localizedFor(values.language, values.descriptionEn, values.descriptionEs)
+  const target = Number(values.targetAudienceCount)
+
+  const questions: CreateSurveyQuestionInput[] = values.questions.map((question, index) => {
+    const built: CreateSurveyQuestionInput = {
+      // Non-null by the guard above: `questionErrors` rejects a blank text.
+      text: localizedFor(values.language, question.textEn, question.textEs) as LocalizedInput,
+      type: question.type,
+      required: question.required,
+      order: index,
+    }
+    if (needsOptions(question.type)) {
+      built.options = question.options
+        // An option with no label in either language is a row the author started and
+        // abandoned; dropping it is what the duplicate check already assumes.
+        .filter((option) => derivedOptionValue(option) !== null)
+        .map((option) => ({
+          // `value` deliberately omitted — the server derives it, and that is what
+          // keeps two surveys built from one template aggregating together.
+          label: localizedFor(values.language, option.labelEn, option.labelEs) as LocalizedInput,
+        }))
+    }
+    return built
+  })
+
+  const input: CreateSurveyInput = {
+    title: title as LocalizedInput,
+    companyId,
+    type: values.type,
+    startDate: new Date(values.startDate).toISOString(),
+    endDate: new Date(values.endDate).toISOString(),
+    language: values.language,
+    questions,
+    settings: {
+      anonymous: values.anonymous,
+      allowPartialResponses: values.allowPartialResponses,
+      showProgress: values.showProgress,
+    },
+  }
+
+  if (description !== undefined) input.description = description
+  if (values.departmentIds.length > 0) input.departmentIds = values.departmentIds
+  if (!isBlank(values.targetAudienceCount) && Number.isInteger(target) && target > 0) {
+    input.targetAudienceCount = target
+  }
+
+  return input
+}
