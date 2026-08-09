@@ -11,6 +11,7 @@ import { emptyQuestion, emptyWizardValues, type SurveyWizardValues } from './wiz
 function filled(): SurveyWizardValues {
   return {
     ...emptyWizardValues('both'),
+    templateId: 'tpl-7',
     titleEn: 'Quarterly pulse',
     titleEs: 'Pulso trimestral',
     descriptionEn: 'How the quarter went',
@@ -220,6 +221,14 @@ describe('hasDraftableContent', () => {
     ['a department', { departmentIds: ['d-1'] }],
   ])('is true once there is %s', (_label, patch) => {
     expect(hasDraftableContent({ ...emptyWizardValues('en'), ...patch })).toBe(true)
+  })
+
+  it('is true once a template is chosen, even with nothing else filled in', () => {
+    // In template mode the choice IS the survey -- there are no questions of one's own
+    // to count -- so leaving it out would mean such a draft was never saved.
+    const values = { ...emptyWizardValues('en'), templateId: 'tpl-7' }
+
+    expect(hasDraftableContent(values)).toBe(true)
   })
 
   it('is true for an added question even before it has any text', () => {

@@ -57,6 +57,8 @@ interface DraftQuestion {
 /** The wire shape. Changing a member here changes what is already in the database. */
 export interface SurveyDraftContent {
   version: number
+  /** '' for a blank survey. Restoring this wrong turns a template survey into a blank one. */
+  templateId: string
   language: ContentLanguage
   titleEn: string
   titleEs: string
@@ -77,6 +79,7 @@ export interface SurveyDraftContent {
 export function toDraftContent(values: SurveyWizardValues): SurveyDraftContent {
   return {
     version: SURVEY_DRAFT_CONTENT_VERSION,
+    templateId: values.templateId,
     language: values.language,
     titleEn: values.titleEn,
     titleEs: values.titleEs,
@@ -178,6 +181,7 @@ export function draftValuesFrom(
   const defaults = emptyWizardValues(fallbackLanguage)
 
   return {
+    templateId: str(content, 'templateId'),
     language: language(content, fallbackLanguage),
     titleEn: str(content, 'titleEn'),
     titleEs: str(content, 'titleEs'),
@@ -236,7 +240,11 @@ export function hasDraftableContent(values: SurveyWizardValues): boolean {
     values.startDate.length > 0 ||
     values.endDate.length > 0 ||
     values.targetAudienceCount.trim().length > 0 ||
-    values.departmentIds.length > 0
+    values.departmentIds.length > 0 ||
+    // Choosing a template IS the survey in template mode -- there are no questions of
+    // one's own to count, so leaving this out would mean a template survey with no title
+    // yet was never saved and never offered back.
+    values.templateId.length > 0
   ) {
     return true
   }

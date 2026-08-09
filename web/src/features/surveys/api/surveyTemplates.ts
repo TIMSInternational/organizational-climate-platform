@@ -1,4 +1,5 @@
 import { authFetch } from '../../../api/authFetch'
+import type { LocalizedInput } from './surveyCreate'
 import type { SurveyDetail } from './surveys'
 
 /**
@@ -121,14 +122,25 @@ export interface SurveyTemplateListFilters {
  * #191. That is why the detail page reads `useCompanyScope()` before offering the
  * action rather than after it fails.
  *
- * `language` is deliberately omitted from this type. It defaults server-side to the
- * language the template's questions are actually authored in, which is the only value
- * that cannot produce a survey failing its own publish gate for a language it never
- * had. Choosing one belongs to the wizard (#108), which can also supply the localized
- * title that a `'both'` survey then requires.
+ * `title` and `description` were added in #267, when the wizard gained a template
+ * picker. `UseSurveyTemplateRequest` has always accepted them; this type had not caught
+ * up, which is why the detail page's one-click "Use template" can only ever produce a
+ * survey named after the template. Omitting `title` falls back to `template.Name`
+ * attributed by the ordinary bare-string rule -- and for a `'both'` survey that
+ * attribution is *refused* with a 400, because filing one monolingual name into both
+ * columns is the content-mangling #195 exists to stop. So a bilingual instantiation has
+ * to send the object form, which is exactly the case this type previously could not
+ * express.
+ *
+ * `language` stays deliberately omitted. It defaults server-side to the language the
+ * template's questions are actually authored in, which is the only value that cannot
+ * produce a survey failing its own publish gate for a language it never had. The wizard
+ * therefore *reports* the template's language rather than offering a choice.
  */
 export interface InstantiateSurveyTemplateInput {
   companyId?: string
+  title?: LocalizedInput
+  description?: LocalizedInput
   type?: string
   startDate?: string
   endDate?: string
