@@ -423,6 +423,7 @@ app.MapMicroclimateTemplateEndpoints();
 app.MapReportEndpoints();
 app.MapBenchmarkEndpoints();
 app.MapAnalyticsInsightEndpoints();
+app.MapAIInsightEndpoints();
 app.MapNotificationEndpoints();
 app.MapDemographicSnapshotEndpoints();
 app.MapSystemStatusEndpoints();
