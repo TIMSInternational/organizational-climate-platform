@@ -1494,7 +1494,17 @@
     "draftUntitled": "Encuesta sin título",
     "draftRestore": "Restaurarla",
     "draftNotNow": "Ahora no",
-    "draftDiscard": "Descartarla"
+    "draftDiscard": "Descartarla",
+    "stepQuestionsFromTemplateDescription": "Lo que pregunta la plantilla. Se copia tal cual.",
+    "templateCategoryFilter": "Categoría de plantilla",
+    "templateCategoryFilterHelp": "Reduce la lista de plantillas de abajo.",
+    "startFromTemplate": "Partir de una plantilla",
+    "startFromTemplateHelp": "Una plantilla aporta las preguntas. Si eliges una, el paso de preguntas pasa a ser una vista previa.",
+    "startBlank": "Empezar en blanco",
+    "contentLanguageFromTemplate": "Se toma de las preguntas de la plantilla: una plantilla siempre se instancia en el idioma en que fue escrita.",
+    "templateQuestionsReadOnly": "Estas preguntas provienen de la plantilla y se copian tal cual, incluido el valor estable de cada opción, que es lo que permite comparar entre sí las encuestas creadas a partir de esta plantilla. No se pueden editar aquí.",
+    "validationTemplateLoading": "Cargando las preguntas de la plantilla.",
+    "validationTemplateNoQuestions": "Esta plantilla no tiene preguntas. Elige otra o empieza en blanco y escribe las tuyas."
   },
   "users": {
     "userManagement": "Gestión de Usuarios",

@@ -1494,7 +1494,17 @@
     "draftUntitled": "Untitled survey",
     "draftRestore": "Restore it",
     "draftNotNow": "Not now",
-    "draftDiscard": "Discard it"
+    "draftDiscard": "Discard it",
+    "stepQuestionsFromTemplateDescription": "What the template asks. Copied as it is.",
+    "templateCategoryFilter": "Template category",
+    "templateCategoryFilterHelp": "Narrows the list of templates below.",
+    "startFromTemplate": "Start from a template",
+    "startFromTemplateHelp": "A template supplies the questions. Pick one and the questions step becomes a preview.",
+    "startBlank": "Start blank",
+    "contentLanguageFromTemplate": "Taken from the template's own questions — a template is always instantiated in the language it was written in.",
+    "templateQuestionsReadOnly": "These questions come from the template and are copied exactly, including each option's stable value — which is what lets surveys built from this template be compared with one another. They cannot be edited here.",
+    "validationTemplateLoading": "Loading the template's questions.",
+    "validationTemplateNoQuestions": "This template has no questions. Pick another one, or start blank and write your own."
   },
   "users": {
     "userManagement": "User Management",

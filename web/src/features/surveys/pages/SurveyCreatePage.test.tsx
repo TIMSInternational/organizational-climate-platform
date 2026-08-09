@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, act, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup, act, fireEvent, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import SurveyCreatePage from './SurveyCreatePage'
 import { TranslationProvider } from '../../../i18n'
@@ -95,6 +96,68 @@ interface RouteOptions {
   /** Status + body for every draft write. Defaults to a successful autosave. */
   writeStatus?: number
   writeBody?: unknown
+  templates?: unknown[]
+  templateDetail?: unknown
+  templateDetailStatus?: number
+  /** Never resolves, so the wizard is observed while the detail is still in flight. */
+  templateDetailPending?: boolean
+}
+
+/** A `SurveyTemplateQuestion`, including the option `value` the wizard must not invent. */
+function templateQuestion(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'tq-1',
+    text: 'Which area needs work?',
+    type: 'multiple_choice',
+    options: [
+      { order: 0, value: 'leadership', label: 'Leadership' },
+      { order: 1, value: 'tooling', label: 'Tooling' },
+    ],
+    scaleMin: null,
+    scaleMax: null,
+    scaleLabelMin: null,
+    scaleLabelMax: null,
+    required: true,
+    commentRequired: false,
+    commentPrompt: null,
+    order: 0,
+    category: 'leadership',
+    ...overrides,
+  }
+}
+
+function templateListItem(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'tpl-1',
+    name: 'Standard Climate Instrument',
+    description: 'The 2026 baseline',
+    category: 'general_climate',
+    industry: null,
+    companySize: null,
+    isPublic: true,
+    companyId: null,
+    isGlobal: true,
+    tags: [],
+    usageCount: 3,
+    rating: 0,
+    questionCount: 1,
+    lastUsed: null,
+    createdAt: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }
+}
+
+function templateDetail(overrides: Record<string, unknown> = {}) {
+  return {
+    ...templateListItem(),
+    language: 'en',
+    resolvedLocale: 'en',
+    fallbackFields: [],
+    questions: [templateQuestion()],
+    sourceSurveyId: null,
+    updatedAt: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }
 }
 
 /** Records every call so a test can assert on what was sent, not only that it rendered. */
@@ -123,6 +186,21 @@ function routeFetch(options: RouteOptions = {}) {
     }
     if (url.includes('/admin/departments')) {
       return Promise.resolve(new Response(JSON.stringify({ departments: [] }), { status: 200 }))
+    }
+    // Before the `/surveys` POST branch only for readability -- the prefixes differ.
+    if (url.includes('/survey-templates/')) {
+      if (options.templateDetailPending) return new Promise<Response>(() => {})
+      const status = options.templateDetailStatus ?? 200
+      const body =
+        status === 200
+          ? (options.templateDetail ?? templateDetail())
+          : { message: 'Template not found' }
+      return Promise.resolve(new Response(JSON.stringify(body), { status }))
+    }
+    if (url.includes('/survey-templates')) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ templates: options.templates ?? [] }), { status: 200 }),
+      )
     }
     if (url.includes('/surveys') && method === 'POST') {
       return Promise.resolve(new Response(JSON.stringify({ id: 'survey-new' }), { status: 201 }))
@@ -478,5 +556,188 @@ describe('SurveyCreatePage recovery', () => {
     await tick()
 
     expect(draftWrites()).toHaveLength(0)
+  })
+})
+
+/**
+ * Starting from a template (#267).
+ *
+ * The assertion that matters most is negative: the wizard must NOT post `/surveys` with
+ * questions it rebuilt from the template. `SurveyQuestionValues` has no field for
+ * `category`, the scale bounds, the comment prompt or an option's `value`, so a round
+ * trip through the wizard's editor would silently flatten the instrument — and option
+ * `value` is what `SurveyAggregation` calls "THE group key".
+ *
+ * ## Real timers here, unlike the autosave block above
+ *
+ * `SelectField` is a Radix `Select` — a button plus a portalled listbox, not a native
+ * `<select>` — so `fireEvent.change` does nothing to it and its options are absent from
+ * the DOM until it is opened. The only way to drive it is the house pattern
+ * (`userEvent.click(combobox)` then click the option), and `userEvent` deadlocks under
+ * `vi.useFakeTimers()`. So this block runs on real timers and never asserts on the
+ * debounce; the draft's handling of `templateId` is covered in `draftContent.test.ts`,
+ * where it is a pure round trip.
+ */
+describe('SurveyCreatePage template mode', () => {
+  beforeEach(() => {
+    vi.useRealTimers()
+    routeFetch({ templates: [templateListItem()] })
+  })
+
+  /** The picker is the second combobox on the basics step; the category filter is first. */
+  async function pickTemplate(name = 'Standard Climate Instrument') {
+    await userEvent.click(screen.getByRole('combobox', { name: /Start from a template/ }))
+    await userEvent.click(await screen.findByRole('option', { name }))
+  }
+
+  /**
+   * `fireEvent` for the text boxes, `userEvent` only for the Radix Select.
+   *
+   * `userEvent.type` sends one event per character, so the two datetime fields alone are
+   * 32 round trips through React. Under full-suite load that pushed the heaviest test in
+   * this block past the 5s default timeout while it passed comfortably in isolation --
+   * a flake I introduced and then measured, not one to retry away.
+   */
+  async function toQuestionsStep() {
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+    await typeInto(/Start Date/, '2026-09-01T09:00')
+    await typeInto(/End Date/, '2026-09-08T17:00')
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+  }
+
+  it('offers the catalogue and starts blank', async () => {
+    renderPage()
+
+    await userEvent.click(screen.getByRole('combobox', { name: /Start from a template/ }))
+
+    expect(await screen.findByRole('option', { name: 'Standard Climate Instrument' })).toBeTruthy()
+    // The default has to be the flow that already worked.
+    expect(screen.getByRole('option', { name: 'Start blank' }).getAttribute('data-state')).toBe(
+      'checked',
+    )
+  })
+
+  it('seeds the title from the template', async () => {
+    renderPage()
+    await pickTemplate()
+
+    await waitFor(() =>
+      expect((screen.getByLabelText(/Title/) as HTMLInputElement).value).toBe(
+        'Standard Climate Instrument',
+      ),
+    )
+  })
+
+  it('does not overwrite a title the author already typed', async () => {
+    renderPage()
+    await typeInto(/Title/, 'My own name for it')
+    await pickTemplate()
+
+    // Browsing templates after naming the survey must not undo the naming.
+    await waitFor(() => expect(screen.getByText(/leadership|Standard/)).toBeTruthy())
+    expect((screen.getByLabelText(/Title/) as HTMLInputElement).value).toBe('My own name for it')
+  })
+
+  it('takes the content language from the template and stops offering a choice', async () => {
+    routeFetch({
+      templates: [templateListItem()],
+      templateDetail: templateDetail({ language: 'both' }),
+    })
+    renderPage()
+    await pickTemplate()
+
+    // 'both' propagated, which is why the title splits into two boxes.
+    expect(await screen.findByLabelText(/Title \(English\)/)).toBeTruthy()
+    expect(screen.getByLabelText(/Title \(Spanish\)/)).toBeTruthy()
+    // `/use` takes no language and infers it from the template's questions, so a live
+    // control here would be one that silently does nothing.
+    expect(
+      screen.getByRole('combobox', { name: /Content language/ }).hasAttribute('disabled'),
+    ).toBe(true)
+  })
+
+  it('shows the template questions read-only, with their stable option values', async () => {
+    renderPage()
+    await pickTemplate()
+    await toQuestionsStep()
+
+    expect(await screen.findByText('Which area needs work?')).toBeTruthy()
+    // `SurveyQuestionList` renders each option as `label (value)`. The value is the point.
+    expect(screen.getByText(/leadership/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Add Question' })).toBeNull()
+    // "Add at least one" is an instruction with nothing to act on here. Rendering the
+    // page caught it still being given.
+    expect(screen.queryByText(/Add at least one/)).toBeNull()
+    expect(screen.getByText('What the template asks. Copied as it is.')).toBeTruthy()
+  })
+
+  it('instantiates server-side and posts no questions of its own', async () => {
+    renderPage()
+    await pickTemplate()
+    await toQuestionsStep()
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Create Survey' }))
+
+    await waitFor(() =>
+      expect(calls.some((call) => call.url.includes('/survey-templates/tpl-1/use'))).toBe(true),
+    )
+    const use = calls.find((call) => call.url.includes('/survey-templates/tpl-1/use'))!
+    expect(use.method).toBe('POST')
+    const body = use.body as Record<string, unknown>
+    expect(body.title).toBe('Standard Climate Instrument')
+    expect(body.companyId).toBe('company-1')
+    expect(body.startDate).toEqual(expect.any(String))
+    // Each of these would be a silent downgrade if the wizard sent it.
+    expect(body.questions).toBeUndefined()
+    expect(body.language).toBeUndefined()
+    // And the blank path must not have run at all.
+    expect(calls.some((call) => call.method === 'POST' && /\/surveys(\?|$)/.test(call.url))).toBe(
+      false,
+    )
+  })
+
+  it('refuses to continue past a template with no questions', async () => {
+    routeFetch({
+      templates: [templateListItem()],
+      templateDetail: templateDetail({ questions: [] }),
+    })
+    renderPage()
+    await pickTemplate()
+    await toQuestionsStep()
+
+    // Continue reveals the reason rather than moving: the stepper never advances past a
+    // step with errors.
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(await screen.findByText(/This template has no questions/)).toBeTruthy()
+  })
+
+  it('does not let the questions step pass before the template has arrived', async () => {
+    // Otherwise the review step would report "1 question" for a template it has not read,
+    // and the author would be told the step is complete before anything is known about it.
+    routeFetch({ templates: [templateListItem()], templateDetailPending: true })
+    renderPage()
+    await pickTemplate()
+    // Typed by hand: the title is normally seeded from the template detail, which by
+    // design never arrives here, and an empty title would block on the basics step
+    // instead -- proving nothing about the questions step.
+    await typeInto(/Title/, 'Named before the template loaded')
+    await toQuestionsStep()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+
+    expect(await screen.findByText(/Loading the template/)).toBeTruthy()
+    // Still on the questions step, not advanced to review.
+    expect(screen.queryByRole('button', { name: 'Create Survey' })).toBeNull()
+  })
+
+  it('says so when the chosen template cannot be loaded', async () => {
+    routeFetch({ templates: [templateListItem()], templateDetailStatus: 404 })
+    renderPage()
+    await pickTemplate()
+
+    // Not silent, unlike the catalogue fetch: a chosen template that failed to load
+    // leaves the wizard unable to say what it is about to create.
+    expect(await screen.findByText('Template not found')).toBeTruthy()
   })
 })

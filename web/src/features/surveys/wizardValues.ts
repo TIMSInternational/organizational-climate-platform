@@ -4,6 +4,7 @@ import type {
   CreateSurveyQuestionInput,
   LocalizedInput,
 } from './api/surveyCreate'
+import type { InstantiateSurveyTemplateInput } from './api/surveyTemplates'
 import { DEFAULT_SURVEY_QUESTION_TYPE, needsOptions } from './surveyVocabulary'
 
 /**
@@ -35,12 +36,41 @@ import { DEFAULT_SURVEY_QUESTION_TYPE, needsOptions } from './surveyVocabulary'
  *   surface for surveys and nothing else, which is why this wizard can be left and
  *   come back to and the microclimate one cannot.
  *
+ * ## Two ways to create, and the template one is not a pre-fill (#267)
+ *
+ * With `templateId === ''` the wizard builds a `CreateSurveyRequest` and posts
+ * `/surveys`. With a template chosen it collects the same fields but posts
+ * `/survey-templates/{id}/use`, and **the server copies the questions**.
+ *
+ * That is not an implementation preference, it is the only correct option. Loading a
+ * template's questions into this module's `SurveyQuestionValues` and re-creating them
+ * through `POST /surveys` would silently lose most of what a template is:
+ *
+ * - **Every option's `value`.** `SurveyAggregation` calls it "THE group key: the
+ *   stable, locale-independent option value that `question_responses.response_value`
+ *   holds", and `buildCreateInput` deliberately omits `value` so the server derives one
+ *   from the label. Two surveys from one template would then agree only for as long as
+ *   nobody edited a label.
+ * - **`Category`, `ScaleMin`/`Max`, the scale labels, `CommentRequired`, the comment
+ *   prompt and the binary comment config.** `TemplateQuestion` carries all of these and
+ *   `SurveyQuestionValues` below has fields for none of them, so a round trip through
+ *   this editor flattens a rich instrument into text, type and options. The loss would
+ *   be invisible: the created survey looks plausible and is simply less than the
+ *   template.
+ *
+ * So in template mode the questions step is a **read-only preview**. The honest cost is
+ * that a template's questions cannot be tweaked on the way through — and, today, not
+ * afterwards either: `PUT /surveys/{id}` can replace them, but nothing in the frontend
+ * calls it and there is no survey question editor. That is a real gap, and a smaller
+ * one than a template that quietly stops aggregating.
+ *
  * ## What this wizard cannot do, and does not pretend to
  *
  * **Launch.** `CreateSurveyRequest` has no status field and `CreateAsync` writes
  * `draft`. Publishing is `PUT /surveys/{id}/status`, guarded by the content-i18n gate
  * — deliberately a separate, irreversible checkpoint (`SurveyDtos.cs` says so at
- * length). The review step states that it is about to create a draft.
+ * length). `POST /survey-templates/{id}/use` writes `draft` too, so both paths land in
+ * the same place. The review step states that it is about to create a draft.
  *
  * ## Which validations are mirrored, and which are left to the server
  *
@@ -75,6 +105,13 @@ export interface SurveyQuestionValues {
 }
 
 export interface SurveyWizardValues {
+  /**
+   * The template this survey is being started from, or `''` for a blank one (#267).
+   *
+   * Not merely a pre-fill flag: it changes which endpoint creates the survey. See
+   * `startsFromTemplate` and the note on the questions step below.
+   */
+  templateId: string
   language: ContentLanguage
   titleEn: string
   titleEs: string
@@ -131,6 +168,7 @@ export function emptyQuestion(key: string): SurveyQuestionValues {
  */
 export function emptyWizardValues(language: ContentLanguage): SurveyWizardValues {
   return {
+    templateId: '',
     language,
     titleEn: '',
     titleEs: '',
@@ -151,6 +189,18 @@ export function emptyWizardValues(language: ContentLanguage): SurveyWizardValues
 /** True when both language columns have to be filled in. */
 export function needsBothLanguages(language: ContentLanguage): boolean {
   return language === 'both'
+}
+
+/**
+ * True when this survey will be created by instantiating a template rather than by
+ * posting a `CreateSurveyRequest`.
+ *
+ * A predicate rather than a bare `!== ''` at each call site: it is checked in the
+ * validation, in both build functions and in four places in the page, and "which
+ * endpoint is about to be called" is worth naming.
+ */
+export function startsFromTemplate(values: SurveyWizardValues): boolean {
+  return values.templateId !== ''
 }
 
 /**
@@ -230,6 +280,21 @@ function audienceErrors(values: SurveyWizardValues, t: TranslateFn): string[] {
   return Number.isInteger(parsed) && parsed > 0 ? [] : [t('surveys.validationTargetPositive')]
 }
 
+/**
+ * In template mode the questions are the template's and this step validates the
+ * template rather than the form.
+ *
+ * `null` means the template detail has not arrived yet, which is not an error — the
+ * step is simply not yet known to be complete, and blocking it with a message about a
+ * request in flight would be a wizard telling the author off for its own latency. It
+ * blocks anyway, because `WizardStepper` only advances past an error-free step and this
+ * returns an error while the count is unknown.
+ */
+function templateQuestionErrors(count: number | null, t: TranslateFn): string[] {
+  if (count === null) return [t('surveys.validationTemplateLoading')]
+  return count === 0 ? [t('surveys.validationTemplateNoQuestions')] : []
+}
+
 function questionErrors(values: SurveyWizardValues, t: TranslateFn): string[] {
   if (values.questions.length === 0) return [t('surveys.validationQuestionsRequired')]
 
@@ -278,11 +343,14 @@ function questionErrors(values: SurveyWizardValues, t: TranslateFn): string[] {
 export function wizardStepErrors(
   values: SurveyWizardValues,
   t: TranslateFn,
+  templateQuestionCount: number | null = null,
 ): Record<SurveyWizardStepId, string[]> {
   const basics = basicsErrors(values, t)
   const schedule = scheduleErrors(values, t)
   const audience = audienceErrors(values, t)
-  const questions = questionErrors(values, t)
+  const questions = startsFromTemplate(values)
+    ? templateQuestionErrors(templateQuestionCount, t)
+    : questionErrors(values, t)
 
   return {
     basics,
@@ -356,6 +424,48 @@ export function buildCreateInput(
       allowPartialResponses: values.allowPartialResponses,
       showProgress: values.showProgress,
     },
+  }
+
+  if (description !== undefined) input.description = description
+  if (values.departmentIds.length > 0) input.departmentIds = values.departmentIds
+  if (!isBlank(values.targetAudienceCount) && Number.isInteger(target) && target > 0) {
+    input.targetAudienceCount = target
+  }
+
+  return input
+}
+
+/**
+ * The body of `POST /survey-templates/{id}/use` — the template path's counterpart to
+ * `buildCreateInput`.
+ *
+ * Everything the wizard asked about, and **not one question**: the questions are the
+ * template's and the server copies them, values and all. See the module header for why
+ * sending them back would be a downgrade rather than a convenience.
+ *
+ * `title` is always sent even though the server would fall back to the template's name.
+ * Two reasons: the fallback is a bare string, which a `'both'` survey rejects with a 400
+ * — so the case where the fallback is least wanted is also the case where it fails — and
+ * an author who has typed a title in the wizard should get the title they typed.
+ *
+ * `language` is *not* sent, deliberately. The server infers it from the template's own
+ * questions, and that is the only value that cannot produce a survey declaring a
+ * language it holds no text for. The wizard reflects that language rather than offering
+ * a choice, which is why `values.language` is read here only through `localizedFor`.
+ */
+export function buildInstantiateInput(
+  values: SurveyWizardValues,
+  companyId: string,
+): InstantiateSurveyTemplateInput {
+  const description = localizedFor(values.language, values.descriptionEn, values.descriptionEs)
+  const target = Number(values.targetAudienceCount)
+
+  const input: InstantiateSurveyTemplateInput = {
+    companyId,
+    title: localizedFor(values.language, values.titleEn, values.titleEs) as LocalizedInput,
+    type: values.type,
+    startDate: new Date(values.startDate).toISOString(),
+    endDate: new Date(values.endDate).toISOString(),
   }
 
   if (description !== undefined) input.description = description
