@@ -189,7 +189,14 @@
     "accountInactiveDetail": "Su acceso fue desactivado, por lo que la aplicación no puede cargar contenido para usted.",
     "accountInactiveNextSteps": "Contacte a un administrador de su organización para reactivar su cuenta. Sus datos no fueron eliminados.",
     "pendingDetail": "Esto tarda solo un momento.",
-    "pendingHint": "Contactando con el servidor…"
+    "pendingHint": "Contactando con el servidor…",
+    "or": "o",
+    "continueWithGoogle": "Continuar con Google",
+    "completingSignIn": "Finalizando el inicio de sesión…",
+    "googleFailedTitle": "El inicio de sesión con Google no se completó",
+    "googleFailedDetail": "Puede intentarlo de nuevo o iniciar sesión con su correo electrónico y contraseña.",
+    "googleCancelled": "La ventana de Google se cerró antes de completar el inicio de sesión.",
+    "googleMismatch": "Esta respuesta de inicio de sesión no corresponde a la solicitud hecha desde este navegador, por lo que se descartó."
   },
   "charts": {
     "noData": "No hay datos para mostrar",

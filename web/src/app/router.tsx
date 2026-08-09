@@ -3,6 +3,7 @@ import LoginPage from '../auth/LoginPage'
 import RegisterPage from '../auth/RegisterPage'
 import AuthErrorPage from '../auth/AuthErrorPage'
 import AccountInactivePage from '../auth/AccountInactivePage'
+import AuthLoadingPage from '../auth/AuthLoadingPage'
 import AuthSuccessPage from '../auth/AuthSuccessPage'
 import AcceptInvitationPage from '../features/org-structure/pages/AcceptInvitationPage'
 import RequireAuth from './RequireAuth'
@@ -93,7 +94,7 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <HomeRedirect /> },
       { path: '/login', element: <LoginPage /> },
-      // #81's auth states. All four sit OUTSIDE RequireAuth, beside /login, and
+      // #81's auth states. All five sit OUTSIDE RequireAuth, beside /login, and
       // must: each of them is a state the app is in precisely because there is no
       // usable session, so putting them behind the gate would redirect them to
       // /login and lose the reason.
@@ -101,9 +102,14 @@ export const router = createBrowserRouter([
       // /auth/inactive is the one exception worth naming -- its visitor DOES hold
       // a token. It is still public because RequireAuth is what sends them here,
       // and a guard that redirects into itself is a loop.
+      //
+      // /auth/loading is the Google OAuth `redirect_uri`. Its visitor is arriving
+      // from accounts.google.com with an ID token and no session yet -- it is the
+      // page that CREATES the session -- so it is public by definition.
       { path: '/register', element: <RegisterPage /> },
       { path: '/auth/error', element: <AuthErrorPage /> },
       { path: '/auth/inactive', element: <AccountInactivePage /> },
+      { path: '/auth/loading', element: <AuthLoadingPage /> },
       { path: '/auth/success', element: <AuthSuccessPage /> },
       { path: '/accept-invitation/:token', element: <AcceptInvitationPage /> },
       { path: '/microclimates/:id/respond', element: <MicroclimateRespondPage /> },

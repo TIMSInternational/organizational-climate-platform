@@ -86,6 +86,33 @@ export interface SignupInput {
  *
  * Returns the same `{ token }` as login, and **201** rather than 200.
  */
+/**
+ * `POST /auth/google`.
+ *
+ * Exchanges a Google **ID token** for one of ours. The server verifies the
+ * signature and the audience against its own `GoogleClientId`
+ * (`GoogleTokenVerifier`), then creates the user — and, if the email domain is
+ * new, the company — on first sign-in, as `Roles.Employee`.
+ *
+ * It shares `CheckSystemSettingsGateAsync` with login and signup, so 403 and 503
+ * mean here exactly what they mean there and route the same way. 401 is
+ * "Google sign-in failed": the token did not verify, which is not something a
+ * user can fix on a form, so unlike login's 401 it takes the whole page.
+ */
+export async function googleLogin(baseUrl: string, idToken: string): Promise<LoginResponse> {
+  const response = await fetch(`${baseUrl}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken }),
+  })
+
+  if (!response.ok) {
+    throw await toRequestError(response)
+  }
+
+  return response.json() as Promise<LoginResponse>
+}
+
 export async function signup(baseUrl: string, input: SignupInput): Promise<LoginResponse> {
   const response = await fetch(`${baseUrl}/auth/signup`, {
     method: 'POST',

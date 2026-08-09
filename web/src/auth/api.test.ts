@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { AuthRequestError, login, signup } from './api'
+import { AuthRequestError, googleLogin, login, signup } from './api'
 
 const BASE = 'https://api.test'
 
@@ -92,5 +92,39 @@ describe('signup', () => {
 
     expect((error as AuthRequestError).status).toBe(409)
     expect((error as Error).message).toBe('User with this email already exists')
+  })
+})
+
+describe('googleLogin', () => {
+  it('posts the ID token under the field name the server binds', async () => {
+    // `GoogleLoginRequest(string IdToken)` -- System.Text.Json is case-insensitive
+    // on the way in, but sending `id_token` (the name Google uses in the callback
+    // fragment) would bind to nothing and come back 400 "Google ID token is
+    // required". The rename happens here, once.
+    respond(200, { token: 'jwt' })
+
+    await expect(googleLogin(BASE, 'google-id-token')).resolves.toEqual({ token: 'jwt' })
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0]
+    expect(String(url)).toBe(`${BASE}/auth/google`)
+    expect(JSON.parse(String(init?.body))).toEqual({ idToken: 'google-id-token' })
+  })
+
+  it('carries the 401 rejected-token message', async () => {
+    respond(401, { message: 'Google sign-in failed' })
+
+    const error = await googleLogin(BASE, 'stale').catch((err: unknown) => err)
+
+    expect((error as AuthRequestError).status).toBe(401)
+    expect((error as Error).message).toBe('Google sign-in failed')
+  })
+
+  it('carries the maintenance gate, which it shares with login and signup', async () => {
+    respond(503, { message: 'Estamos en mantenimiento hasta las 14:00.' })
+
+    const error = await googleLogin(BASE, 'token').catch((err: unknown) => err)
+
+    expect((error as AuthRequestError).status).toBe(503)
+    expect((error as Error).message).toBe('Estamos en mantenimiento hasta las 14:00.')
   })
 })

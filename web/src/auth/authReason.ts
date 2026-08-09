@@ -30,7 +30,13 @@
  * those to a full-page error would lose the form state and read as a crash.
  */
 
-export const AUTH_ERROR_REASONS = ['login-disabled', 'maintenance', 'session-expired', 'unknown'] as const
+export const AUTH_ERROR_REASONS = [
+  'login-disabled',
+  'maintenance',
+  'session-expired',
+  'google-signin',
+  'unknown',
+] as const
 
 export type AuthErrorReason = (typeof AUTH_ERROR_REASONS)[number]
 
@@ -52,6 +58,14 @@ const COPY: Record<AuthErrorReason, AuthErrorCopy> = {
   'session-expired': {
     titleKey: 'auth.sessionExpiredTitle',
     descriptionKey: 'auth.sessionExpired',
+  },
+  // The Google round trip's own failures (#81): the fragment carried no usable
+  // token, or `POST /auth/google` refused it. Distinct from the two above because
+  // password sign-in is still available — the page says so rather than implying
+  // the platform is down.
+  'google-signin': {
+    titleKey: 'auth.googleFailedTitle',
+    descriptionKey: 'auth.googleFailedDetail',
   },
   unknown: {
     titleKey: 'auth.errorTitle',

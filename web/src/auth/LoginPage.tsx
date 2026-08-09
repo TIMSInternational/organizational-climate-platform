@@ -4,11 +4,12 @@ import { AuthRequestError, login } from './api'
 import { AuthShell } from './AuthShell'
 import { AuthPending } from './AuthPending'
 import { pageWorthyReason } from './authReason'
+import { beginGoogleSignIn, googleClientId } from './googleOAuth'
 import { setToken } from './token'
 import { decodeJwtPayload } from './jwt'
 import { resolveInitialRoute } from '../app/resolveInitialRoute'
 import { useTranslation } from '../i18n'
-import { Alert, AlertDescription, Button, TextField } from '../components/ui'
+import { Alert, AlertDescription, Button, Separator, TextField } from '../components/ui'
 
 /**
  * Sign in.
@@ -34,6 +35,10 @@ import { Alert, AlertDescription, Button, TextField } from '../components/ui'
  */
 export default function LoginPage() {
   const { t } = useTranslation()
+  // Absent unless `VITE_GOOGLE_CLIENT_ID` is configured, and the button is omitted
+  // entirely when it is: a "Continue with Google" that can only ever come back as
+  // `invalid_client` is worse than no button. See `googleOAuth.ts`.
+  const googleClient = googleClientId()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -115,6 +120,28 @@ export default function LoginPage() {
           {t('auth.signIn')}
         </Button>
       </form>
+
+      {googleClient && (
+        <>
+          <div className="flex items-center gap-inline text-sm text-fg-tertiary">
+            <Separator className="flex-1" />
+            <span>{t('auth.or')}</span>
+            <Separator className="flex-1" />
+          </div>
+
+          {/* A full-page navigation, not a react-router one: this leaves the app
+              for accounts.google.com and comes back to /auth/loading as a fresh
+              document. `beginGoogleSignIn` stores the state/nonce handshake that
+              the return trip is checked against. */}
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => window.location.assign(beginGoogleSignIn(googleClient, window.location.origin))}
+          >
+            {t('auth.continueWithGoogle')}
+          </Button>
+        </>
+      )}
     </AuthShell>
   )
 }

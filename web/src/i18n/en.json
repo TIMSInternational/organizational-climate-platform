@@ -189,7 +189,14 @@
     "accountInactiveDetail": "Your access has been turned off, so the application cannot load anything for you.",
     "accountInactiveNextSteps": "Contact an administrator at your organization to have your account reactivated. Your data has not been deleted.",
     "pendingDetail": "This only takes a moment.",
-    "pendingHint": "Contacting the server…"
+    "pendingHint": "Contacting the server…",
+    "or": "or",
+    "continueWithGoogle": "Continue with Google",
+    "completingSignIn": "Finishing sign-in…",
+    "googleFailedTitle": "Google sign-in did not finish",
+    "googleFailedDetail": "You can try again, or sign in with your email and password instead.",
+    "googleCancelled": "The Google sign-in window was closed before it finished.",
+    "googleMismatch": "This sign-in response does not match the request this browser made, so it was discarded."
   },
   "charts": {
     "noData": "No data to display",
