@@ -77,9 +77,10 @@ public static class SurveyTemplateEndpoints
     /// long after it happened. Global templates are super-admin-only to write.
     ///
     /// Note the <c>is not null</c>: it is what stops "no companyId" from being read as
-    /// "my company". <see cref="MicroclimateTemplateEndpoints"/> currently only checks the
-    /// scope when a CompanyId was supplied, so a company admin there can create a global
-    /// template by omitting it -- the #207 shape, reported rather than copied.
+    /// "my company". <see cref="MicroclimateTemplateEndpoints"/> checked the scope only
+    /// when a CompanyId was supplied, so a company admin there could create a global
+    /// template by omitting it -- the #207 shape, reported rather than copied at the time
+    /// and closed by #256, which gave that endpoint a helper of this shape.
     /// </summary>
     private static bool CanWriteTemplate(CurrentUser currentUser, Guid? templateCompanyId)
     {
