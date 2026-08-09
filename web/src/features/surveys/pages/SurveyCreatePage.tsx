@@ -19,6 +19,11 @@ import {
 import { useCompanyScope } from '../../../company-context'
 import { listDepartments, type Department } from '../../org-structure/api/departments'
 import { createSurvey } from '../api/surveyCreate'
+import { useSurveyDraft } from '../useSurveyDraft'
+import {
+  SurveyDraftIndicator,
+  SurveyDraftRecoveryBanner,
+} from '../components/SurveyDraftNotices'
 import {
   CONTENT_LANGUAGES,
   SURVEY_WIZARD_STEPS,
@@ -106,6 +111,27 @@ export default function SurveyCreatePage() {
     setValues((current) => ({ ...current, ...next }))
   }, [])
 
+  // Applying a recovered draft sets the step as well as the values: coming back to step
+  // 1 of a survey you had taken to the review step is most of the frustration of having
+  // lost it in the first place.
+  const applyRestored = useCallback((restored: SurveyWizardValues, restoredStep: number) => {
+    setValues(restored)
+    // `currentStep` is 1-based on the wire (the server defaults it to 1) and 0-based
+    // here. Clamped rather than trusted -- a draft written by a wizard with more steps
+    // than this one has would otherwise index past the end of the step list.
+    setStepIndex(Math.min(Math.max(restoredStep - 1, 0), SURVEY_WIZARD_STEPS.length - 1))
+  }, [])
+
+  const draft = useSurveyDraft({
+    baseUrl,
+    locale,
+    enabled: Boolean(companyId),
+    keyPrefix,
+    values,
+    currentStep: stepIndex + 1,
+    onRestore: applyRestored,
+  })
+
   function makeKey(): string {
     const key = `${keyPrefix}-${nextKey}`
     setNextKey((n) => n + 1)
@@ -128,6 +154,9 @@ export default function SurveyCreatePage() {
     setSubmitError(null)
     try {
       const created = await createSurvey(baseUrl, buildCreateInput(values, companyId), locale)
+      // Before navigating, and awaited: the survey is the record now, and a draft left
+      // behind would be offered back as unfinished work the next time the wizard opens.
+      await draft.discardAfterCreate()
       navigate(`/surveys/${created.id}`)
     } catch (err) {
       // The server's own message names the offending field; render it rather than
@@ -160,6 +189,21 @@ export default function SurveyCreatePage() {
           <AlertDescription>{submitError}</AlertDescription>
         </Alert>
       )}
+
+      {draft.recovery !== null && (
+        <SurveyDraftRecoveryBanner
+          recovery={draft.recovery}
+          locale={locale}
+          onRestore={draft.restore}
+          onDiscard={draft.discardRecovered}
+          onDismiss={draft.dismissRecovery}
+        />
+      )}
+
+      {/* Above the stepper, not tucked beside the submit button: on a phone the button
+          sits at the bottom of a scrolled panel, and "your work is not being saved"
+          under it is off screen at the moment it starts being true. */}
+      <SurveyDraftIndicator state={draft.state} locale={locale} onSaveAnyway={draft.saveAnyway} />
 
       <WizardStepper
         steps={steps}
