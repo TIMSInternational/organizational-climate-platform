@@ -279,13 +279,32 @@ public class AIInsightEndpointsTests : IAsyncLifetime
         var firstUser = await db.Users.AsNoTracking().FirstAsync(u => u.Email == firstEmail);
         var secondUser = await db.Users.AsNoTracking().FirstAsync(u => u.Email == secondEmail);
 
+        var stored = await db.AIInsights.AsNoTracking().FirstAsync(i => i.Id == created.Id);
+
         Assert.Equal(firstUser.Id, firstAck.AcknowledgedBy);
         Assert.Equal(firstUser.Id, secondAck.AcknowledgedBy);
         Assert.NotEqual(secondUser.Id, secondAck.AcknowledgedBy);
-        Assert.Equal(firstAck.AcknowledgedAt, secondAck.AcknowledgedAt);
-
-        var stored = await db.AIInsights.AsNoTracking().FirstAsync(i => i.Id == created.Id);
         Assert.Equal(firstUser.Id, stored.AcknowledgedBy);
+
+        // Both of these have been through Postgres, so they are exactly comparable.
+        Assert.Equal(stored.AcknowledgedAt, secondAck.AcknowledgedAt);
+
+        // firstAck.AcknowledgedAt has NOT: it is the in-memory DateTimeOffset.UtcNow from
+        // the first call, returned off the still-tracked entity before any round trip. .NET
+        // ticks are 100 ns and timestamptz truncates to 1 us, so asserting exact equality
+        // here is a coin flip on the clock resolution of whatever machine runs it — 0 of 200
+        // UtcNow samples carry a sub-microsecond remainder on macOS, but 178 of 200 do inside
+        // the Linux .NET SDK image, and every CI job is ubuntu-latest. This assertion was
+        // exactly equal and would have been ~89% red on CI.
+        //
+        // The tolerance does not weaken the claim. What this test is actually asserting is
+        // that the second POST did not overwrite the timestamp — and the Task.Delay(50) above
+        // means an overwrite would move it by ~50 ms, five orders of magnitude beyond 1 ms.
+        var drift = (secondAck.AcknowledgedAt!.Value - firstAck.AcknowledgedAt!.Value).Duration();
+        Assert.True(
+            drift < TimeSpan.FromMilliseconds(1),
+            $"the second acknowledgement moved the timestamp by {drift.TotalMilliseconds} ms; "
+                + "a retry must not re-stamp it");
     }
 
     [Fact]
