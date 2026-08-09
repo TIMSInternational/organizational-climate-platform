@@ -30,7 +30,11 @@ committed copies to be deleted in a later cleanup and the local copies to disapp
 the first fresh clone. `.gitignore` still gains the pattern, but only to stop the **repo
 root** being repopulated; it does not cover the new home.
 
-The move used `git mv`, so `git log --follow` reaches the original commits.
+The one-off move of the eight existing directories used `git mv`, so `git log --follow`
+reaches the original commits. **Future runs cannot use `git mv`**: the ignore rule this
+decision adds means a fresh root report directory is untracked, and `git mv` refuses an
+untracked source with `fatal: source directory is empty`. Use `mv` then `git add`. There
+is no history to preserve for a directory that was never committed, so nothing is lost.
 
 ## Why the names look like that
 
@@ -63,7 +67,8 @@ no test is indistinguishable from a typo'd one.
 ## Consequences
 
 - A pipeline run that writes `.<domain>-reports/` at the root now produces ignored output.
-  To keep a run's reports, `git mv` the directory into `docs/pipeline-reports/` under the
+  To keep a run's reports, `mv` the directory into `docs/pipeline-reports/` and `git add` it,
+  under the
   plan's slug and commit it; the guard test will accept it there and reject it at the root.
 - Nothing else in the repo referenced the old paths, so no links needed rewriting
   (verified by grep across all tracked files before the move).

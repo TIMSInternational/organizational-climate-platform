@@ -22,6 +22,8 @@ reasoning, the old-path mapping and the `.gitignore` rules that keep the root cl
 ## Adding a run
 
 A pipeline that writes `.<domain>-reports/` at the repo root produces **ignored** output —
-that is deliberate. To keep it, `git mv` the directory to `docs/pipeline-reports/<plan-slug>/`
+that is deliberate. To keep it, plain `mv` the directory to `docs/pipeline-reports/<plan-slug>/`
+and `git add` it — **not** `git mv`, which fails with `fatal: source directory is empty`
+because the ignore rule above means git is not tracking the source
 and add a row above. `web/src/test/repoHygiene.test.ts` fails the build if such a directory
 is committed at the root instead.

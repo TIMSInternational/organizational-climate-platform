@@ -49,10 +49,26 @@ function git(...args: string[]): string {
  * `git check-ignore -q` exits 0 when the path is ignored and 1 when it is not, so the
  * answer is only in the exit status — anything else means git itself failed and must
  * not be read as "not ignored".
+ *
+ * **`--no-index` is load-bearing.** Without it, `check-ignore` reports every *tracked*
+ * path as not-ignored regardless of what `.gitignore` says, because a tracked file is
+ * not subject to the ignore rules. Every path in the "leaves the committed archive
+ * alone" case below is tracked, so without this flag that whole half of the guard was
+ * decoration: replacing `.gitignore` wholesale with `*` — ignore literally everything —
+ * still left all five tests green. Measured, not theorised. With `--no-index`, that
+ * mutation goes red and the shipped patterns still return NOT-IGNORED for the archive
+ * and IGNORED for a root report directory.
+ *
+ * Which is the failure this file's own header warns about: a pattern that ignores
+ * everything and a pattern that ignores nothing are equally green if you only check one
+ * direction — and the guard was only really checking one.
  */
 function isIgnored(path: string): boolean {
   try {
-    execFileSync('git', ['check-ignore', '-q', '--', path], { cwd: REPO_ROOT, stdio: 'pipe' })
+    execFileSync('git', ['check-ignore', '-q', '--no-index', '--', path], {
+      cwd: REPO_ROOT,
+      stdio: 'pipe',
+    })
     return true
   } catch (error) {
     const status = (error as { status?: number }).status
