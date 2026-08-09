@@ -184,7 +184,21 @@ describe('MicroclimateLivePage', () => {
     // The failure `LiveResultsPanel` had: a bare `catch {}` left a plausible figure
     // on screen with nothing saying it had stopped updating.
     renderPage()
-    await screen.findByText('Live')
+
+    // Anchored on the panel's CONTENT, not on the 'Live' badge — this is the fix for a
+    // flake that turned main red on 2026-08-09 (node 25 only, 1 of 1647).
+    //
+    // `usePolling` derives `isStale = consecutiveFailures > 0 && data !== null`, and the
+    // badge reads 'Live' whenever polling is enabled and not stale — which includes the
+    // window BEFORE the first poll has returned anything. So `findByText('Live')` could
+    // resolve while `data` was still null; the rejecting mock installed straight after it
+    // then produced a failure that could never satisfy the `data !== null` half, and
+    // 'Updates stalled' never appeared. Under full-suite load the first poll is slower,
+    // which is exactly why this only ever failed on a busy runner and passed in isolation.
+    //
+    // The render prop below `RealTimeChartContainer` is only invoked with data, so
+    // 'Live Participation' on screen is proof the first poll succeeded.
+    await screen.findByText('Live Participation')
 
     vi.mocked(fetch).mockRejectedValue(new Error('offline'))
     await userEvent.click(screen.getByRole('button', { name: 'Refresh' }))
