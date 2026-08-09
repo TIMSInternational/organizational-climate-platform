@@ -18,3 +18,11 @@ dist/
 # Byte-cache from the Python helpers under scripts/.
 __pycache__/
 *.pyc
+
+# Per-domain pipeline report directories (#171). The eight that had accumulated in
+# the repo root are now committed under docs/pipeline-reports/; a fresh pipeline run
+# must not repopulate the root. Both patterns are anchored with a leading slash so
+# they apply only at the top level and leave docs/pipeline-reports/ alone. The second
+# covers rerun suffixes, e.g. the old `.tracking-integration-reports-v2/`.
+/.*-reports/
+/.*-reports-*/
