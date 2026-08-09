@@ -541,6 +541,21 @@ public class SearchEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_caller_cannot_raise_the_per_kind_limit_above_the_cap()
+    {
+        // The other half of the test above, which asserts "capped" in its name but only ever
+        // proves "limited": with five matching rows, a request for a thousand and a request
+        // for twenty-five are indistinguishable. Thirty matching surveys is the smallest
+        // seed that can tell an enforced cap from an ignored one.
+        await SeedExtraMatchingSurveysAsync(29);
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+
+        var overCap = await client.GetFromJsonAsync<SearchResponse>($"/search?q={_tag}&types=survey&limit=1000");
+
+        Assert.Equal(25, Group(overCap!, SearchEntityTypes.Survey).Count);
+    }
+
+    [Fact]
     public async Task TotalCount_counts_what_was_returned_and_not_what_matched()
     {
         await SeedExtraMatchingSurveysAsync(4);
