@@ -425,6 +425,7 @@ app.MapBenchmarkEndpoints();
 app.MapAnalyticsInsightEndpoints();
 app.MapNotificationEndpoints();
 app.MapDemographicSnapshotEndpoints();
+app.MapSearchEndpoints();
 app.MapSystemStatusEndpoints();
 
 app.Run();
