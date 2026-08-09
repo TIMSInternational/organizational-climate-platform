@@ -247,7 +247,7 @@ public class SurveyTemplateEndpointsTests : IAsyncLifetime
         // The denial that matters. A global template is visible to every tenant, and
         // instantiation deep-copies it, so a tenant who could write one would keep
         // propagating their edit into other tenants' surveys long afterwards. This is the
-        // #207 shape, and MicroclimateTemplateEndpoints still has it open.
+        // #207 shape; MicroclimateTemplateEndpoints had it open too until #256.
         var client = await AdminAsync();
         var response = await client.PostAsJsonAsync("/survey-templates", BilingualRequest(companyId: null));
 

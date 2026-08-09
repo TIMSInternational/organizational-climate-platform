@@ -20,6 +20,28 @@ public static class MicroclimateTemplateEndpoints
     private static MicroclimateTemplateDetail ToDetail(MicroclimateTemplate t)
         => new(t.Id, t.Name, t.Description, t.Category, t.CompanyId, t.IsSystemTemplate, t.UsageCount, t.IsActive);
 
+    /// <summary>
+    /// A company admin may WRITE only templates scoped to their own company. In this
+    /// codebase <c>CompanyId == null</c> means GLOBAL -- <see cref="ListAsync"/> returns
+    /// those rows to every tenant, and <c>IsSystemTemplate</c> is derived from exactly the
+    /// same null -- so null is the most privileged value the field can take, not the
+    /// absence of a value.
+    ///
+    /// Note the <c>is not null</c>: it is what stops "no companyId" from being read as
+    /// "nothing to check". Guarding tenant scope behind <c>request.CompanyId.HasValue</c>
+    /// had it backwards, and let a company admin create a global system template simply by
+    /// omitting the field (#256, the #207 shape). Mirrors
+    /// <see cref="SurveyTemplateEndpoints"/> and <see cref="BenchmarkEndpoints"/>.
+    ///
+    /// Read access stays a separate, laxer rule: a company admin may SEE global templates.
+    /// </summary>
+    private static bool CanWriteTemplate(CurrentUser currentUser, Guid? templateCompanyId)
+    {
+        if (currentUser.Role == Roles.SuperAdmin) return true;
+        if (currentUser.Role != Roles.CompanyAdmin) return false;
+        return templateCompanyId is not null && currentUser.CompanyId == templateCompanyId.Value.ToString();
+    }
+
     private static async Task<IResult> ListAsync(
         Guid companyId,
         ClaimsPrincipal principal,
@@ -48,12 +70,7 @@ public static class MicroclimateTemplateEndpoints
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
-        if (!Roles.Admin.Contains(currentUser.Role))
-        {
-            return Results.Forbid();
-        }
-
-        if (request.CompanyId.HasValue && currentUser.Role != Roles.SuperAdmin && currentUser.CompanyId != request.CompanyId.Value.ToString())
+        if (!CanWriteTemplate(currentUser, request.CompanyId))
         {
             return Results.Forbid();
         }
