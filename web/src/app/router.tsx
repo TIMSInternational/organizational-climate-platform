@@ -27,6 +27,7 @@ import MicroclimateRespondPage from '../features/microclimates/pages/Microclimat
 import SurveyRespondPage from '../features/surveys/pages/SurveyRespondPage'
 import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespondPage'
 import NotificationPreferencesPage from '../features/notifications/pages/NotificationPreferencesPage'
+import ProfilePage from '../features/profile/pages/ProfilePage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
 import SurveyDistributionPage from '../features/surveys/pages/SurveyDistributionPage'
 import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
@@ -179,6 +180,11 @@ export const router = createBrowserRouter([
               // a survey, not a place in the sidebar. `/surveys` and `/surveys/:id` are
               // #109's; this route only needs to exist beneath one of them.
               { path: '/surveys/:id/results', element: <SurveyResultsPage /> },
+              // Not under /admin, and gated by nothing beyond RequireAuth: every
+              // authenticated role — plain employees included — owns a profile, and
+              // every endpoint behind this page resolves the caller from their own
+              // token and takes no user id at all (#136).
+              { path: '/profile', element: <ProfilePage /> },
               // Not under /admin: every authenticated role owns their own preferences,
               // and the API behind this page takes no user id at all (#103).
               { path: '/settings/notifications', element: <NotificationPreferencesPage /> },

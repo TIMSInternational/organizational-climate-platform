@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { BellRing, LogOut } from 'lucide-react'
+import { BellRing, LogOut, UserRound } from 'lucide-react'
 import { useTranslation, LanguageSwitcher } from '../../i18n'
 import { Avatar, AvatarFallback } from '../ui/avatar'
 import { getToken } from '../../auth/token'
@@ -179,8 +179,19 @@ export function ShellControls({ onSignOut }: ShellControlsProps) {
         <ThemeSwitcher compact />
       </div>
 
-      {/* Both rows share the nav items' shape, so the foot of the rail reads as
-          navigation rather than as two unrelated controls. */}
+      {/* All three rows share the nav items' shape, so the foot of the rail reads as
+          navigation rather than as unrelated controls.
+
+          The profile row (#136) is here for exactly the reason the notification
+          preferences row below it is: every role owns a profile, and `navSections`
+          is role-aware and returns nothing for most of them. */}
+      <Link
+        to="/profile"
+        className="flex w-full items-center gap-inline rounded-md px-2 py-1 text-sm text-fg-secondary no-underline hover:bg-state-hover hover:text-fg-primary"
+      >
+        <UserRound aria-hidden="true" className="nav-icon" />
+        {t('profile.title')}
+      </Link>
       <Link
         to="/settings/notifications"
         className="flex w-full items-center gap-inline rounded-md px-2 py-1 text-sm text-fg-secondary no-underline hover:bg-state-hover hover:text-fg-primary"
