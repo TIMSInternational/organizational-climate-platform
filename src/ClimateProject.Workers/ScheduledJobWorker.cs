@@ -33,7 +33,8 @@ namespace ClimateProject.Workers;
 /// <para>The same registration also works inside the API host, which is why the jobs are
 /// wired up by an extension method rather than inline in <c>Program.cs</c>. Co-hosting is a
 /// legitimate deployment choice precisely because the lease makes instance count irrelevant --
-/// but it is a deployment decision, not this file's, and it is left to #164.</para>
+/// but it is a deployment decision, not this file's, and it is left to #275 -- which is
+/// where it belongs, because as of 2026-08-09 NO worker host is deployed at all.</para>
 /// </summary>
 public abstract class ScheduledJobWorker : BackgroundService
 {

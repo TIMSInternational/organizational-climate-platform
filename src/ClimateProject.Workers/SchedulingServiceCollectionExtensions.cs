@@ -13,7 +13,7 @@ namespace ClimateProject.Workers;
 ///
 /// <para>An extension method rather than inline wiring in <c>Program.cs</c> so that the same
 /// jobs can be hosted either by this standalone worker process or by the API process,
-/// without the registration being written twice and drifting. That is a real choice #164 has to
+/// without the registration being written twice and drifting. That is a real choice #275 has to
 /// make at cutover, and the advisory lease is what makes it a free one: the jobs behave
 /// identically whether they run in one dedicated instance or in all twenty-five API instances.
 /// The trade is operational, not correctness -- a separate service is one more thing to deploy

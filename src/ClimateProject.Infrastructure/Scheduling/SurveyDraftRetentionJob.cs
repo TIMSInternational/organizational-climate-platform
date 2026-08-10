@@ -151,8 +151,19 @@ public static class SurveyDraftRetentionJob
             ids.RemoveAt(ids.Count - 1);
         }
 
+        // `d.ExpiresAt <= nowUtc` is repeated here, not just in the harvest above, and it is
+        // load-bearing rather than belt-and-braces. Between the SELECT and this DELETE, a
+        // draft can be saved -- and every save pushes ExpiresAt out (SurveyDraftEndpoints
+        // re-stamps it on write). Deleting by id alone would therefore reclaim a draft
+        // somebody had just resumed, which is precisely the loss this job's own safety
+        // argument says it can never cause: "it deletes strictly by expires_at and every
+        // save pushes that out, so it can never take a draft someone is working on."
+        //
+        // With the predicate restated, a row rescued in that window simply fails to match
+        // and survives; the count returned is what was actually deleted, so the log does not
+        // overstate either.
         var deleted = await db.SurveyDrafts
-            .Where(d => ids.Contains(d.Id))
+            .Where(d => ids.Contains(d.Id) && d.ExpiresAt <= nowUtc)
             .ExecuteDeleteAsync(cancellationToken);
 
         // Reported rather than looped: the next tick is the retry, and a loop here would defeat
