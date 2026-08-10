@@ -244,15 +244,19 @@ public static class AuthEndpoints
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
-        var sub = currentUser.Sub;
 
-        // Sub is minted as PersonaExternalId when set, otherwise the user's own Guid Id
-        // (see LoginAsync/SignupAsync/GoogleLoginAsync/RefreshAsync). It is not always a
-        // parseable Guid, so match on PersonaExternalId first and only attempt an Id match
-        // when the value does parse as one — never let a non-Guid Sub throw here.
-        var user = Guid.TryParse(sub, out var userId)
-            ? await db.Users.FirstOrDefaultAsync(u => u.Id == userId || u.PersonaExternalId == sub, cancellationToken)
-            : await db.Users.FirstOrDefaultAsync(u => u.PersonaExternalId == sub, cancellationToken);
+        // Sub is minted as PersonaExternalId when set, otherwise the user's own Guid Id (see
+        // IssueTokenForAsync below, the single mint). It is not always a parseable Guid, so
+        // the resolver matches on PersonaExternalId first and only attempts an Id match when
+        // the value does parse as one — never let a non-Guid Sub throw here.
+        //
+        // #285: that rule used to be stated here and not implemented. The code was a single
+        // `Id == userId || PersonaExternalId == sub` predicate, which is unordered — under a
+        // collision it returned whichever row Postgres reached first, and on this path
+        // picking the wrong row mints a token for the wrong user. The order now lives in
+        // ActingUserResolver, as two sequential queries, because a WHERE ... OR ... cannot
+        // express it.
+        var user = await ActingUserResolver.ResolveAsync(currentUser, db, cancellationToken);
         if (user is null)
         {
             return Results.Json(new ErrorResponse("Account is no longer active"), statusCode: 401);

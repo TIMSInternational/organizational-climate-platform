@@ -560,4 +560,50 @@ public class DemographicSnapshotEndpointsTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
+    /// <summary>
+    /// #285: <c>demographic_snapshots.created_by</c> must name the caller's own row, even
+    /// when their <c>sub</c> spells another user's <c>Id</c>.
+    ///
+    /// <c>persona_external_id</c> is a free-form 64-character string, so nothing stops one
+    /// being a Guid in canonical form -- #154's ETL is the feature that will start filling
+    /// the column from legacy ids. The collider's <c>sub</c> is minted from their own
+    /// <c>PersonaExternalId</c> (<c>PersonaExternalId ?? Id</c>, AuthEndpoints), which here
+    /// is the victim's <c>Id</c>. This endpoint resolved <c>Id</c> first until #285, and a
+    /// snapshot is a compliance record -- who took it is the point of storing it.
+    /// </summary>
+    [Fact]
+    public async Task A_guid_shaped_external_id_never_credits_the_snapshot_to_the_user_whose_id_it_matches()
+    {
+        var victimEmail = $"{Guid.NewGuid():N}@{_companyADomain}";
+        var colliderEmail = $"{Guid.NewGuid():N}@{_companyADomain}";
+        var client = _factory.CreateClient();
+        (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Victim", victimEmail, "a-good-password")))
+            .EnsureSuccessStatusCode();
+        (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Collider", colliderEmail, "a-good-password")))
+            .EnsureSuccessStatusCode();
+
+        Guid colliderId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var victim = await db.Users.FirstAsync(u => u.Email == victimEmail);
+            var collider = await db.Users.FirstAsync(u => u.Email == colliderEmail);
+            collider.Role = Roles.CompanyAdmin;
+            collider.CompanyId = _companyAId;
+            collider.PersonaExternalId = victim.Id.ToString();
+            await db.SaveChangesAsync();
+            colliderId = collider.Id;
+            Assert.NotEqual(victim.Id, collider.Id);
+        }
+
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(colliderEmail, "a-good-password"));
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token);
+
+        var snapshot = await CreateSnapshotAsync(client, _surveyAId, _companyAId, "Collision");
+
+        Assert.Equal(colliderId, snapshot.CreatedBy);
+    }
 }

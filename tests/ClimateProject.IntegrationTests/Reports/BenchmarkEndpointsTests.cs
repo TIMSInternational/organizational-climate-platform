@@ -265,4 +265,60 @@ public class BenchmarkEndpointsTests : IAsyncLifetime
             "n", "d", null, null, null));
         Assert.Equal(HttpStatusCode.NotFound, updateResponse.StatusCode);
     }
+
+    /// <summary>
+    /// #285: <c>benchmarks.created_by</c> must name the caller's own row, even when their
+    /// <c>sub</c> spells another user's <c>Id</c>.
+    ///
+    /// <c>persona_external_id</c> is a free-form 64-character string, so nothing stops one
+    /// being a Guid in canonical form -- #154's ETL is the feature that will start filling
+    /// the column from legacy ids. The collider's <c>sub</c> is minted from their own
+    /// <c>PersonaExternalId</c> (<c>PersonaExternalId ?? Id</c>, AuthEndpoints), which here
+    /// is the victim's <c>Id</c>. This endpoint resolved <c>Id</c> first until #285.
+    ///
+    /// Asserted against the row rather than the response: <c>BenchmarkDetail</c> does not
+    /// carry <c>CreatedBy</c>, so the stored value is the only place the misresolution shows.
+    /// </summary>
+    [Fact]
+    public async Task A_guid_shaped_external_id_never_files_the_benchmark_against_the_user_whose_id_it_matches()
+    {
+        var victimEmail = $"{Guid.NewGuid():N}@{_companyADomain}";
+        var colliderEmail = $"{Guid.NewGuid():N}@{_companyADomain}";
+        var client = _factory.CreateClient();
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Victim", victimEmail, "a-good-password"))).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Collider", colliderEmail, "a-good-password"))).StatusCode);
+
+        Guid colliderId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var victim = await db.Users.FirstAsync(u => u.Email == victimEmail);
+            var collider = await db.Users.FirstAsync(u => u.Email == colliderEmail);
+            collider.Role = Roles.SuperAdmin;
+            collider.PersonaExternalId = victim.Id.ToString();
+            await db.SaveChangesAsync();
+            colliderId = collider.Id;
+            Assert.NotEqual(victim.Id, collider.Id);
+        }
+
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(colliderEmail, "a-good-password"));
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token);
+
+        var response = await client.PostAsJsonAsync("/admin/benchmarks", ValidCreateRequest($"Collision {Guid.NewGuid():N}", null));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<BenchmarkDetail>();
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var stored = await db.Benchmarks.AsNoTracking().FirstAsync(b => b.Id == created!.Id);
+            Assert.Equal(colliderId, stored.CreatedBy);
+        }
+    }
 }
