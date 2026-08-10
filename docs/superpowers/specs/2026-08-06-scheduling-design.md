@@ -78,7 +78,7 @@ below — but the "no consumer" half is the reason it stays out.) Progress stays
 it: the rows a tick takes are deleted, so no row can be handed back to the next tick and none
 can be starved.
 
-**The retention predicate is indexed (#278, closed).** `survey_drafts` was indexed on
+**The retention predicate is indexed (#278).** `survey_drafts` was indexed on
 `company_id` and `user_id` only, so `WHERE expires_at <= now` was a sequential scan — hourly,
 forever, on a table whose whole premise is unbounded growth (the wizard autosaves a draft row
 per authoring session since #266). `20260810180421_AddSurveyDraftExpiresAtIndex` adds

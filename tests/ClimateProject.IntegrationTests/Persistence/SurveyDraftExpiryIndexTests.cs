@@ -111,12 +111,27 @@ public class SurveyDraftExpiryIndexTests(PostgresContainerFixture postgres)
     public void The_expiry_index_is_declared_on_the_model_and_not_only_in_the_migration()
     {
         // On its own this is the weak test the class docstring warns about, and it is not here
-        // to prove the index works -- the plan tests below do that. It is here for the one
-        // failure the plan tests cannot see: the migration creating an index the model does not
-        // declare. `ClimateProjectDbContextModelSnapshot` is generated from the model, so a
-        // configuration and a migration that disagree leave the snapshot describing a database
-        // that does not exist, and the next `dotnet ef migrations add` on any branch emits a
-        // spurious CreateIndex or DropIndex for it. Nothing else in this repo checks that.
+        // to prove the index works -- the plan tests below do that. It is here for a failure the
+        // plan tests cannot see: the migration creating an index the model does not declare.
+        // `ClimateProjectDbContextModelSnapshot` is generated from the model, so a configuration
+        // and a migration that disagree leave the snapshot describing a database that does not
+        // exist, and the next `dotnet ef migrations add` on any branch emits a spurious
+        // CreateIndex or DropIndex for it.
+        //
+        // It is not the only guard against that, and the residual claim is narrower than it
+        // looks. `MigrateAsync` validates the model against the snapshot itself and throws
+        // `PendingModelChangesWarning`, so any test that migrates already fails when the two
+        // disagree. Measured: dropping `HasIndex` from SurveyDraftConfiguration with the
+        // snapshot left alone failed 9 of 14 in the untouched SurveyDraftRetentionJobTests --
+        // exactly its 9 tests that call `MigrateAsync`, every one failing at
+        // `Migrator.ValidateMigrations`; the 5 that passed are the ones that never migrate.
+        //
+        // What is left to this test is the shape that validation is blind to, because it leaves
+        // model and snapshot agreeing: both dropping the index while a hand-edited migration
+        // still creates it. Nothing then has anything to warn about. Measured: with `HasIndex`
+        // removed from the configuration *and* from the snapshot and the migration intact,
+        // SurveyDraftRetentionJobTests passed 14 of 14 and this test was the only failure
+        // ("Assert.NotNull() Failure: Value is null").
         using var db = CreateContext();
 
         var index = db.Model
