@@ -269,13 +269,15 @@ describe('AuthSuccessPage', () => {
 
   it('continues to a page the new employee can actually load', async () => {
     // Before `resolvePostAcceptRoute` learned about /surveys/my, this button's
-    // only destination was /admin/companies -- SuperAdmin-only, so a 403.
+    // only destination was /admin/companies -- SuperAdmin-only, so a 403. Since
+    // #132 it is /dashboard, which every role can load: the page dispatches on the
+    // role claim and the employee branch is scoped to the caller's own user row.
     setToken(tokenFor({ role: 'employee', companyId: 'c1', name: 'Ana', email: 'ana@acme.com', isActive: 'true' }))
     renderAuthRoutes('/auth/success')
 
     await userEvent.click(await screen.findByRole('button', { name: 'Continue' }))
 
-    await waitFor(() => expect(path()).toBe('/surveys/my'))
+    await waitFor(() => expect(path()).toBe('/dashboard'))
   })
 })
 

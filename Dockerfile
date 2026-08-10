@@ -19,6 +19,11 @@ RUN dotnet publish src/ClimateProject.Api/ClimateProject.Api.csproj \
     "/p:CommitSha=${COMMIT_SHA}" \
     "/p:BuildTimestamp=${BUILD_TIMESTAMP}"
 
+# Must not be an Alpine variant. Since #136 the API resolves timezone ids at runtime
+# (ProfilePreferenceUpdate.IsValidTimezone, on PUT /profile/preferences), and Alpine ships
+# without tzdata -- every IANA zone id would fail to resolve and users would be unable to
+# set any timezone but UTC. Dockerfile.workers carries the same constraint for the digest
+# scheduler, where the same missing tzdata fails silently instead of with a 400.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 

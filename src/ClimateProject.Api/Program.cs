@@ -423,6 +423,7 @@ app.MapAuthEndpoints();
 app.MapCompanyEndpoints();
 app.MapDepartmentEndpoints();
 app.MapUserEndpoints();
+app.MapProfileEndpoints();
 app.MapInvitationEndpoints();
 app.MapInvitationAcceptEndpoints();
 app.MapSystemSettingsEndpoints();
@@ -450,6 +451,7 @@ app.MapNotificationEndpoints();
 app.MapDemographicSnapshotEndpoints();
 app.MapSearchEndpoints();
 app.MapSystemStatusEndpoints();
+app.MapDashboardEndpoints();
 
 app.Run();
 

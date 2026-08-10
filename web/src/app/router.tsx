@@ -9,6 +9,7 @@ import AcceptInvitationPage from '../features/org-structure/pages/AcceptInvitati
 import RequireAuth from './RequireAuth'
 import AdminLayout from './AdminLayout'
 import RouteErrorBoundary from './RouteErrorBoundary'
+import DashboardPage from '../features/dashboard/pages/DashboardPage'
 import CompaniesListPage from '../features/org-structure/pages/CompaniesListPage'
 import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage'
 import UsersListPage from '../features/org-structure/pages/UsersListPage'
@@ -27,6 +28,7 @@ import MicroclimateRespondPage from '../features/microclimates/pages/Microclimat
 import SurveyRespondPage from '../features/surveys/pages/SurveyRespondPage'
 import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespondPage'
 import NotificationPreferencesPage from '../features/notifications/pages/NotificationPreferencesPage'
+import ProfilePage from '../features/profile/pages/ProfilePage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
 import SurveyDistributionPage from '../features/surveys/pages/SurveyDistributionPage'
 import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
@@ -40,19 +42,19 @@ import MySurveysPage from '../features/surveys/pages/MySurveysPage'
 import SurveyTemplatesPage from '../features/surveys/pages/SurveyTemplatesPage'
 import SurveyTemplateDetailPage from '../features/surveys/pages/SurveyTemplateDetailPage'
 import AnalyticsDashboardPage from '../features/analytics/pages/AnalyticsDashboardPage'
-import { getToken } from '../auth/token'
-import { decodeJwtPayload } from '../auth/jwt'
 import { resolveInitialRoute } from './resolveInitialRoute'
 
 // /admin/companies (the old unconditional target) is SuperAdmin-only -- a
 // company_admin (or anyone else) landing on `/` needs routing to whatever page
 // their role can actually load, same as a fresh login (see LoginPage.tsx).
+//
+// Since #132 that is `/dashboard` for everyone: the page dispatches on the role
+// claim itself, so nothing has to be decoded here to pick a destination. Kept as a
+// component rather than a bare `<Navigate to="/dashboard">` so the one place that
+// decides "where does a signed-in user land" stays `resolveInitialRoute`, shared
+// with LoginPage and AuthSuccessPage.
 function HomeRedirect() {
-  const token = getToken()
-  const claims = token ? decodeJwtPayload(token) : null
-  const role = typeof claims?.role === 'string' ? claims.role : undefined
-  const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
-  return <Navigate to={resolveInitialRoute(role, companyId)} replace />
+  return <Navigate to={resolveInitialRoute()} replace />
 }
 
 /**
@@ -126,6 +128,10 @@ export const router = createBrowserRouter([
           {
             element: <AdminLayout />,
             children: [
+              // #132. One route for all four role dashboards: the page dispatches by
+              // role, and each role's endpoint refuses the other three, so there is no
+              // per-role route to gate and nothing a wrong guess here could leak.
+              { path: '/dashboard', element: <DashboardPage /> },
               { path: '/admin/companies', element: <CompaniesListPage /> },
               { path: '/admin/companies/:id', element: <CompanyDetailPage /> },
               { path: '/admin/companies/:companyId/users', element: <UsersListPage /> },
@@ -180,6 +186,11 @@ export const router = createBrowserRouter([
               // a survey, not a place in the sidebar. `/surveys` and `/surveys/:id` are
               // #109's; this route only needs to exist beneath one of them.
               { path: '/surveys/:id/results', element: <SurveyResultsPage /> },
+              // Not under /admin, and gated by nothing beyond RequireAuth: every
+              // authenticated role — plain employees included — owns a profile, and
+              // every endpoint behind this page resolves the caller from their own
+              // token and takes no user id at all (#136).
+              { path: '/profile', element: <ProfilePage /> },
               // Not under /admin: every authenticated role owns their own preferences,
               // and the API behind this page takes no user id at all (#103).
               { path: '/settings/notifications', element: <NotificationPreferencesPage /> },

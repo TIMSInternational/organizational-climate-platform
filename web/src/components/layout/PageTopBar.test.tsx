@@ -10,11 +10,18 @@ afterEach(cleanup)
  * `PageTopBar` renders router `<Link>`s for its crumbs, so it needs a router in
  * context — and a `TranslationProvider`, because the default breadcrumb label
  * comes from the catalogue.
+ *
+ * The path is one **no nav row covers**, so the derived eyebrow is absent unless a
+ * test passes one explicitly. It used to be `/`, which stopped being nav-less when
+ * #132 added the Dashboard row: `isUnder` deliberately treats `/` as being under
+ * `/dashboard` (the bare route redirects there), so every render here suddenly grew
+ * a "WORKSPACE" eyebrow and the "omits unused containers" test failed on it. The
+ * path was incidental to all eleven tests; being nav-less is what they assumed.
  */
 function renderTopBar(props: PageTopBarProps) {
   const router = createMemoryRouter(
-    [{ path: '/', element: <PageTopBar {...props} /> }],
-    { initialEntries: ['/'] },
+    [{ path: '/not-a-nav-destination', element: <PageTopBar {...props} /> }],
+    { initialEntries: ['/not-a-nav-destination'] },
   )
   return render(
     <TranslationProvider>

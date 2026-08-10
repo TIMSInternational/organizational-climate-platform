@@ -114,6 +114,10 @@ describe('router', () => {
     // /notifications/mine authorizes per user, so every authenticated role can
     // load their own inbox and the nav offers it to all of them.
     expect(paths).toContain('/notifications')
+    // #136. Same rule as /notifications above and for the same reason: every route
+    // behind this page resolves the caller from their own token and takes no user
+    // id, so a plain employee must be able to load it.
+    expect(paths).toContain('/profile')
     expect(paths).toContain('/analytics/benchmarks')
     expect(paths).toContain('/analytics/ai-insights')
     expect(paths).toContain('/admin/companies/:companyId/reports')

@@ -50,15 +50,17 @@ describe('MobileNav', () => {
     expect(container.querySelector('nav')).toBeNull()
   })
 
-  it('gives a role with no admin pages a bar with their own two per-user pages', () => {
+  it('gives a role with no admin pages a bar with their own three per-user pages', () => {
     renderNav(buildNavSections('employee', COMPANY))
     const bar = screen.getByRole('navigation')
-    // The "More" drawer trigger is always present; the destinations are the two
-    // pages that authorize per *user* rather than per role -- their assigned
-    // surveys (#109) and their inbox (#99). Work destination first, inbox second.
+    // The "More" drawer trigger is always present; the destinations are the three
+    // pages that authorize per *user* rather than per role -- their dashboard
+    // (#132), their assigned surveys (#109) and their inbox (#99). Landing page
+    // first, then work destination, then inbox.
     const links = within(bar).getAllByRole('link')
-    expect(links).toHaveLength(2)
+    expect(links).toHaveLength(3)
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/dashboard',
       '/surveys/my',
       '/notifications',
     ])
@@ -67,6 +69,12 @@ describe('MobileNav', () => {
   it('fills its tab slots with leaf destinations, never with a group toggle', () => {
     // "Company Administration" is a disclosure in the sidebar, not a page. Its
     // three children are the real destinations.
+    //
+    // #132 put Dashboard in the first slot, which pushed Action Plans off the bar
+    // and into the drawer -- see the note on DASHBOARD_ITEM. That is the same
+    // flatten-in-order consequence the Microclimates test below records, applied
+    // deliberately this time: the bar has to be able to return to the page every
+    // role now lands on.
     renderNav(companyAdminSections())
     const bar = screen.getByRole('navigation')
     const labels = within(bar)
@@ -74,7 +82,7 @@ describe('MobileNav', () => {
       .map((link) => link.textContent)
 
     expect(labels).not.toContain('Company Administration')
-    expect(labels).toEqual(['Company Settings', 'Users', 'Demographic fields', 'Action Plans'])
+    expect(labels).toEqual(['Dashboard', 'Company Settings', 'Users', 'Demographic fields'])
   })
 
   it('pushes Microclimates off the bar, because three sub-items come before it', () => {
@@ -99,8 +107,11 @@ describe('MobileNav', () => {
   })
 
   it('marks the tab for the current route as the current page', () => {
-    renderNav(companyAdminSections(), '/action-plans')
-    const active = screen.getByRole('link', { name: 'Action Plans' })
+    // Dashboard rather than Action Plans since #132: Action Plans is no longer one
+    // of the four tabs, and a test that asks for a link the bar does not render
+    // proves nothing about the bar.
+    renderNav(companyAdminSections(), '/dashboard')
+    const active = screen.getByRole('link', { name: 'Dashboard' })
     expect(active.getAttribute('aria-current')).toBe('page')
     expect(screen.getByRole('link', { name: 'Users' }).getAttribute('aria-current')).toBeNull()
   })
@@ -110,9 +121,9 @@ describe('MobileNav', () => {
     // 3.78:1 and `--admin-font-tertiary` #818181 is 3.90:1, both under WCAG AA's
     // 4.5:1 for text. An *icon* is held to 1.4.11's 3:1 and both clear it, so the
     // colour stays on the row (the icon inherits it) and the label overrides it.
-    renderNav(companyAdminSections(), '/action-plans')
+    renderNav(companyAdminSections(), '/dashboard')
 
-    const activeRow = screen.getByRole('link', { name: 'Action Plans' })
+    const activeRow = screen.getByRole('link', { name: 'Dashboard' })
     expect(activeRow.className).toContain('text-accent-blue')
     const activeLabel = activeRow.querySelector('span')!
     expect(activeLabel.className).toContain('text-fg-primary')
