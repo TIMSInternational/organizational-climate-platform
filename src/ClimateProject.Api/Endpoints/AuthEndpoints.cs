@@ -274,8 +274,14 @@ public static class AuthEndpoints
     /// The guard lives inside the mint rather than beside each call deliberately (#280).
     /// While it was a per-path convention, three login paths remembered it twice:
     /// /auth/google loaded the user, stamped LastLoginAt and issued a working JWT to
-    /// accounts an administrator had deactivated. A login path added later cannot now mint
-    /// a token for an inactive account without deleting this check.
+    /// accounts an administrator had deactivated.
+    ///
+    /// "Single place" is a checkable claim, not a slogan: every caller of
+    /// <see cref="IJwtTokenService.IssueToken"/> in this assembly is in this method. The
+    /// one that was not — <see cref="InvitationAcceptEndpoints"/>, which hand-rolled its own
+    /// <see cref="TokenClaims"/> — now calls through here too, which is why this is
+    /// <c>internal</c> rather than <c>private</c>. Keep it that way: a new auth path that
+    /// builds its own TokenClaims re-opens exactly the hole #280 was filed for.
     ///
     /// Callers still reject an inactive account themselves where ordering matters — the
     /// point of refusal has to come before any write, and this helper runs after them.
@@ -283,7 +289,7 @@ public static class AuthEndpoints
     /// refusal may reveal differs: the unauthenticated paths must be indistinguishable from
     /// a failed credential, /auth/refresh may be explicit.
     /// </remarks>
-    private static async Task<IResult> IssueTokenForAsync(
+    internal static async Task<IResult> IssueTokenForAsync(
         User user,
         ClimateProjectDbContext db,
         IJwtTokenService jwtTokenService,

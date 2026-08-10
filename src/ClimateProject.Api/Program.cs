@@ -196,11 +196,12 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
 // buys is that a token saying "deactivated" is refused by the API itself. Before this, the
 // only thing anywhere that read that claim was a client-side redirect in the SPA.
 //
-// It is a second line of defence, not the fix: /auth/login, /auth/signup, /auth/google and
-// /auth/refresh all refuse to mint such a token in the first place (AuthEndpoints
-// .IssueTokenForAsync). Neither layer revokes a token that was issued while the account was
-// still active -- deactivating a user does not end their current session before the token's
-// 24h expiry, and that is a separate change.
+// It is a second line of defence, not the fix: every path that mints a token -- /auth/login,
+// /auth/signup, /auth/google, /auth/refresh and POST /invitations/{token}/accept -- goes
+// through AuthEndpoints.IssueTokenForAsync, which refuses to mint one in the first place.
+// Neither layer revokes a token that was issued while the account was still active --
+// deactivating a user does not end their current session before the token's 24h expiry, and
+// that is a separate change.
 builder.Services.AddAuthorization(options =>
 {
     options.DefaultPolicy = new AuthorizationPolicyBuilder()

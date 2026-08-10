@@ -104,9 +104,30 @@ public class GoogleLoginEndpointTests : IAsyncLifetime
         Assert.Equal(signupBody!.Message, googleBody!.Message);
     }
 
+    /// This used to assert `Companies.Count(c => c.EmailDomain == Domain) == 1`, which after
+    /// #280 is unfalsifiable: /auth/google can no longer create a Company at all, so the count
+    /// is 1 whatever the endpoint does -- it passed against the reverted code too. What is
+    /// still gettable wrong is *which* company each caller is placed in, so assert that: two
+    /// callers on the same domain both land in that domain's company, and not in some other
+    /// tenant that happens to exist in the same database.
     [Fact]
-    public async Task Google_login_with_existing_domain_reuses_the_company()
+    public async Task Google_login_places_every_caller_on_a_domain_in_that_domains_company()
     {
+        var otherCompany = new Company
+        {
+            Id = Guid.NewGuid(),
+            Name = "Not Acme",
+            EmailDomain = $"not-acme-{Guid.NewGuid():N}.test",
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+
+        using (var seed = _factory.Services.CreateScope())
+        {
+            var seedDb = seed.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            seedDb.Companies.Add(otherCompany);
+            await seedDb.SaveChangesAsync();
+        }
+
         var client = _factory.CreateClient();
         var first = await client.PostAsJsonAsync("/auth/google", new GoogleLoginRequest($"valid:one@{Domain}:One"));
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
@@ -116,8 +137,12 @@ public class GoogleLoginEndpointTests : IAsyncLifetime
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
-        var companyCount = await db.Companies.CountAsync(c => c.EmailDomain == Domain);
-        Assert.Equal(1, companyCount);
+        var one = await db.Users.SingleAsync(u => u.Email == $"one@{Domain}");
+        var two = await db.Users.SingleAsync(u => u.Email == $"two@{Domain}");
+
+        Assert.Equal(_company.Id, one.CompanyId);
+        Assert.Equal(_company.Id, two.CompanyId);
+        Assert.NotEqual(otherCompany.Id, one.CompanyId);
     }
 
     [Fact]
