@@ -86,14 +86,16 @@ describe('buildNavSections', () => {
    */
   it('keeps Benchmarks on a super_admin mobile tab bar, so the restored entries do not displace it', () => {
     // `leafNavItems` -- not `hrefs` -- is what MobileNav reads, and it takes the
-    // first four. The group's two children come first, so Benchmarks holds the
-    // third slot and the three #124 entries have to be appended after it.
+    // first four. Dashboard leads (#132: it is where every role now lands after
+    // login, so the bar has to be able to return to it), then the group's two
+    // children, so Benchmarks holds the fourth slot and the three #124 entries
+    // still have to be appended after it.
     const leaves = leafNavItems(buildNavSections('super_admin', 'company-1')).map((item) => item.href)
     expect(leaves.slice(0, 4)).toEqual([
+      '/dashboard',
       '/admin/companies',
       '/admin/system-settings',
       '/analytics/benchmarks',
-      '/action-plans',
     ])
   })
 
@@ -133,7 +135,10 @@ describe('buildNavSections', () => {
     // have built would have been `/admin/companies/undefined/...`, so the empty array
     // was right until #99 -- but neither /notifications nor /surveys/my needs a
     // companyId at all, so the fallback is now those two rows rather than nothing.
+    // #132 added a third, for the same reason: /dashboard needs no companyId either
+    // and its employee branch is scoped to the caller's own user row.
     expect(hrefs(buildNavSections('company_admin', undefined))).toEqual([
+      '/dashboard',
       '/surveys/my',
       '/notifications',
     ])
@@ -142,8 +147,12 @@ describe('buildNavSections', () => {
   it.each(['employee', 'supervisor', 'leader', undefined])('gives %s only the per-user links (no admin page exists for this role yet)', (role) => {
     // Both endpoints behind these resolve the caller's OWN user row and read no role
     // claim, which is precisely what makes them loadable by a role with no admin
-    // surface. Anything company- or role-scoped would 403 here.
+    // surface. Anything company- or role-scoped would 403 here. /dashboard joins
+    // them on the same test (#132): `DashboardPage` dispatches on the role and this
+    // branch's roles reach either the department view (leader/supervisor, scoped to
+    // their own user row's department) or the employee view.
     expect(hrefs(buildNavSections(role, 'company-1'))).toEqual([
+      '/dashboard',
       '/surveys/my',
       '/notifications',
     ])
@@ -220,6 +229,8 @@ describe('leafNavItems', () => {
     const leaves = leafNavItems(sections)
 
     expect(leaves.map((item) => item.href)).toEqual([
+      // #132's landing page, first in every branch -- see DASHBOARD_ITEM.
+      '/dashboard',
       '/admin/companies/company-1',
       '/admin/companies/company-1/users',
       '/admin/companies/company-1/demographic-fields',
@@ -250,6 +261,8 @@ describe('leafNavItems', () => {
   it('keeps a childless item as itself', () => {
     const leaves = leafNavItems(buildNavSections('super_admin', 'company-1'))
     expect(leaves.map((item) => item.href)).toEqual([
+      // #132's landing page, first in every branch -- see DASHBOARD_ITEM.
+      '/dashboard',
       '/admin/companies',
       '/admin/system-settings',
       '/analytics/benchmarks',
@@ -280,17 +293,21 @@ describe('leafNavItems', () => {
    * anyone having to notice which of thirteen hrefs moved.
    */
   it('keeps the four mobile tab slots each role already had', () => {
+    // #132 changed these once, deliberately and for both admin roles: Dashboard
+    // takes the first slot and Action Plans moves behind "More". A bottom bar that
+    // cannot return to the page login lands on is a bar missing its home button.
+    // The pin still does its job -- any FURTHER insertion has to argue with it.
     expect(leafNavItems(buildNavSections('super_admin', 'company-1')).slice(0, 4).map((item) => item.href)).toEqual([
+      '/dashboard',
       '/admin/companies',
       '/admin/system-settings',
       '/analytics/benchmarks',
-      '/action-plans',
     ])
     expect(leafNavItems(buildNavSections('company_admin', 'company-1')).slice(0, 4).map((item) => item.href)).toEqual([
+      '/dashboard',
       '/admin/companies/company-1',
       '/admin/companies/company-1/users',
       '/admin/companies/company-1/demographic-fields',
-      '/action-plans',
     ])
   })
 
@@ -301,8 +318,9 @@ describe('leafNavItems', () => {
     expect(hrefs(buildNavSections('super_admin', 'company-1'))).not.toContain('/surveys/my')
   })
 
-  it('gives a role with no admin pages exactly its two per-user leaves, so the mobile bar has something to render', () => {
+  it('gives a role with no admin pages exactly its three per-user leaves, so the mobile bar has something to render', () => {
     expect(leafNavItems(buildNavSections('employee', 'company-1')).map((item) => item.href)).toEqual([
+      '/dashboard',
       '/surveys/my',
       '/notifications',
     ])

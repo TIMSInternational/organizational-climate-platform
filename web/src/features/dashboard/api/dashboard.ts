@@ -1,0 +1,197 @@
+import { authFetch } from '../../../api/authFetch'
+
+/**
+ * Typed client for `/dashboard/*` (DashboardEndpoints.cs) — the four role dashboards (#132).
+ *
+ * **Four functions, four shapes, and no union.** The server deliberately does not offer a
+ * single "dashboard" payload with optional sections, because that would put every tenant's
+ * figures on the wire for anyone reading the network tab. Modelling them here as one type
+ * with optional fields would hand that shape back at the client, and the first page to
+ * write `data.companies?.length` would be reading a field its caller's role can never
+ * populate. So each role's payload is its own interface, and choosing between them is a
+ * routing decision made once, in `DashboardPage`.
+ *
+ * Nothing here filters. Every count and every row arrives already scoped by the server; if
+ * a figure is on this payload the caller is permitted to see it.
+ */
+
+/** A survey on an admin dashboard — `DashboardSurveySummary` in DashboardDtos.cs. */
+export interface DashboardSurveySummary {
+  id: string
+  /** Already resolved for the requested locale, and null when the title is absent in every language. */
+  title: string | null
+  status: string
+  startDate: string
+  endDate: string
+  responseCount: number
+  targetAudienceCount: number | null
+}
+
+/**
+ * A survey on a department's dashboard — `DashboardDepartmentSurveySummary` in DashboardDtos.cs.
+ *
+ * Not {@link DashboardSurveySummary}, and the missing `targetAudienceCount` is the point.
+ * That shape's two participation columns come off the survey row, where `responseCount` is
+ * bumped once per completed response *anywhere in the tenant* and `targetAudienceCount` is
+ * the tenant's invited headcount. On a page contracted to one department both describe every
+ * other department too, so the server counts this department's responses instead and offers
+ * no target at all: the schema has no per-department invited headcount to offer.
+ */
+export interface DashboardDepartmentSurveySummary {
+  id: string
+  title: string | null
+  status: string
+  startDate: string
+  endDate: string
+  /** Completed responses from this department alone. */
+  responseCount: number
+}
+
+/** One tenant on the platform overview — SuperAdmin payloads only. */
+export interface DashboardCompanySummary {
+  id: string
+  name: string
+  userCount: number
+  activeSurveyCount: number
+  completedResponseCount: number
+  createdAt: string
+}
+
+/** One department's participation. */
+export interface DashboardDepartmentSummary {
+  id: string
+  name: string
+  memberCount: number
+  completedResponseCount: number
+}
+
+/** `GET /dashboard/super-admin`. Every figure spans all tenants. */
+export interface SuperAdminDashboard {
+  companyCount: number
+  userCount: number
+  activeUserCount: number
+  surveyCount: number
+  activeSurveyCount: number
+  responseCount: number
+  completedResponseCount: number
+  companies: DashboardCompanySummary[]
+}
+
+/** `GET /dashboard/company-admin`. One tenant. */
+export interface CompanyAdminDashboard {
+  companyId: string
+  companyName: string
+  userCount: number
+  activeUserCount: number
+  departmentCount: number
+  surveyCount: number
+  activeSurveyCount: number
+  draftSurveyCount: number
+  responseCount: number
+  completedResponseCount: number
+  openActionPlanCount: number
+  overdueActionPlanCount: number
+  ongoingSurveys: DashboardSurveySummary[]
+  departments: DashboardDepartmentSummary[]
+}
+
+/** `GET /dashboard/department-admin`. One department. */
+export interface DepartmentAdminDashboard {
+  departmentId: string
+  departmentName: string
+  companyId: string
+  memberCount: number
+  activeMemberCount: number
+  activeSurveyCount: number
+  completedResponseCount: number
+  openActionPlanCount: number
+  overdueActionPlanCount: number
+  activeSurveys: DashboardDepartmentSurveySummary[]
+}
+
+/**
+ * A survey the caller still owes an answer to.
+ *
+ * Narrower than {@link DashboardSurveySummary} on purpose, exactly as `/surveys/my` is
+ * narrower than `/surveys`: a respondent is not told how many other people have answered.
+ */
+export interface DashboardPendingSurvey {
+  id: string
+  title: string | null
+  type: string
+  startDate: string
+  endDate: string
+  questionCount: number
+}
+
+/** `GET /dashboard/employee`. Scoped to the caller's own user row and to nobody else's. */
+export interface EmployeeDashboard {
+  name: string
+  /** Null for a user who belongs to no tenant — a global super_admin (#191). */
+  companyId: string | null
+  departmentId: string | null
+  departmentName: string | null
+  pendingSurveyCount: number
+  completedSurveyCount: number
+  unreadNotificationCount: number
+  /** The soonest close date across ALL pending surveys, not merely the listed page of them. */
+  nextDeadline: string | null
+  pendingSurveys: DashboardPendingSurvey[]
+}
+
+function withQuery(baseUrl: string, path: string, params: Record<string, string | undefined>): string {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== '') {
+      search.set(key, value)
+    }
+  }
+  const query = search.toString()
+  return query ? `${baseUrl}${path}?${query}` : `${baseUrl}${path}`
+}
+
+/** Takes no locale: nothing on the platform overview is authored content. */
+export async function getSuperAdminDashboard(baseUrl: string): Promise<SuperAdminDashboard> {
+  const response = await authFetch(`${baseUrl}/dashboard/super-admin`)
+  return response.json() as Promise<SuperAdminDashboard>
+}
+
+/**
+ * `companyId` is required for a SuperAdmin (the server answers 400 without one) and
+ * **ignored** for a CompanyAdmin, whose own claim decides the scope. Passing another
+ * tenant's id as a CompanyAdmin is a 403, not a silent substitution — see
+ * `CompanyAdminAsync`.
+ */
+export async function getCompanyAdminDashboard(
+  baseUrl: string,
+  options: { companyId?: string; lang?: string } = {},
+): Promise<CompanyAdminDashboard> {
+  const response = await authFetch(
+    withQuery(baseUrl, '/dashboard/company-admin', { companyId: options.companyId, lang: options.lang }),
+  )
+  return response.json() as Promise<CompanyAdminDashboard>
+}
+
+/**
+ * `departmentId` is omitted by a leader or supervisor — the server reads their own user
+ * row, because department membership moves and a token minted before a transfer would keep
+ * serving the old team. It is required for the two admin roles, who have no department of
+ * their own.
+ */
+export async function getDepartmentAdminDashboard(
+  baseUrl: string,
+  options: { departmentId?: string; lang?: string } = {},
+): Promise<DepartmentAdminDashboard> {
+  const response = await authFetch(
+    withQuery(baseUrl, '/dashboard/department-admin', {
+      departmentId: options.departmentId,
+      lang: options.lang,
+    }),
+  )
+  return response.json() as Promise<DepartmentAdminDashboard>
+}
+
+export async function getEmployeeDashboard(baseUrl: string, lang?: string): Promise<EmployeeDashboard> {
+  const response = await authFetch(withQuery(baseUrl, '/dashboard/employee', { lang }))
+  return response.json() as Promise<EmployeeDashboard>
+}

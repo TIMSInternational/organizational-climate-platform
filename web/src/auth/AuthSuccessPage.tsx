@@ -35,10 +35,10 @@ function claimString(claims: Record<string, unknown> | null, key: string): strin
  *
  * ## Continue goes wherever the role can actually load
  *
- * Via `resolveInitialRoute`, which since this change routes employee, supervisor
- * and leader to `/surveys/my` instead of the SuperAdmin-only companies list. A
- * freshly signed-up user *is* an employee, so before that fix this button's only
- * possible destination was a 403.
+ * Via `resolveInitialRoute`, which since #132 sends every role to `/dashboard` —
+ * a page that dispatches on the role claim and 403s for none of them. A freshly
+ * signed-up user *is* an employee, so before this button was routed at all its
+ * only possible destination was the SuperAdmin-only companies list, i.e. a 403.
  */
 export default function AuthSuccessPage() {
   const { t } = useTranslation()
@@ -52,9 +52,7 @@ export default function AuthSuccessPage() {
   const claims = decodeJwtPayload(token)
   const name = claimString(claims, 'name')
   const email = claimString(claims, 'email')
-  const role = claimString(claims, 'role')
-  const companyId = claimString(claims, 'companyId')
-  const destination = resolveInitialRoute(role, companyId)
+  const destination = resolveInitialRoute()
 
   return (
     <AuthShell

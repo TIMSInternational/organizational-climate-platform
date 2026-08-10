@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using NpgsqlTypes;
 
 #nullable disable
 
@@ -184,6 +185,12 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasDefaultValue("medium")
                         .HasColumnName("priority");
 
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasColumnName("search_vector")
+                        .HasComputedColumnSql("to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(description, ''))", true);
+
                     b.Property<Guid?>("SourceInsightId")
                         .HasColumnType("uuid")
                         .HasColumnName("source_insight_id");
@@ -228,6 +235,11 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasIndex("DepartmentId");
 
                     b.HasIndex("DueDate");
+
+                    b.HasIndex("SearchVector")
+                        .HasDatabaseName("IX_action_plans_search_vector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
 
                     b.HasIndex("TemplateId");
 
@@ -1308,6 +1320,12 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("parent_department_id");
 
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasColumnName("search_vector")
+                        .HasComputedColumnSql("to_tsvector('simple', coalesce(name, '') || ' ' || coalesce(description, ''))", true);
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -1319,6 +1337,11 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasIndex("ManagerId");
 
                     b.HasIndex("ParentDepartmentId");
+
+                    b.HasIndex("SearchVector")
+                        .HasDatabaseName("IX_departments_search_vector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
 
                     b.ToTable("departments", (string)null);
                 });
@@ -2186,6 +2209,12 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("scale_min");
 
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasColumnName("search_vector")
+                        .HasComputedColumnSql("to_tsvector('simple', coalesce(text_en, '') || ' ' || coalesce(text_es, ''))", true);
+
                     b.Property<Guid>("SurveyId")
                         .HasColumnType("uuid")
                         .HasColumnName("survey_id");
@@ -2207,6 +2236,11 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnName("type");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SearchVector")
+                        .HasDatabaseName("IX_questions_search_vector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
 
                     b.HasIndex("SurveyId");
 
@@ -2440,6 +2474,12 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("scheduled_for");
 
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasColumnName("search_vector")
+                        .HasComputedColumnSql("to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(description, ''))", true);
+
                     b.PrimitiveCollection<List<string>>("SharedWith")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -2483,6 +2523,11 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasIndex("ExpiresAt");
 
                     b.HasIndex("ScheduledFor");
+
+                    b.HasIndex("SearchVector")
+                        .HasDatabaseName("IX_reports_search_vector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
 
                     b.HasIndex("Type");
 
@@ -2649,6 +2694,12 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasDefaultValue(0)
                         .HasColumnName("response_count");
 
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasColumnName("search_vector")
+                        .HasComputedColumnSql("to_tsvector('simple', coalesce(title_en, '') || ' ' || coalesce(title_es, '') || ' ' || coalesce(description_en, '') || ' ' || coalesce(description_es, ''))", true);
+
                     b.Property<DateTimeOffset>("StartDate")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("start_date");
@@ -2696,6 +2747,11 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasIndex("CompanyId");
 
                     b.HasIndex("CreatedBy");
+
+                    b.HasIndex("SearchVector")
+                        .HasDatabaseName("IX_surveys_search_vector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
 
                     b.ToTable("surveys", (string)null);
                 });
@@ -3511,6 +3567,12 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("role");
 
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasColumnName("search_vector")
+                        .HasComputedColumnSql("to_tsvector('simple', coalesce(name, '') || ' ' || coalesce(email, '') || ' ' || translate(coalesce(email, ''), '@._-', '    '))", true);
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -3529,6 +3591,11 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasIndex("PersonaExternalId")
                         .IsUnique()
                         .HasFilter("persona_external_id IS NOT NULL");
+
+                    b.HasIndex("SearchVector")
+                        .HasDatabaseName("IX_users_search_vector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
 
                     b.ToTable("users", (string)null);
                 });
