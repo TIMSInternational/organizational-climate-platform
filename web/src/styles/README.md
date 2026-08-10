@@ -407,6 +407,7 @@ rather than the eye.
 | `.nav-section-title` | 10px, 600, uppercase, 0.06em, `--admin-font-light` | legacy `navigation/RoleBasedNav.tsx` `pt-2 pb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.06em]` |
 | `.nav-icon` | 16px | legacy nav `h-4 w-4` |
 | nav row (`RoleBasedNav.tsx`) | min-h 28px, pad 4px 8px, 13px, gap 8px, r 4px; selected leaf = white on blue, selected parent = primary + 700 | legacy `RoleBasedNav.tsx` row style, verbatim |
+| `.nav-row`, `.nav-sub-row` | resting secondary text on no fill; `--admin-bg-hover` + primary text on hover/`:focus-visible`; `--admin-accent-blue` + on-accent when `[data-nav-state='selected']` | NO LEGACY COUNTERPART for the hover half — the legacy rail had none, and could not have had one while the row's fill was an inline style (#169). The selected/resting colours are the legacy row style, moved off the element |
 | content panel (`AdminLayout.tsx`) | panel fill, hairline, r 8px, 12px shell inset, 1280px cap | `AppShell.tsx` `<main>` + `paddingRight/Bottom: 12` |
 
 ### Deliberate deviations

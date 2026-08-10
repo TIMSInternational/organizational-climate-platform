@@ -440,6 +440,63 @@
     text-transform: uppercase;
   }
 
+  /* The rail's rows — a top-level row (`.nav-row`) and a group's child
+     (`.nav-sub-row`), which wear the same three states and differ only in their
+     geometry, which stays in `RoleBasedNav.tsx`.
+
+     These two rules are what make a hover affordance possible at all, and their
+     absence is why no row in the rail had one (parked at PR #12's review, fixed
+     under #169). `RoleBasedNav` used to compute `background` and `color` into the
+     row's inline `style`, and an inline declaration outranks any selector here
+     short of `!important` — so `.nav-row:hover` would have been dead CSS. The
+     resting, hovered and selected colours all live here now, keyed on the
+     `data-nav-state` the component sets.
+
+     The row that owns the current page keeps its fill while the pointer is over
+     it, rather than dropping to a 4%-alpha grey. `.nav-row:hover` and
+     `.nav-row[data-nav-state='selected']` are both one class plus one
+     pseudo/attribute, so on a hovered selected row they tie on specificity and
+     source order would decide; the selected block is written last AND names
+     `:hover` itself, so the fill holds either way.
+
+     Each class gets its own resting rule rather than sharing one selector list:
+     `styles/utilityExistence.test.ts` learns which classes are hand-written by
+     matching `^\s*\.name\s*\{`, so a class that only ever appears in a grouped
+     selector is reported as a class that compiles to nothing. */
+  .nav-row {
+    background: transparent;
+    color: var(--admin-font-secondary);
+    transition: background var(--admin-duration-fast) var(--admin-ease-out);
+  }
+
+  .nav-sub-row {
+    background: transparent;
+    color: var(--admin-font-secondary);
+    transition: background var(--admin-duration-fast) var(--admin-ease-out);
+  }
+
+  .nav-row:hover,
+  .nav-sub-row:hover,
+  .nav-row:focus-visible,
+  .nav-sub-row:focus-visible {
+    background: var(--admin-bg-hover);
+    color: var(--admin-font-primary);
+  }
+
+  /* An expanded group sitting on its own path: no fill (its children carry the
+     selection below it), but lifted out of secondary text. */
+  .nav-row[data-nav-state='parent-selected'] {
+    color: var(--admin-font-primary);
+  }
+
+  .nav-row[data-nav-state='selected'],
+  .nav-sub-row[data-nav-state='selected'],
+  .nav-row[data-nav-state='selected']:hover,
+  .nav-sub-row[data-nav-state='selected']:hover {
+    background: var(--admin-accent-blue);
+    color: var(--admin-font-on-accent);
+  }
+
   /* Legacy nav icon: `h-4 w-4 flex-shrink-0`. */
   .nav-icon {
     width: var(--admin-size-icon);

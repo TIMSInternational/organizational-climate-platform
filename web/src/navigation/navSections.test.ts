@@ -166,6 +166,51 @@ describe('buildNavSections', () => {
     }
   })
 
+  /**
+   * `climate-project#22`, item 4, closed by measurement rather than by a design
+   * pass. The complaint was that "a super admin's sidebar interleaves uppercase
+   * section headers with 5 header-less expandable groups" — `RoleBasedNav` renders
+   * `.nav-section-title` only `if (section.titleKey)`, so a section with `''`
+   * contributes rows under no heading at all.
+   *
+   * The tree that had five such groups did not survive the stack migration, and
+   * the three-group shape #124 arrived at has no unheaded section left in any
+   * branch. This is the pin that keeps it that way: `NavSection.titleKey` still
+   * documents `''` as legal, so nothing but this fails if one comes back.
+   */
+  it('gives every section a heading, so no rows hang under nothing', () => {
+    let swept = 0
+    for (const role of ['super_admin', 'company_admin', 'employee', 'supervisor', 'leader', undefined]) {
+      for (const companyId of ['company-1', undefined]) {
+        for (const section of buildNavSections(role, companyId)) {
+          swept += 1
+          expect(section.titleKey, `${role}/${companyId} has an unheaded section`).not.toBe('')
+        }
+      }
+    }
+    // Guard the guard: the loop above passes vacuously if `buildNavSections`
+    // ever returns an empty array for every branch it is asked for.
+    expect(swept, 'swept no sections at all').toBeGreaterThan(0)
+  })
+
+  /**
+   * The other half of item 4: a heading with nothing under it is the same defect
+   * seen from the other side — `RoleBasedNav` maps `section.items` unconditionally,
+   * so an empty section renders as a bare uppercase label.
+   */
+  it('gives every section at least one row', () => {
+    let swept = 0
+    for (const role of ['super_admin', 'company_admin', 'employee', undefined]) {
+      for (const section of buildNavSections(role, 'company-1')) {
+        swept += 1
+        expect(section.items.length, `${role}: ${section.titleKey} is empty`).toBeGreaterThan(0)
+      }
+    }
+    // Guard the guard, as above: a role that produced no sections at all would
+    // satisfy "every section has a row" without there being one.
+    expect(swept, 'swept no sections at all').toBeGreaterThan(0)
+  })
+
   it('puts Notifications last for an admin, so it does not displace their primary pages', () => {
     // The mobile tab bar takes the first four leaves (see leafNavItems). A
     // company_admin's four are their own company's pages; Notifications sits
