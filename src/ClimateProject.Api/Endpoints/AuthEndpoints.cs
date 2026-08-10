@@ -15,6 +15,13 @@ public static class AuthEndpoints
     // signup email-format validation.
     private const string EmailFormatPattern = @"^[^\s@]+@[^\s@]+\.[^\s@]+$";
 
+    // Registration is invitation-only: an account can only be created for a domain some
+    // company already owns. One constant, shared by /auth/signup and /auth/google, because
+    // the two paths used to disagree -- signup refused an unknown domain while Google
+    // silently provisioned a brand-new tenant for it, gmail.com included (#280).
+    private const string NoCompanyForDomainMessage =
+        "No company found for this email domain. Please contact your administrator for an invitation.";
+
     public static void MapAuthEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/auth");
@@ -66,16 +73,14 @@ public static class AuthEndpoints
         user.LastLoginAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
-        var token = jwtTokenService.IssueToken(new TokenClaims(
-            Sub: user.PersonaExternalId ?? user.Id.ToString(),
-            Role: user.Role,
-            NodoId: await NodoClaimResolver.ResolveAsync(db, user, cancellationToken),
-            Email: user.Email,
-            Name: user.Name,
-            CompanyId: user.CompanyId?.ToString() ?? string.Empty,
-            IsActive: user.IsActive));
-
-        return Results.Ok(new TokenResponse(token));
+        // Unreachable in practice -- the query above already filters on IsActive -- but the
+        // refusal is passed anyway so the guard inside IssueTokenForAsync has the answer this
+        // path is supposed to give: identical to a wrong password, so the endpoint is not an
+        // oracle for which addresses exist.
+        return await IssueTokenForAsync(
+            user, db, jwtTokenService,
+            Results.Json(new ErrorResponse("Invalid email or password"), statusCode: 401),
+            cancellationToken);
     }
 
     private static async Task<IResult> SignupAsync(
@@ -122,9 +127,7 @@ public static class AuthEndpoints
         var company = await db.Companies.FirstOrDefaultAsync(c => c.EmailDomain == domain, cancellationToken);
         if (company is null)
         {
-            return Results.Json(
-                new ErrorResponse("No company found for this email domain. Please contact your administrator for an invitation."),
-                statusCode: 404);
+            return Results.Json(new ErrorResponse(NoCompanyForDomainMessage), statusCode: 404);
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -144,16 +147,13 @@ public static class AuthEndpoints
         db.Users.Add(user);
         await db.SaveChangesAsync(cancellationToken);
 
-        var token = jwtTokenService.IssueToken(new TokenClaims(
-            Sub: user.PersonaExternalId ?? user.Id.ToString(),
-            Role: user.Role,
-            NodoId: await NodoClaimResolver.ResolveAsync(db, user, cancellationToken),
-            Email: user.Email,
-            Name: user.Name,
-            CompanyId: user.CompanyId?.ToString() ?? string.Empty,
-            IsActive: user.IsActive));
-
-        return Results.Json(new TokenResponse(token), statusCode: 201);
+        // A row this method just minted with IsActive = true, so the refusal is unreachable
+        // here too; it is supplied for the same reason as in LoginAsync.
+        return await IssueTokenForAsync(
+            user, db, jwtTokenService,
+            Results.Json(new ErrorResponse("Account is no longer active"), statusCode: 401),
+            cancellationToken,
+            successStatusCode: 201);
     }
 
     private static async Task<IResult> GoogleLoginAsync(
@@ -177,34 +177,43 @@ public static class AuthEndpoints
         var email = googleUser.Email.ToLowerInvariant();
         var domain = email.Split('@')[1];
 
-        // Read-only lookup (AsNoTracking) purely to resolve a SuperAdmin bypass for the
-        // kill-switch gate below, before any company/user rows get written. A tracked
-        // re-fetch happens further down for the actual create-or-update.
-        var existingUserForGate = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
-        var googleGate = await CheckSystemSettingsGateAsync(db, existingUserForGate?.Role, cancellationToken);
+        // One lookup, done before anything is written: it resolves a SuperAdmin bypass for
+        // the kill-switch gate, decides sign-in vs. registration below, and is the row the
+        // IsActive guard reads. (It used to be an AsNoTracking read followed by a tracked
+        // re-fetch further down; the create-or-update now happens on this instance, and every
+        // branch that could return early does so before the first SaveChangesAsync.)
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
+        var googleGate = await CheckSystemSettingsGateAsync(db, user?.Role, cancellationToken);
         if (googleGate is not null)
         {
             return googleGate;
         }
 
-        var company = await db.Companies.FirstOrDefaultAsync(c => c.EmailDomain == domain, cancellationToken);
-        if (company is null)
+        // A deactivated account gets exactly the answer an unverifiable ID token gets (#280).
+        // Deactivation is how this product removes access, and it used to be enforced on the
+        // password and refresh paths only -- a deactivated employee holding a valid Google ID
+        // token for their work address was issued a fully working API JWT. The response is the
+        // generic one for the same reason LoginAsync answers "Invalid email or password":
+        // /auth/google is unauthenticated, so it must not report account state to its caller.
+        if (user is not null && !user.IsActive)
         {
-            company = new Company
-            {
-                Id = Guid.NewGuid(),
-                Name = $"{char.ToUpperInvariant(domain[0])}{domain[1..]} Organization",
-                EmailDomain = domain,
-                CreatedAt = DateTimeOffset.UtcNow,
-            };
-            db.Companies.Add(company);
-            await db.SaveChangesAsync(cancellationToken);
+            return Results.Json(new ErrorResponse("Google sign-in failed"), statusCode: 401);
         }
 
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
         var now = DateTimeOffset.UtcNow;
         if (user is null)
         {
+            // Registering, not signing in -- so the invitation-only rule SignupAsync enforces
+            // has to hold here too, with the same 404 and the same message. This path
+            // used to create a Company for whatever domain it was handed, which made
+            // /auth/google a self-service tenant factory for gmail.com and every other
+            // consumer domain, contradicting the rule the password path enforces (#280).
+            var company = await db.Companies.FirstOrDefaultAsync(c => c.EmailDomain == domain, cancellationToken);
+            if (company is null)
+            {
+                return Results.Json(new ErrorResponse(NoCompanyForDomainMessage), statusCode: 404);
+            }
+
             user = new User
             {
                 Id = Guid.NewGuid(),
@@ -222,16 +231,10 @@ public static class AuthEndpoints
         user.LastLoginAt = now;
         await db.SaveChangesAsync(cancellationToken);
 
-        var token = jwtTokenService.IssueToken(new TokenClaims(
-            Sub: user.PersonaExternalId ?? user.Id.ToString(),
-            Role: user.Role,
-            NodoId: await NodoClaimResolver.ResolveAsync(db, user, cancellationToken),
-            Email: user.Email,
-            Name: user.Name,
-            CompanyId: user.CompanyId?.ToString() ?? string.Empty,
-            IsActive: user.IsActive));
-
-        return Results.Ok(new TokenResponse(token));
+        return await IssueTokenForAsync(
+            user, db, jwtTokenService,
+            Results.Json(new ErrorResponse("Google sign-in failed"), statusCode: 401),
+            cancellationToken);
     }
 
     private static async Task<IResult> RefreshAsync(
@@ -250,9 +253,53 @@ public static class AuthEndpoints
         var user = Guid.TryParse(sub, out var userId)
             ? await db.Users.FirstOrDefaultAsync(u => u.Id == userId || u.PersonaExternalId == sub, cancellationToken)
             : await db.Users.FirstOrDefaultAsync(u => u.PersonaExternalId == sub, cancellationToken);
-        if (user is null || !user.IsActive)
+        if (user is null)
         {
             return Results.Json(new ErrorResponse("Account is no longer active"), statusCode: 401);
+        }
+
+        // The caller has already proved they hold a token for this account, so unlike the two
+        // unauthenticated paths this one may say plainly why the refresh was refused.
+        return await IssueTokenForAsync(
+            user, db, jwtTokenService,
+            Results.Json(new ErrorResponse("Account is no longer active"), statusCode: 401),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// The single place this API mints a token, and therefore the single place the
+    /// deactivation check can be made unavoidable.
+    /// </summary>
+    /// <remarks>
+    /// The guard lives inside the mint rather than beside each call deliberately (#280).
+    /// While it was a per-path convention, three login paths remembered it twice:
+    /// /auth/google loaded the user, stamped LastLoginAt and issued a working JWT to
+    /// accounts an administrator had deactivated.
+    ///
+    /// "Single place" is a checkable claim, not a slogan: every caller of
+    /// <see cref="IJwtTokenService.IssueToken"/> in this assembly is in this method. The
+    /// one that was not — <see cref="InvitationAcceptEndpoints"/>, which hand-rolled its own
+    /// <see cref="TokenClaims"/> — now calls through here too, which is why this is
+    /// <c>internal</c> rather than <c>private</c>. Keep it that way: a new auth path that
+    /// builds its own TokenClaims re-opens exactly the hole #280 was filed for.
+    ///
+    /// Callers still reject an inactive account themselves where ordering matters — the
+    /// point of refusal has to come before any write, and this helper runs after them.
+    /// <paramref name="inactiveResponse"/> is each path's own answer, because how much a
+    /// refusal may reveal differs: the unauthenticated paths must be indistinguishable from
+    /// a failed credential, /auth/refresh may be explicit.
+    /// </remarks>
+    internal static async Task<IResult> IssueTokenForAsync(
+        User user,
+        ClimateProjectDbContext db,
+        IJwtTokenService jwtTokenService,
+        IResult inactiveResponse,
+        CancellationToken cancellationToken,
+        int successStatusCode = 200)
+    {
+        if (!user.IsActive)
+        {
+            return inactiveResponse;
         }
 
         var token = jwtTokenService.IssueToken(new TokenClaims(
@@ -264,7 +311,7 @@ public static class AuthEndpoints
             CompanyId: user.CompanyId?.ToString() ?? string.Empty,
             IsActive: user.IsActive));
 
-        return Results.Ok(new TokenResponse(token));
+        return Results.Json(new TokenResponse(token), statusCode: successStatusCode);
     }
 
     private static async Task<IResult> ResetCredentialsAsync(

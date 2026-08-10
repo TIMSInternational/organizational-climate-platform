@@ -137,15 +137,16 @@ public static class InvitationAcceptEndpoints
 
         await db.SaveChangesAsync(cancellationToken);
 
-        var jwt = jwtTokenService.IssueToken(new TokenClaims(
-            Sub: user.PersonaExternalId ?? user.Id.ToString(),
-            Role: user.Role,
-            NodoId: await NodoClaimResolver.ResolveAsync(db, user, cancellationToken),
-            Email: user.Email,
-            Name: user.Name,
-            CompanyId: user.CompanyId?.ToString() ?? string.Empty,
-            IsActive: user.IsActive));
-
-        return Results.Json(new TokenResponse(jwt), statusCode: 201);
+        // Minted through AuthEndpoints.IssueTokenForAsync, not by hand. This path used to
+        // build its own TokenClaims, which is why #280's "the single place this API mints a
+        // token" was not actually true of it. Nothing was exploitable here -- the row above
+        // is always created with IsActive = true and an existing email 409s before we get
+        // here -- but the point of the shared helper is that the deactivation guard is
+        // unavoidable, and a path that bypasses it cannot deliver that.
+        return await AuthEndpoints.IssueTokenForAsync(
+            user, db, jwtTokenService,
+            Results.Json(new { message = "Account is not active" }, statusCode: 401),
+            cancellationToken,
+            successStatusCode: 201);
     }
 }

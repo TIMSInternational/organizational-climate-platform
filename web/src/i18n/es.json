@@ -1667,7 +1667,13 @@
   },
   "insights": {
     "description": "Hallazgos generados por IA a partir de sus encuestas y microclimas",
+    "insightTitle": "Título",
     "priority": "Prioridad",
+    "typeTrend": "Tendencia",
+    "typePattern": "Patrón",
+    "typeRisk": "Riesgo",
+    "typeRecommendation": "Recomendación",
+    "typePrediction": "Predicción",
     "confidence": "Confianza",
     "confidenceValue": "{score}%",
     "acknowledged": "Revisado",

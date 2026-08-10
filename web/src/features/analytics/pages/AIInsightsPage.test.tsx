@@ -56,9 +56,9 @@ function insightDetail(overrides: Partial<AIInsight> = {}): AIInsight {
 // comes from `useCompanyScope()`. The provider is what `AdminLayout` mounts around
 // every routed page, so it has to be here too -- the hook throws outside one
 // rather than silently defaulting, on purpose.
-function renderPage() {
+function renderPage(locale: 'en' | 'es' = 'en') {
   return render(
-    <TranslationProvider>
+    <TranslationProvider initialLocale={locale}>
       <MemoryRouter>
         <CompanyContextProvider>
           <AIInsightsPage />
@@ -270,5 +270,99 @@ describe('AIInsightsPage acknowledgement', () => {
 
     expect(await screen.findByText('Forbidden')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Acknowledge' })).toBeTruthy()
+  })
+})
+
+/**
+ * #282. Found by rendering this page in real Chrome under `preferredLocale=es`: the
+ * column headers translated, Status translated (`Open` → `Abierto`), and Type and
+ * Priority sat in the same row still reading `risk` and `high`. These assert the
+ * whole row rather than the helper, because the helper being right is not what was
+ * broken — the components were not calling one.
+ */
+describe('AIInsightsPage vocabulary', () => {
+  function insightRoutes(overrides: Partial<AIInsightListItem> = {}, detail: Partial<AIInsight> = {}) {
+    routeFetch([
+      [/\/admin\/ai-insights\/i1$/, () => insightDetail(detail)],
+      [/\/admin\/ai-insights(\?|$)/, () => [listRow(overrides)]],
+    ])
+  }
+
+  it('renders the type and priority in Spanish in the list', async () => {
+    insightRoutes()
+
+    renderPage('es')
+
+    const row = (await screen.findByText('Engagement is falling in Support')).closest('tr')!
+    expect(row.textContent).toContain('Riesgo')
+    expect(row.textContent).toContain('Alta')
+    // The exact regression: the stored values leaking into a Spanish page.
+    expect(row.textContent).not.toContain('risk')
+    expect(row.textContent).not.toContain('high')
+  })
+
+  it('renders the type and priority in Spanish on the detail panel too', async () => {
+    insightRoutes()
+
+    renderPage('es')
+    await userEvent.click(await screen.findByRole('button', { name: 'Ver Detalles' }))
+
+    const panel = (await screen.findByRole('heading', { level: 2 })).closest('section')!
+    expect(panel.textContent).toContain('Riesgo')
+    expect(panel.textContent).toContain('Alta')
+    expect(panel.textContent).not.toContain('risk')
+    expect(panel.textContent).not.toContain('high')
+  })
+
+  it('renders the type and priority in English when the locale is English', async () => {
+    insightRoutes()
+
+    renderPage('en')
+
+    const row = (await screen.findByText('Engagement is falling in Support')).closest('tr')!
+    expect(row.textContent).toContain('Risk')
+    expect(row.textContent).toContain('High')
+  })
+
+  /**
+   * AC #3. `AIInsightValidation` bounds these two columns at "non-empty, ≤ 20
+   * characters" and nothing more, so the wire can carry a value outside the legacy
+   * enum. It must show through, not vanish and not print a key path.
+   */
+  it('shows an unrecognised type and priority verbatim rather than blank', async () => {
+    insightRoutes({ type: 'anomaly', priority: 'urgent' })
+
+    renderPage('es')
+
+    const row = (await screen.findByText('Engagement is falling in Support')).closest('tr')!
+    expect(row.textContent).toContain('anomaly')
+    expect(row.textContent).toContain('urgent')
+    expect(row.textContent).not.toContain('insights.type')
+    expect(row.textContent).not.toContain('actionPlans.')
+  })
+
+  /**
+   * The second half of #282: the first column was headed "Label" — `common.label`,
+   * the generic word for a form field's caption — for what `AIInsightListItem`
+   * calls `title`.
+   */
+  it('heads the first column as the title, not as a label', async () => {
+    insightRoutes()
+
+    renderPage('es')
+
+    const headers = (await screen.findAllByRole('columnheader')).map((h) => h.textContent)
+    expect(headers[0]).toBe('Título')
+    expect(headers).not.toContain('Etiqueta')
+  })
+
+  it('heads the first column as the title in English', async () => {
+    insightRoutes()
+
+    renderPage('en')
+
+    const headers = (await screen.findAllByRole('columnheader')).map((h) => h.textContent)
+    expect(headers[0]).toBe('Title')
+    expect(headers).not.toContain('Label')
   })
 })
