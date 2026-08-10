@@ -1,5 +1,6 @@
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Scheduling;
+using ClimateProject.Application.Surveys;
 using ClimateProject.Infrastructure.Notifications;
 using ClimateProject.Infrastructure.Persistence;
 using ClimateProject.Infrastructure.Scheduling;
@@ -176,6 +177,66 @@ public sealed class ScheduledReportWorker(
                 "Scheduled report sweep fired {Fired} occurrences and cleared {SchedulesCleared} invalid schedules.",
                 result.Fired,
                 result.SchedulesCleared);
+        }
+    }
+}
+
+/// <summary>
+/// Reclaims survey drafts that <see cref="SurveyDraftRetention"/> has expired.
+///
+/// <para>The scheduled caller <c>DELETE /surveys/drafts/expired</c> never had (#272). It runs
+/// <see cref="SurveyDraftRetentionJob.PurgeAsync"/> -- the same method that route runs -- so
+/// the scheduled sweep and the manual one cannot come to disagree about which rows are
+/// expired. The route stays for manual use.</para>
+///
+/// <para><b>Scheduled is not the same as running.</b> This host is built by no workflow and
+/// deployed as no service -- <c>deploy-prod.yml</c> builds only the API image, and nothing
+/// builds <c>Dockerfile.workers</c> -- so none of the workers in this file executes in
+/// production, this one included. #272 makes the sweep something a scheduler *can* run and
+/// proves it does the right thing when ticked; #275 is what makes it actually tick. Deploying
+/// the workers host, or co-hosting these jobs in the API, is #275's call and deliberately not
+/// made here.</para>
+///
+/// <para>Cross-tenant, like every other job here, which the HTTP route reserves for super
+/// admins. Not an escalation: the restriction exists because one company's admin should not
+/// be able to trigger a deployment-wide sweep, and this caller is the platform itself with no
+/// user identity involved -- and unlike the other jobs, this one reads no row content at all,
+/// only <c>expires_at</c>.</para>
+/// </summary>
+public sealed class SurveyDraftRetentionWorker(
+    IServiceScopeFactory scopeFactory,
+    WorkerHeartbeats heartbeats,
+    IOptions<WorkerSchedulingOptions> options,
+    ILogger<SurveyDraftRetentionWorker> logger)
+    : ScheduledJobWorker(
+        WorkerJobs.SurveyDraftRetention,
+        options.Value.SurveyDraftRetentionInterval,
+        scopeFactory,
+        heartbeats,
+        logger)
+{
+    private readonly int _batchSize = options.Value.SurveyDraftRetentionBatchSize;
+
+    protected override async Task RunOnceAsync(
+        IServiceProvider services,
+        DateTimeOffset nowUtc,
+        CancellationToken cancellationToken)
+    {
+        var db = services.GetRequiredService<ClimateProjectDbContext>();
+        var loggerFactory = services.GetRequiredService<ILoggerFactory>();
+
+        var result = await SurveyDraftRetentionJob.RunAsync(
+            db, loggerFactory, nowUtc, _batchSize, cancellationToken);
+
+        if (result.MoreRemaining)
+        {
+            // Only worth a line when the cap actually bit: it means a backlog is draining over
+            // several ticks, which is expected on first deploy and worth noticing if it
+            // persists for days.
+            logger.LogInformation(
+                "Survey draft retention sweep reclaimed its full batch of {Deleted}; more expired drafts remain for " +
+                "the next tick.",
+                result.Deleted);
         }
     }
 }

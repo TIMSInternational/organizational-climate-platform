@@ -12,6 +12,7 @@ using ClimateProject.Infrastructure.Notifications;
 using ClimateProject.Infrastructure.OrgStructure;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.RateLimiting;
@@ -186,7 +187,28 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
     // comment above.
     .ValidateOnStart();
 
-builder.Services.AddAuthorization();
+// Every authorized endpoint in this app uses the bare RequireAuthorization(), i.e. this
+// policy -- so adding the deactivation check here enforces it product-wide in one place (#280).
+//
+// It reads the token's own isActive claim rather than the database: no per-request user
+// lookup is added, and no token minted by another issuer against the shared TrackingJwtSecret
+// is locked out for lacking a claim it never wrote (see HasDeactivatedAccountClaim). What it
+// buys is that a token saying "deactivated" is refused by the API itself. Before this, the
+// only thing anywhere that read that claim was a client-side redirect in the SPA.
+//
+// It is a second line of defence, not the fix: every path that mints a token -- /auth/login,
+// /auth/signup, /auth/google, /auth/refresh and POST /invitations/{token}/accept -- goes
+// through AuthEndpoints.IssueTokenForAsync, which refuses to mint one in the first place.
+// Neither layer revokes a token that was issued while the account was still active --
+// deactivating a user does not end their current session before the token's 24h expiry, and
+// that is a separate change.
+builder.Services.AddAuthorization(options =>
+{
+    options.DefaultPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .RequireAssertion(context => !context.User.HasDeactivatedAccountClaim())
+        .Build();
+});
 
 builder.Services.AddCors();
 builder.Services.AddOptions<CorsOptions>()
@@ -423,8 +445,10 @@ app.MapMicroclimateTemplateEndpoints();
 app.MapReportEndpoints();
 app.MapBenchmarkEndpoints();
 app.MapAnalyticsInsightEndpoints();
+app.MapAIInsightEndpoints();
 app.MapNotificationEndpoints();
 app.MapDemographicSnapshotEndpoints();
+app.MapSearchEndpoints();
 app.MapSystemStatusEndpoints();
 
 app.Run();

@@ -25,6 +25,11 @@ namespace ClimateProject.Workers;
 /// <item><b>Reports, 5 minutes.</b> Recurring reports are daily at their most frequent, so
 /// this is only about promptness, and a report that arrives five minutes after its hour is
 /// indistinguishable from one that arrives on it.</item>
+/// <item><b>Survey draft retention, 1 hour.</b> The only interval nothing observable depends
+/// on. Drafts expire after 30 days and the read filters hide an expired draft the instant it
+/// expires, so this governs when disk comes back and nothing else. Hourly rather than daily
+/// so each tick's delete stays small; not faster, because there is nothing to be prompt
+/// about.</item>
 /// </list>
 /// </summary>
 public sealed class WorkerSchedulingOptions
@@ -44,6 +49,8 @@ public sealed class WorkerSchedulingOptions
     public TimeSpan DigestInterval { get; set; } = TimeSpan.FromMinutes(15);
 
     public TimeSpan ScheduledReportInterval { get; set; } = TimeSpan.FromMinutes(5);
+
+    public TimeSpan SurveyDraftRetentionInterval { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>How often the in-process liveness check runs. See <c>WorkerHeartbeatMonitor</c>.</summary>
     public TimeSpan HeartbeatMonitorInterval { get; set; } = TimeSpan.FromMinutes(5);
@@ -66,6 +73,13 @@ public sealed class WorkerSchedulingOptions
     public int ScheduledReportBatchSize { get; set; } = ScheduledReportJob.DefaultBatchSize;
 
     /// <summary>
+    /// Expired drafts reclaimed per tick. A cap, not a target: it exists so the first sweep
+    /// over an accumulated backlog is not one enormous transaction. Whatever it does not
+    /// reach waits an hour, invisible to the product the whole time.
+    /// </summary>
+    public int SurveyDraftRetentionBatchSize { get; set; } = SurveyDraftRetentionJob.DefaultBatchSize;
+
+    /// <summary>
     /// Fail the host at startup on a configuration that cannot work, rather than at the first
     /// tick. #189 established that principle for the API: a process that boots misconfigured
     /// reports a healthy deploy and then does nothing useful. A zero interval is worse here
@@ -78,6 +92,7 @@ public sealed class WorkerSchedulingOptions
         Require(InvitationReminderInterval, nameof(InvitationReminderInterval));
         Require(DigestInterval, nameof(DigestInterval));
         Require(ScheduledReportInterval, nameof(ScheduledReportInterval));
+        Require(SurveyDraftRetentionInterval, nameof(SurveyDraftRetentionInterval));
         Require(HeartbeatMonitorInterval, nameof(HeartbeatMonitorInterval));
 
         Require(NotificationBatchSize, nameof(NotificationBatchSize));
@@ -85,6 +100,7 @@ public sealed class WorkerSchedulingOptions
         Require(DigestPageSize, nameof(DigestPageSize));
         Require(DigestMaxUsersPerRun, nameof(DigestMaxUsersPerRun));
         Require(ScheduledReportBatchSize, nameof(ScheduledReportBatchSize));
+        Require(SurveyDraftRetentionBatchSize, nameof(SurveyDraftRetentionBatchSize));
 
         if (HeartbeatStaleTolerance <= 0)
         {
