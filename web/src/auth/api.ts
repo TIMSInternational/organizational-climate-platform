@@ -99,3 +99,38 @@ export async function signup(baseUrl: string, input: SignupInput): Promise<Login
 
   return response.json() as Promise<LoginResponse>
 }
+
+/**
+ * `POST /auth/google`.
+ *
+ * Exchanges a Google **ID token** for one of ours. The server verifies the
+ * signature and the audience against its own `GoogleClientId`
+ * (`GoogleTokenVerifier`), then signs the user in — creating the row on first
+ * sign-in, as `Roles.Employee`.
+ *
+ * It does **not** create a company. Since #280 an address whose domain matches no
+ * company is refused with **404** and the same message `signup` gives, because
+ * registering through Google is still registering and the invitation-only rule
+ * holds on both paths. Before that fix this endpoint was a self-service tenant
+ * factory for gmail.com, contradicting the rule `RegisterPage` states on screen.
+ *
+ * It shares `CheckSystemSettingsGateAsync` with login and signup, so 403 and 503
+ * mean here exactly what they mean there and route the same way. 401 is
+ * "Google sign-in failed" — the token did not verify, *or* the account is
+ * deactivated (#280 made those deliberately indistinguishable, since this endpoint
+ * is unauthenticated and must not report account state). Neither is something a
+ * user can fix on a form, so unlike login's 401 it takes the whole page.
+ */
+export async function googleLogin(baseUrl: string, idToken: string): Promise<LoginResponse> {
+  const response = await fetch(`${baseUrl}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken }),
+  })
+
+  if (!response.ok) {
+    throw await toRequestError(response)
+  }
+
+  return response.json() as Promise<LoginResponse>
+}

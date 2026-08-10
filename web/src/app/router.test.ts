@@ -46,6 +46,25 @@ describe('router', () => {
     expect(paths).toContain('/auth/error')
     expect(paths).toContain('/auth/inactive')
     expect(paths).toContain('/auth/success')
+    // #81 AC1 says all five states are ROUTED. This one was the gap: the loading
+    // state shipped as a component (`AuthPending`) with nothing in front of it,
+    // and it is now the `redirect_uri` Google is told to come back to -- if it is
+    // not in the table, every Google sign-in dead-ends on the 404 boundary.
+    expect(paths).toContain('/auth/loading')
+  })
+
+  /**
+   * `/auth/loading` completes the sign-in, so it cannot require one. Behind
+   * `RequireAuth` it would bounce the arriving OAuth callback to `/login`, losing
+   * the ID token in the fragment — and every unit test that renders the page
+   * directly would still pass.
+   */
+  it('keeps the OAuth callback route outside RequireAuth structurally', () => {
+    const topLevel = (router.routes[0].children ?? []).flatMap((route) =>
+      route.path ? [route.path] : [],
+    )
+
+    expect(topLevel).toContain('/auth/loading')
   })
 
   /**
