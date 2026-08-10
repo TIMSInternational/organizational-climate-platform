@@ -58,6 +58,15 @@ public class StartupValidationTests
     private const string ValidInternalApiKey = "integration-test-internal-api-key";
     private const string ValidGoogleClientId = "test-google-client-id";
 
+    // Shaped like the two production connection strings, differing only in the port -- which
+    // is the entire difference between the two Supavisor modes, and the entire content of
+    // #220. Neither host is ever dialled; startup only reads the port out of the string.
+    private const string TransactionPoolerConnectionString =
+        "Host=localhost;Port=6543;Database=unused;Username=unused;Password=unused";
+
+    private const string SessionPoolerConnectionString =
+        "Host=localhost;Port=5432;Database=unused;Username=unused;Password=unused";
+
     /// <summary>
     /// A complete configuration that starts the host cleanly, with <paramref name="overrides"/>
     /// applied on top. Every value goes into a single in-memory provider added *after*
@@ -290,6 +299,65 @@ public class StartupValidationTests
         AssertFailsStartupMentioning(
             ValidConfiguration(("GoogleClientId", null), ("GoogleAuth:Required", "true")),
             "GoogleClientId");
+
+    // -- Database:RequireSessionPooler, the #220 ratchet. ---------------------------------
+    //
+    // Same conditional shape as GoogleAuth:Required above, for a different reason. The
+    // defect is a Secrets Manager value this repository cannot edit: production's runtime
+    // connection string is on Supabase's transaction pooler (port 6543), which Npgsql's
+    // connection pool cannot use safely, and roughly half of all /ready probes hang for
+    // thirty seconds as a result. The flag is what lets the guard be armed *after* that
+    // value is fixed rather than before, and these three tests pin each step of that
+    // sequence -- including, crucially, that the last step is safe to take.
+    //
+    // No database is contacted by any of them: nothing resolves a DbContext during startup,
+    // so the port in the connection string is read and judged but never dialled.
+
+    /// <summary>
+    /// Step 1, and the state production is in today: the port is wrong, the guard is not
+    /// armed, and the service must still start. Arming the guard before the secret is fixed
+    /// would turn an intermittently-slow service into a service that fails its App Runner
+    /// health check and rolls back, so this test is what stops a future "make it consistent
+    /// with the other guards" change from taking production down.
+    /// </summary>
+    [Fact]
+    public void Transaction_pooler_port_does_not_fail_startup_when_session_pooler_is_not_required()
+    {
+        var exception = CaptureStartupException(ValidConfiguration(
+            ("ConnectionStrings:ClimateProject", TransactionPoolerConnectionString),
+            ("Database:RequireSessionPooler", "false")));
+
+        Assert.Null(exception);
+    }
+
+    /// <summary>
+    /// Step 3, the ratchet itself: once armed, the transaction pooler is a startup failure
+    /// rather than a log line nobody reads. #220 survived for weeks precisely because the
+    /// only signal was a warning in the deploy log.
+    /// </summary>
+    [Fact]
+    public void Transaction_pooler_port_fails_startup_when_session_pooler_is_required() =>
+        AssertFailsStartupMentioning(
+            ValidConfiguration(
+                ("ConnectionStrings:ClimateProject", TransactionPoolerConnectionString),
+                ("Database:RequireSessionPooler", "true")),
+            "TRANSACTION pooler");
+
+    /// <summary>
+    /// The end state, and the test that makes step 3 safe to perform: with the secret on the
+    /// session pooler, arming the guard changes nothing about whether the host starts. If
+    /// this ever fails, arming the flag in
+    /// <c>infra/aws/climate-project-api-prod-service.yml</c> would break the deploy.
+    /// </summary>
+    [Fact]
+    public void Session_pooler_port_starts_cleanly_with_the_guard_armed()
+    {
+        var exception = CaptureStartupException(ValidConfiguration(
+            ("ConnectionStrings:ClimateProject", SessionPoolerConnectionString),
+            ("Database:RequireSessionPooler", "true")));
+
+        Assert.Null(exception);
+    }
 
     /// <summary>
     /// Mail configuration is conditionally required in the same shape GoogleClientId is
