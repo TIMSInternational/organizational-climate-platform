@@ -81,9 +81,21 @@ function typeInto(label: string | RegExp, value: string) {
 }
 
 /**
- * Async `act` rather than a bare `fireEvent.click`: `handleSubmit` awaits `fetch`, and
- * the settled promise has to be flushed inside `act` or React warns and the assertion
- * races the state update. `userEvent.click` did this flushing implicitly.
+ * The async `act` here is defensive, not load-bearing — measured, not assumed.
+ *
+ * `handleSubmit` in `MicroclimateCreatePage.tsx` is `async` and awaits
+ * `createMicroclimate`, so pressing `Create microclimate` settles a promise after the
+ * click handler has returned. That is the shape `act` exists for, but neither symptom it
+ * would prevent occurs in this file: replacing the body with a bare
+ * `fireEvent.click(screen.getByRole('button', { name }))` still gives `Tests 7 passed (7)`
+ * with `grep -ci "not wrapped in act"` = 0 over the run. Both tests that press submit
+ * assert through `await waitFor(...)` / `await screen.findByText(...)`, and RTL's async
+ * utilities are already act-wrapped, so they flush the update themselves.
+ *
+ * It is kept because dropping it buys no measurable time (the no-act run above was the
+ * slower of the two), because `SurveyCreatePage.test.tsx` has the byte-identical
+ * `press`, and because it keeps the helper safe for an assertion made *synchronously*
+ * after a press. Do not read it as required by anything asserted below.
  */
 async function press(name: string) {
   await act(async () => {
@@ -106,6 +118,12 @@ async function selectOption(optionName: string) {
   await userEvent.click(await screen.findByRole('option', { name: optionName }))
 }
 
+// The two `datetime-local` wall-clock strings the wizard is driven with. Named so the DTO
+// assertion can be pinned against the same literal the helper types instead of re-deriving
+// it from whatever the page happened to send.
+const SCHEDULE_START = '2026-08-07T10:00'
+const SCHEDULE_END = '2026-08-07T10:20'
+
 /** Walks the four content steps with the minimum a session needs. */
 async function fillMinimumSession() {
   // Regex for the required fields (the label carries a `*`, see the bilingual test
@@ -115,8 +133,8 @@ async function fillMinimumSession() {
   typeInto(/Title/, 'Team pulse')
   await press('Next')
 
-  typeInto('Start Time', '2026-08-07T10:00')
-  typeInto('End Time', '2026-08-07T10:20')
+  typeInto('Start Time', SCHEDULE_START)
+  typeInto('End Time', SCHEDULE_END)
   await press('Next')
 
   await press('Next')
@@ -177,7 +195,17 @@ describe('MicroclimateCreatePage', () => {
     // `createMicroclimate` converts the wall-clock strings to UTC and stamps the
     // browser's timezone -- neither is the page's job, and doing it twice is how the
     // reinterpreted-wall-clock bug comes back.
-    expect(String(body.startTime)).toMatch(/Z$/)
+    //
+    // Pinned to the exact instant, not just a `/Z$/` shape. The two `datetime-local`
+    // fields are the riskiest part of driving this wizard with `fireEvent.change`
+    // (see `typeInto`), and nothing else would catch a mangled value: `scheduleErrors`
+    // in `wizardValues.ts` only rejects a blank field or an end at/before the start, so
+    // a truncated-but-still-ordered string reaches the DTO unchallenged. The expected
+    // value is computed from the literal typed above rather than read back off the
+    // request, so it also pins `toUtcIso`'s local-time -> UTC conversion. Both sides use
+    // the runner's own zone, so this holds wherever CI runs.
+    expect(body.startTime).toBe(new Date(SCHEDULE_START).toISOString())
+    expect(body.endTime).toBe(new Date(SCHEDULE_END).toISOString())
     expect(typeof body.timezone).toBe('string')
     // Not in the request record, so not invented here.
     expect('departmentIds' in body).toBe(false)
