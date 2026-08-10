@@ -78,7 +78,13 @@ export default function DepartmentAdminDashboardView() {
         <KPIDisplay kpis={kpis} title={t('dashboard.overview')} columns={3} locale={locale} />
 
         <H2>{t('dashboard.currentOngoingSurveys')}</H2>
-        <DashboardSurveyTable surveys={data?.activeSurveys ?? []} />
+        {/* No target column. `Survey.TargetAudienceCount` is one tenant-wide number the
+            author typed in, with no per-department breakdown, so on this page it would sit
+            directly beneath the department-scoped "Completed responses" KPI above and
+            describe a different population. The responses column here IS
+            department-scoped — the server counts this department's rows rather than
+            reading the survey's denormalised company-wide tally. */}
+        <DashboardSurveyTable surveys={data?.activeSurveys ?? []} showTarget={false} />
       </DashboardState>
     </div>
   )

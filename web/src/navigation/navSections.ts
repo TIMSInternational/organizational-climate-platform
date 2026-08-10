@@ -89,7 +89,7 @@ const NOTIFICATIONS_ITEM: NavItem = {
   icon: Bell,
 }
 
-// The landing page (#132), and the second entry every role gets — for the same
+// The landing page (#132), and the other entry every role gets — for the same
 // structural reason as Notifications, arrived at differently. `/dashboard` is not one
 // page: `DashboardPage` dispatches on the role claim and each of the four endpoints
 // behind it refuses the other three roles, so there is no role for which this row leads

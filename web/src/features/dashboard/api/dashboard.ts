@@ -27,6 +27,26 @@ export interface DashboardSurveySummary {
   targetAudienceCount: number | null
 }
 
+/**
+ * A survey on a department's dashboard — `DashboardDepartmentSurveySummary` in DashboardDtos.cs.
+ *
+ * Not {@link DashboardSurveySummary}, and the missing `targetAudienceCount` is the point.
+ * That shape's two participation columns come off the survey row, where `responseCount` is
+ * bumped once per completed response *anywhere in the tenant* and `targetAudienceCount` is
+ * the tenant's invited headcount. On a page contracted to one department both describe every
+ * other department too, so the server counts this department's responses instead and offers
+ * no target at all: the schema has no per-department invited headcount to offer.
+ */
+export interface DashboardDepartmentSurveySummary {
+  id: string
+  title: string | null
+  status: string
+  startDate: string
+  endDate: string
+  /** Completed responses from this department alone. */
+  responseCount: number
+}
+
 /** One tenant on the platform overview — SuperAdmin payloads only. */
 export interface DashboardCompanySummary {
   id: string
@@ -86,7 +106,7 @@ export interface DepartmentAdminDashboard {
   completedResponseCount: number
   openActionPlanCount: number
   overdueActionPlanCount: number
-  activeSurveys: DashboardSurveySummary[]
+  activeSurveys: DashboardDepartmentSurveySummary[]
 }
 
 /**

@@ -83,6 +83,10 @@ function departmentPayload(): DepartmentAdminDashboard {
     completedResponseCount: 5,
     openActionPlanCount: 2,
     overdueActionPlanCount: 1,
+    // No `targetAudienceCount`, because the payload has none: see
+    // `DashboardDepartmentSurveySummary`. `responseCount` here is THIS department's, and it
+    // agrees with `completedResponseCount` above, which is the agreement the company-wide
+    // column used to break.
     activeSurveys: [
       {
         id: 's1',
@@ -90,8 +94,7 @@ function departmentPayload(): DepartmentAdminDashboard {
         status: 'active',
         startDate: '2026-01-01T00:00:00Z',
         endDate: '2026-02-01T00:00:00Z',
-        responseCount: 7,
-        targetAudienceCount: null,
+        responseCount: 5,
       },
     ],
   }
@@ -229,6 +232,40 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByText('Company-wide pulse')).toBeTruthy()
     expect(screen.queryByRole('link', { name: 'Company-wide pulse' })).toBeNull()
+  })
+
+  /**
+   * A department's page shows department figures, in the table as well as in the KPIs.
+   *
+   * `Survey.TargetAudienceCount` is the tenant's invited headcount and `Survey.ResponseCount`
+   * is bumped once per completed response anywhere in the company, so both used to appear on
+   * a six-person team's page as "Responses 140 / Target 200" beneath that team's own
+   * "Completed responses 5". The server now sends a department-scoped count and no target at
+   * all, and the table must not print a column for the figure it was not given.
+   */
+  it('shows a department leader no tenant-wide target column', async () => {
+    setToken(tokenFor('leader', 'c1'))
+    vi.mocked(fetch).mockResolvedValue(jsonResponse(departmentPayload()))
+
+    renderDashboard()
+
+    expect(await screen.findByText('Company-wide pulse')).toBeTruthy()
+    expect(screen.getByRole('columnheader', { name: 'Responses' })).toBeTruthy()
+    expect(screen.queryByRole('columnheader', { name: 'Target' })).toBeNull()
+    // Every body row has one cell fewer than the header would need for a target.
+    const headers = screen.getAllByRole('columnheader').length
+    const cells = screen.getAllByRole('row')[1].querySelectorAll('td').length
+    expect(cells).toBe(headers)
+  })
+
+  it('still shows the company dashboard both participation columns, which are its own scope', async () => {
+    setToken(tokenFor('company_admin', 'c1'))
+    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+
+    renderDashboard()
+
+    expect(await screen.findByRole('columnheader', { name: 'Target' })).toBeTruthy()
+    expect(screen.getByRole('cell', { name: '12' })).toBeTruthy()
   })
 
   it('does link a company_admin to the survey page, which their role can load', async () => {

@@ -28,6 +28,27 @@ public sealed record DashboardSurveySummary(
     int ResponseCount,
     int? TargetAudienceCount);
 
+/// <summary>
+/// A survey on a <em>department's</em> dashboard.
+///
+/// Deliberately not <see cref="DashboardSurveySummary"/>, and the difference is the whole
+/// point: that shape's two participation columns come straight off the survey row, where
+/// <c>ResponseCount</c> is incremented once per completed response <em>anywhere in the
+/// tenant</em> and <c>TargetAudienceCount</c> is the tenant's invited headcount. On a page
+/// contracted to one department both describe every other department as well.
+/// </summary>
+/// <param name="ResponseCount">
+/// Completed responses from this department alone, counted in SQL against the response
+/// rows rather than read off the survey.
+/// </param>
+public sealed record DashboardDepartmentSurveySummary(
+    Guid Id,
+    string? Title,
+    string Status,
+    DateTimeOffset StartDate,
+    DateTimeOffset EndDate,
+    int ResponseCount);
+
 /// <summary>One tenant on the platform overview. SuperAdmin-only by construction.</summary>
 public sealed record DashboardCompanySummary(
     Guid Id,
@@ -86,6 +107,11 @@ public sealed record CompanyAdminDashboard(
 /// One department's overview, for the person who runs it.
 /// </summary>
 /// <param name="MemberCount">Everyone whose user row points at this department, active or not.</param>
+/// <param name="ActiveSurveys">
+/// Every figure on these rows is department-scoped, like every figure above them. See
+/// <see cref="DashboardDepartmentSurveySummary"/> for why they are not the company
+/// dashboard's shape.
+/// </param>
 public sealed record DepartmentAdminDashboard(
     Guid DepartmentId,
     string DepartmentName,
@@ -96,7 +122,7 @@ public sealed record DepartmentAdminDashboard(
     int CompletedResponseCount,
     int OpenActionPlanCount,
     int OverdueActionPlanCount,
-    IReadOnlyList<DashboardSurveySummary> ActiveSurveys);
+    IReadOnlyList<DashboardDepartmentSurveySummary> ActiveSurveys);
 
 /// <summary>
 /// A survey the caller is expected to answer. Narrower than

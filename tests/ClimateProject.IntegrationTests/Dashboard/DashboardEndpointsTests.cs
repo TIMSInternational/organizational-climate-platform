@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Dashboard;
@@ -39,6 +40,12 @@ public class DashboardEndpointsTests : IAsyncLifetime
     private readonly AuthWebApplicationFactory _factory;
     private readonly string _companyADomain = $"dsha-{Guid.NewGuid():N}.test";
     private readonly string _companyBDomain = $"dshb-{Guid.NewGuid():N}.test";
+
+    /// <summary>Survey.ResponseCount on the company-wide survey — a tenant-wide tally.</summary>
+    private const int CompanyWideResponseCount = 140;
+
+    /// <summary>Survey.TargetAudienceCount on the company-wide survey — a tenant-wide headcount.</summary>
+    private const int CompanyWideTargetAudience = 200;
 
     private Guid _companyAId;
     private Guid _companyBId;
@@ -81,7 +88,13 @@ public class DashboardEndpointsTests : IAsyncLifetime
 
         // Company A: one company-wide active survey, one targeted only at Engineering, one
         // draft. Company B: one active survey, which must never appear in A's figures.
-        _companyWideSurveyId = await SeedSurveyAsync(db, companyA.Id, authorA, "Company-wide pulse", SurveyStatuses.Active, now.AddDays(30));
+        // The company-wide survey carries the denormalised tenant-wide figures a real one
+        // would: 140 completed responses across every department, 200 people invited. Only
+        // two of those responses are Engineering's, which is what makes it visible when a
+        // department's page reaches for the survey row instead of the response rows.
+        _companyWideSurveyId = await SeedSurveyAsync(
+            db, companyA.Id, authorA, "Company-wide pulse", SurveyStatuses.Active, now.AddDays(30),
+            responseCount: CompanyWideResponseCount, targetAudienceCount: CompanyWideTargetAudience);
         _engineeringOnlySurveyId = await SeedSurveyAsync(db, companyA.Id, authorA, "Engineering only", SurveyStatuses.Active, now.AddDays(10));
         await SeedSurveyAsync(db, companyA.Id, authorA, "Not published yet", SurveyStatuses.Draft, now.AddDays(60));
         await SeedSurveyAsync(db, companyB.Id, authorB, "Other tenant survey", SurveyStatuses.Active, now.AddDays(20));
@@ -132,8 +145,23 @@ public class DashboardEndpointsTests : IAsyncLifetime
         return user.Id;
     }
 
+    /// <param name="responseCount">
+    /// The survey row's own denormalised tally, bumped once per completed response
+    /// <em>company-wide</em> by <c>SurveyResponseEndpoints</c>. Seeded here at a value that
+    /// deliberately disagrees with the number of response rows in any one department, so a
+    /// page that renders it where a department-scoped figure belongs prints a number no
+    /// other assertion in this file could produce.
+    /// </param>
+    /// <param name="targetAudienceCount">The author-entered tenant-wide invited headcount.</param>
     private static async Task<Guid> SeedSurveyAsync(
-        ClimateProjectDbContext db, Guid companyId, Guid createdBy, string title, string status, DateTimeOffset endDate)
+        ClimateProjectDbContext db,
+        Guid companyId,
+        Guid createdBy,
+        string title,
+        string status,
+        DateTimeOffset endDate,
+        int responseCount = 0,
+        int? targetAudienceCount = null)
     {
         var now = DateTimeOffset.UtcNow;
         var survey = new Survey
@@ -148,6 +176,8 @@ public class DashboardEndpointsTests : IAsyncLifetime
             StartDate = now.AddDays(-1),
             EndDate = endDate,
             Status = status,
+            ResponseCount = responseCount,
+            TargetAudienceCount = targetAudienceCount,
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -322,6 +352,13 @@ public class DashboardEndpointsTests : IAsyncLifetime
             new[] { _engineeringOnlySurveyId, _companyWideSurveyId },
             body.OngoingSurveys.Select(s => s.Id));
 
+        // The tenant-wide figures, which is what a tenant-wide page is for. The department
+        // dashboard must NOT show these -- see
+        // The_department_survey_list_counts_that_departments_responses_and_shows_no_tenant_target.
+        var companyWide = Assert.Single(body.OngoingSurveys, s => s.Id == _companyWideSurveyId);
+        Assert.Equal(CompanyWideResponseCount, companyWide.ResponseCount);
+        Assert.Equal(CompanyWideTargetAudience, companyWide.TargetAudienceCount);
+
         var engineering = Assert.Single(body.Departments, d => d.Id == _engineeringId);
         Assert.Equal(2, engineering.CompletedResponseCount);
         Assert.Contains(body.Departments, d => d.Id == _salesId);
@@ -426,6 +463,61 @@ public class DashboardEndpointsTests : IAsyncLifetime
         // Engineering's participation and its action plans belong to Engineering.
         Assert.Equal(0, body.CompletedResponseCount);
         Assert.Equal(0, body.OpenActionPlanCount);
+    }
+
+    /// <summary>
+    /// Every figure on a department's page is that department's, including the ones in the
+    /// survey table.
+    ///
+    /// <para>
+    /// The defect this pins: <c>Survey.ResponseCount</c> and <c>Survey.TargetAudienceCount</c>
+    /// are denormalised <em>tenant-wide</em> columns — the first bumped once per completed
+    /// response anywhere in the company, the second the headcount the author typed in. The
+    /// department dashboard used to project them straight through, so a leader of a
+    /// six-person team read "Completed responses 5" as a KPI and, immediately below it for
+    /// the same survey, "Responses 140 / Target 200". Two identically-named metrics at two
+    /// different scopes, one of them describing every other department.
+    /// </para>
+    ///
+    /// <para>
+    /// 140 and 200 are seeded precisely so that the wrong answer is a number no correctly
+    /// scoped query in this fixture could ever return.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task The_department_survey_list_counts_that_departments_responses_and_shows_no_tenant_target()
+    {
+        var engineering = await ClientAsync(Roles.Leader, _companyADomain, _companyAId, _engineeringId);
+        var sales = await ClientAsync(Roles.Supervisor, _companyADomain, _companyAId, _salesId);
+
+        var engineeringBody = (await (await engineering.GetAsync("/dashboard/department-admin")).Content
+            .ReadFromJsonAsync<DepartmentAdminDashboard>())!;
+        var salesBody = (await (await sales.GetAsync("/dashboard/department-admin")).Content
+            .ReadFromJsonAsync<DepartmentAdminDashboard>())!;
+
+        var forEngineering = Assert.Single(engineeringBody.ActiveSurveys, s => s.Id == _companyWideSurveyId);
+        var forSales = Assert.Single(salesBody.ActiveSurveys, s => s.Id == _companyWideSurveyId);
+
+        // Same survey, same tenant, two departments -- and therefore two different numbers.
+        // Engineering has two completed responses to it (plus one incomplete, which is not
+        // participation); Sales has none.
+        Assert.Equal(2, forEngineering.ResponseCount);
+        Assert.Equal(0, forSales.ResponseCount);
+
+        // And it agrees with the KPI printed directly above it on the same page, which is
+        // the disagreement that made the old behaviour a defect rather than a rounding
+        // difference.
+        Assert.Equal(engineeringBody.CompletedResponseCount, forEngineering.ResponseCount);
+        Assert.Equal(salesBody.CompletedResponseCount, forSales.ResponseCount);
+
+        // There is no per-department invited headcount in this schema, so the payload
+        // offers none rather than passing off the tenant's. Read as raw JSON on purpose:
+        // deserializing into the DTO would silently drop the field, so a typed assertion
+        // could never see it come back.
+        var raw = await (await engineering.GetAsync("/dashboard/department-admin")).Content
+            .ReadFromJsonAsync<JsonElement>();
+        var firstSurvey = raw.GetProperty("activeSurveys").EnumerateArray().First();
+        Assert.False(firstSurvey.TryGetProperty("targetAudienceCount", out _));
     }
 
     [Fact]
@@ -578,6 +670,127 @@ public class DashboardEndpointsTests : IAsyncLifetime
 
         Assert.Equal("Company-wide pulse", Assert.Single(english.PendingSurveys).Title);
         Assert.Equal("Company-wide pulse (ES)", Assert.Single(spanish.PendingSurveys).Title);
+    }
+
+    // ------------------------------------------------------------------
+    // No N+1 — measured, not inferred
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// #132's "aggregate queries must not N+1; measure against realistic data", measured.
+    ///
+    /// <para>
+    /// <b>Why here and not in a unit test.</b> The unit-test version of this guard counted
+    /// statements in <c>ToQueryString()</c> and could not fail: EF renders one command from
+    /// a query and cannot represent a second round trip in that string, so a deliberately
+    /// pathological triple-nested correlated subquery scored exactly the same as the real
+    /// projections. An N+1 translates perfectly well — it just executes N more times — so
+    /// the only place it is observable is at execution. <see cref="CommandCountingInterceptor"/>
+    /// counts what the request actually sent.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Why a bound rather than a before/after comparison.</b> The pages are row-limited,
+    /// so "the count did not change when the data grew" goes quiet as soon as a page
+    /// saturates — the platform overview is capped at twelve tenants and this database is
+    /// shared, so it may well be full before this test adds anything. A fixed ceiling stays
+    /// falsifiable either way: the fixture below is grown until every page is at or near its
+    /// limit, so one extra round trip per row would put every route far past its ceiling.
+    /// The ceilings are the measured counts plus two, and the slack matters less than the
+    /// gap: an N+1 here costs at least eight.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task No_dashboard_issues_a_round_trip_per_row()
+    {
+        var superAdmin = await ClientAsync(Roles.SuperAdmin, _companyADomain, clearCompany: true);
+        var companyAdmin = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var leader = await ClientAsync(Roles.Leader, _companyADomain, _companyAId, _engineeringId);
+        var employee = await ClientAsync(Roles.Employee, _companyADomain, _companyAId, _engineeringId);
+
+        await SeedRealisticVolumeAsync();
+
+        var platform = await MeasureAsync(superAdmin, "/dashboard/super-admin");
+        var tenant = await MeasureAsync(companyAdmin, "/dashboard/company-admin");
+        var department = await MeasureAsync(leader, "/dashboard/department-admin");
+        var mine = await MeasureAsync(employee, "/dashboard/employee");
+
+        // Each page really is returning a page's worth of rows. Without this the ceilings
+        // below would pass on an empty result set, which is the way a measurement like this
+        // goes vacuous.
+        var platformBody = await platform.Response.Content.ReadFromJsonAsync<SuperAdminDashboard>();
+        var tenantBody = await tenant.Response.Content.ReadFromJsonAsync<CompanyAdminDashboard>();
+        var departmentBody = await department.Response.Content.ReadFromJsonAsync<DepartmentAdminDashboard>();
+        var mineBody = await mine.Response.Content.ReadFromJsonAsync<EmployeeDashboard>();
+
+        Assert.True(platformBody!.Companies.Count >= 8, $"companies: {platformBody.Companies.Count}");
+        Assert.True(tenantBody!.Departments.Count >= 10, $"departments: {tenantBody.Departments.Count}");
+        Assert.Equal(5, tenantBody.OngoingSurveys.Count);
+        Assert.Equal(5, departmentBody!.ActiveSurveys.Count);
+        Assert.Equal(5, mineBody!.PendingSurveys.Count);
+
+        // Measured on this fixture: 5 / 8 / 8 / 8. Each ceiling is that plus two. The
+        // smallest N+1 any of these pages could acquire costs five more (the survey lists
+        // are capped at five rows) and the largest costs eleven (company A's departments),
+        // so the slack cannot hide one.
+        Assert.True(platform.Commands <= 7, $"platform overview sent {platform.Commands} commands");
+        Assert.True(tenant.Commands <= 10, $"tenant dashboard sent {tenant.Commands} commands");
+        Assert.True(department.Commands <= 10, $"department dashboard sent {department.Commands} commands");
+        Assert.True(mine.Commands <= 10, $"employee dashboard sent {mine.Commands} commands");
+    }
+
+    /// <summary>One request, and the number of database commands it sent.</summary>
+    private async Task<(HttpResponseMessage Response, int Commands)> MeasureAsync(HttpClient client, string url)
+    {
+        // Reset immediately before the request: signup and login went through this counter
+        // too, and so does anything the seeding above did.
+        _factory.CommandCounter.Reset();
+        var response = await client.GetAsync(url);
+        var commands = _factory.CommandCounter.Count;
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return (response, commands);
+    }
+
+    /// <summary>
+    /// Enough rows that every list on every dashboard is at or past its limit: nine more
+    /// tenants (the platform card grid takes twelve, newest first), nine more departments in
+    /// company A (its table takes twelve), six more company-wide active surveys (every
+    /// survey list takes five) and a completed response to each from Engineering.
+    /// </summary>
+    private async Task SeedRealisticVolumeAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var now = DateTimeOffset.UtcNow;
+        var authorA = await SeedUserAsync(db, _companyAId, _engineeringId);
+
+        for (var i = 0; i < 9; i++)
+        {
+            db.Companies.Add(new Company
+            {
+                Id = Guid.NewGuid(),
+                Name = $"Volume Co {i}",
+                EmailDomain = $"vol-{Guid.NewGuid():N}.test",
+                CreatedAt = now,
+            });
+            db.Departments.Add(new Department
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _companyAId,
+                Name = $"Volume Dept {i}",
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+        }
+
+        await db.SaveChangesAsync();
+
+        for (var i = 0; i < 6; i++)
+        {
+            var surveyId = await SeedSurveyAsync(
+                db, _companyAId, authorA, $"Volume survey {i}", SurveyStatuses.Active, now.AddDays(2 + i));
+            await SeedResponseAsync(db, surveyId, _companyAId, _engineeringId, isComplete: true);
+        }
     }
 
     /// <summary>

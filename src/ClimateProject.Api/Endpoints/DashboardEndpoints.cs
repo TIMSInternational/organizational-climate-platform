@@ -52,7 +52,10 @@ namespace ClimateProject.Api.Endpoints;
 /// <see cref="DashboardQueries"/>, whose whole reason to exist as a separate,
 /// <c>IQueryable</c>-taking class is that <c>DashboardQueriesTests</c> can then assert the
 /// generated SQL directly. A handler here issues a fixed, small number of statements
-/// whatever the size of the tenant.
+/// whatever the size of the tenant, and that is *measured* rather than asserted from the
+/// shape of the LINQ: <c>DashboardEndpointsTests.No_dashboard_issues_a_round_trip_per_row</c>
+/// counts the commands a real request sends through a <c>DbCommandInterceptor</c>, with the
+/// fixture grown past every row limit below.
 /// </summary>
 public static class DashboardEndpoints
 {
@@ -338,8 +341,15 @@ public static class DashboardEndpoints
             db.Surveys, db.SurveyDepartmentTargets, department.CompanyId, scopedDepartmentId);
 
         var activeSurveyCount = await activeSurveys.CountAsync(cancellationToken);
+
+        // SurveySummaries, the company dashboard's projection, is deliberately NOT used here.
+        // Its two participation columns are the survey row's own denormalised
+        // company-wide figures, and printing them on a page contracted to one department
+        // puts "Responses 140 / Target 200" directly beneath this page's own
+        // department-scoped "Completed responses 5".
         var surveyRows = await DashboardQueries
-            .SurveySummaries(activeSurveys, SurveyRowLimit)
+            .SurveySummariesForDepartment(
+                activeSurveys, db.Responses, department.CompanyId, scopedDepartmentId, SurveyRowLimit)
             .ToListAsync(cancellationToken);
 
         return Results.Ok(new DepartmentAdminDashboard(
@@ -352,7 +362,7 @@ public static class DashboardEndpoints
             responses.Completed,
             actionPlans.Open,
             actionPlans.Overdue,
-            surveyRows.Select(s => ToSummary(s, lang)).ToList()));
+            surveyRows.Select(s => ToDepartmentSummary(s, lang)).ToList()));
     }
 
     // ------------------------------------------------------------------
@@ -449,4 +459,15 @@ public static class DashboardEndpoints
             row.EndDate,
             row.ResponseCount,
             row.TargetAudienceCount);
+
+    private static DashboardDepartmentSurveySummary ToDepartmentSummary(
+        DashboardDepartmentSurveyRow row,
+        string? lang)
+        => new(
+            row.Id,
+            LocalizedContent.ResolveText(row.TitleEn, row.TitleEs, lang, row.Language),
+            row.Status,
+            row.StartDate,
+            row.EndDate,
+            row.ResponseCount);
 }

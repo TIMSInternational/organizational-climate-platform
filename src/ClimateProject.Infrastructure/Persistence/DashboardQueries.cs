@@ -51,6 +51,28 @@ public sealed record DashboardSurveyRow(
     int ResponseCount,
     int? TargetAudienceCount);
 
+/// <summary>
+/// One survey row of a <em>department's</em> dashboard, before its title is resolved.
+///
+/// Separate from <see cref="DashboardSurveyRow"/> because it carries no target: the only
+/// invited-headcount this schema has is <c>Survey.TargetAudienceCount</c>, a single
+/// author-entered number for the whole tenant with no per-department breakdown, so there is
+/// nothing honest to put in that column on a page contracted to one department.
+/// </summary>
+/// <param name="ResponseCount">
+/// Completed responses <em>from this department alone</em> — computed, not the denormalised
+/// <c>Survey.ResponseCount</c>, which is bumped once per completed response company-wide.
+/// </param>
+public sealed record DashboardDepartmentSurveyRow(
+    Guid Id,
+    string? TitleEn,
+    string? TitleEs,
+    string Language,
+    string Status,
+    DateTimeOffset StartDate,
+    DateTimeOffset EndDate,
+    int ResponseCount);
+
 /// <summary>One pending survey for a respondent, before its title is resolved for a locale.</summary>
 public sealed record DashboardPendingSurveyRow(
     Guid Id,
@@ -73,7 +95,15 @@ public sealed record DashboardPendingSurveyRow(
 /// the codebase -- correlated subqueries per row plus grouped conditional counts. Taking
 /// the sequences as parameters lets <c>DashboardQueriesTests</c> call
 /// <c>ToQueryString()</c> on the very query the endpoint runs, with no container and no
-/// connection, and prove both that it translates and that it is ONE statement.
+/// connection, and prove that it translates and that the intended predicates survive into
+/// the SQL.
+///
+/// <c>ToQueryString()</c> proves nothing about round trips and no test here claims it
+/// does: it renders one command by construction, so it cannot represent a second one. The
+/// N+1 property is measured where round trips actually happen --
+/// <c>DashboardEndpointsTests.No_dashboard_issues_a_round_trip_per_row</c> counts the
+/// commands a real request sends through a <c>DbCommandInterceptor</c>, against a fixture
+/// deliberately grown past every row limit on the page.
 ///
 /// ## The N+1 rule this class exists to enforce
 ///
@@ -223,6 +253,48 @@ public static class DashboardQueries
                 s.EndDate,
                 s.ResponseCount,
                 s.TargetAudienceCount));
+
+    /// <summary>
+    /// The same list, for a department's own dashboard, with participation counted from
+    /// that department's rows instead of read off the survey.
+    /// </summary>
+    /// <remarks>
+    /// <b>Why this exists rather than reusing <see cref="SurveySummaries"/>.</b>
+    /// <c>Survey.ResponseCount</c> and <c>Survey.TargetAudienceCount</c> are denormalised
+    /// company-wide figures: the first is incremented once per completed response anywhere
+    /// in the tenant (<c>SurveyResponseEndpoints</c>), the second is the invited headcount
+    /// the author typed in. Rendering either on a page contracted to one department puts a
+    /// company-wide number directly under a department-scoped one with the same name — a
+    /// six-person team reading "Completed responses 5" above "Responses 140 / Target 200".
+    ///
+    /// So the count here is a correlated subquery over this department's responses (one
+    /// statement, no N+1), and there is no target column at all: a per-department invited
+    /// headcount does not exist in the schema and inventing one from the member count would
+    /// contradict the number the author actually entered.
+    /// </remarks>
+    public static IQueryable<DashboardDepartmentSurveyRow> SurveySummariesForDepartment(
+        IQueryable<Survey> surveys,
+        IQueryable<Response> responses,
+        Guid companyId,
+        Guid departmentId,
+        int limit)
+        => surveys
+            .OrderBy(s => s.EndDate)
+            .ThenBy(s => s.Id)
+            .Take(limit)
+            .Select(s => new DashboardDepartmentSurveyRow(
+                s.Id,
+                s.TitleEn,
+                s.TitleEs,
+                s.Language,
+                s.Status,
+                s.StartDate,
+                s.EndDate,
+                responses.Count(r =>
+                    r.SurveyId == s.Id
+                    && r.DepartmentId == departmentId
+                    && r.CompanyId == companyId
+                    && r.IsComplete)));
 
     /// <summary>
     /// The respondent's queue. Feed it <see cref="SurveyQueries.AssignedTo"/> so that

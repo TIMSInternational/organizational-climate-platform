@@ -4,19 +4,33 @@ using Microsoft.EntityFrameworkCore;
 namespace ClimateProject.UnitTests.Dashboard;
 
 /// <summary>
-/// Proves the dashboard aggregates translate to SQL, and — the part that matters for #132's
-/// "no N+1 in the aggregate queries" — that each of them is **one** statement.
+/// Proves the dashboard aggregates translate to SQL, and that the predicates and columns
+/// each one is supposed to push down actually appear in it.
 ///
 /// Same technique and same justification as <c>SurveyQueriesTests</c>: EF builds the SQL
 /// from the model alone, so <c>ToQueryString()</c> needs a provider but never a connection.
-/// The alternative (finding out in an integration run, or in production) is what these
-/// exist to avoid, and an N+1 in particular does not fail at all — it just gets slower with
-/// every customer, which is the failure mode a test has to be looked for rather than
-/// waited for.
+/// The alternative — finding out in an integration run, or in production — is what these
+/// exist to avoid.
 ///
-/// The N+1 assertion is <c>StatementCount</c>: a projection that fell out to client
-/// evaluation would either throw here or emit the per-row query separately. One statement
-/// containing the per-row aggregate is proof the count rides along in the same round trip.
+/// ## What this file deliberately does NOT prove, having once pretended to
+///
+/// <list type="bullet">
+/// <item><b>Round trips.</b> An earlier version of this file counted semicolons in
+/// <c>ToQueryString()</c> and asserted the answer was 1, calling that the guard for #132's
+/// "no N+1". It was decoration. <c>ToQueryString()</c> renders a single
+/// <c>IRelationalCommand</c> by construction, so it cannot represent a second round trip
+/// no matter what the query does; measured on this model, a deliberately pathological
+/// triple-nested correlated subquery renders with exactly as many semicolons as the real
+/// queries do — zero. The assertion could not fail, so it did not guard anything. The
+/// N+1 property is now measured where round trips exist:
+/// <c>DashboardEndpointsTests.No_dashboard_issues_a_round_trip_per_row</c> counts commands
+/// through a <c>DbCommandInterceptor</c> on a fixture grown past every row limit.</item>
+/// <item><b>Scoping.</b> Deleting <c>d.CompanyId == companyId</c> from
+/// <c>DepartmentSummaries</c> leaves every test here green — the tenant boundary is proven
+/// by <c>DashboardEndpointsTests</c>, which seeds two tenants so a leak changes a number.
+/// A fragment assertion below such as "the SQL mentions <c>departments</c>" says the table
+/// is in the query, not that the query is scoped.</item>
+/// </list>
 /// </summary>
 public class DashboardQueriesTests
 {
@@ -32,17 +46,8 @@ public class DashboardQueriesTests
     private static readonly Guid DepartmentId = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly DateTimeOffset AsOf = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
-    /// <summary>
-    /// Top-level statements in the generated SQL. Npgsql separates a batch with a
-    /// semicolon-terminated line, so a query that produced more than one round trip shows
-    /// up as more than one statement here.
-    /// </summary>
-    private static int StatementCount(string sql)
-        => sql.Split(';', StringSplitOptions.RemoveEmptyEntries)
-            .Count(part => !string.IsNullOrWhiteSpace(part));
-
     [Fact]
-    public void The_platform_company_summary_counts_every_row_in_one_statement()
+    public void The_platform_company_summary_tallies_each_tenant_with_a_correlated_subquery()
     {
         using var db = CreateContext();
 
@@ -50,10 +55,9 @@ public class DashboardQueriesTests
             .CompanySummaries(db.Companies, db.Users, db.Surveys, db.Responses, 12)
             .ToQueryString();
 
-        // Three correlated aggregates -- users, surveys, responses -- inside ONE select
-        // over companies. If any of them were evaluated per row this would not be one
-        // statement, and the platform overview would issue 3N+1 queries.
-        Assert.Equal(1, StatementCount(sql));
+        // Three correlated aggregates -- users, surveys, responses -- named in the SQL
+        // rather than computed in C# over materialised rows. That they also ride in a
+        // single round trip is measured by the interceptor test, not inferred here.
         Assert.Contains("users", sql, StringComparison.Ordinal);
         Assert.Contains("surveys", sql, StringComparison.Ordinal);
         Assert.Contains("responses", sql, StringComparison.Ordinal);
@@ -61,7 +65,7 @@ public class DashboardQueriesTests
     }
 
     [Fact]
-    public void The_department_summary_counts_members_and_responses_in_one_statement()
+    public void The_department_summary_counts_members_and_responses_in_sql()
     {
         using var db = CreateContext();
 
@@ -69,45 +73,41 @@ public class DashboardQueriesTests
             .DepartmentSummaries(db.Departments, db.Users, db.Responses, CompanyId, 12)
             .ToQueryString();
 
-        Assert.Equal(1, StatementCount(sql));
         Assert.Contains("departments", sql, StringComparison.Ordinal);
         Assert.Contains("COUNT", sql, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void The_survey_tallies_collapse_into_one_grouped_statement()
+    public void The_survey_tallies_translate_as_conditional_counts_over_one_group()
     {
         using var db = CreateContext();
 
         var sql = DashboardQueries.SurveyCounts(db.Surveys).ToQueryString();
 
-        // Total, active and draft from one pass. Three separate CountAsync calls would be
-        // three round trips for three numbers off the same table.
-        Assert.Equal(1, StatementCount(sql));
+        // Total, active and draft in one grouped projection. Three separate CountAsync
+        // calls would be three round trips for three numbers off the same table.
         Assert.Contains("COUNT", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("active", sql, StringComparison.Ordinal);
         Assert.Contains("draft", sql, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void The_response_tallies_collapse_into_one_grouped_statement()
+    public void The_response_tallies_translate_as_conditional_counts_over_one_group()
     {
         using var db = CreateContext();
 
         var sql = DashboardQueries.ResponseCounts(db.Responses).ToQueryString();
 
-        Assert.Equal(1, StatementCount(sql));
         Assert.Contains("is_complete", sql, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void The_user_tallies_collapse_into_one_grouped_statement()
+    public void The_user_tallies_translate_as_conditional_counts_over_one_group()
     {
         using var db = CreateContext();
 
         var sql = DashboardQueries.UserCounts(db.Users).ToQueryString();
 
-        Assert.Equal(1, StatementCount(sql));
         Assert.Contains("is_active", sql, StringComparison.Ordinal);
     }
 
@@ -118,7 +118,6 @@ public class DashboardQueriesTests
 
         var sql = DashboardQueries.ActionPlanCounts(db.ActionPlans, AsOf).ToQueryString();
 
-        Assert.Equal(1, StatementCount(sql));
         Assert.Contains("due_date", sql, StringComparison.Ordinal);
         // Completed and cancelled plans are not outstanding work and must be excluded in
         // SQL, not after the fact.
@@ -135,7 +134,6 @@ public class DashboardQueriesTests
             .ActiveForDepartment(db.Surveys, db.SurveyDepartmentTargets, CompanyId, DepartmentId)
             .ToQueryString();
 
-        Assert.Equal(1, StatementCount(sql));
         Assert.Contains("survey_department_targets", sql, StringComparison.Ordinal);
         // Both halves of the rule: "has no targets" OR "targets me". Only the second would
         // hide every company-wide survey from every department.
@@ -150,20 +148,43 @@ public class DashboardQueriesTests
 
         var sql = DashboardQueries.SurveySummaries(db.Surveys, 5).ToQueryString();
 
-        Assert.Equal(1, StatementCount(sql));
         Assert.Contains("title_en", sql, StringComparison.Ordinal);
         Assert.Contains("title_es", sql, StringComparison.Ordinal);
         Assert.Contains("target_audience_count", sql, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The department dashboard's own survey projection. Two things have to be true of the
+    /// SQL and both are the fix for a real defect: the participation figure is counted from
+    /// the response rows with a department predicate, and the survey's own denormalised
+    /// company-wide columns are nowhere in it.
+    /// </summary>
     [Fact]
-    public void The_pending_survey_projection_counts_questions_in_the_same_statement()
+    public void The_department_survey_projection_counts_responses_per_department_and_asks_for_no_target()
+    {
+        using var db = CreateContext();
+
+        var sql = DashboardQueries
+            .SurveySummariesForDepartment(db.Surveys, db.Responses, CompanyId, DepartmentId, 5)
+            .ToQueryString();
+
+        Assert.Contains("responses", sql, StringComparison.Ordinal);
+        Assert.Contains("department_id = @departmentId", sql, StringComparison.Ordinal);
+        Assert.Contains("is_complete", sql, StringComparison.Ordinal);
+        // `Survey.ResponseCount` and `Survey.TargetAudienceCount` are tenant-wide numbers
+        // living on the survey row; neither belongs on a department's page, so neither is
+        // even selected.
+        Assert.DoesNotContain("target_audience_count", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("response_count", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_pending_survey_projection_counts_questions_in_sql()
     {
         using var db = CreateContext();
 
         var sql = DashboardQueries.PendingSurveys(db.Surveys, db.Questions, 5).ToQueryString();
 
-        Assert.Equal(1, StatementCount(sql));
         Assert.Contains("questions", sql, StringComparison.Ordinal);
         Assert.Contains("COUNT", sql, StringComparison.OrdinalIgnoreCase);
     }
