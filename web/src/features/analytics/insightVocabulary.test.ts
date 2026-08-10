@@ -23,11 +23,27 @@ describe('insight vocabulary', () => {
    */
   it('translates every known type into Spanish', () => {
     expect(INSIGHT_TYPES.map((type) => insightTypeLabel(es, type))).toEqual([
-      'Patrón',
+      'Tendencia',
       'Riesgo',
+      'Patrón',
       'Recomendación',
       'Predicción',
     ])
+  })
+
+  /**
+   * `trend` is the type this repository actually produces — it is the default of the
+   * create-request builder every create test in `AIInsightEndpointsTests.cs` calls
+   * (`:152`), the value asserted on the persisted row (`:326`), and the type in all six
+   * validation `InlineData` rows (`:501`-`:506`). Omitting it was the literal bug in
+   * #282: the one insight type the backend demonstrably emits was the one that fell
+   * through to the raw-English fallback, so `/analytics/ai-insights` printed "trend"
+   * under `preferredLocale=es`.
+   */
+  it('translates the type the backend actually emits', () => {
+    expect(INSIGHT_TYPES).toContain('trend')
+    expect(insightTypeLabel(es, 'trend')).toBe('Tendencia')
+    expect(insightTypeLabel(en, 'trend')).toBe('Trend')
   })
 
   it('translates every known priority into Spanish', () => {
@@ -41,8 +57,9 @@ describe('insight vocabulary', () => {
 
   it('translates every known type and priority into English', () => {
     expect(INSIGHT_TYPES.map((type) => insightTypeLabel(en, type))).toEqual([
-      'Pattern',
+      'Trend',
       'Risk',
+      'Pattern',
       'Recommendation',
       'Prediction',
     ])
@@ -74,9 +91,10 @@ describe('insight vocabulary', () => {
 
   /**
    * `AIInsightValidation.ValidateCreate` bounds `Type` and `Priority` at
-   * "non-empty, ≤ 20 characters" and nothing else — neither column has a CHECK —
-   * so the wire can carry a value outside the legacy enum. AC #3: it falls back
-   * to the raw string, never to blank and never to a key path.
+   * "non-empty, ≤ 20 characters" and nothing else — neither column has a CHECK, and
+   * there is no enum anywhere in the backend — so the value set is unbounded and the
+   * catalogue above is best-effort. AC #3: an unknown value falls back to the raw
+   * string, never to blank and never to a key path.
    */
   it('falls back to the server value for a type it does not know', () => {
     expect(insightTypeLabel(es, 'anomaly')).toBe('anomaly')
@@ -89,7 +107,7 @@ describe('insight vocabulary', () => {
   })
 
   it('does not blank out an empty or oddly-cased value', () => {
-    // Case matters: the enum is lowercase on the wire, and "Risk" is not "risk".
+    // Case matters: every observed value is lowercase on the wire, and "Risk" is not "risk".
     // Rendering the server's own casing is honest; rendering nothing is not.
     expect(insightTypeLabel(es, 'Risk')).toBe('Risk')
     expect(insightPriorityLabel(es, 'HIGH')).toBe('HIGH')

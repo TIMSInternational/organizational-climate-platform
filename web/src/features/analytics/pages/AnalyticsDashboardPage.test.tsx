@@ -44,9 +44,9 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status })
 }
 
-function renderPage() {
+function renderPage(locale: 'en' | 'es' = 'en') {
   return render(
-    <TranslationProvider>
+    <TranslationProvider initialLocale={locale}>
       <MemoryRouter initialEntries={['/admin/companies/c1/analytics']}>
         <Routes>
           <Route path="/admin/companies/:companyId/analytics" element={<AnalyticsDashboardPage />} />
@@ -207,6 +207,55 @@ describe('AnalyticsDashboardPage', () => {
 
     await screen.findByText('Industry median')
     expect(screen.queryByText(/Platform-wide benchmarks are not included/)).toBeNull()
+  })
+
+  /**
+   * `AIInsightList` is the other consumer of `../insightVocabulary` (#282), and until
+   * now nothing here read its priority cell at all: replacing the whole cell with a
+   * literal `'ZZZ'` left all 95 analytics tests green. These two cover the split the
+   * shared helper makes — the known value that must be translated, and the inherited
+   * `Object.prototype` key that must not be.
+   */
+  it('translates the priority in the dashboard insight table', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse([insightRow({ priority: 'high' })]))
+    renderPage()
+
+    const row = (await screen.findByText('Engagement is falling in Sales')).closest('tr')!
+    expect(row.textContent).toContain('High')
+    // The regression itself: the stored value leaking through untranslated.
+    expect(row.textContent).not.toContain('high')
+  })
+
+  it('translates the priority into Spanish in the dashboard insight table', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse([insightRow({ priority: 'high' })]))
+    renderPage('es')
+
+    const row = (await screen.findByText('Engagement is falling in Sales')).closest('tr')!
+    expect(row.textContent).toContain('Alta')
+    expect(row.textContent).not.toContain('high')
+  })
+
+  /**
+   * `priority` is free-form server text — `AIInsightValidation` bounds it at "non-empty,
+   * ≤ 20 characters" and the column has no CHECK — so `'toString'` is reachable on the
+   * wire. A bare `keys[priority]` truthiness check would resolve it to
+   * `Object.prototype.toString`, a *function*, and hand it to `t()`, whose `.split('.')`
+   * would take the whole page down. `Object.hasOwn` is what makes it render verbatim.
+   */
+  it('does not throw on a priority that names an inherited object property', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse([insightRow({ priority: 'toString' })]))
+    renderPage()
+
+    const row = (await screen.findByText('Engagement is falling in Sales')).closest('tr')!
+    expect(row.textContent).toContain('toString')
+    // Still a live row, not a blank cell or a crashed subtree.
+    expect(screen.getByRole('button', { name: 'Acknowledge' })).toBeTruthy()
   })
 
   it('shows empty states for both sections rather than empty tables', async () => {

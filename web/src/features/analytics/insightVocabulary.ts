@@ -7,25 +7,39 @@ import type { TranslateFn } from '../../i18n'
  * `Record` lookup plus a raw fallback, never an exhaustive union — for the reason
  * spelled out there: these are **server data**, not copy.
  *
- * ## Where the value sets come from, and why the fallback is still load-bearing
+ * ## Where the value sets come from, and why the fallback is load-bearing
  *
- * The legacy Mongoose model (`climate-project/src/models/AIInsight.ts`) declares both
- * as closed enums:
+ * **There is no enum anywhere to transcribe.** `AIInsightValidation.ValidateCreate`
+ * (`src/ClimateProject.Application/Analytics/AIInsightValidation.cs:60`) checks only
+ * "non-empty and ≤ 20 characters" for `Type` and `Priority`; both columns are plain
+ * `text` with no CHECK. The value set is therefore **unbounded**, and this catalogue is
+ * a best-effort list of the values actually observed in this repository — not an
+ * exhaustive union. That is why the raw fallback below is not defensive noise: it is the
+ * only correct behaviour for a value we do not ship a label for. Rendering the server's
+ * own string is honest, whereas `t()` on a key we never shipped prints a raw key path at
+ * the user, and a blank cell hides the row's meaning entirely.
  *
- * ```
- * type:     'pattern' | 'risk' | 'recommendation' | 'prediction'
- * priority: 'low' | 'medium' | 'high' | 'critical'
- * ```
+ * Every entry is sourced from something in this repository:
  *
- * That is where these catalogues come from, so they are transcribed rather than
- * invented. But the .NET port does **not** enforce either set:
- * `AIInsightValidation.ValidateCreate` checks only "non-empty and ≤ 20 characters"
- * for both columns, and `AIInsight.Type` / `AIInsight.Priority` are plain `text` with
- * no CHECK. So the wire can legitimately carry a fifth type — most plausibly from
- * #92's generation, which does not exist yet and has not committed to this
- * vocabulary. An unrecognised value therefore renders verbatim: it is the server's
- * own string, which is honest, whereas `t()` on a key we never shipped prints a raw
- * key path at the user, and a blank cell hides the row's meaning entirely.
+ * - `trend` — the canonical type here, and the reason this file exists. It is the
+ *   default of the create-request builder that every create test calls
+ *   (`tests/ClimateProject.IntegrationTests/Analytics/AIInsightEndpointsTests.cs:152`),
+ *   the value asserted on the persisted row (`:326`), the type in all six validation
+ *   `InlineData` rows (`:501`-`:506`), the default in
+ *   `tests/ClimateProject.UnitTests/Analytics/AIInsightValidationTests.cs:8`, and the
+ *   type in the worked example at
+ *   `docs/superpowers/plans/2026-08-01-reports-analytics.md:1182`. It is also the type
+ *   the web fixtures already use (`api/insights.test.ts`,
+ *   `pages/AnalyticsDashboardPage.test.tsx`).
+ * - `risk` — `tests/ClimateProject.IntegrationTests/Persistence/AIInsightTests.cs:46`,
+ *   `tests/ClimateProject.IntegrationTests/Reports/ReportEndpointsTests.cs:123`,
+ *   `tests/ClimateProject.UnitTests/Reports/ReportAIInsightsTests.cs:33`.
+ * - `pattern` — `tests/ClimateProject.IntegrationTests/Persistence/AIInsightTests.cs:87`,
+ *   `tests/ClimateProject.IntegrationTests/Persistence/MicroclimateAiInsightTests.cs:78`.
+ * - `recommendation`, `prediction` — no backend occurrence; carried over from the
+ *   original port of this catalogue and kept because they cost nothing and #92's
+ *   generation (which does not exist yet and has committed to no vocabulary) is the
+ *   most plausible source of new values.
  *
  * ## Why priority reuses `actionPlans.*`
  *
@@ -35,17 +49,21 @@ import type { TranslateFn } from '../../i18n'
  * (`Alta`, `Crítica`) because they agree with `prioridad` in both places.
  */
 
-/** The legacy `AIInsightSchema.type` enum, in schema order. */
-export const INSIGHT_TYPES = ['pattern', 'risk', 'recommendation', 'prediction'] as const
+/**
+ * The insight types we ship a label for, most-attested first. Not a closed set — see
+ * the note above; `insightTypeLabel` accepts any string.
+ */
+export const INSIGHT_TYPES = ['trend', 'risk', 'pattern', 'recommendation', 'prediction'] as const
 
 export type InsightType = (typeof INSIGHT_TYPES)[number]
 
-/** The legacy `AIInsightSchema.priority` enum, lowest first. */
+/** The priorities we ship a label for, lowest first. Also not a closed set. */
 export const INSIGHT_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const
 
 export type InsightPriority = (typeof INSIGHT_PRIORITIES)[number]
 
 const TYPE_KEYS: Record<string, string> = {
+  trend: 'insights.typeTrend',
   pattern: 'insights.typePattern',
   risk: 'insights.typeRisk',
   recommendation: 'insights.typeRecommendation',
