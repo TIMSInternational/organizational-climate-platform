@@ -131,12 +131,17 @@ export function beginGoogleSignIn(clientId: string, origin: string): string {
 }
 
 /**
- * Reads the pending handshake and **removes it**, so one redirect can be
- * completed exactly once. A handshake left in storage is a replay window.
+ * Reads the pending handshake **without** removing it.
+ *
+ * Separate from `clearGoogleHandshake` because the decision to consume depends on
+ * something the caller learns only after parsing the callback: whether a redirect
+ * actually came back. Consuming first meant that opening `/auth/loading` with no
+ * fragment — a bookmark, a back button, a link — destroyed a handshake that was
+ * still waiting for its real redirect, and the sign-in that followed reported a
+ * mismatch it had not earned. See `AuthLoadingPage`.
  */
-export function takeGoogleHandshake(): GoogleHandshake | null {
+export function peekGoogleHandshake(): GoogleHandshake | null {
   const stored = sessionStorage.getItem(HANDSHAKE_KEY)
-  sessionStorage.removeItem(HANDSHAKE_KEY)
   if (!stored) return null
 
   try {
@@ -146,6 +151,24 @@ export function takeGoogleHandshake(): GoogleHandshake | null {
   } catch {
     return null
   }
+}
+
+/**
+ * Drops the pending handshake, so one redirect can be completed exactly once. A
+ * handshake left in storage is a replay window.
+ */
+export function clearGoogleHandshake(): void {
+  sessionStorage.removeItem(HANDSHAKE_KEY)
+}
+
+/**
+ * Peek and clear in one call — the correct pairing whenever a redirect *has* come
+ * back and is about to be judged.
+ */
+export function takeGoogleHandshake(): GoogleHandshake | null {
+  const handshake = peekGoogleHandshake()
+  clearGoogleHandshake()
+  return handshake
 }
 
 export type GoogleCallback =

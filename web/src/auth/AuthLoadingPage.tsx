@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router'
 import { AuthRequestError, googleLogin } from './api'
 import { AuthPending } from './AuthPending'
 import { pageWorthyReason } from './authReason'
-import { readGoogleCallback, takeGoogleHandshake } from './googleOAuth'
+import { clearGoogleHandshake, peekGoogleHandshake, readGoogleCallback } from './googleOAuth'
 import { setToken } from './token'
 import { decodeJwtPayload } from './jwt'
 import { resolveInitialRoute } from '../app/resolveInitialRoute'
@@ -39,14 +39,22 @@ import { useTranslation } from '../i18n'
  *   the stored handshake is someone else's token, and it must never be exchanged.
  * - **403 / 503 from the exchange** → the platform reasons, identical to
  *   `LoginPage`, because it is the same `CheckSystemSettingsGateAsync` refusing.
+ * - **404 from the exchange** → `google-signin`, carrying the server's own message.
+ *   Since #280 `/auth/google` no longer provisions a company for an unknown email
+ *   domain; it answers 404 with the same "no company for this domain" text
+ *   `SignupAsync` uses. That is not a platform condition and not something a retry
+ *   fixes, so it stays a Google-sign-in failure rather than becoming a page-worthy
+ *   platform reason — but the message has to survive, because it is the only thing
+ *   that tells the user *why*.
  *
- * ## Why the effect is fenced with a ref
+ * ## Why the effect is fenced with a ref, and why the handshake is peeked
  *
- * `takeGoogleHandshake()` deliberately consumes the handshake. React 19 StrictMode
- * mounts effects twice in development, and the second run would find storage empty
- * and report a mismatch on a sign-in that was working. The ref makes the exchange
- * happen once per mount, which is also what stops a re-render mid-flight from
- * issuing a second `POST /auth/google`.
+ * The handshake is consumed only after the callback parses as something other than
+ * `absent` — see `peekGoogleHandshake`. React 19 StrictMode mounts effects twice in
+ * development, and a second run that found storage empty would report a mismatch on
+ * a sign-in that was working. The ref makes the exchange happen once per mount,
+ * which is also what stops a re-render mid-flight from issuing a second
+ * `POST /auth/google`.
  */
 export default function AuthLoadingPage() {
   const { t } = useTranslation()
@@ -61,12 +69,18 @@ export default function AuthLoadingPage() {
     // Read from the router's location rather than `window.location` so the page is
     // driven by the same URL the router resolved, and so a test can mount it at a
     // callback URL without touching globals.
-    const callback = readGoogleCallback(location.hash, location.search, takeGoogleHandshake())
+    // Peek rather than take: a bare visit to this route (bookmark, back button, a
+    // link someone shared) must not destroy a handshake that is still waiting for
+    // its real redirect. The handshake is consumed only once we know something
+    // actually came back to judge.
+    const callback = readGoogleCallback(location.hash, location.search, peekGoogleHandshake())
 
     if (callback.status === 'absent') {
       navigate('/login', { replace: true })
       return
     }
+
+    clearGoogleHandshake()
 
     if (callback.status !== 'ok') {
       const message = callback.status === 'denied' ? t('auth.googleCancelled') : t('auth.googleMismatch')

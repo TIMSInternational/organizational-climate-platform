@@ -11,7 +11,7 @@ import AuthSuccessPage from './AuthSuccessPage'
 import RequireAuth from '../app/RequireAuth'
 import { TranslationProvider } from '../i18n'
 import { getToken, setToken, clearToken } from './token'
-import { beginGoogleSignIn } from './googleOAuth'
+import { beginGoogleSignIn, peekGoogleHandshake } from './googleOAuth'
 
 function tokenFor(claims: Record<string, unknown>): string {
   const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
@@ -358,6 +358,47 @@ describe('Google sign-in', () => {
 
     await waitFor(() => expect(path()).toBe('/login'))
     expect(fetch).not.toHaveBeenCalled()
+  })
+
+  /**
+   * The bare visit must also leave a *pending* handshake alone. The page used to
+   * consume it before parsing the callback, so opening `/auth/loading` from a
+   * bookmark or the back button while a sign-in was in flight destroyed the stored
+   * state — and the real redirect that arrived afterwards was then reported as a
+   * mismatch it had not earned.
+   */
+  it('leaves a pending handshake intact when nobody came back from Google', async () => {
+    beginGoogleSignIn(CLIENT_ID, 'https://app.example')
+    const before = peekGoogleHandshake()
+
+    renderAuthRoutes('/auth/loading')
+
+    await waitFor(() => expect(path()).toBe('/login'))
+    expect(peekGoogleHandshake()).toEqual(before)
+    expect(before).not.toBeNull()
+  })
+
+  /**
+   * Pins the **state** check specifically.
+   *
+   * The sibling test below plants a token whose nonce is wrong too, so the nonce
+   * check alone rejects it and removing the state comparison leaves that test green
+   * — measured. Here the nonce is the *real* one from this browser's handshake, so
+   * the forged `state` is the only thing left that can reject the token. Reachable
+   * for an attacker in the case that matters: a token they obtained legitimately for
+   * their own account, replayed into the victim's browser to sign the victim in as
+   * them.
+   */
+  it('rejects a forged state even when the nonce is genuine', async () => {
+    beginGoogleSignIn(CLIENT_ID, 'https://app.example')
+    const handshake = peekGoogleHandshake()
+    const planted = tokenFor({ nonce: handshake!.nonce, email: 'attacker@evil.test' })
+
+    renderAuthRoutes(`/auth/loading#id_token=${planted}&state=forged`)
+
+    await waitFor(() => expect(path()).toBe('/auth/error?reason=google-signin'))
+    expect(fetch).not.toHaveBeenCalled()
+    expect(getToken()).toBeNull()
   })
 
   /**
