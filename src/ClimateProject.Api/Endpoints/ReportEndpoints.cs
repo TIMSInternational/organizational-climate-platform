@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Reports;
 using ClimateProject.Domain.Entities;
@@ -24,16 +25,13 @@ public static class ReportEndpoints
         => currentUser.Role == Roles.SuperAdmin
            || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
 
+    // PersonaExternalId first, then Id -- see ActingUserResolver for why the order is
+    // load-bearing. The Guid.Empty fallback for an unresolvable caller is pre-existing
+    // behaviour, deliberately left alone by #285: `reports.created_by` is a required FK to
+    // `users` (ReportConfiguration), so it fails the insert rather than filing the row
+    // against a real account. Fixing that is a separate change with its own status code.
     private static async Task<Guid> ResolveCurrentUserIdAsync(CurrentUser currentUser, ClimateProjectDbContext db, CancellationToken cancellationToken)
-    {
-        if (Guid.TryParse(currentUser.Sub, out var userId))
-        {
-            var byId = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
-            if (byId is not null) return byId.Id;
-        }
-        var byExternalId = await db.Users.FirstOrDefaultAsync(u => u.PersonaExternalId == currentUser.Sub, cancellationToken);
-        return byExternalId?.Id ?? Guid.Empty;
-    }
+        => await ActingUserResolver.ResolveIdAsync(currentUser, db, cancellationToken) ?? Guid.Empty;
 
     private static async Task<IResult> ListAsync(Guid companyId, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {

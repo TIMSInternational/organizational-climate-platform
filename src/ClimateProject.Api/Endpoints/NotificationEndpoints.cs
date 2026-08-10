@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using System.Security.Claims;
 using System.Text.Json;
+using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Domain.Entities;
@@ -70,28 +71,20 @@ public static class NotificationEndpoints
     /// The acting user's own row id.
     ///
     /// The <c>sub</c> claim is <c>PersonaExternalId ?? Id</c> (see <c>AuthEndpoints</c>), so
-    /// both shapes have to be tried. Returns null rather than <see cref="Guid.Empty"/> when
-    /// neither resolves: an unresolvable caller must get an explicit 403, not be silently
-    /// treated as the owner of every row whose <c>user_id</c> happens to be all zeroes.
+    /// both shapes have to be tried, and <c>PersonaExternalId</c> has to be tried first --
+    /// <see cref="ActingUserResolver"/> carries the argument and #285 the fix. This routine
+    /// had them the other way round, which under a collision handed the caller another
+    /// user's inbox and consent.
+    ///
+    /// Returns null rather than <see cref="Guid.Empty"/> when neither resolves: an
+    /// unresolvable caller must get an explicit 403, not be silently treated as the owner of
+    /// every row whose <c>user_id</c> happens to be all zeroes.
     /// </summary>
-    private static async Task<Guid?> ResolveCurrentUserIdAsync(
+    private static Task<Guid?> ResolveCurrentUserIdAsync(
         CurrentUser currentUser,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
-    {
-        if (Guid.TryParse(currentUser.Sub, out var userId)
-            && await db.Users.AnyAsync(u => u.Id == userId, cancellationToken))
-        {
-            return userId;
-        }
-
-        var byExternalId = await db.Users
-            .Where(u => u.PersonaExternalId == currentUser.Sub)
-            .Select(u => (Guid?)u.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        return byExternalId;
-    }
+        => ActingUserResolver.ResolveIdAsync(currentUser, db, cancellationToken);
 
     // Declared before ToDetail below: static field initialisers run in textual order, and
     // the compiled delegate is built from this expression.

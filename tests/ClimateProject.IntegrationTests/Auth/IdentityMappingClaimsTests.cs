@@ -32,8 +32,10 @@ public class IdentityMappingClaimsTests : IAsyncLifetime
 
     public Task DisposeAsync() => Task.CompletedTask;
 
-    private static string DecodeSubClaim(string token)
-        => new JwtSecurityTokenHandler().ReadJwtToken(token).Claims.First(c => c.Type == "sub").Value;
+    private static string DecodeSubClaim(string token) => DecodeClaim(token, "sub");
+
+    private static string DecodeClaim(string token, string type)
+        => new JwtSecurityTokenHandler().ReadJwtToken(token).Claims.First(c => c.Type == type).Value;
 
     [Fact]
     public async Task Login_uses_fresh_guid_as_sub_when_PersonaExternalId_is_not_set()
@@ -137,6 +139,65 @@ public class IdentityMappingClaimsTests : IAsyncLifetime
         userTwo.PersonaExternalId = "duplicate-legacy-id";
 
         await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+    }
+
+    /// <summary>
+    /// #285: /auth/refresh must re-mint a token for the caller's own row, even when their
+    /// <c>sub</c> spells another user's <c>Id</c>.
+    ///
+    /// The filtered unique index proved above stops two users *sharing* a
+    /// <c>persona_external_id</c>. It does nothing about user A's <c>persona_external_id</c>
+    /// equalling user B's <c>id</c> — different columns, and the column is a free-form
+    /// 64-character string, so a canonical Guid is a legal value. #154's ETL is the feature
+    /// that will start filling it from legacy ids.
+    ///
+    /// Until #285 this endpoint resolved with a single unordered
+    /// <c>Id == userId || PersonaExternalId == sub</c> predicate, so under this collision it
+    /// returned whichever row Postgres reached first and could mint a token carrying the
+    /// victim's identity. The <c>sub</c> claim cannot detect that — a token minted for the
+    /// victim carries the victim's own Id as <c>sub</c>, which is the same string — so this
+    /// asserts on <c>email</c>, the claim that says who the new token is for.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_never_re_mints_for_the_user_whose_id_a_guid_shaped_external_id_matches()
+    {
+        var client = _factory.CreateClient();
+        var victimEmail = $"collision-victim-{Guid.NewGuid():N}@{_emailDomain}";
+        var colliderEmail = $"collision-collider-{Guid.NewGuid():N}@{_emailDomain}";
+        (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Victim", victimEmail, "a-good-password")))
+            .EnsureSuccessStatusCode();
+        (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Collider", colliderEmail, "a-good-password")))
+            .EnsureSuccessStatusCode();
+
+        Guid victimId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var victim = await db.Users.FirstAsync(u => u.Email == victimEmail);
+            var collider = await db.Users.FirstAsync(u => u.Email == colliderEmail);
+            victimId = victim.Id;
+            Assert.NotEqual(victim.Id, collider.Id);
+
+            collider.PersonaExternalId = victim.Id.ToString();
+            await db.SaveChangesAsync();
+        }
+
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(colliderEmail, "a-good-password"));
+        var loginToken = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
+
+        // The collider's own sub is now the victim's Id, spelled exactly.
+        Assert.Equal(victimId.ToString(), DecodeSubClaim(loginToken));
+        Assert.Equal(colliderEmail, DecodeClaim(loginToken, "email"));
+
+        using var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "/auth/refresh");
+        refreshRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginToken);
+        var refresh = await client.SendAsync(refreshRequest);
+
+        Assert.True(refresh.IsSuccessStatusCode, $"Expected success, got {(int)refresh.StatusCode}: {await refresh.Content.ReadAsStringAsync()}");
+        var refreshToken = (await refresh.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
+
+        Assert.Equal(colliderEmail, DecodeClaim(refreshToken, "email"));
+        Assert.Equal("Collider", DecodeClaim(refreshToken, "name"));
     }
 
     [Fact]

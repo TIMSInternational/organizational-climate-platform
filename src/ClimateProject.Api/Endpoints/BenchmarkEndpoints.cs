@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Reports;
 using ClimateProject.Domain.Entities;
@@ -172,16 +173,13 @@ public static class BenchmarkEndpoints
         return Results.Json(await LoadDetailAsync(db, id, cancellationToken), statusCode: 201);
     }
 
+    // PersonaExternalId first, then Id -- see ActingUserResolver for why the order is
+    // load-bearing. The Guid.Empty fallback for an unresolvable caller is pre-existing
+    // behaviour, deliberately left alone by #285: `benchmarks.created_by` is a required FK
+    // to `users` (BenchmarkConfiguration), so it fails the insert rather than filing the row
+    // against a real account.
     private static async Task<Guid> ResolveCurrentUserIdAsync(CurrentUser currentUser, ClimateProjectDbContext db, CancellationToken cancellationToken)
-    {
-        if (Guid.TryParse(currentUser.Sub, out var userId))
-        {
-            var byId = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
-            if (byId is not null) return byId.Id;
-        }
-        var byExternalId = await db.Users.FirstOrDefaultAsync(u => u.PersonaExternalId == currentUser.Sub, cancellationToken);
-        return byExternalId?.Id ?? Guid.Empty;
-    }
+        => await ActingUserResolver.ResolveIdAsync(currentUser, db, cancellationToken) ?? Guid.Empty;
 
     private static async Task<BenchmarkDetail> LoadDetailAsync(ClimateProjectDbContext db, Guid id, CancellationToken cancellationToken)
     {

@@ -644,6 +644,70 @@ public class NotificationEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// #285: the self-service surface must resolve to the caller's own row, even when their
+    /// <c>sub</c> spells another user's <c>Id</c>.
+    ///
+    /// <c>persona_external_id</c> is a free-form 64-character string, so nothing stops one
+    /// being a Guid in canonical form -- #154's ETL is the feature that will start filling
+    /// the column from legacy ids. The collider's <c>sub</c> is minted from their own
+    /// <c>PersonaExternalId</c> (<c>PersonaExternalId ?? Id</c>, AuthEndpoints), which here
+    /// is the victim's <c>Id</c>.
+    ///
+    /// This endpoint resolved <c>Id</c> first until #285, which handed the collider the
+    /// victim's inbox: their notifications readable, and markable read on their behalf. That
+    /// is the same rule <c>A_user_cannot_read_or_mark_read_another_users_notifications</c>
+    /// pins for the ordinary case, reached by a different route.
+    /// </summary>
+    [Fact]
+    public async Task A_guid_shaped_external_id_never_opens_the_inbox_of_the_user_whose_id_it_matches()
+    {
+        var adminClient = await AuthenticatedClientAsync(Roles.CompanyAdmin);
+
+        var victimEmail = $"{Guid.NewGuid():N}@{_companyDomain}";
+        var colliderEmail = $"{Guid.NewGuid():N}@{_companyDomain}";
+        var client = Factory.CreateClient();
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Victim", victimEmail, "a-good-password"))).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Collider", colliderEmail, "a-good-password"))).StatusCode);
+
+        Guid victimId = Guid.Empty;
+        Guid colliderId = Guid.Empty;
+        await WithDbAsync(async db =>
+        {
+            var victim = await db.Users.FirstAsync(u => u.Email == victimEmail);
+            var collider = await db.Users.FirstAsync(u => u.Email == colliderEmail);
+            collider.PersonaExternalId = victim.Id.ToString();
+            await db.SaveChangesAsync();
+            victimId = victim.Id;
+            colliderId = collider.Id;
+        });
+        Assert.NotEqual(victimId, colliderId);
+
+        var forVictim = (await (await adminClient.PostAsJsonAsync("/notifications", Request(victimId, _companyId)))
+            .Content.ReadFromJsonAsync<NotificationDetail>())!;
+        var forCollider = (await (await adminClient.PostAsJsonAsync("/notifications", Request(colliderId, _companyId)))
+            .Content.ReadFromJsonAsync<NotificationDetail>())!;
+
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(colliderEmail, "a-good-password"));
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token);
+
+        var inbox = await (await client.GetAsync("/notifications/mine"))
+            .Content.ReadFromJsonAsync<NotificationListResponse>();
+        Assert.Contains(inbox!.Notifications, n => n.Id == forCollider.Id);
+        Assert.DoesNotContain(inbox.Notifications, n => n.Id == forVictim.Id);
+
+        // ...and the collider cannot mark the victim's notification read on their behalf.
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await client.PostAsync($"/notifications/{forVictim.Id}/read", null)).StatusCode);
+    }
+
+    /// <summary>
     /// Returns a scripted outcome and records who it was asked to deliver to, so the failure
     /// branches of the dispatch path are reachable in a test and the recipient handed across
     /// the seam can be asserted on.

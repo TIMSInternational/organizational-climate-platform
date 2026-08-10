@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Profile;
@@ -87,70 +88,29 @@ public static class ProfileEndpoints
     /// <summary>
     /// The acting user's own row -- the only row any handler in this file may touch.
     ///
-    /// The <c>sub</c> claim is <c>PersonaExternalId ?? Id</c> (see <c>AuthEndpoints</c>), so
-    /// both shapes have to be tried. Its own private copy rather than a call into
-    /// <c>NotificationEndpoints</c>, matching how <c>ReportEndpoints</c>,
-    /// <c>BenchmarkEndpoints</c> and <c>NotificationTemplateEndpoints</c> each carry theirs:
-    /// the endpoint files in this directory do not reach into one another.
+    /// The whole authorization argument in the class remarks above rests on this one call.
+    /// <see cref="ActingUserResolver"/> carries the reasoning: the <c>sub</c> claim is
+    /// <c>PersonaExternalId ?? Id</c>, <c>PersonaExternalId</c> has to be tried FIRST, and the
+    /// order cannot be expressed in an unordered <c>WHERE ... OR ...</c>. If it were tried
+    /// second, a caller whose <c>PersonaExternalId</c> spells another user's <c>Id</c> would
+    /// land on that user for every route in this file -- read, rename, preferences, password
+    /// change.
     ///
-    /// ## PersonaExternalId is tried FIRST, and the order is load-bearing
-    ///
-    /// <c>PersonaExternalId</c> is a free-form legacy string of up to 64 characters, so
-    /// nothing stops one from being a Guid in canonical form -- and #154's ETL is the feature
-    /// that will start populating the column from legacy Mongo ids. The moment user A's
-    /// <c>PersonaExternalId</c> equals user B's <c>Id</c>, an Id-first resolver hands A's
-    /// token B's row: A's <c>sub</c> is minted from their own <c>PersonaExternalId</c>, the
-    /// Id lookup finds B, and every route in this file -- read, rename, preferences, password
-    /// change -- lands on B. That defeats the whole authorization argument in the class
-    /// remarks above, which rests entirely on this one function.
-    ///
-    /// Trying <c>PersonaExternalId</c> first is unambiguous, because that is the order the
-    /// claim was minted in: if the <c>sub</c> matches any row's <c>PersonaExternalId</c>
-    /// (uniquely indexed, see <c>UserConfiguration</c>), that row is by construction the one
-    /// the token was issued for. Only a <c>sub</c> that matches no <c>PersonaExternalId</c>
-    /// can have been minted from an <c>Id</c>.
-    ///
-    /// This is deliberately NOT the shape the rest of the directory uses, and the difference
-    /// is worth knowing before somebody "makes it consistent":
-    ///
-    /// * <c>ReportEndpoints</c>, <c>BenchmarkEndpoints</c>, <c>NotificationEndpoints</c>,
-    ///   <c>NotificationTemplateEndpoints</c> and <c>DemographicSnapshotEndpoints</c> all try
-    ///   <c>Id</c> first. Each carries the same latent misresolution; none is this issue's to
-    ///   change, and none of them writes a credential.
-    /// * <c>AuthEndpoints.RefreshAsync</c> states this rule in prose ("match on
-    ///   PersonaExternalId first") but implements it as a single
-    ///   <c>Id == userId || PersonaExternalId == sub</c> predicate, which under a collision
-    ///   returns whichever row Postgres reaches first. Its comment is the intent; the code
-    ///   here is the intent written out.
-    ///
-    /// Two queries rather than one OR, on purpose: the order has to be in the C#, because it
-    /// cannot be expressed in an unordered <c>WHERE ... OR ...</c>. The second only runs for
-    /// the overwhelmingly common case where the caller has no <c>PersonaExternalId</c> at all.
+    /// This file held the only correct copy of that rule when #136 landed. #285 moved it into
+    /// <see cref="ActingUserResolver"/> and pointed the five Id-first resolvers it names at
+    /// it, along with <c>AuthEndpoints.RefreshAsync</c>, which stated the rule in prose and
+    /// implemented an unordered <c>OR</c>. "Make it consistent" is no longer a route back
+    /// into the bug.
     ///
     /// Returns null rather than a default when nothing resolves, and every caller turns that
     /// into a 403. An unresolvable caller must never fall through to "the row whose id is
     /// all zeroes" or to "the first user".
     /// </summary>
-    private static async Task<User?> ResolveCurrentUserAsync(
+    private static Task<User?> ResolveCurrentUserAsync(
         CurrentUser currentUser,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
-    {
-        var byExternalId = await db.Users.FirstOrDefaultAsync(
-            u => u.PersonaExternalId == currentUser.Sub,
-            cancellationToken);
-        if (byExternalId is not null)
-        {
-            return byExternalId;
-        }
-
-        if (Guid.TryParse(currentUser.Sub, out var userId))
-        {
-            return await db.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
-        }
-
-        return null;
-    }
+        => ActingUserResolver.ResolveAsync(currentUser, db, cancellationToken);
 
     private static async Task<ProfileResponse> ToResponseAsync(
         User user,
