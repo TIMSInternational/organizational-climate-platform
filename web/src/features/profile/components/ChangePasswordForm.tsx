@@ -19,7 +19,7 @@ export interface ChangePasswordFormProps {
 /**
  * The caller's own password change.
  *
- * ## Three properties this form must keep
+ * ## Four properties this form must keep
  *
  * 1. **The current password is asked for, always.** It is what stops an unattended session
  *    from becoming a permanent account takeover, and it is verified server-side — this
@@ -32,6 +32,21 @@ export interface ChangePasswordFormProps {
  *    branch nothing could reach.
  * 3. **Every field is cleared on success.** Leaving a password sitting in an input after the
  *    save has completed serves nothing and survives a screen share.
+ * 4. **The reader is told this does not sign their other devices out** — always, before they
+ *    submit, not only in a success message. See below.
+ *
+ * ## Other sessions stay signed in. Issue #284.
+ *
+ * The API issues a stateless 24-hour JWT and has no way to revoke one: no denylist, no
+ * security stamp, no refresh-token table. A password change writes the new hash and nothing
+ * else, so a session that is already open — including an attacker's — keeps working for up
+ * to 24 hours.
+ *
+ * Somebody changing their password on this form is quite likely doing it *because* they
+ * think they were compromised, which makes the gap worth a sentence of standing copy rather
+ * than a silence. `profile.passwordOtherSessionsNote` is rendered unconditionally next to
+ * the submit button, and a test asserts it is there. Delete both when #284 lands, not
+ * before.
  *
  * The server's own rejection text (wrong current password, policy failures) is rendered
  * verbatim rather than replaced with a generic message: "Password must be at least 12
@@ -124,6 +139,10 @@ export default function ChangePasswordForm({ onSubmit }: ChangePasswordFormProps
               setConfirmPassword(next)
             }}
           />
+
+          {/* Unconditional, and above the button rather than in the success alert: it is
+              something to know before choosing to submit, not afterwards. */}
+          <p className="text-sm text-fg-tertiary">{t('profile.passwordOtherSessionsNote')}</p>
 
           <div>
             <Button type="submit" disabled={submitting}>

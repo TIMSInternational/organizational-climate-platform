@@ -37,7 +37,11 @@ public static class ProfilePreferenceUpdate
 
     /// <summary>
     /// The default in <c>UserConfiguration</c>'s DDL and in the CLR initializer on
-    /// <c>UserPreferences.Theme</c>. A unit test asserts all three agree.
+    /// <c>UserPreferences.Theme</c>. <c>ProfilePreferenceUpdateTests</c>'
+    /// <c>The_default_theme_matches_the_domain_initializer_and_the_ddl</c> asserts all three
+    /// agree -- including the DDL one, read off the EF model rather than assumed, because a
+    /// row written by the ETL (#154) or by raw SQL gets the DDL default and never runs the
+    /// CLR initializer.
     /// </summary>
     public const string DefaultTheme = ThemeLight;
 
@@ -63,6 +67,14 @@ public static class ProfilePreferenceUpdate
     /// <c>TimeZoneInfo</c> when a digest is scheduled, and "looks like a timezone" is not
     /// the property that matters there. <see cref="UtcTimezone"/> is accepted unconditionally
     /// so the column default stays writable even on a host with no tz database.
+    ///
+    /// **This makes the API depend on the host's tz database**, which it did not before --
+    /// this is its first runtime <c>TimeZoneInfo</c> lookup. Fine today: <c>Dockerfile</c>
+    /// runs on Debian-based <c>mcr.microsoft.com/dotnet/aspnet:10.0</c>, which ships tzdata.
+    /// On an Alpine variant every non-UTC id would be rejected outright and users would be
+    /// unable to set their own timezone. <c>Dockerfile.workers</c> already carries the same
+    /// warning for the digest scheduler, where the failure is quieter (silent UTC rather
+    /// than a 400); both images must stay non-Alpine.
     /// </summary>
     public static bool IsValidTimezone(string? value)
     {

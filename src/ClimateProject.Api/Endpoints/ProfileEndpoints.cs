@@ -34,6 +34,11 @@ namespace ClimateProject.Api.Endpoints;
 /// shape as the self-service half of <c>NotificationEndpoints</c>, and there is a test that
 /// a second user's data is unreachable from here.
 ///
+/// The whole of that argument rests on one function, <c>ResolveCurrentUserAsync</c> --
+/// "the caller's own token" is only a guarantee if the token resolves to the caller. Read
+/// its remarks before changing it; the order it tries the two <c>sub</c> shapes in is not
+/// a style choice.
+///
 /// ## Preferences: one store, two views
 ///
 /// <c>/profile/preferences</c> does not introduce a second preferences store. Its
@@ -88,6 +93,40 @@ public static class ProfileEndpoints
     /// <c>BenchmarkEndpoints</c> and <c>NotificationTemplateEndpoints</c> each carry theirs:
     /// the endpoint files in this directory do not reach into one another.
     ///
+    /// ## PersonaExternalId is tried FIRST, and the order is load-bearing
+    ///
+    /// <c>PersonaExternalId</c> is a free-form legacy string of up to 64 characters, so
+    /// nothing stops one from being a Guid in canonical form -- and #154's ETL is the feature
+    /// that will start populating the column from legacy Mongo ids. The moment user A's
+    /// <c>PersonaExternalId</c> equals user B's <c>Id</c>, an Id-first resolver hands A's
+    /// token B's row: A's <c>sub</c> is minted from their own <c>PersonaExternalId</c>, the
+    /// Id lookup finds B, and every route in this file -- read, rename, preferences, password
+    /// change -- lands on B. That defeats the whole authorization argument in the class
+    /// remarks above, which rests entirely on this one function.
+    ///
+    /// Trying <c>PersonaExternalId</c> first is unambiguous, because that is the order the
+    /// claim was minted in: if the <c>sub</c> matches any row's <c>PersonaExternalId</c>
+    /// (uniquely indexed, see <c>UserConfiguration</c>), that row is by construction the one
+    /// the token was issued for. Only a <c>sub</c> that matches no <c>PersonaExternalId</c>
+    /// can have been minted from an <c>Id</c>.
+    ///
+    /// This is deliberately NOT the shape the rest of the directory uses, and the difference
+    /// is worth knowing before somebody "makes it consistent":
+    ///
+    /// * <c>ReportEndpoints</c>, <c>BenchmarkEndpoints</c>, <c>NotificationEndpoints</c>,
+    ///   <c>NotificationTemplateEndpoints</c> and <c>DemographicSnapshotEndpoints</c> all try
+    ///   <c>Id</c> first. Each carries the same latent misresolution; none is this issue's to
+    ///   change, and none of them writes a credential.
+    /// * <c>AuthEndpoints.RefreshAsync</c> states this rule in prose ("match on
+    ///   PersonaExternalId first") but implements it as a single
+    ///   <c>Id == userId || PersonaExternalId == sub</c> predicate, which under a collision
+    ///   returns whichever row Postgres reaches first. Its comment is the intent; the code
+    ///   here is the intent written out.
+    ///
+    /// Two queries rather than one OR, on purpose: the order has to be in the C#, because it
+    /// cannot be expressed in an unordered <c>WHERE ... OR ...</c>. The second only runs for
+    /// the overwhelmingly common case where the caller has no <c>PersonaExternalId</c> at all.
+    ///
     /// Returns null rather than a default when nothing resolves, and every caller turns that
     /// into a 403. An unresolvable caller must never fall through to "the row whose id is
     /// all zeroes" or to "the first user".
@@ -97,16 +136,20 @@ public static class ProfileEndpoints
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
-        if (Guid.TryParse(currentUser.Sub, out var userId))
+        var byExternalId = await db.Users.FirstOrDefaultAsync(
+            u => u.PersonaExternalId == currentUser.Sub,
+            cancellationToken);
+        if (byExternalId is not null)
         {
-            var byId = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
-            if (byId is not null)
-            {
-                return byId;
-            }
+            return byExternalId;
         }
 
-        return await db.Users.FirstOrDefaultAsync(u => u.PersonaExternalId == currentUser.Sub, cancellationToken);
+        if (Guid.TryParse(currentUser.Sub, out var userId))
+        {
+            return await db.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+        }
+
+        return null;
     }
 
     private static async Task<ProfileResponse> ToResponseAsync(
@@ -251,6 +294,25 @@ public static class ProfileEndpoints
     /// permanent account takeover. It is verified with the same
     /// <see cref="IPasswordHasher"/> as login, so a wrong password fails here exactly as it
     /// would there.
+    ///
+    /// ## This does NOT sign other sessions out. Issue #284.
+    ///
+    /// Read the paragraph above narrowly: it stops a *future* login with the old password.
+    /// It does not touch a session that is already open. <c>JwtTokenService</c> issues a
+    /// stateless 24-hour HS256 token and there is nothing to revoke it with -- no denylist,
+    /// no security stamp, no refresh-token table -- and this handler writes
+    /// <c>PasswordHash</c> and nothing else, because there is nothing else to write. A token
+    /// minted before the change validates exactly as well after it, for up to 24 hours.
+    ///
+    /// That matters most in the case the feature exists for: somebody changing their
+    /// password *because they think they were compromised* is not, by this act, uncompromised.
+    /// The same is true of <c>POST /auth/admin/reset-credentials</c>.
+    ///
+    /// Closing the gap is new infrastructure plus a change to every token-validation path,
+    /// which is #284's, not this issue's. What #136 owes is that nobody -- user or
+    /// maintainer -- believes otherwise: the form says so in both languages
+    /// (<c>profile.passwordOtherSessionsNote</c>) and this docstring says so here. Do not
+    /// summarise this route as "ends the compromise" anywhere.
     ///
     /// Note what this route does NOT do, in contrast with
     /// <c>POST /auth/admin/reset-credentials</c>: it accepts no user id, requires no role,

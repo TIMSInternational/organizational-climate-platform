@@ -2,6 +2,8 @@ using ClimateProject.Application.Localization;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Profile;
 using ClimateProject.Domain.Entities;
+using ClimateProject.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace ClimateProject.UnitTests.Profile;
 
@@ -196,9 +198,26 @@ public class ProfilePreferenceUpdateTests
     /// has never touched their settings has to see one value, not three.
     /// </summary>
     [Fact]
-    public void The_default_theme_matches_the_domain_initializer()
+    public void The_default_theme_matches_the_domain_initializer_and_the_ddl()
     {
         Assert.Equal(ProfilePreferenceUpdate.DefaultTheme, new UserPreferences().Theme);
         Assert.Contains(ProfilePreferenceUpdate.DefaultTheme, ProfilePreferenceUpdate.ValidThemes);
+
+        // The third of the three. GetDefaultValue() is the DDL default, not the CLR
+        // initializer -- a row written by the ETL (#154) or by raw SQL gets this one and
+        // never runs the object initializer above, so "all three agree" is not provable
+        // without it. Same technique as NotificationPreferenceTests, and it needs no
+        // database: model building is entirely offline.
+        var options = new DbContextOptionsBuilder<ClimateProjectDbContext>()
+            .UseNpgsql("Host=localhost;Database=model-only")
+            .Options;
+        using var db = new ClimateProjectDbContext(options);
+        var theme = db.Model.FindEntityType(typeof(User))!
+            .FindNavigation(nameof(User.Preferences))!
+            .TargetEntityType
+            .FindProperty(nameof(UserPreferences.Theme))!;
+
+        Assert.Equal("preferences_theme", theme.GetColumnName());
+        Assert.Equal(ProfilePreferenceUpdate.DefaultTheme, theme.GetDefaultValue());
     }
 }

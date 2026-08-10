@@ -57,10 +57,24 @@ export interface ProfilePreferencesFormProps {
  * stores and then ignores. So a successful save writes both, and the page changes language
  * and theme immediately.
  *
- * The server copy is not redundant with the browser copy — it is what makes the choice
- * follow the person to another device, and what lets outbound mail be composed in their
- * language (`InvitationEmailComposer` already reads `Preferences.Language`). The browser
- * copy is what survives a cold boot before any API call has returned.
+ * The server copy is not redundant with the browser copy: it is what lets outbound mail be
+ * composed in the reader's language — `InvitationEmailComposer`, `NotificationRecipient`
+ * and `ScheduledNotificationCopy` all read `Preferences.Language`, none of which the
+ * browser could answer for. The browser copy is what the app boots in.
+ *
+ * ## It does not yet follow you to another device, and the copy must not claim it does
+ *
+ * Nothing hydrates these two values from the server at startup. `TranslationProvider` calls
+ * `detectLocale()`, which reads `localStorage` then `navigator`; `adminTheme.ts` reads
+ * `localStorage` only. So on a new device the UI stays in that device's language and theme
+ * until the user opens this page and presses Save, at which point the two agree again.
+ *
+ * The card's description says what is true — applied here, and used for your mail — rather
+ * than "follows you to any device", which is what it used to say. Closing the gap means
+ * hydrating locale and theme from `GET /profile/preferences` after login and reconciling
+ * that against the stored choice (which wins when they differ, and what a signed-out user
+ * gets); that is a shell/auth change, not a change to this form. Rewrite the copy in the
+ * same commit that does it, not before.
  *
  * ## What is not here
  *

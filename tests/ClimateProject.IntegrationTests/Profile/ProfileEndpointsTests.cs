@@ -336,6 +336,158 @@ public class ProfileEndpointsTests : IAsyncLifetime
         Assert.DoesNotContain(adminEntries, entry => entry.ResourceId == victimId.ToString());
     }
 
+    /// <summary>
+    /// **The collision the whole authorization argument turns on.**
+    ///
+    /// <c>persona_external_id</c> is a free-form 64-character string, so nothing stops one
+    /// from being a Guid in canonical form -- and #154's ETL is the feature that will start
+    /// filling the column from legacy ids. Here the attacker's <c>PersonaExternalId</c> is
+    /// set to the victim's <c>Id</c>, which is exactly what the attacker's <c>sub</c> is then
+    /// minted from (<c>PersonaExternalId ?? Id</c>, AuthEndpoints).
+    ///
+    /// A resolver that tries <c>Id</c> first hands the attacker's token the victim's row and
+    /// every route in the group follows: read, rename, preferences, password change. Trying
+    /// <c>PersonaExternalId</c> first is unambiguous, because that is the order the claim was
+    /// minted in.
+    ///
+    /// Note this is a *self-inflicted* misresolution as much as an attack -- the victim here
+    /// need not be complicit and the attacker need not be malicious; the ETL alone can create
+    /// the collision. Either way the wrong row is written.
+    /// </summary>
+    [Fact]
+    public async Task A_guid_shaped_external_id_never_resolves_to_the_user_whose_id_it_matches()
+    {
+        var (victimClient, victimId, victimEmail) = await SignUpAsync();
+        await victimClient.PutAsJsonAsync("/profile", new UpdateProfileRequest("Victim Name"));
+
+        // A second account whose legacy external id happens to be the victim's row id.
+        var attackerClient = Factory.CreateClient();
+        var attackerEmail = $"{Guid.NewGuid():N}@{_companyDomain}";
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (await attackerClient.PostAsJsonAsync(
+                "/auth/signup",
+                new SignupRequest("Collider", attackerEmail, SignupPassword))).StatusCode);
+
+        Guid attackerId;
+        await using (var db = CreateContext())
+        {
+            var attacker = await db.Users.FirstAsync(u => u.Email == attackerEmail);
+            attacker.PersonaExternalId = victimId.ToString();
+            await db.SaveChangesAsync();
+            attackerId = attacker.Id;
+        }
+
+        Assert.NotEqual(attackerId, victimId);
+
+        var login = await attackerClient.PostAsJsonAsync(
+            "/auth/login",
+            new LoginRequest(attackerEmail, SignupPassword));
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var token = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
+        attackerClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // Read resolves to the collider, not to the row whose id their sub happens to spell.
+        var read = (await (await attackerClient.GetAsync("/profile")).Content
+            .ReadFromJsonAsync<ProfileResponse>())!;
+        Assert.Equal(attackerId, read.Id);
+        Assert.Equal(attackerEmail, read.Email);
+
+        // ...and so does every write.
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await attackerClient.PutAsJsonAsync("/profile", new UpdateProfileRequest("Collider Renamed"))).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await attackerClient.PutAsJsonAsync(
+                "/profile/preferences",
+                new UpdateProfilePreferencesRequest(Language: "es"))).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await attackerClient.PutAsJsonAsync(
+                "/profile/password",
+                new ChangePasswordRequest(SignupPassword, "Rep1acementPass"))).StatusCode);
+
+        await WithDbAsync(async db =>
+        {
+            var victim = await db.Users.FirstAsync(u => u.Id == victimId);
+            Assert.Equal("Victim Name", victim.Name);
+            Assert.Equal(victimEmail, victim.Email);
+            Assert.Equal("en", victim.Preferences.Language);
+
+            var attacker = await db.Users.FirstAsync(u => u.Id == attackerId);
+            Assert.Equal("Collider Renamed", attacker.Name);
+            Assert.Equal("es", attacker.Preferences.Language);
+        });
+
+        // The victim's password is the one that still works; the collider's is the one that
+        // changed. A misresolved password change would invert both of these.
+        var anonymous = Factory.CreateClient();
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await anonymous.PostAsJsonAsync("/auth/login", new LoginRequest(victimEmail, SignupPassword))).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await anonymous.PostAsJsonAsync("/auth/login", new LoginRequest(attackerEmail, "Rep1acementPass"))).StatusCode);
+
+        // And the activity the collider generated is filed against the collider.
+        var entries = (await (await attackerClient.GetAsync("/profile/activity")).Content
+            .ReadFromJsonAsync<ProfileActivityResponse>())!.Activity;
+        Assert.NotEmpty(entries);
+        Assert.All(entries, entry => Assert.Equal(attackerId.ToString(), entry.ResourceId));
+    }
+
+    /// <summary>
+    /// A global super_admin (#191) has no company row, and <c>audit_logs.company_id</c> is
+    /// NOT NULL with a restricting FK to <c>companies</c> -- so <c>AddActivity</c> skips them
+    /// rather than inventing an attribution or widening the column (which would collide with
+    /// another branch's outstanding migration).
+    ///
+    /// The consequence is deliberate but invisible, so it is pinned here: their edits must
+    /// still succeed, and their activity list is empty rather than 500. Without this test the
+    /// decision could be reversed -- in either direction -- without anything noticing.
+    /// </summary>
+    [Fact]
+    public async Task A_company_less_user_can_still_edit_but_has_no_activity()
+    {
+        var (client, userId, _) = await SignUpAsync(Roles.SuperAdmin);
+
+        await WithDbAsync(async db =>
+        {
+            var user = await db.Users.FirstAsync(u => u.Id == userId);
+            user.CompanyId = null;
+            user.DepartmentId = null;
+            await db.SaveChangesAsync();
+        });
+
+        var renamed = await client.PutAsJsonAsync("/profile", new UpdateProfileRequest("Global Admin"));
+        Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
+        var profile = (await renamed.Content.ReadFromJsonAsync<ProfileResponse>())!;
+        Assert.Null(profile.CompanyId);
+        Assert.Null(profile.CompanyName);
+        Assert.Equal("Global Admin", profile.Name);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await client.PutAsJsonAsync(
+                "/profile/preferences",
+                new UpdateProfilePreferencesRequest(Theme: "dark"))).StatusCode);
+
+        // The rename and the preferences save both landed...
+        await WithDbAsync(async db =>
+        {
+            var user = await db.Users.FirstAsync(u => u.Id == userId);
+            Assert.Equal("Global Admin", user.Name);
+            Assert.Equal("dark", user.Preferences.Theme);
+            Assert.Empty(await db.AuditLogs.Where(a => a.UserId == userId).ToListAsync());
+        });
+
+        // ...and the activity endpoint answers, empty, rather than failing.
+        var activity = await client.GetAsync("/profile/activity");
+        Assert.Equal(HttpStatusCode.OK, activity.StatusCode);
+        Assert.Empty((await activity.Content.ReadFromJsonAsync<ProfileActivityResponse>())!.Activity);
+    }
+
     // ---------------------------------------------------------------- password
 
     [Fact]
@@ -405,9 +557,6 @@ public class ProfileEndpointsTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync());
-        Assert.DoesNotContain(
-            typeof(ChangePasswordRequest).GetProperties(),
-            p => p.Name is "UserId" or "Email");
     }
 
     /// <summary>

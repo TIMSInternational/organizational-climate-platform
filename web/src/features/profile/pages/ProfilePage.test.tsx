@@ -187,6 +187,22 @@ describe('ProfilePage', () => {
     expect((screen.getByLabelText(/^New password/) as HTMLInputElement).value).toBe('')
   })
 
+  /**
+   * The API has no token revocation (#284), so a password change leaves every other session
+   * signed in for up to 24 hours — and somebody on this form is quite likely there *because*
+   * they think they were compromised. The disclosure is standing copy, shown before they
+   * submit rather than in the success alert, and it must survive a refactor of this card.
+   */
+  it('warns that other sessions stay signed in, before the change is submitted', async () => {
+    renderPage()
+
+    expect(
+      await screen.findByText(/does not sign out your other devices/i),
+    ).toBeTruthy()
+    // Present from the outset, not only after a successful save.
+    expect(screen.queryByText('Your password was changed.')).toBeNull()
+  })
+
   it('surfaces the server rejection verbatim rather than a generic message', async () => {
     vi.mocked(changePassword).mockRejectedValue(new Error('Current password is incorrect'))
     renderPage()
