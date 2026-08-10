@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, act, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import MicroclimateCreatePage from './MicroclimateCreatePage'
@@ -53,20 +53,77 @@ function postBody(): Record<string, unknown> {
   return JSON.parse(String((call[1] as RequestInit).body)) as Record<string, unknown>
 }
 
+/**
+ * `fireEvent`, not `userEvent.type` — #283.
+ *
+ * `userEvent.type` dispatches one event per character and awaits a real timer between
+ * them, so every keystroke is a full round trip through React. Timed on this page with
+ * a discarded warm-up pass first, the nine interactions below cost **636ms** driven by
+ * `userEvent` and **112ms** driven by `fireEvent` on an idle machine. The worst single
+ * field is not the schedule but `Question Text`: 278.2ms for 17 characters versus
+ * 10.8ms, because `MicroclimateQuestionEditor`'s `onChange` rebuilds the whole
+ * `questions` array and re-renders the wizard on each one. The two `datetime-local`
+ * fields are 86.9ms versus 5.3ms.
+ *
+ * That gap is the whole issue: four tests walk this helper. Alternating the old and new
+ * file back to back under eight CPU hogs, the slowest single test went 2135/3082/4554ms
+ * before and 1431/1301/2734ms after — the 4554ms was 91% of vitest's 5000ms per-test
+ * default, which is the margin the issue was filed about.
+ *
+ * A controlled `Input`/`TextField` cannot tell the two apart. Both end in one `change`
+ * event carrying the final value, and both read it the same way: `Input` here takes
+ * `event.target.value` directly, and `TextField` wraps exactly that
+ * (`onChange={(event) => onChange?.(event.target.value)}` in `FormField.tsx`). What
+ * `fireEvent` cannot drive is a Radix `Select`; see `selectOption` below.
+ */
+function typeInto(label: string | RegExp, value: string) {
+  fireEvent.change(screen.getByLabelText(label), { target: { value } })
+}
+
+/**
+ * Async `act` rather than a bare `fireEvent.click`: `handleSubmit` awaits `fetch`, and
+ * the settled promise has to be flushed inside `act` or React warns and the assertion
+ * races the state update. `userEvent.click` did this flushing implicitly.
+ */
+async function press(name: string) {
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name }))
+  })
+}
+
+/**
+ * The one interaction that must stay on `userEvent`.
+ *
+ * `SelectField` renders `@radix-ui/react-select` (see `select.tsx`) — a
+ * `SelectPrimitive.Trigger` that carries `role="combobox"`, and a `SelectContent` that
+ * lives inside a `SelectPrimitive.Portal` and so is absent from the document until the
+ * trigger is opened. `fireEvent.change` has nothing to change, and no `option` exists
+ * to be found before the click. This file never fakes timers, so `userEvent` — which
+ * deadlocks under `vi.useFakeTimers()` — is safe here.
+ */
+async function selectOption(optionName: string) {
+  await userEvent.click(screen.getByRole('combobox'))
+  await userEvent.click(await screen.findByRole('option', { name: optionName }))
+}
+
 /** Walks the four content steps with the minimum a session needs. */
 async function fillMinimumSession() {
-  await userEvent.type(screen.getByLabelText(/Title/), 'Team pulse')
-  await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+  // Regex for the required fields (the label carries a `*`, see the bilingual test
+  // below); exact strings for `Start Time`/`End Time`, which are not required and so
+  // have no marker — an exact `'Title'` here fails outright, which is how this was
+  // checked rather than assumed.
+  typeInto(/Title/, 'Team pulse')
+  await press('Next')
 
-  await userEvent.type(screen.getByLabelText('Start Time'), '2026-08-07T10:00')
-  await userEvent.type(screen.getByLabelText('End Time'), '2026-08-07T10:20')
-  await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+  typeInto('Start Time', '2026-08-07T10:00')
+  typeInto('End Time', '2026-08-07T10:20')
+  await press('Next')
 
-  await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+  await press('Next')
 
-  await userEvent.click(screen.getByRole('button', { name: 'Add Question' }))
-  await userEvent.type(screen.getByLabelText(/Question Text/), 'How was the week?')
-  await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+  await press('Add Question')
+  typeInto(/Question Text/, 'How was the week?')
+  await press('Next')
 }
 
 beforeEach(() => {
@@ -95,7 +152,7 @@ describe('MicroclimateCreatePage', () => {
   it('blocks the first step until there is a title, and says why', async () => {
     renderPage()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+    await press('Next')
 
     expect(screen.getByRole('alert').textContent).toContain('Enter a title.')
     // Still on Basics: the reason is shown, the step does not advance.
@@ -106,7 +163,7 @@ describe('MicroclimateCreatePage', () => {
     renderPage()
     await fillMinimumSession()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Create microclimate' }))
+    await press('Create microclimate')
 
     await waitFor(() => expect(screen.getByText('Session page')).toBeTruthy())
 
@@ -145,7 +202,7 @@ describe('MicroclimateCreatePage', () => {
         status: 400,
       }),
     )
-    await userEvent.click(screen.getByRole('button', { name: 'Create microclimate' }))
+    await press('Create microclimate')
 
     expect(await screen.findByText(/Template .* not found/)).toBeTruthy()
     // It did not navigate: the wizard is still on screen with everything typed
@@ -158,10 +215,10 @@ describe('MicroclimateCreatePage', () => {
     renderPage()
     await fillMinimumSession()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Back' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Back' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Back' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Back' }))
+    await press('Back')
+    await press('Back')
+    await press('Back')
+    await press('Back')
 
     expect((screen.getByLabelText(/Title/) as HTMLInputElement).value).toBe('Team pulse')
   })
@@ -169,13 +226,17 @@ describe('MicroclimateCreatePage', () => {
   it('demands both languages once the content language is Spanish and English', async () => {
     renderPage()
 
-    await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByRole('option', { name: 'Spanish and English' }))
+    await selectOption('Spanish and English')
 
-    // Regex, not an exact string: `FormLabel` appends a `*` for a required field, so
-    // the label's text content is "Title (English)*".
-    await userEvent.type(await screen.findByLabelText(/Title \(English\)/), 'Team pulse')
-    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+    // Regex, not an exact string. `FormLabel` itself adds nothing; `FormField.tsx`
+    // renders `<span aria-hidden="true">*</span>` as a child *inside* the `FormLabel`
+    // of a required field, and `getByLabelText` matches the label's text content rather
+    // than its accessible name — so `aria-hidden` does not hide the `*` from the query
+    // and the string to match is "Title (English)*".
+    fireEvent.change(await screen.findByLabelText(/Title \(English\)/), {
+      target: { value: 'Team pulse' },
+    })
+    await press('Next')
 
     expect(screen.getByRole('alert').textContent).toContain(
       'Enter the title in English and in Spanish.',
