@@ -24,8 +24,9 @@ public sealed record SearchScope
     public static SearchScope ForCompany(Guid companyId) => new(companyId);
 
     /// <summary>
-    /// No company filter at all. SuperAdmin only -- see <c>SearchEndpoints.ResolveScope</c>,
-    /// which is the one place allowed to call this.
+    /// No company filter at all. SuperAdmin only -- see
+    /// <c>SearchEndpoints.ResolveAccessAsync</c>, which is the one place allowed to call
+    /// this, and only on its <c>Roles.SuperAdmin</c> branch.
     /// </summary>
     public static SearchScope CrossTenant() => new(companyId: null);
 }

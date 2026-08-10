@@ -106,12 +106,13 @@ public class SearchEndpointsTests : IAsyncLifetime
     /// <summary>
     /// Disposes the factory, unlike most classes in this assembly.
     ///
-    /// xUnit constructs the class once per test, so this one class stands up 37 hosts over
-    /// its run -- several times more than any other. Each undisposed
+    /// xUnit constructs the class once per test case, so this one class stands up 42 hosts
+    /// over its run -- several times more than any other. Each undisposed
     /// <c>WebApplicationFactory</c> keeps a running host, a service provider and its share
     /// of the Npgsql pool alive for the rest of the process, and the classes that run after
     /// this one pay for all of it. Leaving them to the GC is survivable at five tests per
-    /// class and is not at thirty-seven.
+    /// class and is not at forty-two. (Count is per test *case*, so a <c>[Theory]</c>
+    /// contributes one host per <c>[InlineData]</c>, not one per method.)
     /// </summary>
     public Task DisposeAsync() => _factory.DisposeAsync().AsTask();
 
@@ -311,6 +312,50 @@ public class SearchEndpointsTests : IAsyncLifetime
         var response = await client.GetAsync($"/search?q={_tag}&companyId={_companyBId}");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    /// <summary>
+    /// The rejection must not depend on the search term.
+    ///
+    /// The blank-term short-circuit used to run before the access check, so
+    /// <c>?q=&amp;companyId=&lt;foreign&gt;</c> answered 200 with an empty body while
+    /// <c>?q=abc&amp;companyId=&lt;foreign&gt;</c> answered 403 -- the same probe, two
+    /// answers, and the quiet one is the lie ResolveAccessAsync's doc comment forbids. Note
+    /// what makes this a regression test rather than a duplicate: it is the *empty* term
+    /// that is load-bearing, and every value here is one a type-ahead sends unprompted on a
+    /// cleared box.
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("...")]
+    public async Task A_foreign_company_is_rejected_even_when_the_query_is_empty(string q)
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+
+        var search = await client.GetAsync($"/search?q={Uri.EscapeDataString(q)}&companyId={_companyBId}");
+        Assert.Equal(HttpStatusCode.Forbidden, search.StatusCode);
+
+        var suggestions = await client.GetAsync($"/search/suggestions?q={Uri.EscapeDataString(q)}&companyId={_companyBId}");
+        Assert.Equal(HttpStatusCode.Forbidden, suggestions.StatusCode);
+    }
+
+    /// <summary>
+    /// The other half of the same rule: an empty term against a company that *is* yours is
+    /// still an ordinary empty 200, not a 403. Without this, moving the access check earlier
+    /// could be "fixed" by rejecting every blank keystroke, which would be worse.
+    /// </summary>
+    [Fact]
+    public async Task An_empty_query_against_your_own_company_is_an_empty_two_hundred()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+
+        var response = await client.GetAsync($"/search?q=&companyId={_companyAId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<SearchResponse>();
+        Assert.Equal(0, body!.TotalCount);
+        Assert.All(body.Groups, g => Assert.Empty(g.Items));
     }
 
     [Fact]

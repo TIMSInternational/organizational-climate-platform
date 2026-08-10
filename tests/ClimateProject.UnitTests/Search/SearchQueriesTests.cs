@@ -91,7 +91,7 @@ public class SearchQueriesTests
 
         var sql = Statement(SearchQueries.Surveys(db.Surveys, SearchScope.CrossTenant(), Query, Limit).ToQueryString());
 
-        // Reachable only from the SuperAdmin branch of SearchEndpoints.ResolveScope. The
+        // Reachable only from the SuperAdmin branch of SearchEndpoints.ResolveAccessAsync. The
         // company id still comes back in the projection so a cross-company caller can tell
         // two identically named rows apart -- it is the WHERE that must be free of it.
         var whereIndex = sql.IndexOf("WHERE", StringComparison.Ordinal);

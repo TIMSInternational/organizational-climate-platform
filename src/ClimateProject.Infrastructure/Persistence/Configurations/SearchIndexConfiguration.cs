@@ -24,6 +24,19 @@ namespace ClimateProject.Infrastructure.Persistence.Configurations;
 /// the row: there is no trigger to forget and no backfill job to fall behind. It also
 /// means writes pay for the tsvector, which is the right trade here -- these are
 /// admin-authored rows written rarely and searched constantly.
+///
+/// <b>The read cost, stated plainly.</b> A shadow property is a mapped scalar like any
+/// other, so EF now selects <c>search_vector</c> in *every* query that materialises one of
+/// these six entities -- not only search. That includes the auth hot path, which becomes
+/// <c>SELECT ... u.search_vector ... FROM users WHERE email = @email</c>. The vector is
+/// small per row (lexemes, not the source text) and these are single-row or small-page
+/// reads, so the measured cost is bytes on the wire rather than a plan change; nothing here
+/// turns a seek into a scan. But it is a real cost paid by callers that get nothing back
+/// for it, and it is invisible at the call site because the property does not exist on the
+/// entity class -- hence this paragraph. If it ever matters, the fix is to stop mapping the
+/// column and have <c>SearchQueries</c> reach it through raw SQL instead; do not reach for
+/// per-query projections, because the point of failure is the queries nobody thought to
+/// change.
 /// </summary>
 public sealed class SearchIndexConfiguration :
     IEntityTypeConfiguration<Survey>,

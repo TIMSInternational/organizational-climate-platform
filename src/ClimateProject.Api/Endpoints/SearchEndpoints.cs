@@ -69,18 +69,28 @@ public static class SearchEndpoints
         var perType = Clamp(limit, DefaultLimit);
         var tsQuery = SearchQueryText.ToPrefixQuery(q);
 
+        // Access first, always -- see ResolveAccessAsync. A caller naming a company that is
+        // not theirs has asserted something they had no right to assert, and that is a 403
+        // whether or not they also typed a search term. Short-circuiting the blank term
+        // first would answer "no results" to a probe for a foreign tenant, which is the one
+        // answer that doc comment says must never be given.
+        //
+        // The cost is real and accepted: a cleared search box now resolves access before it
+        // returns nothing, which for a non-admin means one indexed read of the caller's own
+        // user row per blank keystroke. Cheap, and not something to optimise back by
+        // reordering these two -- the ordering is the fix.
+        var access = await ResolveAccessAsync(principal.GetCurrentUser(), companyId, db, cancellationToken);
+        if (access is DeniedAccess denied)
+        {
+            return denied.Result;
+        }
+
         // A blank or punctuation-only term is what every type-ahead sends on its first
         // keystroke and again when the box is cleared. It is not a client error, and it is
         // certainly not "match everything" -- it is an empty result.
         if (tsQuery is null)
         {
             return Results.Ok(EmptyResponse(q, requestedTypes));
-        }
-
-        var access = await ResolveAccessAsync(principal.GetCurrentUser(), companyId, db, cancellationToken);
-        if (access is DeniedAccess denied)
-        {
-            return denied.Result;
         }
 
         var groups = new List<SearchResultGroup>(requestedTypes.Count);
@@ -110,15 +120,17 @@ public static class SearchEndpoints
     {
         var total = Clamp(limit, DefaultSuggestionLimit);
         var tsQuery = SearchQueryText.ToPrefixQuery(q);
-        if (tsQuery is null)
-        {
-            return Results.Ok(new SearchSuggestionsResponse([]));
-        }
 
+        // Access before the blank-term short-circuit, for the reason SearchAsync gives.
         var access = await ResolveAccessAsync(principal.GetCurrentUser(), companyId, db, cancellationToken);
         if (access is DeniedAccess denied)
         {
             return denied.Result;
+        }
+
+        if (tsQuery is null)
+        {
+            return Results.Ok(new SearchSuggestionsResponse([]));
         }
 
         var byType = new List<IReadOnlyList<SearchResultItem>>(SearchEntityTypes.All.Length);
