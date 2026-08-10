@@ -39,12 +39,15 @@ namespace ClimateProject.Infrastructure.Scheduling;
 /// meantime because it is already invisible. The HTTP route passes no cap -- a human asking
 /// for the sweep by hand is asking it to finish.</para>
 ///
-/// <para><b>Known cost: the predicate is unindexed.</b> <c>survey_drafts</c> is indexed on
-/// <c>company_id</c> and <c>user_id</c> only, so <c>WHERE expires_at &lt;= now</c> is a
-/// sequential scan every run, on a table whose whole premise is unbounded growth. Accepted
-/// rather than overlooked: an index on <c>expires_at</c> needs a migration, migrations are
-/// rationed here, and the scan is cheap while the table is small. It stops being cheap as the
-/// table grows -- see the scheduling design doc and the follow-up issue it names.</para>
+/// <para><b>The predicate is indexed (#278).</b> It was not when this job landed:
+/// <c>survey_drafts</c> carried <c>company_id</c> and <c>user_id</c> only, so
+/// <c>WHERE expires_at &lt;= now</c> was a sequential scan every run, on a table whose whole
+/// premise is unbounded growth. <c>20260810180421_AddSurveyDraftExpiresAtIndex</c> added
+/// <c>IX_survey_drafts_expires_at</c> and both statements below now plan as index scans --
+/// asserted, on the plan rather than on the catalogue, by
+/// <c>SurveyDraftExpiryIndexTests</c>. Keep the predicate a bare comparison on the column:
+/// wrapping <c>expires_at</c> in a function or comparing it to a computed expression puts the
+/// sequential scan back with nothing to show for it.</para>
 /// </summary>
 public static class SurveyDraftRetentionJob
 {
@@ -126,12 +129,16 @@ public static class SurveyDraftRetentionJob
         // Deliberately unordered. An earlier draft sorted by `expires_at, id` so a backlog
         // drained in the order it accumulated, but nothing can observe that order -- every row
         // in this set is already hidden by the read filters, so "which expired row went first"
-        // has no consumer. What the sort did cost is real: `survey_drafts` has no index on
-        // `expires_at` (see the retention section of the scheduling design doc), so ordering
-        // forces the whole table to be scanned and top-N sorted on every tick, whereas an
-        // unordered LIMIT lets Postgres stop as soon as it has found its capful. Progress is
-        // still monotone without it -- the rows it takes are deleted, so the next tick cannot
-        // be handed the same ones and no row can be starved.
+        // has no consumer. That is the whole reason, and it is the one that has not moved.
+        //
+        // The cost argument that accompanied it has moved, and is recorded here so nobody
+        // re-derives it from a stale premise: when the sort was removed, `expires_at` was
+        // unindexed, so ordering meant a full scan plus a top-N sort every tick. Since #278
+        // added `IX_survey_drafts_expires_at`, an `ORDER BY expires_at` would be servable from
+        // the index and would cost far less than it used to. It stays removed anyway, on the
+        // "no consumer" ground alone. Progress is monotone without it either way -- the rows a
+        // tick takes are deleted, so the next tick cannot be handed the same ones and no row
+        // can be starved.
         var ids = await expired
             .Select(d => d.Id)
             // One more than the cap, purely to answer "is there more behind this?" exactly.
