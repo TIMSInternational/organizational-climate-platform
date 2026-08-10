@@ -271,7 +271,9 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
               // A collapsed group row is still a link — clicking it goes to the
               // group's own page, as it always has — but it also owns a popup, and
               // a screen reader user has no other way to know the sub-tree is
-              // there. Both properties are supported on `role=link` in ARIA 1.2.
+              // there. Set only while collapsed: with the rail open the children
+              // are rows in the tree and the `<button>` branch above carries
+              // `aria-expanded` instead, so nothing announces a popup twice.
               aria-haspopup={hasFlyout ? true : undefined}
               aria-expanded={hasFlyout ? isFlyoutOpen : undefined}
               // `title` unconditionally, not only while collapsed. Measured in
