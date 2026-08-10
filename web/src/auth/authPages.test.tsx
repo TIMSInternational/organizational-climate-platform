@@ -49,6 +49,9 @@ function renderAuthRoutes(initialEntry: string) {
           <Route path="/auth/success" element={<AuthSuccessPage />} />
           <Route element={<RequireAuth />}>
             <Route path="/surveys/my" element={<p>guarded page</p>} />
+            {/* Where `resolveInitialRoute()` sends every role since #132. Guarded,
+                so "landed here" also means the session was accepted. */}
+            <Route path="/dashboard" element={<p>dashboard</p>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -336,7 +339,10 @@ describe('Google sign-in', () => {
 
     renderAuthRoutes(callbackUrl({ email: 'ana@acme.com' }))
 
-    await waitFor(() => expect(path()).toBe('/surveys/my'))
+    // `/dashboard` since #132 — one route for every role, which is what makes it
+    // safe for a Google user, who is always minted the narrowest role there is.
+    await waitFor(() => expect(path()).toBe('/dashboard'))
+    expect(await screen.findByText('dashboard')).toBeTruthy()
     expect(getToken()).toBeTruthy()
 
     const [url, init] = vi.mocked(fetch).mock.calls[0]

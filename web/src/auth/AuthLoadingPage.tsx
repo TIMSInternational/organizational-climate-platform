@@ -5,7 +5,6 @@ import { AuthPending } from './AuthPending'
 import { pageWorthyReason } from './authReason'
 import { clearGoogleHandshake, peekGoogleHandshake, readGoogleCallback } from './googleOAuth'
 import { setToken } from './token'
-import { decodeJwtPayload } from './jwt'
 import { resolveInitialRoute } from '../app/resolveInitialRoute'
 import { useTranslation } from '../i18n'
 
@@ -27,9 +26,11 @@ import { useTranslation } from '../i18n'
  *
  * ## Every exit, and why
  *
- * - **ok** → the role's own landing page via `resolveInitialRoute`. A Google user
- *   is minted `Roles.Employee`, so the old unconditional `/admin/companies` would
- *   have been a 403.
+ * - **ok** → `resolveInitialRoute()`, which is `/dashboard` for every role since
+ *   #132. This page does not read the role claim to decide that: `DashboardPage`
+ *   dispatches on the role itself and no role 403s there, which matters here
+ *   because a Google user is minted `Roles.Employee` — the narrowest role there is,
+ *   and the one an unconditional admin landing page would have 403'd.
  * - **absent** → `/login`. No token and no error means nobody came back from
  *   anywhere; somebody typed the URL. An error page for that would be a lie, and
  *   the same shape as `AuthSuccessPage`'s no-token redirect.
@@ -94,10 +95,7 @@ export default function AuthLoadingPage() {
         const { token } = await googleLogin(baseUrl, idToken)
 
         setToken(token)
-        const claims = decodeJwtPayload(token)
-        const role = typeof claims?.role === 'string' ? claims.role : undefined
-        const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
-        navigate(resolveInitialRoute(role, companyId), { replace: true })
+        navigate(resolveInitialRoute(), { replace: true })
       } catch (err) {
         const status = err instanceof AuthRequestError ? err.status : 0
         const message = err instanceof Error && err.message ? err.message : t('errors.generic')
