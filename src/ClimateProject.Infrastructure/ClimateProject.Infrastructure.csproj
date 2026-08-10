@@ -6,6 +6,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- GoogleTokenVerifier.MapPayload is the /auth/google trust decision (#280). Every
+         integration test swaps in FakeGoogleTokenVerifier, so nothing in the suite reaches
+         the real class and the check was enforced only by a comment. Exposing it to the unit
+         tests is what makes it enforced by a test instead. -->
+    <InternalsVisibleTo Include="ClimateProject.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="Google.Apis.Auth" Version="1.70.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
