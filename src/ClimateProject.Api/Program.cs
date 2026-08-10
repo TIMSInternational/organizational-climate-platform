@@ -448,6 +448,7 @@ app.MapAnalyticsInsightEndpoints();
 app.MapAIInsightEndpoints();
 app.MapNotificationEndpoints();
 app.MapDemographicSnapshotEndpoints();
+app.MapSearchEndpoints();
 app.MapSystemStatusEndpoints();
 
 app.Run();
