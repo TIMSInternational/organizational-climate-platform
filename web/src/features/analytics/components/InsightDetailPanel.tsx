@@ -2,6 +2,7 @@ import type { AIInsight } from '../api/insights'
 import { useTranslation } from '../../../i18n'
 import { Badge } from '../../../components/ui'
 import { formatMetric } from '../../../components/charts'
+import { insightPriorityLabel, insightTypeLabel } from '../insightVocabulary'
 
 export interface InsightDetailPanelProps {
   insight: AIInsight
@@ -60,10 +61,13 @@ export default function InsightDetailPanel({
       </p>
       <p>{insight.description}</p>
       <dl>
+        {/* Same vocabulary the list uses (#282) — the two surfaces show the same
+            two fields for the same row, so a value that reads "Riesgo" in the
+            table must not read "risk" one click later. */}
         <dt>{t('common.type')}</dt>
-        <dd>{insight.type}</dd>
+        <dd>{insightTypeLabel(t, insight.type)}</dd>
         <dt>{t('insights.priority')}</dt>
-        <dd>{insight.priority}</dd>
+        <dd>{insightPriorityLabel(t, insight.priority)}</dd>
         <dt>{t('insights.confidence')}</dt>
         {/* `confidenceScore` is an integer 0-100 on the entity, so it is a
             percentage already -- passing it to `formatMetric`'s percentage kind
