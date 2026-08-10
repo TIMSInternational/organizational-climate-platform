@@ -24,6 +24,22 @@ public class SurveyDraftConfiguration : IEntityTypeConfiguration<SurveyDraft>
         builder.Property(d => d.CreatedAt).HasColumnName("created_at").IsRequired();
         builder.Property(d => d.UpdatedAt).HasColumnName("updated_at").IsRequired();
 
+        // Serves the retention sweep's only predicate, `expires_at <= now`
+        // (SurveyDraftRetentionJob.PurgeAsync, and DELETE /surveys/drafts/expired behind it).
+        // Without it that predicate is a sequential scan (#278), on a table that grows with
+        // every wizard autosave session and is swept hourly once the workers host runs.
+        //
+        // Not a partial index: the useful predicate would have to be `expires_at <= now()`,
+        // and `now()` is not IMMUTABLE, so Postgres will not accept it in an index predicate.
+        //
+        // It is on expires_at alone, not (user_id, expires_at), and it does not serve the read
+        // path -- which #278 guessed it would. The reads filter
+        // `user_id = @me AND expires_at > now` (SurveyDraftEndpoints), and there the expiry half
+        // matches nearly every row, because nearly every row is live. Measured: with drafts
+        // spread over many authors the planner takes IX_survey_drafts_user_id and applies
+        // expiry as a post-index Filter, exactly as it did before this index existed.
+        builder.HasIndex(d => d.ExpiresAt);
+
         builder.HasOne<User>().WithMany().HasForeignKey(d => d.UserId);
         builder.HasOne<Company>().WithMany().HasForeignKey(d => d.CompanyId);
     }

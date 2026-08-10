@@ -71,18 +71,28 @@ sweep over a backlog is not one enormous transaction under the lease. A missed t
 nothing: the sweep is idempotent and deletes strictly by `expires_at`.
 
 The capped run is **unordered**. An earlier version took the oldest expiry first; nothing can
-observe that order, because every row in the set is already hidden by the read filters, and
-ordering forced a full scan plus a top-N sort where an unordered `LIMIT` lets Postgres stop at
-its capful. Progress stays monotone without it: the rows a tick takes are deleted, so no row
-can be handed back to the next tick and none can be starved.
+observe that order, because every row in the set is already hidden by the read filters, so the
+sort produced a difference with no consumer. (It also cost a full scan plus a top-N sort at the
+time, because `expires_at` was then unindexed; that half of the argument no longer holds — see
+below — but the "no consumer" half is the reason it stays out.) Progress stays monotone without
+it: the rows a tick takes are deleted, so no row can be handed back to the next tick and none
+can be starved.
 
-**Accepted cost: the retention predicate is unindexed (#278).** `survey_drafts` is indexed on
-`company_id` and `user_id` only, so `WHERE expires_at <= now` is a sequential scan — hourly,
+**The retention predicate is indexed (#278, closed).** `survey_drafts` was indexed on
+`company_id` and `user_id` only, so `WHERE expires_at <= now` was a sequential scan — hourly,
 forever, on a table whose whole premise is unbounded growth (the wizard autosaves a draft row
-per authoring session since #266). Deferred, not overlooked: an index on `expires_at` needs a
-migration, migrations are rationed, and the scan is cheap while the table is small. It stops
-being cheap as the table grows, which is why it is written down here and filed rather than
-carried in someone's head.
+per authoring session since #266). `20260810180421_AddSurveyDraftExpiresAtIndex` adds
+`IX_survey_drafts_expires_at`, a plain btree. Measured on 20,000 live drafts, freshly
+`ANALYZE`d: the harvest goes from a seq scan reading 364 shared buffers to an index scan
+reading 2, and the uncapped `DELETE` behind `DELETE /surveys/drafts/expired` moves the same
+way. `SurveyDraftExpiryIndexTests` asserts this on the plan of the statements the job actually
+sends, not on the presence of a row in `pg_indexes`.
+
+The index does **not** help the read path, despite `expires_at > now` appearing in every draft
+read. Those queries filter `user_id = @me` as well, and the expiry half matches nearly every
+row, so the planner uses `IX_survey_drafts_user_id` and applies expiry as a filter — measured,
+not assumed. What the index does cost is writes: every autosave re-stamps `expires_at`, so
+those `UPDATE`s are no longer HOT-eligible and maintain an index entry apiece.
 
 Dispatch calls `NotificationDelivery.ProcessDueAsync` — **the same method
 `POST /notifications/process` calls.** That logic was extracted out of `NotificationEndpoints`
