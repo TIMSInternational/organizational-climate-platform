@@ -1650,7 +1650,12 @@
   },
   "insights": {
     "description": "AI-generated findings from your survey and microclimate results",
+    "insightTitle": "Title",
     "priority": "Priority",
+    "typePattern": "Pattern",
+    "typeRisk": "Risk",
+    "typeRecommendation": "Recommendation",
+    "typePrediction": "Prediction",
     "confidence": "Confidence",
     "confidenceValue": "{score}%",
     "acknowledged": "Acknowledged",
