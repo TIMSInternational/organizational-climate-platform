@@ -5,6 +5,7 @@ using ClimateProject.Application.Localization;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
+using ClimateProject.Infrastructure.Scheduling;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClimateProject.Api.Endpoints;
@@ -505,6 +506,17 @@ public static class SurveyDraftEndpoints
     /// it deletes strictly by <c>expires_at</c> and every save pushes that out, so it can
     /// never take a draft someone is working on. It reads no draft content, which is what
     /// keeps it compatible with drafts being private to their author.
+    ///
+    /// Since #272 this is no longer the only *scheduled* caller: <c>SurveyDraftRetentionWorker</c>
+    /// is registered to run the same <see cref="SurveyDraftRetentionJob.PurgeAsync"/> hourly.
+    /// <b>Nothing executes that schedule yet.</b> The workers host is built by no workflow and
+    /// deployed as no service, so in production today this route is still the only thing that
+    /// can reclaim a row, and it still needs a human. #275 owns actually running the workers
+    /// host; until it lands, treat the sweep as manual.
+    ///
+    /// The route stays for manual use either way, and it passes no row cap -- someone invoking
+    /// the sweep by hand is asking it to finish, whereas the worker bounds its own transaction
+    /// and lets the next tick take the rest.
     /// </summary>
     private static async Task<IResult> PurgeExpiredAsync(
         ClaimsPrincipal principal,
@@ -517,12 +529,10 @@ public static class SurveyDraftEndpoints
             return Results.Forbid();
         }
 
-        var now = DateTimeOffset.UtcNow;
-        var deleted = await db.SurveyDrafts
-            .Where(d => d.ExpiresAt <= now)
-            .ExecuteDeleteAsync(cancellationToken);
+        var result = await SurveyDraftRetentionJob.PurgeAsync(
+            db, DateTimeOffset.UtcNow, maxRows: null, cancellationToken);
 
-        return Results.Ok(new PurgeExpiredDraftsResponse(deleted));
+        return Results.Ok(new PurgeExpiredDraftsResponse(result.Deleted));
     }
 
     // ------------------------------------------------------------------

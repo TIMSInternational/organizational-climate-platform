@@ -38,5 +38,13 @@ public static class WorkerJobs
     /// </summary>
     public const string ScheduledReports = "scheduled-reports";
 
-    public static readonly string[] All = [NotificationDispatch, InvitationReminders, Digests, ScheduledReports];
+    /// <summary>
+    /// Reclaims expired <c>survey_drafts</c> rows. The only maintenance job here rather than a
+    /// notification one: it exists because <c>DELETE /surveys/drafts/expired</c> had no caller
+    /// and the table has grown unattended since the wizard started autosaving (#272).
+    /// </summary>
+    public const string SurveyDraftRetention = "survey-draft-retention";
+
+    public static readonly string[] All =
+        [NotificationDispatch, InvitationReminders, Digests, ScheduledReports, SurveyDraftRetention];
 }

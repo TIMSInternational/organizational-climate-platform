@@ -12,8 +12,8 @@ namespace ClimateProject.Workers;
 /// Registers the whole scheduler in one call.
 ///
 /// <para>An extension method rather than inline wiring in <c>Program.cs</c> so that the same
-/// four jobs can be hosted either by this standalone worker process or by the API process,
-/// without the registration being written twice and drifting. That is a real choice #164 has to
+/// jobs can be hosted either by this standalone worker process or by the API process,
+/// without the registration being written twice and drifting. That is a real choice #275 has to
 /// make at cutover, and the advisory lease is what makes it a free one: the jobs behave
 /// identically whether they run in one dedicated instance or in all twenty-five API instances.
 /// The trade is operational, not correctness -- a separate service is one more thing to deploy
@@ -26,7 +26,8 @@ namespace ClimateProject.Workers;
 public static class SchedulingServiceCollectionExtensions
 {
     /// <summary>
-    /// Add the four scheduled jobs, the heartbeat registry and the liveness monitor.
+    /// Add every scheduled job in <see cref="WorkerJobs.All"/>, the heartbeat registry and the
+    /// liveness monitor.
     ///
     /// <para>Assumes the caller has already registered <c>ClimateProjectDbContext</c> and an
     /// <see cref="INotificationSender"/> -- both are shared with the API and neither should be
@@ -69,6 +70,7 @@ public static class SchedulingServiceCollectionExtensions
         services.AddHostedService<InvitationReminderWorker>();
         services.AddHostedService<DigestWorker>();
         services.AddHostedService<ScheduledReportWorker>();
+        services.AddHostedService<SurveyDraftRetentionWorker>();
         services.AddHostedService<WorkerHeartbeatMonitor>();
 
         return services;
