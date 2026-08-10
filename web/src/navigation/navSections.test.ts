@@ -179,13 +179,18 @@ describe('buildNavSections', () => {
    * documents `''` as legal, so nothing but this fails if one comes back.
    */
   it('gives every section a heading, so no rows hang under nothing', () => {
+    let swept = 0
     for (const role of ['super_admin', 'company_admin', 'employee', 'supervisor', 'leader', undefined]) {
       for (const companyId of ['company-1', undefined]) {
         for (const section of buildNavSections(role, companyId)) {
+          swept += 1
           expect(section.titleKey, `${role}/${companyId} has an unheaded section`).not.toBe('')
         }
       }
     }
+    // Guard the guard: the loop above passes vacuously if `buildNavSections`
+    // ever returns an empty array for every branch it is asked for.
+    expect(swept, 'swept no sections at all').toBeGreaterThan(0)
   })
 
   /**
@@ -194,11 +199,16 @@ describe('buildNavSections', () => {
    * so an empty section renders as a bare uppercase label.
    */
   it('gives every section at least one row', () => {
+    let swept = 0
     for (const role of ['super_admin', 'company_admin', 'employee', undefined]) {
       for (const section of buildNavSections(role, 'company-1')) {
+        swept += 1
         expect(section.items.length, `${role}: ${section.titleKey} is empty`).toBeGreaterThan(0)
       }
     }
+    // Guard the guard, as above: a role that produced no sections at all would
+    // satisfy "every section has a row" without there being one.
+    expect(swept, 'swept no sections at all').toBeGreaterThan(0)
   })
 
   it('puts Notifications last for an admin, so it does not displace their primary pages', () => {

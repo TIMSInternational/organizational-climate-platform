@@ -253,6 +253,52 @@ describe('RoleBasedNav collapsed flyout', () => {
     expect(screen.queryByRole('group', { name: group })).toBeNull()
   })
 
+  it.each(GROUPS)('dismisses $group’s flyout when focus leaves it, so Tab does not strand the panel', ({ role, group }) => {
+    // The dismissal Escape and unhover cannot stand in for: a keyboard user who
+    // Tabs past the group's last child moves focus out of the wrapper without
+    // ever pressing Escape and without a pointer being involved at all. Without
+    // this handler the panel stays over the content column for the rest of the
+    // session, because nothing else closes it until the pathname changes.
+    renderNav(buildNavSections(role, COMPANY), '/notifications', true)
+    const row = screen.getByRole('link', { name: group })
+
+    fireEvent.focus(row)
+    expect(screen.getByRole('group', { name: group })).toBeTruthy()
+    fireEvent.blur(row, { relatedTarget: document.body })
+
+    expect(screen.queryByRole('group', { name: group })).toBeNull()
+  })
+
+  it.each(GROUPS)('keeps $group’s flyout open while focus moves into it', ({ role, group, childLabel }) => {
+    // The `contains` guard, which is the whole reason the handler is on the
+    // wrapper rather than on the row: focusout fires on the way from the row to
+    // the panel's first link too, and closing there would make the flyout
+    // unreachable by keyboard — the one thing it exists to fix.
+    renderNav(buildNavSections(role, COMPANY), '/notifications', true)
+    const row = screen.getByRole('link', { name: group })
+
+    fireEvent.focus(row)
+    const target = within(screen.getByRole('group', { name: group })).getByRole('link', { name: childLabel })
+    fireEvent.blur(row, { relatedTarget: target })
+
+    expect(screen.getByRole('group', { name: group })).toBeTruthy()
+  })
+
+  it.each(GROUPS)('does not announce $group’s panel as a menu, because it is not one', ({ role, group }) => {
+    // A bare `aria-haspopup` is defined as a synonym for `aria-haspopup="menu"`,
+    // and a menu commits to a keyboard model (roving arrow-key focus, Home/End,
+    // type-ahead) this panel does not implement — it is a `role="group"` of
+    // ordinary links that Tab walks through. `aria-expanded` carries the
+    // disclosure on its own.
+    renderNav(buildNavSections(role, COMPANY), '/notifications', true)
+    const row = screen.getByRole('link', { name: group })
+
+    fireEvent.focus(row)
+
+    expect(row.getAttribute('aria-haspopup')).toBeNull()
+    expect(row.getAttribute('aria-expanded')).toBe('true')
+  })
+
   it.each(GROUPS)('closes $group’s flyout once one of its links is followed', async ({ role, group, childLabel, childPath }) => {
     // `mouseleave` cannot be relied on for this: the panel unmounts under a
     // pointer that never moved, and the pointer is over the *destination* by the
@@ -319,17 +365,104 @@ describe('RoleBasedNav collapsed flyout', () => {
  * `color` in their inline style, which used to outrank any rule in `index.css`.
  */
 describe('RoleBasedNav row states', () => {
-  const css = readFileSync(join(process.cwd(), 'src', 'index.css'), 'utf8')
+  /**
+   * `index.css` with its comments stripped, so every assertion below is about a
+   * rule rather than about prose. The comment introducing these rules names
+   * `.nav-row:hover` and `.nav-row[data-nav-state='selected']` while explaining
+   * them, so a `toContain` against the raw file passes on the commentary alone.
+   */
+  const css = readFileSync(join(process.cwd(), 'src', 'index.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
 
-  it('gives both row kinds a hover and focus-visible rule', () => {
-    for (const selector of ['.nav-row:hover', '.nav-sub-row:hover', '.nav-row:focus-visible', '.nav-sub-row:focus-visible']) {
-      expect(css, `${selector} has no rule`).toContain(selector)
+  /**
+   * The declarations of the first rule whose selector list contains `selector`.
+   *
+   * Asserting on these rather than on the selector string is what makes the
+   * stylesheet's half of this feature falsifiable: the row's fill is no longer
+   * anywhere in the DOM (see the last test in this block, which forbids it
+   * returning), so a rule that exists but declares nothing is indistinguishable
+   * from an unstyled rail to every test that only reads the rendered tree.
+   */
+  function declarationsFor(selector: string): string {
+    const at = css.indexOf(selector)
+    expect(at, `${selector} has no rule`).toBeGreaterThan(-1)
+    const open = css.indexOf('{', at)
+    return css.slice(open + 1, css.indexOf('}', open))
+  }
+
+  it.each(['.nav-row:hover', '.nav-sub-row:hover', '.nav-row:focus-visible', '.nav-sub-row:focus-visible'])(
+    'paints %s, which is the affordance the rail had none of',
+    (selector) => {
+      const declarations = declarationsFor(selector)
+      expect(declarations, `${selector} declares no background`).toMatch(/background:\s*var\(--admin-bg-hover\)/)
+      expect(declarations, `${selector} declares no text colour`).toMatch(/color:\s*var\(--admin-font-primary\)/)
+    },
+  )
+
+  it.each([".nav-row[data-nav-state='selected']", ".nav-sub-row[data-nav-state='selected']"])(
+    'fills %s with the accent, the rail’s only remaining selection affordance',
+    (selector) => {
+      const declarations = declarationsFor(selector)
+      expect(declarations, `${selector} declares no fill`).toMatch(/background:\s*var\(--admin-accent-blue\)/)
+      expect(declarations, `${selector} declares no on-accent text`).toMatch(/color:\s*var\(--admin-font-on-accent\)/)
+    },
+  )
+
+  it('keeps the selected fill on a hovered selected row', () => {
+    // Same rule, reached through the `:hover` member of its selector list, so
+    // this fails if only the resting selectors survive.
+    for (const selector of [".nav-row[data-nav-state='selected']:hover", ".nav-sub-row[data-nav-state='selected']:hover"]) {
+      expect(declarationsFor(selector), `${selector} does not keep the fill`).toMatch(
+        /background:\s*var\(--admin-accent-blue\)/,
+      )
     }
   })
 
-  it('keeps the selected fill on a hovered selected row', () => {
-    expect(css).toContain(".nav-row[data-nav-state='selected']:hover")
-    expect(css).toContain(".nav-sub-row[data-nav-state='selected']:hover")
+  it('lifts a parent-selected group out of secondary text without filling it', () => {
+    const declarations = declarationsFor(".nav-row[data-nav-state='parent-selected']")
+    expect(declarations).toMatch(/color:\s*var\(--admin-font-primary\)/)
+    expect(declarations, 'a parent row must not take the fill its child carries').not.toMatch(/background:/)
+  })
+
+  /**
+   * The other end of the same wire. Every rule above is keyed on a class, and
+   * with the colours out of the inline style an orphaned class renders as no
+   * fill and inherited text — which nothing else here can see, because the
+   * selection assertions key off `data-nav-state` and `utilityExistence.test.ts`
+   * only checks the reverse direction (a class used in `.tsx` has a rule).
+   *
+   * One case per render branch, because each can lose its class on its own: the
+   * group's disclosure `<button>`, the `<Link>` that draws both a leaf and a
+   * collapsed group, and `SubItemRow`.
+   */
+  it.each([
+    ['button' as const, 'Company Administration', 'nav-row'],
+    ['link' as const, 'Notifications', 'nav-row'],
+    ['link' as const, 'Users', 'nav-sub-row'],
+  ])('gives the %s named %s the .%s its colours are keyed to', (role, name, className) => {
+    renderNav(buildNavSections('company_admin', COMPANY), `/admin/companies/${COMPANY}/users`)
+
+    expect(screen.getByRole(role, { name }).classList.contains(className)).toBe(true)
+  })
+
+  it('gives the row that wears the selection the class the fill hangs off', () => {
+    renderNav(buildNavSections('company_admin', COMPANY), `/admin/companies/${COMPANY}/users`)
+
+    const selected = selectedRows()
+    expect(selected).toHaveLength(1)
+    // Both halves on one element: the attribute the component sets and the class
+    // the stylesheet selects. Either alone paints nothing.
+    expect(selected[0].classList.contains('nav-sub-row')).toBe(true)
+  })
+
+  it('gives the collapsed group row the class too, since it is a row like any other', () => {
+    // Collapsed, this is the `<Link>` branch standing in for its whole sub-tree,
+    // and it is the only selected row in the rail — so an orphaned class here is
+    // a rail with no visible selection at all.
+    renderNav(buildNavSections('company_admin', COMPANY), `/admin/companies/${COMPANY}/users`, true)
+
+    const selected = selectedRows()
+    expect(selected).toHaveLength(1)
+    expect(selected[0].classList.contains('nav-row')).toBe(true)
   })
 
   it('leaves the row colours to the stylesheet, so the hover rule is not outranked', async () => {
