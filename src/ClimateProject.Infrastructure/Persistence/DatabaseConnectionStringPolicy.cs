@@ -111,9 +111,12 @@ public enum TransactionPoolerAction
 /// says <see cref="SupavisorTransactionPoolerPort"/>, and a deploy of this commit that
 /// refused to start would take a service that is intermittently slow and make it entirely
 /// down — in order to complain about a value the deploy itself cannot change. The intended
-/// end state is <c>Database:RequireSessionPooler=true</c> on production, set in the same
-/// change that flips the secret, so the two move together and the port cannot silently
-/// regress afterwards. See <c>infra/aws/README.md</c> for the ordered sequence.
+/// end state is <c>Database:RequireSessionPooler=true</c> on production, set <em>after</em>
+/// the secret has been flipped and that deploy verified, so the port cannot silently regress
+/// afterwards. The two cannot move together: a deploy of this repository cannot write a
+/// Secrets Manager value, so arming the flag first is exactly the failed health check the flag
+/// exists to avoid. See <c>infra/aws/README.md</c> ("Arming the guard") for the ordered
+/// sequence.
 /// </para>
 /// </remarks>
 public static class DatabaseConnectionStringPolicy

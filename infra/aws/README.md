@@ -220,11 +220,21 @@ change to this repository.
    `infra/aws/climate-project-api-prod-service.yml` and redeploy. From then on a connection
    string on 6543 fails startup instead of logging, so the port cannot regress silently.
 
-Doing step 3 before step 1 breaks the deploy — that is the whole reason the flag exists.
-`Session_pooler_port_starts_cleanly_with_the_guard_armed` in
-`tests/ClimateProject.IntegrationTests/StartupValidationTests.cs` is the test that makes step 3
-safe to take: it proves that once the port is right, arming the flag changes nothing about
-whether the host starts.
+Doing step 3 before step 1 breaks the deploy — that is the whole reason the flag exists. Steps 1
+and 3 are therefore two separate changes, never one: a CloudFormation deploy cannot write a
+Secrets Manager value, so there is no way to move the secret and the flag together.
+
+Each step's signal is pinned by a test in
+`tests/ClimateProject.IntegrationTests/StartupValidationTests.cs`:
+
+- `Transaction_pooler_port_warns_at_startup_when_session_pooler_is_not_required` and
+  `Session_pooler_port_emits_no_transaction_pooler_warning` are what make step 2's log check
+  meaningful — the first pins that the warning is emitted on 6543 (naming `TRANSACTION pooler`
+  and #220, with `Port`/`ExpectedPort` as structured properties), the second that it stops on
+  5432. Without them, "the warning is gone" could be true because the warning no longer exists.
+- `Session_pooler_port_starts_cleanly_with_the_guard_armed` is what makes step 3 safe to take:
+  it proves that once the port is right, arming the flag changes nothing about whether the host
+  starts.
 
 **Not covered by any of this:** nothing in the deploy pipeline inspects the runtime secret. The
 `grep -qE '(^|[^0-9])6543([^0-9]|$)'` guard in `deploy-prod.yml` reads only

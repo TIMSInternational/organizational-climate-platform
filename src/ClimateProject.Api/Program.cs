@@ -64,9 +64,12 @@ builder.Services.AddOptions<DatabaseOptions>()
 
         // WARN OR THROW ON THE TRANSACTION POOLER -- THE DEPLOYMENT CHOOSES WHICH (#220).
         //
-        // Every other startup guard in this file throws unconditionally, because #189
-        // established that a deploy which boots misconfigured is worse than one that refuses
-        // to boot. This guard cannot be unconditional yet, and the reason is ordering rather
+        // The guards in this file for settings that are required in every environment -- the
+        // connection string above, InternalApiKey, TrackingJwtSecret -- throw outright, because
+        // #189 established that a deploy which boots misconfigured is worse than one that
+        // refuses to boot. The two settings that are not required everywhere, GoogleClientId
+        // and the Email block, already guard themselves conditionally instead; both are below.
+        // This guard cannot throw outright yet, and the reason is ordering rather
         // than principle: the wrong value lives in AWS Secrets Manager
         // (climate-project-api/prod/database-connection-string), not in this repository, and
         // it has not been changed yet. Throwing on today's production value would mean the
@@ -117,10 +120,18 @@ builder.Services.AddOptions<DatabaseOptions>()
 
         if (poolerAction == TransactionPoolerAction.Warn)
         {
+            // Port and ExpectedPort are passed as their own arguments, not only baked into
+            // {TransactionPoolerProblem}, so log aggregation can query the port as a field
+            // rather than by substring-matching the rendered sentence. That mattered before
+            // this rewrite and would have been lost by folding everything into one
+            // pre-rendered string.
             logger.LogWarning(
                 "{TransactionPoolerProblem} Set Database:RequireSessionPooler=true once the "
-                + "secret is on the session pooler, to make this a startup failure instead.",
-                DescribeTransactionPoolerProblem());
+                + "secret is on the session pooler, to make this a startup failure instead. "
+                + "(Port={Port}, ExpectedPort={ExpectedPort}.)",
+                DescribeTransactionPoolerProblem(),
+                policy.Port,
+                DatabaseConnectionStringPolicy.SupavisorSessionPoolerPort);
         }
 
         if (policy.MaxPoolSizeApplied)
