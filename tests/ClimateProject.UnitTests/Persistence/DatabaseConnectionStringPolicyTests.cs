@@ -149,6 +149,96 @@ public class DatabaseConnectionStringPolicyTests
         Assert.Equal(6543, effective.Port);
     }
 
+    // -- The warn-or-throw decision (Database:RequireSessionPooler). ----------------------
+
+    [Theory]
+    // The two states production moves between, in order.
+    [InlineData(true, false, TransactionPoolerAction.Warn)]   // today: wrong port, guard not armed
+    [InlineData(false, true, TransactionPoolerAction.None)]   // the goal: right port, guard armed
+    // The other two corners.
+    [InlineData(true, true, TransactionPoolerAction.Fail)]    // wrong port with the guard armed
+    [InlineData(false, false, TransactionPoolerAction.None)]  // right port, guard not armed
+    public void DecideTransactionPoolerAction_maps_the_whole_truth_table(
+        bool usesTransactionPoolerPort,
+        bool requireSessionPooler,
+        TransactionPoolerAction expected)
+    {
+        // Exhaustive on purpose -- two booleans is four rows, so there is no excuse for
+        // sampling. This decision is the one thing standing between a wrong Secrets Manager
+        // value and a production outage in either direction: too lax and #220 recurs
+        // silently, too strict and a deploy of a correct commit refuses to boot.
+        var action = DatabaseConnectionStringPolicy.DecideTransactionPoolerAction(
+            usesTransactionPoolerPort,
+            requireSessionPooler);
+
+        Assert.Equal(expected, action);
+    }
+
+    [Fact]
+    public void DecideTransactionPoolerAction_never_reports_None_for_the_transaction_pooler()
+    {
+        // The asymmetry that makes the flag a ratchet rather than a mute button: it may
+        // escalate Warn to Fail, but no value of it can turn a transaction-pooler port into
+        // silence. If this ever fails, the flag has become a way to hide #220 instead of a
+        // way to close it.
+        foreach (var requireSessionPooler in new[] { true, false })
+        {
+            var action = DatabaseConnectionStringPolicy.DecideTransactionPoolerAction(
+                usesTransactionPoolerPort: true,
+                requireSessionPooler: requireSessionPooler);
+
+            Assert.NotEqual(TransactionPoolerAction.None, action);
+        }
+    }
+
+    [Fact]
+    public void DecideTransactionPoolerAction_agrees_with_Apply_on_the_production_shaped_string()
+    {
+        // Pins the two halves together. Apply decides *whether* the port is the transaction
+        // pooler; DecideTransactionPoolerAction decides *what to do about it*. Testing them
+        // only in isolation would let the port constant and the decision drift apart while
+        // both files' own tests stayed green.
+        var defective = DatabaseConnectionStringPolicy.Apply(
+            BaseConnectionString + $";Port={DatabaseConnectionStringPolicy.SupavisorTransactionPoolerPort}");
+        var corrected = DatabaseConnectionStringPolicy.Apply(
+            BaseConnectionString + $";Port={DatabaseConnectionStringPolicy.SupavisorSessionPoolerPort}");
+
+        // With the guard armed -- the intended end state -- the current production string is
+        // a startup failure and the corrected one starts clean.
+        Assert.Equal(
+            TransactionPoolerAction.Fail,
+            DatabaseConnectionStringPolicy.DecideTransactionPoolerAction(
+                defective.UsesTransactionPoolerPort,
+                requireSessionPooler: true));
+        Assert.Equal(
+            TransactionPoolerAction.None,
+            DatabaseConnectionStringPolicy.DecideTransactionPoolerAction(
+                corrected.UsesTransactionPoolerPort,
+                requireSessionPooler: true));
+
+        // With the guard unarmed -- today -- the same string only warns, which is what lets
+        // the current deploy stay up.
+        Assert.Equal(
+            TransactionPoolerAction.Warn,
+            DatabaseConnectionStringPolicy.DecideTransactionPoolerAction(
+                defective.UsesTransactionPoolerPort,
+                requireSessionPooler: false));
+    }
+
+    [Fact]
+    public void The_session_and_transaction_pooler_ports_are_the_two_supabase_documents()
+    {
+        // The constants are what every message, guard and document in the repository quotes.
+        // Pinning them here means changing either one breaks a test that says why, rather
+        // than quietly invalidating deploy-prod.yml's grep for 6543 and the prose in
+        // infra/aws/README.md, docs/security/rotation-inventory.md and README.md.
+        Assert.Equal(6543, DatabaseConnectionStringPolicy.SupavisorTransactionPoolerPort);
+        Assert.Equal(5432, DatabaseConnectionStringPolicy.SupavisorSessionPoolerPort);
+        Assert.NotEqual(
+            DatabaseConnectionStringPolicy.SupavisorSessionPoolerPort,
+            DatabaseConnectionStringPolicy.SupavisorTransactionPoolerPort);
+    }
+
     // -- Contract edges. ------------------------------------------------------------------
 
     [Fact]

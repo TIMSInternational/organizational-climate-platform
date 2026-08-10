@@ -117,6 +117,29 @@ Resources:
                 Value: !Ref CorsAllowedOrigin
               - Name: Cors__AllowedWildcardOrigins__0
                 Value: !Ref CorsAllowedWildcardOrigin
+              # THE #220 RATCHET. Leave at "false" until the runtime secret below is on the
+              # session pooler AND that deploy has been verified. Flipping the secret and
+              # setting this to "true" are NOT one change and must not be attempted as one:
+              # they are steps 1 and 3 of the ordered sequence at the bottom of this comment.
+              #
+              # "true" makes the API refuse to start when its connection string points at
+              # Supabase's transaction pooler (port 6543), which is the configuration that
+              # caused #220: Supavisor transaction mode hands a different backend to each
+              # statement, and Npgsql holds pooled connections open across statements, so
+              # roughly half of all /ready probes hung for 30 seconds.
+              #
+              # It is "false" today because the secret is still on 6543. Setting it to "true"
+              # before flipping the secret would make the next deploy fail its health check
+              # and roll back -- the deploy cannot change a Secrets Manager value.
+              #
+              # Ordered sequence (also in infra/aws/README.md, "Arming the guard"):
+              #   1. Flip climate-project-api/prod/database-connection-string 6543 -> 5432.
+              #   2. Redeploy; confirm 20+ consecutive /ready probes return 200 and the
+              #      "TRANSACTION pooler" warning is gone from the App Runner logs.
+              #   3. Only then change this to "true" and redeploy again.
+              # Step 3 is what stops the port regressing silently later.
+              - Name: Database__RequireSessionPooler
+                Value: "false"
             RuntimeEnvironmentSecrets:
               - Name: TrackingJwtSecret
                 Value: !Ref TrackingJwtSecretArn

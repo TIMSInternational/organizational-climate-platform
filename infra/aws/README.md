@@ -26,7 +26,7 @@ error minutes in:
 | `CORS_ALLOWED_ORIGIN` | variable | Exact production frontend origin |
 | `CORS_ALLOWED_WILDCARD_ORIGIN` | variable | Vercel preview pattern |
 | `TRACKING_JWT_SECRET_ARN` | variable | Secrets Manager ARN |
-| `DATABASE_CONNECTION_STRING_SECRET_ARN` | variable | Secrets Manager ARN (runtime). The secret it points at currently holds a **port 6543** string, which is **wrong** — see "Connection pooling" below. It should be the session pooler, 5432, same as the migration string. |
+| `DATABASE_CONNECTION_STRING_SECRET_ARN` | variable | Secrets Manager ARN (runtime). The secret it points at currently holds a **port 6543** string, which is **wrong** — see "Connection pooling" below. It should be the session pooler, 5432, same as the migration string. Fixing it is steps 1–2 of "Arming the guard"; step 3 flips `Database__RequireSessionPooler` in the service template so it cannot regress. |
 | `INTERNAL_API_KEY_SECRET_ARN` | variable | Secrets Manager ARN |
 | `MIGRATION_DATABASE_CONNECTION_STRING` | **secret** | **Session pooler: the same host as the runtime string, port 5432, username `postgres.<project-ref>`.** Not 6543, and **not** `db.<project-ref>.supabase.co` — that host is IPv6-only and unreachable from GitHub Actions. See below. |
 
@@ -192,8 +192,56 @@ Until it is fixed, the API logs a **startup warning** naming #220 whenever it se
 deliberately a warning rather than a hard startup failure: the live secret still says 6543, and
 a hard guard shipped today would stop production booting on the next deploy — converting an
 intermittently-slow service into a fully-down one, to complain about a value that deploy cannot
-change. **Once the secret is flipped and a deploy comes up green, harden the warning into a
-throw** so the port cannot silently regress. The `TODO(#220)` in `Program.cs` marks the spot.
+change.
+
+#### Arming the guard: `Database:RequireSessionPooler`
+
+Whether that warning is a warning or a **startup failure** is a per-deployment setting,
+`Database:RequireSessionPooler`, in the same conditional shape as `GoogleAuth:Required`
+(see `src/ClimateProject.Api/Infrastructure/StartupOptions.cs`). It is passed to App Runner as
+the environment variable `Database__RequireSessionPooler` from
+`infra/aws/climate-project-api-prod-service.yml`, where it is currently `"false"`.
+
+The flag can only ever **escalate** the warning to a failure. There is no value of it that
+silences the warning, so it is a ratchet rather than a mute button —
+`DecideTransactionPoolerAction` never returns `None` for a transaction-pooler port, and a unit
+test pins that.
+
+Do these in order. Steps 1–2 need someone with write access to the secret; only step 3 is a
+change to this repository.
+
+1. **Flip the secret.** Change `climate-project-api/prod/database-connection-string` from port
+   6543 to **5432**. Host, username and password are unchanged — only the port.
+2. **Redeploy and verify.** Confirm **20+ consecutive** `/ready` probes return 200. The defect
+   is intermittent and alternates, so one green probe proves nothing. Confirm also that the
+   `TRANSACTION pooler` warning is **gone** from the App Runner logs — that is the app telling
+   you it read the new value, and it is a stronger signal than the probes.
+3. **Arm the guard.** Set `Database__RequireSessionPooler` to `"true"` in
+   `infra/aws/climate-project-api-prod-service.yml` and redeploy. From then on a connection
+   string on 6543 fails startup instead of logging, so the port cannot regress silently.
+
+Doing step 3 before step 1 breaks the deploy — that is the whole reason the flag exists. Steps 1
+and 3 are therefore two separate changes, never one: a CloudFormation deploy cannot write a
+Secrets Manager value, so there is no way to move the secret and the flag together.
+
+Each step's signal is pinned by a test in
+`tests/ClimateProject.IntegrationTests/StartupValidationTests.cs`:
+
+- `Transaction_pooler_port_warns_at_startup_when_session_pooler_is_not_required` and
+  `Session_pooler_port_emits_no_transaction_pooler_warning` are what make step 2's log check
+  meaningful — the first pins that the warning is emitted on 6543 (naming `TRANSACTION pooler`
+  and #220, with `Port`/`ExpectedPort` as structured properties), the second that it stops on
+  5432. Without them, "the warning is gone" could be true because the warning no longer exists.
+- `Session_pooler_port_starts_cleanly_with_the_guard_armed` is what makes step 3 safe to take:
+  it proves that once the port is right, arming the flag changes nothing about whether the host
+  starts.
+
+**Not covered by any of this:** nothing in the deploy pipeline inspects the runtime secret. The
+`grep -qE '(^|[^0-9])6543([^0-9]|$)'` guard in `deploy-prod.yml` reads only
+`MIGRATION_DATABASE_CONNECTION_STRING`, the GitHub Actions secret used for `dotnet ef database
+update` — the runtime string is delivered straight from Secrets Manager to App Runner and never
+passes through the workflow. Step 3 is therefore the only thing that would catch a regression
+of the runtime port, which is why it should not be skipped once steps 1–2 are done.
 
 ### Cause 2 — the pool was unbounded (**fixed in this repository**)
 

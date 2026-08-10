@@ -100,9 +100,16 @@ Consequences to plan for:
 > the repository does do, as of #220: `DatabaseConnectionStringPolicy` bounds the Npgsql pool
 > and logs a startup **warning** naming this issue whenever it sees port 6543. That guard is
 > deliberately a warning and not a hard startup failure, because the live secret still says
-> 6543 and a hard failure would stop production booting on the next deploy. Once the secret is
-> flipped and a deploy comes up green, harden it into a throw — the `TODO(#220)` in
-> `src/ClimateProject.Api/Program.cs` marks the spot.
+> 6543 and a hard failure would stop production booting on the next deploy.
+>
+> Whoever rotates this password is the most likely person to also fix the port, since they are
+> rewriting the value anyway. **If you do, finish the job**: set
+> `Database__RequireSessionPooler` to `"true"` in
+> `infra/aws/climate-project-api-prod-service.yml` once a deploy on port 5432 has come up
+> green. That flag turns the warning into a startup failure, and it is the only thing in the
+> system that would catch the port regressing later — nothing in `deploy-prod.yml` inspects
+> this secret. The ordered sequence, and why the order matters, is in `infra/aws/README.md`
+> under "Arming the guard".
 
 ### C. Internal service auth
 

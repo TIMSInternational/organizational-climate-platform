@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace ClimateProject.IntegrationTests;
 
@@ -57,6 +59,15 @@ public class StartupValidationTests
     private const string ValidTrackingJwtSecret = "integration-test-tracking-jwt-secret-32-bytes-min";
     private const string ValidInternalApiKey = "integration-test-internal-api-key";
     private const string ValidGoogleClientId = "test-google-client-id";
+
+    // Shaped like the two production connection strings, differing only in the port -- which
+    // is the entire difference between the two Supavisor modes, and the entire content of
+    // #220. Neither host is ever dialled; startup only reads the port out of the string.
+    private const string TransactionPoolerConnectionString =
+        "Host=localhost;Port=6543;Database=unused;Username=unused;Password=unused";
+
+    private const string SessionPoolerConnectionString =
+        "Host=localhost;Port=5432;Database=unused;Username=unused;Password=unused";
 
     /// <summary>
     /// A complete configuration that starts the host cleanly, with <paramref name="overrides"/>
@@ -204,6 +215,115 @@ public class StartupValidationTests
            && (disposed.ObjectName == "IServiceProvider"
                || disposed.Message.Contains("IServiceProvider", StringComparison.Ordinal));
 
+    /// <summary>
+    /// The category Program.cs logs the #220 startup findings under (its
+    /// <c>DatabaseStartupLogCategory</c> constant). Duplicated as a literal because Program.cs
+    /// uses top-level statements, so a local const in it is not addressable from here.
+    /// </summary>
+    private const string DatabaseStartupLogCategory = "ClimateProject.Api.Database";
+
+    /// <summary>
+    /// Starts the host with a capturing <see cref="ILoggerProvider"/> attached and returns
+    /// everything logged while it started. Used for the guards whose only production-visible
+    /// effect is a log line, which <see cref="CaptureStartupException"/> cannot observe at all.
+    /// </summary>
+    /// <remarks>
+    /// Same no-request discipline as <see cref="CaptureStartupException"/>: <c>CreateClient()</c>
+    /// builds and starts the host and nothing else is sent, so every record returned was emitted
+    /// during startup. No retry loop, because these configurations are the ones that start
+    /// <em>cleanly</em> — the teardown race documented on <see cref="IsHostCaptureRace"/> only
+    /// exists when startup throws.
+    /// </remarks>
+    private static IReadOnlyList<LogRecord> CaptureStartupLogs(Dictionary<string, string?> configuration)
+    {
+        var provider = new CapturingLoggerProvider();
+
+        using (var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(configuration));
+            builder.ConfigureLogging(logging => logging.AddProvider(provider));
+        }))
+        {
+            using var client = factory.CreateClient();
+        }
+
+        return provider.Records;
+    }
+
+    private sealed record LogRecord(
+        string Category,
+        LogLevel Level,
+        string Message,
+        IReadOnlyDictionary<string, object?> Properties);
+
+    /// <summary>
+    /// Records every entry, keeping the structured state separate from the rendered message so
+    /// a test can assert on a named property rather than on a substring of the sentence.
+    /// </summary>
+    private sealed class CapturingLoggerProvider : ILoggerProvider
+    {
+        private readonly List<LogRecord> _records = [];
+
+        public IReadOnlyList<LogRecord> Records
+        {
+            get
+            {
+                lock (_records)
+                {
+                    return _records.ToArray();
+                }
+            }
+        }
+
+        public ILogger CreateLogger(string categoryName) => new CapturingLogger(categoryName, Add);
+
+        // Deliberately not clearing the records: the host disposes its providers, and the test
+        // reads them afterwards.
+        public void Dispose()
+        {
+        }
+
+        private void Add(LogRecord record)
+        {
+            lock (_records)
+            {
+                _records.Add(record);
+            }
+        }
+
+        private sealed class CapturingLogger(string category, Action<LogRecord> sink) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                LogLevel logLevel,
+                EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                var properties = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+                if (state is IReadOnlyList<KeyValuePair<string, object?>> values)
+                {
+                    foreach (var (key, value) in values)
+                    {
+                        // "{OriginalFormat}" is the unrendered template, not a property.
+                        if (key != "{OriginalFormat}")
+                        {
+                            properties[key] = value;
+                        }
+                    }
+                }
+
+                sink(new LogRecord(category, logLevel, formatter(state, exception), properties));
+            }
+        }
+    }
+
     private static void AssertFailsStartupMentioning(
         Dictionary<string, string?> configuration,
         string expectedMention)
@@ -290,6 +410,127 @@ public class StartupValidationTests
         AssertFailsStartupMentioning(
             ValidConfiguration(("GoogleClientId", null), ("GoogleAuth:Required", "true")),
             "GoogleClientId");
+
+    // -- Database:RequireSessionPooler, the #220 ratchet. ---------------------------------
+    //
+    // Same conditional shape as GoogleAuth:Required above, for a different reason. The
+    // defect is a Secrets Manager value this repository cannot edit: production's runtime
+    // connection string is on Supabase's transaction pooler (port 6543), which Npgsql's
+    // connection pool cannot use safely, and roughly half of all /ready probes hang for
+    // thirty seconds as a result. The flag is what lets the guard be armed *after* that
+    // value is fixed rather than before, and these three tests pin each step of that
+    // sequence -- including, crucially, that the last step is safe to take.
+    //
+    // No database is contacted by any of them: nothing resolves a DbContext during startup,
+    // so the port in the connection string is read and judged but never dialled.
+
+    /// <summary>
+    /// Step 1, and the state production is in today: the port is wrong, the guard is not
+    /// armed, and the service must still start. Arming the guard before the secret is fixed
+    /// would turn an intermittently-slow service into a service that fails its App Runner
+    /// health check and rolls back, so this test is what stops a future "make it consistent
+    /// with the other guards" change from taking production down.
+    /// </summary>
+    [Fact]
+    public void Transaction_pooler_port_does_not_fail_startup_when_session_pooler_is_not_required()
+    {
+        var exception = CaptureStartupException(ValidConfiguration(
+            ("ConnectionStrings:ClimateProject", TransactionPoolerConnectionString),
+            ("Database:RequireSessionPooler", "false")));
+
+        Assert.Null(exception);
+    }
+
+    /// <summary>
+    /// Step 3, the ratchet itself: once armed, the transaction pooler is a startup failure
+    /// rather than a log line nobody reads. #220 survived for weeks precisely because the
+    /// only signal was a warning in the deploy log.
+    /// </summary>
+    [Fact]
+    public void Transaction_pooler_port_fails_startup_when_session_pooler_is_required() =>
+        AssertFailsStartupMentioning(
+            ValidConfiguration(
+                ("ConnectionStrings:ClimateProject", TransactionPoolerConnectionString),
+                ("Database:RequireSessionPooler", "true")),
+            "TRANSACTION pooler");
+
+    /// <summary>
+    /// The end state, and the test that makes step 3 safe to perform: with the secret on the
+    /// session pooler, arming the guard changes nothing about whether the host starts. If
+    /// this ever fails, arming the flag in
+    /// <c>infra/aws/climate-project-api-prod-service.yml</c> would break the deploy.
+    /// </summary>
+    [Fact]
+    public void Session_pooler_port_starts_cleanly_with_the_guard_armed()
+    {
+        var exception = CaptureStartupException(ValidConfiguration(
+            ("ConnectionStrings:ClimateProject", SessionPoolerConnectionString),
+            ("Database:RequireSessionPooler", "true")));
+
+        Assert.Null(exception);
+    }
+
+    /// <summary>
+    /// Step 2's acceptance signal, and the only #220 behaviour production actually executes
+    /// today — the flag ships as <c>false</c>, so the warning below is 100% of what the guard
+    /// does on the live service.
+    ///
+    /// <para>
+    /// It needs its own test because <c>infra/aws/README.md</c> makes this log line the gate on
+    /// step 2 ("Confirm also that the <c>TRANSACTION pooler</c> warning is <b>gone</b> from the
+    /// App Runner logs"), and a gate whose absence nobody checks passes vacuously. Nothing else
+    /// can see it: measured 2026-08-10 by making the <c>Warn</c> branch in Program.cs
+    /// unreachable, this test was the <em>only</em> failure anywhere — the other 17 tests in
+    /// this class and all 1086 unit tests stayed green with the guard's entire
+    /// production-visible output deleted.
+    /// </para>
+    /// <para>
+    /// <c>Port</c> and <c>ExpectedPort</c> are asserted as structured properties rather than as
+    /// substrings of the rendered text, because that is the difference the assertion is meant
+    /// to protect: a log aggregator can filter on <c>Port = 6543</c> only while they are
+    /// separate arguments to <c>LogWarning</c>.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Transaction_pooler_port_warns_at_startup_when_session_pooler_is_not_required()
+    {
+        var records = CaptureStartupLogs(ValidConfiguration(
+            ("ConnectionStrings:ClimateProject", TransactionPoolerConnectionString),
+            ("Database:RequireSessionPooler", "false")));
+
+        var warning = Assert.Single(
+            records,
+            record => record.Category == DatabaseStartupLogCategory && record.Level == LogLevel.Warning);
+
+        Assert.Contains("TRANSACTION pooler", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("#220", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("Database:RequireSessionPooler", warning.Message, StringComparison.Ordinal);
+        Assert.True(warning.Properties.TryGetValue("Port", out var port), "Port is not a log property.");
+        Assert.Equal("6543", port?.ToString());
+        Assert.True(
+            warning.Properties.TryGetValue("ExpectedPort", out var expectedPort),
+            "ExpectedPort is not a log property.");
+        Assert.Equal("5432", expectedPort?.ToString());
+    }
+
+    /// <summary>
+    /// The other half of step 2's acceptance signal: once the secret is on the session pooler
+    /// the warning must actually stop, otherwise "the warning is gone" is not a usable check on
+    /// whether the new value was read. Pairs with the test above — together they pin that the
+    /// log line tracks the port rather than being emitted (or suppressed) unconditionally.
+    /// </summary>
+    [Fact]
+    public void Session_pooler_port_emits_no_transaction_pooler_warning()
+    {
+        var records = CaptureStartupLogs(ValidConfiguration(
+            ("ConnectionStrings:ClimateProject", SessionPoolerConnectionString),
+            ("Database:RequireSessionPooler", "false")));
+
+        Assert.DoesNotContain(
+            records,
+            record => record.Category == DatabaseStartupLogCategory
+                      && record.Level == LogLevel.Warning);
+    }
 
     /// <summary>
     /// Mail configuration is conditionally required in the same shape GoogleClientId is

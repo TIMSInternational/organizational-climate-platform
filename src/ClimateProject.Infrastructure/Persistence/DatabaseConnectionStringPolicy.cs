@@ -29,6 +29,34 @@ public sealed record DatabaseConnectionStringPolicyResult(
     bool UsesTransactionPoolerPort);
 
 /// <summary>
+/// What the host should do about a connection string that points at Supavisor's transaction
+/// pooler. Returned by
+/// <see cref="DatabaseConnectionStringPolicy.DecideTransactionPoolerAction"/>.
+/// </summary>
+/// <remarks>
+/// Three outcomes rather than two, because "the port is correct" and "the port is wrong but
+/// this deployment tolerates it" are different states and an operator reading a deploy log
+/// has to be able to tell them apart.
+/// </remarks>
+public enum TransactionPoolerAction
+{
+    /// <summary>The port is not the transaction pooler. Say nothing.</summary>
+    None,
+
+    /// <summary>
+    /// The port is Supavisor's transaction pooler, and this deployment has not armed the
+    /// guard. Start anyway, and log a warning.
+    /// </summary>
+    Warn,
+
+    /// <summary>
+    /// The port is Supavisor's transaction pooler, and this deployment declared that it
+    /// requires session mode. Refuse to start.
+    /// </summary>
+    Fail,
+}
+
+/// <summary>
 /// Normalises the runtime Postgres connection string before it reaches Npgsql, and reports
 /// what it found so the host can log about it at startup.
 /// </summary>
@@ -67,6 +95,28 @@ public sealed record DatabaseConnectionStringPolicyResult(
 /// same <c>postgres.&lt;project-ref&gt;</c> username, different port. That value lives in AWS
 /// Secrets Manager (<c>climate-project-api/prod/database-connection-string</c>), not in this
 /// repository, so this type can only <em>detect and report</em> it.
+/// </para>
+/// <para>
+/// <strong>How severely it reports it is a deployment's own decision.</strong>
+/// <see cref="DecideTransactionPoolerAction"/> takes the detection above and a per-deployment
+/// <c>Database:RequireSessionPooler</c> flag and returns one of
+/// <see cref="TransactionPoolerAction"/>. This is the same shape as
+/// <c>GoogleAuth:Required</c> (see <c>StartupOptions.cs</c>) and exists for the same reason:
+/// the guard must be a hard startup failure in the environment that depends on it, and must
+/// not be one in the environments that do not.
+/// </para>
+/// <para>
+/// The flag defaults to <see langword="false"/>, which is a deliberate and temporary
+/// concession rather than the intended end state. Production's Secrets Manager value still
+/// says <see cref="SupavisorTransactionPoolerPort"/>, and a deploy of this commit that
+/// refused to start would take a service that is intermittently slow and make it entirely
+/// down — in order to complain about a value the deploy itself cannot change. The intended
+/// end state is <c>Database:RequireSessionPooler=true</c> on production, set <em>after</em>
+/// the secret has been flipped and that deploy verified, so the port cannot silently regress
+/// afterwards. The two cannot move together: a deploy of this repository cannot write a
+/// Secrets Manager value, so arming the flag first is exactly the failed health check the flag
+/// exists to avoid. See <c>infra/aws/README.md</c> ("Arming the guard") for the ordered
+/// sequence.
 /// </para>
 /// </remarks>
 public static class DatabaseConnectionStringPolicy
@@ -129,6 +179,47 @@ public static class DatabaseConnectionStringPolicy
             MaxPoolSize: builder.MaxPoolSize,
             Port: builder.Port,
             UsesTransactionPoolerPort: builder.Port == SupavisorTransactionPoolerPort);
+    }
+
+    /// <summary>
+    /// Decides what a host should do when the connection string points at Supavisor's
+    /// transaction pooler.
+    /// </summary>
+    /// <param name="usesTransactionPoolerPort">
+    /// <see cref="DatabaseConnectionStringPolicyResult.UsesTransactionPoolerPort"/> from
+    /// <see cref="Apply"/>.
+    /// </param>
+    /// <param name="requireSessionPooler">
+    /// The deployment's <c>Database:RequireSessionPooler</c> setting.
+    /// </param>
+    /// <returns>The action the host should take.</returns>
+    /// <remarks>
+    /// <para>
+    /// Two booleans and three outcomes is small enough to inline at the call site, and it is
+    /// deliberately not inlined. The call site is <c>Program.cs</c>, which has no unit tests —
+    /// a host is not constructible without a database — so a decision left there is a decision
+    /// nothing pins. Extracting it is the same move <c>SystemStatusPolicy</c> makes for the
+    /// same reason: the part that must not be wrong is put where it can be exhaustively
+    /// tested, and the caller is reduced to acting on the answer.
+    /// </para>
+    /// <para>
+    /// Note the asymmetry: <paramref name="requireSessionPooler"/> can only ever *escalate*
+    /// <see cref="TransactionPoolerAction.Warn"/> to <see cref="TransactionPoolerAction.Fail"/>.
+    /// It is not a suppression switch — there is no combination of inputs that turns a
+    /// transaction-pooler port into <see cref="TransactionPoolerAction.None"/>, so arming the
+    /// guard in production cannot be undone by silencing it somewhere else.
+    /// </para>
+    /// </remarks>
+    public static TransactionPoolerAction DecideTransactionPoolerAction(
+        bool usesTransactionPoolerPort,
+        bool requireSessionPooler)
+    {
+        if (!usesTransactionPoolerPort)
+        {
+            return TransactionPoolerAction.None;
+        }
+
+        return requireSessionPooler ? TransactionPoolerAction.Fail : TransactionPoolerAction.Warn;
     }
 
     /// <summary>

@@ -20,6 +20,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
+using System.Globalization;
 using System.Text;
 using System.Threading.RateLimiting;
 
@@ -61,30 +62,74 @@ builder.Services.AddOptions<DatabaseOptions>()
         var policy = DatabaseConnectionStringPolicy.Apply(connectionString);
         var logger = loggerFactory.CreateLogger(DatabaseStartupLogCategory);
 
-        if (policy.UsesTransactionPoolerPort)
+        // WARN OR THROW ON THE TRANSACTION POOLER -- THE DEPLOYMENT CHOOSES WHICH (#220).
+        //
+        // The guards in this file for settings that are required in every environment -- the
+        // connection string above, InternalApiKey, TrackingJwtSecret -- throw outright, because
+        // #189 established that a deploy which boots misconfigured is worse than one that
+        // refuses to boot. The two settings that are not required everywhere, GoogleClientId
+        // and the Email block, already guard themselves conditionally instead; both are below.
+        // This guard cannot throw outright yet, and the reason is ordering rather
+        // than principle: the wrong value lives in AWS Secrets Manager
+        // (climate-project-api/prod/database-connection-string), not in this repository, and
+        // it has not been changed yet. Throwing on today's production value would mean the
+        // next deploy of *this commit* fails its App Runner health check and rolls back --
+        // turning a service that is intermittently slow into one that is entirely down, in
+        // order to complain about a value the deploy itself cannot fix.
+        //
+        // So the severity is a per-deployment setting, Database:RequireSessionPooler, in the
+        // same shape as GoogleAuth:Required (see StartupOptions.cs) and for the same reason:
+        // a guard that must be fatal where it matters and must not be fatal where it does
+        // not. It defaults to false, and it can only ever escalate the warning to a failure
+        // -- there is no value of it that suppresses the warning, which is what stops it
+        // becoming a way to hide the defect rather than a way to ratchet it shut.
+        //
+        // The intended end state, in this order (infra/aws/README.md has the full sequence):
+        // flip the secret to 5432, redeploy, confirm 20+ consecutive /ready probes are 200
+        // and this warning is gone from the logs, then set Database__RequireSessionPooler to
+        // "true" in infra/aws/climate-project-api-prod-service.yml so the port cannot
+        // silently regress. That last step is a one-line change to the service template; no
+        // step in the sequence requires editing this file again.
+        var requireSessionPooler = configuration.GetValue<bool>("Database:RequireSessionPooler");
+        var poolerAction = DatabaseConnectionStringPolicy.DecideTransactionPoolerAction(
+            policy.UsesTransactionPoolerPort,
+            requireSessionPooler);
+
+        // One description, used by both branches, so the warning and the startup failure
+        // cannot drift into describing the problem differently. Written as a local function
+        // rather than two literals for that reason alone.
+        string DescribeTransactionPoolerProblem() => string.Format(
+            CultureInfo.InvariantCulture,
+            "Database connection string uses port {0}, the Supabase Supavisor TRANSACTION " +
+            "pooler. This service holds pooled connections open across statements, which " +
+            "transaction mode cannot support: it is the cause of the intermittent /ready " +
+            "timeouts in issue #220. Expected port {1} (the SESSION pooler -- same host, " +
+            "same credentials, different port). Fix the Secrets Manager value " +
+            "'climate-project-api/prod/database-connection-string'; it cannot be fixed from " +
+            "this repository.",
+            policy.Port,
+            DatabaseConnectionStringPolicy.SupavisorSessionPoolerPort);
+
+        if (poolerAction == TransactionPoolerAction.Fail)
         {
-            // WARNING, NOT A HARD FAILURE -- DELIBERATELY. THE LIVE SECRET STILL SAYS 6543.
-            //
-            // Every other startup guard in this file throws, because #189 established that a
-            // deploy which boots misconfigured is worse than one that refuses to boot. This
-            // one is the exception, and only because of ordering: the fix is a value in AWS
-            // Secrets Manager (climate-project-api/prod/database-connection-string), not a
-            // value in this repository, and it has not been changed yet. Throwing here would
-            // mean the next deploy of *this commit* fails its App Runner health check and
-            // rolls back -- turning a service that is intermittently slow into one that is
-            // entirely down, in order to complain about a value the deploy cannot fix.
-            //
-            // TODO(#220): once the secret is flipped from 6543 to 5432 and a deploy has come
-            // up green on it, harden this into a throw like the guards above, so the port
-            // cannot silently regress. That change is safe only in that order.
+            throw new InvalidOperationException(
+                DescribeTransactionPoolerProblem()
+                + " This deployment sets Database:RequireSessionPooler=true, so this is a "
+                + "startup failure rather than a warning.");
+        }
+
+        if (poolerAction == TransactionPoolerAction.Warn)
+        {
+            // Port and ExpectedPort are passed as their own arguments, not only baked into
+            // {TransactionPoolerProblem}, so log aggregation can query the port as a field
+            // rather than by substring-matching the rendered sentence. That mattered before
+            // this rewrite and would have been lost by folding everything into one
+            // pre-rendered string.
             logger.LogWarning(
-                "Database connection string uses port {Port}, the Supabase Supavisor TRANSACTION " +
-                "pooler. This service holds pooled connections open across statements, which " +
-                "transaction mode cannot support: it is the cause of the intermittent /ready " +
-                "timeouts in issue #220. Expected port {ExpectedPort} (the SESSION pooler -- same " +
-                "host, same credentials). Fix the Secrets Manager value " +
-                "'climate-project-api/prod/database-connection-string'; it cannot be fixed from " +
-                "this repository.",
+                "{TransactionPoolerProblem} Set Database:RequireSessionPooler=true once the "
+                + "secret is on the session pooler, to make this a startup failure instead. "
+                + "(Port={Port}, ExpectedPort={ExpectedPort}.)",
+                DescribeTransactionPoolerProblem(),
                 policy.Port,
                 DatabaseConnectionStringPolicy.SupavisorSessionPoolerPort);
         }
