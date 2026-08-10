@@ -86,6 +86,45 @@ describe('useDashboardData', () => {
     expect(result.current.data).toBe('company B')
   })
 
+  /**
+   * The case a cleanup flag alone would miss, which is why the guard is a counter: `reload`
+   * runs outside the effect and has no cleanup to hang a flag on. Click Retry, then switch
+   * tenant while the retry is still in flight, and the retry lands last.
+   */
+  it('ignores a manual retry that lands after the caller has changed scope', async () => {
+    const retry = deferred<string>()
+    const companyB = deferred<string>()
+
+    // The first load of company A settles at once; the retry does not, so it is still in
+    // flight when the scope changes.
+    let aCalls = 0
+    const loadA = () => (aCalls++ === 0 ? Promise.resolve('company A') : retry.promise)
+
+    const { result, rerender } = renderHook(({ load }) => useDashboardData(load), {
+      initialProps: { load: loadA },
+    })
+    await waitFor(() => expect(result.current.data).toBe('company A'))
+
+    await act(async () => {
+      void result.current.reload()
+    })
+    expect(aCalls).toBe(2)
+
+    rerender({ load: () => companyB.promise })
+    await act(async () => {
+      companyB.resolve('company B')
+      await companyB.promise
+    })
+    await waitFor(() => expect(result.current.data).toBe('company B'))
+
+    await act(async () => {
+      retry.resolve('company A retried')
+      await retry.promise
+    })
+
+    expect(result.current.data).toBe('company B')
+  })
+
   it('still reports a failure from the current scope', async () => {
     const load = () => Promise.reject(new Error('Service unavailable'))
 
@@ -104,7 +143,9 @@ describe('useDashboardData', () => {
 
     await waitFor(() => expect(result.current.data).toBe('load 1'))
 
-    act(() => result.current.reload())
+    await act(async () => {
+      void result.current.reload()
+    })
 
     await waitFor(() => expect(result.current.data).toBe('load 2'))
   })

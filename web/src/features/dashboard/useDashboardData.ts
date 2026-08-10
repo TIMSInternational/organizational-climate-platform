@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export interface DashboardData<T> {
   data: T | null
@@ -38,9 +38,8 @@ export interface DashboardData<T> {
  *
  * This is reachable, not theoretical: a SuperAdmin changing the tenant in the header
  * switcher gives `CompanyAdminDashboardView` a new `companyId` prop without remounting it,
- * so company A's figures can be painted under company B's name. The flag is set in the
- * effect's cleanup, which React runs before the re-run, so exactly one response — the
- * newest — is ever allowed to call `setData`.
+ * so company A's figures can be painted under company B's name. Only the newest request
+ * may publish, and "newest" counts `reload` too — see the generation counter below.
  */
 export function useDashboardData<T>(load: () => Promise<T>): DashboardData<T> {
   const [data, setData] = useState<T | null>(null)
@@ -49,46 +48,39 @@ export function useDashboardData<T>(load: () => Promise<T>): DashboardData<T> {
   const [error, setError] = useState<string | null>(null)
 
   /**
-   * `isCurrent` decides whether this call's result may still be published. `reload` passes
-   * a function that is always true — a manual retry is by definition the current request,
-   * and it has no cleanup to hang a flag on.
+   * Which request is allowed to publish. A counter rather than a flag in the effect's
+   * cleanup, because `reload` needs the same protection and has no cleanup to hang a flag
+   * on: click Retry, switch tenant, and the retry would otherwise land last and win.
+   * Starting a request supersedes every earlier one, whoever started it.
    */
-  const run = useCallback(
-    async (isCurrent: () => boolean = () => true) => {
-      setLoading(true)
-      setFailed(false)
-      setError(null)
-      try {
-        const result = await load()
-        if (!isCurrent()) return
-        setData(result)
-      } catch (err) {
-        if (!isCurrent()) return
-        setFailed(true)
-        setError(err instanceof Error ? err.message : null)
-      } finally {
-        // Guarded too, and `finally` still runs after the early returns above. A superseded
-        // request clearing `loading` would hide the spinner belonging to the request that
-        // superseded it; whoever is current will clear it when they land.
-        if (isCurrent()) {
-          setLoading(false)
-        }
+  const generation = useRef(0)
+
+  const run = useCallback(async () => {
+    const mine = ++generation.current
+    setLoading(true)
+    setFailed(false)
+    setError(null)
+    try {
+      const result = await load()
+      if (generation.current !== mine) return
+      setData(result)
+    } catch (err) {
+      if (generation.current !== mine) return
+      setFailed(true)
+      setError(err instanceof Error ? err.message : null)
+    } finally {
+      // Guarded too, and `finally` still runs after the early returns above. A superseded
+      // request clearing `loading` would hide the spinner belonging to the request that
+      // superseded it; whoever is current will clear it when they land.
+      if (generation.current === mine) {
+        setLoading(false)
       }
-    },
-    [load],
-  )
+    }
+  }, [load])
 
   useEffect(() => {
-    let current = true
-    run(() => current)
-    return () => {
-      current = false
-    }
-  }, [run])
-
-  const reload = useCallback(() => {
     void run()
   }, [run])
 
-  return { data, loading, failed, error, reload }
+  return { data, loading, failed, error, reload: run }
 }
