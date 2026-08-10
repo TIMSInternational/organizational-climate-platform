@@ -13,6 +13,7 @@ import {
   Bell,
   ClipboardList,
   Inbox,
+  LayoutDashboard,
   LayoutTemplate,
   Network,
 } from 'lucide-react'
@@ -88,6 +89,25 @@ const NOTIFICATIONS_ITEM: NavItem = {
   icon: Bell,
 }
 
+// The landing page (#132), and the other entry every role gets — for the same
+// structural reason as Notifications, arrived at differently. `/dashboard` is not one
+// page: `DashboardPage` dispatches on the role claim and each of the four endpoints
+// behind it refuses the other three roles, so there is no role for which this row leads
+// to a 403. That includes a role this module has never heard of, which falls through to
+// the per-user employee view.
+//
+// **First in every branch, deliberately, and it moves each role's mobile tab bar.**
+// `leafNavItems` feeds MobileNav the first four leaves; Dashboard taking the first slot
+// pushes the fourth entry each role previously had behind "More". That is the right
+// trade rather than an accidental one: this is the page every user is now landed on
+// after login, and a bottom bar that cannot return to it is a bar missing its home
+// button. navSections.test.ts and MobileNav.test.tsx pin the new order.
+const DASHBOARD_ITEM: NavItem = {
+  labelKey: 'navigation.dashboard',
+  href: '/dashboard',
+  icon: LayoutDashboard,
+}
+
 // "My surveys" (#109) is the second entry, after Notifications, that a non-admin role
 // can load -- and for the same structural reason: `GET /surveys/my` resolves the
 // caller's OWN user row and filters by that row's company and department, reading no
@@ -160,6 +180,7 @@ export function buildNavSections(role: string | undefined, companyId: string | u
       {
         titleKey: 'navigation.sectionAdministration',
         items: [
+          DASHBOARD_ITEM,
           {
             labelKey: 'navigation.systemAdministration',
             href: '/admin/companies',
@@ -238,6 +259,7 @@ export function buildNavSections(role: string | undefined, companyId: string | u
       {
         titleKey: 'navigation.sectionAdministration',
         items: [
+          DASHBOARD_ITEM,
           {
             labelKey: 'navigation.companyAdministration',
             href: `/admin/companies/${companyId}`,
@@ -328,7 +350,9 @@ export function buildNavSections(role: string | undefined, companyId: string | u
   // My surveys first: it is a work destination, Notifications is an inbox. Same
   // ordering principle as the admin branches above.
   return [
-    { titleKey: 'navigation.sectionWorkspace', items: [MY_SURVEYS_ITEM] },
+    // Dashboard first: since #132 it is where this role lands after login, and it is
+    // their only page that is a summary rather than a list.
+    { titleKey: 'navigation.sectionWorkspace', items: [DASHBOARD_ITEM, MY_SURVEYS_ITEM] },
     { titleKey: 'navigation.sectionCommunication', items: [NOTIFICATIONS_ITEM] },
   ]
 }

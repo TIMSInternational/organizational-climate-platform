@@ -5,7 +5,6 @@ import { AuthShell } from './AuthShell'
 import { AuthPending } from './AuthPending'
 import { pageWorthyReason } from './authReason'
 import { setToken } from './token'
-import { decodeJwtPayload } from './jwt'
 import { resolveInitialRoute } from '../app/resolveInitialRoute'
 import { useTranslation } from '../i18n'
 import { Alert, AlertDescription, Button, TextField } from '../components/ui'
@@ -50,11 +49,10 @@ export default function LoginPage() {
       setToken(token)
 
       // Unconditionally navigating to /admin/companies (SuperAdmin-only) used to
-      // 403 every non-SuperAdmin login before they could see anything.
-      const claims = decodeJwtPayload(token)
-      const role = typeof claims?.role === 'string' ? claims.role : undefined
-      const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
-      navigate(resolveInitialRoute(role, companyId))
+      // 403 every non-SuperAdmin login before they could see anything. Since #132
+      // the destination is `/dashboard` for every role — the page itself dispatches
+      // on the claim, so nothing needs decoding here.
+      navigate(resolveInitialRoute())
     } catch (err) {
       const status = err instanceof AuthRequestError ? err.status : 0
       const message = err instanceof Error && err.message ? err.message : t('errors.generic')
