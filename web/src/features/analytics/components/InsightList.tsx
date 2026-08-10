@@ -19,10 +19,13 @@ export interface InsightListProps {
  *
  * `priority` and `type` go through `insightVocabulary.ts` (#282). They used to be
  * printed as the API's own strings on the grounds that #92's vocabulary "has not
- * been chosen" — but it has: the legacy `AIInsightSchema` declares both as closed
- * enums, so the catalogue is transcribed rather than guessed. The half of that
- * objection which still stands is the `t()` miss, and the helper answers it by
- * falling back to the raw value for anything it does not recognise.
+ * been chosen", and that much is still true — `AIInsightValidation` bounds both to
+ * 20 characters and checks nothing else, so there is no enum anywhere to transcribe.
+ * What that objection got wrong was the remedy, not the diagnosis: the catalogue is
+ * a best-effort list of the values this repository actually attests, and the helper
+ * falls back to the server's own string for anything it does not recognise. An
+ * unlabelled value therefore renders as itself rather than as a raw key path.
+ * `insightVocabulary.ts` documents where each entry comes from.
  *
  * The first column is headed as the *title*, not "Label". `AIInsightListItem`
  * calls the field `title`, and `common.label` is the generic word for a form

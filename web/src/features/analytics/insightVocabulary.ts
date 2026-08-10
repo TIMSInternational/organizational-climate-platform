@@ -11,8 +11,9 @@ import type { TranslateFn } from '../../i18n'
  *
  * **There is no enum anywhere to transcribe.** `AIInsightValidation.ValidateCreate`
  * (`src/ClimateProject.Application/Analytics/AIInsightValidation.cs:60`) checks only
- * "non-empty and ≤ 20 characters" for `Type` and `Priority`; both columns are plain
- * `text` with no CHECK. The value set is therefore **unbounded**, and this catalogue is
+ * "non-empty and ≤ 20 characters" for `Type` and `Priority`; both columns are
+ * `character varying(20)` with no CHECK constraint behind them. The value set is
+ * therefore **open** — any non-blank string of 20 characters or fewer — and this catalogue is
  * a best-effort list of the values actually observed in this repository — not an
  * exhaustive union. That is why the raw fallback below is not defensive noise: it is the
  * only correct behaviour for a value we do not ship a label for. Rendering the server's

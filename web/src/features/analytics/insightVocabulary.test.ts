@@ -91,10 +91,11 @@ describe('insight vocabulary', () => {
 
   /**
    * `AIInsightValidation.ValidateCreate` bounds `Type` and `Priority` at
-   * "non-empty, ≤ 20 characters" and nothing else — neither column has a CHECK, and
-   * there is no enum anywhere in the backend — so the value set is unbounded and the
-   * catalogue above is best-effort. AC #3: an unknown value falls back to the raw
-   * string, never to blank and never to a key path.
+   * "non-empty, ≤ 20 characters" and nothing else — both columns are
+   * `character varying(20)` with no CHECK, and there is no enum anywhere in the
+   * backend — so the value set is open and the catalogue above is best-effort.
+   * AC #3: an unknown value falls back to the raw string, never to blank and never
+   * to a key path.
    */
   it('falls back to the server value for a type it does not know', () => {
     expect(insightTypeLabel(es, 'anomaly')).toBe('anomaly')
