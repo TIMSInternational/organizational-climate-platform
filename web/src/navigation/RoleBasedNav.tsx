@@ -102,18 +102,21 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
   }, [collapsed, pathname])
 
   /**
-   * Expansion is keyed by `labelKey`, and that is the fix for the parked item
-   * rather than a survival of it.
+   * Expansion is keyed by `labelKey`, and #169 adds the pin for that rather than
+   * the keying itself — `toggleExpand` already took a `labelKey` on `main`.
    *
-   * The state used to be keyed by `t(item.labelKey)` — the *translated* label — so
-   * two groups whose copy happened to coincide toggled in lockstep, and whether
-   * they did depended on the reader's language. `labelKey` is a catalogue path
+   * The rail's first version keyed on `item.label`, a raw English literal on the
+   * nav item (`label: 'Companies'`), so two groups whose copy coincided toggled in
+   * lockstep; `2ad4c37` replaced every `label` with a catalogue key when the shell
+   * was translated. `labelKey` is a catalogue path
    * (`navigation.systemAdministration`), which is unique per entry and identical in
-   * every locale. #22 suggested `href` instead; `labelKey` is preferred here
+   * every locale, so the collision cannot come back through a translation either.
+   * `climate-project#22` suggested `href` instead; `labelKey` is preferred here
    * because a company_admin's group `href` interpolates their company id, so
    * keying on it would silently reset the group's open/closed state the moment
-   * that id changed. `RoleBasedNav.test.tsx` pins the locale-independence
-   * directly, with two groups whose labels translate to the same string.
+   * that id changed. What was missing was a test: `RoleBasedNav.test.tsx` now pins
+   * the locale-independence directly, with two groups whose labels translate to
+   * the same string in both catalogues.
    */
   function toggleExpand(labelKey: string) {
     setExpanded((current) =>
@@ -240,9 +243,11 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
               data-nav-state={navState}
               onClick={() => toggleExpand(item.labelKey)}
               aria-expanded={isExpanded}
-              // See the `title` note on the leaf row below: 240px is not enough
-              // for "Company Administration", let alone
-              // "Administración de Empresa".
+              // See the `title` note on the leaf row below. A group row is the
+              // tightest of the lot: the chevron and its gap take another 24px,
+              // leaving the label 140px of the 220px rail — while carrying the
+              // longest label in the nav, `navigation.systemAdministration`
+              // ("Administración del Sistema", 26 characters).
               title={label}
               style={rowStyle}
             >
@@ -269,21 +274,34 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
               // from somewhere.
               aria-label={collapsed ? label : undefined}
               // A collapsed group row is still a link — clicking it goes to the
-              // group's own page, as it always has — but it also owns a popup, and
+              // group's own page, as it always has — but it also owns a panel, and
               // a screen reader user has no other way to know the sub-tree is
-              // there. Set only while collapsed: with the rail open the children
-              // are rows in the tree and the `<button>` branch above carries
-              // `aria-expanded` instead, so nothing announces a popup twice.
-              aria-haspopup={hasFlyout ? true : undefined}
+              // there. `aria-expanded` alone carries that, and deliberately no
+              // `aria-haspopup`: a bare `aria-haspopup` means `menu`, which
+              // commits to a keyboard model (arrow-key roving focus, Home/End,
+              // type-ahead) the panel does not implement — it is a `role="group"`
+              // of ordinary links that Tab walks through. Announcing "has menu"
+              // and then landing the user in something that is not one is worse
+              // than announcing nothing. Set only while collapsed: with the rail
+              // open the children are rows in the tree and the `<button>` branch
+              // above carries `aria-expanded` instead, so nothing announces twice.
               aria-expanded={hasFlyout ? isFlyoutOpen : undefined}
-              // `title` unconditionally, not only while collapsed. Measured in
-              // Chrome: the label box in a 240px rail is 151px, and "Company
-              // Administration" at 13px semibold is ~186px — so the row truncates
-              // with an ellipsis even in English, and worse in Spanish
-              // ("Administración de Empresa", 182px, at a smaller weight). The
-              // tooltip is what makes the hidden text recoverable; widening the
-              // rail means changing `--admin-size-sidebar`, which is shared token
-              // surface (#208 is queued on tokens.css).
+              // `title` unconditionally, not only while collapsed. The label span
+              // in `rowContent` above sets `overflow: hidden` + `textOverflow:
+              // ellipsis` + `whiteSpace: nowrap`, so anything wider than its box
+              // is cut with no way to read the rest, and the box is narrow while
+              // the rail is expanded: the rail is 220px
+              // (`--admin-size-sidebar`), of which 16px goes to the `<nav>`'s own
+              // `4px 8px 8px 8px` gutter, 16px to this row's `var(--admin-space-4)
+              // var(--admin-space-8)` padding, 16px to the icon
+              // (`--admin-size-icon`) and 8px to the gap
+              // (`--admin-size-inline-gap`) — 164px for the label, less again on a
+              // row carrying a badge. Whether a given label survives that depends
+              // on the locale and on the reader's font settings, neither of which
+              // this component can see, so the tooltip is set for all of them
+              // rather than guessed at. Widening the rail means changing
+              // `--admin-size-sidebar`, which is shared token surface (#208 is
+              // queued on tokens.css).
               title={label}
               style={rowStyle}
             >
