@@ -79,6 +79,19 @@ public static class NotificationEndpoints
     /// Returns null rather than <see cref="Guid.Empty"/> when neither resolves: an
     /// unresolvable caller must get an explicit 403, not be silently treated as the owner of
     /// every row whose <c>user_id</c> happens to be all zeroes.
+    ///
+    /// For a caller whose <c>PersonaExternalId</c> is null -- today every account this API
+    /// creates, since nothing in <c>src/</c> writes the column -- this now costs two queries
+    /// where it used to cost one, on each of the four self-service routes that call it:
+    /// <c>GET /notifications/mine</c>, <c>POST /notifications/{id}/read</c>, and <c>GET</c>
+    /// and <c>PUT</c> of <c>/notifications/preferences</c>. The old body short-circuited on
+    /// <c>AnyAsync(u =&gt; u.Id == userId)</c> and never reached its <c>PersonaExternalId</c>
+    /// query at all.
+    ///
+    /// That short-circuit cannot come back. Answering from the <c>Id</c> lookup before the
+    /// <c>PersonaExternalId</c> one *is* the ordering defect -- it is what handed a colliding
+    /// caller another user's inbox and consent -- so the first query is load-bearing, not
+    /// redundant. Do not "optimise" it away.
     /// </summary>
     private static Task<Guid?> ResolveCurrentUserIdAsync(
         CurrentUser currentUser,

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.IdentityModel.Tokens.Jwt;
@@ -198,6 +199,67 @@ public class IdentityMappingClaimsTests : IAsyncLifetime
 
         Assert.Equal(colliderEmail, DecodeClaim(refreshToken, "email"));
         Assert.Equal("Collider", DecodeClaim(refreshToken, "name"));
+    }
+
+    /// <summary>
+    /// #285: the branch that decides between "refuse" and "act as somebody".
+    ///
+    /// <c>ActingUserResolver</c> ends in <c>return null</c> — reached by a <c>sub</c> that
+    /// matches no <c>persona_external_id</c> and does not parse as a Guid, so neither of its
+    /// two steps can answer. Every collision test in this suite seeds a Guid-shaped
+    /// <c>sub</c>, so none of them reaches that tail; this one does.
+    ///
+    /// The tail is load-bearing. Its callers turn null into a refusal — 401 here, 403 on the
+    /// notification routes, a 400 or a null attribution elsewhere — so a tail that answered
+    /// with a row instead (the first user, or the all-zeroes id) would hand an unresolvable
+    /// bearer somebody else's session. A non-Guid <c>sub</c> whose row is gone is exactly the
+    /// state #154's ETL can produce: it mints <c>sub</c> from a legacy id, and the mapping
+    /// can be corrected or withdrawn while a token is still in flight.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_is_refused_when_a_non_guid_sub_matches_no_row()
+    {
+        var client = _factory.CreateClient();
+        var email = $"orphaned-sub-{Guid.NewGuid():N}@{_emailDomain}";
+        // See the uniqueness note in Login_uses_PersonaExternalId_as_sub_when_it_is_set.
+        var externalId = $"legacy-mongo-id-{Guid.NewGuid():N}";
+        Assert.False(Guid.TryParse(externalId, out _));
+        (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Orphaned Sub", email, "a-good-password")))
+            .EnsureSuccessStatusCode();
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var user = await db.Users.FirstAsync(u => u.Email == email);
+            user.PersonaExternalId = externalId;
+            await db.SaveChangesAsync();
+        }
+
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var loginToken = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
+        Assert.Equal(externalId, DecodeSubClaim(loginToken));
+
+        // The mapping is withdrawn while the token is still valid. The token still carries a
+        // signature this API accepts and a sub that now belongs to nobody: no row has that
+        // persona_external_id any more, and it is not a Guid, so the Id step cannot run
+        // either. The account itself is untouched -- only the identity the sub named is gone.
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var user = await db.Users.FirstAsync(u => u.Email == email);
+            user.PersonaExternalId = null;
+            await db.SaveChangesAsync();
+            Assert.True(user.IsActive);
+        }
+
+        using var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "/auth/refresh");
+        refreshRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginToken);
+        var refresh = await client.SendAsync(refreshRequest);
+
+        // Refused, and with no re-minted token in the body -- not a token for whichever row
+        // a defaulting resolver happened to reach.
+        Assert.Equal(HttpStatusCode.Unauthorized, refresh.StatusCode);
+        Assert.DoesNotContain("token", await refresh.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
