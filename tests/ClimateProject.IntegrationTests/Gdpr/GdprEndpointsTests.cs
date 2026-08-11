@@ -376,30 +376,53 @@ public class GdprEndpointsTests : IAsyncLifetime
     private sealed record SeededSubject(Guid SurveyId, Guid ResponseId, Guid OtherResponseId, string SurveyInvitationToken);
 
     /// <summary>
-    /// A word that appears nowhere else, inside the other tenant's free-form invitation
-    /// payload. Assertions search for this rather than for the whole payload: the payload is a
+    /// Words that appear nowhere else, one per table, inside the other tenant's free-form
+    /// columns. Assertions search for these rather than for the whole payload: a payload is a
     /// JSON string inside a JSON response, so its quotes come back escaped and a verbatim match
-    /// on it would pass whether or not the value leaked.
+    /// on it would pass whether or not the value leaked. One marker per table rather than one
+    /// shared marker, so a failure names the path that leaked rather than only that something
+    /// did.
     /// </summary>
-    private const string ForeignPayloadMarker = "other-tenant-private-payload";
+    private const string ForeignPayloadMarker = "other-tenant-private-user-invitation";
+
+    private const string ForeignSurveyInvitationMarker = "other-tenant-private-survey-invitation";
+    private const string ForeignMicroclimateInvitationMarker = "other-tenant-private-microclimate-invitation";
+    private const string ForeignSurveyAuditMarker = "other-tenant-private-survey-audit-change";
+    private const string ForeignReportMarker = "other-tenant-private-report-title";
 
     /// <summary>The free-form payload on the other tenant's invitation.</summary>
     private const string ForeignPayload = "{\"note\": \"" + ForeignPayloadMarker + "\"}";
 
+    private const string ForeignSurveyInvitationPayload =
+        "{\"note\": \"" + ForeignSurveyInvitationMarker + "\"}";
+
+    private const string ForeignMicroclimateInvitationPayload =
+        "{\"note\": \"" + ForeignMicroclimateInvitationMarker + "\"}";
+
+    private const string ForeignSurveyAuditPayload = "{\"note\": \"" + ForeignSurveyAuditMarker + "\"}";
+
     /// <summary>
-    /// A second company's invitation to the <i>same</i> email address, with a demographic child
-    /// row hanging off it.
+    /// A second company's rows carrying the <i>same</i> email address — one in each of the five
+    /// tables the subject can be reached in by address rather than by key.
     /// </summary>
     /// <remarks>
-    /// This is the shape both tenant tests turn on and it is not contrived: an employee's work
-    /// address can be invited by another customer of the platform, and <c>user_invitations</c>
-    /// identifies its invitee by email alone because no user row exists until they accept. The
-    /// row belongs to the other tenant — its company, its inviting administrator, its role
-    /// grant, its payload — and a caller with rights only in <c>_companyId</c> has no claim on
-    /// any of that, in either direction: it must not come back in their export and their
-    /// erasure must not rewrite it.
+    /// <para>This is the shape both tenant tests turn on and it is not contrived: an employee's
+    /// work address can be held by another customer of the platform, and an address is not
+    /// tenant-unique. <c>user_invitations</c> identifies its invitee by email alone because no
+    /// user row exists until they accept; <c>survey_invitations</c>, <c>microclimate_invitations</c>
+    /// and <c>survey_audit_logs</c> each denormalise an address of their own; and
+    /// <c>reports.shared_with</c> is a bare <c>text[]</c> that no code today fixes the form of,
+    /// so it is matched on the address as well as on the id.</para>
+    ///
+    /// <para>All five are seeded, and not just the first, because each one is matched by a
+    /// separate predicate: a seed that populates only <c>user_invitations</c> witnesses only the
+    /// <c>user_invitations</c> predicate, and the other four can be removed with the suite still
+    /// green. Every row belongs to the other tenant — its company, its administrator, its survey,
+    /// its payload — and a caller with rights only in <c>_companyId</c> has no claim on any of
+    /// it, in either direction: none of it may come back in their export and their erasure may
+    /// not rewrite any of it.</para>
     /// </remarks>
-    private async Task<ForeignInvitation> SeedForeignTenantInvitationAsync(string subjectEmail)
+    private async Task<ForeignTenantRows> SeedForeignTenantInvitationAsync(string subjectEmail)
     {
         var (_, foreignAdminId, _) = await SignInAsync(Roles.CompanyAdmin, _otherCompanyId, _otherDomain);
 
@@ -443,11 +466,161 @@ public class GdprEndpointsTests : IAsyncLifetime
             Value = "6-10",
         });
 
+        // The other tenant's own survey. survey_audit_logs carries no company of its own, so
+        // this is what puts the audit row below in a tenant the caller has no rights in.
+        var survey = new Survey
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = _otherCompanyId,
+            CreatedBy = foreignAdminId,
+            TitleEn = "Other tenant climate",
+            TitleEs = "Clima de otra empresa",
+            DescriptionEn = "d",
+            DescriptionEs = "d",
+            Type = "general_climate",
+            Status = "active",
+            StartDate = now,
+            EndDate = now.AddDays(30),
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.Surveys.Add(survey);
+
+        var surveyInvitation = new SurveyInvitation
+        {
+            Id = Guid.NewGuid(),
+            SurveyId = survey.Id,
+            // Somebody else's account, so the row is reachable by the address on it and by
+            // nothing else -- which is the predicate under test.
+            UserId = foreignAdminId,
+            CompanyId = _otherCompanyId,
+            Email = subjectEmail,
+            InvitationToken = Guid.NewGuid().ToString("N"),
+            Metadata = ForeignSurveyInvitationPayload,
+            ExpiresAt = now.AddDays(7),
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.SurveyInvitations.Add(surveyInvitation);
+
+        var microclimate = new Microclimate
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = _otherCompanyId,
+            CreatedBy = foreignAdminId,
+            TitleEn = "Other tenant pulse",
+            TitleEs = "Pulso de otra empresa",
+            Status = "active",
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.Microclimates.Add(microclimate);
+
+        var microclimateInvitation = new MicroclimateInvitation
+        {
+            Id = Guid.NewGuid(),
+            MicroclimateId = microclimate.Id,
+            UserId = foreignAdminId,
+            CompanyId = _otherCompanyId,
+            Email = subjectEmail,
+            InvitationToken = Guid.NewGuid().ToString("N"),
+            Metadata = ForeignMicroclimateInvitationPayload,
+            ExpiresAt = now.AddDays(7),
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.MicroclimateInvitations.Add(microclimateInvitation);
+
+        var surveyAuditLog = new SurveyAuditLog
+        {
+            Id = Guid.NewGuid(),
+            SurveyId = survey.Id,
+            Action = "updated",
+            EntityType = "survey",
+            UserId = foreignAdminId,
+            UserName = "Other Tenant Admin",
+            UserEmail = subjectEmail,
+            UserRole = Roles.CompanyAdmin,
+            Changes = ForeignSurveyAuditPayload,
+            Timestamp = now,
+        };
+        db.SurveyAuditLogs.Add(surveyAuditLog);
+
+        var report = new Report
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = _otherCompanyId,
+            CreatedBy = foreignAdminId,
+            Title = ForeignReportMarker,
+            Type = "custom",
+            Format = "pdf",
+            SharedWith = [subjectEmail],
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.Reports.Add(report);
+
         await db.SaveChangesAsync();
-        return new ForeignInvitation(invitation.Id, foreignAdminId);
+
+        return new ForeignTenantRows(
+            invitation.Id,
+            surveyInvitation.Id,
+            microclimateInvitation.Id,
+            surveyAuditLog.Id,
+            report.Id,
+            survey.Id,
+            microclimate.Id,
+            foreignAdminId);
     }
 
-    private sealed record ForeignInvitation(Guid Id, Guid InviterId);
+    /// <summary>
+    /// The other tenant's row in each of the five email-matched tables, plus the parents that
+    /// place two of them in that tenant and the administrator who owns them all. Every one of
+    /// these identifiers is that tenant's, and none may appear in the caller's export.
+    /// </summary>
+    private sealed record ForeignTenantRows(
+        Guid InvitationId,
+        Guid SurveyInvitationId,
+        Guid MicroclimateInvitationId,
+        Guid SurveyAuditLogId,
+        Guid ReportId,
+        Guid SurveyId,
+        Guid MicroclimateId,
+        Guid InviterId);
+
+    /// <summary>
+    /// Every column of each of the other tenant's five rows, exactly as Postgres renders the
+    /// whole row.
+    /// </summary>
+    /// <remarks>
+    /// <c>to_jsonb(t)</c> rather than a hand-written column list, for the same reason the export
+    /// flattens through <c>ChangeTracker</c> metadata: a column added to one of these tables
+    /// later is compared with no change here. Table and key column come from <c>db.Model</c>,
+    /// so neither is a literal that can drift from the schema.
+    /// </remarks>
+    private async Task<SortedDictionary<string, string>> ForeignTenantRowsAsTextAsync(ForeignTenantRows foreign)
+    {
+        await using var db = NewContext();
+        var rows = new SortedDictionary<string, string>(StringComparer.Ordinal);
+
+        await AddAsync<UserInvitation>(foreign.InvitationId);
+        await AddAsync<SurveyInvitation>(foreign.SurveyInvitationId);
+        await AddAsync<MicroclimateInvitation>(foreign.MicroclimateInvitationId);
+        await AddAsync<SurveyAuditLog>(foreign.SurveyAuditLogId);
+        await AddAsync<Report>(foreign.ReportId);
+
+        return rows;
+
+        async Task AddAsync<T>(Guid id)
+            where T : class
+        {
+            var entityType = db.Model.FindEntityType(typeof(T))!;
+            var table = entityType.GetTableName()!;
+            var key = entityType.FindPrimaryKey()!.Properties.Single().GetColumnName()!;
+            var sql = $"SELECT to_jsonb(t)::text AS \"Value\" FROM {Quote(table)} t WHERE t.{Quote(key)} = {{0}}";
+            rows[table] = await db.Database.SqlQueryRaw<string>(sql, id).SingleAsync();
+        }
+    }
 
     [Fact]
     public async Task Access_export_never_reaches_a_row_in_a_tenant_the_caller_has_no_rights_in()
@@ -460,23 +633,72 @@ public class GdprEndpointsTests : IAsyncLifetime
         var raw = await (await adminClient.GetAsync($"/gdpr/access?userId={subjectId}")).Content.ReadAsStringAsync();
         var export = JsonSerializer.Deserialize<JsonElement>(raw);
 
-        // The other tenant's row, and everything it would disclose about that tenant.
-        Assert.DoesNotContain(ForeignPayloadMarker, raw, StringComparison.Ordinal);
-        Assert.DoesNotContain(foreign.Id.ToString(), raw, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(foreign.InviterId.ToString(), raw, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(_otherCompanyId.ToString(), raw, StringComparison.OrdinalIgnoreCase);
+        // One assertion per email-matched path, named, because a single "nothing of the other
+        // tenant is here" would go red without saying which predicate stopped holding.
+        AssertWithheld(raw, ForeignPayloadMarker, "user_invitations.invitation_data");
+        AssertWithheld(raw, ForeignSurveyInvitationMarker, "survey_invitations.metadata");
+        AssertWithheld(raw, ForeignMicroclimateInvitationMarker, "microclimate_invitations.metadata");
+        AssertWithheld(raw, ForeignSurveyAuditMarker, "survey_audit_logs.changes");
+        AssertWithheld(raw, ForeignReportMarker, "reports.title");
 
-        // The caller's own tenant's invitation to the same address is still returned, so the
-        // scope is an authority predicate and not an accidental "return nothing".
-        var invitations = Section(export, "UserInvitation").GetProperty("records").EnumerateArray().ToList();
-        Assert.Single(invitations);
-        Assert.Equal(_companyId.ToString(), invitations[0].GetProperty("CompanyId").GetString());
+        AssertWithheld(raw, foreign.InvitationId, "the other tenant's user_invitations row");
+        AssertWithheld(raw, foreign.SurveyInvitationId, "the other tenant's survey_invitations row");
+        AssertWithheld(raw, foreign.MicroclimateInvitationId, "the other tenant's microclimate_invitations row");
+        AssertWithheld(raw, foreign.SurveyAuditLogId, "the other tenant's survey_audit_logs row");
+        AssertWithheld(raw, foreign.ReportId, "the other tenant's reports row");
 
-        // And a super admin, whose authority is every tenant, does see it.
+        // The parents that place two of those rows in that tenant, the administrator who owns
+        // them, and the tenant itself: each is disclosed by the row that carries it as a column.
+        AssertWithheld(raw, foreign.SurveyId, "the other tenant's survey");
+        AssertWithheld(raw, foreign.MicroclimateId, "the other tenant's microclimate");
+        AssertWithheld(raw, foreign.InviterId, "the other tenant's administrator");
+        AssertWithheld(raw, _otherCompanyId, "the other tenant");
+
+        // The caller's own tenant's rows for the same address are still returned, so the scope
+        // is an authority predicate and not an accidental "return nothing".
+        AssertSingleRecordInTheCallersTenant(export, "UserInvitation");
+        AssertSingleRecordInTheCallersTenant(export, "SurveyInvitation");
+        AssertSingleRecordInTheCallersTenant(export, "MicroclimateInvitation");
+        Assert.Equal(1, Section(export, "SurveyAuditLog").GetProperty("recordCount").GetInt32());
+
+        // And a super admin, whose authority is every tenant, reaches all five. That is what
+        // makes the four assertions above a statement about authority rather than about a query
+        // that happens to return nothing.
         var (superClient, _, _) = await SignInAsync(Roles.SuperAdmin);
         var superRaw = await (await superClient.GetAsync($"/gdpr/access?userId={subjectId}"))
             .Content.ReadAsStringAsync();
-        Assert.Contains(ForeignPayloadMarker, superRaw, StringComparison.Ordinal);
+
+        AssertReached(superRaw, ForeignPayloadMarker, "user_invitations");
+        AssertReached(superRaw, ForeignSurveyInvitationMarker, "survey_invitations");
+        AssertReached(superRaw, ForeignMicroclimateInvitationMarker, "microclimate_invitations");
+        AssertReached(superRaw, ForeignSurveyAuditMarker, "survey_audit_logs");
+        AssertReached(superRaw, ForeignReportMarker, "reports.shared_with");
+    }
+
+    private static void AssertWithheld(string export, string marker, string source)
+        => Assert.True(
+            !export.Contains(marker, StringComparison.Ordinal),
+            $"The export handed a company admin {source}, which belongs to a tenant they have no rights in. "
+            + "The company predicate on that lookup is not holding.");
+
+    private static void AssertWithheld(string export, Guid id, string what)
+        => Assert.True(
+            !export.Contains(id.ToString(), StringComparison.OrdinalIgnoreCase),
+            $"The export named {what} ({id}) to a company admin who has no rights in that tenant. "
+            + "The company predicate on the lookup that reaches it is not holding.");
+
+    private static void AssertReached(string export, string marker, string table)
+        => Assert.True(
+            export.Contains(marker, StringComparison.Ordinal),
+            $"A super admin's export did not reach the other tenant's {table} row. Either the scope is not the "
+            + "authority predicate it is meant to be, or the seed never created the row -- in which case the "
+            + "company admin's half of this test passes for the wrong reason.");
+
+    private void AssertSingleRecordInTheCallersTenant(JsonElement export, string entity)
+    {
+        var records = Section(export, entity).GetProperty("records").EnumerateArray().ToList();
+        Assert.Single(records);
+        Assert.Equal(_companyId.ToString(), records[0].GetProperty("CompanyId").GetString());
     }
 
     [Fact]
@@ -487,16 +709,44 @@ public class GdprEndpointsTests : IAsyncLifetime
         await SeedSubjectDataAsync(subjectId, subjectEmail, adminId);
         var foreign = await SeedForeignTenantInvitationAsync(subjectEmail);
 
+        // Every column of all five of the other tenant's rows, before anything runs. Compared
+        // whole afterwards, so a treatment that reaches into that tenant is caught whichever
+        // column it writes -- not only the ones this test would have thought to name.
+        var before = await ForeignTenantRowsAsTextAsync(foreign);
+
         var response = await adminClient.PostAsJsonAsync("/gdpr/erasure", new ErasureRequest(subjectId, true));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
+        var after = await ForeignTenantRowsAsTextAsync(foreign);
+        foreach (var (table, row) in before)
+        {
+            Assert.True(
+                string.Equals(row, after[table], StringComparison.Ordinal),
+                $"A company admin's erasure rewrote a {table} row in a tenant they have no rights in. The "
+                + $"company predicate on that lookup is not holding.{Environment.NewLine}"
+                + $"before: {row}{Environment.NewLine}after:  {after[table]}");
+        }
+
         await using var db = NewContext();
 
-        // Untouched: same address, same payload, same child row.
-        var untouched = await db.UserInvitations.SingleAsync(i => i.Id == foreign.Id);
+        // Named as well as compared, because the whole-row comparison above would also stay
+        // green if the seed had never written the address here.
+        var untouched = await db.UserInvitations.SingleAsync(i => i.Id == foreign.InvitationId);
         Assert.Equal(subjectEmail, untouched.Email);
         Assert.Equal(ForeignPayload, untouched.InvitationData);
-        Assert.Equal(1, await db.UserInvitationDemographics.CountAsync(d => d.InvitationId == foreign.Id));
+        Assert.Equal(1, await db.UserInvitationDemographics.CountAsync(d => d.InvitationId == foreign.InvitationId));
+        Assert.Equal(
+            subjectEmail,
+            (await db.SurveyInvitations.SingleAsync(i => i.Id == foreign.SurveyInvitationId)).Email);
+        Assert.Equal(
+            subjectEmail,
+            (await db.MicroclimateInvitations.SingleAsync(i => i.Id == foreign.MicroclimateInvitationId)).Email);
+        Assert.Equal(
+            subjectEmail,
+            (await db.SurveyAuditLogs.SingleAsync(a => a.Id == foreign.SurveyAuditLogId)).UserEmail);
+        Assert.Contains(
+            subjectEmail,
+            (await db.Reports.SingleAsync(r => r.Id == foreign.ReportId)).SharedWith);
 
         // Erased: the invitation in the tenant the caller does administer.
         Assert.Equal(
