@@ -539,6 +539,7 @@ app.MapSearchEndpoints();
 app.MapSystemStatusEndpoints();
 app.MapDashboardEndpoints();
 app.MapAuditEndpoints();
+app.MapGdprEndpoints();
 
 app.Run();
 

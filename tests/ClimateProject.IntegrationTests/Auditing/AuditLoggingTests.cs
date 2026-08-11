@@ -288,6 +288,146 @@ public class AuditLoggingTests : IAsyncLifetime
         Assert.Equal(ProfileAuditActions.Update, Assert.Single(rows).Action);
     }
 
+    /// <summary>
+    /// The GDPR erasure exception is exactly one shape, and these pin every edge of it.
+    /// </summary>
+    /// <remarks>
+    /// #144 needed to delete a subject's <c>survey_audit_logs</c> rows, which this guard
+    /// otherwise refuses, so <c>AllowSubjectErasureDeletes</c> opens a hole. A hole in an
+    /// append-only guard is only as safe as its edges are tested — without these, widening the
+    /// scope to cover <c>audit_logs</c>, or to permit UPDATE, breaks nothing and no reviewer
+    /// would necessarily notice. Each of these fails if the scope grows in that direction.
+    /// </remarks>
+    /// <summary>
+    /// Seeds one <c>survey_audit_logs</c> row and returns its id.
+    /// </summary>
+    /// <remarks>
+    /// The erasure exception applies to THIS table and no other, so a test of its edges has to
+    /// act on this table. Two of these tests originally acted on <c>audit_logs</c>, which is
+    /// never exempt whatever the scope says — so they threw either way and could not fail when
+    /// the hole was widened. Seeding a real row is what makes them falsifiable.
+    /// </remarks>
+    private async Task<Guid> SeedSurveyAuditRowAsync(Guid userId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = AppContext(scope);
+        var now = DateTimeOffset.UtcNow;
+
+        var survey = new Survey
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = _companyId,
+            CreatedBy = userId,
+            TitleEn = "Climate",
+            TitleEs = "Clima",
+            DescriptionEn = "d",
+            DescriptionEs = "d",
+            Type = "general_climate",
+            Status = "active",
+            StartDate = now,
+            EndDate = now.AddDays(30),
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.Surveys.Add(survey);
+
+        var row = new SurveyAuditLog
+        {
+            Id = Guid.NewGuid(),
+            SurveyId = survey.Id,
+            Action = "updated",
+            EntityType = "survey",
+            UserId = userId,
+            UserName = "Someone",
+            UserEmail = "someone@example.test",
+            UserRole = Roles.CompanyAdmin,
+            Timestamp = now,
+        };
+        db.SurveyAuditLogs.Add(row);
+        await db.SaveChangesAsync();
+        return row.Id;
+    }
+
+    [Fact]
+    public async Task The_erasure_scope_does_not_reach_audit_logs()
+    {
+        var (client, userId) = await SignUpAsync(Roles.Employee);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await client.PutAsJsonAsync("/profile", new UpdateProfileRequest("Before"))).StatusCode);
+
+        using var scope = Factory.Services.CreateScope();
+        var db = AppContext(scope);
+        db.AuditLogs.RemoveRange(await db.AuditLogs.Where(a => a.UserId == userId).ToListAsync());
+
+        using (AuditLogAppendOnlyInterceptor.AllowSubjectErasureDeletes())
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
+            Assert.Contains("audit_logs", error.Message, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task The_erasure_scope_permits_deletes_but_never_updates()
+    {
+        var (_, userId) = await SignUpAsync(Roles.CompanyAdmin);
+        var rowId = await SeedSurveyAuditRowAsync(userId);
+
+        using var scope = Factory.Services.CreateScope();
+        var db = AppContext(scope);
+        var row = await db.SurveyAuditLogs.SingleAsync(a => a.Id == rowId);
+        row.Action = "tampered";
+
+        using (AuditLogAppendOnlyInterceptor.AllowSubjectErasureDeletes())
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
+            Assert.Contains("append-only", error.Message, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task The_erasure_scope_does_permit_the_delete_it_exists_for()
+    {
+        // The positive control. Without it, the three refusals above would all still pass if the
+        // scope did nothing at all, and #144's erasure would be the only thing that noticed.
+        var (_, userId) = await SignUpAsync(Roles.CompanyAdmin);
+        var rowId = await SeedSurveyAuditRowAsync(userId);
+
+        using var scope = Factory.Services.CreateScope();
+        var db = AppContext(scope);
+        db.SurveyAuditLogs.Remove(await db.SurveyAuditLogs.SingleAsync(a => a.Id == rowId));
+
+        using (AuditLogAppendOnlyInterceptor.AllowSubjectErasureDeletes())
+        {
+            await db.SaveChangesAsync();
+        }
+
+        Assert.False(await db.SurveyAuditLogs.AnyAsync(a => a.Id == rowId));
+    }
+
+    [Fact]
+    public async Task The_erasure_scope_closes_when_it_is_disposed()
+    {
+        var (_, userId) = await SignUpAsync(Roles.CompanyAdmin);
+
+        using (AuditLogAppendOnlyInterceptor.AllowSubjectErasureDeletes())
+        {
+            // deliberately empty: the scope opens and closes with nothing inside it
+        }
+
+        // A survey_audit_logs delete attempted after the scope closed is refused exactly as
+        // before, so the flag does not leak past its using block and leave the guard open. This
+        // has to act on survey_audit_logs: audit_logs is never exempt, so deleting one would
+        // throw whether the flag leaked or not.
+        var rowId = await SeedSurveyAuditRowAsync(userId);
+        using var scope = Factory.Services.CreateScope();
+        var db = AppContext(scope);
+        db.SurveyAuditLogs.Remove(await db.SurveyAuditLogs.SingleAsync(a => a.Id == rowId));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
+        Assert.Contains("append-only", error.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Audit_rows_cannot_be_deleted()
     {

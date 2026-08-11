@@ -150,10 +150,11 @@ aimed is a purge that can be used to erase a specific event.
 Volume, so the decision is informed: one row per mutating request, plus report views and
 exports. Reads are not audited by default precisely to keep this bounded.
 
-## GDPR: audit records are excluded from erasure
+## GDPR: `audit_logs` is excluded from erasure; `survey_audit_logs` is deleted
 
-A subject-access erasure request (Art. 17) **does not delete that person's audit rows**, and
-this is deliberate.
+A subject-access erasure request (Art. 17) **does not delete that person's `audit_logs` rows,
+and does delete their `survey_audit_logs` rows**. The split is deliberate and the two halves
+have different reasons.
 
 * The lawful basis is legitimate interest / legal obligation (Art. 17(3)(b), (e)) — a
   security trail that a subject can erase is not a security trail, and "who exported this
@@ -162,11 +163,24 @@ this is deliberate.
   path, an IP address and a user agent. The identifying columns are foreign keys, so erasing
   the `users` row is what removes the name and email; `audit_logs.user_id` carries `ON DELETE
   SET NULL`, so a deleted user's rows survive as anonymous records of the actions.
-* `survey_audit_logs` is the exception worth knowing about: it *denormalises* `user_name`,
-  `user_email` and `user_role` onto every row on purpose, so history reads correctly after a
-  rename. Those three columns are personal data that outlives the `users` row and an erasure
-  request has to address them explicitly. Its `user_id` FK is `RESTRICT`, so the `users` row
-  cannot be deleted while they exist at all. **Unresolved** — see below.
+* `survey_audit_logs` is treated differently, and this is a decided trade rather than an
+  oversight. It *denormalises* `user_name`, `user_email` and `user_role` onto every row on
+  purpose, so history reads correctly after a rename — which makes those three columns personal
+  data that outlives the `users` row. **An erasure now DELETES the subject's rows in this table**
+  (#144).
+
+  The alternative considered was redacting the three identity columns and keeping the row: that
+  preserves the change history and pseudonymises the actor, and it is the more conservative
+  option. Deletion was chosen instead. The cost is stated rather than implied: along with the
+  personal data goes the record that those changes were made at all, so the per-survey history
+  behind `GET /surveys/{id}/history` will have gaps that nothing marks as gaps.
+
+  Mechanically this needs a hole in the append-only interceptor, since that guard refuses
+  `DELETE` as well as `UPDATE`. The hole is exactly one shape — `DELETE`, on
+  `survey_audit_logs` only, only while an erasure is running — and `audit_logs` is never exempt
+  and `UPDATE` is never exempt. Every one of those edges has a test that fails if the scope is
+  widened in that direction, plus a positive control that fails if the scope stops working
+  entirely; see `AuditLogAppendOnlyInterceptor.AllowSubjectErasureDeletes`.
 
 ## Outstanding work
 
@@ -199,7 +213,6 @@ not permit, or on a line of code per handler.
    *Owner:* not planned — reconsider if a route ever needs an authentication-failure trail of
    its own, which is a different feature (per-account lockout, #146's neighbourhood) rather
    than a hole in this one.
-6. **Retention has no policy and no job**, and **`survey_audit_logs`' denormalised
-   `user_name` / `user_email` / `user_role` are not addressed by an erasure request** — both
-   set out in full above. *Owner:* #144 (GDPR endpoints) for the erasure half; retention needs
-   a policy decision before an implementation.
+6. **Retention has no policy and no job.** *Owner:* needs a policy decision before an
+   implementation. (The `survey_audit_logs` erasure half that used to sit here is done — see
+   the GDPR section above.)

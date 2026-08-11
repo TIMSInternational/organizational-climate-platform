@@ -36,6 +36,47 @@ public sealed class AuditLogAppendOnlyInterceptor : SaveChangesInterceptor
     /// <summary>Stateless, so one instance is shared by every context that registers it.</summary>
     public static readonly AuditLogAppendOnlyInterceptor Instance = new();
 
+    /// <summary>
+    /// Open while a GDPR erasure is deleting a subject's <c>survey_audit_logs</c> rows.
+    /// </summary>
+    /// <remarks>
+    /// <c>AsyncLocal</c> rather than a scoped service because the interceptor is a shared static
+    /// instance with no container to resolve from. It flows to the awaits inside the erasure and
+    /// nowhere else: a concurrent request on another async context sees false.
+    /// </remarks>
+    private static readonly AsyncLocal<bool> ErasingSubject = new();
+
+    /// <summary>
+    /// Permits DELETE of <c>survey_audit_logs</c> rows for the duration of the returned scope,
+    /// and nothing else (#144).
+    /// </summary>
+    /// <remarks>
+    /// This is a deliberate, decided hole in an append-only guard, so it is written as narrowly
+    /// as it can be and the narrowness is the part under test:
+    /// <list type="bullet">
+    /// <item><c>audit_logs</c> is NOT covered — neither UPDATE nor DELETE, ever.</item>
+    /// <item><c>survey_audit_logs</c> UPDATE is still refused; only DELETE is let through, so the
+    /// scope cannot be used to rewrite a row's action, timestamp or changes.</item>
+    /// <item>It is open only across the erasure's own <c>SaveChangesAsync</c>.</item>
+    /// </list>
+    /// The trade is stated plainly rather than implied: deleting the rows removes the personal
+    /// data completely, and it also removes the record that those changes were made by anyone.
+    /// The alternative considered was redacting the three denormalised identity columns and
+    /// keeping the row, which preserves the trail and pseudonymises the actor. Deletion was
+    /// chosen. <c>docs/decisions/audit-logging.md</c> carries the reasoning; do not widen this
+    /// scope to reach <c>audit_logs</c> or to permit UPDATE without revisiting that decision.
+    /// </remarks>
+    public static IDisposable AllowSubjectErasureDeletes()
+    {
+        ErasingSubject.Value = true;
+        return new ErasureScope();
+    }
+
+    private sealed class ErasureScope : IDisposable
+    {
+        public void Dispose() => ErasingSubject.Value = false;
+    }
+
     public override InterceptionResult<int> SavingChanges(
         DbContextEventData eventData,
         InterceptionResult<int> result)
@@ -84,6 +125,15 @@ public sealed class AuditLogAppendOnlyInterceptor : SaveChangesInterceptor
             };
 
             if (table is null)
+            {
+                continue;
+            }
+
+            // The one hole, and it is exactly this shape: a DELETE of survey_audit_logs while a
+            // GDPR erasure is running. audit_logs is never exempt, and UPDATE is never exempt.
+            if (entry.Entity is SurveyAuditLog
+                && entry.State is EntityState.Deleted
+                && ErasingSubject.Value)
             {
                 continue;
             }
