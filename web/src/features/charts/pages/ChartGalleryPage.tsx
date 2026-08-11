@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { LanguageSwitcher, useTranslation } from '../../../i18n'
 import {
   BarChart,
+  ClimateMap,
   Counter,
   HeatMap,
   KPIDisplay,
+  KpiTile,
+  ProtectedCell,
   LineChart,
   ParticipationTracker,
   PieChart,
@@ -14,6 +17,8 @@ import {
   WordCloud,
   type ChartDatum,
   type ChartSeries,
+  type ClimateMapDimension,
+  type ClimateMapRow,
   type HeatMapCell,
   type Kpi,
   type PieSlice,
@@ -143,6 +148,38 @@ export default function ChartGalleryPage() {
         <HeatMap data={HEATMAP} showValues={false} title={t('charts.galleryHeatMapValues')} />
       </Section>
 
+      <Section title={t('charts.gallerySectionUi0')}>
+        {/* Rendered here rather than trusted to a green suite: happy-dom does no
+            layout, which is how HeatMap's `w-auto` defect survived its tests.
+            Switch the theme above with this on screen -- the diverging ink flips
+            with the fill, and the protected hatch has to stay legible in both. */}
+        <div className="grid grid-cols-4 gap-2">
+          <KpiTile label={t('charts.galleryKpiClimateIndex')} value={72} previousValue={68} changeLabel={t('charts.gallerySinceQ1')} />
+          <KpiTile label={t('charts.galleryKpiParticipation')} value={84} format={{ kind: 'percentage' }} sub={<span>{t('charts.galleryParticipationSub')}</span>} />
+          <KpiTile label={t('charts.galleryKpiOpenPlans')} value={7} sub={<span>{t('charts.galleryPlansSub')}</span>} />
+          {/* Up is BAD here -- this tile is the one that would render green in the
+              legacy code, and it is in the gallery so the regression is visible. */}
+          <KpiTile label={t('charts.galleryKpiAttrition')} value={12} previousValue={8} higherIsBetter={false} changeLabel={t('charts.gallerySinceQ1')} />
+        </div>
+
+        <ClimateMap
+          dimensions={CLIMATE_DIMENSIONS}
+          rows={CLIMATE_ROWS}
+          target={70}
+          title={t('charts.galleryClimateMap')}
+        />
+
+        <div className="flex items-center gap-2 text-xs text-fg-secondary">
+          <span>{t('charts.galleryProtectedBeside')}</span>
+          <ProtectedCell responses={12} description="Operations, workload">
+            <span className="font-mono tabular-nums">61</span>
+          </ProtectedCell>
+          <ProtectedCell responses={4} description="Finance, workload" suppressedClassName="h-7 w-12">
+            <span className="font-mono tabular-nums">61</span>
+          </ProtectedCell>
+        </div>
+      </Section>
+
       <Section title={t('charts.gallerySectionWords')}>
         <WordCloud data={WORDS} title={t('charts.galleryWords')} />
         <WordCloud data={WORDS} colorBy="category" title={t('charts.galleryWordsByCategory')} />
@@ -232,6 +269,26 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 /* ---------------------------------------------------------------------------
  * Sample data. Hardcoded on purpose: this page must not depend on a backend.
  * ------------------------------------------------------------------------- */
+
+const CLIMATE_DIMENSIONS: ClimateMapDimension[] = [
+  { key: 'safety', label: 'Safety', fullLabel: 'Psychological safety' },
+  { key: 'workload', label: 'Workload' },
+  { key: 'trust', label: 'Trust', fullLabel: 'Leadership trust' },
+  { key: 'recognition', label: 'Recogn.', fullLabel: 'Recognition' },
+  { key: 'growth', label: 'Growth' },
+  { key: 'belonging', label: 'Belong.', fullLabel: 'Belonging' },
+]
+
+// Every band is represented on purpose, including a row under the floor: the
+// point of rendering this is to see all five steps and the hatch at once.
+const CLIMATE_ROWS: ClimateMapRow[] = [
+  { id: 'ops', label: 'Operations', responses: 48, scores: [74, 61, 72, 68, 71, 76] },
+  { id: 'support', label: 'Support', responses: 23, scores: [58, 52, 63, 60, 66, 69] },
+  { id: 'sales', label: 'Sales', responses: 31, scores: [77, 70, 74, 74, 72, 78] },
+  { id: 'eng', label: 'Engineering', responses: 57, scores: [81, 66, 79, 73, 84, 80] },
+  { id: 'people', label: 'People', responses: 12, scores: [79, 68, 77, 75, 78, 82] },
+  { id: 'finance', label: 'Finance', responses: 4, scores: [79, 81, 77, 80, 76, 83] },
+]
 
 const QUARTERS: ChartSeries[] = [
   { key: 'q1', name: 'Q1' },
