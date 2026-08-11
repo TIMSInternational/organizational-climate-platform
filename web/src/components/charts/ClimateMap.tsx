@@ -1,7 +1,8 @@
 import { useTranslation } from '../../i18n'
 import { Table } from '../ui'
 import { DIVERGING_COLORS, divergingPair } from './palette'
-import ProtectedCell, { isSuppressed } from './ProtectedCell'
+import ProtectedCell from './ProtectedCell'
+import { isSuppressed } from './suppression'
 
 /**
  * Score against a target, by group and dimension — the dashboard's hero.

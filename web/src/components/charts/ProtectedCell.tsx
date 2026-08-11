@@ -1,6 +1,7 @@
 import { Lock } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { cn } from '../../lib/cn'
+import { isSuppressed } from './suppression'
 
 /**
  * The anonymity floor, made visible.
@@ -53,11 +54,6 @@ export interface ProtectedCellProps {
   className?: string
   /** Applied only to the suppressed rendering, for grid-specific sizing. */
   suppressedClassName?: string
-}
-
-/** Whether a reading is below the anonymity floor and must be withheld. */
-export function isSuppressed(responses: number, threshold = 5): boolean {
-  return responses < threshold
 }
 
 export default function ProtectedCell({

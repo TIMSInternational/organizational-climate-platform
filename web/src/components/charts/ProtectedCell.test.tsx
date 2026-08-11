@@ -2,7 +2,8 @@ import { cleanup, render as rtlRender, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TranslationProvider } from '../../i18n'
-import ProtectedCell, { isSuppressed } from './ProtectedCell'
+import ProtectedCell from './ProtectedCell'
+import { isSuppressed } from './suppression'
 
 afterEach(cleanup)
 
