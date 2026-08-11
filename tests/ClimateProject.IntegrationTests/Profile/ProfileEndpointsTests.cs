@@ -403,11 +403,18 @@ public class ProfileEndpointsTests : IAsyncLifetime
             (await attackerClient.PutAsJsonAsync(
                 "/profile/preferences",
                 new UpdateProfilePreferencesRequest(Language: "es"))).StatusCode);
-        Assert.Equal(
-            HttpStatusCode.OK,
-            (await attackerClient.PutAsJsonAsync(
-                "/profile/password",
-                new ChangePasswordRequest(SignupPassword, "Rep1acementPass"))).StatusCode);
+        var passwordChange = await attackerClient.PutAsJsonAsync(
+            "/profile/password",
+            new ChangePasswordRequest(SignupPassword, "Rep1acementPass"));
+        Assert.Equal(HttpStatusCode.OK, passwordChange.StatusCode);
+
+        // The change revoked the token this client is holding (#284). The replacement it
+        // handed back is minted from the same resolved row, so carrying on with it keeps the
+        // rest of this test asking the question it was written to ask -- which row the
+        // collider's sub lands on -- rather than a 401.
+        attackerClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            (await passwordChange.Content.ReadFromJsonAsync<TokenResponse>())!.Token);
 
         await WithDbAsync(async db =>
         {
