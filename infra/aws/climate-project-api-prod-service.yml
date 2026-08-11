@@ -156,13 +156,10 @@ Resources:
               # caller cannot pre-seed the entry App Runner appends. Do NOT copy this value to
               # a deployment where the app is addressable directly.
               #
-              # NOT YET VERIFIED AGAINST A RUNNING SERVICE. The value follows from App Runner's
-              # documented X-Forwarded-For behaviour, but nothing in this repository can
-              # observe production. After the deploy that first carries it, confirm the
-              # "ClimateProject.Api.RateLimiting" warnings in the App Runner logs report
-              # distinct ClientIp values for distinct callers; if they all report one address,
-              # the hop count is wrong and this should go back to "0" (which restores today's
-              # behaviour exactly) rather than be guessed upward.
+              # The value follows from App Runner's documented X-Forwarded-For behaviour and
+              # has not been observed against a running service, because nothing in this
+              # repository can. "0" restores the pre-#146 behaviour exactly and is the correct
+              # thing to fall back to if it turns out to be wrong; do not guess it upward.
               - Name: RateLimiting__TrustedProxyHopCount
                 Value: "1"
               # HSTS is emitted explicitly rather than by app.UseHsts(), because behind the

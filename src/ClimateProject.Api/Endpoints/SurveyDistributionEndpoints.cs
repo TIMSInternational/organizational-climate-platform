@@ -28,17 +28,31 @@ namespace ClimateProject.Api.Endpoints;
 /// client is routinely not logged in, and <c>Survey.Settings.InvitationIncludeCredentials</c>
 /// exists precisely because some of them do not have credentials to hand. Requiring a login
 /// here would defeat the reason the token column exists at all.</item>
-/// <item>The <c>/survey-links/{token}</c> route is the same, for an open share link.</item>
+/// <item>The <c>/survey-links/{token}</c> route is unauthenticated for the same reason, but
+/// its token is <b>not</b> a per-person credential the way an invitation token is: it is one
+/// open share link for the whole company. That distinction is what decides which rate-limit
+/// policy it gets -- see below.</item>
 /// </list>
 ///
-/// <para><b>On the unauthenticated surface.</b> <c>Program.cs</c>'s rate-limiter comment
-/// records that <c>POST /microclimates/{id}/responses</c> was "the app's only unauthenticated
-/// write surface". That is no longer literally true, and the difference is worth stating
-/// rather than leaving for someone to discover: the microclimate route <b>allocates rows</b>
-/// on an unauthenticated call, which is why it needed a per-IP limiter. Every write below
-/// stamps a timestamp or bumps a counter on <b>one already-existing row</b>, addressed by a
-/// 256-bit token, and is strictly monotonic -- there is no amplification to rate-limit and no
-/// row to flood with. A limiter here would mostly throttle an office NAT opening its mail.</para>
+/// <para><b>On the unauthenticated surface, and how it is rate limited (#146).</b> The
+/// microclimate route <c>POST /microclimates/{id}/responses</c> <b>allocates rows</b> on an
+/// unauthenticated call, which is why it has a per-caller limiter. Every write below stamps a
+/// timestamp or bumps a counter on <b>one already-existing row</b>, addressed by a 256-bit
+/// token, and is strictly monotonic -- so there is no amplification here and no row to flood
+/// with, and a per-caller limiter would indeed mostly throttle an office NAT opening its mail.
+/// The limiter these routes carry is therefore not a per-caller one: the
+/// <c>/survey-invitations/{token}</c> routes and <c>/invitations/{token}/accept</c> take
+/// <c>RateLimitPolicies.PublicToken</c>, which buckets by the token, because the risk on a
+/// route whose credential is in its URL is that <i>one</i> token is replayed or brute-forced
+/// from many addresses. One full bucket can only inconvenience the one invitee it names.</para>
+///
+/// <para><b><c>/survey-links/{token}</c> is the exception and takes the opposite policy.</b>
+/// That token is one company-wide share link, not a person's credential -- one
+/// <c>survey_distributions.PublicUrl</c> per survey, handed to everybody by
+/// <c>ShareLinkPanel</c>. Bucketing it by the token would make a company's own respondents
+/// compete for one bucket and would let anyone holding the (deliberately public) URL keep the
+/// survey closed for that company. It takes <c>RateLimitPolicies.PublicLink</c>, keyed by
+/// caller.</para>
 ///
 /// <para><b>Where the notification seam is (#100).</b> Nothing in this file sends anything.
 /// Inviting and reminding <b>persist <c>notifications</c> rows and stop</b>; delivery is
@@ -116,10 +130,10 @@ public static class SurveyDistributionEndpoints
         // routes mirror the legacy shape (#130) but share one handler, so the monotonic rule
         // and the anonymity ceiling cannot be applied to two of them and forgotten on the third.
         //
-        // Rate limited per token (#146). These four routes plus /survey-links/{token} below
-        // are the distribution module's unauthenticated surface: the token IS the credential,
-        // so the bucket has to be the token, not the caller -- otherwise one invitation can be
-        // replayed from as many addresses as an attacker has.
+        // Rate limited per token (#146). On these four routes the token IS one invitee's
+        // credential, so the bucket has to be the token, not the caller -- otherwise one
+        // invitation can be replayed from as many addresses as an attacker has. The share
+        // link below is the opposite case; see the class remarks.
         var byToken = app.MapGroup("/survey-invitations")
             .RequireRateLimiting(RateLimitPolicies.PublicToken);
         byToken.MapGet("/{token}", ValidateInvitationTokenAsync);
@@ -130,8 +144,12 @@ public static class SurveyDistributionEndpoints
         byToken.MapPost("/{token}/completed", (string token, ClimateProjectDbContext db, CancellationToken ct)
             => RecordStateAsync(token, SurveyInvitationStatuses.Completed, db, ct));
 
+        // Keyed by caller, NOT by the token in the path (#146). One survey has one share link
+        // and every respondent uses it, so a token-keyed bucket would be a bucket shared by a
+        // whole company -- and a one-line way for anyone holding the public URL to close the
+        // survey for all of them. See RateLimitPolicies.PartitionPublicLink.
         app.MapGet("/survey-links/{token}", ResolvePublicLinkAsync)
-            .RequireRateLimiting(RateLimitPolicies.PublicToken);
+            .RequireRateLimiting(RateLimitPolicies.PublicLink);
     }
 
     // ------------------------------------------------------------------
