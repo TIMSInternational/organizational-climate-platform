@@ -1734,7 +1734,18 @@
     "noBenchmarksDescription": "Las referencias que usted o los administradores de la plataforma creen aparecerán aquí.",
     "loadFailed": "No se pudieron cargar las referencias.",
     "selectedCount": "{count} seleccionadas",
-    "notRecorded": "Sin registrar"
+    "notRecorded": "Sin registrar",
+    "allBenchmarks": "Todas las referencias",
+    "selected": "Seleccionadas",
+    "cohortAvailable": "para comparar",
+    "cohortExplainer": "Las barras muestran {name}, ancladas en cero y escaladas por métrica. La marca indica la mediana de las demás referencias seleccionadas.",
+    "cohortMedian": "Mediana del grupo",
+    "aboveCohort": "por encima del grupo",
+    "belowCohort": "por debajo del grupo",
+    "levelWithCohort": "al nivel del grupo",
+    "notComparable": "no comparable",
+    "noSubjectValue": "sin registrar aquí",
+    "noCohortValue": "sin valor del grupo"
   },
   "insights": {
     "description": "Hallazgos generados por IA a partir de sus encuestas y microclimas",
@@ -1757,6 +1768,7 @@
     "affectedSegments": "Segmentos afectados",
     "recommendedActions": "Acciones recomendadas",
     "selectAnInsight": "Seleccione un hallazgo para leer su detalle.",
+    "selectedInsight": "Hallazgo seleccionado",
     "noInsights": "Aún no hay hallazgos",
     "noInsightsDescription": "Los hallazgos aparecerán aquí una vez que se ejecute el análisis sobre sus resultados.",
     "loadFailed": "No se pudieron cargar los hallazgos.",

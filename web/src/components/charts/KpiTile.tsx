@@ -89,6 +89,11 @@ export default function KpiTile({
 
   return (
     <div
+      // Same `data-slot` convention the `ui/` primitives use (`badge`,
+      // `page-top-bar`). A KPI strip is a row of near-identical tiles whose
+      // labels — "Open", "Critical" — also appear as badges on the same screen,
+      // so a test asserting the strip needs a handle that is not the label text.
+      data-slot="kpi-tile"
       className={cn(
         // `surface-icon-box` is this project's existing recessed surface (the
         // badge `secondary` variant sits on it too), which is the role the

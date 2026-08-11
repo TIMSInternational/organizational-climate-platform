@@ -85,7 +85,10 @@ export default function BenchmarkList({ benchmarks, selectedIds, onToggle }: Ben
                 </Badge>
               </td>
               <td>{benchmark.isActive ? t('common.yes') : t('common.no')}</td>
-              <td>{benchmark.qualityScore}</td>
+              {/* Mono with tabular figures, like every other reading in the
+                  product: a column of scores that do not line up digit for digit
+                  cannot be scanned, which is the whole reason it is a column. */}
+              <td className="font-mono tabular-nums">{benchmark.qualityScore}</td>
             </tr>
           )
         })}

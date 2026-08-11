@@ -14,6 +14,7 @@ import { followPriorPeriodChain } from '../benchmarkAnalysis'
 import {
   SUPER_ADMIN,
   canWriteBenchmark,
+  isGlobalBenchmark,
   newBenchmarkCompanyId,
   readableBenchmarks,
   type BenchmarkScope,
@@ -27,7 +28,8 @@ import { getToken } from '../../../auth/token'
 import { decodeJwtPayload } from '../../../auth/jwt'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
-import { EmptyState, ErrorState } from '../../../components/ui'
+import { Button, EmptyState, ErrorState } from '../../../components/ui'
+import { KpiTile } from '../../../components/charts'
 
 /**
  * List, compare and trend the benchmarks the caller may read.
@@ -53,11 +55,19 @@ import { EmptyState, ErrorState } from '../../../components/ui'
  *
  * - 1 selected → the detail panel, plus a trend if that benchmark links to a
  *   prior period.
- * - 2+ selected → the comparison matrix.
+ * - 2+ selected → the cohort bars, where the first-ticked benchmark is the
+ *   subject and the rest are the cohort (see `../cohortComparison.ts`).
  *
  * Details are fetched per selected id and cached, because `GET /admin/benchmarks`
  * returns `BenchmarkListItem`, which carries no metrics — and metrics are the
  * only thing there is to compare.
+ *
+ * ## The KPI strip is counted, not fetched
+ *
+ * The four tiles above the table are all derived from `benchmarks`, the list this
+ * page already has in hand. There is no summary endpoint behind them and none is
+ * wanted: a tile whose number disagrees with the table under it is worse than no
+ * tile, and counting the rows on screen makes that impossible by construction.
  */
 export default function BenchmarksPage() {
   const { t } = useTranslation()
@@ -191,6 +201,8 @@ export default function BenchmarksPage() {
     return <ErrorState title={t('benchmarks.loadFailed')} description={error} />
   }
 
+  const globalCount = benchmarks.filter(isGlobalBenchmark).length
+
   return (
     <div>
       <PageTopBar
@@ -198,16 +210,19 @@ export default function BenchmarksPage() {
         description={t('benchmarks.description')}
         actions={
           createCompanyId !== undefined ? (
-            <button onClick={() => setShowCreateForm((open) => !open)}>
+            <Button
+              variant={showCreateForm ? 'outline' : 'default'}
+              onClick={() => setShowCreateForm((open) => !open)}
+            >
               {showCreateForm ? t('common.cancel') : t('benchmarks.newBenchmark')}
-            </button>
+            </Button>
           ) : undefined
         }
       />
 
       {showCreateForm && createCompanyId !== undefined && (
-        <>
-          <p>
+        <div className="mb-section rounded-lg border border-line-light bg-surface-icon-box p-panel">
+          <p className="max-w-prose text-sm text-fg-secondary">
             {role === SUPER_ADMIN
               ? t('benchmarks.createsGlobalHint')
               : t('benchmarks.createsCompanyHint')}
@@ -217,7 +232,7 @@ export default function BenchmarksPage() {
             submitLabel={t('benchmarks.createBenchmark')}
             onSubmit={handleCreate}
           />
-        </>
+        </div>
       )}
 
       {loading ? (
@@ -229,22 +244,62 @@ export default function BenchmarksPage() {
         />
       ) : (
         <>
-          <BenchmarkList benchmarks={benchmarks} selectedIds={selectedIds} onToggle={toggle} />
-
-          {selectedIds.length === 0 && <p>{t('benchmarks.comparisonHint')}</p>}
-
-          {single && (
-            <BenchmarkDetailPanel
-              benchmark={single}
-              canWrite={canWriteBenchmark(scope, single.companyId)}
-              onUpdate={(input) => handleUpdate(single.id, input)}
-              onAddMetric={(input) => handleAddMetric(single.id, input)}
+          {/* The KPI strip. Every one of these is counted from the list the page
+              already holds — nothing here is a second request, and nothing is a
+              figure the API does not carry. */}
+          <div className="grid grid-cols-1 gap-inline sm:grid-cols-2 xl:grid-cols-4">
+            <KpiTile label={t('analytics.kpiBenchmarks')} value={benchmarks.length} />
+            <KpiTile
+              label={t('analytics.scopeGlobal')}
+              value={globalCount}
+              sub={t('benchmarks.cohortAvailable')}
             />
+            <KpiTile
+              label={t('analytics.scopeCompany')}
+              value={benchmarks.length - globalCount}
+            />
+            <KpiTile label={t('benchmarks.selected')} value={selectedIds.length} />
+          </div>
+
+          <section className="mt-section">
+            <h2 className="mb-inline text-base">{t('benchmarks.allBenchmarks')}</h2>
+            <BenchmarkList benchmarks={benchmarks} selectedIds={selectedIds} onToggle={toggle} />
+            {selectedIds.length === 0 && (
+              <p className="mt-inline mb-0 max-w-prose text-sm text-fg-tertiary">
+                {t('benchmarks.comparisonHint')}
+              </p>
+            )}
+          </section>
+
+          {/* Comparison first, then the single-selection detail. The bars answer
+              "where does this sit", which is the question the page is for; the
+              detail panel is the record behind one row. */}
+          {selectedDetails.length > 1 && (
+            <div className="mt-section">
+              <BenchmarkComparison benchmarks={selectedDetails} />
+            </div>
           )}
 
-          {single && (chain.length > 1 ? <BenchmarkTrend chain={chain} /> : <p>{t('benchmarks.noPriorPeriods')}</p>)}
+          {single && (
+            <div className="mt-section">
+              <BenchmarkDetailPanel
+                benchmark={single}
+                canWrite={canWriteBenchmark(scope, single.companyId)}
+                onUpdate={(input) => handleUpdate(single.id, input)}
+                onAddMetric={(input) => handleAddMetric(single.id, input)}
+              />
+            </div>
+          )}
 
-          {selectedDetails.length > 1 && <BenchmarkComparison benchmarks={selectedDetails} />}
+          {single && (
+            <div className="mt-section">
+              {chain.length > 1 ? (
+                <BenchmarkTrend chain={chain} />
+              ) : (
+                <p className="mb-0 text-sm text-fg-tertiary">{t('benchmarks.noPriorPeriods')}</p>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

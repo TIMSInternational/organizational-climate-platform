@@ -185,8 +185,52 @@ describe('BenchmarksPage scope handling', () => {
   })
 })
 
+describe('BenchmarksPage headline counts', () => {
+  /**
+   * The four tiles are counted from the list the page already holds, so they can
+   * be asserted against the rows on screen. Queried through `data-slot` rather
+   * than by label: "This company" and "Platform-wide" are also the scope badges
+   * in every row of the table below.
+   */
+  it('counts the readable, platform-wide, own-company and selected benchmarks', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [
+        /\/admin\/benchmarks(\?|$)/,
+        () => [
+          listRow('g1', 'Industry average', null),
+          listRow('g2', 'Regional average', null),
+          listRow('o1', 'Our 2026 baseline', OWN),
+        ],
+      ],
+    ])
+
+    const { container } = renderPage()
+    await screen.findByText('Our 2026 baseline')
+
+    const tiles = () =>
+      [...container.querySelectorAll('[data-slot="kpi-tile"]')].map((tile) => tile.textContent)
+    expect(tiles()).toEqual([
+      'Benchmarks3',
+      'Platform-wide2to compare against',
+      'This company1',
+      'Selected0',
+    ])
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Our 2026 baseline/ }))
+    await waitFor(() => expect(tiles()[3]).toBe('Selected1'))
+  })
+})
+
 describe('BenchmarksPage comparison and trend', () => {
-  it('compares two selected benchmarks by metric name', async () => {
+  /**
+   * The comparison is bars-with-a-tick now, not a matrix, so this asserts on the
+   * section rather than on a `<table>` inside it. What it asserts is unchanged:
+   * both benchmarks' values for the shared metric are on screen and attributed —
+   * the subject's reading and the cohort's median — plus the difference the bars
+   * exist to make legible.
+   */
+  it('reads a selected benchmark against the cohort, by metric name', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
       [/\/admin\/benchmarks\/g$/, () => detail('g', 'Industry average', null)],
@@ -204,10 +248,67 @@ describe('BenchmarksPage comparison and trend', () => {
     await userEvent.click(await screen.findByRole('checkbox', { name: /Industry average/ }))
     await userEvent.click(screen.getByRole('checkbox', { name: /Our 2026 baseline/ }))
 
-    const comparison = await screen.findByRole('heading', { name: 'Comparison', level: 2 })
-    const table = comparison.parentElement!.querySelector('table')!
-    expect(table.textContent).toContain('72 %')
-    expect(table.textContent).toContain('65 %')
+    const comparison = (await screen.findByRole('heading', { name: 'Comparison', level: 2 }))
+      .closest('section')!
+    expect(comparison.textContent).toContain('engagement')
+    // The subject is the one ticked first, and it is named over the bars.
+    expect(comparison.textContent).toContain('Industry average')
+    expect(comparison.textContent).toContain('72 %')
+    expect(comparison.textContent).toContain('65 %')
+    expect(comparison.textContent).toContain('+7')
+    expect(comparison.textContent).toContain('above cohort')
+  })
+
+  /**
+   * The tick is the cohort MEDIAN and it has to sit where the median actually is.
+   * happy-dom does no layout, so this reads the inline percentages the component
+   * computes rather than rendered pixels.
+   *
+   * Subject 72 against a cohort of 60, 80 and 200: the median is 80 and the mean is
+   * 113.33, so a mean would put the tick past the subject's bar in the other
+   * direction and print a different sign. The row's scale tops out at its own
+   * largest value, 200 — hence 36% for the bar and 40% for the tick.
+   */
+  it('places the cohort-median tick at the median, on a track scaled to the row', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    function metricsOf(value: number) {
+      return { metrics: [{ id: `m-${value}`, metricName: 'engagement', value, unit: '%', percentile: null, sampleSize: null }] }
+    }
+    routeFetch([
+      [/\/admin\/benchmarks\/subject$/, () => detail('subject', 'Ours', OWN, metricsOf(72))],
+      [/\/admin\/benchmarks\/c1$/, () => detail('c1', 'Cohort one', null, metricsOf(60))],
+      [/\/admin\/benchmarks\/c2$/, () => detail('c2', 'Cohort two', null, metricsOf(80))],
+      [/\/admin\/benchmarks\/c3$/, () => detail('c3', 'Cohort three', null, metricsOf(200))],
+      [
+        /\/admin\/benchmarks(\?|$)/,
+        () => [
+          listRow('subject', 'Ours', OWN),
+          listRow('c1', 'Cohort one', null),
+          listRow('c2', 'Cohort two', null),
+          listRow('c3', 'Cohort three', null),
+        ],
+      ],
+    ])
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Ours/ }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /Cohort one/ }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /Cohort two/ }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /Cohort three/ }))
+
+    const comparison = (await screen.findByRole('heading', { name: 'Comparison', level: 2 }))
+      .closest('section')!
+    await waitFor(() => {
+      const positioned = [...comparison.querySelectorAll('[style]')].map((node) =>
+        node.getAttribute('style'),
+      )
+      expect(positioned).toContain('width: 36%;')
+      expect(positioned).toContain('left: 40%;')
+    })
+    // The same median, printed. The mean would read 113.33 and the change +9.
+    expect(comparison.textContent).toContain('80 %')
+    expect(comparison.textContent).toContain('−8')
+    expect(comparison.textContent).toContain('below cohort')
   })
 
   it('warns when the compared benchmarks record a metric in different units', async () => {
@@ -265,6 +366,56 @@ describe('BenchmarksPage comparison and trend', () => {
     const table = trend.parentElement!.querySelector('table')!
     expect(table.textContent).toContain('Q1 2026')
     expect(table.textContent).toContain('+4')
+  })
+
+  /**
+   * Three rows that cannot produce a change, and three different sentences. The
+   * defect this pins was found by rendering: a row whose *subject* had no value
+   * said "no cohort value", and a row whose units disagreed printed the cohort's
+   * 1200 ms as "1,200 s" with a change of −1,198.8.
+   */
+  it('says which side is missing, and refuses to compare across units', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [
+        /\/admin\/benchmarks\/subject$/,
+        () =>
+          detail('subject', 'Ours', OWN, {
+            metrics: [
+              { id: 's-1', metricName: 'engagement', value: 72, unit: '%', percentile: null, sampleSize: null },
+              { id: 's-2', metricName: 'responseTime', value: 1.2, unit: 's', percentile: null, sampleSize: null },
+            ],
+          }),
+      ],
+      [
+        /\/admin\/benchmarks\/cohort$/,
+        () =>
+          detail('cohort', 'Theirs', null, {
+            metrics: [
+              { id: 'c-2', metricName: 'responseTime', value: 1200, unit: 'ms', percentile: null, sampleSize: null },
+              { id: 'c-3', metricName: 'attrition', value: 12, unit: '%', percentile: null, sampleSize: null },
+            ],
+          }),
+      ],
+      [/\/admin\/benchmarks(\?|$)/, () => [listRow('subject', 'Ours', OWN), listRow('cohort', 'Theirs', null)]],
+    ])
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Ours/ }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /Theirs/ }))
+
+    const comparison = (await screen.findByRole('heading', { name: 'Comparison', level: 2 }))
+      .closest('section')!
+    // engagement: only the subject has it.
+    expect(comparison.textContent).toContain('no cohort value')
+    // attrition: only the cohort has it.
+    expect(comparison.textContent).toContain('not recorded here')
+    // responseTime: both have it, in different units.
+    expect(comparison.textContent).toContain('Units differ')
+    expect(comparison.textContent).toContain('not comparable')
+    // The cohort's magnitude must never appear wearing the subject's unit.
+    expect(comparison.textContent).not.toContain('1,200 s')
+    expect(comparison.textContent).not.toContain('1,198.8')
   })
 
   it('says so plainly when a benchmark has no prior period', async () => {
