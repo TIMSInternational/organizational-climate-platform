@@ -111,31 +111,50 @@ export default function ProfileDetailsForm({ profile, onSubmit }: ProfileDetails
             }}
           />
 
-          <dl className="grid gap-inline text-sm">
-            <div className="flex flex-wrap gap-inline">
-              <dt className="text-fg-tertiary">{t('profile.email')}</dt>
-              <dd className="text-fg-primary">{profile.email}</dd>
-            </div>
-            <div className="flex flex-wrap gap-inline">
-              <dt className="text-fg-tertiary">{t('profile.role')}</dt>
-              <dd className="text-fg-primary">{roleKey ? t(roleKey) : profile.role}</dd>
-            </div>
-            <div className="flex flex-wrap gap-inline">
-              <dt className="text-fg-tertiary">{t('profile.company')}</dt>
-              <dd className="text-fg-primary">{profile.companyName ?? t('common.none')}</dd>
-            </div>
-            <div className="flex flex-wrap gap-inline">
-              <dt className="text-fg-tertiary">{t('profile.department')}</dt>
-              <dd className="text-fg-primary">{profile.departmentName ?? t('common.none')}</dd>
-            </div>
-            <div className="flex flex-wrap gap-inline">
-              <dt className="text-fg-tertiary">{t('profile.memberSince')}</dt>
-              <dd className="text-fg-primary">{formatDate(profile.createdAt)}</dd>
-            </div>
-            <div className="flex flex-wrap gap-inline">
-              <dt className="text-fg-tertiary">{t('profile.lastLogin')}</dt>
-              <dd className="text-fg-primary">{formatDate(profile.lastLoginAt)}</dd>
-            </div>
+          {/* The design's key/value block: labels in one narrow column, values in a
+              wider one, the whole thing on the recessed surface so it reads as *given*
+              rather than as more fields to fill in. A three-column grid with a 1/2 span
+              rather than a fixed label width, which would be a raw length. */}
+          <dl className="m-0 grid grid-cols-3 gap-x-inline gap-y-1 rounded-lg border border-line-light bg-surface-icon-box p-3 text-sm">
+            <dt className="text-fg-tertiary">{t('profile.email')}</dt>
+            <dd className="col-span-2 m-0 break-words font-medium text-fg-primary">
+              {profile.email}
+            </dd>
+
+            <dt className="text-fg-tertiary">{t('profile.role')}</dt>
+            <dd className="col-span-2 m-0 break-words font-medium text-fg-primary">
+              {roleKey ? t(roleKey) : profile.role}
+            </dd>
+
+            <dt className="text-fg-tertiary">{t('profile.company')}</dt>
+            <dd className="col-span-2 m-0 break-words font-medium text-fg-primary">
+              {profile.companyName ?? t('common.none')}
+            </dd>
+
+            <dt className="text-fg-tertiary">{t('profile.department')}</dt>
+            <dd className="col-span-2 m-0 break-words font-medium text-fg-primary">
+              {profile.departmentName ?? t('common.none')}
+            </dd>
+
+            {/* Both dates are readings, so both are set in the mono face with tabular
+                figures — the one typographic rule the redesign applies to every number
+                it prints. `common.none`/`profile.never` are words, not readings, and
+                the fallback below stays in the sans face for that reason. */}
+            <dt className="text-fg-tertiary">{t('profile.memberSince')}</dt>
+            <dd className="col-span-2 m-0 font-mono font-medium text-fg-primary tabular-nums">
+              {formatDate(profile.createdAt)}
+            </dd>
+
+            <dt className="text-fg-tertiary">{t('profile.lastLogin')}</dt>
+            <dd
+              className={
+                profile.lastLoginAt === null
+                  ? 'col-span-2 m-0 font-medium text-fg-tertiary'
+                  : 'col-span-2 m-0 font-mono font-medium text-fg-primary tabular-nums'
+              }
+            >
+              {formatDate(profile.lastLoginAt)}
+            </dd>
           </dl>
 
           <p className="text-sm text-fg-tertiary">{t('profile.adminManagedNote')}</p>

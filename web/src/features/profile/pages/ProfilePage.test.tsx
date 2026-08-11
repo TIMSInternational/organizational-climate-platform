@@ -114,6 +114,50 @@ describe('ProfilePage', () => {
     expect(screen.getByText('Profile updated')).toBeTruthy()
   })
 
+  /**
+   * `/profile` is in no nav section for any role, so the derived eyebrow is null and the
+   * page has to name its own area. Without this the header loses its top line entirely,
+   * which is invisible in a DOM diff and obvious on screen.
+   */
+  it('names its own area, because the nav does not cover this route', async () => {
+    renderPage()
+    await screen.findByDisplayValue('A Person')
+    const eyebrow = document.querySelector('[data-slot="page-eyebrow"]')
+    expect(eyebrow?.textContent).toBe('Account')
+  })
+
+  /**
+   * The typographic rule the whole redesign runs on: a reading is set in the mono face
+   * with tabular figures, prose is not. Both account dates and every activity timestamp
+   * are readings.
+   */
+  it('sets every date reading in the mono face with tabular figures', async () => {
+    renderPage()
+    await screen.findByDisplayValue('A Person')
+
+    const memberSince = screen.getByText('Member since').nextElementSibling
+    expect(memberSince?.className).toContain('font-mono')
+    expect(memberSince?.className).toContain('tabular-nums')
+
+    const when = screen.getByText('Profile updated').closest('tr')?.firstElementChild
+    expect(when?.className).toContain('font-mono')
+    expect(when?.className).toContain('tabular-nums')
+  })
+
+  /**
+   * "Never" is a word, not a reading — setting it in the mono face would claim it is a
+   * measurement and would sit oddly in a column of dates that are.
+   */
+  it('leaves a missing sign-in date in the sans face, because it is a word', async () => {
+    vi.mocked(getProfile).mockResolvedValue({ ...PROFILE, lastLoginAt: null })
+    renderPage()
+
+    await screen.findByText('Never')
+    const lastLogin = screen.getByText('Last sign-in').nextElementSibling
+    expect(lastLogin?.textContent).toBe('Never')
+    expect(lastLogin?.className).not.toContain('font-mono')
+  })
+
   it('saves the name and refreshes the activity list', async () => {
     const renamed = { ...PROFILE, name: 'Renamed Person' }
     vi.mocked(updateProfile).mockResolvedValue(renamed)

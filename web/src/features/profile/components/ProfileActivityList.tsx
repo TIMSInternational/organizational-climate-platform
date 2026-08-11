@@ -68,7 +68,11 @@ export default function ProfileActivityList({ entries }: ProfileActivityListProp
                 const labelPath = ACTION_LABEL_PATH[entry.action]
                 return (
                   <TableRow key={entry.id}>
-                    <TableCell>{formatNotificationTimestamp(entry.timestamp, locale)}</TableCell>
+                    {/* A reading, so the mono face with tabular figures — which is also
+                        what keeps a column of timestamps aligned rather than ragged. */}
+                    <TableCell className="whitespace-nowrap font-mono tabular-nums">
+                      {formatNotificationTimestamp(entry.timestamp, locale)}
+                    </TableCell>
                     <TableCell>{labelPath ? t(labelPath) : entry.action}</TableCell>
                     <TableCell>
                       <Badge variant={entry.success ? 'success' : 'destructive'}>

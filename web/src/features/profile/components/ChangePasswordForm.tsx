@@ -141,8 +141,21 @@ export default function ChangePasswordForm({ onSubmit }: ChangePasswordFormProps
           />
 
           {/* Unconditional, and above the button rather than in the success alert: it is
-              something to know before choosing to submit, not afterwards. */}
-          <p className="text-sm text-fg-tertiary">{t('profile.passwordOtherSessionsNote')}</p>
+              something to know before choosing to submit, not afterwards.
+
+              The redesign gives it the recessed surface and a left rule in the warning
+              tone so it reads as a standing property of this action rather than as a
+              caption — but it is not an `Alert`, because nothing has gone wrong and an
+              alert that is always on screen is one nobody reads. The wording itself is
+              unchanged and must stay that way until #284 actually lands; see the note on
+              this component. */}
+          {/* `border-y border-r border-l-4` rather than `border border-l-4`: the
+              shorthand sets all four widths at once and whether it or the left-only
+              width wins would depend on the order Tailwind happens to emit them in.
+              Naming the three plain sides separately leaves no property set twice. */}
+          <p className="mb-0 rounded-lg border-y border-r border-l-4 border-line-light border-l-accent-amber bg-surface-icon-box p-3 text-sm text-fg-secondary">
+            {t('profile.passwordOtherSessionsNote')}
+          </p>
 
           <div>
             <Button type="submit" disabled={submitting}>
