@@ -71,18 +71,79 @@ describe('SurveysListPage', () => {
     expect(lastUrl(fetchMock)).not.toContain('companyId')
   })
 
-  it('pushes the status filter to the server rather than filtering the fetched array', async () => {
-    // Filtering client-side would be a second implementation of a rule the server
-    // owns, and would silently disagree the moment the listing is paginated.
-    const fetchMock = vi.fn().mockResolvedValue(ok(row()))
+  it('keeps status off the wire, because the chips count statuses the response would not contain', async () => {
+    // The chip row states a count per status. A response to `?status=active` holds no
+    // scheduled surveys, so those counts cannot be derived from it — which is why this
+    // one filter is applied over the full result set instead. Type and search stay the
+    // server's.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(ok(row({ status: 'active' }), row({ id: 's2', title: 'Next quarter', status: 'scheduled' })))
     vi.stubGlobal('fetch', fetchMock)
     renderPage()
     await screen.findByText('Q3 climate survey')
 
-    await userEvent.selectOptions(screen.getByLabelText('Status'), 'active')
-    await userEvent.click(screen.getByRole('button', { name: 'Filter' }))
+    await userEvent.click(screen.getByRole('button', { name: /^Scheduled/ }))
 
-    await waitFor(() => expect(lastUrl(fetchMock)).toContain('status=active'))
+    expect(lastUrl(fetchMock)).not.toContain('status=')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('narrows the rows on screen to the chosen status', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          ok(row({ status: 'active' }), row({ id: 's2', title: 'Next quarter', status: 'scheduled' })),
+        ),
+    )
+    renderPage()
+    await screen.findByText('Q3 climate survey')
+
+    await userEvent.click(screen.getByRole('button', { name: /^Scheduled/ }))
+
+    expect(screen.getByText('Next quarter')).toBeTruthy()
+    expect(screen.queryByText('Q3 climate survey')).toBeNull()
+  })
+
+  it('gives every status a chip carrying its count, including the statuses with no rows', async () => {
+    // An absent chip is indistinguishable from a filter that does not exist; a chip
+    // reading 0 says what it means. The counts come from the whole result set, not
+    // from the visible rows.
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          ok(row({ status: 'active' }), row({ id: 's2', title: 'Next quarter', status: 'scheduled' })),
+        ),
+    )
+    renderPage()
+    await screen.findByText('Q3 climate survey')
+
+    const chips = screen
+      .getByRole('group', { name: 'Filter by status' })
+      .querySelectorAll('button')
+    expect(Array.from(chips).map((chip) => chip.textContent)).toEqual([
+      'All2',
+      'Draft0',
+      'Scheduled1',
+      'Active1',
+      'Closed0',
+      'Archived0',
+    ])
+  })
+
+  it('marks the selected chip with aria-pressed, so the state is not carried by colour alone', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(row({ status: 'active' }))))
+    renderPage()
+    await screen.findByText('Q3 climate survey')
+
+    expect(screen.getByRole('button', { name: /^All/ }).getAttribute('aria-pressed')).toBe('true')
+    await userEvent.click(screen.getByRole('button', { name: /^Active/ }))
+    expect(screen.getByRole('button', { name: /^Active/ }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: /^All/ }).getAttribute('aria-pressed')).toBe('false')
   })
 
   it('does not refetch on every keystroke in the search box', async () => {
@@ -124,6 +185,56 @@ describe('SurveysListPage', () => {
     await screen.findByText('Q3 climate survey')
     expect(screen.getByText('4')).toBeTruthy()
     expect(screen.queryByText(/4 of/)).toBeNull()
+  })
+
+  it('renders participation as a bar plus a mono figure, with the bar hidden from the reading', async () => {
+    // The bar duplicates the figure beside it, so announcing both would read the same
+    // quantity twice. The figure is the reading, and it is set in the mono face.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ok(row({ responseCount: 175, targetAudienceCount: 208 }))),
+    )
+    const { container } = renderPage()
+    await screen.findByText('Q3 climate survey')
+
+    const figure = screen.getByText('84%')
+    expect(figure.className).toContain('font-mono')
+    expect(figure.className).toContain('tabular-nums')
+
+    const bar = container.querySelector('td [aria-hidden="true"] > span[style]')
+    expect(bar?.getAttribute('style')).toContain('width: 84%')
+  })
+
+  it('clamps the bar at full while still printing a participation above 100', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ok(row({ responseCount: 56, targetAudienceCount: 50 }))),
+    )
+    const { container } = renderPage()
+    await screen.findByText('Q3 climate survey')
+
+    expect(screen.getByText('112%')).toBeTruthy()
+    const bar = container.querySelector('td [aria-hidden="true"] > span[style]')
+    expect(bar?.getAttribute('style')).toContain('width: 100%')
+  })
+
+  it('draws no bar at all when the survey declares no expected audience', async () => {
+    // A bar at zero would say "nobody responded", which is a different statement from
+    // "there is nothing to measure against".
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(row({ targetAudienceCount: null }))))
+    const { container } = renderPage()
+    await screen.findByText('Q3 climate survey')
+
+    expect(container.querySelector('td [aria-hidden="true"] > span[style]')).toBeNull()
+    expect(screen.getByTitle('No expected number of respondents was set for this survey, so it has no participation rate.')).toBeTruthy()
+  })
+
+  it('names each row action for the survey it opens', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(row())))
+    renderPage()
+
+    const link = await screen.findByRole('link', { name: 'Open Q3 climate survey' })
+    expect(link.getAttribute('href')).toBe('/surveys/s1')
   })
 
   it('falls back to a label when a survey has no title in any language', async () => {

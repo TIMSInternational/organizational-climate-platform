@@ -209,10 +209,10 @@ function routeFetch(options: RouteOptions = {}) {
   })
 }
 
-function renderPage() {
+function renderPage(entry = '/surveys/new') {
   return render(
     <TranslationProvider>
-      <MemoryRouter initialEntries={['/surveys/new']}>
+      <MemoryRouter initialEntries={[entry]}>
         <CompanyContextProvider>
           <Routes>
             <Route path="/surveys/new" element={<SurveyCreatePage />} />
@@ -615,6 +615,23 @@ describe('SurveyCreatePage template mode', () => {
     // The default has to be the flow that already worked.
     expect(screen.getByRole('option', { name: 'Start blank' }).getAttribute('data-state')).toBe(
       'checked',
+    )
+  })
+
+  it('starts from the template named in the query string, which is how the catalogue hands one over', async () => {
+    // The catalogue card links to `/surveys/new?template={id}` rather than calling
+    // `/use` itself, because `/use` needs a companyId for a super admin and takes the
+    // title, dates and audience this wizard collects. Landing here with the template
+    // already chosen is what makes that link equivalent to picking it in the picker.
+    renderPage('/surveys/new?template=tpl-1')
+
+    await waitFor(() =>
+      expect(calls.some((call) => call.url.includes('/survey-templates/tpl-1'))).toBe(true),
+    )
+    await waitFor(() =>
+      expect((screen.getByLabelText(/Title/) as HTMLInputElement).value).toBe(
+        'Standard Climate Instrument',
+      ),
     )
   })
 
