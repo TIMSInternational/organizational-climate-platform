@@ -172,8 +172,14 @@ describe('colour palette', () => {
     expect(token('--admin-font-primary')).toBe('#141414')
     expect(token('--admin-font-secondary')).toBe('#474747')
     expect(token('--admin-font-tertiary')).toBe('#818181')
-    // The brand accent, and the selected-nav-row fill in the legacy sidebar.
-    expect(token('--admin-accent-blue')).toBe('#2e9098')
+    // The brand accent. NOT byte-for-byte legacy any more: UI-0 revalued it from
+    // the legacy `#2e9098` (oklch chroma 0.089, under the 0.1 floor, which is why
+    // the product read grey) to the validated teal, and split off a darker fill
+    // step so white-on-accent can clear AA. `accentContrast.test.ts` is what pins
+    // the relationship between the three; this only pins the values.
+    expect(token('--admin-accent-blue')).toBe('#0d9488')
+    expect(token('--admin-accent-blue-fill')).toBe('#0f766e')
+    expect(token('--admin-accent-blue-fill-hover')).toBe('#115e59')
     expect(token('--admin-font-on-accent')).toBe('#ffffff')
   })
 

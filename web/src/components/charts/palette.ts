@@ -10,10 +10,13 @@
  *
  * The `--admin-accent-*` colours are a UI palette, not a series palette, and
  * this was measured rather than argued. Feeding the six accents to the dataviz
- * validator as a categorical palette FAILS three checks:
+ * validator as a categorical palette FAILS:
  *
- * - `--admin-accent-blue` `#2e9098` has chroma 0.089, below the 0.1 floor — as a
- *   fill it reads gray.
+ * (Until UI-0 this list also led with `--admin-accent-blue` `#2e9098`, chroma
+ * 0.089, below the 0.1 floor. That is no longer true — the accent is now
+ * `#0d9488`, which is `--admin-chart-series-1` exactly. The reasons below stand
+ * on their own and are why the accents are still not a series palette.)
+ *
  * - orange `#ea580c` against amber `#d97706` is ΔE 1.6 for deuteranopia and
  *   **6.7 for normal vision** — indistinguishable even with full colour vision.
  *

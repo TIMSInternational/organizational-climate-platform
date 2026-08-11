@@ -198,30 +198,60 @@
   --admin-font-light: #999999;
   --admin-font-section-label: #999999;
   /* Text on a solid accent fill — the selected nav row in the legacy
-     RoleBasedNav is `color: '#fff'` on `--admin-accent-blue`. */
+     RoleBasedNav is `color: '#fff'` on `--admin-accent-blue`.
+     ONLY ever place this on `--admin-accent-blue-fill`, never on
+     `--admin-accent-blue`. See the accent block below for why. */
   --admin-font-on-accent: #ffffff;
 
   --admin-accent-green: #059669;
   --admin-accent-red: #dc2626;
-  --admin-accent-blue: #2e9098;
+
+  /* -- The accent is TWO tokens, deliberately (UI-0) ----------------------
+     The old `#2e9098` measures oklch chroma 0.0887, below the 0.1 floor, which
+     is why the product read grey. `#0d9488` (the validated chart teal, chroma
+     0.1038) fixes that — but white on it is only 3.74:1, and this repo's own
+     standard, stated in `badgeVariantContrast.test.ts`, is 4.5:1 for text.
+
+     The two constraints cannot be met by one value on this hue: the lightest
+     hue-matched teal clearing 4.5:1 is `#0e857b`, at chroma 0.0951 — back
+     under the floor. So identity and fill are separated, which is the design's
+     own third principle (colour does one job) rather than a compromise:
+
+       --admin-accent-blue       identity: borders, focus ring, icons, tinted
+                                 backgrounds, large/bold text, chart series 1.
+                                 All of those need >=3:1, and it gives 3.74 on
+                                 the light panel and 4.79 on the dark one.
+       --admin-accent-blue-fill  the ONLY surface `--admin-font-on-accent` may
+                                 sit on. 5.47:1 with white in both themes.
+
+     Hover moves in OPPOSITE directions per theme, and that is not an oversight:
+     the light hover `#115e59` is only 2.36:1 against the dark panel `#171717`,
+     so in dark the button would dissolve into the page. Dark therefore lightens
+     instead, to a step that still clears 4.5:1 with white.
+
+     Every number above is measured, not asserted — `accentContrast.test.ts`
+     re-derives all of them from this file and fails if any drifts. */
+  --admin-accent-blue: #0d9488;
+  --admin-accent-blue-fill: #0f766e;
+  --admin-accent-blue-fill-hover: #115e59;
   --admin-accent-purple: #7c3aed;
   --admin-accent-amber: #d97706;
   --admin-accent-orange: #ea580c;
 
   --admin-accent-bg-green: rgba(16, 185, 129, 0.08);
   --admin-accent-bg-red: rgba(239, 68, 68, 0.08);
-  --admin-accent-bg-blue: rgba(46, 144, 152, 0.08);
+  --admin-accent-bg-blue: rgba(13, 148, 136, 0.08);
   --admin-accent-bg-purple: rgba(139, 92, 246, 0.08);
   --admin-accent-bg-amber: rgba(245, 158, 11, 0.08);
   --admin-accent-bg-orange: rgba(249, 115, 22, 0.08);
   --admin-accent-bg-green-subtle: rgba(16, 185, 129, 0.04);
-  --admin-accent-bg-blue-subtle: rgba(46, 144, 152, 0.04);
+  --admin-accent-bg-blue-subtle: rgba(13, 148, 136, 0.04);
   --admin-accent-bg-purple-subtle: rgba(139, 92, 246, 0.04);
   --admin-accent-bg-orange-subtle: rgba(249, 115, 22, 0.04);
 
   --admin-accent-border-green: rgba(16, 185, 129, 0.2);
   --admin-accent-border-red: rgba(239, 68, 68, 0.2);
-  --admin-accent-border-blue: rgba(46, 144, 152, 0.2);
+  --admin-accent-border-blue: rgba(13, 148, 136, 0.2);
   --admin-accent-border-purple: rgba(139, 92, 246, 0.2);
   --admin-accent-border-amber: rgba(245, 158, 11, 0.2);
   --admin-accent-border-orange: rgba(249, 115, 22, 0.2);
@@ -230,9 +260,13 @@
      A categorical series palette, because the accent palette above is not one.
      Measured rather than assumed, with the dataviz validator:
 
-       --admin-accent-blue #2e9098      chroma 0.089 -> below the 0.1 floor, reads GRAY
        orange #ea580c vs amber #d97706  dE 1.6 deutan, 6.7 normal -> indistinguishable
                                         even with full colour vision
+
+     (UI-0 note: the accent's own chroma is no longer one of the reasons. It was
+     -- `#2e9098` measured chroma 0.089, below the floor -- but the accent is now
+     `#0d9488`, chroma 0.1038, which is series 1 exactly. The orange/amber collision
+     and the status reservation below are what still rule the accents out.)
 
      So charts cannot draw series colours from the accents. These six can: all
      inside the light band L 0.43-0.77, all above the chroma floor, worst
@@ -355,25 +389,30 @@
 
   --admin-accent-green: #10b981;
   --admin-accent-red: #ef4444;
-  --admin-accent-blue: #2e9098;
+  /* Dark lifts the identity accent to chroma 0.1230 (7.20:1 on the dark panel);
+     the fill stays the same step as light because white-on-fill contrast is a
+     property of the fill alone, and hover LIGHTENS here — see the light block. */
+  --admin-accent-blue: #14b8a6;
+  --admin-accent-blue-fill: #0f766e;
+  --admin-accent-blue-fill-hover: #0e857b;
   --admin-accent-purple: #8b5cf6;
   --admin-accent-amber: #f59e0b;
   --admin-accent-orange: #f97316;
 
   --admin-accent-bg-green: rgba(16, 185, 129, 0.1);
   --admin-accent-bg-red: rgba(239, 68, 68, 0.1);
-  --admin-accent-bg-blue: rgba(46, 144, 152, 0.1);
+  --admin-accent-bg-blue: rgba(20, 184, 166, 0.1);
   --admin-accent-bg-purple: rgba(139, 92, 246, 0.1);
   --admin-accent-bg-amber: rgba(245, 158, 11, 0.1);
   --admin-accent-bg-orange: rgba(249, 115, 22, 0.1);
   --admin-accent-bg-green-subtle: rgba(16, 185, 129, 0.05);
-  --admin-accent-bg-blue-subtle: rgba(46, 144, 152, 0.05);
+  --admin-accent-bg-blue-subtle: rgba(20, 184, 166, 0.05);
   --admin-accent-bg-purple-subtle: rgba(139, 92, 246, 0.05);
   --admin-accent-bg-orange-subtle: rgba(249, 115, 22, 0.05);
 
   --admin-accent-border-green: rgba(16, 185, 129, 0.15);
   --admin-accent-border-red: rgba(239, 68, 68, 0.15);
-  --admin-accent-border-blue: rgba(46, 144, 152, 0.15);
+  --admin-accent-border-blue: rgba(20, 184, 166, 0.15);
   --admin-accent-border-purple: rgba(139, 92, 246, 0.15);
   --admin-accent-border-amber: rgba(245, 158, 11, 0.15);
   --admin-accent-border-orange: rgba(249, 115, 22, 0.15);
