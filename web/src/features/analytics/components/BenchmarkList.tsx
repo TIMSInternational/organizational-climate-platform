@@ -1,7 +1,9 @@
 import type { BenchmarkListItem } from '../api/benchmarks'
 import { isGlobalBenchmark } from '../benchmarkScope'
+import { QUALITY_SCORE_FORMAT } from '../benchmarkReadings'
 import { useTranslation } from '../../../i18n'
 import { Badge, Checkbox, EmptyState, Table } from '../../../components/ui'
+import { formatMetric } from '../../../components/charts'
 
 export interface BenchmarkListProps {
   benchmarks: readonly BenchmarkListItem[]
@@ -37,7 +39,7 @@ export interface BenchmarkListProps {
  * below it another.
  */
 export default function BenchmarkList({ benchmarks, selectedIds, onToggle }: BenchmarkListProps) {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const selectable = onToggle !== undefined
 
   if (benchmarks.length === 0) {
@@ -59,7 +61,7 @@ export default function BenchmarkList({ benchmarks, selectedIds, onToggle }: Ben
           <th>{t('analytics.category')}</th>
           <th>{t('analytics.scope')}</th>
           <th>{t('common.active')}</th>
-          <th>{t('analytics.qualityScore')}</th>
+          <th className="text-right">{t('analytics.qualityScore')}</th>
         </tr>
       </thead>
       <tbody>
@@ -87,8 +89,14 @@ export default function BenchmarkList({ benchmarks, selectedIds, onToggle }: Ben
               <td>{benchmark.isActive ? t('common.yes') : t('common.no')}</td>
               {/* Mono with tabular figures, like every other reading in the
                   product: a column of scores that do not line up digit for digit
-                  cannot be scanned, which is the whole reason it is a column. */}
-              <td className="font-mono tabular-nums">{benchmark.qualityScore}</td>
+                  cannot be scanned, which is the whole reason it is a column.
+                  Tabular figures only line the column up if every score has the
+                  same number of them, which is what `QUALITY_SCORE_FORMAT` is
+                  for — and going through `formatMetric` is also what gives a
+                  Spanish reader `0,92` rather than a raw JS `0.92`. */}
+              <td className="text-right font-mono tabular-nums">
+                {formatMetric(benchmark.qualityScore, QUALITY_SCORE_FORMAT, locale)}
+              </td>
             </tr>
           )
         })}

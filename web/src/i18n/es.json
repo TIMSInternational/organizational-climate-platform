@@ -1726,6 +1726,8 @@
     "selectForComparison": "Seleccionar {name} para comparar",
     "unitsDiffer": "Unidades distintas",
     "unitsDifferHint": "Las referencias seleccionadas registran esta métrica en unidades distintas, por lo que los valores no son directamente comparables.",
+    "selectedBenchmark": "Referencia seleccionada",
+    "priorPeriods": "Períodos anteriores",
     "trend": "Tendencia respecto a períodos anteriores",
     "trendHint": "Seleccione una sola referencia vinculada a un período anterior para ver cómo se movieron sus métricas.",
     "noPriorPeriods": "Esta referencia no está vinculada a un período anterior.",

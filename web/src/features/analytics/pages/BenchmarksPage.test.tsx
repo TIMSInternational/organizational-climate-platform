@@ -451,3 +451,124 @@ describe('BenchmarksPage empty and error states', () => {
     expect(await screen.findByText('The benchmarks could not be loaded.')).toBeTruthy()
   })
 })
+
+/**
+ * Ticking ONE row is the likeliest thing anyone does on this page, and it opens
+ * the detail panel and the trend rather than the cohort bars. Both of those used
+ * to render every one of their ~30 numbers in the sans face, directly under a
+ * comparison that sets all of its readings in mono. These pin the rule per
+ * surface, because it was per surface that it was broken.
+ */
+describe('BenchmarksPage single-selection readings', () => {
+  const withMetrics = (id: string, name: string, extra: Partial<Benchmark> = {}) =>
+    detail(id, name, OWN, {
+      qualityScore: 0.9,
+      metrics: [
+        { id: `${id}-a`, metricName: 'engagement', value: 74, unit: 'pts', percentile: 62, sampleSize: 1200 },
+      ],
+      ...extra,
+    })
+
+  it('sets the detail panel readings in mono with tabular figures, and only the readings', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [/\/admin\/benchmarks\/o$/, () => withMetrics('o', 'Our 2026 baseline')],
+      [/\/admin\/benchmarks(\?|$)/, () => [listRow('o', 'Our 2026 baseline', OWN)]],
+    ])
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Our 2026 baseline/ }))
+
+    const panel = (await screen.findByRole('heading', { name: 'Our 2026 baseline', level: 2 }))
+      .closest('section')!
+    const mono = (text: string) =>
+      [...panel.querySelectorAll('.font-mono.tabular-nums')].some(
+        (node) => node.textContent?.trim() === text,
+      )
+
+    // The value, the percentile and the sample size: three readings, three monos.
+    expect(mono('74')).toBe(true)
+    expect(mono('62')).toBe(true)
+    expect(mono('1,200')).toBe(true)
+    // The quality score, at the two decimals it is stored with.
+    expect(mono('0.90')).toBe(true)
+    // The metric NAME and the unit are words, not readings, and stay sans.
+    const sans = (text: string) =>
+      [...panel.querySelectorAll('td')].some(
+        (cell) => cell.textContent?.trim() === text && !cell.className.includes('font-mono'),
+      )
+    expect(sans('engagement')).toBe(true)
+    expect(sans('pts')).toBe(true)
+  })
+
+  /**
+   * `formatMetric`'s default precision is "however many this number needs, capped
+   * at ONE", so the panel printed a stored 0.92 as "0.9" — a digit dropped off the
+   * figure it exists to report — while the list beside it printed the raw JS
+   * number and so never localised at all.
+   */
+  it('prints the quality score at two decimals in both the list and the panel, and localises it', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [/\/admin\/benchmarks\/o$/, () => withMetrics('o', 'Our 2026 baseline', { qualityScore: 0.92 })],
+      [
+        /\/admin\/benchmarks(\?|$)/,
+        () => [
+          { ...listRow('o', 'Our 2026 baseline', OWN), qualityScore: 0.92 },
+          { ...listRow('p', 'Prior baseline', OWN), qualityScore: 0.9 },
+        ],
+      ],
+    ])
+
+    renderPage()
+
+    const table = (await screen.findByText('Our 2026 baseline')).closest('table')!
+    // Same digit count on both rows, which is the only way tabular figures line a
+    // column up. `0.9` next to `0.92` does not.
+    expect(table.textContent).toContain('0.92')
+    expect(table.textContent).toContain('0.90')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Our 2026 baseline/ }))
+    const panel = (await screen.findByRole('heading', { name: 'Our 2026 baseline', level: 2 }))
+      .closest('section')!
+    // Never "0.9": that is the panel disagreeing with the row above it.
+    expect(panel.textContent).toContain('0.92')
+  })
+
+  it('sets the trend readings in mono with tabular figures', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [
+        /\/admin\/benchmarks\/q2$/,
+        () =>
+          detail('q2', 'Q2 2026', OWN, {
+            priorPeriodBenchmarkId: 'q1',
+            metrics: [{ id: 'q2-m', metricName: 'engagement', value: 74, unit: 'pts', percentile: null, sampleSize: null }],
+          }),
+      ],
+      [
+        /\/admin\/benchmarks\/q1$/,
+        () =>
+          detail('q1', 'Q1 2026', OWN, {
+            metrics: [{ id: 'q1-m', metricName: 'engagement', value: 70, unit: 'pts', percentile: null, sampleSize: null }],
+          }),
+      ],
+      [/\/admin\/benchmarks(\?|$)/, () => [listRow('q2', 'Q2 2026', OWN)]],
+    ])
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Q2 2026/ }))
+
+    const trend = (await screen.findByRole('heading', { name: 'Trend over prior periods', level: 2 }))
+      .closest('section')!
+    const mono = [...trend.querySelectorAll('.font-mono.tabular-nums')].map((node) =>
+      node.textContent?.trim(),
+    )
+    expect(mono).toContain('70 pts')
+    expect(mono).toContain('74 pts')
+    // The change is a reading too, and it is the one a reader differences by eye.
+    expect(mono).toContain('+4')
+    // The metric name is a word and must not be dragged into the mono face.
+    expect(mono).not.toContain('engagement')
+  })
+})

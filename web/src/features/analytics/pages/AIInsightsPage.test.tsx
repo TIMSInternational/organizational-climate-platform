@@ -430,3 +430,86 @@ describe('AIInsightsPage vocabulary', () => {
     expect(names).not.toContain('Label')
   })
 })
+
+/**
+ * The card is the only control on this screen and the only way into an insight,
+ * so both of its states owe the reader something visible. happy-dom does no
+ * layout and computes no cascade, so these assert the CLASSES — which is all this
+ * environment can see. The measured values behind each class are in
+ * `InsightList.tsx`'s header, and were taken off the rendered page in Chromium in
+ * both themes.
+ */
+describe('AIInsightsPage card states', () => {
+  function twoInsights() {
+    routeFetch([
+      [/\/admin\/ai-insights\/i1$/, () => insightDetail()],
+      [
+        /\/admin\/ai-insights(\?|$)/,
+        () => [listRow(), listRow({ id: 'i2', title: 'Workload is heaviest in Operations' })],
+      ],
+    ])
+  }
+
+  /** Returns the insight cards, never the pagination or acknowledge buttons. */
+  async function insightCards(): Promise<HTMLElement[]> {
+    const first = await screen.findByRole('button', { name: /Engagement is falling in Support/ })
+    const list = first.closest('ul')!
+    return [...list.querySelectorAll('li > button')] as HTMLElement[]
+  }
+
+  /**
+   * The regression this pins. The `<button>` the redesign replaced inherited
+   * index.css's `button:hover:not(:disabled)`, but that rule is in `@layer base`
+   * and the card's own fill is a `@layer utilities` class, which wins on layer
+   * order — so the rewrite silently shipped a card that did not answer the
+   * pointer at all. Measured in Chromium with the pointer over the third card:
+   * hovered and un-hovered returned identical background and border.
+   */
+  it('gives every card a hover tint over its own fill', async () => {
+    twoInsights()
+
+    renderPage()
+
+    const cards = await insightCards()
+    expect(cards).toHaveLength(2)
+    for (const card of cards) {
+      expect(card.className).toContain('group')
+      const overlay = card.querySelector(':scope > span[aria-hidden="true"]')!
+      expect(overlay.className).toContain('group-hover:bg-state-hover')
+      // Over the card's own fill, not over the page: `inset-0` on a layer inside
+      // the card is what makes the translucent token composite correctly.
+      expect(overlay.className).toContain('absolute')
+      expect(overlay.className).toContain('inset-0')
+      expect(overlay.className).toContain('pointer-events-none')
+    }
+  })
+
+  /**
+   * Dark mode is where the first attempt failed: `bg-surface-panel` against
+   * `bg-surface-icon-box` is 1.25:1, `border-line-hover` against the neighbouring
+   * cards is 1.47:1, and `shadow-sm` is `rgba(0,0,0,.4)` on a near-black ground.
+   * WCAG 1.4.11 asks 3:1 of a state indicator. `border-accent-blue` measures
+   * 3.74:1 light / 7.20:1 dark on the surface it encloses, and 3.29:1 / 5.77:1
+   * against the closed cards beside it.
+   */
+  it('marks the open card with the accent border, and only that card', async () => {
+    twoInsights()
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: /Engagement is falling in Support/ }))
+    await screen.findByRole('heading', { name: 'Engagement is falling in Support', level: 2 })
+
+    const [open, closed] = await insightCards()
+    expect(open.getAttribute('aria-current')).toBe('true')
+    expect(open.className).toContain('border-accent-blue')
+    expect(closed.getAttribute('aria-current')).toBeNull()
+    expect(closed.className).not.toContain('border-accent-blue')
+    // The three cues that could not be seen in dark, gone.
+    expect(open.className).not.toContain('shadow-sm')
+    expect(open.className).not.toContain('border-line-hover')
+    // Both cards carry the same border WIDTH, so opening one cannot shift the
+    // column sideways by the pixel a 1px -> 2px swap would cost.
+    expect(open.className).toContain('border-2')
+    expect(closed.className).toContain('border-2')
+  })
+})

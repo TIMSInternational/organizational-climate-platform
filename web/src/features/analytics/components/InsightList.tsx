@@ -58,6 +58,52 @@ export interface InsightListProps {
  * `high` steps down through `--admin-font-tertiary` rather than through a second
  * hue. Colour never carries the priority on its own: the word is always in the
  * badge beside it.
+ *
+ * ## The open card is marked with the accent border, not with a surface lift
+ *
+ * The first attempt lifted the open card from `bg-surface-icon-box` onto
+ * `bg-surface-panel` and gave it `border-line-hover` and `shadow-sm`. Measured on
+ * the rendered page in dark, all three of those cues fail:
+ *
+ * - the two surfaces are `#2a2a2a` and `#171717`, **1.25:1** apart;
+ * - `--admin-border-hover` `#444444` against the neighbouring cards' `#2a2a2a` is
+ *   **1.47:1**, where WCAG 1.4.11 asks 3:1 of a state indicator;
+ * - `shadow-sm` is `rgba(0,0,0,.4)`, which is invisible on a near-black ground.
+ *
+ * So the open card is bordered in `--admin-accent-blue` instead, which is the same
+ * ink the shell already spends on "you are here": `--admin-focus-ring` is defined
+ * as it, and index.css fills `.nav-row[data-nav-state='selected']` with it.
+ * Measured against the three surfaces it actually touches — the page ground behind
+ * the column was read off the rendered page, `#ffffff` light and `#171717` dark:
+ *
+ * | | its own fill | the ground | the closed cards |
+ * |---|---|---|---|
+ * | light `#0d9488` | 3.74:1 | 3.74:1 | 3.29:1 |
+ * | dark `#14b8a6` | 7.20:1 | 7.20:1 | 5.77:1 |
+ *
+ * All six clear 3:1. The border is 2px on *every* card — `border-line-light` when
+ * closed — so opening one cannot move the column by a pixel. The surface lift and
+ * `aria-current` stay as the redundant cues they should always have been;
+ * `shadow-sm` is gone, since a cue that only exists in one theme is not a cue.
+ *
+ * ## Hover
+ *
+ * The card is the only control on this screen and the only way into an insight, so
+ * it has to answer the pointer. It could not: the plain `<button>` this replaced
+ * inherited index.css's `button:hover:not(:disabled)` rule, but that lives in
+ * `@layer base` and `bg-surface-icon-box` lives in `@layer utilities`, which wins
+ * on layer order whatever the specificity — so the rewrite silently dropped the
+ * hover it used to get for free.
+ *
+ * `--admin-bg-hover` is the token for this and it is *translucent* —
+ * `rgba(0,0,0,.04)` light, `rgba(255,255,255,.06)` dark — so it darkens in light
+ * and lightens in dark, always toward the reader. As a `hover:bg-state-hover`
+ * background it would REPLACE the card's opaque fill and composite over the page
+ * instead, which in light mode comes out *lighter* than the resting card. So it is
+ * painted by an inset overlay layered over the card's own fill, which is what
+ * `table.tsx`'s rows and `QuickActions` get for free by being transparent to begin
+ * with. The overlay is `aria-hidden`, `pointer-events-none`, and its siblings are
+ * `relative` so the content paints above it.
  */
 export default function InsightList({ insights, selectedId, onSelect }: InsightListProps) {
   const { t } = useTranslation()
@@ -75,18 +121,27 @@ export default function InsightList({ insights, selectedId, onSelect }: InsightL
               className={cn(
                 // `h-auto`, `justify-start`, `text-left`: index.css gives every
                 // bare `button` a 32px centred row, which would crush the card.
-                'flex h-auto w-full items-stretch justify-start gap-0 overflow-hidden p-0 text-left',
-                'rounded-lg border border-line-light bg-surface-icon-box',
-                // The open card lifts onto the panel surface. `aria-current`
-                // carries the same fact for anyone who cannot see the lift.
-                selected && 'border-line-hover bg-surface-panel shadow-sm',
+                'group relative flex h-auto w-full items-stretch justify-start gap-0 overflow-hidden p-0 text-left',
+                // `border-2` on both states so opening a card cannot shift the
+                // column by the pixel a 1px→2px swap would cost.
+                'rounded-lg border-2 border-line-light bg-surface-icon-box',
+                // The open card. `aria-current` carries the same fact for anyone
+                // who cannot see it.
+                selected && 'border-accent-blue bg-surface-panel',
               )}
             >
+              {/* The hover tint, over the card's OWN fill rather than over the
+                  page — see the header. `transition-colors` is stopped by
+                  index.css's prefers-reduced-motion block. */}
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 transition-colors group-hover:bg-state-hover"
+              />
               {/* The priority rail. Redundant with the badge below by design. */}
               <span
                 aria-hidden="true"
                 className={cn(
-                  'w-1 shrink-0 self-stretch',
+                  'relative w-1 shrink-0 self-stretch',
                   // Compared against the shared wire values, not against a
                   // literal: the headline count on the page matches the same
                   // constant, and a rail painted from `'Critical'` would silently
@@ -98,7 +153,7 @@ export default function InsightList({ insights, selectedId, onSelect }: InsightL
                       : 'bg-line-default',
                 )}
               />
-              <span className="flex min-w-0 flex-1 items-start gap-inline p-card">
+              <span className="relative flex min-w-0 flex-1 items-start gap-inline p-card">
                 <span className="flex size-icon-box shrink-0 items-center justify-center rounded-md border border-line-light bg-surface-panel text-fg-tertiary">
                   <Sparkles aria-hidden="true" className="size-icon" />
                 </span>

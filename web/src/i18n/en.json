@@ -1726,6 +1726,8 @@
     "selectForComparison": "Select {name} for comparison",
     "unitsDiffer": "Units differ",
     "unitsDifferHint": "The selected benchmarks record this metric in different units, so the values are not directly comparable.",
+    "selectedBenchmark": "Selected benchmark",
+    "priorPeriods": "Prior periods",
     "trend": "Trend over prior periods",
     "trendHint": "Select a single benchmark that links to a prior period to see how its metrics moved.",
     "noPriorPeriods": "This benchmark does not link to a prior period.",

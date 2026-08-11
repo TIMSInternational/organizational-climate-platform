@@ -296,7 +296,12 @@ export default function BenchmarksPage() {
               {chain.length > 1 ? (
                 <BenchmarkTrend chain={chain} />
               ) : (
-                <p className="mb-0 text-sm text-fg-tertiary">{t('benchmarks.noPriorPeriods')}</p>
+                // Panelled like the trend it stands in for. A bare sentence on
+                // the page ground next to a carded detail panel reads as a
+                // rendering accident rather than as an answer.
+                <p className="mb-0 rounded-lg border border-line-light bg-surface-icon-box p-panel text-sm text-fg-tertiary">
+                  {t('benchmarks.noPriorPeriods')}
+                </p>
               )}
             </div>
           )}
