@@ -13,6 +13,7 @@ export { default as Counter } from './Counter'
 export { default as WordCloud } from './WordCloud'
 export { default as KPIDisplay } from './KPIDisplay'
 export { default as KpiTile } from './KpiTile'
+export { default as ProtectedCell, isSuppressed } from './ProtectedCell'
 export { default as ParticipationTracker } from './ParticipationTracker'
 export { default as RealTimeChartContainer } from './RealTimeChartContainer'
 export { default as SentimentVisualization } from './SentimentVisualization'
@@ -27,6 +28,7 @@ export type { HeatMapCell } from './HeatMap'
 export type { WordFrequency } from './WordCloud'
 export type { Kpi } from './KPIDisplay'
 export type { KpiTileProps } from './KpiTile'
+export type { ProtectedCellProps } from './ProtectedCell'
 export type {
   EffortImpact,
   RecommendationKind,
