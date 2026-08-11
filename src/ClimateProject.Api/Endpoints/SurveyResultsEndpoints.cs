@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using ClimateProject.Api.Infrastructure.Auditing;
+using ClimateProject.Application.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Surveys;
@@ -59,7 +61,13 @@ public static class SurveyResultsEndpoints
         // guard, same 404-then-403 ordering as every other survey route.
         var group = app.MapGroup("/surveys").RequireAuthorization();
 
-        group.MapGet("/{id:guid}/results", GetResultsAsync);
+        // Audited as a sensitive read (#143). This route is the one that returns the
+        // per-question answer breakdown for a survey of confidential employee opinion, so
+        // "who read this" has an answer. The three aggregates below are not marked: they are
+        // polled by dashboards and return counts, not content.
+        group.MapGet("/{id:guid}/results", GetResultsAsync)
+            .WithMetadata(new AuditSensitiveReadAttribute(AuditVerbs.Read));
+
         group.MapGet("/{id:guid}/statistics", GetStatisticsAsync);
         group.MapGet("/{id:guid}/analytics", GetAnalyticsAsync);
         group.MapGet("/{id:guid}/real-time-stats", GetRealTimeStatsAsync);
