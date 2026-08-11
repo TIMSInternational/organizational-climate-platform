@@ -454,7 +454,11 @@ function SessionPlate({
 
   return (
     <section className="flex flex-col gap-inline rounded-lg border border-line-light bg-surface-icon-box p-3">
-      <dl className="m-0 grid grid-cols-2 gap-inline md:grid-cols-5">
+      {/* Five across only from `lg`. At 900px wide the five-column form put the
+          two localised timestamps into two lines each while the three short facts
+          beside them sat on one, which reads as a broken row rather than as a
+          plate. Measured by rendering at 900. */}
+      <dl className="m-0 grid grid-cols-2 gap-inline sm:grid-cols-3 lg:grid-cols-5">
         <Fact label={t('microclimates.liveOpenedAt')}>
           {new Date(microclimate.startTime).toLocaleString(locale)}
         </Fact>

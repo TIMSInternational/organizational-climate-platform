@@ -143,8 +143,12 @@ describe('MicroclimateLivePage', () => {
     responseCount = 14
     expect(screen.queryAllByText('14')).toHaveLength(0)
 
-    // `POLL_MS` in the page. Advancing by less than it must not be enough, which
-    // is what makes this distinguish polling from a re-render on some other cause.
+    // A short advance is not enough, so this cannot be satisfied by a re-render
+    // on some other cause. It is not a precise assertion about `POLL_MS` itself:
+    // `shouldAdvanceTime` ties fake time to real time, so `waitFor` below moves
+    // the clock on by up to its own timeout as well. What it does pin down is
+    // that the interval fires at all — mutating `usePolling`'s `setInterval` to a
+    // no-op turns this test red, while leaving the initial mount fetch intact.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000)
     })
