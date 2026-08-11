@@ -86,23 +86,31 @@ export async function updateProfile(baseUrl: string, name: string): Promise<Prof
 }
 
 /**
- * Changes the caller's own password, proving they know the current one.
+ * Changes the caller's own password, proving they know the current one, and returns the
+ * replacement session token.
  *
- * Resolves to nothing: the endpoint answers 204 with an empty body, because a password
- * route is the last place to start echoing state back. A wrong current password comes back
- * as a 400 whose message `authFetch` throws, **not** a 401 — a 401 would be
- * indistinguishable from an expired session and would bounce the user to the login page,
- * losing the form.
+ * **The caller MUST store the returned token.** Since #284 the change signs every session
+ * for this account out, including the one that sent the request: the API rotates the user's
+ * security stamp and every token minted under the old one is refused from that moment. The
+ * response carries a token minted after the rotation, so the client that drops it on the
+ * floor has just signed itself out — the next request 401s and `authFetch` redirects to the
+ * login page.
+ *
+ * A wrong current password still comes back as a 400 whose message `authFetch` throws,
+ * **not** a 401 — a 401 would be indistinguishable from an expired session and would bounce
+ * the user to the login page, losing the form.
  */
 export async function changePassword(
   baseUrl: string,
   currentPassword: string,
   newPassword: string,
-): Promise<void> {
-  await authFetch(`${baseUrl}${PATH}/password`, {
+): Promise<string> {
+  const response = await authFetch(`${baseUrl}${PATH}/password`, {
     method: 'PUT',
     body: JSON.stringify({ currentPassword, newPassword }),
   })
+  const body = (await response.json()) as { token: string }
+  return body.token
 }
 
 /** The caller's own audit trail, most recent first. `limit` is clamped server-side. */

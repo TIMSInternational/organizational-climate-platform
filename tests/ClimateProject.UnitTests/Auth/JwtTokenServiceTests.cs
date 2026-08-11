@@ -26,7 +26,8 @@ public class JwtTokenServiceTests
         Email: "person@acme.test",
         Name: "Person One",
         CompanyId: Guid.NewGuid().ToString(),
-        IsActive: true);
+        IsActive: true,
+        SecurityStamp: Guid.NewGuid());
 
     [Fact]
     public void IssueToken_produces_exact_claim_shape_with_no_iss_or_aud()
@@ -43,6 +44,15 @@ public class JwtTokenServiceTests
         Assert.Equal("Person One", jwt.Claims.Single(c => c.Type == "name").Value);
         Assert.Equal(SampleClaims.CompanyId, jwt.Claims.Single(c => c.Type == "companyId").Value);
         Assert.Equal("true", jwt.Claims.Single(c => c.Type == "isActive").Value);
+
+        // #284. Asserted as the exact "D" text a Guid renders by default, not just as
+        // "present": the reader parses this value and compares it for equality against
+        // users.security_stamp, so a token carrying a truncated or reformatted stamp would
+        // be refused by its own next request.
+        Assert.Equal(
+            SampleClaims.SecurityStamp.ToString(),
+            jwt.Claims.Single(c => c.Type == "securityStamp").Value);
+
         Assert.Contains(jwt.Claims, c => c.Type == "iat");
 
         Assert.DoesNotContain(jwt.Claims, c => c.Type == "iss");
