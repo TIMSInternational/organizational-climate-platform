@@ -146,6 +146,14 @@
      panel stopped being capped. Not a breakpoint: the control still shrinks with
      its container, this only stops it growing past the point of being readable. */
   --admin-size-field-max: 32rem;
+  /* The measure: how long a line of prose is allowed to get. In `ch`, because
+     the constraint is a character count and not a distance. Tailwind's own
+     `prose` container is 65ch; the redesign's page header caps its description
+     at 70ch (`.ptb p { max-width: 70ch }`), and theme.css points
+     `--container-measure` here, giving `max-w-measure`.
+     Applies to PROSE ONLY — tables and charts fill the width, and there is no
+     page width cap (see `app/AdminLayout.tsx`). */
+  --admin-size-measure: 70ch;
 
   /* -- Radii -------------------------------------------------------------
      4px on controls and 8px on panels are the legacy literals: ui/button.tsx
@@ -255,6 +263,44 @@
   --admin-accent-border-purple: rgba(139, 92, 246, 0.2);
   --admin-accent-border-amber: rgba(245, 158, 11, 0.2);
   --admin-accent-border-orange: rgba(249, 115, 22, 0.2);
+
+  /* -- Status-chip ink (UI-0) --------------------------------------------
+     THE INK A STATUS CHIP WEARS ON ITS SOFT FILL. Five tones, one per state
+     the design names: good / warning / critical / accent / neutral.
+
+     These exist because the accent tokens above cannot do this job. Measured
+     against the 8% soft fills, `badgeVariantContrast.test.ts` records the
+     three hued badge variants at 3.49 / 2.99 / 3.41:1 in LIGHT — all under
+     WCAG AA 1.4.3's 4.5:1, and chip text is 11px, so 4.5 is the threshold.
+     A soft tint over white is a near-white surface; the accents were picked
+     to sit on the PANEL (>=3:1 for icons and borders), not to be read on a
+     tint of themselves. Two different jobs, so two different tokens — the
+     design's own third principle rather than a workaround.
+
+     Light takes the redesign's own status inks verbatim (`--good` #15803d,
+     `--warn` #b45309, `--crit` #b91c1c), which are already the darker steps
+     for exactly this reason. Dark takes the redesign's dark inks (#4ade80,
+     #fbbf24, #f87171).
+
+     Two deviations from the prototype, both because its value fails here:
+       accent, light  the prototype pairs #0d9488 with its accent tint, which
+                      measures 3.40:1. `--admin-accent-blue-fill` #0f766e is
+                      the repo's existing text-safe teal and gives 4.97:1.
+       critical, dark the prototype's #f87171 is kept; note that the dark
+                      `--admin-accent-red` #ef4444 would have been 4.31:1.
+
+     Neutral is `--admin-font-secondary` because a neutral chip is body ink on
+     a recessed surface and there is nothing hued to preserve.
+
+     Every pairing, both themes, worst case 4.64:1. Re-derived from THIS FILE
+     and from the real `ui/chipVariants.ts` class table by
+     `styles/chipVariantContrast.test.ts`, so neither a token nudge nor a
+     variant re-pairing can quietly drop one under the line. */
+  --admin-chip-ink-good: #15803d;
+  --admin-chip-ink-warning: #b45309;
+  --admin-chip-ink-critical: #b91c1c;
+  --admin-chip-ink-accent: var(--admin-accent-blue-fill);
+  --admin-chip-ink-neutral: var(--admin-font-secondary);
 
   /* -- Data visualisation (#79) -------------------------------------------
      A categorical series palette, because the accent palette above is not one.
@@ -435,6 +481,17 @@
   --admin-accent-border-purple: rgba(139, 92, 246, 0.15);
   --admin-accent-border-amber: rgba(245, 158, 11, 0.15);
   --admin-accent-border-orange: rgba(249, 115, 22, 0.15);
+
+  /* Status-chip ink, dark. Selected against the 10% fills over #171717 rather
+     than flipped from light — see the light block for the whole argument.
+     `accent` can be the identity accent here (6.23:1) because the dark fill is
+     dark; `critical` is a step lighter than `--admin-accent-red`, which would
+     have measured 4.31:1. */
+  --admin-chip-ink-good: #4ade80;
+  --admin-chip-ink-warning: #fbbf24;
+  --admin-chip-ink-critical: #f87171;
+  --admin-chip-ink-accent: var(--admin-accent-blue);
+  --admin-chip-ink-neutral: var(--admin-font-secondary);
 
   /* -- Data visualisation, dark ------------------------------------------
      SELECTED for the dark surface, not flipped from light. The dark band is

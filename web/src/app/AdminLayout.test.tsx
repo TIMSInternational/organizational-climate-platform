@@ -157,8 +157,9 @@ describe('AdminLayout', () => {
    * from 1516px up, which is an ordinary laptop.
    *
    * A table or a chart is better for the width; it is prose that becomes
-   * unreadable, so the cap moved onto the text (`max-w-prose`, asserted below and
-   * in `PageTopBar`). happy-dom computes no layout, so — as with the
+   * unreadable, so the cap moved onto the text (`max-w-prose` in
+   * `ui/error-state.tsx`, `max-w-measure` in `PageTopBar`, asserted there).
+   * happy-dom computes no layout, so — as with the
    * `overflow-x-auto` rule beneath — this can only be asserted as the classes.
    */
   it('does not cap or centre the panel, so the card cannot drift away from the rail', () => {

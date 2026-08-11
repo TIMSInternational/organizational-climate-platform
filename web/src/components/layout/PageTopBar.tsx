@@ -12,7 +12,6 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-  Separator,
   type BadgeVariantProps,
 } from '../ui'
 
@@ -47,6 +46,41 @@ import {
  *   `shell.breadcrumb` from the catalogue rather than to the string "Breadcrumb"
  *   — this component is app-level and has translation context, unlike the `ui/`
  *   primitives that have to take their labels as props.
+ *
+ * ## The page layout rule (UI-0)
+ *
+ * One rule carries every screen in the redesign: **page header, then a KPI row,
+ * then the work.** This component is the header half of it, and its geometry is
+ * the prototype's `.ptb`: a 14px pad under the content, a hairline bottom rule,
+ * and 16px of air below that before the KPI row starts. The container itself
+ * therefore owns the rule — there is no `<Separator />` element any more,
+ * because a separator is a sibling with its own margins and the design's rule is
+ * a property of the header box.
+ *
+ * The row is `items-start`, not `items-center`: when the actions wrap to two
+ * lines the title must stay pinned to the top of the block rather than drifting
+ * to its middle.
+ *
+ * Three deliberate deviations from `.ptb`, each because the repo's own layer
+ * already answers the question:
+ *
+ * - **`<h1>`, not `<h2>`.** The prototype nests its screens inside a page that
+ *   already has an `<h1>` in the caption above the shell; here the page title is
+ *   the document's heading, 27 callers render exactly one of them, and demoting
+ *   it would break the heading outline for AT.
+ * - **20px, not 19px.** `text-2xl` is the type scale's step here, and the scale
+ *   is a checked port (`styles/tokens.test.ts` pins it at eight `rem` sizes). A
+ *   ninth token for a 1px difference buys nothing; the change that matters is
+ *   away from the bare `h1`'s 24px, which is 26% too heavy for this header.
+ *   `tracking-tight` is -0.025em against the prototype's -0.02em, and
+ *   `font-semibold` is 600 against its 640 — which no static Poppins weight can
+ *   render anyway, `styles/fonts.css` loading 400/500/600/700.
+ * - **The description's cap is `max-w-measure`, not `max-w-prose`.** The design
+ *   caps prose at 70ch; Tailwind v4 emits `max-w-prose` as a static utility with
+ *   a literal 65ch rather than from a theme key, so it cannot be re-pointed, and
+ *   `styles/theme.css` declares `--container-measure` instead. Tables and charts
+ *   fill the width; only prose is capped, and there is no page width cap (see
+ *   `app/AdminLayout.tsx`).
  */
 export interface PageBreadcrumb {
   /** Already-translated text. */
@@ -101,7 +135,13 @@ export function PageTopBar({
   const eyebrowText = eyebrow === undefined ? derivedEyebrow : eyebrow
 
   return (
-    <div data-slot="page-top-bar" className="mb-section flex flex-col gap-inline">
+    // `.ptb`: 14px of pad, then the hairline, then 16px before the KPI row.
+    // `pb-3.5` is 3.5 x the 4px `--spacing` token; `mb-panel` is the 16px
+    // `--admin-size-panel-padding`.
+    <div
+      data-slot="page-top-bar"
+      className="mb-panel flex flex-col gap-inline border-b border-line-light pb-3.5"
+    >
       {breadcrumbs && breadcrumbs.length > 0 && (
         <Breadcrumb aria-label={breadcrumbLabel ?? t('shell.breadcrumb')}>
           <BreadcrumbList>
@@ -137,7 +177,7 @@ export function PageTopBar({
       {/* `flex-wrap` rather than a fixed two-column row: the actions slot holds
           real buttons, and at 320px a title plus two buttons does not fit on one
           line. Without it the row overflows the panel horizontally. */}
-      <div className="flex flex-wrap items-center justify-between gap-inline">
+      <div className="flex flex-wrap items-start justify-between gap-panel">
         <div className="min-w-0 flex-1">
           {/* ForMaps' page eyebrow: `text-[10px] uppercase tracking-[0.2em]
               font-bold` in the muted tone, on its own line above the title. A
@@ -155,7 +195,7 @@ export function PageTopBar({
           <div className="flex flex-wrap items-center gap-inline">
             {/* No bottom margin: index.css gives every `h1` `margin-bottom: 8px`,
                 which would double up with this container's `gap`. */}
-            <h1 className="mb-0 min-w-0 break-words">{title}</h1>
+            <h1 className="mb-0 min-w-0 break-words text-2xl">{title}</h1>
             {badge && <Badge variant={badge.variant}>{badge.text}</Badge>}
           </div>
           {/* `text-fg-secondary`, not `text-fg-tertiary`. Measured in Chrome:
@@ -167,20 +207,18 @@ export function PageTopBar({
               320px Spanish render to show: "Retroalimentación" is 120px at 13px
               type and the description box is 110px there, so a single unbreakable
               word pushed 10px out of its own box. */}
-          {/* `max-w-prose` caps the line length. The shell's content panel has no
-              width cap any more (see `AdminLayout`) because a table or a chart is
-              better for the room — but prose is not, and measured across eleven
-              viewports this line ran to 132 characters at 1280 and wider, against a
-              readable maximum of about 70. The cap is on the text, where it
-              belongs, rather than on the page around it. */}
+          {/* `max-w-measure` caps the line length at the design's 70ch. The
+              shell's content panel has no width cap any more (see `AdminLayout`)
+              because a table or a chart is better for the room — but prose is not,
+              and measured across eleven viewports this line ran to 132 characters
+              at 1280 and wider. The cap is on the text, where it belongs, rather
+              than on the page around it. */}
           {description && (
-            <p className="mb-0 max-w-prose break-words text-fg-secondary">{description}</p>
+            <p className="mb-0 max-w-measure break-words text-fg-secondary">{description}</p>
           )}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-inline">{actions}</div>}
       </div>
-
-      <Separator />
     </div>
   )
 }

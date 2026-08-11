@@ -119,6 +119,16 @@
   --color-accent-amber-ring: var(--admin-accent-border-amber);
   --color-accent-orange-ring: var(--admin-accent-border-orange);
 
+  /* Status-chip ink (UI-0). Exposed as `text-chip-*-ink`, to be worn on the
+     `bg-accent-*-soft` fill it was measured against — the pairing is fixed in
+     `components/ui/chipVariants.ts` and checked by
+     `styles/chipVariantContrast.test.ts`. Never separate an ink from its fill. */
+  --color-chip-good-ink: var(--admin-chip-ink-good);
+  --color-chip-warning-ink: var(--admin-chip-ink-warning);
+  --color-chip-critical-ink: var(--admin-chip-ink-critical);
+  --color-chip-accent-ink: var(--admin-chip-ink-accent);
+  --color-chip-neutral-ink: var(--admin-chip-ink-neutral);
+
   /* -- Space ------------------------------------------------------------
      Tailwind derives every `p-*`/`m-*`/`gap-*` step from `--spacing`, by
      multiplication: `p-4` is `calc(var(--spacing) * 4)`. Pointing `--spacing`
@@ -167,6 +177,14 @@
      control; this is the same ceiling for the primitive, whose label and
      control are siblings and so never matched that rule. */
   --container-field: var(--admin-size-field-max);
+  /* `--container-*` gives `max-w-measure`: the redesign's 70ch prose cap.
+     A NEW NAME RATHER THAN AN OVERRIDE OF `prose`, and that was measured, not
+     assumed: Tailwind v4 emits `max-w-prose` as a STATIC utility with a literal
+     `65ch`, not from a `--container-prose` theme key, so declaring one here
+     changes nothing at all — `max-w-prose` still compiles to `max-width: 65ch`.
+     (Checked by resolving both candidates through the real compiler, the way
+     `styles/utilityExistence.test.ts` does.) */
+  --container-measure: var(--admin-size-measure);
 
   /* -- Radii ------------------------------------------------------------- */
   --radius-sm: var(--admin-radius-sm);
