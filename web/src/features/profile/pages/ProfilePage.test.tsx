@@ -145,6 +145,25 @@ describe('ProfilePage', () => {
   })
 
   /**
+   * happy-dom does no layout, so this asserts the cause rather than the symptom.
+   *
+   * A `whitespace-nowrap` timestamp cell gives the cell a min-content width equal to the
+   * whole date, and `<Table>`'s `overflow-x-auto` container cannot hold it in: the Card
+   * around it is a grid item whose `min-width: auto` resolves to min-content, so the width
+   * propagates past the container and the shell panel scrolls sideways instead. Measured in
+   * Chromium at 390px the page column reached 415px and both the Result heading and the
+   * Succeeded/Failed words were clipped off the right edge. Guarding the class keeps the
+   * regression from being re-introduced by a change that no rendering test would catch.
+   */
+  it('leaves the timestamp cell able to shrink, so a phone never scrolls sideways', async () => {
+    renderPage()
+    await screen.findByDisplayValue('A Person')
+
+    const when = screen.getByText('Profile updated').closest('tr')?.firstElementChild
+    expect(when?.className).not.toContain('whitespace-nowrap')
+  })
+
+  /**
    * "Never" is a word, not a reading — setting it in the mono face would claim it is a
    * measurement and would sit oddly in a column of dates that are.
    */

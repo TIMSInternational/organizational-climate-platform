@@ -66,7 +66,10 @@ const TYPE_LABEL_PATH: Record<string, string> = {
  * is no fixed-width row left to scroll, and prose reflows instead.
  *
  * Read state is still carried **in words** as well as by the dot and the weight — the
- * dot is 7px of colour and nothing else, which WCAG 1.4.1 does not accept on its own.
+ * dot is 8px of colour and nothing else (`size-2`, and `theme.css` sets `--spacing` to
+ * `--admin-space-4` = 4px), which WCAG 1.4.1 does not accept on its own. The approved
+ * prototype draws it at 7px; this build has no 7px step and rounding it to the scale is
+ * the right trade, since the measurement is not what carries the meaning.
  *
  * ## Every reading is mono
  *
