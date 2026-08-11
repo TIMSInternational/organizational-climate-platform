@@ -139,10 +139,15 @@ export default function DemographicFieldsPage() {
   }
 
   const activeCount = fields.filter((field) => field.isActive).length
-  // A cut is counted usable only where it is countable at all: a `select` whose
-  // mean group size clears the floor. Everything else is either unbounded or
-  // proved too narrow, and neither belongs in a "usable" total.
+  // A cut is counted usable only where it is countable at all *and* actually on
+  // offer: an **active** `select` whose mean group size clears the floor.
+  // Everything else is deactivated, unbounded or proved too narrow, and none of
+  // the three belongs in a "usable" total — a deactivated field is never offered
+  // as a cut, so counting it would overstate the reading and contradict both the
+  // Fields tile beside it, which reports the inactive count, and the row's own
+  // "not offered" verdict.
   const usableCount = fields.filter((field) => {
+    if (!field.isActive) return false
     if (field.type !== 'select' || people === undefined) return false
     const perValue = peoplePerValue(people, field.options?.length ?? 0)
     return perValue !== null && !isSuppressed(perValue, FLOOR)

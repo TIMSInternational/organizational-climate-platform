@@ -150,20 +150,42 @@ describe('DemographicFieldsPage as an instrument', () => {
     expect(within(row).queryByRole('img')).toBeNull()
   })
 
-  it('protects the group size of a cut that is too narrow, and never prints it', async () => {
+  it('calls a cut that is too narrow too narrow, and does not pretend to hide the arithmetic', async () => {
     // 31 people across 14 values averages 2 -- so at least one value holds fewer
-    // than five people, provably, and the figure itself is withheld.
+    // than five people, provably. The verdict carries the padlock; the mean does
+    // not, because a padlock over it would be theatre: 31 is on the "Active
+    // people" tile and 14 is in this row's own Values cell, so the reader can do
+    // the division in their head from one frame. See DemographicFieldList.tsx.
     serve(() => [field({ label: 'Team', field: 'team', options: options(14) })], 31)
 
     renderPage()
 
     const row = (await screen.findByText('Team')).closest('tr')!
     expect(within(row).getByText('Too narrow')).toBeTruthy()
-    const protectedCell = within(row).getByRole('img')
-    expect(protectedCell.getAttribute('aria-label')).toContain('protected')
-    // The mean is a sub-floor headcount; publishing it beside a known company size
-    // is the arithmetic the floor exists to block.
-    expect(within(row).queryByText('2')).toBeNull()
+    // No claimed guarantee anywhere in the row.
+    expect(within(row).queryByRole('img')).toBeNull()
+    expect(row.textContent).not.toContain('protected')
+    // The mean is stated, in the instrument face, like every other reading.
+    const mean = within(row).getByText('2')
+    expect(mean.className).toContain('font-mono')
+    expect(mean.className).toContain('tabular-nums')
+  })
+
+  it('says a deactivated field is not offered as a cut, and leaves it out of the usable count', async () => {
+    // Deactivation is what decides the column here: the arithmetic clears the
+    // floor easily, so a row that read "Yes" would contradict the tile beside it.
+    serve(
+      () => [field({ label: 'Shift', field: 'shift', options: options(2), isActive: false })],
+      100,
+    )
+
+    renderPage()
+
+    const row = (await screen.findByText('Shift')).closest('tr')!
+    expect(within(row).getByText('Not offered')).toBeTruthy()
+    expect(within(row).queryByText('Yes')).toBeNull()
+    const tile = screen.getByText('Usable cuts').parentElement!
+    expect(within(tile).getByText('0')).toBeTruthy()
   })
 
   it('says a field with no fixed value list cannot be checked, rather than failing it', async () => {

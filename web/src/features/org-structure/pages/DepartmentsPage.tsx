@@ -129,11 +129,16 @@ export default function DepartmentsPage() {
     // The list is the page. Losing it is `NetworkError` with a retry.
     //
     // The readings are an enrichment: `GET /dashboard/company-admin` is the only
-    // response this client can ask for that carries completed responses for every
-    // department at once (`DashboardDepartmentSummary`; the department dashboard
-    // answers for one department at a time). If it fails, the Participation column
-    // is dropped rather than filled with zeroes — a zero is a measurement, and "we
-    // could not ask" is not one.
+    // response this client can ask for that carries completed responses for more
+    // than one department at once (`DashboardDepartmentSummary`; the department
+    // dashboard answers for one department at a time). If it fails, the Responses
+    // column is dropped rather than filled with zeroes — a zero is a measurement,
+    // and "we could not ask" is not one.
+    //
+    // It answers for at most `DepartmentRowLimit` departments (12, in
+    // `DashboardEndpoints.cs`), ordered by name, and no row carries a flag saying
+    // the list was cut. `DepartmentList` therefore treats a department absent from
+    // this map as unmeasured rather than as a zero; the same rule, one level down.
     const [list, dashboard] = await Promise.allSettled([
       listDepartments(baseUrl, companyId),
       getCompanyAdminDashboard(baseUrl, { companyId, lang: locale }),
@@ -144,7 +149,7 @@ export default function DepartmentsPage() {
         new Map(
           dashboard.value.departments.map((department) => [
             department.id,
-            { responses: department.completedResponseCount, members: department.memberCount },
+            { responses: department.completedResponseCount },
           ]),
         ),
       )

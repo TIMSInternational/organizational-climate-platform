@@ -357,7 +357,7 @@ describe('DepartmentsPage as an instrument', () => {
     expect(within(row).queryByText('Under 5')).toBeNull()
   })
 
-  it('protects a participation reading under the floor instead of blanking it', async () => {
+  it('protects a response reading under the floor instead of blanking it', async () => {
     // 3 responses from 48 people. The cell must be shown as withheld -- an empty
     // cell reads as missing data rather than as a guarantee being enforced.
     serveListAndReadings(
@@ -376,7 +376,7 @@ describe('DepartmentsPage as an instrument', () => {
     expect(protectedCell.getAttribute('aria-label')).not.toContain('3')
   })
 
-  it('shows the participation figure once the floor is met', async () => {
+  it('shows the response count once the floor is met', async () => {
     serveListAndReadings(
       () => [department({ id: 'eng', name: 'Engineering', employeeCount: 48 })],
       () => [{ id: 'eng', name: 'Engineering', memberCount: 48, completedResponseCount: 24 }],
@@ -385,24 +385,81 @@ describe('DepartmentsPage as an instrument', () => {
     renderPage()
 
     const row = (await screen.findByText('Engineering')).closest('tr')!
-    const reading = within(row).getByText('50%')
+    const reading = within(row).getByText('24')
+    expect(reading.className).toContain('font-mono')
     expect(reading.className).toContain('tabular-nums')
     expect(within(row).queryByRole('img')).toBeNull()
   })
 
-  it('treats a department the dashboard did not report as having no responses, not as a gap', async () => {
+  it('reports the responses as a count and never as a share of the headcount', async () => {
+    // `completedResponseCount` carries no survey predicate in
+    // `DashboardQueries.DepartmentSummaries`, so it is every completed response
+    // the department has ever submitted and it passes the headcount as soon as a
+    // company runs its second survey. Divided by `memberCount` this row read
+    // "270%" against a progress bar pinned at 100 — the two contradicting each
+    // other on the screen's only measured column.
     serveListAndReadings(
-      () => [department({ id: 'new-dept', name: 'Research', employeeCount: 40 })],
-      () => [],
+      () => [department({ id: 'ops', name: 'Operations', employeeCount: 40 })],
+      () => [{ id: 'ops', name: 'Operations', memberCount: 40, completedResponseCount: 108 }],
+    )
+
+    renderPage()
+
+    const row = (await screen.findByText('Operations')).closest('tr')!
+    expect(within(row).getByText('108')).toBeTruthy()
+    expect(row.textContent).not.toContain('%')
+    // And nothing claims a scale it does not have.
+    expect(within(row).queryByRole('progressbar')).toBeNull()
+    // The units are stated once, in the column header, so the count cannot be
+    // mistaken for a rate.
+    expect(screen.getByText('completed, all surveys')).toBeTruthy()
+  })
+
+  it('reads a department the dashboard did not report on as unmeasured, never as protected', async () => {
+    // `DashboardEndpoints.cs` caps the summary list at `DepartmentRowLimit = 12`
+    // with no total and no truncation flag, so a thirteenth department simply has
+    // no line in the payload. Calling that zero put a padlock and the words
+    // "protected -- withheld below 5 responses" on data the app never asked for.
+    serveListAndReadings(
+      () => [
+        department({ id: 'seen', name: 'Engineering', employeeCount: 40 }),
+        department({ id: 'unseen', name: 'Research', employeeCount: 40 }),
+      ],
+      () => [{ id: 'seen', name: 'Engineering', memberCount: 40, completedResponseCount: 33 }],
     )
 
     renderPage()
 
     const row = (await screen.findByText('Research')).closest('tr')!
-    expect(within(row).getByRole('img').getAttribute('aria-label')).toContain('protected')
+    expect(within(row).getByText('Not measured')).toBeTruthy()
+    expect(within(row).queryByRole('img')).toBeNull()
+    expect(row.textContent).not.toContain('protected')
+    // The department that *was* reported on is unaffected.
+    const measured = screen.getByText('Engineering').closest('tr')!
+    expect(within(measured).getByText('33')).toBeTruthy()
   })
 
-  it('drops the participation column rather than filling it with zeroes when the readings fail', async () => {
+  it('still reads a department whose reported member count is zero', async () => {
+    // The reading does not divide by anything any more, so a zero headcount on
+    // the dashboard line cannot blank the cell. It used to: `?? employeeCount`
+    // never fired, because 0 is not nullish, and the row rendered an em dash.
+    serveListAndReadings(
+      () => [department({ id: 'ghost', name: 'Ghost', employeeCount: 30 })],
+      () => [{ id: 'ghost', name: 'Ghost', memberCount: 0, completedResponseCount: 9 }],
+    )
+
+    renderPage()
+
+    const row = (await screen.findByText('Ghost')).closest('tr')!
+    // Name, Parent, People, Reportable, Responses, Actions. Read by position so
+    // the assertion is about the measured cell and not about the em dash the
+    // Parent column legitimately carries for a root department.
+    const responsesCell = within(row).getAllByRole('cell')[4]
+    expect(responsesCell.textContent).toBe('9')
+    expect(within(responsesCell).getByText('9').className).toContain('font-mono')
+  })
+
+  it('drops the responses column rather than filling it with zeroes when the readings fail', async () => {
     // `serveList` 404s the dashboard. A column of zeroes would claim a measurement
     // that was never taken.
     serveList(() => [department({ name: 'Engineering' })])
@@ -410,7 +467,8 @@ describe('DepartmentsPage as an instrument', () => {
     renderPage()
     await screen.findByText('Engineering')
 
-    expect(screen.queryByText('Participation')).toBeNull()
+    expect(screen.queryByText('Responses')).toBeNull()
+    expect(screen.queryByText('completed, all surveys')).toBeNull()
     // The list itself is unaffected: the optional half failing is not a page error.
     expect(screen.getByText('People')).toBeTruthy()
     expect(screen.queryByText('Failed to load departments. Please try again.')).toBeNull()

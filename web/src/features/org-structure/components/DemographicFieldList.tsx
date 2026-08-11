@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '../../../components/ui'
-import { ProtectedCell, formatMetric, isSuppressed } from '../../../components/charts'
+import { formatMetric, isSuppressed } from '../../../components/charts'
 import { peoplePerValue } from './demographicReach'
 
 /**
@@ -36,20 +36,37 @@ import { peoplePerValue } from './demographicReach'
  * The converse is deliberately **not** claimed: a mean above the floor says the
  * cut *can* clear it, not that every value does. See `demographicReach.ts`.
  *
- * ## Three verdicts, each carrying a word
+ * ## Four verdicts, each carrying a word
  *
+ * - A deactivated field — **not offered**. It is never presented as a cut
+ *   whatever its arithmetic says, so it is not counted as usable either, and the
+ *   "Usable cuts" tile on `DemographicFieldsPage` excludes it for this reason.
  * - `select` clearing the floor — **usable**.
- * - `select` under it — **too narrow**, padlocked, and the mean itself is
- *   withheld as a `ProtectedCell`. A sub-floor group size is exactly the figure
- *   the floor exists to keep unpublished; printing "2 people per team" beside a
- *   known headcount is the arithmetic an attacker wants. Shown as protected, never
- *   as a blank — a blank would read as missing data instead of as a guarantee.
+ * - `select` under it — **too narrow**, with the padlock on the *verdict*.
  * - Anything else — a `text`/`number`/`date` field, or a `select` with no options
  *   yet — has no fixed value list, so its groups cannot be counted ahead of time
  *   at all: **not checkable**, which is a different statement from failing the
  *   check and is not dressed up as one.
  *
  * Colour never does this alone: each verdict is a Badge with the word in it.
+ *
+ * ## Why the mean is printed even when it is under the floor
+ *
+ * It looks like a figure the anonymity floor should withhold, and an earlier pass
+ * of this screen did withhold it behind a `ProtectedCell`. That was theatre. The
+ * mean is `⌊people / values⌋` and **both operands are printed in the same
+ * frame** — the headcount by the "Active people" tile a few pixels above, the
+ * value count by the Values cell in the very same row. A padlock over a number
+ * the reader can do in their head claims a guarantee that nothing is enforcing,
+ * and a claim like that is worth less than nothing on a screen whose subject is
+ * exactly this guarantee.
+ *
+ * The floor still governs it, just not here: it is a property of a *field
+ * definition*, arithmetic on two counts of the org chart, and no respondent's
+ * answer is behind it. What the floor covers is a measured group — a cell in a
+ * result — and those are suppressed where they are rendered, cell by cell. Here
+ * the floor decides the *verdict*, which is why "too narrow" still carries the
+ * padlock icon: the cut will be refused.
  *
  * ## Why the two measured columns disappear together
  *
@@ -183,27 +200,26 @@ export default function DemographicFieldList({
                     {perValue === null ? (
                       <span className="text-fg-tertiary">{t('demographicFields.notCountable')}</span>
                     ) : (
-                      <ProtectedCell
-                        // `perValue` is itself the count under test, so passing it
-                        // here is what makes the cell protect exactly the figures
-                        // the floor covers — and `ProtectedCell` never renders or
-                        // announces the number it was given.
-                        responses={perValue}
-                        threshold={threshold}
-                        description={field.label ?? field.field}
-                        suppressedClassName="h-5 w-14"
-                      >
-                        <span className="font-mono tabular-nums text-fg-primary">
-                          {formatMetric(perValue, { kind: 'number' }, locale)}
-                        </span>
-                      </ProtectedCell>
+                      // Printed whatever it says. It is arithmetic on the two
+                      // numbers beside it, not a measured group; see the note
+                      // above on why a padlock here would be theatre.
+                      <span className="font-mono tabular-nums text-fg-primary">
+                        {formatMetric(perValue, { kind: 'number' }, locale)}
+                      </span>
                     )}
                   </TableCell>
                 )}
 
                 {people !== undefined && (
                   <TableCell>
-                    {perValue === null ? (
+                    {!field.isActive ? (
+                      // First, because it settles the question the column asks
+                      // whatever the arithmetic says: a deactivated field is not
+                      // offered as a cut at all. Stated here so this column and
+                      // the page's "Usable cuts" tile, which excludes it for the
+                      // same reason, cannot contradict each other.
+                      <Badge variant="outline">{t('demographicFields.notOffered')}</Badge>
+                    ) : perValue === null ? (
                       // Covers both shapes of "no fixed value list": a free-text
                       // type, and a `select` that has not been given options yet.
                       // Neither can be checked against the floor, which is a
