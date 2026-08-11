@@ -295,52 +295,67 @@ export default function MicroclimateLivePage() {
 }
 
 /**
- * The four readings, as the redesign's flat four-across strip.
+ * The readings, as the redesign's flat four-across strip.
  *
  * Every value is `KpiTile`'s, i.e. mono with tabular figures — which is the point
  * of using it: a figure that changes width as it ticks from 9 to 10 is the thing
  * tabular figures exist to prevent, and on this screen the figures tick every four
  * seconds.
  *
- * The participation tile is *omitted* rather than shown as 0% when there is no
- * target: nothing in `CreateAsync` requires `targetParticipantCount` to be
- * positive, and a rate over an invented denominator is worse than no rate.
+ * Nothing in `CreateAsync` requires `targetParticipantCount` to be positive, so a
+ * session with no target is reachable — and when there is none, *all three* of the
+ * readings derived from it go away, not just the rate. `participationPercent`
+ * returns null there rather than 0 because a rate over an invented denominator is
+ * worse than no rate; the same argument disqualifies the target itself and the
+ * remainder computed from it, which would otherwise print "expected participants 0"
+ * and "yet to respond 0" beside a live response count that is not zero — three
+ * readings that cannot all be true at once. So the strip narrows to the one reading
+ * that is measured rather than derived, and the column count narrows with it instead
+ * of stranding empty cells in a four-column grid.
  */
 function LiveReadings({ live }: { live: LiveResults }) {
   const { t, locale } = useTranslation()
   const rate = participationPercent(live.responseCount, live.targetParticipantCount)
 
   return (
-    <div className="grid grid-cols-2 gap-inline lg:grid-cols-4">
+    <div
+      className={
+        rate === null
+          ? 'grid grid-cols-1 gap-inline'
+          : 'grid grid-cols-2 gap-inline lg:grid-cols-4'
+      }
+    >
       <KpiTile
         label={t('microclimates.kpiResponses')}
         value={live.responseCount}
         locale={locale}
       />
-      <KpiTile
-        label={t('microclimates.kpiTarget')}
-        value={live.targetParticipantCount}
-        locale={locale}
-      />
-      <KpiTile
-        label={t('microclimates.kpiOutstanding')}
-        // Never negative: an anonymous link can be answered by more people than
-        // were expected, and "-3 yet to respond" is not a fact about anything.
-        value={Math.max(0, live.targetParticipantCount - live.responseCount)}
-        locale={locale}
-      />
       {rate !== null && (
-        <KpiTile
-          label={t('microclimates.kpiParticipation')}
-          value={rate}
-          // Whole percent, matching the meter below. `formatMetric` defaults to
-          // one decimal for a non-integer, so the default rendered "64.6%" here
-          // beside the meter's rounded "65%" — the same ratio, printed twice, in
-          // two different numbers, with nothing on screen to say they were the
-          // same measurement.
-          format={{ kind: 'percentage', decimals: 0 }}
-          locale={locale}
-        />
+        <>
+          <KpiTile
+            label={t('microclimates.kpiTarget')}
+            value={live.targetParticipantCount}
+            locale={locale}
+          />
+          <KpiTile
+            label={t('microclimates.kpiOutstanding')}
+            // Never negative: an anonymous link can be answered by more people than
+            // were expected, and "-3 yet to respond" is not a fact about anything.
+            value={Math.max(0, live.targetParticipantCount - live.responseCount)}
+            locale={locale}
+          />
+          <KpiTile
+            label={t('microclimates.kpiParticipation')}
+            value={rate}
+            // Whole percent, matching the meter below. `formatMetric` defaults to
+            // one decimal for a non-integer, so the default rendered "64.6%" here
+            // beside the meter's rounded "65%" — the same ratio, printed twice, in
+            // two different numbers, with nothing on screen to say they were the
+            // same measurement.
+            format={{ kind: 'percentage', decimals: 0 }}
+            locale={locale}
+          />
+        </>
       )}
     </div>
   )
@@ -453,12 +468,29 @@ function SessionPlate({
   const { t, locale } = useTranslation()
 
   return (
-    <section className="flex flex-col gap-inline rounded-lg border border-line-light bg-surface-icon-box p-3">
-      {/* Five across only from `lg`. At 900px wide the five-column form put the
-          two localised timestamps into two lines each while the three short facts
-          beside them sat on one, which reads as a broken row rather than as a
-          plate. Measured by rendering at 900. */}
-      <dl className="m-0 grid grid-cols-2 gap-inline sm:grid-cols-3 lg:grid-cols-5">
+    <section className="@container flex flex-col gap-inline rounded-lg border border-line-light bg-surface-icon-box p-3">
+      {/* The column count is keyed to the PLATE, not to the viewport, and that is
+          the whole point of the `@container` above.
+
+          What breaks the row is a timestamp wrapping while the three short facts
+          beside it stay on one line, which reads as a broken row rather than as a
+          plate. What decides whether it wraps is the width of one column, so the
+          quantity that matters is the width of this section — and that is not a
+          function of the viewport. `AdminLayout` renders the rail `hidden md:flex`
+          at `--admin-size-sidebar` (220px, or 52px collapsed), so the plate is
+          *narrower* at a 768px viewport than at a 700px one. Measured in Chromium
+          at 2x with the rail expanded: 616px of plate at a 700px viewport, 464px
+          at 768px — a bigger window, a smaller plate, and the two dates wrap. A
+          viewport query gets that backwards by construction.
+
+          Measured thresholds for the en-US form "8/11/2026, 4:00:00 AM", the
+          longer of the two locales this app ships (under `es` the same instants
+          print 24-hour and fit five across at every plate width measured, down to
+          720px): five across is ragged at a 788px plate and clean at 792px; three
+          across is ragged at 464px and clean at 496px. The gates are the next
+          container size up from each — `@4xl` is 56rem/896px, `@lg` is 32rem/512px
+          — so each has headroom rather than sitting on the measured edge. */}
+      <dl className="m-0 grid grid-cols-2 gap-inline @lg:grid-cols-3 @4xl:grid-cols-5">
         <Fact label={t('microclimates.liveOpenedAt')}>
           {new Date(microclimate.startTime).toLocaleString(locale)}
         </Fact>

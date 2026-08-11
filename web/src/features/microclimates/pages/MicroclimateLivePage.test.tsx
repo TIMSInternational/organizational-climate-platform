@@ -366,4 +366,45 @@ describe('MicroclimateLivePage', () => {
 
     expect(await screen.findByText('Language of this content')).toBeTruthy()
   })
+
+  it('gates the plate on the plate, never on the viewport', async () => {
+    // happy-dom has no layout, so this cannot check that the row is unbroken --
+    // that was measured in Chromium. What it CAN pin is the thing that made the
+    // row break: a viewport query standing in for a width the viewport does not
+    // determine. `AdminLayout` renders a fixed 220px rail from `md` upward
+    // (`hidden md:flex`, `--admin-size-sidebar: 220px`), so widening the window
+    // from 700px to 768px makes this section NARROWER, and any `sm:`/`md:`/`lg:`
+    // gate on it is wrong in that direction by construction.
+    renderPage()
+
+    const plate = (await screen.findByText('Opened')).closest('dl')
+    expect(plate).not.toBeNull()
+    expect(plate?.parentElement?.className).toContain('@container')
+
+    const gates = [...(plate?.className ?? '').matchAll(/(\S+):grid-cols-\d+/g)].map(
+      (match) => match[1],
+    )
+    expect(gates.length).toBeGreaterThan(0)
+    expect(gates.filter((gate) => !gate.startsWith('@'))).toEqual([])
+  })
+
+  it('drops every reading derived from a target the session does not have', async () => {
+    // `targetParticipantCount` is not required to be positive, so this state is
+    // reachable. Printing "expected participants 0" and "yet to respond 0" beside
+    // a non-zero response count states three things that cannot all be true.
+    routeFetch(
+      detail({ targetParticipantCount: 0 }),
+      results({ responseCount: 7, targetParticipantCount: 0 }),
+    )
+    renderPage()
+
+    expect(await screen.findByText('Responses')).toBeTruthy()
+    expect(screen.queryByText('Expected participants')).toBeNull()
+    expect(screen.queryByText('Yet to respond')).toBeNull()
+    expect(screen.queryByText('Participation')).toBeNull()
+    // And the strip narrows to what it has, rather than stranding empty cells.
+    const strip = screen.getByText('Responses').closest('[class*="grid-cols-"]')
+    expect(strip?.className).toContain('grid-cols-1')
+    expect(strip?.className).not.toContain('grid-cols-4')
+  })
 })
