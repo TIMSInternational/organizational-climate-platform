@@ -41,6 +41,14 @@ Add a table, add a `user_id`, add an email column, and those tests fail until so
 decided what the new thing holds. That mechanism — not this document — is what keeps the
 coverage true.
 
+What those checks do **not** catch is a link property that is declared and then searched by
+nothing: they run declaration-to-model and export-to-declaration, never declaration-to-query. The
+four address links (`User.Email`, `SurveyInvitation.Email`, `MicroclimateInvitation.Email`,
+`SurveyAuditLog.UserEmail`) were declared before they were honoured, which is a coverage claim
+without the coverage. `GdprEndpointsTests.A_row_carrying_the_subjects_address_under_another_user_id_is_exported_and_erased`
+seeds the case that separates the two — a row holding the subject's address under somebody
+else's `user_id` — so removing any of those predicates goes red.
+
 ## Access (Art. 15) — `GET /gdpr/access`
 
 Callable by the data subject about themselves (no `userId`), or by an administrator of the
@@ -65,6 +73,18 @@ that authenticate them.
 
 **Columns come from the EF model**, not from a hand-written projection, so a column added to a
 table later appears in the export without anyone remembering to widen anything.
+
+**Rows matched by email address are matched inside the caller's tenant.** Most of the export
+follows foreign keys, and a `user_id` is the subject wherever it appears. Five places cannot:
+`user_invitations` names its invitee by email alone (there is no user row until they accept),
+`survey_invitations`, `microclimate_invitations` and `survey_audit_logs` each carry a
+denormalised copy of an address, and `reports.shared_with` is a `text[]` that could hold either.
+An address is not unique across tenants — the same person's work address can be invited by two
+different customers of this platform — so those lookups take the caller's own company as a
+predicate. Without it, a company administrator exporting their own employee receives the other
+tenant's invitation in full: its company id, its inviting administrator, its role grant and its
+free-form payload. A super admin's authority is every tenant, so their export is not scoped this
+way. The limitation is stated in the response's `limitations` array as well as here.
 
 ## Erasure (Art. 17) — `POST /gdpr/erasure`
 
@@ -150,7 +170,23 @@ That is the only part of an audit record erasure can take without breaking what 
    searches it anyway (matching both the subject's id and their email) because the column exists
    and an import could fill it. Erasure does not touch it: guessing at the element format of a
    column no code writes would be inventing a contract.
-4. **The tracking service** — next section.
+4. **A session the subject already holds is not ended.** The account is deactivated, so no new
+   token can be minted for it — `/auth/login` filters on `is_active` and every mint in the API
+   goes through `AuthEndpoints.IssueTokenForAsync`, which refuses an inactive account, so
+   `/auth/refresh` refuses too. But an access token issued *before* the erasure is self-contained
+   and nothing reads `is_active` per request: `ActingUserResolver` resolves the token's subject
+   to the account row by id, which erasure does not change, so that token keeps authorising
+   requests until it expires. (A token identifying the account by a legacy `persona_external_id`
+   is the exception — erasure clears that column, so it stops resolving.) Revoking an outstanding
+   token needs a per-user security stamp checked on every request, which is #284's work; this
+   issue does not add a second mechanism alongside it. Do not describe an erasure as ending the
+   subject's session.
+5. **Erasure is scoped to the caller's tenant** in exactly the places the access export is —
+   see the access section above. A company administrator's erasure redacts the invitation held by
+   their own company and leaves another company's invitation to the same address alone. That row
+   is the other controller's record, and reaching into it would be a cross-tenant write with no
+   audit trail in the tenant it changed. A super admin's erasure is not scoped.
+6. **The tracking service** — next section.
 
 ## Compliance report — `GET /gdpr/compliance-report`
 
@@ -217,12 +253,25 @@ aggregate-integrity grounds as responses).
 
 ## Audit
 
-Every one of the four actions writes an `audit_logs` row attributed to the caller, with the
-subject in `resource_id` — including the reads, because an access export is a bulk disclosure of
-one person's data and the fact that it happened is what an investigation needs. Erasure and
-retention cleanup write theirs *before* acting, so the record survives the deletion it describes.
+Each of the four actions writes an `audit_logs` row attributed to the caller, with the subject in
+`resource_id` — including the reads, because an access export is a bulk disclosure of one
+person's data and the fact that it happened is what an investigation needs. Erasure and retention
+cleanup write theirs *before* acting, so the record survives the deletion it describes. There is
+one exception, and it is stated below rather than left in the word "each".
 
-One gap, shared with `ProfileEndpoints`: `audit_logs.company_id` is `NOT NULL` with a restricting
-key to `companies`, and a global super admin (#191) has no company row to attribute an entry to,
-so their actions here are not audited. Widening the column is a migration, which #144 does not
-add. #143 is landing an audit-logging convention in parallel; these writes should move onto it.
+`audit_logs.company_id` is `NOT NULL` with a restricting key to `companies`, and a global super
+admin (#191) has no company row of their own to attribute an entry to. So the row is filed
+against the tenant that was **acted on** — the subject's company for an access export or an
+erasure, the requested scope for a compliance report — which is arguably where it belonged
+anyway: it puts "somebody exported one of your employees' data" in front of the administrators of
+the tenant whose data moved.
+
+What remains uncovered is worth stating precisely rather than as "super admins are not audited":
+a caller with no company performing an action that names no tenant either. That is
+`POST /gdpr/retention-cleanup`, which sweeps every tenant at once, and
+`GET /gdpr/compliance-report` asked about no tenant in particular. There is nothing to file those
+rows against while the column is `NOT NULL`, so they run unaudited and the API logs a warning
+when they do. An access export and an erasure always name a subject, so the two actions that
+disclose or destroy one person's data are audited whoever the caller is. Widening the column is a
+migration, which #144 does not add. #143 is landing an audit-logging convention in parallel;
+these writes should move onto it, and that is where the remaining gap closes.

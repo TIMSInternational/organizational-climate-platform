@@ -38,13 +38,28 @@ namespace ClimateProject.Api.Endpoints;
 /// </description></item>
 /// </list>
 ///
-/// <para><b>Every action is audit-logged</b>, including the ones that only read: a subject
-/// access export is a bulk disclosure of one person's data and the fact that it happened is
-/// itself the thing an investigation needs. The rows are written to <c>audit_logs</c> through
-/// the same shape <c>ProfileEndpoints</c> uses, and the log is attributed to the
-/// <i>caller</i>, with the subject in <c>resource_id</c>. #143 is landing an audit-logging
-/// convention in parallel; when it does, these four writes should move onto it rather than
-/// keep their own copy.</para>
+/// <para><b>Every action attempts an audit row</b>, including the ones that only read: a
+/// subject access export is a bulk disclosure of one person's data and the fact that it
+/// happened is itself the thing an investigation needs. The rows are written to
+/// <c>audit_logs</c> through the same shape <c>ProfileEndpoints</c> uses, attributed to the
+/// <i>caller</i>, with the subject in <c>resource_id</c>. "Attempts" rather than "writes" is
+/// deliberate, and the exception is exact rather than "super admins are not audited":
+/// <c>audit_logs.company_id</c> is NOT NULL, so a row exists only where the caller has a
+/// company <i>or</i> the action names one. A global super admin (#191) has neither on
+/// <c>POST /gdpr/retention-cleanup</c>, which sweeps every tenant, nor on
+/// <c>GET /gdpr/compliance-report</c> asked about no tenant in particular. Those two run
+/// unaudited, and <see cref="AuditAsync"/> logs a warning when they do. Every other
+/// combination is filed against the tenant that was acted on — including the two that a
+/// company-less super admin can use to disclose or destroy one person's data, which are the
+/// ones that had to be closed. #143 is landing an audit-logging convention in parallel; when
+/// it does, these four writes should move onto it rather than keep their own copy.</para>
+///
+/// <para><b>Authority is a tenant, and it is passed down rather than assumed.</b> Both the
+/// exporter and the eraser match some rows on the subject's email address, which is not unique
+/// across tenants; <see cref="AuthorityScope"/> turns the caller into the one company they may
+/// act in (or "all of them", for a super admin) and every such lookup takes it. Without it a
+/// company admin's export of their own employee returns another tenant's invitation to the
+/// same address, and an erasure rewrites it.</para>
 /// </summary>
 public static class GdprEndpoints
 {
@@ -89,10 +104,32 @@ public static class GdprEndpoints
         return subject.CompanyId is { } companyId && currentUser.CompanyId == companyId.ToString();
     }
 
+    /// <summary>
+    /// The one tenant this caller may act in, or null for a super admin, whose reach is every
+    /// tenant. Handed to the exporter and the eraser, which use it on every lookup that matches
+    /// on an email address rather than on a foreign key.
+    /// </summary>
+    /// <remarks>
+    /// Read from the caller's own row rather than from the subject's, so that widening what a
+    /// caller may be shown takes a change to their authority and not to whose data they asked
+    /// about. For everyone except a super admin the two are the same tenant anyway, because
+    /// <see cref="CanAdministerSubject"/> has already refused the cross-tenant case and
+    /// self-service means caller and subject are one row.
+    ///
+    /// A non-super-admin whose own row carries no company has no tenant to act in, and the
+    /// scope becomes <see cref="Guid.Empty"/> — a value no company row carries in practice,
+    /// since those ids are generated — so the lookups match nothing rather than everything.
+    /// Erring open on a caller shape nobody expected is how the leak this scope exists to close
+    /// would come back.
+    /// </remarks>
+    private static Guid? AuthorityScope(CurrentUser currentUser, User caller)
+        => currentUser.Role == Roles.SuperAdmin ? null : caller.CompanyId ?? Guid.Empty;
+
     private static async Task<IResult> AccessAsync(
         Guid? userId,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
+        ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
@@ -115,9 +152,12 @@ public static class GdprEndpoints
         }
 
         var now = DateTimeOffset.UtcNow;
-        var export = await SubjectAccessExport.BuildAsync(db, subject, now, cancellationToken);
+        var export = await SubjectAccessExport.BuildAsync(
+            db, subject, AuthorityScope(currentUser, caller), now, cancellationToken);
 
-        await AuditAsync(db, caller, AccessAction, subject.Id.ToString(), now, cancellationToken);
+        await AuditAsync(
+            db, caller, AccessAction, subject.Id.ToString(), subject.CompanyId, now, loggerFactory,
+            cancellationToken);
 
         return Results.Ok(export);
     }
@@ -126,6 +166,7 @@ public static class GdprEndpoints
         ErasureRequest request,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
+        ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
@@ -166,9 +207,12 @@ public static class GdprEndpoints
         // and the one moment an audit trail must not have a gap is around the action that
         // destroys data. Filed against the caller, naming the subject, so it survives the
         // erasure of the subject's own rows.
-        await AuditAsync(db, caller, ErasureAction, subject.Id.ToString(), now, cancellationToken);
+        await AuditAsync(
+            db, caller, ErasureAction, subject.Id.ToString(), subject.CompanyId, now, loggerFactory,
+            cancellationToken);
 
-        var result = await SubjectErasure.EraseAsync(db, subject, now, cancellationToken);
+        var result = await SubjectErasure.EraseAsync(
+            db, subject, AuthorityScope(currentUser, caller), now, cancellationToken);
         return Results.Ok(result);
     }
 
@@ -176,6 +220,7 @@ public static class GdprEndpoints
         Guid? companyId,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
+        ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
@@ -202,7 +247,8 @@ public static class GdprEndpoints
         var now = DateTimeOffset.UtcNow;
         var report = await ComplianceReport.BuildAsync(db, scope, now, cancellationToken);
 
-        await AuditAsync(db, caller, ComplianceReportAction, scope?.ToString(), now, cancellationToken);
+        await AuditAsync(
+            db, caller, ComplianceReportAction, scope?.ToString(), scope, now, loggerFactory, cancellationToken);
 
         return Results.Ok(report);
     }
@@ -221,8 +267,13 @@ public static class GdprEndpoints
 
         var now = DateTimeOffset.UtcNow;
 
-        // Audited before the sweep, for the same reason as erasure: this deletes rows.
-        await AuditAsync(db, caller, RetentionCleanupAction, resourceId: null, now, cancellationToken);
+        // Audited before the sweep, for the same reason as erasure: this deletes rows. It names
+        // no subject and crosses every company, so there is no tenant to fall back on when the
+        // caller has none of their own, and a company-less super admin leaves no record here.
+        // That combination is warned about rather than silently skipped; see AuditAsync.
+        await AuditAsync(
+            db, caller, RetentionCleanupAction, resourceId: null, fallbackCompanyId: null, now, loggerFactory,
+            cancellationToken);
 
         // The same entry point the scheduled worker calls, with no cap: a human asking for the
         // sweep by hand is asking it to finish, exactly as DELETE /surveys/drafts/expired does.
@@ -235,14 +286,24 @@ public static class GdprEndpoints
     /// <summary>
     /// One <c>audit_logs</c> row per GDPR action, attributed to the caller.
     /// </summary>
+    /// <param name="fallbackCompanyId">
+    /// The tenant the action was performed <i>on</i>, used when the caller's own row has no
+    /// company: the subject's company for an access export or an erasure, the requested scope
+    /// for a compliance report, and nothing at all for the global sweep.
+    /// </param>
     /// <remarks>
-    /// Skipped for a caller with no company, and the omission is deliberate rather than
-    /// overlooked: <c>audit_logs.company_id</c> is NOT NULL with a restricting foreign key to
+    /// <c>audit_logs.company_id</c> is NOT NULL with a restricting foreign key to
     /// <c>companies</c>, and a global super admin (#191) has no company row to attribute an
-    /// entry to. Widening the column is a migration, and this issue adds none. The same
-    /// trade-off is already recorded on <c>ProfileEndpoints.AddActivity</c>. The consequence
-    /// is bounded and visible: actions by a company-less super admin are not audited here, and
-    /// the action itself still runs.
+    /// entry to. Widening the column is a migration, and this issue adds none — so the row is
+    /// filed against the tenant that was acted on instead, which is arguably where it belonged
+    /// all along: it puts the record of "somebody exported one of your employees' data" in
+    /// front of the administrators of the tenant whose data moved.
+    ///
+    /// What that leaves is a caller with no company performing an action that names no tenant
+    /// either: the retention sweep, always, and a compliance report asked about every tenant at
+    /// once. Both log a warning rather than being passed over in silence, since the first of
+    /// them deletes rows, and both are closed by #143's audit convention. The same NOT NULL
+    /// trade-off is recorded on <c>ProfileEndpoints.AddActivity</c>.
     ///
     /// Saved immediately rather than left for a later <c>SaveChangesAsync</c>. Erasure runs in
     /// its own transaction and retention cleanup issues <c>ExecuteDelete</c> statements, so
@@ -254,11 +315,18 @@ public static class GdprEndpoints
         User caller,
         string action,
         string? resourceId,
+        Guid? fallbackCompanyId,
         DateTimeOffset now,
+        ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
-        if (caller.CompanyId is not { } companyId)
+        if ((caller.CompanyId ?? fallbackCompanyId) is not { } companyId)
         {
+            loggerFactory.CreateLogger(typeof(GdprEndpoints)).LogWarning(
+                "GDPR action {Action} by user {UserId} ran without an audit row: neither the caller nor the "
+                + "action names a company, and audit_logs.company_id is NOT NULL.",
+                action,
+                caller.Id);
             return;
         }
 

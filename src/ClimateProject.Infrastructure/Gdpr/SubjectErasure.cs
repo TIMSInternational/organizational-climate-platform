@@ -41,9 +41,19 @@ namespace ClimateProject.Infrastructure.Gdpr;
 /// <c>users</c> is left dangling. The three tables deleted outright
 /// (<c>user_demographics</c>, <c>notifications</c>, <c>survey_drafts</c>) are the principal
 /// end of no foreign key except an owned type stored in their own row, and
-/// <c>user_invitation_demographics</c> is deleted only through its own parent key. <c>GdprEndpointsTests.Erasure_leaves_no_orphaned_rows</c> re-derives every
-/// foreign key in the model and checks each one after an erasure rather than trusting this
-/// paragraph.</para>
+/// <c>user_invitation_demographics</c> is deleted only through its own parent key. Note what
+/// backs that: Postgres enforces every one of those constraints, so a statement here that
+/// orphaned a row would be refused rather than committed. A test that counts dangling keys
+/// afterwards therefore proves the schema, not this class — what the tests hold is that the
+/// erasure reaches the tables it claims to, and
+/// <c>GdprEndpointsTests.Erasure_leaves_the_subjects_address_in_no_column_of_any_table</c> is
+/// the one that goes red when it stops doing so.</para>
+///
+/// <para><b>Scoped to the caller's authority.</b> The invitee side of <c>user_invitations</c>
+/// is matched by email alone, and an address is not tenant-unique, so an unscoped predicate
+/// would redact and delete rows in companies the caller has no rights in — invisibly, since
+/// nothing in that tenant would carry a record of it. <c>companyScope</c> is null only for a
+/// super admin, whose reach is every tenant by design.</para>
 ///
 /// <para><b>Scope: this database only.</b> <c>services/tracking-api</c> caches the roster and
 /// keys its action plans by persona external id; this API cannot reach it, so the response is
@@ -72,6 +82,10 @@ public static class SubjectErasure
     /// <summary>
     /// Erases the subject and returns what was done, table by table.
     /// </summary>
+    /// <param name="companyScope">
+    /// The single tenant the caller has authority over, or null for a super admin. Constrains
+    /// every lookup that matches on an email address rather than on a foreign key.
+    /// </param>
     /// <remarks>
     /// Runs inside an explicit transaction, and the reason is specific rather than
     /// belt-and-braces: the deletes below go through <c>ExecuteDeleteAsync</c>, which issues
@@ -84,6 +98,7 @@ public static class SubjectErasure
     public static async Task<ErasureResponse> EraseAsync(
         ClimateProjectDbContext db,
         User subject,
+        Guid? companyScope,
         DateTimeOffset erasedAt,
         CancellationToken cancellationToken)
     {
@@ -91,7 +106,7 @@ public static class SubjectErasure
         ArgumentNullException.ThrowIfNull(subject);
 
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        var response = await EraseWithinTransactionAsync(db, subject, erasedAt, cancellationToken);
+        var response = await EraseWithinTransactionAsync(db, subject, companyScope, erasedAt, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return response;
     }
@@ -99,6 +114,7 @@ public static class SubjectErasure
     private static async Task<ErasureResponse> EraseWithinTransactionAsync(
         ClimateProjectDbContext db,
         User subject,
+        Guid? companyScope,
         DateTimeOffset erasedAt,
         CancellationToken cancellationToken)
     {
@@ -119,15 +135,20 @@ public static class SubjectErasure
         actions.Add(await DeleteAsync("SurveyDraft",
             db.SurveyDrafts.Where(d => d.UserId == id), cancellationToken));
 
-        var invitationIds = await db.UserInvitations
-            .Where(i => i.Email == originalEmail)
+        var invitationIds = await SubjectAccessExport
+            .AddressedInvitations(db, originalEmail, companyScope)
             .Select(i => i.Id)
             .ToListAsync(cancellationToken);
         actions.Add(await DeleteAsync("UserInvitationDemographic",
             db.UserInvitationDemographics.Where(d => invitationIds.Contains(d.InvitationId)), cancellationToken));
 
         // --- Redacted -------------------------------------------------------------------
-        var surveyInvitations = await db.SurveyInvitations.Where(i => i.UserId == id).ToListAsync(cancellationToken);
+        // The same predicates the export uses, deliberately: a row the export hands to the
+        // subject as theirs and the eraser then leaves alone is the two halves of this feature
+        // disagreeing about whose data it is.
+        var surveyInvitations = await SubjectAccessExport
+            .SurveyInvitationsFor(db, id, originalEmail, companyScope)
+            .ToListAsync(cancellationToken);
         foreach (var invitation in surveyInvitations)
         {
             invitation.Email = RedactedValue;
@@ -137,8 +158,9 @@ public static class SubjectErasure
         }
         actions.Add(Action("SurveyInvitation", surveyInvitations.Count));
 
-        var microclimateInvitations = await db.MicroclimateInvitations
-            .Where(i => i.UserId == id).ToListAsync(cancellationToken);
+        var microclimateInvitations = await SubjectAccessExport
+            .MicroclimateInvitationsFor(db, id, originalEmail, companyScope)
+            .ToListAsync(cancellationToken);
         foreach (var invitation in microclimateInvitations)
         {
             invitation.Email = RedactedValue;
@@ -150,8 +172,9 @@ public static class SubjectErasure
 
         // Only the invitee side. An invitation this person *sent* is an administrative act on
         // the company's behalf and names somebody else; invited_by is retained.
-        var userInvitations = await db.UserInvitations
-            .Where(i => i.Email == originalEmail).ToListAsync(cancellationToken);
+        var userInvitations = await SubjectAccessExport
+            .AddressedInvitations(db, originalEmail, companyScope)
+            .ToListAsync(cancellationToken);
         foreach (var invitation in userInvitations)
         {
             invitation.Email = RedactedValue;
@@ -163,7 +186,9 @@ public static class SubjectErasure
 
         // The denormalised identity copies only. user_id, action, entity, changes, timestamp,
         // IP and user agent all stay -- see the class remarks.
-        var surveyAuditLogs = await db.SurveyAuditLogs.Where(a => a.UserId == id).ToListAsync(cancellationToken);
+        var surveyAuditLogs = await SubjectAccessExport
+            .SurveyAuditLogsFor(db, id, originalEmail, companyScope)
+            .ToListAsync(cancellationToken);
         foreach (var entry in surveyAuditLogs)
         {
             entry.UserName = ErasedName;
@@ -246,6 +271,17 @@ public static class SubjectErasure
         "The account row survives as a pseudonym. Sixteen foreign keys into users are ON DELETE RESTRICT, so a "
         + "row delete is not available without destroying the audit trail and the company's business records.",
 
+        "A session the subject already holds is not ended. The account is deactivated, so no new token can be "
+        + "issued for it -- /auth/login and /auth/refresh both refuse an inactive account -- but an access token "
+        + "minted before the erasure is self-contained and keeps authorising requests until it expires, unless "
+        + "it identifies the account by a legacy persona id, which erasure clears. Revoking an outstanding token "
+        + "needs a per-user security stamp checked on every request, which is #284's work and is not duplicated "
+        + "here.",
+
+        "Rows matched by email address are erased only inside the tenant the caller has authority over. An "
+        + "address is not unique across tenants, and an invitation held by another company is that company's "
+        + "record: a company administrator's erasure does not reach it. A super admin's erasure is not scoped.",
+
         SubjectDataSources.TrackingUnavailableDetail,
     ];
 
@@ -271,6 +307,22 @@ public static class SubjectErasure
     /// <para>Consent flags are set to withdrawn and the notification opt-outs to silence, so
     /// that nothing downstream can read a live permission off an erased account. Preferences
     /// go back to defaults because a timezone is weakly identifying.</para>
+    ///
+    /// <para><c>IsActive = false</c> closes the door on new tokens, not on old ones, and the
+    /// difference matters enough to say here rather than only in the response. It is read at
+    /// <c>AuthEndpoints.IssueTokenForAsync</c>, which every mint in this API goes through, and
+    /// at the <c>/auth/login</c> lookup — both of them mint-time checks. Nothing consults it
+    /// per request: <c>ActingUserResolver</c> resolves the <c>sub</c> claim to this row by id,
+    /// which erasure does not change, so an access token issued before the erasure keeps
+    /// working until it expires. (One shape does die with the erasure, by accident rather than
+    /// design: a token whose <c>sub</c> is a legacy <c>PersonaExternalId</c> stops resolving,
+    /// because that column is cleared above. Every token this API mints for an account without
+    /// one carries the account's own id.) Revoking one needs a per-user security stamp validated on
+    /// every request; that is #284, and a second mechanism invented here would be one more
+    /// thing to keep in step with it. Do not describe an erasure as "ends the subject's
+    /// session" anywhere, for the reason <c>ProfileEndpoints.ChangePasswordAsync</c> gives
+    /// about the identical gap on a password change ("do not summarise this route as 'ends
+    /// the compromise' anywhere").</para>
     /// </remarks>
     private static void AnonymiseAccount(User subject, DateTimeOffset erasedAt)
     {

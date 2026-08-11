@@ -375,6 +375,284 @@ public class GdprEndpointsTests : IAsyncLifetime
 
     private sealed record SeededSubject(Guid SurveyId, Guid ResponseId, Guid OtherResponseId, string SurveyInvitationToken);
 
+    /// <summary>
+    /// A word that appears nowhere else, inside the other tenant's free-form invitation
+    /// payload. Assertions search for this rather than for the whole payload: the payload is a
+    /// JSON string inside a JSON response, so its quotes come back escaped and a verbatim match
+    /// on it would pass whether or not the value leaked.
+    /// </summary>
+    private const string ForeignPayloadMarker = "other-tenant-private-payload";
+
+    /// <summary>The free-form payload on the other tenant's invitation.</summary>
+    private const string ForeignPayload = "{\"note\": \"" + ForeignPayloadMarker + "\"}";
+
+    /// <summary>
+    /// A second company's invitation to the <i>same</i> email address, with a demographic child
+    /// row hanging off it.
+    /// </summary>
+    /// <remarks>
+    /// This is the shape both tenant tests turn on and it is not contrived: an employee's work
+    /// address can be invited by another customer of the platform, and <c>user_invitations</c>
+    /// identifies its invitee by email alone because no user row exists until they accept. The
+    /// row belongs to the other tenant — its company, its inviting administrator, its role
+    /// grant, its payload — and a caller with rights only in <c>_companyId</c> has no claim on
+    /// any of that, in either direction: it must not come back in their export and their
+    /// erasure must not rewrite it.
+    /// </remarks>
+    private async Task<ForeignInvitation> SeedForeignTenantInvitationAsync(string subjectEmail)
+    {
+        var (_, foreignAdminId, _) = await SignInAsync(Roles.CompanyAdmin, _otherCompanyId, _otherDomain);
+
+        await using var db = NewContext();
+        var now = DateTimeOffset.UtcNow;
+
+        var field = new DemographicField
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = _otherCompanyId,
+            Field = $"tenure-{Guid.NewGuid():N}",
+            LabelEn = "Tenure",
+            LabelEs = "Antiguedad",
+            Type = "select",
+            Required = false,
+            IsActive = true,
+            Order = 1,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.DemographicFields.Add(field);
+
+        var invitation = new UserInvitation
+        {
+            Id = Guid.NewGuid(),
+            Email = subjectEmail,
+            CompanyId = _otherCompanyId,
+            InvitedBy = foreignAdminId,
+            InvitationToken = Guid.NewGuid().ToString("N"),
+            InvitationType = InvitationValidation.TypeEmployeeDirect,
+            Role = Roles.Leader,
+            Status = InvitationValidation.StatusPending,
+            InvitationData = ForeignPayload,
+            ExpiresAt = now.AddDays(7),
+        };
+        db.UserInvitations.Add(invitation);
+        db.UserInvitationDemographics.Add(new UserInvitationDemographic
+        {
+            InvitationId = invitation.Id,
+            DemographicFieldId = field.Id,
+            Value = "6-10",
+        });
+
+        await db.SaveChangesAsync();
+        return new ForeignInvitation(invitation.Id, foreignAdminId);
+    }
+
+    private sealed record ForeignInvitation(Guid Id, Guid InviterId);
+
+    [Fact]
+    public async Task Access_export_never_reaches_a_row_in_a_tenant_the_caller_has_no_rights_in()
+    {
+        var (_, subjectId, subjectEmail) = await SignInAsync(Roles.Employee);
+        var (adminClient, adminId, _) = await SignInAsync(Roles.CompanyAdmin);
+        await SeedSubjectDataAsync(subjectId, subjectEmail, adminId);
+        var foreign = await SeedForeignTenantInvitationAsync(subjectEmail);
+
+        var raw = await (await adminClient.GetAsync($"/gdpr/access?userId={subjectId}")).Content.ReadAsStringAsync();
+        var export = JsonSerializer.Deserialize<JsonElement>(raw);
+
+        // The other tenant's row, and everything it would disclose about that tenant.
+        Assert.DoesNotContain(ForeignPayloadMarker, raw, StringComparison.Ordinal);
+        Assert.DoesNotContain(foreign.Id.ToString(), raw, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(foreign.InviterId.ToString(), raw, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(_otherCompanyId.ToString(), raw, StringComparison.OrdinalIgnoreCase);
+
+        // The caller's own tenant's invitation to the same address is still returned, so the
+        // scope is an authority predicate and not an accidental "return nothing".
+        var invitations = Section(export, "UserInvitation").GetProperty("records").EnumerateArray().ToList();
+        Assert.Single(invitations);
+        Assert.Equal(_companyId.ToString(), invitations[0].GetProperty("CompanyId").GetString());
+
+        // And a super admin, whose authority is every tenant, does see it.
+        var (superClient, _, _) = await SignInAsync(Roles.SuperAdmin);
+        var superRaw = await (await superClient.GetAsync($"/gdpr/access?userId={subjectId}"))
+            .Content.ReadAsStringAsync();
+        Assert.Contains(ForeignPayloadMarker, superRaw, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Erasure_does_not_touch_a_tenant_the_caller_has_no_rights_in()
+    {
+        var (_, subjectId, subjectEmail) = await SignInAsync(Roles.Employee);
+        var (adminClient, adminId, _) = await SignInAsync(Roles.CompanyAdmin);
+        await SeedSubjectDataAsync(subjectId, subjectEmail, adminId);
+        var foreign = await SeedForeignTenantInvitationAsync(subjectEmail);
+
+        var response = await adminClient.PostAsJsonAsync("/gdpr/erasure", new ErasureRequest(subjectId, true));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var db = NewContext();
+
+        // Untouched: same address, same payload, same child row.
+        var untouched = await db.UserInvitations.SingleAsync(i => i.Id == foreign.Id);
+        Assert.Equal(subjectEmail, untouched.Email);
+        Assert.Equal(ForeignPayload, untouched.InvitationData);
+        Assert.Equal(1, await db.UserInvitationDemographics.CountAsync(d => d.InvitationId == foreign.Id));
+
+        // Erased: the invitation in the tenant the caller does administer.
+        Assert.Equal(
+            0,
+            await db.UserInvitations.CountAsync(i => i.Email == subjectEmail && i.CompanyId == _companyId));
+    }
+
+    /// <summary>
+    /// The four link properties the map declares as an address rather than a key —
+    /// <c>SurveyInvitation.Email</c>, <c>MicroclimateInvitation.Email</c>,
+    /// <c>SurveyAuditLog.UserEmail</c> and <c>User.Email</c> — are searched, not merely
+    /// declared.
+    /// </summary>
+    /// <remarks>
+    /// The map's guard test runs one way only: it requires every email column on a classified
+    /// table to be declared as a link, and it checks that every exported record names a
+    /// declared link. Neither direction notices a declaration that no query ever uses, so all
+    /// four of these were declared and none was searched — the export and the erasure reached
+    /// those rows through <c>user_id</c> alone.
+    ///
+    /// This seeds the case that separates the two: rows carrying the subject's address whose
+    /// <c>user_id</c> is somebody else's. It is an anomaly rather than a shape the product
+    /// creates today — those columns are non-nullable — but it is exactly what the declaration
+    /// claims to cover, and without it the claim is untested either way.
+    /// </remarks>
+    [Fact]
+    public async Task A_row_carrying_the_subjects_address_under_another_user_id_is_exported_and_erased()
+    {
+        var (_, subjectId, subjectEmail) = await SignInAsync(Roles.Employee);
+        var (adminClient, adminId, _) = await SignInAsync(Roles.CompanyAdmin);
+        var (_, colleagueId, _) = await SignInAsync(Roles.Employee);
+        var seeded = await SeedSubjectDataAsync(subjectId, subjectEmail, adminId);
+
+        var surveyInvitationId = Guid.NewGuid();
+        var microclimateInvitationId = Guid.NewGuid();
+        var auditId = Guid.NewGuid();
+        await using (var db = NewContext())
+        {
+            var now = DateTimeOffset.UtcNow;
+            var microclimateId = await db.MicroclimateInvitations
+                .Where(i => i.UserId == subjectId).Select(i => i.MicroclimateId).SingleAsync();
+
+            db.SurveyInvitations.Add(new SurveyInvitation
+            {
+                Id = surveyInvitationId,
+                SurveyId = seeded.SurveyId,
+                UserId = colleagueId,
+                CompanyId = _companyId,
+                Email = subjectEmail,
+                InvitationToken = Guid.NewGuid().ToString("N"),
+                ExpiresAt = now.AddDays(7),
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            db.MicroclimateInvitations.Add(new MicroclimateInvitation
+            {
+                Id = microclimateInvitationId,
+                MicroclimateId = microclimateId,
+                UserId = colleagueId,
+                CompanyId = _companyId,
+                Email = subjectEmail,
+                InvitationToken = Guid.NewGuid().ToString("N"),
+                ExpiresAt = now.AddDays(7),
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            db.SurveyAuditLogs.Add(new SurveyAuditLog
+            {
+                Id = auditId,
+                SurveyId = seeded.SurveyId,
+                Action = "updated",
+                EntityType = "survey",
+                UserId = colleagueId,
+                UserName = "Test User",
+                UserEmail = subjectEmail,
+                UserRole = Roles.Employee,
+                Timestamp = now,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var export = await (await adminClient.GetAsync($"/gdpr/access?userId={subjectId}"))
+            .Content.ReadFromJsonAsync<JsonElement>();
+
+        AssertLinkedByAddress(export, "SurveyInvitation", surveyInvitationId, "Email");
+        AssertLinkedByAddress(export, "MicroclimateInvitation", microclimateInvitationId, "Email");
+        AssertLinkedByAddress(export, "SurveyAuditLog", auditId, "UserEmail");
+
+        // The account itself is reached by id; users.email is uniquely indexed, so the declared
+        // Email link can only ever resolve to the same row and the export says so.
+        Assert.Equal(
+            "Id",
+            Section(export, "User").GetProperty("records").EnumerateArray()
+                .First().GetProperty(SubjectAccessExport.LinkKey).GetString());
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await adminClient.PostAsJsonAsync("/gdpr/erasure", new ErasureRequest(subjectId, true))).StatusCode);
+
+        await using var verify = NewContext();
+        Assert.Equal(
+            SubjectErasure.RedactedValue,
+            (await verify.SurveyInvitations.SingleAsync(i => i.Id == surveyInvitationId)).Email);
+        Assert.Equal(
+            SubjectErasure.RedactedValue,
+            (await verify.MicroclimateInvitations.SingleAsync(i => i.Id == microclimateInvitationId)).Email);
+        Assert.Equal(
+            SubjectErasure.RedactedValue,
+            (await verify.SurveyAuditLogs.SingleAsync(a => a.Id == auditId)).UserEmail);
+    }
+
+    private static void AssertLinkedByAddress(JsonElement export, string entity, Guid id, string linkProperty)
+    {
+        var record = Section(export, entity).GetProperty("records").EnumerateArray()
+            .SingleOrDefault(r => r.TryGetProperty("Id", out var value) && value.GetGuid() == id);
+
+        Assert.True(
+            record.ValueKind == JsonValueKind.Object,
+            $"{entity} row {id} carries the subject's address and was not exported at all, so the "
+            + $"'{linkProperty}' link the map declares for it is searched by nothing.");
+        Assert.Equal(linkProperty, record.GetProperty(SubjectAccessExport.LinkKey).GetString());
+    }
+
+    [Fact]
+    public async Task An_erased_account_can_neither_log_in_nor_refresh()
+    {
+        var (subjectClient, subjectId, subjectEmail) = await SignInAsync(Roles.Employee);
+        var (adminClient, adminId, _) = await SignInAsync(Roles.CompanyAdmin);
+        await SeedSubjectDataAsync(subjectId, subjectEmail, adminId);
+
+        // The subject's token works before the erasure, so a refusal afterwards is the
+        // erasure's doing and not a token that was never valid.
+        Assert.Equal(HttpStatusCode.OK, (await subjectClient.PostAsync("/auth/refresh", content: null)).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await adminClient.PostAsJsonAsync("/gdpr/erasure", new ErasureRequest(subjectId, true))).StatusCode);
+
+        // No new token can be minted for the account: the password path cannot find it under
+        // the old address, and the authenticated path refuses a deactivated account.
+        var login = await _factory.CreateClient()
+            .PostAsJsonAsync("/auth/login", new LoginRequest(subjectEmail, "a-good-password"));
+        Assert.Equal(HttpStatusCode.Unauthorized, login.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            (await subjectClient.PostAsync("/auth/refresh", content: null)).StatusCode);
+
+        // What that does *not* do is revoke the access token already in the subject's hand --
+        // nothing reads IsActive per request. The response says so rather than leaving it to be
+        // discovered, and closing it is #284's per-user security stamp, not a second mechanism
+        // invented here.
+        Assert.Contains(
+            SubjectErasure.KnownLimitations,
+            limitation => limitation.Contains("minted before the erasure", StringComparison.Ordinal));
+    }
+
     private static JsonElement Section(JsonElement export, string entity)
         => export.GetProperty("sections").EnumerateArray()
             .Single(s => s.GetProperty("entity").GetString() == entity);
@@ -594,67 +872,120 @@ public class GdprEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Re-derives every foreign key in the model and checks each one after an erasure.
+    /// After an erasure, the subject's own address survives in no column of any table.
     /// </summary>
     /// <remarks>
-    /// A hand-written list of "tables erasure touches" would only ever check the tables
-    /// somebody remembered, which is the same failure mode the subject-data map exists to
-    /// prevent. This walks <c>db.Model.GetEntityTypes()</c> instead, so a foreign key added
-    /// later is checked without anyone editing this test.
+    /// <para>This stands where a "no dangling foreign keys" sweep used to. That sweep could not
+    /// fail: every key it counted is an enforced Postgres constraint, so its answer is zero
+    /// whatever the erasure does — a run with <c>SubjectErasure.EraseAsync</c> gutted to a
+    /// no-op passed it. It proved the migration matches the model, which is worth knowing and
+    /// is not this issue's claim. No orphan can be created here because the database refuses
+    /// one, and that is now said in <c>SubjectErasure</c>'s own remarks rather than attributed
+    /// to a test.</para>
+    ///
+    /// <para>What this asserts, only the code under test can make true. The seed puts the
+    /// address in five tables through five different treatments — pseudonymised on
+    /// <c>users</c>, redacted on <c>survey_invitations</c>, <c>microclimate_invitations</c> and
+    /// <c>user_invitations</c>, overwritten on <c>survey_audit_logs</c> — and the scan is
+    /// derived from <c>db.Model</c> rather than from that list, so a new table that copies an
+    /// address is checked without anyone editing this test. The pre-condition is asserted
+    /// first: a green run cannot mean "there was nothing to erase".</para>
     /// </remarks>
     [Fact]
-    public async Task Erasure_leaves_no_orphaned_rows()
+    public async Task Erasure_leaves_the_subjects_address_in_no_column_of_any_table()
     {
         var (_, subjectId, subjectEmail) = await SignInAsync(Roles.Employee);
         var (adminClient, adminId, _) = await SignInAsync(Roles.CompanyAdmin);
         await SeedSubjectDataAsync(subjectId, subjectEmail, adminId);
 
-        await adminClient.PostAsJsonAsync("/gdpr/erasure", new ErasureRequest(subjectId, true));
+        await using (var before = NewContext())
+        {
+            var seeded = await TablesHoldingAsync(before, subjectEmail);
+            foreach (var table in new[]
+                     {
+                         "users", "survey_invitations", "microclimate_invitations", "user_invitations",
+                         "survey_audit_logs",
+                     })
+            {
+                Assert.True(
+                    seeded.Contains(table, StringComparer.Ordinal),
+                    $"The seed never put the subject's address in {table}, so this test would pass without "
+                    + "erasure doing anything. Found it in: " + string.Join(", ", seeded));
+            }
+        }
+
+        var response = await adminClient.PostAsJsonAsync("/gdpr/erasure", new ErasureRequest(subjectId, true));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         await using var db = NewContext();
-        var orphans = new List<string>();
+        var remaining = await TablesHoldingAsync(db, subjectEmail);
 
-        foreach (var entityType in db.Model.GetEntityTypes().Where(t => !t.IsOwned()))
+        Assert.True(
+            remaining.Count == 0,
+            "The erased subject's email address is still readable in: " + string.Join(", ", remaining)
+            + ". Either the erasure missed a table or a new column now copies the address.");
+    }
+
+    /// <summary>
+    /// Every table with at least one row in which <paramref name="needle"/> appears, in any
+    /// column that renders as text.
+    /// </summary>
+    /// <remarks>
+    /// The column list comes from <c>db.Model</c> — string and string-collection properties,
+    /// owned types included, since those are columns of their owner's table. One statement per
+    /// table rather than one per column, and <c>POSITION</c> rather than <c>LIKE</c> so that no
+    /// character in the address is read as a wildcard. The <c>::text</c> cast is what lets one
+    /// predicate cover <c>text</c>, <c>jsonb</c> and <c>text[]</c> alike.
+    /// </remarks>
+    private static async Task<List<string>> TablesHoldingAsync(ClimateProjectDbContext db, string needle)
+    {
+        var columnsByTable = new SortedDictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+
+        foreach (var entityType in db.Model.GetEntityTypes())
         {
-            var table = entityType.GetTableName();
-            if (table is null)
+            if (entityType.GetTableName() is not { } table)
             {
                 continue;
             }
 
-            foreach (var fk in entityType.GetForeignKeys())
+            foreach (var property in entityType.GetProperties())
             {
-                var principal = fk.PrincipalEntityType;
-                var principalTable = principal.GetTableName();
-                if (principalTable is null || principalTable == table)
+                if (property.ClrType != typeof(string)
+                    && property.ClrType != typeof(List<string>)
+                    && property.ClrType != typeof(string[]))
                 {
-                    continue; // Self-references would need aliasing; users.manager_id is covered below.
+                    continue;
                 }
 
-                var childColumns = fk.Properties.Select(p => Quote(p.GetColumnName())).ToList();
-                var parentColumns = fk.PrincipalKey.Properties.Select(p => Quote(p.GetColumnName())).ToList();
-                var join = string.Join(" AND ",
-                    childColumns.Zip(parentColumns, (c, p) => $"c.{c} = p.{p}"));
-                var notNull = string.Join(" AND ", childColumns.Select(c => $"c.{c} IS NOT NULL"));
-
-                var sql =
-                    $"SELECT COUNT(*)::bigint AS \"Value\" FROM {Quote(table)} c "
-                    + $"WHERE {notNull} AND NOT EXISTS (SELECT 1 FROM {Quote(principalTable)} p WHERE {join})";
-
-                var dangling = await db.Database.SqlQueryRaw<long>(sql).SingleAsync();
-                if (dangling > 0)
+                if (property.GetColumnName() is not { } column)
                 {
-                    orphans.Add($"{table}({string.Join(",", childColumns)}) -> {principalTable}: {dangling}");
+                    continue;
                 }
+
+                if (!columnsByTable.TryGetValue(table, out var columns))
+                {
+                    columns = new SortedSet<string>(StringComparer.Ordinal);
+                    columnsByTable[table] = columns;
+                }
+
+                columns.Add(column);
             }
         }
 
-        // users.manager_id, the one self-reference, checked directly.
-        var danglingManagers = await db.Users
-            .CountAsync(u => u.ManagerId != null && !db.Users.Any(m => m.Id == u.ManagerId));
-        Assert.Equal(0, danglingManagers);
+        var holding = new List<string>();
+        foreach (var (table, columns) in columnsByTable)
+        {
+            var predicate = string.Join(
+                " OR ", columns.Select(c => $"POSITION({{0}} IN {Quote(c)}::text) > 0"));
+            var sql = $"SELECT COUNT(*)::bigint AS \"Value\" FROM {Quote(table)} WHERE {predicate}";
 
-        Assert.True(orphans.Count == 0, "Dangling foreign keys after erasure: " + string.Join("; ", orphans));
+            if (await db.Database.SqlQueryRaw<long>(sql, needle).SingleAsync() > 0)
+            {
+                holding.Add(table);
+            }
+        }
+
+        return holding;
     }
 
     [Fact]
@@ -761,6 +1092,11 @@ public class GdprEndpointsTests : IAsyncLifetime
         Assert.Equal(0, await verify.SurveyDrafts.CountAsync(d => d.UserId == superId));
     }
 
+    /// <summary>
+    /// All four actions, not three. The name used to promise more than the body checked:
+    /// deleting the audit write from <c>RetentionCleanupAsync</c> reddened nothing, and that
+    /// is the one action here that deletes rows across every tenant.
+    /// </summary>
     [Fact]
     public async Task Every_gdpr_action_writes_an_audit_row_attributed_to_the_caller()
     {
@@ -772,6 +1108,11 @@ public class GdprEndpointsTests : IAsyncLifetime
         await adminClient.GetAsync("/gdpr/compliance-report");
         await adminClient.PostAsJsonAsync("/gdpr/erasure", new ErasureRequest(subjectId, true));
 
+        var (superClient, superId, _) = await SignInAsync(Roles.SuperAdmin);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await superClient.PostAsync("/gdpr/retention-cleanup", content: null)).StatusCode);
+
         await using var db = NewContext();
         var rows = await db.AuditLogs
             .Where(a => a.Resource == GdprEndpoints.AuditResource && a.UserId == adminId)
@@ -782,6 +1123,75 @@ public class GdprEndpointsTests : IAsyncLifetime
 
         // The erasure's own audit row must survive the erasure it records.
         Assert.Contains(rows, r => r.Action == GdprEndpoints.ErasureAction && r.ResourceId == subjectId.ToString());
+
+        var sweepRows = await db.AuditLogs
+            .Where(a => a.Resource == GdprEndpoints.AuditResource && a.UserId == superId)
+            .ToListAsync();
+        Assert.Contains(sweepRows, r => r.Action == GdprEndpoints.RetentionCleanupAction);
+    }
+
+    /// <summary>
+    /// The company-less super admin (#191), which no other test in this class exercises: every
+    /// caller here is minted by <see cref="SignInAsync"/>, whose <c>companyId</c> defaults to
+    /// the tenant, so the branch that decides whether an audit row can be written at all was
+    /// never reached.
+    /// </summary>
+    /// <remarks>
+    /// Three answers, and the difference between them is the fix. An erasure names a subject, so
+    /// its row is filed against the subject's tenant and the action is recorded even though the
+    /// caller has no company of their own; a compliance report about one tenant is filed against
+    /// that tenant. The retention sweep names no tenant and crosses all of them, and neither
+    /// does a compliance report about every tenant at once, so there is nothing to file those
+    /// against while <c>audit_logs.company_id</c> is NOT NULL — they run unaudited, with a
+    /// warning, and that pair is exactly the gap the class docstring states. Widening the column
+    /// is a migration, which this issue does not carry.
+    /// </remarks>
+    [Fact]
+    public async Task A_company_less_super_admins_erasure_is_audited_against_the_subjects_tenant()
+    {
+        var (_, subjectId, subjectEmail) = await SignInAsync(Roles.Employee);
+        var (_, authorId, _) = await SignInAsync(Roles.CompanyAdmin);
+        await SeedSubjectDataAsync(subjectId, subjectEmail, authorId);
+
+        var (superClient, superId, _) = await SignInAsync(Roles.SuperAdmin);
+        await using (var db = NewContext())
+        {
+            var super = await db.Users.SingleAsync(u => u.Id == superId);
+            super.CompanyId = null;
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await superClient.PostAsJsonAsync("/gdpr/erasure", new ErasureRequest(subjectId, true))).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await superClient.GetAsync($"/gdpr/compliance-report?companyId={_companyId}")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await superClient.GetAsync("/gdpr/compliance-report")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await superClient.PostAsync("/gdpr/retention-cleanup", content: null)).StatusCode);
+
+        await using var verify = NewContext();
+        var rows = await verify.AuditLogs
+            .Where(a => a.Resource == GdprEndpoints.AuditResource && a.UserId == superId)
+            .ToListAsync();
+
+        var erasure = rows.Single(r => r.Action == GdprEndpoints.ErasureAction);
+        Assert.Equal(subjectId.ToString(), erasure.ResourceId);
+        Assert.Equal(_companyId, erasure.CompanyId);
+
+        var report = rows.Single(r => r.Action == GdprEndpoints.ComplianceReportAction);
+        Assert.Equal(_companyId.ToString(), report.ResourceId);
+        Assert.Equal(_companyId, report.CompanyId);
+
+        // The two that name no tenant, with no company on the caller either: the documented gap,
+        // and the whole of it.
+        Assert.DoesNotContain(rows, r => r.Action == GdprEndpoints.RetentionCleanupAction);
+        Assert.DoesNotContain(
+            rows, r => r.Action == GdprEndpoints.ComplianceReportAction && r.ResourceId is null);
     }
 
     private static string Quote(string identifier)

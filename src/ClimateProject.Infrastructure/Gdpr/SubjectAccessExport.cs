@@ -33,6 +33,17 @@ namespace ClimateProject.Infrastructure.Gdpr;
 /// there. Expanding a survey the subject created would hand its responses — other employees'
 /// answers about their employer — to whoever asked, which is a disclosure, not an export.</para>
 ///
+/// <para><b>Every email-matched lookup is scoped to the caller's authority.</b> An email
+/// address is not tenant-unique: <c>user_invitations</c> names its invitee by email alone, and
+/// <c>survey_invitations</c>, <c>microclimate_invitations</c>, <c>survey_audit_logs</c> and
+/// <c>reports.shared_with</c> each carry an address column of their own. Matching on the address
+/// with no company predicate therefore reaches rows in tenants the caller has no rights in —
+/// another company's invitation to the same address, in full, including its free-form payload
+/// and the id of the administrator who sent it. So <c>companyScope</c> is passed in from the
+/// caller's own authority (null only for a super admin, who has every tenant) and constrains
+/// every one of those lookups. The foreign-key lookups need no such predicate: a
+/// <c>user_id</c> is the subject.</para>
+///
 /// <para><b>Incomplete by construction.</b> <c>services/tracking-api</c> holds subject data in
 /// its own database and this API cannot read it; see <see cref="SubjectDataSources"/>. The
 /// response is marked <see cref="SubjectAccessResponse.Complete"/> = false and names the store
@@ -68,12 +79,23 @@ public static class SubjectAccessExport
         "Responses submitted anonymously carry no user_id and are not linked to the person who submitted them. "
         + "They cannot be included in, or removed from, a response to a request about that person — by design.",
 
+        "Rows matched by email address are searched only inside the tenant the caller has authority over. An "
+        + "email address is not unique across tenants, so an invitation or an audit copy of the address held by "
+        + "another company is that company's record and is not disclosed here. A super admin's export is not "
+        + "scoped this way.",
+
         SubjectDataSources.TrackingUnavailableDetail,
     ];
 
+    /// <param name="companyScope">
+    /// The single tenant the caller has authority over, or null for a super admin, who has all
+    /// of them. Constrains every lookup that matches on an email address rather than on a
+    /// foreign key — see the class remarks.
+    /// </param>
     public static async Task<SubjectAccessResponse> BuildAsync(
         ClimateProjectDbContext db,
         User subject,
+        Guid? companyScope,
         DateTimeOffset generatedAt,
         CancellationToken cancellationToken)
     {
@@ -88,13 +110,17 @@ public static class SubjectAccessExport
         // are reachable only through these parents.
         var responseIds = await db.Responses.Where(r => r.UserId == id)
             .Select(r => r.Id).ToListAsync(cancellationToken);
-        var invitationIds = await db.UserInvitations.Where(i => i.Email == email)
+        var invitationIds = await AddressedInvitations(db, email, companyScope)
             .Select(i => i.Id).ToListAsync(cancellationToken);
 
         var sections = new List<SubjectAccessSection>
         {
             // --- Subject: rows that exist because this person exists -------------------------
-            await FullAsync(db, "User", "Id", db.Users.Where(u => u.Id == id), cancellationToken),
+            // users.email is uniquely indexed, so the second predicate can only match the same
+            // row as the first. It is written out because the map declares Email as a link
+            // property of this table and a declaration nothing searches is a claim, not a rule.
+            await FullAsync(db, "User", (User u) => u.Id == id ? "Id" : "Email",
+                db.Users.Where(u => u.Id == id || u.Email == email), cancellationToken),
             await FullAsync(db, "UserDemographic", "UserId",
                 db.UserDemographics.Where(d => d.UserId == id), cancellationToken),
             await FullAsync(db, "Response", "UserId",
@@ -103,18 +129,19 @@ public static class SubjectAccessExport
                 db.QuestionResponses.Where(q => responseIds.Contains(q.ResponseId)), cancellationToken),
             await FullAsync(db, "ResponseDemographic", "ResponseId",
                 db.ResponseDemographics.Where(rd => responseIds.Contains(rd.ResponseId)), cancellationToken),
-            await FullAsync(db, "SurveyInvitation", "UserId",
-                db.SurveyInvitations.Where(i => i.UserId == id), cancellationToken),
-            await FullAsync(db, "MicroclimateInvitation", "UserId",
-                db.MicroclimateInvitations.Where(i => i.UserId == id), cancellationToken),
+            await FullAsync(db, "SurveyInvitation", (SurveyInvitation i) => i.UserId == id ? "UserId" : "Email",
+                SurveyInvitationsFor(db, id, email, companyScope), cancellationToken),
+            await FullAsync(db, "MicroclimateInvitation",
+                (MicroclimateInvitation i) => i.UserId == id ? "UserId" : "Email",
+                MicroclimateInvitationsFor(db, id, email, companyScope), cancellationToken),
             await FullAsync(db, "Notification", "UserId",
                 db.Notifications.Where(n => n.UserId == id), cancellationToken),
             await FullAsync(db, "SurveyDraft", "UserId",
                 db.SurveyDrafts.Where(d => d.UserId == id), cancellationToken),
             await FullAsync(db, "AuditLog", "UserId",
                 db.AuditLogs.Where(a => a.UserId == id), cancellationToken),
-            await FullAsync(db, "SurveyAuditLog", "UserId",
-                db.SurveyAuditLogs.Where(a => a.UserId == id), cancellationToken),
+            await FullAsync(db, "SurveyAuditLog", (SurveyAuditLog a) => a.UserId == id ? "UserId" : "UserEmail",
+                SurveyAuditLogsFor(db, id, email, companyScope), cancellationToken),
             await FullAsync(db, "DemographicSnapshotEntry", "UserId",
                 db.DemographicSnapshotEntries.Where(e => e.UserId == id), cancellationToken),
             await FullAsync(db, "UserInvitationDemographic", "InvitationId",
@@ -123,7 +150,7 @@ public static class SubjectAccessExport
             // user_invitations is the one mixed section: invitations addressed to the subject
             // are theirs in full, invitations they *sent* name somebody else and are exported
             // as bare attribution. See the LinkKey remark above.
-            await MixedInvitationsAsync(db, id, email, cancellationToken),
+            await MixedInvitationsAsync(db, id, email, companyScope, cancellationToken),
 
             // --- Actor: the subject as author, approver or manager ---------------------------
             await ReferencesAsync("Survey", "CreatedBy",
@@ -163,7 +190,7 @@ public static class SubjectAccessExport
 
             // reports.shared_with is a text[] with no writer in src/ today; matched on both the
             // subject's id and their email because no code fixes which of the two it would hold.
-            await ReportsAsync(db, id, idText, email, cancellationToken),
+            await ReportsAsync(db, id, idText, email, companyScope, cancellationToken),
         };
 
         // Direct reports are folded into the User section rather than given one of their own:
@@ -189,6 +216,73 @@ public static class SubjectAccessExport
     private sealed record Reference(Guid Id, string? Label);
 
     /// <summary>
+    /// Invitations addressed to the subject's email, inside the caller's authority.
+    /// </summary>
+    /// <remarks>
+    /// The invitee of a <c>user_invitations</c> row is identified by email alone — there is no
+    /// user row until they accept — so this is the one lookup that cannot fall back to a
+    /// foreign key, and the one that most needs the company predicate: without it a company
+    /// admin's export of their own employee returns another tenant's invitation to the same
+    /// address in full.
+    /// </remarks>
+    internal static IQueryable<UserInvitation> AddressedInvitations(
+        ClimateProjectDbContext db,
+        string email,
+        Guid? companyScope)
+    {
+        var query = db.UserInvitations.Where(i => i.Email == email);
+        return companyScope is { } company ? query.Where(i => i.CompanyId == company) : query;
+    }
+
+    /// <summary>
+    /// Survey invitations the subject holds, by user id or by the address on the row.
+    /// </summary>
+    internal static IQueryable<SurveyInvitation> SurveyInvitationsFor(
+        ClimateProjectDbContext db,
+        Guid id,
+        string email,
+        Guid? companyScope)
+    {
+        var query = db.SurveyInvitations.Where(i => i.UserId == id || i.Email == email);
+        return companyScope is { } company ? query.Where(i => i.CompanyId == company) : query;
+    }
+
+    /// <summary>
+    /// Microclimate invitations the subject holds, by user id or by the address on the row.
+    /// </summary>
+    internal static IQueryable<MicroclimateInvitation> MicroclimateInvitationsFor(
+        ClimateProjectDbContext db,
+        Guid id,
+        string email,
+        Guid? companyScope)
+    {
+        var query = db.MicroclimateInvitations.Where(i => i.UserId == id || i.Email == email);
+        return companyScope is { } company ? query.Where(i => i.CompanyId == company) : query;
+    }
+
+    /// <summary>
+    /// Survey audit rows attributed to the subject, by user id or by the denormalised address.
+    /// </summary>
+    /// <remarks>
+    /// <c>survey_audit_logs</c> has no <c>company_id</c> of its own, so the tenant comes from
+    /// the survey the row belongs to. The predicate is scoped as a whole rather than only its
+    /// email half, which errs closed: a row attributed to the subject but hanging off another
+    /// company's survey is that company's change trail either way, and a caller who is entitled
+    /// to read it is a super admin, who is unscoped.
+    /// </remarks>
+    internal static IQueryable<SurveyAuditLog> SurveyAuditLogsFor(
+        ClimateProjectDbContext db,
+        Guid id,
+        string email,
+        Guid? companyScope)
+    {
+        var query = db.SurveyAuditLogs.Where(a => a.UserId == id || a.UserEmail == email);
+        return companyScope is { } company
+            ? query.Where(a => db.Surveys.Any(s => s.Id == a.SurveyId && s.CompanyId == company))
+            : query;
+    }
+
+    /// <summary>
     /// Materialise the rows and flatten every mapped column of each.
     /// </summary>
     /// <remarks>
@@ -197,16 +291,30 @@ public static class SubjectAccessExport
     /// needs the entity tracked to reach that metadata. This is a read-only path — nothing
     /// here calls <c>SaveChangesAsync</c> — so the only cost is the snapshot.
     /// </remarks>
-    private static async Task<SubjectAccessSection> FullAsync<T>(
+    private static Task<SubjectAccessSection> FullAsync<T>(
         ClimateProjectDbContext db,
         string entity,
         string linkProperty,
         IQueryable<T> query,
         CancellationToken cancellationToken)
         where T : class
+        => FullAsync(db, entity, _ => linkProperty, query, cancellationToken);
+
+    /// <summary>
+    /// The same, where the link differs per row because the section is matched on more than one
+    /// property — an invitation reached by user id and one reached by the address on it are not
+    /// the same statement about the subject.
+    /// </summary>
+    private static async Task<SubjectAccessSection> FullAsync<T>(
+        ClimateProjectDbContext db,
+        string entity,
+        Func<T, string> linkProperty,
+        IQueryable<T> query,
+        CancellationToken cancellationToken)
+        where T : class
     {
         var rows = await query.ToListAsync(cancellationToken);
-        var records = rows.Select(row => Flatten(db.Entry(row), entity, linkProperty)).ToList();
+        var records = rows.Select(row => Flatten(db.Entry(row), entity, linkProperty(row))).ToList();
         return Section(entity, ExportTreatment.FullRecord, records);
     }
 
@@ -233,11 +341,20 @@ public static class SubjectAccessExport
         Guid id,
         string idText,
         string email,
+        Guid? companyScope,
         CancellationToken cancellationToken)
     {
-        var authored = await db.Reports.Where(r => r.CreatedBy == id)
+        // shared_with is matched on the address as well as on the id, so it carries the same
+        // cross-tenant reach as the invitation tables and takes the same predicate.
+        IQueryable<Report> reports = db.Reports;
+        if (companyScope is { } company)
+        {
+            reports = reports.Where(r => r.CompanyId == company);
+        }
+
+        var authored = await reports.Where(r => r.CreatedBy == id)
             .Select(r => new Reference(r.Id, r.Title)).ToListAsync(cancellationToken);
-        var shared = await db.Reports
+        var shared = await reports
             .Where(r => r.CreatedBy != id && (r.SharedWith.Contains(idText) || r.SharedWith.Contains(email)))
             .Select(r => new Reference(r.Id, r.Title)).ToListAsync(cancellationToken);
 
@@ -252,11 +369,18 @@ public static class SubjectAccessExport
         ClimateProjectDbContext db,
         Guid id,
         string email,
+        Guid? companyScope,
         CancellationToken cancellationToken)
     {
-        var addressed = await db.UserInvitations.Where(i => i.Email == email).ToListAsync(cancellationToken);
-        var sent = await db.UserInvitations
-            .Where(i => i.InvitedBy == id && i.Email != email)
+        var addressed = await AddressedInvitations(db, email, companyScope).ToListAsync(cancellationToken);
+
+        IQueryable<UserInvitation> sentQuery = db.UserInvitations.Where(i => i.InvitedBy == id && i.Email != email);
+        if (companyScope is { } company)
+        {
+            sentQuery = sentQuery.Where(i => i.CompanyId == company);
+        }
+
+        var sent = await sentQuery
             .Select(i => new Reference(i.Id, i.InvitationType))
             .ToListAsync(cancellationToken);
 
