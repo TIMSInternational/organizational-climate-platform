@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Notifications;
@@ -402,11 +403,18 @@ public class ProfileEndpointsTests : IAsyncLifetime
             (await attackerClient.PutAsJsonAsync(
                 "/profile/preferences",
                 new UpdateProfilePreferencesRequest(Language: "es"))).StatusCode);
-        Assert.Equal(
-            HttpStatusCode.NoContent,
-            (await attackerClient.PutAsJsonAsync(
-                "/profile/password",
-                new ChangePasswordRequest(SignupPassword, "Rep1acementPass"))).StatusCode);
+        var passwordChange = await attackerClient.PutAsJsonAsync(
+            "/profile/password",
+            new ChangePasswordRequest(SignupPassword, "Rep1acementPass"));
+        Assert.Equal(HttpStatusCode.OK, passwordChange.StatusCode);
+
+        // The change revoked the token this client is holding (#284). The replacement it
+        // handed back is minted from the same resolved row, so carrying on with it keeps the
+        // rest of this test asking the question it was written to ask -- which row the
+        // collider's sub lands on -- rather than a 401.
+        attackerClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            (await passwordChange.Content.ReadFromJsonAsync<TokenResponse>())!.Token);
 
         await WithDbAsync(async db =>
         {
@@ -530,7 +538,11 @@ public class ProfileEndpointsTests : IAsyncLifetime
             "/profile/password",
             new ChangePasswordRequest(SignupPassword, NewPassword));
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        // 200 with a replacement token since #284: the change rotates the caller's security
+        // stamp, which ends the session they sent this request on, so the route hands back a
+        // session minted after the rotation. SecurityStampRevocationTests covers what that
+        // token is worth; here it is only the status that moved.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var anonymous = Factory.CreateClient();
         Assert.Equal(
@@ -542,10 +554,17 @@ public class ProfileEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A password change is not an admin reset. It never returns a password, and the response
-    /// body is empty -- unlike <c>POST /auth/admin/reset-credentials</c>, which returns the
-    /// temporary password it generated.
+    /// A password change is not an admin reset. It never returns a password -- unlike
+    /// <c>POST /auth/admin/reset-credentials</c>, which returns the temporary password it
+    /// generated.
     /// </summary>
+    /// <remarks>
+    /// The body stopped being empty in #284: it carries the replacement token, because the
+    /// change revokes the caller's own session along with every other. So "empty body" is no
+    /// longer the assertion. What is asserted instead is the property that mattered -- the
+    /// only field present is the token, and neither password appears anywhere in the
+    /// response text.
+    /// </remarks>
     [Fact]
     public async Task The_response_never_carries_a_password()
     {
@@ -555,8 +574,16 @@ public class ProfileEndpointsTests : IAsyncLifetime
             "/profile/password",
             new ChangePasswordRequest(SignupPassword, "Rep1acementPass"));
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var text = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(SignupPassword, text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Rep1acementPass", text, StringComparison.Ordinal);
+
+        using var body = JsonDocument.Parse(text);
+        Assert.Equal(
+            ["token"],
+            body.RootElement.EnumerateObject().Select(p => p.Name).ToArray());
     }
 
     /// <summary>
@@ -577,9 +604,10 @@ public class ProfileEndpointsTests : IAsyncLifetime
             newPassword = "Adm1nChosenPass",
         });
 
-        // 204 -- the admin changed their OWN password, because that is the only row this
-        // route can address. The victim's is untouched.
-        Assert.Equal(HttpStatusCode.NoContent, attempt.StatusCode);
+        // 200 -- the admin changed their OWN password, because that is the only row this
+        // route can address. The victim's is untouched. (204 until #284 gave the route a
+        // replacement token to hand back.)
+        Assert.Equal(HttpStatusCode.OK, attempt.StatusCode);
 
         var anonymous = Factory.CreateClient();
         Assert.Equal(
@@ -651,7 +679,18 @@ public class ProfileEndpointsTests : IAsyncLifetime
 
         await client.PutAsJsonAsync("/profile", new UpdateProfileRequest("First Rename"));
         await client.PutAsJsonAsync("/profile/preferences", new UpdateProfilePreferencesRequest(Theme: "dark"));
-        await client.PutAsJsonAsync("/profile/password", new ChangePasswordRequest(SignupPassword, "Rep1acementPass"));
+
+        var passwordChange = await client.PutAsJsonAsync(
+            "/profile/password",
+            new ChangePasswordRequest(SignupPassword, "Rep1acementPass"));
+
+        // The change ended the session this client was holding (#284), so the rest of the
+        // test carries on with the replacement token the route handed back. Without this the
+        // GET below is a 401 -- which is the mechanism working, not a flake.
+        Assert.Equal(HttpStatusCode.OK, passwordChange.StatusCode);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            (await passwordChange.Content.ReadFromJsonAsync<TokenResponse>())!.Token);
 
         var response = await client.GetAsync("/profile/activity");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

@@ -257,24 +257,26 @@ public static class ProfileEndpoints
     /// <see cref="IPasswordHasher"/> as login, so a wrong password fails here exactly as it
     /// would there.
     ///
-    /// ## This does NOT sign other sessions out. Issue #284.
+    /// ## This DOES sign the caller's other sessions out. Issue #284.
     ///
-    /// Read the paragraph above narrowly: it stops a *future* login with the old password.
-    /// It does not touch a session that is already open. <c>JwtTokenService</c> issues a
-    /// stateless 24-hour HS256 token and there is nothing to revoke it with -- no denylist,
-    /// no security stamp, no refresh-token table -- and this handler writes
-    /// <c>PasswordHash</c> and nothing else, because there is nothing else to write. A token
-    /// minted before the change validates exactly as well after it, for up to 24 hours.
+    /// Rotating <c>User.SecurityStamp</c> is what makes that true: every token this API
+    /// mints carries the stamp it was issued under, and
+    /// <see cref="ClimateProject.Api.Infrastructure.SecurityStampValidation"/> refuses any
+    /// token whose stamp no longer matches the row. So a token minted before this call --
+    /// including one held by whoever the caller is changing their password to escape -- is
+    /// refused with a 401 by its next request, rather than working on for up to 24 hours as
+    /// it did until #284. That is the case the feature exists for: somebody changing their
+    /// password *because they think they were compromised*.
     ///
-    /// That matters most in the case the feature exists for: somebody changing their
-    /// password *because they think they were compromised* is not, by this act, uncompromised.
-    /// The same is true of <c>POST /auth/admin/reset-credentials</c>.
+    /// The caller's own session is the one exception, and it is handled rather than
+    /// exempted. The rotation ends it too, so this route hands back a token minted after the
+    /// rotation -- the response body's <c>token</c> -- and the client replaces the one it
+    /// holds. There is no exemption anywhere in the check: the caller keeps working because
+    /// they were given a new session, not because theirs was skipped.
     ///
-    /// Closing the gap is new infrastructure plus a change to every token-validation path,
-    /// which is #284's, not this issue's. What #136 owes is that nobody -- user or
-    /// maintainer -- believes otherwise: the form says so in both languages
-    /// (<c>profile.passwordOtherSessionsNote</c>) and this docstring says so here. Do not
-    /// summarise this route as "ends the compromise" anywhere.
+    /// This is why the route answers 200 with a body where #136 answered 204. A password
+    /// route is still no place to echo state back, and it does not: the body is a
+    /// credential the caller must have to stay signed in, not a report.
     ///
     /// Note what this route does NOT do, in contrast with
     /// <c>POST /auth/admin/reset-credentials</c>: it accepts no user id, requires no role,
@@ -286,6 +288,7 @@ public static class ProfileEndpoints
         ClimateProjectDbContext db,
         IPasswordHasher passwordHasher,
         AuditEntry audit,
+        IJwtTokenService jwtTokenService,
         CancellationToken cancellationToken)
     {
         var user = await ResolveCurrentUserAsync(principal.GetCurrentUser(), db, cancellationToken);
@@ -342,12 +345,29 @@ public static class ProfileEndpoints
         }
 
         user.PasswordHash = passwordHasher.Hash(request.NewPassword);
+
+        // The revocation itself (#284): every token minted under the old stamp -- every other
+        // device, and anyone who took this account's session -- stops validating from here.
+        user.SecurityStamp = Guid.NewGuid();
+
         user.UpdatedAt = now;
         await db.SaveChangesAsync(cancellationToken);
 
-        // No body. There is nothing to say that the status code does not, and a password
-        // route is the last place to start echoing state back.
-        return Results.NoContent();
+        // Minted AFTER the rotation is saved, and through AuthEndpoints' helper rather than
+        // by hand: that is the single mint site, it is where the deactivation guard from #280
+        // lives, and it reads the stamp off the row -- the row this method has just rotated
+        // and saved, on the tracked instance it is holding. Minting before the save, or from
+        // a second IJwtTokenService call here, would hand the caller a token that its own
+        // next request refuses.
+        return await AuthEndpoints.IssueTokenForAsync(
+            user, db, jwtTokenService,
+            // Unreachable: the caller reached this handler through RequireAuthorization, and
+            // #280's policy refuses a token whose account is deactivated. Supplied because
+            // the helper takes each path's own refusal, and 401 is this one's -- a session
+            // whose account died mid-request has to go to the login page, not be told the
+            // save failed.
+            Results.Json(new { message = "Account is no longer active" }, statusCode: 401),
+            cancellationToken);
     }
 
     /// <summary>

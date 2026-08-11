@@ -26,6 +26,28 @@ public class User
     public Guid? DepartmentId { get; set; }
     public Guid? ManagerId { get; set; }
     public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// The value that decides whether a token issued for this user is still a live session
+    /// (#284). It is minted into every token as the <c>securityStamp</c> claim and compared
+    /// against this column on the read path; rotating it ends every session that was open
+    /// when the rotation happened.
+    /// </summary>
+    /// <remarks>
+    /// Rotated by exactly two code paths today, both of them a password replacement:
+    /// <c>ProfileEndpoints.ChangePasswordAsync</c> and
+    /// <c>AuthEndpoints.ResetCredentialsAsync</c>. Signing in does NOT rotate it — a login
+    /// on a second device would otherwise sign the first one out.
+    ///
+    /// Initialised here rather than left to the database so that every row this application
+    /// creates carries a distinct value from the moment it is constructed, whichever of the
+    /// several places that create a User does it. A user whose stamp equalled another's, or
+    /// <see cref="Guid.Empty"/>, would still be revocable — rotation only ever compares a
+    /// user against their own past value — but a duplicate makes the column useless as
+    /// evidence when reading the table by hand.
+    /// </remarks>
+    public Guid SecurityStamp { get; set; } = Guid.NewGuid();
+
     public DateTimeOffset? LastLoginAt { get; set; }
     public DateTimeOffset? ConsentUpdatedAt { get; set; }
     public UserPreferences Preferences { get; set; } = new();

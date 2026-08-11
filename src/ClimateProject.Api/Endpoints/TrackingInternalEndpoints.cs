@@ -26,6 +26,14 @@ namespace ClimateProject.Api.Endpoints;
 // point of stubbing them was to not need a real company_id yet. Reverted to match the plan.
 public static class TrackingInternalEndpoints
 {
+    /// <summary>
+    /// The path prefix every route in this file hangs off. Shared with
+    /// <see cref="RateLimitPolicies.PartitionGlobal"/>, which gives this surface its own
+    /// ceiling because it is machine traffic gated by <see cref="InternalApiKeyFilter"/>
+    /// rather than by a JWT -- a literal in both places would let the two drift silently.
+    /// </summary>
+    internal const string GroupPrefix = "/api/internal";
+
     private static readonly JsonSerializerOptions SnakeCaseOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -33,7 +41,7 @@ public static class TrackingInternalEndpoints
 
     public static void MapTrackingInternalEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/internal").AddEndpointFilter<InternalApiKeyFilter>();
+        var group = app.MapGroup(GroupPrefix).AddEndpointFilter<InternalApiKeyFilter>();
 
         group.MapGet("/nodos", ListNodosAsync);
         group.MapGet("/personas", ListPersonasAsync);

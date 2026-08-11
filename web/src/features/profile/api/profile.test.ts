@@ -63,7 +63,7 @@ describe('profile api client', () => {
     respond({ activity: [] })
     respond(preferences)
     respond(preferences)
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }))
+    respond({ token: 'replacement-token' })
 
     await getProfile(baseUrl)
     await updateProfile(baseUrl, 'New Name')
@@ -99,10 +99,17 @@ describe('profile api client', () => {
     expect(JSON.parse(String(init!.body))).toEqual({ name: 'Renamed Person' })
   })
 
-  it('sends both passwords and resolves with nothing on a 204', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }))
+  /**
+   * The returned token is the caller's next session (#284): the change signs every session
+   * for this account out, this one included. A client that discards it has signed itself
+   * out, so "resolves with the token from the body" is the contract, not a convenience.
+   */
+  it('sends both passwords and resolves with the replacement token', async () => {
+    respond({ token: 'replacement-token' })
 
-    await expect(changePassword(baseUrl, 'Current1Pass', 'Rep1acementPass')).resolves.toBeUndefined()
+    await expect(changePassword(baseUrl, 'Current1Pass', 'Rep1acementPass')).resolves.toBe(
+      'replacement-token',
+    )
 
     const [url, init] = vi.mocked(fetch).mock.calls[0]
     expect(url).toBe(`${baseUrl}/profile/password`)
