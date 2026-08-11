@@ -197,11 +197,29 @@ public static class AuditEndpoints
     }
 
     /// <summary>
-    /// Everything recorded about one row, from both audit tables.
+    /// Everything recorded about one row: the resource named and everything filed beneath it,
+    /// from both audit tables.
     /// </summary>
     /// <remarks>
     /// <paramref name="resource"/> is matched against <c>audit_logs.resource</c> — the derived
     /// dotted name, <c>surveys</c> or <c>admin.benchmarks</c>, see <see cref="AuditPolicy"/>.
+    ///
+    /// **Matched as a prefix, not as a literal.** The derivation names a row after the route
+    /// that touched it, so the mutations of one survey are spread over <c>surveys</c>,
+    /// <c>surveys.status</c>, <c>surveys.duplicate</c>, <c>surveys.invitations</c> and more,
+    /// every one of them carrying that survey's id in <c>resource_id</c>. An exact match
+    /// returned only the first of those, which made "who changed this survey after responses
+    /// arrived" — the question #143 opens with — unanswerable from the endpoint built to
+    /// answer it. So <c>surveys</c> matches itself and anything under <c>surveys.</c>, and the
+    /// trailing dot is what keeps it from also matching a hypothetical <c>surveys_archive</c>.
+    /// Asking for <c>surveys.status</c> still narrows to that one route's rows.
+    ///
+    /// What the prefix does *not* do is re-file rows onto a different id. A route that names a
+    /// nested row — <c>/surveys/{surveyId}/invitations/{invitationId}/revoke</c> — records the
+    /// invitation's id, not the survey's (see
+    /// <c>AuditWritingMiddleware.DeriveResourceId</c>), so it answers
+    /// <c>/audit/surveys.invitations.revoke/{invitationId}</c> and not the survey's trail.
+    ///
     /// When it names surveys and the id is a Guid, the survey's own change history is merged in
     /// so a reader gets one ordered trail rather than having to know there are two tables.
     /// </remarks>
@@ -217,7 +235,10 @@ public static class AuditEndpoints
 
         var companyFilter = ResolveCompanyFilter(currentUser, requestedCompanyId: null);
 
-        var general = await Filtered(db, companyFilter, null, resource, null, null, null, null)
+        var subResourcePrefix = resource + ".";
+
+        var general = await Filtered(db, companyFilter, null, null, null, null, null, null)
+            .Where(a => a.Resource == resource || a.Resource.StartsWith(subResourcePrefix))
             .Where(a => a.ResourceId == resourceId)
             .OrderByDescending(a => a.Timestamp)
             .ThenByDescending(a => a.Id)
@@ -345,14 +366,54 @@ public static class AuditEndpoints
     }
 
     /// <summary>
-    /// One CSV field.
+    /// The leading characters a spreadsheet reads as the start of a formula rather than as
+    /// text. See <see cref="Csv"/>.
     /// </summary>
     /// <remarks>
-    /// Always quoted, with embedded quotes doubled. Unconditional quoting rather than
-    /// quote-when-needed because these values are user-controlled — a name or a user agent can
-    /// contain a comma or a newline — and a rule with no branches has no branch to get wrong.
+    /// <c>=</c> and <c>+</c> begin a formula in Excel, LibreOffice Calc and Sheets; <c>-</c>
+    /// does too (it is parsed as unary minus applied to an expression); <c>@</c> is Excel's
+    /// legacy intersection/function prefix. Tab and carriage return are included because a
+    /// leading whitespace character can be dropped on import, which would promote the
+    /// character after it into the leading position this rule is about.
     /// </remarks>
-    private static string Csv(string? value) => $"\"{value?.Replace("\"", "\"\"", StringComparison.Ordinal) ?? string.Empty}\"";
+    private static readonly char[] FormulaLeadingCharacters = ['=', '+', '-', '@', '\t', '\r'];
+
+    /// <summary>
+    /// One CSV field, quoted and made inert.
+    /// </summary>
+    /// <remarks>
+    /// Two separate jobs, and quoting only does the first.
+    ///
+    /// **Delimiters.** Always quoted, with embedded quotes doubled. Unconditional quoting
+    /// rather than quote-when-needed because these values are user-controlled — a name or a
+    /// user agent can contain a comma or a newline.
+    ///
+    /// **Formulas.** Quoting a field does *not* stop Excel or LibreOffice evaluating it: a
+    /// cell whose text begins with <c>=</c>, <c>+</c>, <c>-</c> or <c>@</c> is a formula
+    /// however it was quoted in the file. That matters here because this export's
+    /// <c>user_name</c> and <c>user_email</c> columns are strings an ordinary Employee
+    /// controls — <c>PUT /profile</c> accepts any non-blank name — and the person who opens
+    /// the file is by definition a CompanyAdmin or a SuperAdmin, so the payload would run with
+    /// the reader's authority on the reader's machine. A leading apostrophe is the standard
+    /// neutraliser: spreadsheets treat the rest of the cell as literal text and do not display
+    /// the apostrophe itself.
+    ///
+    /// Applied to every field rather than only the two known-hostile ones. <c>action</c> and
+    /// <c>resource</c> are derived from route patterns today, but the point of a rule with no
+    /// exceptions is that it survives someone adding a column that is not.
+    /// </remarks>
+    private static string Csv(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return "\"\"";
+        }
+
+        var escaped = value.Replace("\"", "\"\"", StringComparison.Ordinal);
+        var inert = FormulaLeadingCharacters.Contains(value[0]) ? "'" + escaped : escaped;
+
+        return $"\"{inert}\"";
+    }
 
     private static async Task<IResult> ReportAsync(
         Guid? companyId,

@@ -25,6 +25,13 @@ namespace ClimateProject.Api.Infrastructure.Auditing;
 /// would have to reach back into <c>IHttpContextAccessor</c> for all three.</description></item>
 /// </list>
 ///
+/// What the choice costs, stated because it is the requirement it forfeits: an interceptor is
+/// the only one of the two holding the before and after values (<c>EntityEntry.OriginalValues</c>
+/// and <c>CurrentValues</c>), so middleware cannot produce #143's "before/after where
+/// meaningful" by itself. A handler that has both hands them to <see cref="AuditEntry.RecordChange"/>
+/// and they are serialised into <c>details</c>; <c>SurveyAuditTrail</c> writes the richer
+/// field-level diff for surveys. docs/decisions/audit-logging.md tracks the rest.
+///
 /// The interceptor still exists, for the one job it is genuinely better at:
 /// <see cref="AuditLogAppendOnlyInterceptor"/> refuses to let anything UPDATE or DELETE an
 /// audit row. Writing is the middleware's; protecting what is written is the interceptor's.
@@ -38,8 +45,20 @@ namespace ClimateProject.Api.Infrastructure.Auditing;
 /// mechanism that commits the writes it was only supposed to observe. A fresh scope has an
 /// empty change tracker and can only insert the row it was given.
 ///
-/// The cost is one extra round trip per audited request. Reads are not audited by default
-/// precisely so this is bounded to mutations and the handful of reads that ask for it.
+/// The cost is one extra round trip per audited request -- two when the handler did not
+/// enrich, because the actor has to be resolved. What it is *not* is a second pooled
+/// connection held alongside the request's own: <c>next(context)</c> has returned by the time
+/// this runs, and EF closes the connection it opened as soon as each operation finishes,
+/// returning it to Npgsql's pool rather than holding it for the <c>DbContext</c>'s lifetime.
+/// The two contexts use the pool one after the other.
+///
+/// <c>AuditPoolPressureTests</c> pins that against a pool deliberately smaller than the number
+/// of concurrent mutations, and it counts the rows as well as the responses: made to hold the
+/// request's connection open across this write, the same test still returns 201 for every
+/// request and writes **zero** audit rows, because a write that cannot get a connection is
+/// swallowed by the handler below. Doubling the pool demand would cost the trail silently, not
+/// loudly. Reads are not audited by default so even the sequential cost stays bounded to
+/// mutations and the handful of reads that ask for it.
 ///
 /// ## A failed audit never fails the request
 ///
@@ -94,13 +113,17 @@ internal sealed class AuditWritingMiddleware(
             var actor = await ResolveActorAsync(context, entry, db);
             if (actor is not { } resolved)
             {
-                // Not an error: every unauthenticated write surface in this application lands
-                // here -- /auth/login, /auth/signup, POST /invitations/{token}/accept, the two
-                // anonymous response submissions. audit_logs.company_id is NOT NULL behind a
+                // Not an error: this is where every mutating endpoint that accepts an
+                // unidentified caller lands. audit_logs.company_id is NOT NULL behind a
                 // RESTRICT foreign key to companies, so a request with no resolvable tenant has
                 // no row that can legally be inserted. Warning rather than silence so the gap
-                // is visible in the logs of any environment that hits it; docs/decisions/
-                // audit-logging.md records what closing it needs.
+                // is visible in the logs of any environment that hits it.
+                //
+                // The set of endpoints this can happen on is not written out here -- a
+                // hand-copied list goes stale, and this one already had. It is derived from the
+                // live route table and asserted exactly by
+                // AuditCoverageTests.UnattributableMutatingRoutes, so a new one fails the build;
+                // docs/decisions/audit-logging.md records what closing the gap needs.
                 logger.LogWarning(
                     "Audit row for {Method} {Path} was not written: no company could be resolved for the caller.",
                     context.Request.Method,
@@ -116,7 +139,7 @@ internal sealed class AuditWritingMiddleware(
                 Action = entry.Action ?? decision.Action,
                 Resource = entry.Resource ?? decision.Resource,
                 ResourceId = entry.ResourceId ?? DeriveResourceId(context),
-                Details = Describe(context),
+                Details = Describe(context, entry, failure),
                 IpAddress = AuditPolicy.TruncateOptional(
                     context.Connection.RemoteIpAddress?.ToString(),
                     AuditPolicy.MaxIpAddressLength),
@@ -211,7 +234,8 @@ internal sealed class AuditWritingMiddleware(
     }
 
     /// <summary>
-    /// The <c>details</c> jsonb: method, path and status, and nothing else.
+    /// The <c>details</c> jsonb: method, path, status, and the before/after values the handler
+    /// chose to record. Nothing else.
     /// </summary>
     /// <remarks>
     /// Deliberately not the request body and not the query string. The bodies on this API
@@ -219,11 +243,33 @@ internal sealed class AuditWritingMiddleware(
     /// survey answers, and the query strings carry demographic filters; an audit table is a
     /// long-retention table read by admins, and is the last place any of that should be
     /// copied to. The path alone is enough to reconstruct which endpoint and which row.
+    ///
+    /// <c>Changes</c> is the one exception, and it is opt-in per field rather than automatic
+    /// for that reason -- see <see cref="AuditEntry.RecordChange"/>, which says what must not
+    /// be passed to it. Null, not an empty object, when the handler recorded none: a reader
+    /// scanning the column can then tell "no diff was captured" from "nothing changed".
     /// </remarks>
-    private static string Describe(HttpContext context) => JsonSerializer.Serialize(new AuditDetails(
-        context.Request.Method,
-        context.Request.Path.Value ?? string.Empty,
-        context.Response.StatusCode));
+    private static string Describe(HttpContext context, AuditEntry entry, Exception? failure)
+        => JsonSerializer.Serialize(new AuditDetails(
+            context.Request.Method,
+            context.Request.Path.Value ?? string.Empty,
+            StatusToRecord(context, failure),
+            entry.Changes.Count == 0 ? null : entry.Changes));
+
+    /// <summary>
+    /// The response status, or null when the request ended in an exception.
+    /// </summary>
+    /// <remarks>
+    /// This runs from a <c>finally</c> while the exception is still travelling outwards, so
+    /// <c>UseExceptionHandler</c> -- registered upstream in <c>Program.cs</c> -- has not turned
+    /// it into a status yet and <c>Response.StatusCode</c> still reads 200. Recording that 200
+    /// would be a lie on the one kind of row where the outcome matters most: a request that
+    /// became a 500, or the 409 the handler turns a unique-index violation into. Null says the
+    /// status was not decided yet; <c>error_message</c> carries the exception's type name and
+    /// <c>success</c> is false, so the row is unambiguous without inventing a number.
+    /// </remarks>
+    private static int? StatusToRecord(HttpContext context, Exception? failure)
+        => failure is null ? context.Response.StatusCode : null;
 
     /// <summary>
     /// Why a request failed, in a form safe to keep.
@@ -246,7 +292,11 @@ internal sealed class AuditWritingMiddleware(
             : null;
     }
 
-    private sealed record AuditDetails(string Method, string Path, int Status);
+    private sealed record AuditDetails(
+        string Method,
+        string Path,
+        int? Status,
+        IReadOnlyDictionary<string, AuditFieldChange>? Changes);
 }
 
 /// <summary>Pipeline registration for <see cref="AuditWritingMiddleware"/>.</summary>

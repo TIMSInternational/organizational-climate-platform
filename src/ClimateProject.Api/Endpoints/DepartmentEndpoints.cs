@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using ClimateProject.Api.Infrastructure.Auditing;
 using ClimateProject.Application.Auth;
@@ -142,6 +143,7 @@ public static class DepartmentEndpoints
         UpdateDepartmentRequest request,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
+        AuditEntry audit,
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
@@ -155,6 +157,15 @@ public static class DepartmentEndpoints
         {
             return Results.Forbid();
         }
+
+        // Read before anything below writes to the entity. This is #143's "before/after where
+        // meaningful", and this handler is the worked example for the same reason CreateAsync
+        // is the worked example for resource_id: the middleware sees an HTTP request, not a
+        // change tracker, so only a handler holding both values can record them. Names and an
+        // active flag -- nothing here is a secret or free text, which is the rule
+        // AuditEntry.RecordChange states.
+        var nameBefore = department.Name;
+        var activeBefore = department.IsActive;
 
         var name = request.Name?.Trim();
         if (!string.IsNullOrWhiteSpace(name) && name != department.Name)
@@ -195,6 +206,14 @@ public static class DepartmentEndpoints
 
         department.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
+
+        // After the save, so a request that threw on the way out records no diff it did not
+        // make. Identical values are dropped by RecordChange, so a no-op PUT records nothing.
+        audit.RecordChange("name", nameBefore, department.Name);
+        audit.RecordChange(
+            "isActive",
+            activeBefore.ToString(CultureInfo.InvariantCulture),
+            department.IsActive.ToString(CultureInfo.InvariantCulture));
 
         return Results.Ok(new DepartmentDetail(department.Id, department.CompanyId, department.Name, department.Description, department.ParentDepartmentId, department.IsActive, department.EmployeeCount));
     }

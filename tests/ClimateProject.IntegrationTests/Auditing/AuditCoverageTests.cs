@@ -8,7 +8,8 @@ namespace ClimateProject.IntegrationTests.Auditing;
 
 /// <summary>
 /// The completeness half of #143: whatever the audit middleware does, it has to do it to
-/// **every** mutating endpoint the application maps.
+/// **every** mutating endpoint the application maps -- and where it demonstrably cannot, that
+/// has to be a written-down set rather than a discovery.
 ///
 /// ## Why this reads the route table instead of calling every endpoint
 ///
@@ -23,6 +24,16 @@ namespace ClimateProject.IntegrationTests.Auditing;
 /// itself calls. A new endpoint is in this test the moment it is mapped, because nobody has to
 /// add it. <c>AuditLoggingTests</c> is the other half: it proves the decision this asserts
 /// actually results in a row on the way through.
+///
+/// ## Deciding "audit" is not the same as auditing
+///
+/// <see cref="AuditPolicy.Decide(Endpoint?, string)"/> answers "should there be a row", and it
+/// says yes for every mutating method. Whether there *is* one also depends on the request
+/// having a resolvable tenant, because <c>audit_logs.company_id</c> is NOT NULL: a mutating
+/// endpoint that accepts unidentified callers writes nothing, and used to do so with every
+/// test here green. So <see cref="Every_mutating_endpoint_is_audited"/> asserts both halves,
+/// and pins the second against <see cref="UnattributableMutatingRoutes"/> -- the blind set
+/// cannot grow, shrink or move without this test failing.
 /// </summary>
 [Collection("Postgres")]
 public class AuditCoverageTests : IAsyncLifetime
@@ -122,6 +133,51 @@ public class AuditCoverageTests : IAsyncLifetime
             $"only {MutatingRoutes().Count} mutating routes were found; the data source is probably not the app's");
     }
 
+    /// <summary>
+    /// The mutating routes that write no row however the policy decides, because they accept a
+    /// caller the application never identifies.
+    /// </summary>
+    /// <remarks>
+    /// Not an allowance -- a measurement, asserted exactly in both directions so that it is a
+    /// deliberate act to change it. Adding a mutating endpoint without
+    /// <c>RequireAuthorization()</c>, or opening an authorized one up with
+    /// <c>AllowAnonymous()</c>, fails <see cref="Every_mutating_endpoint_is_audited"/> until
+    /// the route is written down here; giving one of these an identified caller fails it too,
+    /// so the list cannot go stale in the flattering direction either.
+    ///
+    /// Why they cannot be audited today: <c>audit_logs.company_id</c> is NOT NULL behind a
+    /// RESTRICT foreign key, so a request with no user row behind it has no tenant to file
+    /// under. Closing that is a nullable-column migration, which this wave permits only on
+    /// another branch -- docs/decisions/audit-logging.md carries it as outstanding work.
+    /// <c>AuditLoggingTests.An_unidentified_mutation_writes_no_row</c> pins the same fact
+    /// behaviourally, so this list is not the only thing standing between the gap and a
+    /// silent change.
+    /// </remarks>
+    private static readonly string[] UnattributableMutatingRoutes =
+    [
+        "POST /api/internal/send-notification",
+        "POST /auth/google",
+        "POST /auth/login",
+        "POST /auth/signup",
+        "POST /invitations/{token}/accept",
+        "POST /microclimates/{id:guid}/responses",
+        "POST /survey-invitations/{token}/completed",
+        "POST /survey-invitations/{token}/opened",
+        "POST /survey-invitations/{token}/started",
+        "POST /surveys/{id:guid}/responses",
+    ];
+
+    /// <summary>
+    /// Every mutating route is decided "audit", and every one of them can actually produce the
+    /// row -- except the written-down set that cannot.
+    /// </summary>
+    /// <remarks>
+    /// Both halves, because the first alone was the defect: <see cref="AuditPolicy.Decide"/>
+    /// returns Audit for any mutating method that is not <c>[AuditExempt]</c>, so an endpoint
+    /// added with no authorization passed this test while writing nothing at all. The second
+    /// half is what makes the completeness claim falsifiable -- see
+    /// <see cref="UnattributableMutatingRoutes"/>.
+    /// </remarks>
     [Fact]
     public void Every_mutating_endpoint_is_audited()
     {
@@ -131,6 +187,17 @@ public class AuditCoverageTests : IAsyncLifetime
             .ToList();
 
         Assert.Empty(unaudited);
+
+        var cannotBeAttributed = MutatingRoutes()
+            .Where(r => !AuditPolicy.RequiresIdentifiedCaller(r.Endpoint))
+            .Select(r => $"{r.Method} {r.Pattern}")
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(
+            UnattributableMutatingRoutes.Order(StringComparer.Ordinal).ToList(),
+            cannotBeAttributed);
     }
 
     /// <summary>

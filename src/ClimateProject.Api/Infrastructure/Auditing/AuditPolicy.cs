@@ -1,4 +1,5 @@
 using ClimateProject.Application.Auditing;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Routing.Patterns;
 
 namespace ClimateProject.Api.Infrastructure.Auditing;
@@ -105,6 +106,32 @@ public static class AuditPolicy
     /// the application derives it.
     /// </summary>
     public const string UnnameableResource = "unknown";
+
+    /// <summary>
+    /// Whether this endpoint can only be reached by a caller the application has identified --
+    /// and therefore whether the row <see cref="Decide"/> asks for can actually be written.
+    /// </summary>
+    /// <remarks>
+    /// <c>audit_logs.company_id</c> is NOT NULL behind a RESTRICT foreign key to
+    /// <c>companies</c>, so a request whose caller resolves to no user row resolves to no
+    /// tenant either, and there is no row that can legally be inserted for it —
+    /// <c>AuditWritingMiddleware.WriteAsync</c> logs a warning and abandons the write. Deciding
+    /// "audit" for such an endpoint is therefore not the same as auditing it, which is the
+    /// distinction <c>AuditCoverageTests.Every_mutating_endpoint_is_audited</c> exists to keep
+    /// honest: it asserts this predicate over the live route table against a written-down set,
+    /// so a new mutating endpoint that accepts unidentified callers fails the build instead of
+    /// quietly joining the blind spot.
+    ///
+    /// Read off the endpoint's own metadata rather than from a list: an endpoint is authorized
+    /// in this application by <c>RequireAuthorization()</c>, which adds <see cref="IAuthorizeData"/>,
+    /// and an authorized group opens one route back up with <c>AllowAnonymous()</c>, which adds
+    /// <see cref="IAllowAnonymous"/> and wins. Both are what <c>UseAuthorization</c> itself
+    /// reads, so this cannot drift from who actually gets in.
+    /// </remarks>
+    public static bool RequiresIdentifiedCaller(Endpoint? endpoint)
+        => endpoint is not null
+            && endpoint.Metadata.GetMetadata<IAllowAnonymous>() is null
+            && endpoint.Metadata.GetMetadata<IAuthorizeData>() is not null;
 
     /// <summary>POST, PUT, PATCH, DELETE. Everything else is a read as far as auditing goes.</summary>
     public static bool IsMutatingMethod(string method)

@@ -366,14 +366,25 @@ public static class ProfileEndpoints
     /// <summary>
     /// The caller's own audit trail, most recent first.
     ///
-    /// Filtered on <c>user_id</c> and nothing else, so it cannot return another person's
-    /// entries even inside the caller's own company.
+    /// Filtered on <c>user_id</c>, so it cannot return another person's entries even inside
+    /// the caller's own company — and on <c>resource</c>, so it returns the caller's own
+    /// self-service events and only those.
     ///
-    /// Since #143 that is every audited request the caller made, not only the ones against
-    /// <c>/profile</c>: <c>audit_logs</c> now has one writer for the whole application. The
-    /// three profile actions still read back under <see cref="ProfileAuditActions"/>'s names
-    /// (see <c>RecordActivity</c>), and everything else reads back under the route-derived
-    /// name its resource and action were built from.
+    /// ## Why the resource filter, when #143 gave the table a writer for the whole application
+    ///
+    /// Without it this endpoint would broaden by itself: <c>audit_logs</c> now carries a row
+    /// for every mutating request anyone makes, so a CompanyAdmin's "recent activity" card
+    /// would fill up with <c>admin.departments.create</c> and <c>surveys.status.update</c>.
+    /// The UI that renders this (<c>web/src/features/profile/components/ProfileActivityList.tsx</c>)
+    /// has copy for the three profile actions and falls back to printing the raw action
+    /// string, which is an untranslated dotted identifier in both locales — so the broadening
+    /// would have shipped as English wire values on a Spanish screen.
+    ///
+    /// The contract is therefore unchanged from before #143: the three
+    /// <see cref="ProfileAuditActions"/> events, which <c>RecordActivity</c> still files under
+    /// <see cref="ProfileAuditActions.Resource"/>. A cross-resource "everything I did" view is
+    /// a real feature — it needs its own screen and its own copy, not this card silently
+    /// becoming one.
     /// </summary>
     private static async Task<IResult> GetActivityAsync(
         int? limit,
@@ -391,7 +402,7 @@ public static class ProfileEndpoints
 
         var activity = await db.AuditLogs
             .AsNoTracking()
-            .Where(a => a.UserId == user.Id)
+            .Where(a => a.UserId == user.Id && a.Resource == ProfileAuditActions.Resource)
             .OrderByDescending(a => a.Timestamp)
             .ThenByDescending(a => a.Id)
             .Take(pageSize)

