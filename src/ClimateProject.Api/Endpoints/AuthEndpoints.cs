@@ -5,6 +5,7 @@ using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClimateProject.Api.Endpoints;
@@ -26,9 +27,14 @@ public static class AuthEndpoints
     {
         var group = app.MapGroup("/auth");
 
-        group.MapPost("/login", LoginAsync);
-        group.MapPost("/signup", SignupAsync);
-        group.MapPost("/google", GoogleLoginAsync);
+        // The three unauthenticated routes carry the strictest policy in the app (#146):
+        // this is the surface where credential stuffing is the realistic attack, and where a
+        // caller making twenty attempts a minute is already not a person. /refresh and
+        // /admin/reset-credentials below need a valid token first and are covered by the
+        // per-user global ceiling instead.
+        group.MapPost("/login", LoginAsync).RequireRateLimiting(RateLimitPolicies.Authentication);
+        group.MapPost("/signup", SignupAsync).RequireRateLimiting(RateLimitPolicies.Authentication);
+        group.MapPost("/google", GoogleLoginAsync).RequireRateLimiting(RateLimitPolicies.Authentication);
         group.MapPost("/refresh", RefreshAsync).RequireAuthorization();
         group.MapPost("/admin/reset-credentials", ResetCredentialsAsync).RequireAuthorization();
     }

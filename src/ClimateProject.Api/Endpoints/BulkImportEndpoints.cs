@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Domain.Entities;
@@ -11,7 +12,13 @@ public static class BulkImportEndpoints
 {
     public static void MapBulkImportEndpoints(this WebApplication app)
     {
-        app.MapPost("/admin/users/bulk-import", ImportAsync).RequireAuthorization();
+        // The one route in the app that legitimately accepts a multi-megabyte body (a CSV
+        // upload), so it is opted out of the default request-body ceiling #146 applies
+        // everywhere else. It still has a ceiling -- Security:MaxUploadBodyBytes -- and it is
+        // authenticated, unlike the surfaces the strict default exists for.
+        app.MapPost("/admin/users/bulk-import", ImportAsync)
+            .RequireAuthorization()
+            .WithMetadata(new LargeRequestBodyMetadata());
     }
 
     // Matches the CanAccessCompany helper in every sibling endpoint file

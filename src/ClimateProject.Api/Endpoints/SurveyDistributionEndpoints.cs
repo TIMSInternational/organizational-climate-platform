@@ -1,11 +1,13 @@
 using System.Security.Claims;
 using System.Text.Json;
+using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClimateProject.Api.Endpoints;
@@ -113,7 +115,13 @@ public static class SurveyDistributionEndpoints
         // Token-addressed and unauthenticated -- see the class remarks. The three state
         // routes mirror the legacy shape (#130) but share one handler, so the monotonic rule
         // and the anonymity ceiling cannot be applied to two of them and forgotten on the third.
-        var byToken = app.MapGroup("/survey-invitations");
+        //
+        // Rate limited per token (#146). These four routes plus /survey-links/{token} below
+        // are the distribution module's unauthenticated surface: the token IS the credential,
+        // so the bucket has to be the token, not the caller -- otherwise one invitation can be
+        // replayed from as many addresses as an attacker has.
+        var byToken = app.MapGroup("/survey-invitations")
+            .RequireRateLimiting(RateLimitPolicies.PublicToken);
         byToken.MapGet("/{token}", ValidateInvitationTokenAsync);
         byToken.MapPost("/{token}/opened", (string token, ClimateProjectDbContext db, CancellationToken ct)
             => RecordStateAsync(token, SurveyInvitationStatuses.Opened, db, ct));
@@ -122,7 +130,8 @@ public static class SurveyDistributionEndpoints
         byToken.MapPost("/{token}/completed", (string token, ClimateProjectDbContext db, CancellationToken ct)
             => RecordStateAsync(token, SurveyInvitationStatuses.Completed, db, ct));
 
-        app.MapGet("/survey-links/{token}", ResolvePublicLinkAsync);
+        app.MapGet("/survey-links/{token}", ResolvePublicLinkAsync)
+            .RequireRateLimiting(RateLimitPolicies.PublicToken);
     }
 
     // ------------------------------------------------------------------
