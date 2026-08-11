@@ -89,6 +89,52 @@ describe('router', () => {
     expect(topLevel).not.toContain('/surveys/:id/respond')
   })
 
+  /**
+   * All three respond routes sit outside `AdminLayout`.
+   *
+   * `/surveys/:id/respond` is the one that has to be asserted structurally, because
+   * it is the one still behind `RequireAuth` — the test above already pins that, and
+   * "gated" and "wrapped in the admin shell" are two different statements that were
+   * previously the same route entry. The respondent surface is the same page whether
+   * the answerer holds a token or not, and `AdminLayout` is the administrator's
+   * frame: a role-aware rail, a company-context switcher, a notification bell, a
+   * sign-out control. None of it belongs around a survey being answered.
+   *
+   * The shell branch is found by its contents rather than by its element, so this
+   * does not depend on how `createBrowserRouter` stores an element.
+   */
+  it('keeps every respond route out of the AdminLayout branch', () => {
+    function directPaths(routes: typeof router.routes): string[] {
+      return routes.flatMap((route) => (route.path ? [route.path] : []))
+    }
+
+    function findShellBranch(routes: typeof router.routes): typeof router.routes | null {
+      for (const route of routes) {
+        const children = (route.children ?? []) as typeof router.routes
+        if (children.length === 0) continue
+        const paths = directPaths(children)
+        if (paths.includes('/dashboard') && paths.includes('/admin/companies')) return children
+        const nested = findShellBranch(children)
+        if (nested) return nested
+      }
+      return null
+    }
+
+    const shellChildren = findShellBranch(router.routes)
+    // Guard the guard: if the branch were not found, every assertion below would
+    // pass vacuously against an empty list.
+    expect(shellChildren, 'the AdminLayout branch was not found').not.toBeNull()
+    expect(directPaths(shellChildren ?? []).length).toBeGreaterThan(10)
+
+    for (const respondRoute of [
+      '/surveys/:id/respond',
+      '/survey/:id',
+      '/microclimates/:id/respond',
+    ]) {
+      expect(directPaths(shellChildren ?? [])).not.toContain(respondRoute)
+    }
+  })
+
   it('registers the authenticated admin routes', () => {
     const paths: string[] = []
     function walk(routes: typeof router.routes): void {

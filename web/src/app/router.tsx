@@ -125,6 +125,24 @@ export const router = createBrowserRouter([
       {
         element: <RequireAuth />,
         children: [
+          // #120's authenticated half. Gated like everything else under
+          // `RequireAuth` — an employee sent a survey their company does not run
+          // anonymously has to sign in, and the test below this file pins that this
+          // route is NOT a top-level one beside `/survey/:id`.
+          //
+          // But outside `AdminLayout`, beside the gate rather than inside the shell.
+          // The respondent surface is the same page whether the answerer holds a
+          // token or not: `SurveyRespondPage` and `PublicSurveyRespondPage` both
+          // render `RespondShell` around one `SurveyRespondForm`. Wrapping this one
+          // in the administrator's rail — role-aware nav, company switcher,
+          // notification bell, sign-out — put an administration frame around the
+          // only screen an ordinary employee ever sees, and made the two halves of
+          // one flow look like two different products.
+          //
+          // No role gate of its own: the respond endpoint resolves the caller's own
+          // user row and checks the survey's department targets itself, so every
+          // role that can be sent a survey can load this.
+          { path: '/surveys/:id/respond', element: <SurveyRespondPage /> },
           {
             element: <AdminLayout />,
             children: [
@@ -177,11 +195,9 @@ export const router = createBrowserRouter([
               { path: '/surveys/templates', element: <SurveyTemplatesPage /> },
               { path: '/surveys/templates/:id', element: <SurveyTemplateDetailPage /> },
               { path: '/surveys/:id', element: <SurveyDetailPage /> },
-              // The authenticated half of #120. No role gate beyond RequireAuth: the
-              // respond endpoint resolves the caller's own user row and checks the
-              // survey's department targets itself, so every role that can be sent a
-              // survey can load this.
-              { path: '/surveys/:id/respond', element: <SurveyRespondPage /> },
+              // `/surveys/:id/respond` used to be declared here. It is now a sibling
+              // of this whole `AdminLayout` branch, one level up — see the comment
+              // beside it for why the respondent surface is not in the admin shell.
               // No nav entry, deliberately: this is a per-survey destination reached from
               // a survey, not a place in the sidebar. `/surveys` and `/surveys/:id` are
               // #109's; this route only needs to exist beneath one of them.

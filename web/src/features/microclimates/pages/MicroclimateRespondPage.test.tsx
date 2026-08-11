@@ -108,3 +108,129 @@ describe('MicroclimateRespondPage option values', () => {
     expect(await screen.findByLabelText('disagree')).toBeDefined()
   })
 })
+
+/**
+ * The redesign. This page used to be an unstyled `<h1>`, a stack of bare
+ * `<fieldset>`s and a naked `<button>` — no layout at all on the only screen an
+ * ordinary employee ever sees.
+ */
+describe('MicroclimateRespondPage as a respondent surface', () => {
+  beforeEach(() => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    cleanup()
+    window.localStorage.clear()
+    vi.unstubAllGlobals()
+  })
+
+  /**
+   * The same standalone frame as the two survey respond routes, and none of the
+   * administrator's shell: this route is open to anyone holding a link, and a
+   * role-aware rail is a way for a company's structure to appear on it.
+   */
+  it('renders the standalone respond shell and none of the admin one', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(spanishMicroclimate()), { status: 200 }),
+    )
+    const { container } = renderPage()
+
+    await screen.findByRole('heading', { name: 'Pulso semanal' })
+    expect(screen.queryByRole('navigation')).toBeNull()
+    expect(screen.queryByRole('complementary')).toBeNull()
+
+    const skip = screen.getByRole('link', { name: 'Ir a las preguntas' })
+    expect(container.firstElementChild?.firstElementChild).toBe(skip)
+    expect(container.querySelector('#questions')).toBeTruthy()
+  })
+
+  /**
+   * `PublicMicroclimateDetail` carries no `anonymousResponses` flag, so this page
+   * cannot report the session's configuration and does not claim to. What it states
+   * is what `submitResponse` verifiably does: post with `Content-Type` alone and no
+   * bearer token.
+   */
+  it('states what leaves the page with the answers, and attaches no token', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify(spanishMicroclimate()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 201 }))
+    renderPage()
+
+    expect(
+      await screen.findByText('Su nombre no se envía con sus respuestas'),
+    ).toBeTruthy()
+    // The word beside the colour, so green is never the only thing saying it.
+    expect(screen.getByText('No se asocia a usted')).toBeTruthy()
+
+    await userEvent.click(await screen.findByLabelText('Muy de acuerdo'))
+    await userEvent.click(screen.getByRole('button', { name: /enviar|submit/i }))
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+    const headers = new Headers(
+      (vi.mocked(fetch).mock.calls[1][1] as RequestInit).headers as HeadersInit,
+    )
+    expect(headers.get('Authorization')).toBeNull()
+  })
+
+  it('counts answers as a mono reading, and says the same thing in words', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(spanishMicroclimate()), { status: 200 }),
+    )
+    renderPage()
+
+    const reading = await screen.findByText('0 / 1')
+    expect(reading.className).toContain('font-mono')
+    expect(reading.className).toContain('tabular-nums')
+    expect(reading.getAttribute('aria-hidden')).toBe('true')
+    expect(screen.getByText('0 de 1 preguntas respondidas')).toBeTruthy()
+
+    await userEvent.click(screen.getByLabelText('Muy de acuerdo'))
+    expect(screen.getByText('1 / 1')).toBeTruthy()
+  })
+
+  /**
+   * The word carries whether an answer is required, never a colour (WCAG 1.4.1) —
+   * the rule `surveys/RespondQuestionField.tsx` already keeps.
+   */
+  it('marks a required question in words, inside the legend that names the group', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(spanishMicroclimate()), { status: 200 }),
+    )
+    renderPage()
+
+    const legend = await waitFor(() => {
+      const found = document.querySelector('legend')
+      expect(found).toBeTruthy()
+      return found!
+    })
+    expect(legend.textContent).toContain('(obligatoria)')
+    // The mono index reading, with the sentence beside it for a screen reader.
+    expect(legend.textContent).toContain('Pregunta 1 de 1')
+    const marker = screen.getByText('1/1')
+    expect(marker.className).toContain('font-mono')
+    expect(marker.getAttribute('aria-hidden')).toBe('true')
+  })
+
+  it('tells a respondent that a session is not taking answers, rather than showing a form', async () => {
+    const detail = spanishMicroclimate()
+    detail.status = 'completed'
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(detail), { status: 200 }))
+    renderPage()
+
+    expect(await screen.findByText('Esta sesión no está recibiendo respuestas')).toBeTruthy()
+    expect(screen.queryByRole('radio')).toBeNull()
+  })
+
+  it('reports a failed load as an alert rather than a bare line of text', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Microclimate not found' }), { status: 404 }),
+    )
+    renderPage()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('No se pudo cargar esta sesión')
+    expect(alert.textContent).toContain('Microclimate not found')
+  })
+})

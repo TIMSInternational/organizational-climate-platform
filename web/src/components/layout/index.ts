@@ -43,5 +43,11 @@ export {
   type JourneyStatus,
   type JourneyTimelineProps,
 } from './JourneyTimeline'
+export {
+  RespondShell,
+  RespondCaption,
+  RespondReading,
+  type RespondShellProps,
+} from './RespondShell'
 export { SidebarBrand, type SidebarBrandProps } from './SidebarBrand'
 export { SidebarUserMenu } from './SidebarUserMenu'
