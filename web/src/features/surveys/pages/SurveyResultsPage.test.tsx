@@ -3,10 +3,15 @@ import { render, screen, cleanup, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import SurveyResultsPage from './SurveyResultsPage'
+import { downloadTextFile } from '../../../lib/downloadTextFile'
 import { TranslationProvider } from '../../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { setToken } from '../../../auth/token'
 import type { SurveyAnalyticsResponse } from '../api/surveyResults'
+
+// The only part of the export that touches the DOM. Stubbed so the assertions
+// below can read the bytes the page decided to write.
+vi.mock('../../../lib/downloadTextFile', () => ({ downloadTextFile: vi.fn() }))
 
 function payload(overrides: Partial<SurveyAnalyticsResponse> = {}): SurveyAnalyticsResponse {
   return {
@@ -149,6 +154,9 @@ describe('SurveyResultsPage', () => {
     cleanup()
     window.localStorage.clear()
     vi.unstubAllGlobals()
+    // The download stub is module scoped, so a call recorded by one test would
+    // otherwise be the "last call" another test reads.
+    vi.mocked(downloadTextFile).mockClear()
   })
 
   it('reads the whole page from one request to /analytics', async () => {
@@ -214,13 +222,29 @@ describe('SurveyResultsPage', () => {
       }
     })
 
-    it('says how many groups and how many people were withheld, and how many were unsegmented', async () => {
+    it('says how many groups were withheld and how many were unsegmented', async () => {
       renderPage()
 
       // Withheld and unsegmented are reported separately: one group was measured and
       // hidden, the other was never in a group at all.
-      expect(await screen.findByText(/1 groups covering 3 people are withheld/i)).toBeTruthy()
+      expect(await screen.findByText(/Withheld groups: 1/i)).toBeTruthy()
       expect(screen.getByRole('row', { name: /Not recorded/ })).toBeTruthy()
+    })
+
+    it('never announces how many people are behind the withheld group', async () => {
+      // `suppressedRespondentCount` is 3 here, and 24 responses completed. The page
+      // used to print both "1 groups covering 3 people are withheld" and "Showing 21
+      // of 24 completed responses" -- the second discloses the same 3 by subtraction,
+      // which is the inference the floor exists to block.
+      renderPage()
+      await screen.findByText(/Withheld groups: 1/i)
+
+      const text = document.body.textContent ?? ''
+      expect(text).not.toMatch(/covering 3 people/i)
+      expect(text).not.toMatch(/\b21 of 24\b/)
+      // Nothing anywhere on the page pairs the completed total with a smaller
+      // "shown" figure, whatever the wording.
+      expect(text).not.toMatch(/\b\d+ of 24 completed/i)
     })
 
     it('keeps the withheld group out of the heat map entirely', async () => {
@@ -511,6 +535,77 @@ describe('SurveyResultsPage', () => {
     })
   })
 
+  /**
+   * The floor taking *every* group, which is the case the section used to vanish
+   * on: `{climate && ...}` had no else and `buildClimateMap` returned null, so the
+   * H2, the map and the findings panel all left the DOM while the breakdown table
+   * six hundred pixels below still listed the same groups as withheld.
+   */
+  describe('every group below the segment floor', () => {
+    function allWithheldPayload(): SurveyAnalyticsResponse {
+      const base = payload()
+      return {
+        ...base,
+        breakdowns: [
+          {
+            ...base.breakdowns[0],
+            segments: base.breakdowns[0].segments.map((segment) => ({
+              ...segment,
+              respondentCount: 0,
+              participationRate: null,
+              isSuppressed: true,
+              questions: [],
+            })),
+            suppressedSegmentCount: 2,
+            suppressedRespondentCount: 7,
+          },
+          base.breakdowns[1],
+        ],
+      }
+    }
+
+    beforeEach(() => {
+      vi.mocked(fetch).mockImplementation(() =>
+        Promise.resolve(jsonResponse(allWithheldPayload())),
+      )
+    })
+
+    it('still renders the climate section, with every group protected', async () => {
+      renderPage()
+      const map = within(
+        await screen.findByRole('region', { name: 'Climate by group and dimension' }),
+      ).getByRole('table', { name: 'Chart data as a table' })
+
+      // The rows are still there -- the groups exist and were measured.
+      expect(within(map).getByRole('rowheader', { name: 'Support' })).toBeTruthy()
+      expect(within(map).getByRole('rowheader', { name: 'Legal' })).toBeTruthy()
+      // And every cell is the padlock, not a blank and not a colour.
+      const cells = within(map).getAllByLabelText(/protected — withheld below 5 responses/)
+      expect(cells).toHaveLength(2)
+    })
+
+    it('says the floor is what is holding the readings back, and prints no target', async () => {
+      renderPage()
+      await screen.findByRole('region', { name: 'Climate by group and dimension' })
+
+      expect(
+        screen.getByText(/every reading below is protected and none is shown/i),
+      ).toBeTruthy()
+      // There is no disclosed cell to average, so no "target of x" may be claimed.
+      expect(screen.queryByText(/this survey's own average, which is what the scale/)).toBeNull()
+    })
+
+    it('keeps the findings panel and says why it is empty', async () => {
+      renderPage()
+
+      expect(await screen.findByText('Where to look first')).toBeTruthy()
+      // "No group sits below the survey average" would be a claim about the
+      // organisation; this is the floor being enforced, which is a different fact.
+      expect(screen.getByText(/every group's reading is protected/i)).toBeTruthy()
+      expect(screen.queryByText(/No group sits below the survey average/i)).toBeNull()
+    })
+  })
+
   describe('filters and drill-down', () => {
     it('narrows the question list by type', async () => {
       const user = userEvent.setup()
@@ -548,6 +643,40 @@ describe('SurveyResultsPage', () => {
       await screen.findAllByRole('row', { name: /Legal/ })
       const row = within(breakdownTable()).getByRole('row', { name: /Legal/ })
       expect(within(row).queryByRole('button')).toBeNull()
+    })
+  })
+
+  describe('the header exports', () => {
+    it('writes every question, not the subset the filters two thousand pixels below left visible', async () => {
+      // The button sits in the header, where nothing is beside it to say the
+      // download was narrowed. So it must not be: filtering to open-ended hides Q1
+      // from the page, and the file still has to carry it.
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findAllByText(/I feel safe raising concerns/)
+
+      await user.selectOptions(screen.getByLabelText('Question type'), 'open_ended')
+      await waitFor(() =>
+        expect(screen.queryAllByText(/I feel safe raising concerns/)).toHaveLength(0),
+      )
+
+      await user.click(screen.getByRole('button', { name: 'Export questions (CSV)' }))
+
+      const [, , contents] = vi.mocked(downloadTextFile).mock.calls.at(-1)!
+      expect(contents).toContain('I feel safe raising concerns')
+      expect(contents).toContain('What would you change?')
+    })
+
+    it('writes every dimension of the breakdown, not just the selected one', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findAllByText(/I feel safe raising concerns/)
+
+      await user.click(screen.getByRole('button', { name: 'Export breakdown (CSV)' }))
+
+      const [, , contents] = vi.mocked(downloadTextFile).mock.calls.at(-1)!
+      expect(contents).toContain('department')
+      expect(contents).toContain('tenure')
     })
   })
 

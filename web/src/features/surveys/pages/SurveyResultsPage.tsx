@@ -49,6 +49,17 @@ import {
 } from '../surveyResultsCsv'
 
 /**
+ * One decimal, everywhere a score is printed on this page.
+ *
+ * `surveyResultsMap.ts` rounds every mean it produces to one decimal (`round1`),
+ * so that is the precision of the data. `formatMetric`'s default — as many places
+ * as the number needs, capped at one — put `4` and `3.8` in the same grid column,
+ * and a column of readings that do not line up is not an instrument.
+ */
+const SCORE_DECIMALS = 1
+const SCORE_FORMAT: MetricFormat = { kind: 'number', decimals: SCORE_DECIMALS }
+
+/**
  * Where an administrator reads what a survey found.
  *
  * ## What the page answers, in the order it answers it
@@ -106,6 +117,12 @@ import {
  *   guarantee being enforced, and never the response count behind it.
  * - **The same group, in the breakdown table.** Handled in `SegmentBreakdownPanel`:
  *   the row stays, marked withheld, and never as a zero.
+ * - **Every group below that floor at once.** The section still renders: the same
+ *   grid, every row protected, and copy saying that is what happened. Dropping the
+ *   section would be the worst version of the mistake above — the breakdown table
+ *   further down still lists those groups as withheld, so the page would be saying
+ *   the groups exist in one place and that group-level climate was never measured
+ *   in another. `buildClimateMap` returns a map with a `null` target for it.
  *
  * ## Filters and drill-down
  *
@@ -238,10 +255,18 @@ export default function SurveyResultsPage() {
           { label: heading, href: `/surveys/${id}` },
           { label: t('surveys.results') },
         ]}
-        // The exports act on the whole page, not on the section they used to sit
-        // in, so they belong in the header's action slot beside the title — the
-        // `ptb` shape the redesign uses everywhere. They can only be built once
-        // the payload is here, hence the guard rather than a disabled button.
+        // Both exports act on the whole payload — every question and every
+        // dimension — which is what lets them sit in the header's action slot
+        // beside the title, the `ptb` shape the redesign uses everywhere. A
+        // header control has nothing beside it to qualify its scope, so it must
+        // not have one: the questions export deliberately writes `questions` and
+        // not `visibleQuestions`, because the category and type selects that
+        // produce `visibleQuestions` sit 2,180px below this button — measured in
+        // Chromium at 1440 against scripts/shot-fixtures/survey-results.json —
+        // and nothing up here says the download was narrowed by them. The
+        // breakdown export writes `breakdowns`, every dimension, for the same
+        // reason. They can only be built once the payload is here, hence the
+        // guard rather than a disabled button.
         //
         // `!isSuppressed` as well, and that is not cosmetic: below the whole-survey
         // floor `questions` and `breakdowns` both arrive empty, so both buttons
@@ -258,7 +283,7 @@ export default function SurveyResultsPage() {
                   downloadTextFile(
                     resultsFileName(payload, 'questions'),
                     'text/csv',
-                    buildQuestionResultsCsv(visibleQuestions, csvLabels),
+                    buildQuestionResultsCsv(questions, csvLabels),
                   )
                 }
               >
@@ -352,13 +377,30 @@ export default function SurveyResultsPage() {
                       {/* The map is the wide half and the findings the narrow
                           one, because the map is the evidence and the findings
                           are the summary of it. They stack on a narrow screen
-                          with the map first, for the same reason. */}
-                      <div className="grid gap-panel-gap lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-                        <div className="rounded-lg border border-line-light bg-surface-panel p-panel">
+                          with the map first, for the same reason.
+                          `items-start` so the shorter panel keeps its own height
+                          rather than being stretched to the taller one's and
+                          holding a band of empty surface under its legend.
+                          `min-w-0` on the panels because a grid item's automatic
+                          minimum size is its content's min-content width: without
+                          it the map's own widest row pushed the panel to 430px
+                          inside a 390px phone viewport, and `Table`'s scroll
+                          container never got the chance to scroll. Measured in
+                          Chromium at 390, 820, 1024, 1440 and 1920. */}
+                      <div className="grid items-start gap-panel-gap lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                        <div className="min-w-0 rounded-lg border border-line-light bg-surface-panel p-panel">
                           <p className="mb-panel-gap max-w-prose text-sm text-fg-secondary">
-                            {t('surveyResults.climateAgainstAverage', {
-                              target: formatMetric(climate.target, { kind: 'number' }, locale),
-                            })}
+                            {climate.target === null
+                              ? t('surveyResults.climateAllProtected', {
+                                  minimum: climate.threshold,
+                                })
+                              : t('surveyResults.climateAgainstAverage', {
+                                  target: formatMetric(
+                                    climate.target,
+                                    SCORE_FORMAT,
+                                    locale,
+                                  ),
+                                })}
                           </p>
                           <ClimateMap
                             dimensions={climate.dimensions.map((entry) => ({
@@ -370,6 +412,9 @@ export default function SurveyResultsPage() {
                             deadBandAt={climate.deadBandAt}
                             extremeAt={climate.extremeAt}
                             threshold={climate.threshold}
+                            // Every score on this page is a one-decimal mean; see
+                            // `round1` in `surveyResultsMap.ts`.
+                            decimals={SCORE_DECIMALS}
                           />
                           {/* What the grid could not show, said rather than left
                               to be noticed. Both counts are about coverage, not
@@ -390,7 +435,7 @@ export default function SurveyResultsPage() {
                           )}
                         </div>
 
-                        <div className="rounded-lg border border-line-light bg-surface-panel p-panel">
+                        <div className="min-w-0 rounded-lg border border-line-light bg-surface-panel p-panel">
                           <h3 className="mb-1 text-lg font-semibold leading-tight">
                             {t('surveyResults.findingsTitle')}
                           </h3>
@@ -399,7 +444,16 @@ export default function SurveyResultsPage() {
                           </p>
                           {findings.length === 0 ? (
                             <p className="text-sm text-fg-secondary">
-                              {t('surveyResults.findingsNone')}
+                              {/* Two different facts, and saying the wrong one
+                                  would be a claim about the organisation: "no
+                                  group is below average" is a finding, while
+                                  "every group is protected" is the floor being
+                                  enforced. */}
+                              {t(
+                                climate.target === null
+                                  ? 'surveyResults.findingsAllProtected'
+                                  : 'surveyResults.findingsNone',
+                              )}
                             </p>
                           ) : (
                             <ul className="m-0 flex list-none flex-col gap-2 p-0">
@@ -429,13 +483,13 @@ export default function SurveyResultsPage() {
                                       {/* Mono for the two readings, sans for the
                                           words around them. */}
                                       <span className="font-mono tabular-nums">
-                                        {formatMetric(finding.score, { kind: 'number' }, locale)}
+                                        {formatMetric(finding.score, SCORE_FORMAT, locale)}
                                       </span>
                                       {' — '}
                                       {t('surveyResults.findingShortfall', {
                                         shortfall: formatMetric(
                                           finding.shortfall,
-                                          { kind: 'number' },
+                                          SCORE_FORMAT,
                                           locale,
                                         ),
                                       })}
@@ -458,7 +512,7 @@ export default function SurveyResultsPage() {
                       <H2 id="results-dimensions">{t('surveyResults.dimensionsTitle')}</H2>
                       <p className="m-0 max-w-prose text-sm text-fg-secondary">
                         {t('surveyResults.dimensionsIntro', {
-                          overall: formatMetric(standings.overall, { kind: 'number' }, locale),
+                          overall: formatMetric(standings.overall, SCORE_FORMAT, locale),
                         })}
                       </p>
                       <Table className="text-sm">
@@ -479,7 +533,7 @@ export default function SurveyResultsPage() {
                               <th scope="row">{dimensionName(row.key)}</th>
                               <td className="font-mono tabular-nums">{row.questionCount}</td>
                               <td className="font-mono tabular-nums">
-                                {formatMetric(row.score, { kind: 'number' }, locale)}
+                                {formatMetric(row.score, SCORE_FORMAT, locale)}
                               </td>
                               <td>
                                 <StandingCell
@@ -558,7 +612,6 @@ export default function SurveyResultsPage() {
                         <SegmentBreakdownPanel
                           breakdown={activeBreakdown}
                           questions={questions}
-                          completedCount={payload.summary.completedCount}
                           minimumGroupSize={payload.minimumGroupSize}
                           questionLabel={questionLabel}
                           selectedKey={selectedSegment}

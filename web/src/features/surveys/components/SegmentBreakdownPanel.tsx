@@ -13,8 +13,6 @@ import {
 interface SegmentBreakdownPanelProps {
   breakdown: SurveyBreakdown
   questions: readonly SurveyQuestionResult[]
-  /** Completed responses, so the panel can say the table accounts for all of them. */
-  completedCount: number
   /** The segment floor the server applied. */
   minimumGroupSize: number
   /** Already-translated short identifier for a question, e.g. "Q3". */
@@ -48,9 +46,13 @@ interface SegmentBreakdownPanelProps {
  *    row (silently dropped). `segmentHeatMapCells` excludes them and the footer accounts
  *    for them.
  *
- * The footer also reports the *unsegmented* count separately from the withheld count.
- * They are different facts — one group was measured and hidden, the other was never in a
- * group — and adding them together would be the same kind of quiet collapse.
+ * The footer reports how many groups were withheld and what the floor is. It does
+ * **not** report how many people are behind them, and nothing on this panel is
+ * computed from `suppressedRespondentCount`: that number is the withheld headcount,
+ * and publishing it — directly, or as one half of a pair a reader subtracts —
+ * hands over exactly what the floor protects. The *unsegmented* count is reported
+ * separately, because it is a different fact: one group was measured and hidden,
+ * the other was never in a group at all.
  *
  * ## Why the heat map and not a stacked bar
  *
@@ -63,7 +65,6 @@ interface SegmentBreakdownPanelProps {
 export default function SegmentBreakdownPanel({
   breakdown,
   questions,
-  completedCount,
   minimumGroupSize,
   questionLabel,
   selectedKey,
@@ -158,20 +159,20 @@ export default function SegmentBreakdownPanel({
         </tbody>
       </Table>
 
+      {/* How many groups, and what the floor is — never how many people are behind
+          them. `breakdown.suppressedRespondentCount` is the withheld headcount and
+          is deliberately not read here, in any form: printing it, or printing
+          anything it can be recovered from by one subtraction, publishes the exact
+          sub-threshold count the floor exists to hide. The sentence that used to
+          follow this one said "Showing 171 of 175 completed responses", whose two
+          numbers differ by precisely that count. */}
       <Body className="text-fg-secondary">
         {breakdown.suppressedSegmentCount > 0
           ? t('surveyResults.segmentsWithheld', {
               segments: breakdown.suppressedSegmentCount,
-              respondents: breakdown.suppressedRespondentCount,
               minimum: minimumGroupSize,
             })
           : t('surveyResults.nothingWithheld')}
-      </Body>
-      <Body className="text-fg-secondary">
-        {t('surveyResults.accountsFor', {
-          shown: completedCount - breakdown.suppressedRespondentCount,
-          total: completedCount,
-        })}
       </Body>
 
       {cells.length > 0 && (

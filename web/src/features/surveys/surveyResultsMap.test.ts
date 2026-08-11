@@ -265,12 +265,31 @@ describe('buildClimateMap', () => {
       .toBeNull()
   })
 
-  it('is null when every group is withheld', () => {
+  it('keeps every group as a protected row when the floor takes all of them', () => {
+    // The strongest form of "protected is shown, never hidden". Returning null
+    // here deleted the whole climate section from the page while the breakdown
+    // table below it still listed these groups as withheld — the page saying the
+    // groups exist in one place and that nothing was measured in another.
     const { questions } = fixture()
     const allWithheld = breakdown([
       segment({ key: 'legal', label: 'Legal', respondentCount: 0, isSuppressed: true }),
+      segment({ key: 'finance', label: 'Finance', respondentCount: 0, isSuppressed: true }),
     ])
-    expect(buildClimateMap(allWithheld, questions, 5, nameOf)).toBeNull()
+    const model = buildClimateMap(allWithheld, questions, 5, nameOf)!
+
+    expect(model.rows.map((row) => row.label)).toEqual(['Legal', 'Finance'])
+    // Every row is below the floor `ClimateMap` is handed, so every cell renders
+    // through `ProtectedCell` rather than as a colour.
+    expect(model.rows.every((row) => row.responses < model.threshold)).toBe(true)
+    // No disclosed cell means no mean to take — and no number that could be
+    // presented as one.
+    expect(model.target).toBeNull()
+    expect(model.dimensions.map((entry) => entry.key)).toEqual(['Safety', 'Workload'])
+  })
+
+  it('is null only when the breakdown holds no group at all', () => {
+    const { questions } = fixture()
+    expect(buildClimateMap(breakdown([]), questions, 5, nameOf)).toBeNull()
   })
 })
 
@@ -314,6 +333,11 @@ describe('climateFindings', () => {
     // would leak exactly what the floor protects.
     expect(climateFindings(model).some((finding) => finding.rowId === 'legal')).toBe(false)
   })
+
+  // No test for "a null target produces no findings": the early return is what
+  // narrows `target` for the comparison below it, so removing it is a type error,
+  // and every value it could plausibly be replaced with (`?? 0`) still yields an
+  // empty list for any real score. A test there would be one that cannot go red.
 
   it('honours the limit', () => {
     const { questions, breakdown: data } = fixture()

@@ -237,8 +237,14 @@ export interface ClimateMapModel {
    * withheld ones, which arrive with no scores and are rendered as protected.
    */
   rows: ClimateMapRow[]
-  /** The mean of every visible cell. What the colours are relative to. */
-  target: number
+  /**
+   * The mean of every visible cell. What the colours are relative to.
+   *
+   * `null` when no group is disclosed: there is then no cell to average, and
+   * nothing on the grid is measured against anything. Every row in that case is
+   * a withheld one, which `ClimateMap` renders as protected — see below.
+   */
+  target: number | null
   deadBandAt: number
   extremeAt: number
   /** The anonymity floor to hand `ClimateMap`. */
@@ -273,6 +279,20 @@ export interface ClimateMapModel {
  * attributed to that group, and a hatched cell is the protection claim above. So
  * a dimension survives only if every group drawn has a score for it, and the count
  * of the ones that did not is reported.
+ *
+ * ## Why "every group is withheld" is a map and not a `null`
+ *
+ * When the floor takes every group there is nothing to *colour*, but there is a
+ * great deal to *say*: these groups exist, they were measured, and their readings
+ * are being protected. Returning `null` there would delete the whole section from
+ * the page, and an absent section is worse than an empty cell — the reader cannot
+ * even learn that group-level climate was measured, while the breakdown table
+ * further down still lists every one of those groups as withheld. So the map is
+ * still returned: every row present, every cell protected, and `target` `null`
+ * because no cell was disclosed for a target to be the mean of.
+ *
+ * `null` is kept for the cases where there is genuinely nothing to show: no scale
+ * question at all, or no group of any kind in the breakdown.
  */
 export function buildClimateMap(
   breakdown: SurveyBreakdown,
@@ -293,7 +313,6 @@ export function buildClimateMap(
     if (hasAny) scored.push(segment)
     else omittedSegments.push(labelOf(segment))
   }
-  if (scored.length === 0) return null
 
   const kept: ClimateDimension[] = []
   const omittedDimensions: string[] = []
@@ -312,9 +331,15 @@ export function buildClimateMap(
   }))
 
   const cells = scoredRows.flatMap((row) => row.scores)
-  const target = round1(cells.reduce((sum, cell) => sum + cell, 0) / cells.length)
-  const spread = Math.max(...cells.map((cell) => Math.abs(cell - target)))
-  const extremeAt = Math.max(spread, MIN_EXTREME)
+  // No disclosed cell means no mean to take. `reduce`-then-divide would return
+  // NaN here and `Math.max()` over nothing returns -Infinity, and both would be
+  // handed to the colour scale as if they were readings.
+  const target =
+    cells.length === 0 ? null : round1(cells.reduce((sum, cell) => sum + cell, 0) / cells.length)
+  const extremeAt =
+    target === null
+      ? MIN_EXTREME
+      : Math.max(Math.max(...cells.map((cell) => Math.abs(cell - target))), MIN_EXTREME)
 
   const scoresByKey = new Map(scoredRows.map((row) => [row.segment.key, row.scores]))
   const rows: ClimateMapRow[] = []
@@ -337,6 +362,10 @@ export function buildClimateMap(
       scores,
     })
   }
+  // Nothing was measured and nothing is being protected — the breakdown holds no
+  // group this map could account for. That is the one case where the section has
+  // nothing to say and is right to be absent.
+  if (rows.length === 0) return null
 
   return {
     dimensions: kept,
@@ -373,20 +402,27 @@ export interface ClimateFinding {
  *
  * Ties are broken by label and then by dimension so the list is stable between
  * renders rather than reordering itself on data that did not change.
+ *
+ * A map with no target has no disclosed cell to compare against one, so it
+ * produces no findings — the page says so in words rather than showing an empty
+ * list.
  */
 export function climateFindings(model: ClimateMapModel, limit = 4): ClimateFinding[] {
+  const target = model.target
+  if (target === null) return []
+
   const findings: ClimateFinding[] = []
   for (const row of model.rows) {
     if (row.responses < model.threshold) continue
     model.dimensions.forEach((dimension, index) => {
       const score = row.scores[index]
-      if (score === undefined || score >= model.target) return
+      if (score === undefined || score >= target) return
       findings.push({
         rowId: row.id,
         rowLabel: row.label,
         dimensionKey: dimension.key,
         score,
-        shortfall: round1(model.target - score),
+        shortfall: round1(target - score),
       })
     })
   }
