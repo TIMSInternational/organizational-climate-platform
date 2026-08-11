@@ -625,7 +625,6 @@
     "documentChanges": "Documente cambios organizacionales",
     "regularAudits": "Auditorías de estructura regulares recomendadas",
     "editCompany": "Editar Empresa",
-    "loadSettings": "Cargar Configuración",
     "manageUsers": "Gestionar Usuarios",
     "manageDemographicFields": "Gestionar Campos Demográficos",
     "viewReports": "Ver informes",
@@ -1690,7 +1689,6 @@
     "neverSignedIn": "Nunca",
     "unassigned": "Sin departamento",
     "showingCount": "{shown} de {total}",
-    "roleUnknown": "Rol no reconocido",
     "inviteDescription": "Una invitación es la única forma de entrar a esta empresa. El rol que elija aquí es con el que la persona llega.",
     "invitationStatusPending": "Pendiente",
     "invitationStatusSent": "Enviada",
@@ -1709,8 +1707,6 @@
     "people": "Personas",
     "identity": "Identidad",
     "reporting": "Reportes",
-    "defaultLanguage": "Idioma predeterminado",
-    "timezone": "Zona horaria",
     "anonymityFloor": "Umbral de anonimato",
     "responsesUnit": "respuestas",
     "daysUnit": "días",
@@ -1724,7 +1720,6 @@
     "enabled": "Activado",
     "disabled": "Desactivado",
     "microclimates": "Microclimas",
-    "aiInsights": "Análisis de IA",
     "notSet": "Sin definir"
   },
   "validation": {

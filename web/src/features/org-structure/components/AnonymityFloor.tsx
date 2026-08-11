@@ -37,7 +37,23 @@ export function AnonymityFloorReading() {
       <span className="text-xs font-semibold text-fg-secondary">
         {t('companySettings.anonymityFloor')}
       </span>
-      <div className="flex h-control-lg items-center gap-inline rounded-md border border-line-default bg-surface-input px-3">
+      {/* `min-h-control-lg` rather than a hard `h-control-lg`, matching
+          `SettingReadout` on the page that renders this. Three pieces of copy
+          share the row — the figure, its unit and the word `Locked` — and two
+          of the three are translated. Measured in a browser, the row does not
+          in fact wrap today: in Spanish at 420, 390, 360, 320, 300 and 280px,
+          and in English at 390 and 1440px, the content stays one 19.5px line
+          inside the 32px box. A fixed height is
+          still the wrong container for it, because the moment it does wrap the
+          second line is painted through the bottom border rather than growing
+          the box — which is exactly what `SettingReadout` was doing with a
+          36-character email domain. `min-h` + `py-1` is a measured no-op here —
+          32px stays 32px at every width tested — and stops being one only in
+          the case it exists for. `flex-wrap` is deliberately *not* added with
+          it: tried, and it made the row break onto two lines at 280px where it
+          had been fitting on one, which is a change to a screen that was not
+          broken. */}
+      <div className="flex min-h-control-lg items-center gap-inline rounded-md border border-line-default bg-surface-input px-3 py-1">
         {/* The reading, in mono with tabular figures, like every other number in
             the product. */}
         <span className="font-mono font-semibold tabular-nums">{ANONYMITY_FLOOR}</span>

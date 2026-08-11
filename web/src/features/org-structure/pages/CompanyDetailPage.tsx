@@ -396,6 +396,17 @@ export default function CompanyDetailPage() {
  * identifier* — a count, a retention period, a domain — and left off prose like
  * an industry or a company name, which is the typographic rule the whole redesign
  * turns on.
+ *
+ * ## The box grows; it is not a control
+ *
+ * `min-h-control-lg` and not `h-control-lg`. Every other reading in the product
+ * that borrows the control height is a single-line control that cannot wrap —
+ * a tab, a select, a date picker. These hold prose the company chose: `name` is
+ * `HasMaxLength(200)`, `emailDomain` 255, `industry` 100. An ordinary
+ * 36-character domain wraps to two lines at 390px, and against a hard 32px the
+ * first line escapes above the border and the second below it, into the next
+ * label. The minimum keeps the single-line case at exactly the control height,
+ * so nothing that used to fit moves; `py-1` gives the wrapped case room.
  */
 function SettingReadout({
   label,
@@ -411,12 +422,21 @@ function SettingReadout({
   return (
     <div className="grid gap-1">
       <span className="text-xs font-semibold text-fg-secondary">{label}</span>
-      <div className="flex h-control-lg items-center rounded-md border border-line-default bg-surface-input px-3">
+      <div className="flex min-h-control-lg items-center rounded-md border border-line-default bg-surface-input px-3 py-1">
         {value ? (
           <span className={mono ? 'font-mono tabular-nums' : undefined}>{value}</span>
         ) : (
           // An empty box would read as a field this screen failed to fill in.
-          <span className="text-fg-light">{t('companySettings.notSet')}</span>
+          //
+          // `text-fg-secondary`, not `text-fg-light`. This is rendered content —
+          // the answer the page gives to "what is the email domain?" — not an
+          // input placeholder and not a disabled control, so none of AA 1.4.3's
+          // exceptions apply to it. `--admin-font-light` is #999999 on white and
+          // #555555 on #1e1e1e: 2.85:1 and 2.24:1, both under 4.5:1, and
+          // styles/README.md reserves that token for "Disabled, section labels".
+          // `--admin-font-secondary` reads 9.29:1 / 7.95:1 and still sits a step
+          // below the set values, which inherit `--admin-font-primary`.
+          <span className="text-fg-secondary">{t('companySettings.notSet')}</span>
         )}
       </div>
     </div>

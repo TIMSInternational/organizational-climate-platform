@@ -34,6 +34,22 @@ describe('AnonymityFloorReading', () => {
     expect(value.className).toContain('tabular-nums')
   })
 
+  it('holds the reading in a box that grows rather than a fixed control height', () => {
+    // The row carries three pieces of copy, two of them translated. Measured in
+    // Chromium it does not wrap — Spanish at 420/390/360/320/300/280px, English
+    // at 390 and 1440 — so this is not a defect being fixed, it is the fixed
+    // height being removed before it becomes one, exactly as `SettingReadout`
+    // had to. The minimum is a no-op: 32px stayed 32px at every width measured.
+    renderIn('en', <AnonymityFloorReading />)
+
+    const row = screen.getByText('Locked').parentElement!
+    const classes = row.className.split(/\s+/)
+    expect(classes).toContain('min-h-control-lg')
+    // Split, not substring: `min-h-control-lg` contains `h-control-lg`.
+    expect(classes).not.toContain('h-control-lg')
+    expect(classes).toContain('py-1')
+  })
+
   it('states both directions: a higher floor is accepted, a lower one refused', () => {
     renderIn('en', <AnonymityFloorReading />)
 

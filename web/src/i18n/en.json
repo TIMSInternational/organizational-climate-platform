@@ -625,7 +625,6 @@
     "documentChanges": "Document organizational changes",
     "regularAudits": "Regular structure audits recommended",
     "editCompany": "Edit company",
-    "loadSettings": "Load settings",
     "manageUsers": "Manage users",
     "manageDemographicFields": "Manage demographic fields",
     "viewReports": "View reports",
@@ -1690,7 +1689,6 @@
     "neverSignedIn": "Never",
     "unassigned": "Unassigned",
     "showingCount": "{shown} of {total}",
-    "roleUnknown": "Unrecognised role",
     "inviteDescription": "An invitation is the only way a person joins this company. The role you pick here is the one they arrive with.",
     "invitationStatusPending": "Pending",
     "invitationStatusSent": "Sent",
@@ -1709,8 +1707,6 @@
     "people": "People",
     "identity": "Identity",
     "reporting": "Reporting",
-    "defaultLanguage": "Default language",
-    "timezone": "Time zone",
     "anonymityFloor": "Anonymity floor",
     "responsesUnit": "responses",
     "daysUnit": "days",
@@ -1724,7 +1720,6 @@
     "enabled": "Enabled",
     "disabled": "Disabled",
     "microclimates": "Microclimates",
-    "aiInsights": "AI insights",
     "notSet": "Not set"
   },
   "validation": {

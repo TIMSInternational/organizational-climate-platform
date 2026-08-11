@@ -67,7 +67,8 @@ function department(): Department {
 }
 
 interface ServeOptions {
-  profile?: 'ok' | 'forbidden'
+  /** `unset`: the company exists but has left the optional fields empty. */
+  profile?: 'ok' | 'forbidden' | 'unset'
   settings?: 'ok' | 'forbidden'
 }
 
@@ -87,7 +88,9 @@ function serve({ profile = 'ok', settings = 'ok' }: ServeOptions = {}) {
       if (profile === 'forbidden' && (init?.method ?? 'GET') === 'GET') {
         return Promise.resolve(new Response(JSON.stringify({ message: 'nope' }), { status: 403 }))
       }
-      return Promise.resolve(new Response(JSON.stringify(companyDetail()), { status: 200 }))
+      const detail =
+        profile === 'unset' ? companyDetail({ emailDomain: null, industry: null }) : companyDetail()
+      return Promise.resolve(new Response(JSON.stringify(detail), { status: 200 }))
     }
     return Promise.resolve(new Response(null, { status: 404 }))
   })
@@ -161,6 +164,62 @@ describe('CompanyDetailPage readings', () => {
     expect(domain.className).toContain('font-mono')
     const industry = screen.getByText('Transportation')
     expect(industry.className ?? '').not.toContain('font-mono')
+  })
+
+  it('gives every readout a box that grows instead of a fixed control height', async () => {
+    // happy-dom does no layout, so nothing here can catch the overflow itself.
+    // What it can catch is the cause: a hard `h-control-lg` on a box holding
+    // wrapping prose. Rendered in Chromium at 390px, `logistica.northwind-
+    // colombia.example` (36 chars, well inside the column's 255) wrapped to two
+    // lines, 39px of text in a 32px box, and the border was painted through
+    // both. Every readout on the screen is asserted, not just one, because the
+    // hazard is the class and the class is shared.
+    serve()
+
+    renderPage()
+    await screen.findByText('northwind.example')
+
+    const readings = [
+      'Northwind Logistics',
+      'northwind.example',
+      'Transportation',
+      '208',
+      'quarterly',
+      '730 days',
+      'Enabled',
+    ]
+    for (const reading of readings) {
+      // The company name is also the PageTopBar badge; the readout is the one
+      // whose parent is the bordered box.
+      const box = screen
+        .getAllByText(reading)
+        .map((node) => node.parentElement!)
+        .find((parent) => parent.className.includes('bg-surface-input'))!
+      const classes = box.className.split(/\s+/)
+      expect(classes).toContain('min-h-control-lg')
+      // Substring matching would pass on `min-h-control-lg` itself.
+      expect(classes).not.toContain('h-control-lg')
+      expect(classes).toContain('py-1')
+    }
+  })
+
+  it('reports an unset value in a tone that meets AA against the inset', async () => {
+    // `Not set` is the answer the page gives, not an input placeholder and not a
+    // disabled control, so none of 1.4.3's exceptions cover it. `text-fg-light`
+    // is `--admin-font-light`: #999999 on #ffffff is 2.85:1 and #555555 on
+    // #1e1e1e is 2.24:1, both under 4.5:1. `text-fg-secondary` is 9.29:1 /
+    // 7.95:1 and keeps the de-emphasis by sitting below `--admin-font-primary`,
+    // which the set values inherit.
+    serve({ profile: 'unset' })
+
+    renderPage()
+
+    const notSet = await screen.findAllByText('Not set')
+    expect(notSet.length).toBe(2)
+    for (const node of notSet) {
+      expect(node.className).toContain('text-fg-secondary')
+      expect(node.className).not.toContain('text-fg-light')
+    }
   })
 })
 
