@@ -1,29 +1,23 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { MessageSquare, Users, UserMinus, Percent } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import {
-  Counter,
-  KPIDisplay,
-  ParticipationTracker,
+  KpiTile,
   RealTimeChartContainer,
-  type Kpi,
+  bandStatus,
+  formatMetric,
+  participationBand,
 } from '../../../components/charts'
 import {
   Alert,
   AlertDescription,
   AlertTitle,
-  Badge,
   Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
   EmptyState,
-  H2,
   LoadingRegion,
   NetworkError,
+  Progress,
   SkeletonText,
 } from '../../../components/ui'
 import {
@@ -32,12 +26,12 @@ import {
   type LiveResults,
   type MicroclimateDetail,
 } from '../api/microclimates'
+import LiveOpenAnswers from '../components/LiveOpenAnswers'
 import LiveResponseTrend from '../components/LiveResponseTrend'
 import MicroclimateContentNotice from '../components/MicroclimateContentNotice'
 import MicroclimateSentimentNotice from '../components/MicroclimateSentimentNotice'
-import MicroclimateWordPanel from '../components/MicroclimateWordPanel'
-import { participationPercent } from '../microclimatePrivacy'
-import { engagementLabel, statusBadgeVariant, statusLabel } from '../microclimateVocabulary'
+import { MINIMUM_RESPONDENTS, participationPercent } from '../microclimatePrivacy'
+import { statusBadgeVariant, statusLabel } from '../microclimateVocabulary'
 
 /**
  * Milliseconds between polls.
@@ -52,25 +46,43 @@ import { engagementLabel, statusBadgeVariant, statusLabel } from '../microclimat
 const POLL_MS = 4000
 
 /**
- * #128 — a microclimate while it is happening.
+ * #128 — a microclimate while it is happening, redesigned as an instrument.
  *
- * ## Why this does not reuse `LiveResultsPanel`'s loop
+ * ## The shape of the screen
  *
- * The issue says to reuse the polling already in `MicroclimateDetailPage`. That
- * instruction predates #79. `LiveResultsPanel` is a 61-line `setInterval` that
- * swallows every failure in a bare `catch {}` — so a reader watching a dead endpoint
- * sees a plausible figure with no indication it stopped updating, which is the worst
- * failure a live view has, because the number is still *there*. `usePolling` and
- * `RealTimeChartContainer` generalise exactly that loop and were written to replace
- * it: they skip a tick while a request is still in flight (so a slow backend cannot
- * accumulate requests and settle on an older value than it already had), pause on
- * `visibilitychange` (so an abandoned tab stops hitting the API forever for data
- * nobody will see), and keep the last good value while flipping a visible "updates
- * stalled" marker. Reusing the named file would have re-shipped all three bugs.
+ * A live view answers three questions in order, so it is laid out in that order:
  *
- * Polling stops on unmount because the effect inside `usePolling` cleans up its
- * interval and its listener — that is the acceptance criterion, satisfied by the
- * mechanism rather than by a second one written here.
+ * 1. **What is fixed about this session** — the plate. Opened, closes, how many
+ *    questions, whether answers are anonymous, and where the disclosure floor
+ *    sits. None of it moves while the session runs, so it is fetched once and sits
+ *    above the moving parts rather than being mixed in with them.
+ * 2. **What the reading is right now** — four flat tiles across, then the meter.
+ * 3. **What it is doing** — the trend, then what people wrote.
+ *
+ * Every *reading* is set in `font-mono tabular-nums`; prose stays in the sans
+ * face. That is the one typographic rule that makes this read as a measuring
+ * device, and it is why the KPI row is `KpiTile` (whose value carries the mono
+ * classes) rather than `KPIDisplay` (a card grid whose figures are sans, and
+ * which drew an icon per card — decoration on a screen whose whole job is the
+ * numbers).
+ *
+ * ## Polling every four seconds, never a socket
+ *
+ * `usePolling` — inside `RealTimeChartContainer` — owns the loop. A `GET` every
+ * few seconds reuses the exact authorisation and error handling every other
+ * request has, and recovers from a dropped network by simply succeeding next
+ * time; a socket costs a persistent connection per viewer, a server-side fan-out
+ * and reconnect-and-backfill logic to arrive at the same answer.
+ *
+ * The panel header carries the freshness readout, which is the honest form of a
+ * "LIVE" pill: the timestamp of the last *successful* fetch is always on screen,
+ * and a failed poll flips the badge to "updates stalled" while leaving the last
+ * good numbers up. `isStale` is `consecutiveFailures > 0 && data !== null`, so the
+ * badge cannot read "stalled" before anything has ever loaded — and, in the other
+ * direction, it reads "Live" during the window before the first poll returns,
+ * which is why nothing on this page (or in its tests) treats that badge as proof
+ * that polling happened. The tiles are that proof: they are only rendered from a
+ * poll result.
  *
  * ## Detail once, results on the loop
  *
@@ -80,10 +92,27 @@ const POLL_MS = 4000
  *
  * ## The three non-live states are designed, not a blank panel
  *
- * A draft has not opened yet: the page says when it will, and links to the session
- * where it is launched. A closed session will never move again: the page says so and
- * points at the results. Only `active` polls at all, so a page left open on a closed
- * session is not quietly hitting the API every four seconds.
+ * A draft has not opened yet: the page says when it will. A closed session will
+ * never move again: the page says so and points at the results. Only `active`
+ * polls at all, so a page left open on a closed session is not quietly hitting the
+ * API every four seconds.
+ *
+ * ## Two figures the redesign deliberately removed
+ *
+ * **`engagementLevel`.** `MicroclimateEndpoints.ComputeEngagementLevel` (line 524)
+ * bands the *same* `responseCount / targetParticipantCount` ratio the
+ * participation tile already shows, at 0.3 and 0.7. So a session at 64.6% rendered
+ * "Participation 64.6% · Good" beside "Engagement: Medium" — two verdicts on one
+ * ratio, disagreeing, with nothing on screen to say they were the same number
+ * twice. One ratio, one verdict: `participation.ts`'s bands, which are the ones
+ * with a label a reader can act on.
+ *
+ * **The `Counter` and `ParticipationTracker` blocks.** Between them they restated
+ * responses, invited and outstanding a second and third time, in the sans face,
+ * under a heading that repeated the panel's. What `ParticipationTracker` adds over
+ * the tiles is the bar, so the bar is what survives — drawn here from
+ * `participationBand`/`bandStatus`, the same policy module it uses, so the band
+ * boundaries are not re-derived.
  *
  * ## No sentiment
  *
@@ -157,7 +186,7 @@ export default function MicroclimateLivePage() {
   const respondUrl = `${window.location.origin}/microclimates/${microclimate.id}/respond`
 
   return (
-    <div>
+    <div className="flex flex-col gap-panel-gap">
       <PageTopBar
         title={title}
         description={t('microclimates.liveDescription')}
@@ -186,7 +215,7 @@ export default function MicroclimateLivePage() {
       />
 
       {microclimate.status === 'draft' && (
-        <Alert variant="info" role="status" className="mb-panel-gap">
+        <Alert variant="info" role="status">
           <AlertTitle>{t('microclimates.microclimateScheduled')}</AlertTitle>
           <AlertDescription>
             <span className="grid gap-1">
@@ -201,31 +230,13 @@ export default function MicroclimateLivePage() {
       )}
 
       {microclimate.status === 'closed' && (
-        <Alert role="status" className="mb-panel-gap">
+        <Alert role="status">
           <AlertTitle>{t('microclimates.liveClosedTitle')}</AlertTitle>
           <AlertDescription>{t('microclimates.liveClosedDescription')}</AlertDescription>
         </Alert>
       )}
 
-      {isActive && microclimate.anonymousResponses && (
-        <Card className="mb-panel-gap">
-          <CardHeader>
-            <CardTitle className="text-base">{t('microclimates.liveRespondLink')}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-inline">
-            <p className="m-0 text-fg-secondary">
-              {t('microclimates.liveRespondLinkDescription')}
-            </p>
-            {/* Selectable text rather than a copy button: the clipboard API is
-                blocked outside a secure context and silently no-ops in several
-                embedded browsers, and a copy button that does nothing is worse than
-                a link somebody can read out or select. */}
-            <code className="break-all rounded-md border border-line-default bg-surface-input px-2 py-1 text-sm">
-              {respondUrl}
-            </code>
-          </CardContent>
-        </Card>
-      )}
+      <SessionPlate microclimate={microclimate} respondUrl={respondUrl} isActive={isActive} />
 
       <RealTimeChartContainer
         // Not `liveTitle`: that is already the last breadcrumb and the page's own
@@ -241,68 +252,41 @@ export default function MicroclimateLivePage() {
       >
         {(live: LiveResults) => (
           <div className="flex flex-col gap-panel-gap">
-            <KPIDisplay
-              kpis={liveKpis(live, t, `/microclimates/${id}/results`)}
-              columns={4}
-              locale={locale}
-              title={t('microclimates.liveParticipation')}
+            <LiveReadings live={live} />
+            <ParticipationMeter
+              current={live.responseCount}
+              target={live.targetParticipantCount}
             />
 
             {live.responseCount === 0 ? (
-              // A designed state, not a blank panel. The counters above still read
-              // "0 of 40", which identifies nobody and is exactly the number that
-              // says whether to keep chasing.
+              // A designed state, not a blank panel. The tiles above still read
+              // "0" against "48", which identifies nobody and is exactly the
+              // number that says whether to keep chasing.
               <EmptyState
                 title={t('microclimates.liveNoResponsesTitle')}
                 description={t('microclimates.liveNoResponsesDescription')}
               />
             ) : (
-              <>
-                <ParticipationTracker
-                  current={live.responseCount}
-                  target={live.targetParticipantCount}
-                  locale={locale}
-                  // Its own heading, not `liveParticipation` again. The KPI row above
-                  // already carries that title, so reusing it rendered "Live
-                  // Participation" twice on the page, over two blocks showing much the
-                  // same numbers -- which reads as a duplicated section rather than as
-                  // a summary followed by its progress bar.
-                  title={t('microclimates.liveProgressTitle')}
-                />
-
-                <div className="flex flex-wrap items-center gap-panel-gap">
-                  <Counter
-                    value={live.responseCount}
-                    label={t('microclimates.kpiResponses')}
-                    locale={locale}
-                  />
-                  <span className="flex items-center gap-inline">
-                    <span className="text-fg-secondary">{t('microclimates.kpiEngagement')}</span>
-                    <Badge variant="secondary">
-                      {engagementLabel(t, live.engagementLevel)}
-                    </Badge>
-                  </span>
-                </div>
-
-                <LiveResponseTrend
-                  responseCount={live.responseCount}
-                  title={t('microclimates.liveTrendTitle')}
-                />
-              </>
+              <LiveResponseTrend
+                responseCount={live.responseCount}
+                title={t('microclimates.liveTrendTitle')}
+              />
             )}
 
-            {/* No `title` on the panel: the <H2> above already carries it, and
-                passing both drew "Live Word Cloud" twice — the same duplication
-                fixed on the results page. `MicroclimateWordPanel.title` is optional
-                precisely so a caller with its own heading can leave it off. */}
-            <H2>{t('microclimates.liveWordCloud')}</H2>
-            <MicroclimateWordPanel
-              words={live.wordCloud}
-              responseCount={live.responseCount}
-            />
+            <LiveOpenAnswers words={live.wordCloud} responseCount={live.responseCount} />
 
-            <H2>{t('microclimates.sentimentAnalysis')}</H2>
-            <MicroclimateSentimentNotice />
+            <section className="flex flex-col gap-inline">
+              {/* `h4`, not `H2`: this block sits inside the live panel, whose own
+                  heading is the `h3` `RealTimeChartContainer` renders, under the
+                  page's `h1`. It was an `<h2>` before, which put a level-2
+                  heading inside a level-3 section and drew it at 20px — larger
+                  than the panel heading it belongs to. The redesign's section
+                  headings are a size *below* the block they sit in. */}
+              <h4 className="m-0 text-lg font-semibold text-fg-primary">
+                {t('microclimates.sentimentAnalysis')}
+              </h4>
+              <MicroclimateSentimentNotice />
+            </section>
           </div>
         )}
       </RealTimeChartContainer>
@@ -311,57 +295,219 @@ export default function MicroclimateLivePage() {
 }
 
 /**
- * The headline counters.
+ * The four readings, as the redesign's flat four-across strip.
  *
- * `targetParticipantCount` can be zero — nothing in `CreateAsync` requires it to be
- * positive — so the participation rate is omitted rather than shown as 0%. A rate
- * over an invented denominator is worse than no rate, and `ComputeEngagementLevel`
- * makes the same call server side by returning "medium" instead of dividing by zero.
+ * Every value is `KpiTile`'s, i.e. mono with tabular figures — which is the point
+ * of using it: a figure that changes width as it ticks from 9 to 10 is the thing
+ * tabular figures exist to prevent, and on this screen the figures tick every four
+ * seconds.
+ *
+ * The participation tile is *omitted* rather than shown as 0% when there is no
+ * target: nothing in `CreateAsync` requires `targetParticipantCount` to be
+ * positive, and a rate over an invented denominator is worse than no rate.
  */
-function liveKpis(
-  live: LiveResults,
-  t: (key: string, params?: Record<string, string | number>) => string,
-  resultsHref: string,
-): Kpi[] {
-  const kpis: Kpi[] = [
-    {
-      id: 'responses',
-      label: t('microclimates.kpiResponses'),
-      value: live.responseCount,
-      icon: MessageSquare,
-      // The ForMaps KPI card's "Continue →" — the one card here with a genuine next
-      // step. The live page is a running count; the settled breakdown of what those
-      // responses said is the results page, and this is the only route out of the
-      // band to it. The other three cards are re-cuts of the same number and get no
-      // link: a card that offers one is asserting the destination adds something.
-      action: { label: t('microclimates.results'), href: resultsHref },
-    },
-    {
-      id: 'target',
-      label: t('microclimates.kpiTarget'),
-      value: live.targetParticipantCount,
-      icon: Users,
-    },
-    {
-      id: 'outstanding',
-      label: t('microclimates.kpiOutstanding'),
-      // Never negative: an anonymous link can be answered by more people than were
-      // expected, and "-3 yet to respond" is not a fact about anything.
-      value: Math.max(0, live.targetParticipantCount - live.responseCount),
-      icon: UserMinus,
-    },
-  ]
-
+function LiveReadings({ live }: { live: LiveResults }) {
+  const { t, locale } = useTranslation()
   const rate = participationPercent(live.responseCount, live.targetParticipantCount)
-  if (rate !== null) {
-    kpis.push({
-      id: 'participation',
-      label: t('microclimates.kpiParticipation'),
-      value: rate,
-      format: { kind: 'percentage' },
-      icon: Percent,
-    })
+
+  return (
+    <div className="grid grid-cols-2 gap-inline lg:grid-cols-4">
+      <KpiTile
+        label={t('microclimates.kpiResponses')}
+        value={live.responseCount}
+        locale={locale}
+      />
+      <KpiTile
+        label={t('microclimates.kpiTarget')}
+        value={live.targetParticipantCount}
+        locale={locale}
+      />
+      <KpiTile
+        label={t('microclimates.kpiOutstanding')}
+        // Never negative: an anonymous link can be answered by more people than
+        // were expected, and "-3 yet to respond" is not a fact about anything.
+        value={Math.max(0, live.targetParticipantCount - live.responseCount)}
+        locale={locale}
+      />
+      {rate !== null && (
+        <KpiTile
+          label={t('microclimates.kpiParticipation')}
+          value={rate}
+          // Whole percent, matching the meter below. `formatMetric` defaults to
+          // one decimal for a non-integer, so the default rendered "64.6%" here
+          // beside the meter's rounded "65%" — the same ratio, printed twice, in
+          // two different numbers, with nothing on screen to say they were the
+          // same measurement.
+          format={{ kind: 'percentage', decimals: 0 }}
+          locale={locale}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Participation as a bar, with the band named in words beside it.
+ *
+ * The band and its status come from `charts/participation.ts` — the same policy
+ * module `ParticipationTracker` uses — so the boundaries are consulted, not
+ * re-derived. The mapping from status to a class stays here in `.tsx` on purpose:
+ * `styles/utilityExistence.test.ts` sweeps `className` attributes in `.tsx` and
+ * cannot follow a class name out of a `.ts` helper, so a typo in one would be
+ * exactly as invisible as the four dead classes that guard was written to catch.
+ *
+ * The rate is rounded once and then used for the label, the band and the bar
+ * alike: banding on the raw ratio while displaying a rounded one makes them
+ * disagree at the boundary — 190 of 480 is 39.58%, which displays as the "40%"
+ * threshold for Fair while banding as Low.
+ */
+function ParticipationMeter({ current, target }: { current: number; target: number }) {
+  const { t, locale } = useTranslation()
+  const rate = participationPercent(current, target)
+
+  if (rate === null) {
+    return <p className="m-0 text-sm text-fg-secondary">{t('charts.noParticipationTarget')}</p>
   }
 
-  return kpis
+  const displayRate = Math.round(rate)
+  const band = participationBand(displayRate)
+  const status = bandStatus(band)
+
+  const textTone =
+    status === 'critical'
+      ? 'text-accent-red'
+      : status === 'warning'
+        ? 'text-accent-amber'
+        : 'text-accent-green'
+  const fillTone =
+    status === 'critical'
+      ? 'bg-accent-red'
+      : status === 'warning'
+        ? 'bg-accent-amber'
+        : 'bg-accent-green'
+
+  const bandLabel =
+    band === 'excellent'
+      ? t('charts.participationExcellent')
+      : band === 'good'
+        ? t('charts.participationGood')
+        : band === 'fair'
+          ? t('charts.participationFair')
+          : t('charts.participationLow')
+
+  return (
+    <section className="flex flex-col gap-inline">
+      <div className="flex flex-wrap items-baseline justify-between gap-inline">
+        <span className="text-2xs font-semibold uppercase tracking-label text-fg-tertiary">
+          {t('microclimates.liveProgressTitle')}
+        </span>
+        {/* The colour never carries the verdict on its own — the band is spelled
+            out beside it, and the percentage is the reading, so it is mono. */}
+        <span className="flex items-baseline gap-inline text-sm">
+          <span className={`font-medium ${textTone}`}>{bandLabel}</span>
+          <span className="font-mono tabular-nums text-fg-primary">
+            {formatMetric(displayRate, { kind: 'percentage', decimals: 0 }, locale)}
+          </span>
+        </span>
+      </div>
+      <Progress
+        // Already whole, so `aria-valuenow` is not read out digit by digit.
+        value={Math.max(0, Math.min(100, displayRate))}
+        indicatorClassName={fillTone}
+        aria-label={t('charts.participationProgress', {
+          current: formatMetric(current, { kind: 'number' }, locale),
+          target: formatMetric(target, { kind: 'number' }, locale),
+        })}
+      />
+    </section>
+  )
+}
+
+/**
+ * The session's fixed facts — the plate on the front of the instrument.
+ *
+ * Everything here comes off the one-shot detail fetch and none of it moves while
+ * the session runs, which is why it sits above the polled panel instead of inside
+ * it: a value that never changes, redrawn every four seconds inside a block
+ * labelled "live", teaches the reader to distrust the block.
+ *
+ * The disclosure floor is stated here rather than only appearing at the moment
+ * something is withheld. An admin watching a session with four responses should
+ * be able to see *why* the wording is not there yet without the page having to
+ * tell them how many responses there are.
+ *
+ * The respondent link is selectable text rather than a copy button: the clipboard
+ * API is blocked outside a secure context and silently no-ops in several embedded
+ * browsers, and a copy button that does nothing is worse than a link somebody can
+ * read out or select.
+ */
+function SessionPlate({
+  microclimate,
+  respondUrl,
+  isActive,
+}: {
+  microclimate: MicroclimateDetail
+  respondUrl: string
+  isActive: boolean
+}) {
+  const { t, locale } = useTranslation()
+
+  return (
+    <section className="flex flex-col gap-inline rounded-lg border border-line-light bg-surface-icon-box p-3">
+      <dl className="m-0 grid grid-cols-2 gap-inline md:grid-cols-5">
+        <Fact label={t('microclimates.liveOpenedAt')}>
+          {new Date(microclimate.startTime).toLocaleString(locale)}
+        </Fact>
+        <Fact label={t('microclimates.liveClosesAt')}>
+          {new Date(microclimate.endTime).toLocaleString(locale)}
+        </Fact>
+        <Fact label={t('microclimates.liveQuestionsAsked')}>
+          {formatMetric(microclimate.questions.length, { kind: 'number' }, locale)}
+        </Fact>
+        {/* Not a reading, so not mono: it is a word, and setting a word in the
+            figure face is what makes tabular figures stop meaning anything. */}
+        <Fact label={t('microclimates.liveRespondingAs')} mono={false}>
+          {microclimate.anonymousResponses
+            ? t('microclimates.anonymousShort')
+            : t('microclimates.identifiedShort')}
+        </Fact>
+        <Fact label={t('microclimates.liveDisclosureFloor')}>
+          {formatMetric(MINIMUM_RESPONDENTS, { kind: 'number' }, locale)}
+        </Fact>
+      </dl>
+
+      {isActive && microclimate.anonymousResponses && (
+        <div className="flex flex-col gap-1">
+          <span className="text-2xs font-semibold uppercase tracking-label text-fg-tertiary">
+            {t('microclimates.liveRespondLink')}
+          </span>
+          <code className="break-all rounded-md border border-line-default bg-surface-input px-2 py-1 text-sm">
+            {respondUrl}
+          </code>
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** One fact on the plate. A definition pair, so the association is real markup. */
+function Fact({
+  label,
+  mono = true,
+  children,
+}: {
+  label: string
+  mono?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex min-w-0 flex-col">
+      <dt className="text-2xs font-semibold uppercase tracking-label text-fg-tertiary">
+        {label}
+      </dt>
+      <dd className={`m-0 text-sm text-fg-primary ${mono ? 'font-mono tabular-nums' : ''}`}>
+        {children}
+      </dd>
+    </div>
+  )
 }
