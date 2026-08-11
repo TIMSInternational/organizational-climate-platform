@@ -277,6 +277,45 @@ public class SecurityStampRevocationTests : IAsyncLifetime
             (await ClientWith(mismatched).GetAsync("/profile")).StatusCode);
     }
 
+    /// <summary>
+    /// The fail-closed half of the comparison, and the one behaviour change #284 makes that
+    /// nobody asked for explicitly: a token whose <c>sub</c> now resolves to no row is refused
+    /// rather than waved through.
+    /// </summary>
+    /// <remarks>
+    /// This is a real state, not a hypothetical one — a token lives 24 hours, so any account
+    /// deletion inside that window leaves live tokens behind it.
+    ///
+    /// It is also the assertion that stops the check collapsing into "reject only when the
+    /// database disagrees with the token". Written as <c>current is not null &amp;&amp;
+    /// current != presented</c>, <c>SecurityStampValidation</c> would still pass every other
+    /// fact in this class and all 57 of the Auth integration tests, because no other fact ever
+    /// presents a <c>sub</c> that resolves to nothing.
+    ///
+    /// The row is removed through <c>ClimateProjectDbContext</c> rather than by raw SQL so the
+    /// configured cascade behaviour runs, and the token is a real login from before it.
+    /// </remarks>
+    [Fact]
+    public async Task A_token_whose_subject_no_longer_exists_is_refused()
+    {
+        var session = await LoginAsync(_employee.Email, EmployeePassword);
+
+        // Live before the deletion, so the 401 below cannot be a token that never worked.
+        Assert.Equal(HttpStatusCode.OK, (await ClientWith(session).GetAsync("/profile")).StatusCode);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var row = await db.Users.SingleAsync(u => u.Id == _employee.Id);
+            db.Users.Remove(row);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            (await ClientWith(session).GetAsync("/profile")).StatusCode);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private async Task<string> LoginAsync(string email, string password)

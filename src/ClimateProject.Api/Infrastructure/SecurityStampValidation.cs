@@ -66,15 +66,21 @@ namespace ClimateProject.Api.Infrastructure;
 /// A token that carries a stamp claim was minted by this API for a row that existed. If that
 /// <c>sub</c> now resolves to nothing the row is gone, and there is no stamp to agree with,
 /// so the token is refused rather than waved through. That is a change of behaviour for a
-/// deleted user with a live token, and the intended one.
+/// deleted user with a live token, and the intended one — pinned by
+/// <c>SecurityStampRevocationTests.A_token_whose_subject_no_longer_exists_is_refused</c>,
+/// which is the only fact in that suite presenting a <c>sub</c> that resolves to nothing, and
+/// so the only one that can tell this apart from a fail-open comparison.
 /// </remarks>
 public static class SecurityStampValidation
 {
     /// <summary>
     /// Rejection text. One message for both refusals (stamp mismatch, and a <c>sub</c> that
-    /// resolves to no row) so the header cannot be used to tell those two states apart, and
-    /// worded for the person who will actually read it — <c>authFetch</c> turns a 401 into a
-    /// redirect to the login page, which is the right destination for both.
+    /// resolves to no row) so the header cannot be used to tell those two states apart. No
+    /// human reads it in this product: it reaches only the <c>WWW-Authenticate</c> header's
+    /// <c>error_description</c>, and the web client's <c>authFetch</c> discards the response
+    /// on any 401, clears the token and redirects to <c>/login</c>
+    /// (<c>web/src/api/authFetch.ts</c>). It is worded for whoever reads the raw response —
+    /// an API client, or a developer with the header in front of them.
     /// </summary>
     internal const string RejectionMessage = "This session has been signed out. Sign in again.";
 
