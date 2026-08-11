@@ -10,23 +10,29 @@ namespace ClimateProject.Infrastructure.Migrations
     /// open when it is rotated (#284).
     /// </summary>
     /// <remarks>
-    /// Three steps rather than the one <c>dotnet ef</c> scaffolds, and the difference matters
-    /// on both counts.
+    /// <c>gen_random_uuid()</c> rather than the <c>defaultValue: Guid.Empty</c> that
+    /// <c>dotnet ef</c> scaffolds for a non-nullable Guid, and the difference matters twice
+    /// over.
     ///
-    /// The scaffolded form was <c>AddColumn(nullable: false, defaultValue: Guid.Empty)</c>,
-    /// which gives every pre-existing row the SAME stamp. Nothing is *broken* by that —
-    /// rotation only ever compares a user against their own past value — but a column whose
-    /// job is to identify one account's sessions should not ship with every account sharing
-    /// one value, and <c>gen_random_uuid()</c> is volatile, so a single UPDATE gives each row
-    /// its own. (Built into PostgreSQL core since 13 — no pgcrypto extension needed;
-    /// <c>docker-compose.yml</c> and the integration suite's container both pin
-    /// <c>postgres:16-alpine</c>.)
+    /// The scaffolded constant gives every pre-existing row the SAME stamp. Nothing is
+    /// *broken* by that — rotation only ever compares a user against their own past value —
+    /// but a column whose job is to identify one account's sessions should not ship with every
+    /// account sharing one value. <c>gen_random_uuid()</c> is volatile, so Postgres cannot
+    /// take the fast "one missing value for the whole table" path for it: it rewrites the
+    /// table and evaluates the default once per row, which is what backfills each existing
+    /// user with a distinct stamp in this single statement. (Built into PostgreSQL core since
+    /// 13 — no pgcrypto extension needed; <c>docker-compose.yml</c> and the integration
+    /// suite's container both pin <c>postgres:16-alpine</c>.)
     ///
-    /// It also leaves no <c>DEFAULT</c> behind on the column. The scaffolded form emits one
-    /// into the DDL that the model snapshot does not record — <c>UserConfiguration</c>
-    /// deliberately declares no <c>HasDefaultValueSql</c>, because <c>User.SecurityStamp</c>
-    /// initialises itself and the application always sends a value — so the next scaffolded
-    /// migration would see a difference that is not a model change.
+    /// The <c>DEFAULT</c> also stays on the column afterwards, and that is deliberate: this
+    /// repo's convention is that a new NOT NULL column on <c>users</c> carries a DB-level
+    /// default so that a row written by something other than this EF model still gets one.
+    /// <c>UserProfileTests.Existing_user_without_new_fields_still_loads_with_defaults</c> and
+    /// <c>Notification_preference_defaults_come_from_the_database_not_the_clr_initialiser</c>
+    /// pin exactly that with raw <c>INSERT INTO users (...)</c> statements that name none of
+    /// the newer columns, and #154's ETL will insert the same way. <c>UserConfiguration</c>
+    /// declares the matching <c>HasDefaultValueSql</c> so the model snapshot records this
+    /// default and the next scaffolded migration sees no phantom difference.
     /// </remarks>
     public partial class AddUserSecurityStamp : Migration
     {
@@ -37,18 +43,8 @@ namespace ClimateProject.Infrastructure.Migrations
                 name: "security_stamp",
                 table: "users",
                 type: "uuid",
-                nullable: true);
-
-            migrationBuilder.Sql("UPDATE users SET security_stamp = gen_random_uuid();");
-
-            migrationBuilder.AlterColumn<Guid>(
-                name: "security_stamp",
-                table: "users",
-                type: "uuid",
                 nullable: false,
-                oldClrType: typeof(Guid),
-                oldType: "uuid",
-                oldNullable: true);
+                defaultValueSql: "gen_random_uuid()");
         }
 
         /// <inheritdoc />

@@ -21,11 +21,18 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.ManagerId).HasColumnName("manager_id");
         builder.Property(u => u.IsActive).HasColumnName("is_active").IsRequired();
 
-        // No HasDefaultValueSql, deliberately (#284). User.SecurityStamp initialises itself
-        // to a fresh Guid, so the application always sends a value and a database-side
-        // default would never be reached by anything this code inserts. The backfill of the
-        // rows that predate the column is done once, inside the migration.
-        builder.Property(u => u.SecurityStamp).HasColumnName("security_stamp").IsRequired();
+        // #284. Nothing this application inserts reaches the DB-level default -- User
+        // .SecurityStamp initialises itself to a fresh Guid, so EF always sends a value -- but
+        // the default is declared here anyway, for two reasons. It is what makes rows written
+        // outside this model legal at all: the column is NOT NULL, and a raw INSERT that names
+        // only the #48-era columns (the ETL in #154, psql, PostgREST) would otherwise be
+        // rejected, which is what UserProfileTests' two "legacy row" facts assert against.
+        // And declaring it here is what puts it in the model snapshot, so the DEFAULT the
+        // migration writes is not a difference the next scaffolded migration tries to undo.
+        builder.Property(u => u.SecurityStamp)
+            .HasColumnName("security_stamp")
+            .HasDefaultValueSql("gen_random_uuid()")
+            .IsRequired();
 
         builder.Property(u => u.LastLoginAt).HasColumnName("last_login_at");
         builder.Property(u => u.ConsentUpdatedAt).HasColumnName("consent_updated_at");
