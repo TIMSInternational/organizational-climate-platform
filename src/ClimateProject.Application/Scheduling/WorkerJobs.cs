@@ -45,6 +45,21 @@ public static class WorkerJobs
     /// </summary>
     public const string SurveyDraftRetention = "survey-draft-retention";
 
+    /// <summary>
+    /// The GDPR storage-limitation sweep: expired drafts, terminal notifications past their
+    /// window and long-expired unaccepted invitations. Replaces legacy
+    /// <c>api/gdpr/retention-cleanup</c>, which #144 requires to run from here rather than from
+    /// a scheduler of its own.
+    /// </summary>
+    public const string RetentionCleanup = "retention-cleanup";
+
     public static readonly string[] All =
-        [NotificationDispatch, InvitationReminders, Digests, ScheduledReports, SurveyDraftRetention];
+    [
+        NotificationDispatch,
+        InvitationReminders,
+        Digests,
+        ScheduledReports,
+        SurveyDraftRetention,
+        RetentionCleanup,
+    ];
 }

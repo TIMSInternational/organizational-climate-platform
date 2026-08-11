@@ -497,6 +497,7 @@ app.MapDemographicSnapshotEndpoints();
 app.MapSearchEndpoints();
 app.MapSystemStatusEndpoints();
 app.MapDashboardEndpoints();
+app.MapGdprEndpoints();
 
 app.Run();
 
