@@ -32,21 +32,21 @@ export interface ChangePasswordFormProps {
  *    branch nothing could reach.
  * 3. **Every field is cleared on success.** Leaving a password sitting in an input after the
  *    save has completed serves nothing and survives a screen share.
- * 4. **The reader is told this does not sign their other devices out** — always, before they
+ * 4. **The reader is told their other devices will be signed out** — always, before they
  *    submit, not only in a success message. See below.
  *
- * ## Other sessions stay signed in. Issue #284.
+ * ## Other sessions are signed out. Issue #284.
  *
- * The API issues a stateless 24-hour JWT and has no way to revoke one: no denylist, no
- * security stamp, no refresh-token table. A password change writes the new hash and nothing
- * else, so a session that is already open — including an attacker's — keeps working for up
- * to 24 hours.
+ * The API rotates the account's security stamp on a password change, so every token minted
+ * before it — every other device, and anyone holding a stolen session — is refused from that
+ * moment. This form's own session is replaced by the token the response carries; `ProfilePage`
+ * stores it.
  *
- * Somebody changing their password on this form is quite likely doing it *because* they
- * think they were compromised, which makes the gap worth a sentence of standing copy rather
- * than a silence. `profile.passwordOtherSessionsNote` is rendered unconditionally next to
- * the submit button, and a test asserts it is there. Delete both when #284 lands, not
- * before.
+ * Somebody changing their password on this form is quite likely doing it *because* they think
+ * they were compromised, and whether the act ends that compromise is the single most useful
+ * thing to know before submitting. So the disclosure stayed, with the fact reversed:
+ * `profile.passwordOtherSessionsNote` said the opposite and was removed from both locales in
+ * #284, and `profile.passwordSignsOutOtherDevices` replaced it in the same place.
  *
  * The server's own rejection text (wrong current password, policy failures) is rendered
  * verbatim rather than replaced with a generic message: "Password must be at least 12
@@ -142,7 +142,9 @@ export default function ChangePasswordForm({ onSubmit }: ChangePasswordFormProps
 
           {/* Unconditional, and above the button rather than in the success alert: it is
               something to know before choosing to submit, not afterwards. */}
-          <p className="text-sm text-fg-tertiary">{t('profile.passwordOtherSessionsNote')}</p>
+          <p className="text-sm text-fg-tertiary">
+            {t('profile.passwordSignsOutOtherDevices')}
+          </p>
 
           <div>
             <Button type="submit" disabled={submitting}>
