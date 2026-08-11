@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using ClimateProject.Api.Infrastructure;
+using ClimateProject.Api.Infrastructure.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Profile;
@@ -150,43 +151,40 @@ public static class ProfileEndpoints
     }
 
     /// <summary>
-    /// Records one self-caused event on the caller's own account, for
-    /// <c>GET /profile/activity</c> to read back.
+    /// Names the self-service event this request is, so the row #143's audit middleware is
+    /// already going to write carries the profile vocabulary instead of a route-derived one.
     ///
-    /// Skipped entirely for a user with no company. <c>audit_logs.company_id</c> is NOT NULL
-    /// with a restricting FK to <c>companies</c>, so a global super_admin (#191) has no
-    /// company row to attribute an entry to; inventing one, or widening the column, is a
-    /// schema change this issue deliberately does not make (it would collide with the
-    /// migration another branch already has outstanding). The consequence is bounded and
-    /// visible: a company-less super_admin's activity list is empty, and their profile
-    /// edits still succeed.
+    /// ## This no longer writes the row, and that is the point
     ///
-    /// Does not save -- the caller decides when, so the audit row and the change it
-    /// describes land in the same <c>SaveChangesAsync</c> and cannot disagree.
+    /// #136 inserted an <c>AuditLog</c> here directly, because at the time nothing else wrote
+    /// to <c>audit_logs</c> at all. #143 replaced that with one writer for the whole
+    /// application (<c>AuditWritingMiddleware</c>): a second one here would give every profile
+    /// mutation two rows, which is worse than the one-endpoint-at-a-time trail it replaced.
+    ///
+    /// What is preserved is the vocabulary. Left to derive its own names the middleware would
+    /// file a password change as <c>profile.password.update</c> on resource
+    /// <c>profile.password</c>; <see cref="ProfileAuditActions"/> is what
+    /// <c>GET /profile/activity</c> and its tests read back, so it is asserted here instead.
+    ///
+    /// Success is no longer a parameter: the middleware takes it from the response status, so
+    /// a handler cannot claim an outcome its own status code contradicts. Call this as soon as
+    /// the acting user is known and every branch is described, including the ones that fail.
+    ///
+    /// Attribution is skipped for a user with no company. <c>audit_logs.company_id</c> is NOT
+    /// NULL with a restricting FK to <c>companies</c>, so a global super_admin (#191) has no
+    /// company row to attribute an entry to; widening the column is a migration, and this wave
+    /// permits exactly one, on another branch. The consequence is bounded and visible: a
+    /// company-less super_admin's activity list is empty, and their profile edits still
+    /// succeed.
     /// </summary>
-    private static void AddActivity(
-        ClimateProjectDbContext db,
-        User user,
-        string action,
-        bool success,
-        DateTimeOffset now)
+    private static void RecordActivity(AuditEntry audit, User user, string action)
     {
-        if (user.CompanyId is not { } companyId)
-        {
-            return;
-        }
+        audit.Describe(action, ProfileAuditActions.Resource, user.Id.ToString());
 
-        db.AuditLogs.Add(new AuditLog
+        if (user.CompanyId is { } companyId)
         {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            CompanyId = companyId,
-            Action = action,
-            Resource = ProfileAuditActions.Resource,
-            ResourceId = user.Id.ToString(),
-            Success = success,
-            Timestamp = now,
-        });
+            audit.AttributeTo(user.Id, companyId);
+        }
     }
 
     private static async Task<IResult> GetAsync(
@@ -211,6 +209,7 @@ public static class ProfileEndpoints
         UpdateProfileRequest request,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
+        AuditEntry audit,
         CancellationToken cancellationToken)
     {
         var user = await ResolveCurrentUserAsync(principal.GetCurrentUser(), db, cancellationToken);
@@ -218,6 +217,10 @@ public static class ProfileEndpoints
         {
             return Results.Forbid();
         }
+
+        // Described before the validation branches below, not after the save: every outcome of
+        // this request is a profile.update, and the middleware reads success from the status.
+        RecordActivity(audit, user, ProfileAuditActions.Update);
 
         // Rejected rather than ignored. `/admin/users/{id}` treats a blank name as "leave it
         // alone", which is right for a partial admin edit of somebody else's row; here the
@@ -240,7 +243,6 @@ public static class ProfileEndpoints
         var now = DateTimeOffset.UtcNow;
         user.Name = name;
         user.UpdatedAt = now;
-        AddActivity(db, user, ProfileAuditActions.Update, success: true, now);
         await db.SaveChangesAsync(cancellationToken);
 
         return Results.Ok(await ToResponseAsync(user, db, cancellationToken));
@@ -285,6 +287,7 @@ public static class ProfileEndpoints
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         IPasswordHasher passwordHasher,
+        AuditEntry audit,
         IJwtTokenService jwtTokenService,
         CancellationToken cancellationToken)
     {
@@ -293,6 +296,10 @@ public static class ProfileEndpoints
         {
             return Results.Forbid();
         }
+
+        // Every branch below is a password change attempt, successful or not, and a run of
+        // failures on one's own account is exactly what the activity history is for.
+        RecordActivity(audit, user, ProfileAuditActions.PasswordChange);
 
         if (string.IsNullOrEmpty(request.CurrentPassword) || string.IsNullOrEmpty(request.NewPassword))
         {
@@ -314,10 +321,8 @@ public static class ProfileEndpoints
 
         if (!passwordHasher.Verify(request.CurrentPassword, user.PasswordHash))
         {
-            // Recorded before returning: a run of these on one's own account is exactly what
-            // an activity history is for. Saved on its own, since nothing else changed.
-            AddActivity(db, user, ProfileAuditActions.PasswordChange, success: false, now);
-            await db.SaveChangesAsync(cancellationToken);
+            // No save: nothing changed, and the failed attempt is recorded by the audit
+            // middleware from the 400 below (RecordActivity above named it).
 
             // 400, not 401. A 401 would be indistinguishable from an expired session and
             // would send the client's authFetch straight to the login page, discarding the
@@ -346,7 +351,6 @@ public static class ProfileEndpoints
         user.SecurityStamp = Guid.NewGuid();
 
         user.UpdatedAt = now;
-        AddActivity(db, user, ProfileAuditActions.PasswordChange, success: true, now);
         await db.SaveChangesAsync(cancellationToken);
 
         // Minted AFTER the rotation is saved, and through AuthEndpoints' helper rather than
@@ -382,8 +386,25 @@ public static class ProfileEndpoints
     /// <summary>
     /// The caller's own audit trail, most recent first.
     ///
-    /// Filtered on <c>user_id</c> and nothing else, so it cannot return another person's
-    /// entries even inside the caller's own company.
+    /// Filtered on <c>user_id</c>, so it cannot return another person's entries even inside
+    /// the caller's own company — and on <c>resource</c>, so it returns the caller's own
+    /// self-service events and only those.
+    ///
+    /// ## Why the resource filter, when #143 gave the table a writer for the whole application
+    ///
+    /// Without it this endpoint would broaden by itself: <c>audit_logs</c> now carries a row
+    /// for every mutating request anyone makes, so a CompanyAdmin's "recent activity" card
+    /// would fill up with <c>admin.departments.create</c> and <c>surveys.status.update</c>.
+    /// The UI that renders this (<c>web/src/features/profile/components/ProfileActivityList.tsx</c>)
+    /// has copy for the three profile actions and falls back to printing the raw action
+    /// string, which is an untranslated dotted identifier in both locales — so the broadening
+    /// would have shipped as English wire values on a Spanish screen.
+    ///
+    /// The contract is therefore unchanged from before #143: the three
+    /// <see cref="ProfileAuditActions"/> events, which <c>RecordActivity</c> still files under
+    /// <see cref="ProfileAuditActions.Resource"/>. A cross-resource "everything I did" view is
+    /// a real feature — it needs its own screen and its own copy, not this card silently
+    /// becoming one.
     /// </summary>
     private static async Task<IResult> GetActivityAsync(
         int? limit,
@@ -401,7 +422,7 @@ public static class ProfileEndpoints
 
         var activity = await db.AuditLogs
             .AsNoTracking()
-            .Where(a => a.UserId == user.Id)
+            .Where(a => a.UserId == user.Id && a.Resource == ProfileAuditActions.Resource)
             .OrderByDescending(a => a.Timestamp)
             .ThenByDescending(a => a.Id)
             .Take(pageSize)
@@ -440,6 +461,7 @@ public static class ProfileEndpoints
         UpdateProfilePreferencesRequest request,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
+        AuditEntry audit,
         CancellationToken cancellationToken)
     {
         var user = await ResolveCurrentUserAsync(principal.GetCurrentUser(), db, cancellationToken);
@@ -447,6 +469,8 @@ public static class ProfileEndpoints
         {
             return Results.Forbid();
         }
+
+        RecordActivity(audit, user, ProfileAuditActions.PreferencesUpdate);
 
         // Validated against detached copies first, so neither helper's in-place write lands
         // unless both would succeed.
@@ -502,7 +526,6 @@ public static class ProfileEndpoints
         }
 
         user.UpdatedAt = now;
-        AddActivity(db, user, ProfileAuditActions.PreferencesUpdate, success: true, now);
         await db.SaveChangesAsync(cancellationToken);
 
         return Results.Ok(new ProfilePreferencesResponse(

@@ -1,6 +1,7 @@
 using ClimateProject.Api;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Api.Infrastructure;
+using ClimateProject.Api.Infrastructure.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Cors;
 using ClimateProject.Application.Email;
@@ -152,8 +153,17 @@ builder.Services.AddOptions<DatabaseOptions>()
     })
     .ValidateOnStart();
 
-builder.Services.AddDbContext<ClimateProjectDbContext>((sp, options) =>
-    options.UseNpgsql(sp.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString));
+// AuditLogAppendOnlyInterceptor makes an UPDATE or DELETE of an audit row throw rather than
+// succeed (#143). Registered on the context itself, not in one endpoint, because the property
+// wanted is "nothing in this process can rewrite the trail" -- see the interceptor for what
+// that does and does not cover, and for why the complete version is a database grant.
+builder.Services.AddDbContext<ClimateProjectDbContext>((sp, options) => options
+    .UseNpgsql(sp.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString)
+    .AddInterceptors(AuditLogAppendOnlyInterceptor.Instance));
+
+// One per request, shared by the audit middleware and whichever handler runs. Handlers use it
+// to name what they did; nothing about it can stop a row being written. See AuditEntry.
+builder.Services.AddScoped<AuditEntry>();
 
 // InternalApiKey guards /api/internal/*, which TrackingInternalEndpoints maps unconditionally.
 // Before #189 an unset key meant those routes were mapped and every call 500'd with "Internal
@@ -414,6 +424,18 @@ app.UseCors("Frontend");
 app.UseClimateProjectRequestSizeLimit();
 
 app.UseAuthentication();
+
+// Between authentication and authorization, on purpose (#143). After UseAuthentication because
+// it reads HttpContext.User to attribute the row; before UseAuthorization so that a mutating
+// request refused by the authorization middleware is still recorded, rather than disappearing
+// before anything sees it. That second half only helps when the caller is identifiable -- a
+// 403 for a deactivated account is recorded, a 401 with no token cannot be, because
+// audit_logs.company_id is NOT NULL and there is no tenant to file it under.
+//
+// It audits every POST/PUT/PATCH/DELETE that reaches an endpoint, with no per-endpoint opt-in
+// -- that is the whole requirement of the issue.
+app.UseAuditLogging();
+
 app.UseAuthorization();
 app.UseRateLimiter();
 
@@ -516,6 +538,7 @@ app.MapDemographicSnapshotEndpoints();
 app.MapSearchEndpoints();
 app.MapSystemStatusEndpoints();
 app.MapDashboardEndpoints();
+app.MapAuditEndpoints();
 app.MapGdprEndpoints();
 
 app.Run();

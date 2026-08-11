@@ -21,8 +21,12 @@ if (string.IsNullOrWhiteSpace(connectionString))
 
 var databasePolicy = DatabaseConnectionStringPolicy.Apply(connectionString);
 
-builder.Services.AddDbContext<ClimateProjectDbContext>(options =>
-    options.UseNpgsql(databasePolicy.ConnectionString));
+// The append-only guard is registered here as well as in the API (#143). The worker writes no
+// audit rows today, but "nothing rewrites the audit trail" is not a property if it holds in one
+// of the two processes that hold the database credentials.
+builder.Services.AddDbContext<ClimateProjectDbContext>(options => options
+    .UseNpgsql(databasePolicy.ConnectionString)
+    .AddInterceptors(AuditLogAppendOnlyInterceptor.Instance));
 
 // The same stub the API registers. Replacing it with a real provider is #100, in one place for
 // both hosts.

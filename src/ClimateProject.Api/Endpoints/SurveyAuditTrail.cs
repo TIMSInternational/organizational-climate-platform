@@ -31,14 +31,22 @@ internal sealed record SurveyActor(
 /// <summary>
 /// Writing the survey domain's version snapshots and audit entries.
 ///
-/// <b>Where the boundary is, for #143.</b> Everything here writes
+/// <b>Where the boundary is, now that #143 has landed.</b> Everything here writes
 /// <c>survey_versions</c> and <c>survey_audit_logs</c>, both of which are keyed by a NOT
-/// NULL <c>survey_id</c>, and it is called only from <c>SurveyEndpoints</c>. It is not a
-/// mutation interceptor, there is no <c>SaveChangesAsync</c> override and no
-/// <c>IAuditable</c> marker: #143 has to touch every mutating endpoint in the product and
-/// belongs on the tenant-scoped <c>audit_logs</c> table, and half-building that mechanism
-/// here would leave #143 undoing it. See <see cref="SurveyAuditActions"/> for the shapes
-/// worth reconciling if #143 wants a single writer.
+/// NULL <c>survey_id</c>, and it is called only from <c>SurveyEndpoints</c>.
+///
+/// #143 built the general trail as HTTP middleware over <c>audit_logs</c>, and did **not**
+/// fold this into it. The two records answer different questions and are not duplicates of
+/// each other: <c>audit_logs</c> records that a request happened, who made it, from where and
+/// whether it succeeded; <c>survey_audit_logs</c> records what changed inside the survey's
+/// content, with the field-level diff (<c>changes</c> jsonb) and the version number that
+/// <c>GET /surveys/{id}/history</c> renders and that <c>audit_logs</c> has no column for.
+/// Merging them is a migration, and #143's wave permitted exactly one, on another branch.
+///
+/// What #143 did do is stop them being two *trails* to read: <c>GET /audit/surveys/{id}</c>
+/// returns both, merged and ordered, tagged by <c>AuditSources</c>. And
+/// <c>AuditLogAppendOnlyInterceptor</c> guards this table alongside the other one, so neither
+/// can be rewritten after the fact.
 /// </summary>
 internal static class SurveyAuditTrail
 {

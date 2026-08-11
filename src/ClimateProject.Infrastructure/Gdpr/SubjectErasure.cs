@@ -184,16 +184,20 @@ public static class SubjectErasure
         }
         actions.Add(Action("UserInvitation", userInvitations.Count));
 
-        // The denormalised identity copies only. user_id, action, entity, changes, timestamp,
-        // IP and user agent all stay -- see the class remarks.
+        // DELETED, not redacted. survey_audit_logs denormalises user_name, user_email and
+        // user_role onto every row so history reads correctly after a rename, which means those
+        // columns are personal data that outlives the users row. Redacting the three and keeping
+        // the row was the alternative -- it preserves the change history and pseudonymises the
+        // actor. Deleting was chosen instead, and the cost is real and worth stating: the record
+        // that those changes happened at all goes with the personal data.
+        //
+        // #143's append-only interceptor refuses DELETE on this table, so this runs inside the
+        // one narrow exception it grants -- see AuditLogAppendOnlyInterceptor for exactly how
+        // narrow, and docs/decisions/audit-logging.md for the decision.
         var surveyAuditLogs = await SubjectAccessExport
             .SurveyAuditLogsFor(db, id, originalEmail, companyScope)
             .ToListAsync(cancellationToken);
-        foreach (var entry in surveyAuditLogs)
-        {
-            entry.UserName = ErasedName;
-            entry.UserEmail = RedactedValue;
-        }
+        db.SurveyAuditLogs.RemoveRange(surveyAuditLogs);
         actions.Add(Action("SurveyAuditLog", surveyAuditLogs.Count));
 
         // --- Anonymised -----------------------------------------------------------------
@@ -236,7 +240,12 @@ public static class SubjectErasure
         actions.Add(await RetainedAsync("ResponseDemographic",
             db.ResponseDemographics.Where(rd => responseIds.Contains(rd.ResponseId)), cancellationToken));
 
-        await db.SaveChangesAsync(cancellationToken);
+        // The scope is opened around the save rather than around the RemoveRange above, because
+        // the interceptor runs at SaveChanges -- that is the moment the deletes are seen.
+        using (Persistence.AuditLogAppendOnlyInterceptor.AllowSubjectErasureDeletes())
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
 
         return new ErasureResponse(
             identity,

@@ -853,9 +853,9 @@ public class GdprEndpointsTests : IAsyncLifetime
         Assert.Equal(
             SubjectErasure.RedactedValue,
             (await verify.MicroclimateInvitations.SingleAsync(i => i.Id == microclimateInvitationId)).Email);
-        Assert.Equal(
-            SubjectErasure.RedactedValue,
-            (await verify.SurveyAuditLogs.SingleAsync(a => a.Id == auditId)).UserEmail);
+        // survey_audit_logs is DELETED rather than redacted, so the row the address reached is
+        // gone entirely. Asserted as absence, which is the stronger statement of the two.
+        Assert.False(await verify.SurveyAuditLogs.AnyAsync(a => a.Id == auditId));
     }
 
     private static void AssertLinkedByAddress(JsonElement export, string entity, Guid id, string linkProperty)
@@ -1111,11 +1111,11 @@ public class GdprEndpointsTests : IAsyncLifetime
         var audit = await db.AuditLogs.SingleAsync(a => a.UserId == subjectId && a.Action == "login");
         Assert.Equal("203.0.113.9", audit.IpAddress);
 
-        var surveyAudit = await db.SurveyAuditLogs.SingleAsync(a => a.UserId == subjectId);
-        Assert.Equal(SubjectErasure.RedactedValue, surveyAudit.UserEmail);
-        Assert.Equal(SubjectErasure.ErasedName, surveyAudit.UserName);
-        Assert.Equal("updated", surveyAudit.Action);
-        Assert.Equal(subjectId, surveyAudit.UserId);
+        // survey_audit_logs is DELETED, not redacted -- the decided treatment. The cost is
+        // asserted here rather than left to prose: the subject's rows in the per-survey change
+        // history are gone, so that history no longer records that those changes were made.
+        // audit_logs above is what survives, still attributable by user_id.
+        Assert.False(await db.SurveyAuditLogs.AnyAsync(a => a.UserId == subjectId));
 
         // Retained: the historical snapshot the employer has already reported on.
         Assert.Equal(1, await db.DemographicSnapshotEntries.CountAsync(e => e.UserId == subjectId));
