@@ -41,9 +41,15 @@ public sealed class RateLimitingOptions
 /// bucket. Public token-addressed routes are the ones an attacker can enumerate or replay
 /// without any credential, so they are bucketed by the token rather than by the caller --
 /// bucketing them by caller alone would let a botnet replay one invitation freely. Public
-/// submission keeps the two per-surface policies that already existed. Everything else,
-/// authenticated included, gets <see cref="RateLimitingOptions.GlobalPermitsPerMinute"/>
-/// keyed by user id, so one compromised account cannot saturate the service for its tenant.
+/// submission keeps the two per-surface policies that already existed.
+/// </para>
+/// <para>
+/// Underneath all of them, and in addition to them, every non-probe request also passes
+/// <see cref="RateLimitingOptions.GlobalPermitsPerMinute"/> -- keyed by user id once the
+/// caller is authenticated, so a shared office address cannot make colleagues compete for
+/// one bucket, and one compromised account cannot saturate the service for its tenant. That
+/// is the class the ordinary authenticated API falls into, and it is why routes with no
+/// policy of their own are still bounded.
 /// </para>
 /// <para>
 /// <b>The probe carve-out is load-bearing.</b> <c>/health</c> is what App Runner's own
@@ -98,7 +104,8 @@ public static class RateLimitPolicies
     /// Paths that are never rate limited, at any layer. All four are unauthenticated on
     /// purpose and none of them touches user-supplied input: <c>/</c> is a static redirect,
     /// <c>/health</c> and <c>/version</c> are static literals, and <c>/ready</c> issues one
-    /// <c>SELECT 1</c>. See the class remarks for what a 429 on the first two would cost.
+    /// <c>SELECT 1</c>. See the class remarks for what a 429 on <c>/health</c> or
+    /// <c>/ready</c> would cost.
     /// </summary>
     public static readonly IReadOnlySet<string> UnlimitedPaths =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "/", "/health", "/ready", "/version" };
