@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
 using System.Threading.RateLimiting;
+using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Surveys;
@@ -44,13 +45,20 @@ public static class SurveyResponseEndpoints
     /// integrity attack: fabricated responses are indistinguishable from real ones once
     /// stored, and on an anonymous survey there is deliberately nothing recorded that
     /// could be used to unpick them afterwards.
+    ///
+    /// <para>
+    /// The address comes from <see cref="RateLimitPolicies.ClientIpFor"/> rather than
+    /// <c>Connection.RemoteIpAddress</c>: behind App Runner the socket peer is the AWS proxy,
+    /// which would collapse every respondent in the world into one partition. See
+    /// <see cref="ClientIpResolver"/>.
+    /// </para>
     /// </summary>
     public static RateLimitPartition<string> PartitionResponseSubmission(HttpContext httpContext)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
         return RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            partitionKey: ResponseSubmissionRateLimiterPolicy + ":" + RateLimitPolicies.ClientIpFor(httpContext),
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = RateLimitPermitsPerWindow,

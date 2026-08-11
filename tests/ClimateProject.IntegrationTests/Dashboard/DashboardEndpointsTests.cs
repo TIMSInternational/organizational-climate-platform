@@ -696,8 +696,9 @@ public class DashboardEndpointsTests : IAsyncLifetime
     /// shared, so it may well be full before this test adds anything. A fixed ceiling stays
     /// falsifiable either way: the fixture below is grown until every page is at or near its
     /// limit, so one extra round trip per row would put every route far past its ceiling.
-    /// The ceilings are the measured counts plus two, and the slack matters less than the
-    /// gap: an N+1 here costs at least eight.
+    /// The slack under each ceiling matters less than the gap between that slack and what an
+    /// N+1 would cost: the cheapest one available to any of these pages is five more round
+    /// trips, and no ceiling here has five to spare.
     /// </para>
     /// </summary>
     [Fact]
@@ -729,10 +730,13 @@ public class DashboardEndpointsTests : IAsyncLifetime
         Assert.Equal(5, departmentBody!.ActiveSurveys.Count);
         Assert.Equal(5, mineBody!.PendingSurveys.Count);
 
-        // Measured on this fixture: 5 / 8 / 8 / 8. Each ceiling is that plus two. The
-        // smallest N+1 any of these pages could acquire costs five more (the survey lists
-        // are capped at five rows) and the largest costs eleven (company A's departments),
-        // so the slack cannot hide one.
+        // Measured on this fixture: 6 / 9 / 9 / 9, one under each ceiling. It was 5 / 8 / 8 / 8
+        // when these ceilings were written; #284's revocation check adds one SELECT to every
+        // authenticated request, which is why all four moved by exactly one and none of them
+        // moved by a row count. The remaining slack is one rather than two, and that is still
+        // not enough to hide an N+1: the smallest any of these pages could acquire costs five
+        // more (the survey lists are capped at five rows) and the largest costs eleven
+        // (company A's departments).
         Assert.True(platform.Commands <= 7, $"platform overview sent {platform.Commands} commands");
         Assert.True(tenant.Commands <= 10, $"tenant dashboard sent {tenant.Commands} commands");
         Assert.True(department.Commands <= 10, $"department dashboard sent {department.Commands} commands");

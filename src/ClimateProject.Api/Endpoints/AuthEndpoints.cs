@@ -5,6 +5,7 @@ using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClimateProject.Api.Endpoints;
@@ -26,9 +27,14 @@ public static class AuthEndpoints
     {
         var group = app.MapGroup("/auth");
 
-        group.MapPost("/login", LoginAsync);
-        group.MapPost("/signup", SignupAsync);
-        group.MapPost("/google", GoogleLoginAsync);
+        // The three unauthenticated routes carry the strictest policy in the app (#146):
+        // this is the surface where credential stuffing is the realistic attack, and where a
+        // caller making twenty attempts a minute is already not a person. /refresh and
+        // /admin/reset-credentials below need a valid token first and are covered by the
+        // per-user global ceiling instead.
+        group.MapPost("/login", LoginAsync).RequireRateLimiting(RateLimitPolicies.Authentication);
+        group.MapPost("/signup", SignupAsync).RequireRateLimiting(RateLimitPolicies.Authentication);
+        group.MapPost("/google", GoogleLoginAsync).RequireRateLimiting(RateLimitPolicies.Authentication);
         group.MapPost("/refresh", RefreshAsync).RequireAuthorization();
         group.MapPost("/admin/reset-credentials", ResetCredentialsAsync).RequireAuthorization();
     }
@@ -313,7 +319,14 @@ public static class AuthEndpoints
             Email: user.Email,
             Name: user.Name,
             CompanyId: user.CompanyId?.ToString() ?? string.Empty,
-            IsActive: user.IsActive));
+            IsActive: user.IsActive,
+            // Read off the row, never generated here (#284). The claim's only job is to equal
+            // users.security_stamp on the read path, so a value invented at mint time would
+            // produce a token that is refused by its own first request. A caller that wants
+            // the OTHER sessions gone rotates the column and saves before calling this, and
+            // the token minted here then carries the new value -- which is what lets a
+            // password change hand its own caller a working session back.
+            SecurityStamp: user.SecurityStamp));
 
         return Results.Json(new TokenResponse(token), statusCode: successStatusCode);
     }
@@ -356,6 +369,20 @@ public static class AuthEndpoints
 
         var temporaryPassword = Guid.NewGuid().ToString("N")[..12];
         user.PasswordHash = passwordHasher.Hash(temporaryPassword);
+
+        // Every session this account has open ends here (#284). An administrator resetting
+        // credentials is usually responding to a compromise, and replacing the hash alone
+        // only stops a future login: whoever already holds a token for this row keeps it
+        // working for up to 24 hours. Rotating the stamp is what makes the reset take effect
+        // now, because SecurityStampValidation compares this column against the claim in
+        // every presented token.
+        //
+        // Including the administrator's own, if they pass their own id: this signs them out
+        // too, on the next request, and they sign back in with the temporary password the
+        // response hands them. That is the honest outcome of "reset my credentials" and it is
+        // why the refusal is a 401 rather than something the SPA would sit on.
+        user.SecurityStamp = Guid.NewGuid();
+
         user.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 

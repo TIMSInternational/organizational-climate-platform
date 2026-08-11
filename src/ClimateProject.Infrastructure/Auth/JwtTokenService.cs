@@ -36,6 +36,13 @@ public class JwtTokenService : IJwtTokenService
             new("name", claims.Name),
             new("companyId", claims.CompanyId),
             new("isActive", claims.IsActive ? "true" : "false"),
+
+            // #284. "D" (the Guid default, 8-4-4-4-12 with hyphens) rather than "N", because
+            // the reader parses with Guid.TryParse, which accepts both, and "D" is the form
+            // Postgres prints a uuid in — so a stamp copied out of a decoded token can be
+            // pasted straight into a query against users.security_stamp.
+            new(TokenClaimNames.SecurityStamp, claims.SecurityStamp.ToString()),
+
             new(JwtRegisteredClaimNames.Iat, now.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
         };
 

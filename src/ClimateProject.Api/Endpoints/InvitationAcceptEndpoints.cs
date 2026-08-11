@@ -4,6 +4,7 @@ using ClimateProject.Application.Auth;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClimateProject.Api.Endpoints;
@@ -17,7 +18,12 @@ public static class InvitationAcceptEndpoints
 
     public static void MapInvitationAcceptEndpoints(this WebApplication app)
     {
-        app.MapPost("/invitations/{token}/accept", AcceptAsync);
+        // Unauthenticated and token-addressed, so it is rate limited per token rather than
+        // per caller (#146): the attack this bounds is one invitation being replayed or
+        // brute-forced, which a botnet would otherwise spread across enough addresses that a
+        // caller-keyed limit never fires. See RateLimitPolicies.PartitionPublicToken.
+        app.MapPost("/invitations/{token}/accept", AcceptAsync)
+            .RequireRateLimiting(RateLimitPolicies.PublicToken);
     }
 
     private static async Task<IResult> AcceptAsync(
