@@ -99,10 +99,19 @@ export default function MicroclimateList({ microclimates }: { microclimates: Mic
                 </Badge>
               </td>
               <td className="font-mono tabular-nums text-fg-secondary">
-                {t('surveys.responseProgress', {
-                  count: microclimate.responseCount,
-                  target: microclimate.targetParticipantCount,
-                })}
+                {/* "31 of 0" is not a reading. `targetParticipantCount` is
+                    nullable in practice — a session opened without a roster
+                    records zero — and the Participation cell beside this one
+                    already renders an em dash rather than dividing by it (see
+                    `participationPercent`). The count on its own is the honest
+                    statement, and it is the same one the live card above makes
+                    with `microclimates.liveNoTarget`. */}
+                {microclimate.targetParticipantCount > 0
+                  ? t('surveys.responseProgress', {
+                      count: microclimate.responseCount,
+                      target: microclimate.targetParticipantCount,
+                    })
+                  : t('microclimates.responsesNoTarget', { count: microclimate.responseCount })}
               </td>
               <td className="font-mono font-semibold tabular-nums">
                 {rate === null ? '—' : `${Math.round(rate)}%`}
@@ -134,11 +143,18 @@ export default function MicroclimateList({ microclimates }: { microclimates: Mic
 
                         Both this and the cell decide with `isSuppressed` called on
                         the same two arguments, so they cannot disagree about which
-                        rows are locked. */}
+                        rows are locked.
+
+                        A closed session with *zero* responses is locked too, and
+                        deliberately not given a distinct "nothing to show" state.
+                        Splitting the two would publish the one fact
+                        `ProtectedCell` is written never to publish — how far under
+                        the floor a cell sits — because "no responses" and
+                        "protected" would then be readable as 0 versus 1..4. */}
                     {isSuppressed(microclimate.responseCount, MINIMUM_RESPONDENTS) && (
                       <span
                         aria-hidden="true"
-                        className="text-2xs font-semibold uppercase tracking-label text-accent-amber"
+                        className="text-2xs font-semibold uppercase tracking-label text-accent-amber-ink"
                       >
                         {t('charts.protectedWord')}
                       </span>

@@ -73,6 +73,11 @@ describe('ActionPlanList due dates', () => {
     renderList([plan({ dueDate: '2026-08-01T00:00:00.000Z' })])
 
     expect(screen.getByText('Past due')).toBeTruthy()
+    // In the ink token, not the identity accent: `text-accent-red` clears 4.5:1
+    // on the panel but not on `bg-icon-box` (4.24:1 light, 3.81:1 dark), and one
+    // rule for the state words is worth more than one exception in it. Numbers
+    // in `styles/accentInkContrast.test.ts`.
+    expect(screen.getByText('Past due').className).toContain('text-accent-red-ink')
   })
 
   it('does not mark a plan due today, nor a completed plan whose date went by', () => {

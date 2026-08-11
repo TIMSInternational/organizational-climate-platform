@@ -50,6 +50,15 @@ describe('MicroclimateList results suppression', () => {
     expect(screen.queryByRole('link', { name: 'Open results' })).toBeNull()
   })
 
+  it('sets the protected word in the ink token rather than the identity accent', () => {
+    // `text-accent-amber` on the panel is 3.19:1 at `text-2xs` (10px), under the
+    // 4.5:1 this repo pins for text in `badgeVariantContrast.test.ts`.
+    // `accentInkContrast.test.ts` guards the value; this guards the reach for it.
+    renderList([session({ responseCount: MINIMUM_RESPONDENTS - 1 })])
+
+    expect(screen.getByText('Protected').className).toContain('text-accent-amber-ink')
+  })
+
   it('never puts the suppressed count in the locked cell or its accessible name', () => {
     // Publishing "4" for a protected cell leaks exactly what the floor exists to
     // protect. The Responses column shows the count; the lock must not repeat it.
@@ -94,5 +103,18 @@ describe('MicroclimateList readings', () => {
 
     expect(screen.getByText('—')).toBeTruthy()
     expect(screen.queryByText('0%')).toBeNull()
+  })
+
+  it('states the count alone when no target was recorded, never "31 of 0"', () => {
+    // The Participation cell beside it already refuses to divide by that zero.
+    // The Responses cell was still printing it as a denominator, which is the
+    // same invented reading in a different column — and the live card one row
+    // above got it right, so the two disagreed on the same session.
+    renderList([session({ responseCount: 31, targetParticipantCount: 0 })])
+
+    expect(screen.queryByText('31 of 0')).toBeNull()
+    const cell = screen.getByText('31 responded')
+    expect(cell.className).toContain('font-mono')
+    expect(cell.className).toContain('tabular-nums')
   })
 })

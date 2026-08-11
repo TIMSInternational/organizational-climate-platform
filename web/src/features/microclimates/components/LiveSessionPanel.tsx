@@ -50,16 +50,13 @@ export default function LiveSessionPanel({ sessions }: { sessions: readonly Micr
     )
   }
 
+  // Two across only when there are two to put across. A lone card stretched to
+  // half the width leaves a hole where the missing one would be.
+  const twoAcross = sessions.length > 1
+
   return (
-    <div
-      className={cn(
-        'grid gap-inline',
-        // Two across only when there are two to put across. A lone card stretched
-        // to half the width leaves a hole where the missing one would be.
-        sessions.length > 1 && 'md:grid-cols-2',
-      )}
-    >
-      {sessions.map((session) => {
+    <div className={cn('grid gap-inline', twoAcross && 'md:grid-cols-2')}>
+      {sessions.map((session, index) => {
         const rate = participationPercent(session.responseCount, session.targetParticipantCount)
         const name = session.title ?? t('microclimates.untitled')
 
@@ -69,7 +66,20 @@ export default function LiveSessionPanel({ sessions }: { sessions: readonly Micr
             // The accent hairline marks these cards out from the tiles above. It
             // is never the only signal (WCAG 1.4.1): the status word sits in the
             // card's own header, top right.
-            className="rounded-lg border border-accent-blue-ring bg-surface-icon-box p-card"
+            className={cn(
+              'rounded-lg border border-accent-blue-ring bg-surface-icon-box p-card',
+              // The odd one out spans the row rather than sitting alone in the
+              // left column — the same hole the one-card case above avoids, which
+              // three, five or seven sessions would otherwise reintroduce at the
+              // bottom of the grid.
+              // `twoAcross` is part of the condition, not an accident of it: with
+              // one session the grid has a single track, and spanning two would
+              // conjure an implicit second column for the card to hang off.
+              twoAcross &&
+                sessions.length % 2 === 1 &&
+                index === sessions.length - 1 &&
+                'md:col-span-2',
+            )}
           >
             <div className="flex flex-wrap items-start justify-between gap-inline">
               <Link to={`/microclimates/${session.id}`} className="font-semibold">
@@ -79,7 +89,7 @@ export default function LiveSessionPanel({ sessions }: { sessions: readonly Micr
                   passes `microclimateRollup.liveSessions()`, so in practice these
                   are all open — but a component that printed a status it had not
                   read would be free to be wrong the day that changes. */}
-              <span className="text-2xs font-semibold uppercase tracking-label text-accent-green">
+              <span className="text-2xs font-semibold uppercase tracking-label text-accent-green-ink">
                 {statusLabel(t, session.status)}
               </span>
             </div>
@@ -106,7 +116,11 @@ export default function LiveSessionPanel({ sessions }: { sessions: readonly Micr
                 // take in at one glance, which is the whole argument of this
                 // redesign.
                 className="mt-2 max-w-sm"
-                aria-label={t('microclimates.columnParticipation')}
+                // Named, not just "Participation". Two open sessions put two
+                // meters on this screen, and a screen-reader user moving between
+                // them would otherwise hear the same label twice with no way to
+                // tell which room either belongs to.
+                aria-label={t('microclimates.liveParticipationLabel', { session: name })}
               />
             )}
 
@@ -134,7 +148,7 @@ export default function LiveSessionPanel({ sessions }: { sessions: readonly Micr
               {isSuppressed(session.responseCount, MINIMUM_RESPONDENTS) && (
                 <span
                   aria-hidden="true"
-                  className="text-2xs font-semibold uppercase tracking-label text-accent-amber"
+                  className="text-2xs font-semibold uppercase tracking-label text-accent-amber-ink"
                 >
                   {t('charts.protectedWord')}
                 </span>

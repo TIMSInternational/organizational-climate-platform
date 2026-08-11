@@ -51,6 +51,13 @@ interface ActionPlanListProps {
  * "Company-wide" rather than being left blank, and a department the listing does
  * not know reads "Department not listed" rather than silently going missing.
  *
+ * "Not listed" is a claim about a lookup that has **finished**, so it is the
+ * caller's job never to render this table while one is still in flight —
+ * `ActionPlansListPage` holds its `LoadingRegion` skeleton until
+ * `GET /admin/departments` settles, for exactly that reason. This component takes
+ * a map, and a map cannot say "not yet"; a component that guessed would be
+ * guessing on every caller's behalf.
+ *
  * ## Status and priority are translated, and both badges are low-chroma variants
  *
  * They used to render the raw wire value — `not_started`, `high` — which is
@@ -158,7 +165,7 @@ export default function ActionPlanList({
                   {/* Colour never carries this alone (WCAG 1.4.1): the word is
                       the message and the red is emphasis on it. */}
                   {overdue && (
-                    <span className="text-2xs font-semibold uppercase tracking-label text-accent-red">
+                    <span className="text-2xs font-semibold uppercase tracking-label text-accent-red-ink">
                       {t('actionPlans.pastDue')}
                     </span>
                   )}

@@ -58,14 +58,29 @@ function todayDay(now: Date): number {
 }
 
 /**
- * Whether an open plan's due date has already gone by.
+ * Whether an open plan is past due.
  *
  * A plan due today is **not** past due, which is the whole reason this is a
  * function. A closed plan is never past due whatever its date says: delivered late
  * is delivered, and flagging it would send someone to chase finished work.
+ *
+ * ## Why the recorded status is consulted at all
+ *
+ * `overdue` is one of `ActionPlanValidation.ValidStatuses` — the C# array is
+ * `["not_started", "in_progress", "completed", "overdue", "cancelled"]` — and
+ * nothing under `src/` ever computes it, so it arrives only because a client sent
+ * it on a PUT. That makes it a *statement*, and a plan can therefore be marked
+ * overdue while its date is still in the future.
+ *
+ * Reading the date alone left the same row saying two things at once: a Status
+ * badge reading "Overdue" while the strip above counted the plan under ON TRACK,
+ * "still inside their date". Whichever of the two a reader believes, one of them
+ * was lying. Honouring the status makes the badge and the strip agree, and it errs
+ * the safe way — towards showing work as needing attention rather than hiding it.
  */
 export function isPastDue(plan: Pick<ActionPlan, 'status' | 'dueDate'>, now: Date): boolean {
   if (!isOpenPlan(plan.status)) return false
+  if (plan.status === 'overdue') return true
   const due = dueDay(plan.dueDate)
   return due !== null && due < todayDay(now)
 }

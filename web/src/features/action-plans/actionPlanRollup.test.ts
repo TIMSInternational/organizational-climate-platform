@@ -66,6 +66,23 @@ describe('isPastDue', () => {
   it('does not flag a plan whose due date cannot be read', () => {
     expect(isPastDue(plan({ dueDate: 'not-a-date' }), new Date(2026, 7, 11))).toBe(false)
   })
+
+  it('honours a recorded overdue status against a date that has not gone by', () => {
+    // `overdue` is in `ActionPlanValidation.ValidStatuses` and nothing under
+    // `src/` ever computes it, so it can only have been sent by a client — which
+    // means it can disagree with the date. Reading the date alone put a Status
+    // badge saying "Overdue" on the same row the strip counted under ON TRACK,
+    // "still inside their date".
+    const now = new Date(2026, 7, 11)
+    expect(isPastDue(plan({ status: 'overdue', dueDate: '2026-12-01T00:00:00.000Z' }), now)).toBe(
+      true,
+    )
+    // Still not resurrected once it is finished: a plan can be closed out after
+    // having been marked overdue, and chasing done work is the failure above.
+    expect(isPastDue(plan({ status: 'completed', dueDate: '2020-01-01T00:00:00.000Z' }), now)).toBe(
+      false,
+    )
+  })
 })
 
 describe('rollUpActionPlans', () => {
@@ -100,6 +117,19 @@ describe('rollUpActionPlans', () => {
     )
 
     expect(rollup.onTrack + rollup.atRisk).toBe(rollup.open)
+  })
+
+  it('never puts a plan the API calls overdue under on track', () => {
+    // The strip and the row's own Status badge read the same listing, so they
+    // must not be able to contradict each other about the same plan.
+    const rollup = rollUpActionPlans(
+      [plan({ status: 'overdue', dueDate: '2026-12-01T00:00:00.000Z' })],
+      now,
+    )
+
+    expect(rollup.open).toBe(1)
+    expect(rollup.atRisk).toBe(1)
+    expect(rollup.onTrack).toBe(0)
   })
 
   it('counts a cancelled plan as neither open nor completed', () => {

@@ -1085,6 +1085,8 @@
     "liveHeading": "Abiertas ahora mismo",
     "liveRespondedOf": "de {target} han respondido",
     "liveNoTarget": "han respondido",
+    "liveParticipationLabel": "Participación — {session}",
+    "responsesNoTarget": "{count} han respondido",
     "noLiveTitle": "Ahora mismo no hay nada abierto",
     "noLiveDescription": "Una sesión que abras aparece aquí mientras recopila, con el número moviéndose a medida que la gente responde.",
     "sessionsHeading": "Sesiones",

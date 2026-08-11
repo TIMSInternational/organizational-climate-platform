@@ -206,6 +206,30 @@
   --admin-accent-green: #059669;
   --admin-accent-red: #dc2626;
 
+  /* -- State inks: the accent hues, as TEXT -------------------------------
+     Same separation the accent makes below, for the same reason. The three
+     state accents above are *identity* values — hairlines, icons, soft tints,
+     chart series — where 3:1 is the bar. Set as small text they are not
+     legible: measured against this file, `--admin-accent-amber` is 2.80:1 on
+     `--admin-bg-icon-box` and 3.19:1 on `--admin-bg-panel`, and
+     `--admin-accent-green` is 3.31:1 / 3.77:1. The repo's own bar for text is
+     4.5:1 (`badgeVariantContrast.test.ts`), and the words these carry —
+     PROTECTED, ACTIVE, PAST DUE — are 10px, so 4.5 is the right threshold and
+     not 3.0.
+
+     So a second token per hue, for ink only. Every one clears 4.5:1 against
+     BOTH surfaces a state word lands on in this product (`--admin-bg-panel`
+     and `--admin-bg-icon-box`) in BOTH themes, which is what
+     `accentInkContrast.test.ts` re-derives from this file.
+
+     Light darkens and dark lightens, because the surfaces invert. The red ink
+     moves in light even though `--admin-accent-red` alone clears 4.5:1 on the
+     panel (4.83:1): it does *not* clear it on the icon box (4.24:1), and one
+     rule for the family is worth more than one exception in it. */
+  --admin-accent-green-ink: #065f46;
+  --admin-accent-amber-ink: #92400e;
+  --admin-accent-red-ink: #b91c1c;
+
   /* -- The accent is TWO tokens, deliberately (UI-0) ----------------------
      The old `#2e9098` measures oklch chroma 0.0887, below the 0.1 floor, which
      is why the product read grey. `#0d9488` (the validated chart teal, chroma
@@ -408,6 +432,13 @@
 
   --admin-accent-green: #10b981;
   --admin-accent-red: #ef4444;
+  /* Ink lightens here, where light darkened — see the light block. Amber and
+     green already clear 4.5:1 on both dark surfaces as identity values, so
+     those two inks restate them rather than inventing a step nobody needs; red
+     does not (3.81:1 on `--admin-bg-icon-box`), so it moves. */
+  --admin-accent-green-ink: #10b981;
+  --admin-accent-amber-ink: #f59e0b;
+  --admin-accent-red-ink: #f87171;
   /* Dark lifts the identity accent to chroma 0.1230 (7.20:1 on the dark panel);
      the fill stays the same step as light because white-on-fill contrast is a
      property of the fill alone, and hover LIGHTENS here — see the light block. */

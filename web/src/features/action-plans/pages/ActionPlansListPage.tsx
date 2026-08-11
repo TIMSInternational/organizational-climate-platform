@@ -63,6 +63,14 @@ export default function ActionPlansListPage() {
   // Department id → name, for the listing's `From` column. A Map rather than the
   // raw array so the table does a lookup per row instead of a scan per row.
   const [departmentNames, setDepartmentNames] = useState<ReadonlyMap<string, string>>(new Map())
+  // Whether that lookup has *settled* — separately from what it settled to,
+  // because an empty map is a real answer (a company with no departments, or a
+  // failed request the column degrades over) and is indistinguishable from the
+  // initial value. Without this the table renders "Department not listed" against
+  // every departmented plan for the whole window between the two responses and
+  // then flips to the real name: a false provenance claim on the one column this
+  // screen was redesigned around. See the gate on `LoadingRegion` below.
+  const [departmentsSettled, setDepartmentsSettled] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [filters, setFilters] = useState<ActionPlanFiltersValue>(EMPTY_ACTION_PLAN_FILTERS)
@@ -124,13 +132,27 @@ export default function ActionPlansListPage() {
   // unreachable. `GET /admin/departments` is gated by the same `CanAccessCompany`
   // rule as `GET /action-plans`, so anyone who can see these rows can see these
   // names -- this adds no permission the page did not already need.
+  //
+  // "Degrades to not-listed" is only honest once the request has *finished*.
+  // `setDepartmentsSettled(true)` is in a `finally`, so it runs on the success
+  // path, on the failure path, and on the no-company path -- the table must never
+  // be waiting on a request that will never be made.
   const loadDepartments = useCallback(async () => {
-    if (!companyId) return
+    if (!companyId) {
+      setDepartmentsSettled(true)
+      return
+    }
+    // Reset on a company switch as well as on mount: company A's names are not an
+    // answer about company B's plans, and leaving this true would put the same
+    // false "not listed" on screen for the length of the second request.
+    setDepartmentsSettled(false)
     try {
       const departments = await listDepartments(baseUrl, companyId)
       setDepartmentNames(new Map(departments.map((department) => [department.id, department.name])))
     } catch {
       setDepartmentNames(new Map())
+    } finally {
+      setDepartmentsSettled(true)
     }
   }, [baseUrl, companyId])
 
@@ -303,8 +325,15 @@ export default function ActionPlansListPage() {
         // `LoadingRegion` already announces `common.loading` in an sr-only live
         // region, so the visible placeholder is a skeleton rather than a second
         // copy of the same word.
-        <LoadingRegion loading={loading} label={t('common.loading')}>
-          {loading ? (
+        //
+        // Gated on the departments lookup too, not on `listActionPlans` alone.
+        // The two run in parallel, so the wait is the slower of them rather than
+        // their sum -- and a table that renders first would spend that window
+        // asserting "Department not listed" on rows whose department it is about
+        // to name. The strip and the filters above are not gated: neither depends
+        // on the lookup, and neither can be wrong while it is in flight.
+        <LoadingRegion loading={loading || !departmentsSettled} label={t('common.loading')}>
+          {loading || !departmentsSettled ? (
             <SkeletonText lines={4} />
           ) : (
             <ActionPlanList

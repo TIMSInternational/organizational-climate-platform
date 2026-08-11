@@ -1085,6 +1085,8 @@
     "liveHeading": "Open right now",
     "liveRespondedOf": "of {target} responded",
     "liveNoTarget": "responded",
+    "liveParticipationLabel": "Participation — {session}",
+    "responsesNoTarget": "{count} responded",
     "noLiveTitle": "Nothing is open right now",
     "noLiveDescription": "A session you open appears here while it collects, with the count moving as people answer.",
     "sessionsHeading": "Sessions",
