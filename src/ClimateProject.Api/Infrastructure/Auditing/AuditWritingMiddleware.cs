@@ -124,10 +124,18 @@ internal sealed class AuditWritingMiddleware(
                 // live route table and asserted exactly by
                 // AuditCoverageTests.UnattributableMutatingRoutes, so a new one fails the build;
                 // docs/decisions/audit-logging.md records what closing the gap needs.
+                // The ROUTE TEMPLATE, never Request.Path. This warning fires on exactly the
+                // routes that carry a bearer token in the path -- the anonymous, unattributable
+                // ones -- so logging the raw path would write live invitation and share-link
+                // tokens into the application log, and the path is percent-decoded, so a caller
+                // could forge newlines into this category too. #146 fixed the same defect in the
+                // rate limiter's rejection log; this reuses its helper rather than growing a
+                // second answer to the same question. Caught by #146's test sweeping EVERY
+                // record the host wrote, once the two branches met on main.
                 logger.LogWarning(
-                    "Audit row for {Method} {Path} was not written: no company could be resolved for the caller.",
+                    "Audit row for {Method} {Route} was not written: no company could be resolved for the caller.",
                     context.Request.Method,
-                    context.Request.Path.Value);
+                    RateLimitPolicies.RouteNameFor(context));
                 return;
             }
 
@@ -160,9 +168,9 @@ internal sealed class AuditWritingMiddleware(
         {
             logger.LogError(
                 exception,
-                "Failed to write the audit row for {Method} {Path}. The request itself was unaffected.",
+                "Failed to write the audit row for {Method} {Route}. The request itself was unaffected.",
                 context.Request.Method,
-                context.Request.Path.Value);
+                RateLimitPolicies.RouteNameFor(context));
         }
     }
 
