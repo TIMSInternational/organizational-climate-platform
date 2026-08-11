@@ -12,7 +12,7 @@ namespace ClimateProject.Application.Auth;
 /// them any safer to change, since changing them at all is what breaks. <c>securityStamp</c>
 /// is different: a typo on either side does not fail loudly. Written but not read means no
 /// token is ever revoked, and read but not written means the claim is simply absent, which
-/// <see cref="ClimateProject.Api"/>'s validator treats as "issued by someone else" and lets
+/// the API's <c>SecurityStampValidation</c> treats as "issued by someone else" and lets
 /// through. Both failures are silent and both are the whole of #284, so the two sides share
 /// one symbol.
 /// </remarks>

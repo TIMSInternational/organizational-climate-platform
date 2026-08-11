@@ -18,7 +18,9 @@ namespace ClimateProject.Infrastructure.Migrations
     /// rotation only ever compares a user against their own past value — but a column whose
     /// job is to identify one account's sessions should not ship with every account sharing
     /// one value, and <c>gen_random_uuid()</c> is volatile, so a single UPDATE gives each row
-    /// its own. (Built into PostgreSQL core since 13; this project runs 16.)
+    /// its own. (Built into PostgreSQL core since 13 — no pgcrypto extension needed;
+    /// <c>docker-compose.yml</c> and the integration suite's container both pin
+    /// <c>postgres:16-alpine</c>.)
     ///
     /// It also leaves no <c>DEFAULT</c> behind on the column. The scaffolded form emits one
     /// into the DDL that the model snapshot does not record — <c>UserConfiguration</c>

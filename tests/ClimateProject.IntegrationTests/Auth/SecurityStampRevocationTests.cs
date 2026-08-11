@@ -29,10 +29,12 @@ namespace ClimateProject.IntegrationTests.Auth;
 /// which has to hand-build a token precisely because no code path in this API can produce
 /// one any more.
 ///
-/// <c>AuthWebApplicationFactory</c> replaces exactly one collaborator on this path,
-/// <c>IGoogleTokenVerifier</c>, which none of these tests goes near: the password paths, the
-/// JWT bearer handler, <c>ClimateProjectDbContext</c> and the real
-/// <c>JwtTokenService</c> are all the production types.
+/// <c>AuthWebApplicationFactory</c> substitutes exactly one service — <c>IGoogleTokenVerifier</c>,
+/// which none of these tests goes near — and adds a counting interceptor to the DbContext
+/// options. Nothing on the path under test is a double: the password endpoints, the JWT
+/// bearer handler and its <c>OnTokenValidated</c> hook, <c>ClimateProjectDbContext</c>,
+/// <c>BcryptPasswordHasher</c> and <c>JwtTokenService</c> are the production types against a
+/// real Postgres.
 /// </remarks>
 [Collection("Postgres")]
 public class SecurityStampRevocationTests : IAsyncLifetime
