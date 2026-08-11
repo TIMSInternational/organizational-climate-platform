@@ -5,7 +5,7 @@ import { formatMetric } from '../../../components/charts/formatMetric'
 import { cn } from '../../../lib/cn'
 import { Button, EmptyState, Table } from '../../../components/ui'
 import { statusLabel, typeLabel } from '../surveyVocabulary'
-import { surveyParticipationPercent } from '../surveyListView'
+import { surveyResponseReading } from '../surveyListView'
 
 interface SurveyListProps {
   surveys: readonly SurveyListItem[]
@@ -70,9 +70,13 @@ function StatusChip({ t, status }: { t: TranslateFn; status: string }) {
  * cannot show more than full, while the printed figure is not — a survey that beat
  * its expected audience says 112%, which is true, rather than being quietly capped.
  *
- * A survey with no `targetAudienceCount` has no rate at all, and gets an em dash
- * with an explanation rather than a bar at zero. "Nobody responded" and "there is
- * nothing to measure against" must not look alike.
+ * A survey with no expected audience — none declared, or a declared zero — has no
+ * rate at all, and gets an em dash with an explanation rather than a bar at zero.
+ * "Nobody responded" and "there is nothing to measure against" must not look alike.
+ *
+ * Both cells read one `surveyResponseReading`, so the denominator is withheld by the
+ * same predicate that withholds the rate. Deciding separately is how the Responses
+ * cell came to print "5 of 0" beside that em dash.
  */
 export default function SurveyList({ surveys }: SurveyListProps) {
   const { t, locale } = useTranslation()
@@ -116,14 +120,26 @@ export default function SurveyList({ surveys }: SurveyListProps) {
             // the resolver returns null rather than an empty string or a key path,
             // so the caller decides what to show (#195).
             const title = survey.title ?? t('surveys.untitled')
-            const percent = surveyParticipationPercent(
-              survey.responseCount,
-              survey.targetAudienceCount,
-            )
+            // One reading for both cells: `target` is non-null exactly when
+            // `percent` is, so "5 of 0" beside an em dash cannot be rendered.
+            const reading = surveyResponseReading(survey.responseCount, survey.targetAudienceCount)
             return (
               <tr key={survey.id}>
                 <td>
-                  <span className="font-semibold text-fg-primary">{title}</span>
+                  {/* A survey title is free text with no length limit, and one long
+                      unbroken word otherwise sets this column's minimum width,
+                      widens the table past the panel and pushes the trailing action
+                      into horizontal scroll.
+
+                      `wrap-anywhere` (overflow-wrap: anywhere) rather than
+                      `break-words` (overflow-wrap: break-word), which is what the
+                      template card uses: only `anywhere` reduces the element's
+                      min-content contribution, and min-content is exactly what an
+                      auto-layout table column is sized from. Measured, not assumed —
+                      `break-words` here left the 1024px table clipped at the panel
+                      edge with the Open column off-screen. The card gets away with it
+                      because it is a flex child with `min-w-0`. */}
+                  <span className="block wrap-anywhere font-semibold text-fg-primary">{title}</span>
                   <span className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-fg-secondary">
                     <span>{typeLabel(t, survey.type)}</span>
                     <span aria-hidden="true">·</span>
@@ -133,19 +149,23 @@ export default function SurveyList({ surveys }: SurveyListProps) {
                 <td>
                   <StatusChip t={t} status={survey.status} />
                 </td>
-                <td className="font-mono tabular-nums">
-                  {/* `targetAudienceCount` is genuinely nullable -- a survey may not
-                      declare one -- so "12 / 40" degrades to "12" rather than to
-                      "12 / null" or a fabricated denominator. */}
-                  {survey.targetAudienceCount === null
-                    ? survey.responseCount
+                {/* `whitespace-nowrap` for the same reason the Closes cell has it:
+                    a reading split across two lines ("175 de" / "208") is exactly
+                    what the tabular-figures rule exists to prevent. */}
+                <td className="whitespace-nowrap font-mono tabular-nums">
+                  {/* There is a denominator only when there is a rate — a survey may
+                      declare no expected audience at all, or declare zero. Either way
+                      "12 of 40" degrades to "12" rather than to a denominator the
+                      Participation cell beside it has already refused to divide by. */}
+                  {reading.target === null
+                    ? reading.count
                     : t('surveys.responseProgress', {
-                        count: survey.responseCount,
-                        target: survey.targetAudienceCount,
+                        count: reading.count,
+                        target: reading.target,
                       })}
                 </td>
                 <td>
-                  {percent === null ? (
+                  {reading.percent === null ? (
                     <span
                       className="font-mono tabular-nums text-fg-secondary"
                       title={t('surveys.noParticipationTarget')}
@@ -160,11 +180,11 @@ export default function SurveyList({ surveys }: SurveyListProps) {
                       >
                         <span
                           className="block h-full rounded-full bg-accent-blue"
-                          style={{ width: `${Math.min(percent, 100)}%` }}
+                          style={{ width: `${Math.min(reading.percent, 100)}%` }}
                         />
                       </span>
                       <span className="font-mono tabular-nums text-fg-secondary">
-                        {formatMetric(percent, { kind: 'percentage' }, locale)}
+                        {formatMetric(reading.percent, { kind: 'percentage' }, locale)}
                       </span>
                     </span>
                   )}

@@ -187,6 +187,57 @@ describe('SurveysListPage', () => {
     expect(screen.queryByText(/4 of/)).toBeNull()
   })
 
+  it('prints no denominator when the expected audience is zero, matching the dash beside it', async () => {
+    // The two cells used to disagree: Participation routed a non-positive
+    // denominator to an em dash meaning "there is nothing to measure against",
+    // while Responses tested only for null and printed "5 of 0" in the same row.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ok(row({ responseCount: 5, targetAudienceCount: 0 }))),
+    )
+    renderPage()
+    await screen.findByText('Q3 climate survey')
+
+    expect(screen.queryByText('5 of 0')).toBeNull()
+    expect(screen.getByText('5')).toBeTruthy()
+    expect(
+      screen.getByTitle(
+        'No expected number of respondents was set for this survey, so it has no participation rate.',
+      ),
+    ).toBeTruthy()
+  })
+
+  it('keeps a reading on one line, so it cannot break mid-value', async () => {
+    // happy-dom does no layout, so this asserts the rule rather than the pixels:
+    // at 1024px in Spanish the Responses cell wrapped "175 de 208" onto two lines,
+    // which is what the tabular-figures rule exists to prevent. The screenshot is
+    // the evidence that it stopped; this is the evidence it stays stopped.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ok(row({ responseCount: 175, targetAudienceCount: 208 }))),
+    )
+    renderPage()
+
+    const cell = (await screen.findByText('175 of 208')).closest('td')
+    expect(cell?.className).toContain('whitespace-nowrap')
+    expect(cell?.className).toContain('tabular-nums')
+  })
+
+  it('breaks a long title rather than widening the table past the panel', async () => {
+    // A title is free text with no length limit. One long unbroken word sets the
+    // column's minimum width, which pushed the trailing Open action into
+    // horizontal scroll and clipped it at the panel edge.
+    //
+    // `wrap-anywhere`, not `break-words`: only `overflow-wrap: anywhere` lowers the
+    // min-content width an auto-layout table column is sized from. Rendering it at
+    // 1024px is what established that; happy-dom cannot tell the two apart.
+    const long = 'Leadership360DegreeFeedbackAndCalibrationCycleForAllPeopleManagers'
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(row({ title: long }))))
+    renderPage()
+
+    expect((await screen.findByText(long)).className).toContain('wrap-anywhere')
+  })
+
   it('renders participation as a bar plus a mono figure, with the bar hidden from the reading', async () => {
     // The bar duplicates the figure beside it, so announcing both would read the same
     // quantity twice. The figure is the reading, and it is set in the mono face.

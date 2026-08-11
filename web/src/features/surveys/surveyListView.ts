@@ -96,3 +96,48 @@ export function surveyParticipationPercent(
   const rate = participationRate(responseCount, targetAudienceCount)
   return rate === null ? null : Math.round(rate)
 }
+
+/** What the Responses cell and the Participation cell beside it both print. */
+export interface SurveyResponseReading {
+  /** The numerator, always printable. */
+  count: number
+  /** The denominator to print, or `null` when there is nothing to measure against. */
+  target: number | null
+  /** Participation in whole percentage points. `null` exactly when `target` is. */
+  percent: number | null
+}
+
+/**
+ * The whole row reading, derived once so the two cells cannot contradict each other.
+ *
+ * ## Why this exists rather than each cell deciding for itself
+ *
+ * They already did, and they disagreed. The Participation cell asked
+ * `surveyParticipationPercent`, which routes a non-positive denominator to `null` via
+ * `participationRate` — so a survey with `targetAudienceCount: 0` printed an em dash
+ * meaning "there is nothing to measure against". The Responses cell tested
+ * `targetAudienceCount === null` instead, so the same row printed "5 of 0" beside that
+ * dash: one cell said there was no audience and the cell next to it named one.
+ *
+ * Zero is not a hypothetical value here. `SurveyEndpoints` stores whatever was sent —
+ * `TargetAudienceCount = request.TargetAudienceCount` on create and
+ * `if (request.TargetAudienceCount.HasValue) survey.TargetAudienceCount = ...` on
+ * update, with no positivity check on either path — and the server guards the same
+ * case itself where it divides: `SurveyResultsEndpoints` computes a completion rate
+ * only `if (survey.TargetAudienceCount is > 0)`.
+ *
+ * So the denominator is withheld by the *same* predicate that withholds the rate:
+ * `target` is non-null only when `percent` is, which is an invariant of the return
+ * value rather than a rule two components have to remember.
+ */
+export function surveyResponseReading(
+  responseCount: number,
+  targetAudienceCount: number | null,
+): SurveyResponseReading {
+  const percent = surveyParticipationPercent(responseCount, targetAudienceCount)
+  return {
+    count: responseCount,
+    target: percent === null ? null : targetAudienceCount,
+    percent,
+  }
+}

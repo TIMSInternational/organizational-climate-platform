@@ -1376,7 +1376,6 @@
     "totalResponses": "Total de Respuestas",
     "searchSurveys": "Buscar encuestas por título, descripción o etiquetas...",
     "createNewSurvey": "Crear Nueva Encuesta",
-    "allStatus": "Todos los Estados",
     "allTypes": "Todos los Tipos",
     "allTime": "Todo el Tiempo",
     "lastWeek": "Última Semana",
@@ -1599,7 +1598,6 @@
     "open": "Abrir",
     "openNamed": "Abrir {title}",
     "noParticipationTarget": "No se fijó un número previsto de participantes para esta encuesta, así que no tiene tasa de participación.",
-    "noEndDate": "Sin fecha de cierre",
     "use": "Usar",
     "useNamed": "Usar {name}",
     "previewNamed": "Vista previa de {name}"

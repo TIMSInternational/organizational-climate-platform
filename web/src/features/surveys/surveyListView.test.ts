@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   filterSurveysByStatus,
   surveyParticipationPercent,
+  surveyResponseReading,
   surveyStatusFacets,
 } from './surveyListView'
 import { SURVEY_STATUSES } from './surveyVocabulary'
@@ -76,5 +77,34 @@ describe('surveyParticipationPercent', () => {
 
   it('reports over 100 rather than capping, when more people answered than expected', () => {
     expect(surveyParticipationPercent(56, 50)).toBe(112)
+  })
+})
+
+describe('surveyResponseReading', () => {
+  it('names a denominator only when it can also state a rate', () => {
+    expect(surveyResponseReading(175, 208)).toEqual({ count: 175, target: 208, percent: 84 })
+  })
+
+  it('withholds the denominator when the expected audience is zero', () => {
+    // The defect this exists to prevent: the Participation cell printed an em dash
+    // meaning "there is nothing to measure against" while the Responses cell beside
+    // it printed "5 of 0" and named one.
+    expect(surveyResponseReading(5, 0)).toEqual({ count: 5, target: null, percent: null })
+  })
+
+  it('withholds the denominator when the survey declares no expected audience', () => {
+    expect(surveyResponseReading(12, null)).toEqual({ count: 12, target: null, percent: null })
+  })
+
+  it('keeps target and percent null together, whatever the denominator is', () => {
+    // Stated as the invariant rather than case by case, so a future denominator the
+    // rate refuses (a negative count, say) cannot be printed by the other cell.
+    for (const target of [null, -5, 0, 1, 40, 208]) {
+      const reading = surveyResponseReading(5, target)
+      expect(
+        reading.target === null,
+        `target ${String(target)} is printed as a denominator but has no rate`,
+      ).toBe(reading.percent === null)
+    }
   })
 })

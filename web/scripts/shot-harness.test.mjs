@@ -3,10 +3,13 @@ import {
   API_ORIGIN,
   STORAGE_KEYS,
   buildDevToken,
+  choosePort,
   classifyRequest,
   compileFixtures,
   matchFixture,
+  waitForServer,
 } from './shot-harness.mjs'
+import { createServer } from 'node:net'
 import { decodeJwtPayload } from '../src/auth/jwt.ts'
 import { ADMIN_THEME_STORAGE_KEY } from '../src/theme/adminTheme.ts'
 import { LOCALE_STORAGE_KEY } from '../src/i18n/locale.ts'
@@ -170,5 +173,127 @@ describe('shot harness: request classification', () => {
     expect(classifyRequest('data:text/plain,x', app)).toBe('app')
     expect(classifyRequest(`blob:${app}/abc`, app)).toBe('app')
     expect(classifyRequest('blob:http://elsewhere.example/abc', app)).toBe('app')
+  })
+})
+
+/**
+ * The defect these two describes exist for.
+ *
+ * `--strictPort` was believed to make a busy port an error. It makes it an error *for
+ * vite*, which exits — and the poll that followed accepted any listener on that port,
+ * so the browser attached to whatever was already there. Screenshotting two worktrees
+ * of this repository at once on the shared default port produced a PNG of the other
+ * one's code, with nothing in the output saying so: the harness printed "dev server
+ * started" as usual.
+ *
+ * That matters more than a wrong image. "Render it and look at it" is the primary
+ * evidence standard on this project, so a harness that can photograph the wrong
+ * application can launder a stale or foreign screen into a verification report.
+ */
+describe('shot harness: the port is proved free before vite is started', () => {
+  /** Binds a port the way another lane's dev server would. */
+  function occupy() {
+    return new Promise((resolve) => {
+      const server = createServer()
+      server.listen(0, '127.0.0.1', () =>
+        resolve({
+          port: server.address().port,
+          release: () => new Promise((done) => server.close(done)),
+        }),
+      )
+    })
+  }
+
+  it('takes a free port from the OS by default', async () => {
+    const port = await choosePort('auto')
+    expect(Number.isInteger(port)).toBe(true)
+    expect(port).toBeGreaterThan(0)
+  })
+
+  it('refuses a port something else is already listening on', async () => {
+    const taken = await occupy()
+    try {
+      await expect(choosePort(String(taken.port))).rejects.toThrow(/already in use/)
+    } finally {
+      await taken.release()
+    }
+  })
+
+  it('accepts a named port that is genuinely free', async () => {
+    // The counterpart to the test above: a guard that rejects everything is not a
+    // guard. The port is free precisely because it has just been released.
+    const taken = await occupy()
+    const { port } = taken
+    await taken.release()
+    expect(await choosePort(String(port))).toBe(port)
+  })
+
+  it('rejects a port that is not a port', async () => {
+    await expect(choosePort('5199x')).rejects.toThrow(/must be "auto" or a port number/)
+    await expect(choosePort('70000')).rejects.toThrow(/must be "auto" or a port number/)
+  })
+})
+
+describe('shot harness: waiting for the server watches the server', () => {
+  const answers = async () => ({ status: 200 })
+  const noSleep = async () => {}
+
+  it('resolves when the server this harness started answers', async () => {
+    await expect(
+      waitForServer('http://127.0.0.1:1/', { fetchImpl: answers, sleep: noSleep }),
+    ).resolves.toBeUndefined()
+  })
+
+  it('refuses to accept an answer once the spawned server has died', async () => {
+    // The exact laundering path: vite exits on EADDRINUSE, the foreign process on
+    // that port answers 200, and the old poll returned happily.
+    await expect(
+      waitForServer('http://127.0.0.1:1/', {
+        fetchImpl: answers,
+        deadReason: () => 'exited with code 1',
+        sleep: noSleep,
+      }),
+    ).rejects.toThrow(/not this working tree/)
+  })
+
+  it('says that something else answered, because that is the confusing case', async () => {
+    await expect(
+      waitForServer('http://127.0.0.1:1/', {
+        fetchImpl: answers,
+        deadReason: () => 'exited with code 1',
+        sleep: noSleep,
+      }),
+    ).rejects.toThrow(/something else answered on that port/)
+  })
+
+  it('gives up rather than hanging when nothing ever answers', async () => {
+    await expect(
+      waitForServer('http://127.0.0.1:1/', {
+        fetchImpl: async () => {
+          throw new Error('ECONNREFUSED')
+        },
+        attempts: 3,
+        sleep: noSleep,
+      }),
+    ).rejects.toThrow(/never answered/)
+  })
+
+  it('keeps polling while the server is still starting up', async () => {
+    // Guard the guard: if the liveness check were wired to reject on a *live*
+    // child, every test above would still pass and the harness would never start.
+    let calls = 0
+    const slowStart = async () => {
+      calls += 1
+      if (calls < 3) throw new Error('ECONNREFUSED')
+      return { status: 200 }
+    }
+    await expect(
+      waitForServer('http://127.0.0.1:1/', {
+        fetchImpl: slowStart,
+        deadReason: () => null,
+        sleep: noSleep,
+      }),
+    ).resolves.toBeUndefined()
+    expect(calls).toBe(3)
   })
 })

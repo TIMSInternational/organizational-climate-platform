@@ -1376,7 +1376,6 @@
     "totalResponses": "Total Responses",
     "searchSurveys": "Search surveys by title, description, or tags...",
     "createNewSurvey": "Create New Survey",
-    "allStatus": "All Status",
     "allTypes": "All Types",
     "allTime": "All Time",
     "lastWeek": "Last Week",
@@ -1599,7 +1598,6 @@
     "open": "Open",
     "openNamed": "Open {title}",
     "noParticipationTarget": "No expected number of respondents was set for this survey, so it has no participation rate.",
-    "noEndDate": "No close date",
     "use": "Use",
     "useNamed": "Use {name}",
     "previewNamed": "Preview {name}"
