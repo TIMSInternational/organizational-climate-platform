@@ -15,14 +15,12 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using System.Globalization;
 using System.Text;
-using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -358,32 +356,24 @@ builder.Services.AddScoped<INotificationSender>(sp => sp.GetRequiredService<Emai
 
 builder.Services.AddOpenApi();
 
-// POST /microclimates/{id}/responses is the app's only unauthenticated write surface (approved
-// 2026-07-31 for microclimates configured with AnonymousResponses). With no per-respondent
-// identity and no persisted individual response rows to reconcile against later, a single
-// visitor/bot holding the microclimate's GUID could otherwise inflate ResponseCount/
-// EngagementLevel/the word cloud without bound. Partition per client IP -- generous enough for
-// legitimate shared-IP participation (office NAT, etc.) but bounded against a scripted flood.
-builder.Services.AddRateLimiter(options =>
-{
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddPolicy(MicroclimateEndpoints.ResponseSubmissionRateLimiterPolicy, httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 30,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-            }));
+// Rate limiting (#146). Every policy, limit and partition key lives in RateLimitPolicies;
+// this line is only the registration. Two of the policies predate #146 (the microclimate and
+// survey public-submission surfaces) and are unchanged in their limits -- what #146 added is
+// the authentication and public-token classes, a coarse global ceiling with an explicit
+// carve-out for the App Runner probe paths, and a shared notion of "which caller is this"
+// that is not the socket peer. See RateLimitPolicies and ClientIpResolver.
+builder.Services.AddClimateProjectRateLimiting();
 
-    // POST /surveys/{id}/responses and GET /surveys/{id}/respond (#118). Its own policy
-    // rather than the microclimate one -- the partition and limits live with the
-    // endpoints, in SurveyResponseEndpoints.
-    options.AddPolicy(
-        SurveyResponseEndpoints.ResponseSubmissionRateLimiterPolicy,
-        SurveyResponseEndpoints.PartitionResponseSubmission);
-});
+// Security response headers and the request-body ceiling (#146). See SecurityHardening.
+builder.Services.AddClimateProjectSecurityOptions();
+
+// Kestrel's own body ceiling, raised from its 30 MiB default to the upload ceiling so that
+// Kestrel does not reject a legitimate bulk import before the middleware has decided which
+// ceiling applies. The middleware is what enforces the strict default per request.
+builder.WebHost.ConfigureKestrel((context, kestrelOptions) =>
+    kestrelOptions.Limits.MaxRequestBodySize =
+        context.Configuration.GetValue<long?>("Security:MaxUploadBodyBytes")
+        ?? new SecurityOptions().MaxUploadBodyBytes);
 
 var app = builder.Build();
 
@@ -412,7 +402,17 @@ app.UseExceptionHandler(errorApp =>
     });
 });
 
+// Before UseCors so the headers are attached to every response the pipeline can produce,
+// including the exception handler's 500 above.
+app.UseClimateProjectSecurityHeaders();
+
 app.UseCors("Frontend");
+
+// After UseCors so a 413 still carries the CORS headers the browser needs in order to read
+// it, and before authentication so an oversized body is refused without a token or database
+// round trip.
+app.UseClimateProjectRequestSizeLimit();
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();

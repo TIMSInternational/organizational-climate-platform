@@ -140,6 +140,34 @@ Resources:
               # Step 3 is what stops the port regressing silently later.
               - Name: Database__RequireSessionPooler
                 Value: "false"
+              # RATE LIMITING BEHIND THE APP RUNNER PROXY (#146).
+              #
+              # App Runner terminates the client connection at an AWS-managed proxy and opens
+              # its own connection to this container, so HttpContext.Connection.RemoteIpAddress
+              # is that proxy, not the caller. Every per-address rate limit in the app would
+              # therefore share ONE bucket across the whole internet -- the first thirty
+              # microclimate responses in a minute would 429 everyone else, which is a worse
+              # outage than having no limit.
+              #
+              # "1" means "one trusted proxy appends to X-Forwarded-For, so the caller is the
+              # LAST entry of that header" (ClientIpResolver.TrustedProxyHopCount; the
+              # semantics match ForwardedHeadersOptions.ForwardLimit). It is safe here and
+              # only here because the container is not reachable except through that proxy: a
+              # caller cannot pre-seed the entry App Runner appends. Do NOT copy this value to
+              # a deployment where the app is addressable directly.
+              #
+              # The value follows from App Runner's documented X-Forwarded-For behaviour and
+              # has not been observed against a running service, because nothing in this
+              # repository can. "0" restores the pre-#146 behaviour exactly and is the correct
+              # thing to fall back to if it turns out to be wrong; do not guess it upward.
+              - Name: RateLimiting__TrustedProxyHopCount
+                Value: "1"
+              # HSTS is emitted explicitly rather than by app.UseHsts(), because behind the
+              # proxy above Request.IsHttps is false and UseHsts() would emit nothing at all
+              # here. See SecurityOptions.EnableHsts. The public App Runner endpoint is
+              # HTTPS-only, so the header is accurate.
+              - Name: Security__EnableHsts
+                Value: "true"
             RuntimeEnvironmentSecrets:
               - Name: TrackingJwtSecret
                 Value: !Ref TrackingJwtSecretArn

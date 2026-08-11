@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Threading.RateLimiting;
+using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Microclimates;
@@ -12,11 +14,44 @@ namespace ClimateProject.Api.Endpoints;
 
 public static class MicroclimateEndpoints
 {
-    // Shared with Program.cs's rate limiter registration -- this is the only
-    // unauthenticated write surface in the domain (POST /responses), so it gets its
-    // own named policy rather than a global limiter that would also throttle
-    // authenticated admin traffic.
+    // Shared with RateLimitPolicies -- POST /responses is this domain's unauthenticated
+    // write surface, so it gets its own named policy rather than relying on the coarse
+    // global ceiling that also covers authenticated admin traffic.
     internal const string ResponseSubmissionRateLimiterPolicy = "microclimate-response-submission";
+
+    /// <summary>Requests per window per caller on the public submission path.</summary>
+    private const int RateLimitPermitsPerWindow = 30;
+
+    private static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Partitions the public submission path per caller. Generous enough for legitimate
+    /// shared-address participation (an office behind one NAT answering together) and
+    /// bounded against a scripted flood: with no per-respondent identity and no persisted
+    /// individual response rows, a single visitor holding the microclimate's GUID could
+    /// otherwise inflate ResponseCount/EngagementLevel/the word cloud without bound, and
+    /// nothing recorded afterwards could unpick it.
+    ///
+    /// <para>
+    /// The caller comes from <see cref="Infrastructure.RateLimitPolicies.ClientIpFor"/>
+    /// rather than <c>Connection.RemoteIpAddress</c> directly -- see
+    /// <see cref="Infrastructure.ClientIpResolver"/> for why the socket peer is the wrong
+    /// key behind App Runner.
+    /// </para>
+    /// </summary>
+    internal static RateLimitPartition<string> PartitionResponseSubmission(HttpContext httpContext)
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ResponseSubmissionRateLimiterPolicy + ":" + RateLimitPolicies.ClientIpFor(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = RateLimitPermitsPerWindow,
+                Window = RateLimitWindow,
+                QueueLimit = 0,
+            });
+    }
 
     public static void MapMicroclimateEndpoints(this WebApplication app)
     {
@@ -35,10 +70,15 @@ public static class MicroclimateEndpoints
         group.MapPut("/{id:guid}", UpdateAsync);
         group.MapGet("/{id:guid}/live-results", GetLiveResultsAsync);
 
-        // Only unauthenticated write surface in the app -- rate-limited per client IP so a
-        // single visitor/bot holding the microclimate's GUID can't unboundedly inflate
-        // ResponseCount/EngagementLevel/the word cloud (individual responses aren't persisted,
-        // so there is nothing to reconcile against after the fact).
+        // Unauthenticated write surface -- rate-limited per caller so a single visitor/bot
+        // holding the microclimate's GUID can't unboundedly inflate ResponseCount/
+        // EngagementLevel/the word cloud (individual responses aren't persisted, so there is
+        // nothing to reconcile against after the fact). See PartitionResponseSubmission.
+        //
+        // GET /{id:guid} above is anonymous too but is deliberately NOT on this policy: it is
+        // the same route an authenticated admin reads a microclimate through, and an
+        // address-keyed policy would bucket a whole office of admins together. It is covered
+        // by the global ceiling in RateLimitPolicies instead.
         app.MapPost("/microclimates/{id:guid}/responses", SubmitResponseAsync)
             .RequireRateLimiting(ResponseSubmissionRateLimiterPolicy);
     }
