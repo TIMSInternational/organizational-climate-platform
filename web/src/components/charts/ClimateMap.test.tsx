@@ -120,8 +120,35 @@ describe('ClimateMap', () => {
     )
     const cells = [...container.querySelectorAll('td div')] as HTMLElement[]
     // 58 is a full extreme below target; 68 is inside the dead band.
-    expect(cells[0].style.boxShadow).toContain('--admin-chart-div-neg-2')
-    expect(cells[1].style.boxShadow).toBe('')
+    expect(cells[0].style.outline).toContain('--admin-chart-div-neg-2')
+    expect(cells[1].style.outline).toBe('')
+  })
+
+  /**
+   * The ring must be a ring, on any surface.
+   *
+   * It used to be a two-step box-shadow whose inner step was painted
+   * `--admin-bg-panel`. The company dashboard stands this map on
+   * `--admin-bg-icon-box`, so that spacer rendered as a white halo in light and a
+   * near-black one in dark — the cell read as a sticker cut out of the tile rather
+   * than as a marked cell, on the one cell the ring exists to draw the eye to.
+   * An offset outline leaves its gap unpainted, so whatever is behind shows through.
+   *
+   * happy-dom does no layout and cannot see the halo; what it CAN see is that no
+   * surface token is being painted into the gap, which is the whole of the defect.
+   */
+  it('draws the ring without painting a surface colour behind it', () => {
+    const { container } = render(
+      <ClimateMap
+        dimensions={DIMENSIONS}
+        rows={[{ id: 'sup', label: 'Support', responses: 20, scores: [58, 68] }]}
+        target={70}
+      />,
+    )
+    const ringed = container.querySelector('td div') as HTMLElement
+    expect(ringed.style.outlineOffset).not.toBe('')
+    expect(ringed.style.boxShadow).toBe('')
+    expect(ringed.getAttribute('style') ?? '').not.toContain('--admin-bg-')
   })
 
   it('is a real table, so the axes are announced as headers', () => {

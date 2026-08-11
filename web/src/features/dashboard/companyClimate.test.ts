@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   belowTarget,
+  mapExtreme,
   measurableDepartments,
   organisationResponseRate,
+  publishableDepartments,
   readDepartments,
 } from './companyClimate'
 import type { DashboardDepartmentSummary } from './api/dashboard'
@@ -125,5 +127,100 @@ describe('belowTarget', () => {
     ])
 
     expect(belowTarget(tied, 120).map((reading) => reading.name)).toEqual(['Alpha', 'Zeta'])
+  })
+})
+
+describe('publishableDepartments', () => {
+  /**
+   * The evidence test the "no department is behind" all-clear stands on. A department
+   * with nobody in it has no reading, and one under the anonymity floor has one that may
+   * not be published; neither is evidence about the organisation.
+   */
+  it('keeps only the departments whose reading may actually be shown', () => {
+    const readings = readDepartments([
+      department({ id: 'open', memberCount: 10, completedResponseCount: 9 }),
+      department({ id: 'withheld', memberCount: 10, completedResponseCount: 2 }),
+      department({ id: 'empty', memberCount: 0, completedResponseCount: 0 }),
+    ])
+
+    expect(publishableDepartments(readings).map((reading) => reading.id)).toEqual(['open'])
+  })
+
+  it('is empty when every department is under the floor', () => {
+    const readings = readDepartments([
+      department({ id: 'a', memberCount: 8, completedResponseCount: 4 }),
+      department({ id: 'b', memberCount: 6, completedResponseCount: 1 }),
+    ])
+
+    expect(publishableDepartments(readings)).toEqual([])
+  })
+})
+
+describe('mapExtreme', () => {
+  /**
+   * The defect it exists for. `ClimateMap`'s 10-point default is calibrated for a bounded
+   * 0-100 score; measured against a real tenant on an unbounded rate, everything beyond
+   * ten points from target saturated and the map stopped ranking. Here the target is 125
+   * and the worst shortfall is 75, so the scale has to reach 75 rather than 10.
+   */
+  it('reaches the worst shortfall rather than a fixed ten points', () => {
+    const readings = readDepartments([
+      department({ id: 'marketing', memberCount: 12, completedResponseCount: 6 }),
+      department({ id: 'support', memberCount: 18, completedResponseCount: 11 }),
+      department({ id: 'it', memberCount: 7, completedResponseCount: 30 }),
+    ])
+    expect(readings.map((reading) => reading.rate)).toEqual([50, 61, 429])
+
+    expect(mapExtreme(readings, 125)).toBe(75)
+  })
+
+  /**
+   * A department far ABOVE the target does not stretch the scale. If it did, one
+   * seven-person team that answered four surveys would flatten every other cell — the
+   * far end is the worst shortfall, which is the finding the page is about.
+   */
+  it('is not stretched by a department far above the target', () => {
+    const readings = readDepartments([
+      department({ id: 'behind', memberCount: 20, completedResponseCount: 8 }),
+      department({ id: 'ahead', memberCount: 10, completedResponseCount: 90 }),
+    ])
+    expect(readings.map((reading) => reading.rate)).toEqual([40, 900])
+
+    // 60 behind against 800 ahead: the scale is the shortfall, not the overshoot.
+    expect(mapExtreme(readings, 100)).toBe(60)
+  })
+
+  /**
+   * The floor. Departments a point or two apart are noise, and stretching noise to full
+   * saturation would paint a crisis; half the organisation's own rate is the smallest
+   * shortfall worth the deepest colour, and it scales with the tenant.
+   */
+  it('does not amplify a tight cluster', () => {
+    const readings = readDepartments([
+      department({ id: 'a', memberCount: 10, completedResponseCount: 10 }),
+      department({ id: 'b', memberCount: 10, completedResponseCount: 9 }),
+    ])
+
+    expect(mapExtreme(readings, 100)).toBe(50)
+  })
+
+  /**
+   * A withheld department must not set the scale. Its own cell is hatched, so allowing it
+   * to would let a row nobody can read visibly change every published colour on the grid.
+   */
+  it('is not set by a suppressed department', () => {
+    const readings = readDepartments([
+      department({ id: 'withheld', memberCount: 40, completedResponseCount: 2 }),
+      department({ id: 'shown', memberCount: 10, completedResponseCount: 9 }),
+    ])
+    expect(readings[0].rate).toBe(5)
+
+    // 5 is 115 behind; ignored, so the floor decides.
+    expect(mapExtreme(readings, 120)).toBe(60)
+  })
+
+  /** Never zero: `ClimateMap` divides by `2 * extremeAt`. */
+  it('is never zero, even for a tenant on a rate of nothing', () => {
+    expect(mapExtreme([], 0)).toBe(1)
   })
 })

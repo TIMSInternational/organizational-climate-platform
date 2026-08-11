@@ -108,4 +108,26 @@ describe('KpiTile', () => {
     render(<KpiTile label="Participation" value={84} sub={<span>175 of 208</span>} />)
     expect(screen.getByText('175 of 208')).toBeTruthy()
   })
+
+  describe('a reading that does not exist', () => {
+    /**
+     * "We measured, and it is none" and "we could not measure" are different
+     * statements. A tile that prints 0 for the second asserts a fact nobody
+     * established — which is exactly how the company dashboard came to show
+     * "BELOW TARGET 0" for a tenant where not one department could be read.
+     */
+    it('draws an em dash rather than a zero', () => {
+      const { container } = render(<KpiTile label="Below target" value={null} />)
+      expect(container.textContent).toContain('\u2014')
+      expect(container.textContent).not.toContain('0')
+    })
+
+    it('shows no change indicator, because there is no number to have moved', () => {
+      const { container } = render(
+        <KpiTile label="Below target" value={null} previousValue={4} />,
+      )
+      expect(container.textContent).not.toContain('\u25b2')
+      expect(container.textContent).not.toContain('\u25bc')
+    })
+  })
 })

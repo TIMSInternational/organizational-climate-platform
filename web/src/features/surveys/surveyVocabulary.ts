@@ -127,6 +127,26 @@ export function statusLabel(t: TranslateFn, status: string): string {
   return label(t, STATUS_KEYS, status)
 }
 
+/**
+ * Whether a survey in this status is still collecting — the client mirror of
+ * `SurveyStatuses.AcceptsResponses`, which is `status == "active"` and nothing else.
+ *
+ * **The response window is the status, never the dates.** The server says so where it
+ * enforces it (`SurveyResponseEndpoints`, on the submit path): "deliberately
+ * status-only … re-deriving it from StartDate/EndDate here would let this endpoint
+ * refuse a survey that `SurveyQueries.AssignedTo` still lists in /surveys/my". Nothing
+ * closes a survey automatically either: the only two ways into `closed` are
+ * `PUT /surveys/{id}/status` and the `close` bulk action, both of them an
+ * administrator's deliberate act, and none of the jobs in
+ * `ClimateProject.Infrastructure/Scheduling` writes a survey status at all. So a
+ * survey routinely sits `active` past its `EndDate` and is still accepting answers,
+ * and a client that read the dates instead would tell an administrator a survey is
+ * closed while the API is still taking responses for it.
+ */
+export function acceptsResponses(status: string): boolean {
+  return status === 'active'
+}
+
 export function typeLabel(t: TranslateFn, type: string): string {
   return label(t, TYPE_KEYS, type)
 }

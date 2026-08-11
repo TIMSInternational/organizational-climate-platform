@@ -688,12 +688,19 @@
     "timelineOpens": "abre el {date}",
     "timelineCloses": "cierra el {date}",
     "timelineClosed": "cerró el {date}",
+    "timelineStillOpen": "sigue abierta, pasado el {date}",
     "timelineResponses": "{count} respuestas completadas",
     "timelineOverdue": "{count} de ellos están vencidos",
     "timelineNoneOverdue": "Ninguno está vencido",
     "timelineOpenCount": "{count} abiertos",
     "draftsStep": "Borradores sin lanzar",
-    "timelineDraftCount": "{count} en espera"
+    "timelineDraftCount": "{count} en espera",
+    "responsesFromPeople": "{completed} respuestas completadas de {people} personas",
+    "noReadingYet": "Aún sin lectura",
+    "attentionUnmeasured": "Aún no se puede comparar ningún departamento",
+    "attentionUnmeasuredEvidence": "Ningún departamento tiene una lectura publicable, así que aquí nada está por encima ni por debajo de la organización: solo sin medir.",
+    "noDepartmentReadings": "Aún no se puede medir ningún departamento",
+    "noDepartmentReadingsBody": "La tasa de respuesta se mide por persona, así que un departamento sin personas no tiene lectura que representar."
   },
   "departments": {
     "structureOverview": "Visión General de la Estructura",

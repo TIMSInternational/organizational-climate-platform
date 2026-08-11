@@ -1,6 +1,9 @@
 import { cn } from '../../lib/cn'
 import { changeDirection, formatMetric, type MetricFormat } from './formatMetric'
 
+/** Stands in for a reading that does not exist. Punctuation, so it needs no locale. */
+const EM_DASH = '—'
+
 /**
  * One reading in the KPI row that sits under every page header.
  *
@@ -38,7 +41,16 @@ import { changeDirection, formatMetric, type MetricFormat } from './formatMetric
 export interface KpiTileProps {
   /** Already-translated. This component never translates its own copy. */
   label: string
-  value: number
+  /**
+   * The reading.
+   *
+   * `null` when there is nothing to read, and it renders an em dash rather than a
+   * zero. The two are different statements — "we measured, and it is none" against
+   * "we could not measure" — and a tile that prints `0` for the second is asserting
+   * a fact nobody established. `DashboardSurveyTable` reaches for the same em dash
+   * for the same reason.
+   */
+  value: number | null
   /** How the number reads. Defaults to a plain localised number. */
   format?: MetricFormat
   /**
@@ -79,13 +91,15 @@ export default function KpiTile({
   locale,
   className,
 }: KpiTileProps) {
+  // A tile with no reading has no change either: there is no number to have moved.
   const direction =
-    previousValue === undefined ? 'flat' : changeDirection(value, previousValue)
+    previousValue === undefined || value === null ? 'flat' : changeDirection(value, previousValue)
   const hasChange = previousValue !== undefined && direction !== 'flat'
   // `higherIsBetter` is what decides the tone, not the direction: a fall in
   // attrition is good news and must not render red.
   const isGoodNews = direction === 'up' ? higherIsBetter : !higherIsBetter
-  const delta = previousValue === undefined ? 0 : Math.abs(value - previousValue)
+  const delta =
+    previousValue === undefined || value === null ? 0 : Math.abs(value - previousValue)
 
   return (
     <div
@@ -102,7 +116,7 @@ export default function KpiTile({
         {label}
       </div>
       <div className="mt-0.5 font-mono text-3xl font-semibold tracking-tight tabular-nums">
-        {formatMetric(value, format, locale)}
+        {value === null ? EM_DASH : formatMetric(value, format, locale)}
       </div>
       <div className="mt-px flex items-center gap-1 text-xs text-fg-tertiary">
         {hasChange && (

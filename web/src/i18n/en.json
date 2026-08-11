@@ -688,12 +688,19 @@
     "timelineOpens": "opens {date}",
     "timelineCloses": "closes {date}",
     "timelineClosed": "closed {date}",
+    "timelineStillOpen": "still open, past {date}",
     "timelineResponses": "{count} completed responses",
     "timelineOverdue": "{count} of them are overdue",
     "timelineNoneOverdue": "None of them are overdue",
     "timelineOpenCount": "{count} open",
     "draftsStep": "Drafts not yet launched",
-    "timelineDraftCount": "{count} waiting"
+    "timelineDraftCount": "{count} waiting",
+    "responsesFromPeople": "{completed} completed responses from {people} people",
+    "noReadingYet": "No reading yet",
+    "attentionUnmeasured": "No department can be compared yet",
+    "attentionUnmeasuredEvidence": "No department has a reading that may be published, so nothing here is ahead of or behind the organisation — only unmeasured.",
+    "noDepartmentReadings": "No department can be measured yet",
+    "noDepartmentReadingsBody": "Response rate is measured per person, so a department with nobody in it has no reading to plot."
   },
   "departments": {
     "structureOverview": "Structure Overview",

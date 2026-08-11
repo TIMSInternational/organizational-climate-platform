@@ -138,3 +138,72 @@ export function belowTarget(
     .filter((reading) => reading.rate !== null && reading.rate < target - deadBand)
     .sort((left, right) => (left.rate ?? 0) - (right.rate ?? 0) || left.name.localeCompare(right.name))
 }
+
+/**
+ * The departments whose reading may actually be published — measurable *and* above
+ * the anonymity floor.
+ *
+ * The count is what tells "every department is at or above target" apart from "no
+ * department could be measured at all". {@link belowTarget} returning nothing means
+ * only the first when this is greater than zero; when it is zero the page has no
+ * admissible evidence and must not claim either. See `NeedsAttention`.
+ */
+export function publishableDepartments(
+  readings: readonly DepartmentReading[],
+): DepartmentReading[] {
+  return readings.filter((reading) => reading.rate !== null && !reading.suppressed)
+}
+
+/**
+ * How far from the target `ClimateMap` should saturate, for this tenant.
+ *
+ * ## Why the default is wrong here
+ *
+ * `ClimateMap`'s own `extremeAt` default is 10 points, calibrated for a bounded
+ * 0–100 climate score. The quantity this page plots is **responses per 100 people**,
+ * which has no ceiling: a seven-person team that answered four surveys reads 429.
+ * Left at 10, everything more than ten points from the target saturates — measured
+ * on a five-department tenant, 50 and 61 painted the identical deep red and 139 and
+ * 429 the identical deep blue — so the hero collapsed to a three-colour
+ * good/neutral/bad grid. `ClimateMap`'s own docstring is explicit that the form exists
+ * to render *polarity* — above, on, below — with the distance from the target legible;
+ * a grid where every distance past ten points looks the same has stopped doing that.
+ *
+ * ## The scale is set by the worst shortfall
+ *
+ * The far end is the shortfall of the department {@link belowTarget} puts first —
+ * the same department the "needs attention" panel names and the same one
+ * `ClimateMap` rings, because the ring fires at exactly `-extremeAt`. One number
+ * therefore governs the finding, the ring and the deepest red, and they cannot
+ * disagree. Everything better than that worst case lands strictly inside the ramp,
+ * which is what restores the ordering; departments far above the target clip at the
+ * same distance on the other side, which is what saturation means.
+ *
+ * `belowTarget` is reused rather than re-derived so the `deadBand` and the
+ * suppression rule are applied once. Suppressed rows not voting matters on its own:
+ * they are hatched, so their score is never painted, and letting one set the scale
+ * would let a withheld department visibly change every published colour on the grid.
+ *
+ * ## The floor
+ *
+ * `floorFraction` of the target is the minimum. Without it, a tenant whose
+ * departments all sit a point or two apart would have that noise stretched to full
+ * saturation and read as a crisis. Half the organisation's own rate is the smallest
+ * shortfall worth painting at full strength, and it scales with the tenant rather
+ * than being a constant nobody set. When the floor wins, no cell reaches
+ * `-extremeAt` and nothing is ringed — correct, because nothing is far enough behind
+ * to act on.
+ *
+ * Never returns zero: `ClimateMap`'s polarity divides by `2 * extremeAt`, so the
+ * `Math.max` is taken against at least 1.
+ */
+export function mapExtreme(
+  readings: readonly DepartmentReading[],
+  target: number,
+  deadBand = 2,
+  floorFraction = 0.5,
+): number {
+  const worst = belowTarget(readings, target, deadBand)[0]
+  const shortfall = worst ? target - (worst.rate ?? 0) : 0
+  return Math.max(1, Math.round(target * floorFraction), shortfall)
+}

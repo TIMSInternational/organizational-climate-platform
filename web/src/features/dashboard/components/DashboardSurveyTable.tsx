@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { EmptyState, Table } from '../../../components/ui'
 import { statusLabel } from '../../surveys/surveyVocabulary'
+import { calendarDay } from '../calendarDay'
 
 /**
  * The columns the company and department dashboards genuinely share.
@@ -110,7 +111,9 @@ export default function DashboardSurveyTable({
             {/* An em dash, not "0": a survey with no invitation total has no target, and
                 printing zero would read as "nobody was invited". */}
             {showTarget && <td>{survey.targetAudienceCount ?? '—'}</td>}
-            <td>{new Date(survey.endDate).toLocaleDateString(locale)}</td>
+            {/* UTC, not the browser's zone: these are calendar days, and a reader
+                west of UTC was shown the day before. See `calendarDay`. */}
+            <td>{calendarDay(Date.parse(survey.endDate), locale)}</td>
           </tr>
         ))}
       </tbody>
