@@ -349,6 +349,18 @@ export default function SurveyCreatePage() {
   const templateQuestionCount = template === null ? null : template.questions.length
   const questionCount = surveyQuestionCount(values, templateQuestionCount)
   const days = scheduledDays(values)
+  // The selected ids the catalogue can actually put a name to. The two collections are
+  // fetched against different scopes, so neither is a subset of the other by
+  // construction. `values.departmentIds` can arrive verbatim from a restored draft
+  // (`applyRestored` above; `draftValuesFrom` copies the array and reconciles nothing),
+  // and `SurveyDraftEndpoints.Mine` filters drafts by user and expiry only -- not by
+  // company -- so a draft written under one company context comes back under another.
+  // Meanwhile the catalogue is a fetch the effect above deliberately lets fail without
+  // blocking the flow, which leaves it empty. Either way `departments` can hold fewer of
+  // these ids than the selection does.
+  const namedDepartments = departments.filter((d) => values.departmentIds.includes(d.id))
+  // Only then is "n of {total}" a true statement about the same set of things.
+  const departmentsAllNamed = namedDepartments.length === values.departmentIds.length
 
   return (
     <div>
@@ -829,13 +841,23 @@ export default function SurveyCreatePage() {
                 sub={days === null ? t('surveys.readingNoDates') : undefined}
                 locale={locale}
               />
+              {/* The value is the selection, which is always true; the sub-line is a
+                  ratio, which is only true while the catalogue names every id in that
+                  selection. It did not check, so a restored draft naming five
+                  departments read "5" over "of 3" above a row naming three, and a
+                  catalogue whose fetch had failed read "2" over "of 0" -- a reading no
+                  instrument should ever be able to show. */}
               <KpiTile
                 label={t('surveys.departmentsLabel')}
                 value={values.departmentIds.length}
                 sub={
                   values.departmentIds.length === 0
                     ? t('surveys.departmentsAll')
-                    : t('surveys.readingOfDepartments', { total: departments.length })
+                    : departmentsAllNamed
+                      ? t('surveys.readingOfDepartments', { total: departments.length })
+                      : namedDepartments.length === 0
+                        ? t('surveys.readingDepartmentsUnlisted')
+                        : t('surveys.readingDepartmentsPartial')
                 }
                 locale={locale}
               />
@@ -856,15 +878,17 @@ export default function SurveyCreatePage() {
                   tile above. Both are readings, so both are mono. */}
               <Review mono label={t('surveys.startDate')} value={reviewDate(values.startDate, locale)} />
               <Review mono label={t('surveys.endDate')} value={reviewDate(values.endDate, locale)} />
+              {/* Names when there are names. With none -- the failed catalogue again --
+                  this row used to fall to `Review`'s em dash, which reads as "none
+                  selected" directly under a tile reading 2. */}
               <Review
                 label={t('surveys.departmentsLabel')}
                 value={
                   values.departmentIds.length === 0
                     ? t('surveys.departmentsAll')
-                    : departments
-                        .filter((d) => values.departmentIds.includes(d.id))
-                        .map((d) => d.name)
-                        .join(', ')
+                    : namedDepartments.length === 0
+                      ? t('surveys.readingDepartmentsUnlisted')
+                      : namedDepartments.map((d) => d.name).join(', ')
                 }
               />
             </dl>

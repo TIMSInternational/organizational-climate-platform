@@ -120,6 +120,27 @@ interface RouteOptions {
   templateDetailStatus?: number
   /** Never resolves, so the wizard is observed while the detail is still in flight. */
   templateDetailPending?: boolean
+  /** The company's department catalogue. Empty unless a test says otherwise. */
+  departments?: unknown[]
+  /**
+   * Status for `GET /admin/departments`. 500 is a supported state, not a contrived one:
+   * `SurveyCreatePage` catches that fetch on purpose ("A failed department list is not a
+   * reason to block the flow") and carries on with an empty catalogue.
+   */
+  departmentsStatus?: number
+}
+
+/** A row of `GET /admin/departments`, in the shape `Department` declares. */
+function department(id: string, name: string) {
+  return {
+    id,
+    companyId: 'company-1',
+    name,
+    description: null,
+    parentDepartmentId: null,
+    isActive: true,
+    employeeCount: 12,
+  }
 }
 
 /** A `SurveyTemplateQuestion`, including the option `value` the wizard must not invent. */
@@ -204,7 +225,12 @@ function routeFetch(options: RouteOptions = {}) {
       return Promise.resolve(new Response(JSON.stringify(body), { status }))
     }
     if (url.includes('/admin/departments')) {
-      return Promise.resolve(new Response(JSON.stringify({ departments: [] }), { status: 200 }))
+      const status = options.departmentsStatus ?? 200
+      const body =
+        status === 200
+          ? { departments: options.departments ?? [] }
+          : { message: 'Department list unavailable' }
+      return Promise.resolve(new Response(JSON.stringify(body), { status }))
     }
     // Before the `/surveys` POST branch only for readability -- the prefixes differ.
     if (url.includes('/survey-templates/')) {
@@ -625,6 +651,83 @@ describe('SurveyCreatePage recovery', () => {
     await tick()
 
     expect(draftWrites()).toHaveLength(0)
+  })
+})
+
+/**
+ * The DEPARTMENTS reading on the review step.
+ *
+ * The tile's value is the selection and the sub-line is a ratio, and the two come from
+ * different places: `values.departmentIds` is restored verbatim from a draft, while
+ * `departments` is a fetch the page catches and carries on without. Neither is a subset
+ * of the other by construction, so both of the states below are reachable in the product
+ * and both used to produce a reading that cannot be true.
+ *
+ * A restored draft rather than five `Next` presses: it lands on the review step in one
+ * step, and this file's own header records that walking the wizard is the most expensive
+ * thing in it.
+ */
+describe('SurveyCreatePage review departments reading', () => {
+  const catalogue = [
+    department('dept-1', 'Operations'),
+    department('dept-2', 'Support'),
+    department('dept-3', 'Engineering'),
+  ]
+
+  async function restoreOnReview(options: RouteOptions, departmentIds: string[]) {
+    routeFetch({
+      ...options,
+      latest: draftResponse({
+        currentStep: 5,
+        content: storedContent({ departmentIds }),
+      }),
+    })
+    renderPage()
+    await settle()
+    await press('Restore it')
+    await settle()
+    return reviewPanel()
+  }
+
+  it('reads the ratio out only while the catalogue names every selected department', async () => {
+    const review = await restoreOnReview({ departments: catalogue }, ['dept-1', 'dept-2'])
+
+    expect(reading(review, 'Departments')).toBe('2')
+    expect(review.textContent).toContain('of 3')
+    expect(review.textContent).toContain('Operations, Support')
+  })
+
+  it('does not read "5 of 3" for a draft naming departments the catalogue does not hold', async () => {
+    // `GET /surveys/drafts/latest` is scoped to the user and the expiry window and not
+    // to a company (`SurveyDraftEndpoints.Mine`), while the catalogue is fetched for the
+    // company context that is current now. Nothing reconciles the two on the way back
+    // in, and `MapDepartmentEndpoints` has no delete, so this — not a deletion — is how
+    // a selection outruns the list.
+    const review = await restoreOnReview({ departments: catalogue }, [
+      'dept-1',
+      'dept-2',
+      'dept-3',
+      'dept-gone-1',
+      'dept-gone-2',
+    ])
+
+    // Five ids are still targeted, so five is the true value; three is not the total of
+    // anything the tile is counting.
+    expect(reading(review, 'Departments')).toBe('5')
+    expect(review.textContent).not.toContain('of 3')
+    expect(review.textContent).toContain('Not all are in the department list')
+    // The names it does have are still listed -- the caveat is on the tile, not here.
+    expect(review.textContent).toContain('Operations, Support, Engineering')
+  })
+
+  it('does not read "2 of 0" when the department list failed to load', async () => {
+    const review = await restoreOnReview({ departmentsStatus: 500 }, ['dept-1', 'dept-2'])
+
+    expect(reading(review, 'Departments')).toBe('2')
+    expect(review.textContent).not.toContain('of 0')
+    // Twice: once as the tile's sub-line, once in place of the list of names, which
+    // would otherwise fall to an em dash and read as "no departments chosen".
+    expect(screen.getAllByText('Not in the department list')).toHaveLength(2)
   })
 })
 

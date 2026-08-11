@@ -1568,6 +1568,8 @@
     "readingWrittenHere": "Escritas en este asistente",
     "readingNoDates": "Sin fechas definidas",
     "readingOfDepartments": "de {total}",
+    "readingDepartmentsPartial": "No todos están en la lista de departamentos",
+    "readingDepartmentsUnlisted": "Fuera de la lista de departamentos",
     "modeFromTemplate": "Desde una plantilla",
     "modeBlank": "En blanco",
     "railSetup": "Configuración",

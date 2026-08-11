@@ -1568,6 +1568,8 @@
     "readingWrittenHere": "Written in this wizard",
     "readingNoDates": "No dates set",
     "readingOfDepartments": "of {total}",
+    "readingDepartmentsPartial": "Not all are in the department list",
+    "readingDepartmentsUnlisted": "Not in the department list",
     "modeFromTemplate": "From a template",
     "modeBlank": "Blank",
     "railSetup": "Setup",
