@@ -14,9 +14,10 @@ import {
   type ActionPlanFiltersValue,
 } from '../actionPlanFilterState'
 import ActionPlanForm, { type ActionPlanFormValues } from '../components/ActionPlanForm'
+import { rollUpActionPlans } from '../actionPlanRollup'
+import { listDepartments } from '../../org-structure/api/departments'
 import { useCompanyScope } from '../../../company-context'
-import { Target, Loader, CircleCheck, TriangleAlert } from 'lucide-react'
-import { KPIDisplay } from '../../../components/charts'
+import { KpiTile } from '../../../components/charts'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import {
@@ -59,6 +60,9 @@ export default function ActionPlansListPage() {
   const companyId = scope.companyId
   const [plans, setPlans] = useState<ActionPlan[]>([])
   const [templates, setTemplates] = useState<ActionPlanTemplate[]>([])
+  // Department id → name, for the listing's `From` column. A Map rather than the
+  // raw array so the table does a lookup per row instead of a scan per row.
+  const [departmentNames, setDepartmentNames] = useState<ReadonlyMap<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [filters, setFilters] = useState<ActionPlanFiltersValue>(EMPTY_ACTION_PLAN_FILTERS)
@@ -114,6 +118,26 @@ export default function ActionPlansListPage() {
     void loadTemplates()
   }, [loadTemplates])
 
+  // The `From` column's names. Failure is silent for the same reason templates'
+  // is: the column degrades to "Department not listed" (see `ActionPlanList`),
+  // whereas failing the page would hide every plan because one lookup table was
+  // unreachable. `GET /admin/departments` is gated by the same `CanAccessCompany`
+  // rule as `GET /action-plans`, so anyone who can see these rows can see these
+  // names -- this adds no permission the page did not already need.
+  const loadDepartments = useCallback(async () => {
+    if (!companyId) return
+    try {
+      const departments = await listDepartments(baseUrl, companyId)
+      setDepartmentNames(new Map(departments.map((department) => [department.id, department.name])))
+    } catch {
+      setDepartmentNames(new Map())
+    }
+  }, [baseUrl, companyId])
+
+  useEffect(() => {
+    void loadDepartments()
+  }, [loadDepartments])
+
   /**
    * Priority and title search, narrowed here rather than on the wire.
    *
@@ -129,6 +153,11 @@ export default function ActionPlansListPage() {
         (!needle || plan.title.toLocaleLowerCase().includes(needle)),
     )
   }, [plans, filters.priority, filters.q])
+
+  // Over the *unfiltered* set, and recomputed only when it changes. `now` is read
+  // once per roll-up rather than once per plan so every tile is counted against
+  // the same day.
+  const rollup = useMemo(() => rollUpActionPlans(plans, new Date()), [plans])
 
   async function handleCreate(values: ActionPlanFormValues) {
     if (!companyId) return
@@ -171,7 +200,10 @@ export default function ActionPlansListPage() {
     <div>
       <PageTopBar
         title={t('navigation.actionPlans')}
-        description={t('navigation.actionPlansDesc')}
+        // The longer line, not `navigation.actionPlansDesc` ("Track improvement
+        // initiatives"): the nav blurb has to fit a tooltip, and this header is
+        // where the screen gets to say what the `From` column is for.
+        description={t('actionPlans.listDescription')}
         actions={
           <Button
             type="button"
@@ -213,43 +245,42 @@ export default function ActionPlansListPage() {
         </Card>
       )}
 
-      {/* A KPI band ahead of the filters, matching the ForMaps admin shell: the
-          shape of the workload is read before it is filtered. Counts come from the
-          unfiltered `plans`, deliberately — a band that moved with the filter would
-          be describing the filter rather than the company. */}
+      {/* The KPI strip, ahead of the filters: the shape of the workload is read
+          before it is filtered. Counts come from the unfiltered `plans`,
+          deliberately — a strip that moved with the filter would be describing the
+          filter rather than the company.
+
+          `KpiTile` rather than `KPIDisplay`. They are not duplicates (see
+          `charts/KpiTile.tsx`): `KPIDisplay` is a card grid for when the KPI *is*
+          the content, and this is the flat four-across strip from the redesign,
+          where the number is context for the table below it. The value lands in
+          mono with tabular figures, which the card grid does not do and which is
+          the one typographic rule that makes the product read as an instrument. */}
       {!loading && !loadError && plans.length > 0 && (
-        <div className="mb-panel-gap">
-          <KPIDisplay
-            columns={4}
+        <div className="mb-panel-gap grid grid-cols-2 gap-inline lg:grid-cols-4">
+          <KpiTile
+            label={t('actionPlans.kpiOpen')}
+            value={rollup.open}
             locale={locale}
-            kpis={[
-              { id: 'total', label: t('actionPlans.kpiTotalPlans'), value: plans.length, icon: Target },
-              {
-                id: 'in-progress',
-                label: t('actionPlans.kpiInProgress'),
-                value: plans.filter((plan) => plan.status === 'in_progress').length,
-                icon: Loader,
-              },
-              {
-                id: 'completed',
-                label: t('actionPlans.kpiCompleted'),
-                value: plans.filter((plan) => plan.status === 'completed').length,
-                icon: CircleCheck,
-              },
-              {
-                id: 'overdue',
-                label: t('actionPlans.kpiOverdue'),
-                // Past its due date and not finished. `completed` is excluded rather
-                // than counted late: a plan delivered after its date is done, and
-                // showing it as overdue would tell someone to chase it.
-                value: plans.filter(
-                  (plan) => plan.status !== 'completed' && new Date(plan.dueDate) < new Date(),
-                ).length,
-                icon: TriangleAlert,
-                // Up is bad here, so the change indicator must not paint a rise green.
-                higherIsBetter: false,
-              },
-            ]}
+            sub={t('actionPlans.kpiOpenSub', { count: rollup.dueThisMonth })}
+          />
+          <KpiTile
+            label={t('actionPlans.kpiOnTrack')}
+            value={rollup.onTrack}
+            locale={locale}
+            sub={t('actionPlans.kpiOnTrackSub')}
+          />
+          <KpiTile
+            label={t('actionPlans.kpiAtRisk')}
+            value={rollup.atRisk}
+            locale={locale}
+            sub={t('actionPlans.kpiAtRiskSub')}
+          />
+          <KpiTile
+            label={t('actionPlans.kpiCompleted')}
+            value={rollup.completed}
+            locale={locale}
+            sub={t('actionPlans.kpiCompletedSub')}
           />
         </div>
       )}
@@ -279,6 +310,7 @@ export default function ActionPlansListPage() {
             <ActionPlanList
               plans={visible}
               filtered={Boolean(filters.status || filters.priority || filters.q.trim())}
+              departmentNames={departmentNames}
             />
           )}
         </LoadingRegion>

@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { listMicroclimates, type Microclimate } from '../api/microclimates'
 import MicroclimateList from '../components/MicroclimateList'
 import MicroclimateFilters, { type MicroclimateFiltersValue } from '../components/MicroclimateFilters'
+import LiveSessionPanel from '../components/LiveSessionPanel'
+import { liveSessions, rollUpMicroclimates } from '../microclimateRollup'
+import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
 import { useCompanyScope } from '../../../company-context'
+import { KpiTile } from '../../../components/charts'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import {
@@ -28,7 +32,7 @@ import {
 // this page whether or not anyone opened the form. `/microclimates/new` owns that
 // now, so this page fetches one thing and lists it.
 export default function MicroclimatesListPage() {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const scope = useCompanyScope()
   const companyId = scope.companyId
@@ -66,6 +70,13 @@ export default function MicroclimatesListPage() {
   // what an array filter already did.
   const filtered = microclimates.filter((m) => !filters.status || m.status === filters.status)
 
+  // Both read the *unfiltered* set. A strip that moved with the status filter
+  // would be describing the filter rather than the company, and the live panel is
+  // the answer to "is anything open right now" — a question the filter does not
+  // get a vote on.
+  const rollup = useMemo(() => rollUpMicroclimates(microclimates), [microclimates])
+  const live = useMemo(() => liveSessions(microclimates), [microclimates])
+
   if (scope.status === 'needs-selection') {
     return (
       <EmptyState
@@ -83,7 +94,11 @@ export default function MicroclimatesListPage() {
     <div>
       <PageTopBar
         title={t('navigation.microclimates')}
-        description={t('navigation.microclimatesDesc')}
+        // Not `navigation.microclimatesDesc` ("Real-time team feedback"): the nav
+        // blurb has to fit a tooltip. The floor is named here, with the number
+        // taken from `MINIMUM_RESPONDENTS` rather than typed into the catalogue,
+        // so the copy cannot drift from the rule it describes.
+        description={t('microclimates.listDescription', { minimum: MINIMUM_RESPONDENTS })}
         actions={
           <>
             {/* `asChild` so the router owns the navigation: a bare anchor
@@ -97,6 +112,52 @@ export default function MicroclimatesListPage() {
           </>
         }
       />
+
+      {/* The strip, then what is open, then everything. `KpiTile` rather than
+          `KPIDisplay` for the reason set out in `charts/KpiTile.tsx`: this is the
+          flat four-across form where the number is context for the work below,
+          and its value is set in mono with tabular figures. */}
+      {!loading && !error && microclimates.length > 0 && (
+        <>
+          <div className="mb-panel-gap grid grid-cols-2 gap-inline lg:grid-cols-4">
+            <KpiTile
+              label={t('microclimates.kpiLive')}
+              value={rollup.live}
+              locale={locale}
+              sub={t('microclimates.kpiLiveSub')}
+            />
+            <KpiTile
+              label={t('microclimates.kpiDrafts')}
+              value={rollup.draft}
+              locale={locale}
+              sub={t('microclimates.kpiDraftsSub')}
+            />
+            <KpiTile
+              label={t('microclimates.kpiClosedSessions')}
+              value={rollup.closed}
+              locale={locale}
+              sub={t('microclimates.kpiClosedSessionsSub')}
+            />
+            <KpiTile
+              label={t('microclimates.kpiResponsesCollected')}
+              value={rollup.responses}
+              locale={locale}
+              sub={t('microclimates.kpiResponsesCollectedSub')}
+            />
+          </div>
+
+          <section className="mb-panel-gap">
+            <h2 className="mb-2 text-sm font-semibold tracking-tight">
+              {t('microclimates.liveHeading')}
+            </h2>
+            <LiveSessionPanel sessions={live} />
+          </section>
+        </>
+      )}
+
+      <h2 className="mb-2 text-sm font-semibold tracking-tight">
+        {t('microclimates.sessionsHeading')}
+      </h2>
 
       <MicroclimateFilters value={filters} onChange={setFilters} />
 

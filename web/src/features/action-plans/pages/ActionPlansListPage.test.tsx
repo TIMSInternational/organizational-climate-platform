@@ -135,11 +135,14 @@ function plan(overrides: Partial<ActionPlan> = {}): ActionPlan {
 }
 
 /** A fresh `Response` per call — a body can only be read once. */
-function routePlans(plans: ActionPlan[]) {
+function routePlans(plans: ActionPlan[], departments: { id: string; name: string }[] = []) {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.includes('/action-plan-templates')) {
       return Promise.resolve(new Response(JSON.stringify({ templates: [] }), { status: 200 }))
+    }
+    if (url.includes('/admin/departments')) {
+      return Promise.resolve(new Response(JSON.stringify({ departments }), { status: 200 }))
     }
     if (init?.method === 'POST') {
       return Promise.resolve(
@@ -159,6 +162,21 @@ function routePlans(plans: ActionPlan[]) {
     }
     return Promise.resolve(new Response(JSON.stringify({ actionPlans: plans }), { status: 200 }))
   })
+}
+
+/**
+ * The KPI tile whose label is `label`.
+ *
+ * Matched on the label element specifically — `Completed` is also a status badge
+ * in the table and an option in the status filter, so a bare `getByText` finds
+ * three of them.
+ */
+function kpiTile(label: string): HTMLElement {
+  const heading = screen
+    .getAllByText(label)
+    .find((node) => node.className.includes('tracking-label'))
+  if (!heading?.parentElement) throw new Error(`no KPI tile labelled ${label}`)
+  return heading.parentElement
 }
 
 function planUrls(): string[] {
@@ -275,6 +293,63 @@ describe('ActionPlansListPage listing surface', () => {
 
     const confirmation = await screen.findByText(/Action plan .*Reduce attrition.* created\./)
     expect(confirmation).toBeTruthy()
+  })
+
+  it('resolves the From column from the departments endpoint', async () => {
+    // The link back to where the finding was measured. `GET /admin/departments`
+    // is gated by the same `CanAccessCompany` rule as `GET /action-plans`, so this
+    // adds no permission the page did not already need.
+    routePlans([plan({ departmentId: 'd1' })], [{ id: 'd1', name: 'Support' }])
+    renderPage()
+
+    const from = await screen.findByRole('link', { name: /Measured in Support/ })
+    expect(from.getAttribute('href')).toBe('/departments')
+  })
+
+  it('still lists the plans when the departments lookup fails', async () => {
+    // Failing the whole page because one lookup table was unreachable would hide
+    // every plan to avoid one missing chip.
+    routePlans([plan({ departmentId: 'd1' })])
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/admin/departments')) return Promise.reject(new Error('down'))
+      if (url.includes('/action-plan-templates')) {
+        return Promise.resolve(new Response(JSON.stringify({ templates: [] }), { status: 200 }))
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ actionPlans: [plan({ departmentId: 'd1' })] }), { status: 200 }),
+      )
+    })
+    renderPage()
+
+    expect(await screen.findByText('Raise engagement')).toBeTruthy()
+    expect(screen.getByText('Department not listed')).toBeTruthy()
+  })
+
+  it('reads the KPI strip off the whole company, not off the filtered table', async () => {
+    // A strip wired to the filtered array still renders four plausible numbers,
+    // which is exactly how a wrong one survives review.
+    routePlans([
+      plan({ id: 'p1', title: 'Raise engagement', status: 'in_progress', dueDate: '2099-12-01T00:00:00.000Z' }),
+      plan({ id: 'p2', title: 'Reduce attrition', status: 'completed', priority: 'low' }),
+    ])
+    renderPage()
+    await screen.findByText('Raise engagement')
+
+    const strip = () => ({
+      open: within(kpiTile('Open')).getByText('1'),
+      completed: within(kpiTile('Completed')).getByText('1'),
+    })
+    expect(strip().open).toBeTruthy()
+    expect(strip().completed).toBeTruthy()
+
+    await userEvent.type(screen.getByLabelText('Search'), 'attrition')
+    expect(screen.queryByText('Raise engagement')).toBeNull()
+
+    // Unmoved: one open plan and one completed plan is still the truth about the
+    // company, whatever the search box is showing.
+    expect(strip().open).toBeTruthy()
+    expect(strip().completed).toBeTruthy()
   })
 
   it('refuses to submit a blank KPI row, which the server would happily persist', async () => {
