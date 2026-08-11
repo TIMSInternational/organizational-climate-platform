@@ -49,7 +49,10 @@ export default function SurveyQuestionList({ questions }: SurveyQuestionListProp
       <tbody>
         {questions.map((question) => (
           <tr key={question.id}>
-            <td>{question.order + 1}</td>
+            {/* A position is a reading, and every reading in this product is set in the
+                mono face with tabular figures — which is also what keeps a column of
+                them aligned once the list passes question 9. */}
+            <td className="font-mono tabular-nums">{question.order + 1}</td>
             <td>{question.text ?? t('surveys.untranslatedQuestion')}</td>
             <td>{questionTypeLabel(t, question.type)}</td>
             <td>

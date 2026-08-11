@@ -8,6 +8,7 @@ import {
   emptyWizardValues,
   localizedFor,
   scheduledDays,
+  surveyQuestionCount,
   wizardStepErrors,
   type SurveyWizardValues,
 } from './wizardValues'
@@ -217,5 +218,41 @@ describe('buildCreateInput', () => {
       COMPANY,
     )
     expect(input.title).toEqual({ en: 'Q3', es: 'T3' })
+  })
+})
+
+/**
+ * How many questions the survey will have — the number the review step reads out.
+ *
+ * Worth its own function and its own tests because the two sources cannot be told
+ * apart by looking at them: in template mode the wizard's own `questions` array is
+ * empty and correct, so a call site that reads `values.questions.length` reports 0 for
+ * a twelve-question template and looks perfectly reasonable doing it.
+ */
+describe('surveyQuestionCount', () => {
+  it('counts the wizard’s own questions for a blank survey, ignoring any template count', () => {
+    const values = complete({
+      questions: [
+        { ...emptyQuestion('q1'), textEn: 'One' },
+        { ...emptyQuestion('q2'), textEn: 'Two' },
+      ],
+    })
+    // 9 is a template's count that must not be reachable here: no template is chosen.
+    expect(surveyQuestionCount(values, 9)).toBe(2)
+  })
+
+  it("counts the template's questions in template mode, not the empty form's", () => {
+    const values = complete({ templateId: 'tpl-1', questions: [] })
+    expect(surveyQuestionCount(values, 12)).toBe(12)
+  })
+
+  it('reports zero for a template whose detail has not arrived', () => {
+    // Not the form's own length, which is the wrong number and would let the review step
+    // claim a count for a template it has not read.
+    const values = complete({
+      templateId: 'tpl-1',
+      questions: [{ ...emptyQuestion('stale'), textEn: 'Left over from before' }],
+    })
+    expect(surveyQuestionCount(values, null)).toBe(0)
   })
 })
