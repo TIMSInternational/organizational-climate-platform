@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import DashboardPage from './DashboardPage'
 import { TranslationProvider } from '../../../i18n'
@@ -200,7 +200,12 @@ describe('DashboardPage', () => {
     await waitFor(() => expect(fetch).toHaveBeenCalled())
     expect(requestedPath()).toContain('/dashboard/company-admin')
     expect(requestedPath()).not.toContain('companyId')
-    expect(await screen.findByRole('heading', { level: 1, name: 'Acme Corporation' })).toBeTruthy()
+    // The redesign moved the tenant's name off the `<h1>` and into the eyebrow above it:
+    // the page is always "Dashboard", and what changes between two visits is which
+    // company it is about. The assertion that the name reaches the screen at all is the
+    // part that matters, and it is kept.
+    expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeTruthy()
+    expect(screen.getByText('Acme Corporation')).toBeTruthy()
   })
 
   it.each(['leader', 'supervisor'])(
@@ -276,6 +281,128 @@ describe('DashboardPage', () => {
 
     const link = await screen.findByRole('link', { name: 'Company-wide pulse' })
     expect(link.getAttribute('href')).toBe('/surveys/s1')
+  })
+
+  /* -------------------------------------------------------------------------
+   * The redesigned company dashboard. Exercised through the page, because a test
+   * that rendered the view directly would not prove the role that reaches it does.
+   * ---------------------------------------------------------------------- */
+
+  /**
+   * The hero. `companyPayload` is 18 completed responses over 12 people (150 per 100) for
+   * the tenant, and 5 over 6 (83) for Engineering — so the cell has to say *below*, not
+   * merely paint a colour, and the target it names has to be the organisation's own rate
+   * rather than a constant.
+   */
+  it('plots each department against the organisation on the climate map', async () => {
+    setToken(tokenFor('company_admin', 'c1'))
+    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+
+    renderDashboard()
+
+    expect(await screen.findByRole('rowheader', { name: 'Engineering' })).toBeTruthy()
+    expect(screen.getByRole('cell', { name: /83.*below the target of 150/ })).toBeTruthy()
+  })
+
+  /**
+   * The suppression principle, both halves of it.
+   *
+   * Finance has 3 completed responses from 40 people — under the floor — so its cell is
+   * drawn as protected rather than left empty, and neither its rate (8 per 100) nor the
+   * count behind it may appear anywhere. It must also not be counted among the
+   * departments below target: one hatched row plus a below-target count of two would tell
+   * the reader that row's polarity, which is exactly what the hatch withholds.
+   */
+  it('draws a department under the anonymity floor as protected and keeps it out of the prose', async () => {
+    setToken(tokenFor('company_admin', 'c1'))
+    const payload = companyPayload()
+    payload.departments = [
+      ...payload.departments,
+      { id: 'd2', name: 'Finance', memberCount: 40, completedResponseCount: 3 },
+    ]
+    vi.mocked(fetch).mockResolvedValue(jsonResponse(payload))
+
+    renderDashboard()
+
+    const cell = await screen.findByRole('img', { name: /Finance/ })
+    expect(cell.getAttribute('aria-label')).toContain('protected')
+    // Neither the withheld rate nor the count behind it.
+    expect(cell.getAttribute('aria-label')).not.toContain('3')
+    expect(screen.queryByText('8')).toBeNull()
+    // Engineering alone is behind; Finance is not counted even though it is further back.
+    expect(screen.getByText(/Engineering is behind the organisation/)).toBeTruthy()
+    expect(screen.queryByText(/Finance is behind the organisation/)).toBeNull()
+  })
+
+  /** The finding, its evidence, and the two things to do about it. */
+  it('names the department furthest behind, with its evidence and two actions', async () => {
+    setToken(tokenFor('company_admin', 'c1'))
+    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+
+    renderDashboard()
+
+    expect(await screen.findByText(/Engineering is behind the organisation/)).toBeTruthy()
+    expect(
+      screen.getByText(/5 of 6 people in Engineering have completed a survey/),
+    ).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Create Action Plan' }).getAttribute('href')).toBe(
+      '/action-plans',
+    )
+    expect(screen.getByRole('link', { name: 'View responses' }).getAttribute('href')).toBe(
+      '/surveys',
+    )
+  })
+
+  /**
+   * The cleared state is rendered, not omitted. An empty panel where the finding goes
+   * reads as "not measured", which is the opposite of what has happened.
+   */
+  it('says so when no department is behind the organisation', async () => {
+    setToken(tokenFor('company_admin', 'c1'))
+    const payload = companyPayload()
+    payload.departments = [{ id: 'd1', name: 'Engineering', memberCount: 6, completedResponseCount: 9 }]
+    vi.mocked(fetch).mockResolvedValue(jsonResponse(payload))
+
+    renderDashboard()
+
+    expect(
+      await screen.findByText("No department is behind the organisation's response rate"),
+    ).toBeTruthy()
+  })
+
+  it('offers three quick actions that all land somewhere that exists', async () => {
+    setToken(tokenFor('company_admin', 'c1'))
+    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+
+    renderDashboard()
+
+    expect(
+      (await screen.findByRole('link', { name: /From a template or blank/ })).getAttribute('href'),
+    ).toBe('/surveys/new')
+    expect(screen.getByRole('link', { name: /Run a microclimate/ }).getAttribute('href')).toBe(
+      '/microclimates/new',
+    )
+    expect(screen.getByRole('link', { name: /Compare with a benchmark you saved/ }).getAttribute('href')).toBe(
+      '/analytics/benchmarks',
+    )
+  })
+
+  /**
+   * The cycle. Every survey on this payload has status `active` — the endpoint filters on
+   * it — so the step's state comes from its own window instead, which is what keeps the
+   * done / current / future distinction alive. `companyPayload`'s survey closed on
+   * 2026-02-01, so it is a settled step and reads "closed", not "closes".
+   */
+  it('places each running survey in the cycle by its own dates', async () => {
+    setToken(tokenFor('company_admin', 'c1'))
+    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+
+    renderDashboard()
+
+    const cycle = await screen.findByRole('list', { name: 'Steps of the survey cycle' })
+    expect(within(cycle).getByText('Company-wide pulse')).toBeTruthy()
+    expect(within(cycle).getByText(/^closed /)).toBeTruthy()
+    expect(within(cycle).getByText('Open action plans')).toBeTruthy()
   })
 
   it('gives a plain employee their own dashboard, with a real way to answer each survey', async () => {
