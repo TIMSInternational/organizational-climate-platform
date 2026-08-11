@@ -98,13 +98,22 @@ export default function KpiTile({
         className,
       )}
     >
-      <div className="text-2xs font-semibold uppercase tracking-label text-fg-tertiary">
+      {/* `text-fg-secondary`, not `text-fg-tertiary`. Measured from
+          styles/tokens.css: `--admin-font-tertiary` #818181 over
+          `--admin-bg-icon-box` — which is this tile's own surface — is **3.42:1**
+          in light and **3.68:1** in dark, and both fail WCAG AA 1.4.3's 4.5:1 for
+          small text. `--admin-font-secondary` is 8.15:1 and 6.85:1. Failing in
+          BOTH themes is what made it survive: this project's usual contrast bug
+          is light-only, so a reviewer checking dark saw nothing wrong either way.
+          Asserted in features/surveys/resultsContrast.test.ts, which also bans
+          the class from this file by name. */}
+      <div className="text-2xs font-semibold uppercase tracking-label text-fg-secondary">
         {label}
       </div>
       <div className="mt-0.5 font-mono text-3xl font-semibold tracking-tight tabular-nums">
         {formatMetric(value, format, locale)}
       </div>
-      <div className="mt-px flex items-center gap-1 text-xs text-fg-tertiary">
+      <div className="mt-px flex items-center gap-1 text-xs text-fg-secondary">
         {hasChange && (
           <span
             className={cn(
