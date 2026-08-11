@@ -90,6 +90,11 @@
   --color-chart-div-mid: var(--admin-chart-div-mid);
   --color-chart-div-pos-1: var(--admin-chart-div-pos-1);
   --color-chart-div-pos-2: var(--admin-chart-div-pos-2);
+  --color-chart-div-neg-2-ink: var(--admin-chart-div-neg-2-ink);
+  --color-chart-div-neg-1-ink: var(--admin-chart-div-neg-1-ink);
+  --color-chart-div-mid-ink: var(--admin-chart-div-mid-ink);
+  --color-chart-div-pos-1-ink: var(--admin-chart-div-pos-1-ink);
+  --color-chart-div-pos-2-ink: var(--admin-chart-div-pos-2-ink);
 
   --color-chart-grid: var(--admin-chart-grid);
   --color-chart-axis: var(--admin-chart-axis);

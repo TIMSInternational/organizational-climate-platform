@@ -102,6 +102,25 @@ export const DIVERGING_COLORS = [
   'var(--admin-chart-div-pos-2)',
 ] as const
 
+/**
+ * Ink paired to each {@link DIVERGING_COLORS} step, for a mark that prints its
+ * value inside the fill — the climate map does.
+ *
+ * These are `var()` references rather than literals precisely because the
+ * assignment inverts between the themes: the light ramp needs
+ * light/dark/dark/dark/light ink and the dark ramp needs dark/light/light/light/dark.
+ * A literal array would be correct in one theme and unreadable in the other, and
+ * that is not something review catches by eye. `tokens.css` declares both, and
+ * `styles/divInkContrast.test.ts` re-measures every pair.
+ */
+export const DIVERGING_INKS = [
+  'var(--admin-chart-div-neg-2-ink)',
+  'var(--admin-chart-div-neg-1-ink)',
+  'var(--admin-chart-div-mid-ink)',
+  'var(--admin-chart-div-pos-1-ink)',
+  'var(--admin-chart-div-pos-2-ink)',
+] as const
+
 export const CHART_GRID = 'var(--admin-chart-grid)'
 export const CHART_AXIS = 'var(--admin-chart-axis)'
 /** The surface colour, used as the 2px spacer between adjacent or stacked fills. */
@@ -192,12 +211,36 @@ export function sequentialPair(fraction: number): { fill: string; ink: string } 
  * does not read as weakly positive or negative.
  */
 export function divergingColor(value: number, deadBand = 0.1): string {
-  if (Number.isNaN(value)) {
-    return DIVERGING_COLORS[2]
-  }
-  if (value <= -0.5) return DIVERGING_COLORS[0]
-  if (value < -deadBand) return DIVERGING_COLORS[1]
-  if (value <= deadBand) return DIVERGING_COLORS[2]
-  if (value < 0.5) return DIVERGING_COLORS[3]
-  return DIVERGING_COLORS[4]
+  return DIVERGING_COLORS[divergingStep(value, deadBand)]
+}
+
+/**
+ * Which of the five diverging steps a -1..1 polarity falls in.
+ *
+ * Extracted so {@link divergingColor} and {@link divergingPair} cannot drift
+ * apart: a fill and its ink disagreeing about the step is exactly the bug that
+ * produces an unreadable cell, and it would not show up in either function's own
+ * test.
+ */
+function divergingStep(value: number, deadBand: number): 0 | 1 | 2 | 3 | 4 {
+  if (Number.isNaN(value)) return 2
+  if (value <= -0.5) return 0
+  if (value < -deadBand) return 1
+  if (value <= deadBand) return 2
+  if (value < 0.5) return 3
+  return 4
+}
+
+/**
+ * The fill and the ink that goes on it, for a -1..1 polarity.
+ *
+ * Use this rather than {@link divergingColor} whenever the mark carries a label,
+ * so the two always come from the same step.
+ */
+export function divergingPair(
+  value: number,
+  deadBand = 0.1,
+): { fill: string; ink: string } {
+  const step = divergingStep(value, deadBand)
+  return { fill: DIVERGING_COLORS[step], ink: DIVERGING_INKS[step] }
 }

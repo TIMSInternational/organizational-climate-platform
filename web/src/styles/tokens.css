@@ -339,6 +339,25 @@
   --admin-chart-div-pos-1: #7dd3fc;
   --admin-chart-div-pos-2: #0369a1;
 
+  /* Ink paired to each diverging step, for the same reason #208 added one per
+     sequential step: the climate map prints the score INSIDE the cell, so the
+     fill needs a label colour that is legible on it.
+
+     Unlike the sequential ramp, the assignment is not a monotone run of dark inks
+     with a light one at the end -- it INVERTS between the themes, because the
+     diverging ramps do. Light runs light/dark/dark/dark/light; dark runs
+     dark/light/light/light/dark. Writing one shared array would therefore be
+     wrong in one theme and no eye would catch it, so both are declared.
+
+     Measured against the ramp above, worst pairing 5.11:1 vs AA's 4.5:1 for
+     small text. styles/divInkContrast.test.ts re-derives every pair from this
+     file, so a nudge here fails the build rather than the eye. */
+  --admin-chart-div-neg-2-ink: #f0fdfa;
+  --admin-chart-div-neg-1-ink: #02100f;
+  --admin-chart-div-mid-ink: #02100f;
+  --admin-chart-div-pos-1-ink: #02100f;
+  --admin-chart-div-pos-2-ink: #f0fdfa;
+
   /* Chart furniture. Recessive on purpose -- grid and axes must not compete
      with the marks. The gap colour is the surface, used as the 2px spacer
      between adjacent fills. */
@@ -467,6 +486,13 @@
   --admin-chart-div-mid: #6b6b6b;
   --admin-chart-div-pos-1: #0c4a6e;
   --admin-chart-div-pos-2: #38bdf8;
+
+  /* Inverted against light -- see the note on the light block. */
+  --admin-chart-div-neg-2-ink: #02100f;
+  --admin-chart-div-neg-1-ink: #f0fdfa;
+  --admin-chart-div-mid-ink: #f0fdfa;
+  --admin-chart-div-pos-1-ink: #f0fdfa;
+  --admin-chart-div-pos-2-ink: #02100f;
 
   --admin-chart-grid: #2a2a2a;
   --admin-chart-axis: #818181;
