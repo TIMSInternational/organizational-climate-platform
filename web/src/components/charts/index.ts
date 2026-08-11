@@ -14,6 +14,7 @@ export { default as WordCloud } from './WordCloud'
 export { default as KPIDisplay } from './KPIDisplay'
 export { default as KpiTile } from './KpiTile'
 export { default as ProtectedCell, isSuppressed } from './ProtectedCell'
+export { default as ClimateMap } from './ClimateMap'
 export { default as ParticipationTracker } from './ParticipationTracker'
 export { default as RealTimeChartContainer } from './RealTimeChartContainer'
 export { default as SentimentVisualization } from './SentimentVisualization'
@@ -29,6 +30,7 @@ export type { WordFrequency } from './WordCloud'
 export type { Kpi } from './KPIDisplay'
 export type { KpiTileProps } from './KpiTile'
 export type { ProtectedCellProps } from './ProtectedCell'
+export type { ClimateMapProps, ClimateMapRow, ClimateMapDimension } from './ClimateMap'
 export type {
   EffortImpact,
   RecommendationKind,
