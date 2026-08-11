@@ -263,7 +263,17 @@ export default function SurveyRespondForm({ surveyId, publicEntry = false }: Sur
           DOM and moved to column three by `col-start`, so a respondent on a phone
           — which is how this page is mostly answered — meets the anonymity promise
           and the progress reading before the first question rather than after the
-          last one. On a wide screen `sticky` keeps both in view while they scroll. */}
+          last one. On a wide screen `lg:sticky lg:top-gutter` keeps both in view
+          while the questions scroll past.
+
+          That last part depends on something outside this file: NO ancestor of the
+          panel may set `overflow` on either axis, because the used value of the
+          other axis is then promoted to `auto` and that ancestor becomes the
+          panel's scrollport. `RespondShell`'s `<main>` used to carry
+          `overflow-x-auto` and never scrolls itself — the document does — so the
+          panel was pinned to a box that never moved and left the viewport with the
+          questions. `components/layout/respondSticky.test.tsx` is the guard, and
+          `RespondShell` records the measurement. */}
       <div className="grid gap-panel-gap lg:grid-cols-3">
         <section
           aria-label={t('panelLabel')}
@@ -311,16 +321,23 @@ export default function SurveyRespondForm({ surveyId, publicEntry = false }: Sur
             />
           )}
 
-          <div className="grid gap-panel-gap sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            <RespondReading label={t('closesReading')} value={formatDate(view.endDate, locale)} />
-            {/* Only when the survey turned progress OFF. With the progress tile
-                above it, `Questions 5` says the same thing the denominator of
-                `0 / 5` already said, and two tiles reporting one fact is what
-                makes an instrument panel read as decoration. */}
-            {!view.showProgress && (
-              <RespondReading label={t('questionsReading')} value={String(total)} />
-            )}
-          </div>
+          {/* One reading per row, flush with every tile above it, and NOT a
+              two-column grid. It was `sm:grid-cols-2 lg:grid-cols-1
+              xl:grid-cols-2`, which put CLOSES in a half-width tile with a
+              stranded empty cell beside it at every viewport from 640px up —
+              because its second child only exists when the survey turned progress
+              OFF, which is the rarer case. Measured in Chromium at 1440x900: a
+              402px panel with a 197px CLOSES tile under three 402px ones. A column
+              of readings that are all the same width is also what makes them
+              scannable as one instrument. */}
+          <RespondReading label={t('closesReading')} value={formatDate(view.endDate, locale)} />
+          {/* Only when the survey turned progress OFF. With the progress tile
+              above it, `Questions 5` says the same thing the denominator of
+              `0 / 5` already said, and two tiles reporting one fact is what
+              makes an instrument panel read as decoration. */}
+          {!view.showProgress && (
+            <RespondReading label={t('questionsReading')} value={String(total)} />
+          )}
         </section>
 
         {/* `noValidate`: the browser's own required-field bubbles are untranslated,
@@ -421,7 +438,9 @@ function RespondSurface({ children }: { children: React.ReactNode }) {
  * This is the only surface an ordinary employee ever sees, and it decides whether
  * they answer honestly. So the promise sits at the top of the instrument panel:
  * first on a phone, and held in view by `sticky` on a wide screen while the
- * questions scroll past it. It was a plain `Alert` in the run of the page before,
+ * questions scroll past it — measured at 1440x900 on /survey/s1, the panel is at
+ * `rect.top = 12px` at the page's maximum scroll, which is `top-gutter`. It was a
+ * plain `Alert` in the run of the page before,
  * which put it above the fold once and then out of sight for the rest of a
  * forty-question survey.
  *

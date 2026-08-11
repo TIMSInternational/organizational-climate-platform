@@ -72,7 +72,14 @@ export default function RespondQuestionField({
       // the browser's own focus ring still draws on the control inside it, so
       // nothing depends on seeing the tint. `index.css` reduces every transition
       // to 0.01ms under `prefers-reduced-motion`.
-      className="rounded-xl border border-line-panel bg-surface-card p-panel transition-colors focus-within:border-accent-blue-ring"
+      // `min-w-0` because this is a grid item of the question column, and a grid
+      // item's automatic minimum size is its MIN-CONTENT width — which for a
+      // ranking question is 300px (measured below), wider than the 262px the
+      // column has at a 320px viewport. Without it the card cannot shrink, so it
+      // widens the column, the column widens the page, and the document scrolls
+      // sideways: 9px at 320px, measured in Chromium. With it the card fits and the
+      // one row that is genuinely too wide scrolls inside its own container.
+      className="min-w-0 rounded-xl border border-line-panel bg-surface-card p-panel transition-colors focus-within:border-accent-blue-ring"
     >
       {/* `float-left w-full` is not decoration. A `<legend>` in its default flow
           is cut out of the fieldset's own border, so the question text straddles
@@ -342,11 +349,28 @@ function RankingAnswer({
   return (
     <div>
       <p className="text-sm text-fg-secondary">{t('rankingInstructions')}</p>
+      {/* `overflow-x-auto` HERE, on the one row on this page that is genuinely
+          wider than a phone, rather than on the shell's `<main>` where it used to
+          live. A ranking row is a nowrap rank reading plus two 32px buttons plus
+          gaps and padding that none of `flex-wrap` can fold; measured with the
+          `respond.json` fixture in Chromium, this `<ol>`'s fieldset has a
+          min-content width of 300px, which is what pushed the document 9px wide at
+          320px. Every other fieldset on that page measures 103-138px.
+          Scoping the scroll here rather than on `<main>` is what lets the
+          instrument panel be `sticky`: an `overflow` on an ancestor of a sticky box
+          makes that ancestor its scrollport, and `<main>` never scrolls — the
+          document does. `RespondShell` records the measurement.
+          Nothing focusable has its ring clipped by this container: with the list
+          scrolled fully right, the last reorder button's edge measures 9px inside
+          the clip edge (the row's own `px-inline` plus its border), against the
+          4px a 2px focus ring at its 2px offset needs. That was the reason for
+          putting the guard on this `<ol>` rather than on the `<form>`, where the
+          submit buttons sit flush against the edge. */}
       <ol
         aria-labelledby={legendId}
         aria-invalid={invalid || undefined}
         aria-describedby={invalid ? errorId : undefined}
-        className="mt-2 grid gap-1"
+        className="mt-2 grid gap-1 overflow-x-auto"
       >
         {order.map((value, index) => {
           const optionIndex = indices.get(value) ?? index

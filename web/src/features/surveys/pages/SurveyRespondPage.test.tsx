@@ -732,6 +732,14 @@ describe('SurveyRespondPage as an instrument', () => {
    * the rest of a forty-question survey. It is now the first thing in the panel that
    * `sticky` holds beside the questions — and, on a phone, the block a respondent
    * reads before the first question rather than after the last.
+   *
+   * **What this case can and cannot hold.** It asserts placement and DOM order,
+   * which is all it names. The `toContain('sticky')` line below is a spelling
+   * check and nothing more: the class was present, correct and completely inert
+   * for the whole of this branch's first pass, because an ancestor's
+   * `overflow-x-auto` had made itself the panel's scrollport. Whether the panel
+   * actually sticks is asserted in `components/layout/respondSticky.test.tsx`,
+   * which computes it.
    */
   it('puts the anonymity promise inside the panel that stays with the questions', async () => {
     respondWith(view({ anonymous: true }))
@@ -848,5 +856,55 @@ describe('SurveyRespondPage as an instrument', () => {
 
     expect(await screen.findByText('Protegido')).toBeTruthy()
     expect(screen.getByText(/departamento/)).toBeTruthy()
+  })
+
+  /**
+   * Every reading in the panel is one row of it.
+   *
+   * The closing date used to sit in a `sm:grid-cols-2 lg:grid-cols-1
+   * xl:grid-cols-2` wrapper whose only other child renders when the survey turned
+   * progress OFF — the rarer case. With progress on, that grid held one child in
+   * two columns, so CLOSES rendered at half the panel width with a stranded empty
+   * cell beside it at every viewport from 640px up: measured in Chromium at
+   * 1440x900, a 197px tile under three 402px ones.
+   *
+   * happy-dom cannot measure that, but it can see the cause. Each reading is a
+   * direct child of the panel, so there is no intermediate track for one of them to
+   * be laid out in.
+   */
+  it('gives every panel reading its own full-width row', async () => {
+    respondWith(view({ showProgress: true }))
+    renderPage()
+
+    const panel = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
+    const closes = within(panel).getByText('Cierra').closest('div')
+    expect(closes, 'the CLOSES reading renders').toBeTruthy()
+    expect(
+      closes!.parentElement,
+      'A wrapper here is a second grid inside the panel, and the wrapper this '
+        + 'replaced held one child in two columns whenever `showProgress` was on — '
+        + 'a half-width tile with a hole beside it.',
+    ).toBe(panel)
+
+    // The tiles above it are direct children too, which is what "the same width"
+    // means when nothing can be measured.
+    expect(within(panel).getByText('Respondidas').closest('div')!.parentElement).toBe(panel)
+    expect(panel.children.length).toBeGreaterThanOrEqual(3)
+  })
+
+  /**
+   * And the second reading appears in that same column when the survey turns
+   * progress off — the case the two-column wrapper was built for. It is a row of
+   * the panel like every other one now.
+   */
+  it('adds the question count as another row when progress is off', async () => {
+    respondWith(view({ showProgress: false, questions: [question(), question({ id: 'q2' })] }))
+    renderPage()
+
+    const panel = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
+    expect(within(panel).queryByText('Respondidas')).toBeNull()
+    const count = within(panel).getByText('Preguntas').closest('div')
+    expect(count!.parentElement).toBe(panel)
+    expect(within(count!).getByText('2')).toBeTruthy()
   })
 })

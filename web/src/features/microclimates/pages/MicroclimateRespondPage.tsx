@@ -272,7 +272,15 @@ export default function MicroclimateRespondPage() {
                 the anonymity statement and the progress reading come BEFORE the
                 first question on a phone — which is how a five-minute pulse is
                 actually answered — and stay in view beside the questions on a wide
-                screen. */}
+                screen.
+
+                `lg:sticky` here is only real while no ancestor sets `overflow`:
+                the other axis is then promoted to `auto` and that ancestor becomes
+                this panel's scrollport instead of the document. `RespondShell`'s
+                `<main>` carried `overflow-x-auto` and does not scroll, which made
+                this class inert on all three respond routes.
+                `components/layout/respondSticky.test.tsx` is the guard against it
+                coming back. */}
             <div className="grid gap-panel-gap lg:grid-cols-3">
               <section
                 aria-label={t('microclimates.respondPanelLabel')}

@@ -72,14 +72,25 @@ export function RespondShell({ skipLabel, contentId = 'respond', children }: Res
 
       <main
         id={contentId}
-        // `overflow-x-auto` for the same reason `AdminLayout` keeps it: anything
-        // wider than the column — a long scale row, a wide word — scrolls inside
-        // the page rather than pushing the body sideways on a phone.
+        // **No `overflow` of any kind here, and that is load-bearing.** This
+        // `<main>` used to carry `overflow-x-auto`, copied from `AdminLayout`'s
+        // panel as a generic wide-content guard. It cost the page its sticky
+        // instrument panel: CSS promotes the used value of `overflow-y` to `auto`
+        // when the other axis is not `visible`, so `<main>` became the nearest
+        // scrollport for every `position: sticky` inside it — and unlike
+        // `AdminLayout`'s `<main>` (`h-dvh` shell, `flex-1 overflow-y-auto`, so it
+        // genuinely scrolls) this one grows with its content and the DOCUMENT
+        // scrolls. A sticky box in a scrollport that never scrolls never sticks.
+        // Measured in Chromium at 1440x900 on /survey/s1: `scrollHeight === clientHeight`
+        // (1273), and the panel sat at `rect.top = -238` at the page's maximum
+        // scroll — the anonymity promise left the screen after the first question
+        // and never came back. The guard now sits on the wide rows themselves; see
+        // `RespondQuestionField`.
         // `flex flex-col` so a child asking for `flex-1` fills the column. Without
         // it a short state — the thank-you card, a closed survey — renders as a
         // stub stranded at the top of a large empty field, which reads as content
         // that failed to load rather than as a page with little on it.
-        className="mx-auto flex w-full max-w-content flex-1 flex-col overflow-x-auto px-gutter pb-section"
+        className="mx-auto flex w-full max-w-content flex-1 flex-col px-gutter pb-section"
       >
         {children}
       </main>
