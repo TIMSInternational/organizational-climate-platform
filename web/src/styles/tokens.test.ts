@@ -157,6 +157,17 @@ describe('control density', () => {
     expect(publicSurveySource).toMatch(/max-w-content/)
   })
 
+  it('gives the page header a flex basis wide enough to be worth wrapping for', () => {
+    // `layout/PageTopBar.tsx` wears this as `basis-header-text`, and it is what
+    // makes the action cluster drop to its own line instead of squeezing the
+    // title. The value has to be a real width: a zero (or a percentage, which is
+    // what `flex-1`'s `0%` basis is) puts the flex base size back at nothing and
+    // the row silently stops wrapping at every viewport — invisible to happy-dom,
+    // and the defect this token was added to fix.
+    expect(token('--admin-size-header-text-min')).toBe('20rem')
+    expect(themeCss).toMatch(/--container-header-text:\s*var\(--admin-size-header-text-min\)/)
+  })
+
   it('reserves a viewport-relative block for a page-level empty state', () => {
     // `ui/error-state.tsx` reads this for its `fill` variant. Viewport-relative
     // because the dead space it compensates for grows with the display.

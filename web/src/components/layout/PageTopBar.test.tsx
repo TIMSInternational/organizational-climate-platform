@@ -199,12 +199,37 @@ describe('PageTopBar', () => {
       expect(topBar(container).className).not.toContain('max-w-measure')
     })
 
-    it('keeps the title at the top when the actions wrap', () => {
-      // `items-start`, not `items-center`: with two rows of buttons beside it a
-      // centred title floats to the middle of the block.
+    it('aligns the actions with the title, not with the middle of the block', () => {
+      // `items-start`, not `items-center`. While the two share a line the text
+      // column is three lines tall (eyebrow, title, description) against a
+      // one-control-high action cluster, so centring floats the buttons into the
+      // middle of the block.
       const { container } = renderTopBar({ title: 'Companies', actions: <button>New</button> })
       const row = container.querySelector('h1')!.closest('.justify-between')!
       expect(row.className.split(/\s+/)).toContain('items-start')
+    })
+
+    it('gives the text column a flex basis, so the actions can wrap off its line', () => {
+      // THE ONE THING happy-dom CANNOT SEE, so it is asserted as the mechanism.
+      //
+      // Flexbox breaks a line when the items' flex BASE sizes stop fitting.
+      // `flex-1` is `flex: 1 1 0%` — base size zero — so a row of `flex-wrap`
+      // plus `flex-1` never wraps at any width; it shrinks the text column
+      // toward nothing instead, which measured 1px wide by 5591px tall at a 320px
+      // viewport with the right half of the header empty. `basis-header-text` is
+      // 20rem, so the actions drop to their own line before the title is squeezed.
+      //
+      // The `flex-1` assertion is not redundant with the `basis-*` one: `flex-1`
+      // is shorthand for all three of grow/shrink/basis, so leaving it beside
+      // `basis-header-text` would re-zero the basis depending on order.
+      const { container } = renderTopBar({ title: 'Companies', actions: <button>New</button> })
+      const row = container.querySelector('h1')!.closest('.justify-between')!
+      expect(row.className.split(/\s+/)).toContain('flex-wrap')
+      const textColumn = container.querySelector('h1')!.closest('.justify-between > *')!
+      const classes = textColumn.className.split(/\s+/)
+      expect(classes).toContain('basis-header-text')
+      expect(classes).toContain('grow')
+      expect(classes).not.toContain('flex-1')
     })
   })
 })

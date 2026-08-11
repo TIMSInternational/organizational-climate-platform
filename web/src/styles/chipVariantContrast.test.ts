@@ -16,9 +16,9 @@ import { chipVariants, type ChipTone } from '../components/ui/chipVariants'
  * hand-listed. This calls the real `chipVariants()` for each tone, pulls the
  * `bg-*` and `text-*` classes out of the string it returns, resolves those class
  * names back through `styles/theme.css` to `--admin-*` tokens, resolves those
- * through `styles/tokens.css` per theme, composites the translucent fill over
- * the panel and measures. So the chain under test is the whole chain a browser
- * walks, and every link can break it:
+ * through `styles/tokens.css` per theme, composites the fill over each surface a
+ * chip can land on and measures. So the chain under test is the whole chain a
+ * browser walks, and every link can break it:
  *
  *   - re-pointing a tone at a different fill or ink in `chipVariants.ts`
  *   - re-mapping a `--color-*` in `theme.css`
@@ -26,6 +26,21 @@ import { chipVariants, type ChipTone } from '../components/ui/chipVariants'
  *
  * A guard that restated the ten hex pairs would agree with itself while all
  * three drifted — the reasoning `seqInkContrast.test.ts` sets out.
+ *
+ * ## Why FOUR surfaces and not just the panel
+ *
+ * The first version of this file composited over `--admin-bg-panel` and nothing
+ * else, and passed while the shipped pixels failed. A chip does not have a fixed
+ * ground: `ui/table.tsx`'s `TableRow` carries `hover:bg-state-hover`, so hovering
+ * an ordinary row lays `--admin-bg-hover` over the panel; and `--admin-bg-icon-box`
+ * is both the page background and the recessed KPI-tile surface. Measured in
+ * Chromium on `/dev/chart-gallery`, the old translucent fills read 4.28:1 (good)
+ * and 4.32:1 (warning) on a hovered row — under the line, with the panel-only
+ * guard green.
+ *
+ * The fix was opaque fills, so the surface no longer matters. `fills are opaque`
+ * below asserts exactly that, and the four surfaces stay because they are what
+ * makes a regression to a translucent fill *visible* rather than merely illegal.
  */
 
 const STYLES = join(process.cwd(), 'src', 'styles')
@@ -139,47 +154,113 @@ function classesFor(tone: ChipTone): { fill: string; ink: string } {
 const TONES: ChipTone[] = ['good', 'warning', 'critical', 'accent', 'neutral']
 const THEMES: Theme[] = ['light', 'dark']
 
-function measure(tone: ChipTone, theme: Theme): number {
-  const { fill, ink } = classesFor(tone)
+/**
+ * The grounds a chip is actually rendered on, built from the same tokens the
+ * browser uses rather than from literals.
+ *
+ * `panelHovered` is `hover:bg-state-hover` on a `TableRow` — `theme.css` maps
+ * `--color-state-hover` to `--admin-bg-hover`, which is translucent, so it has to
+ * be composited over the panel to get the surface. `iconBox` is
+ * `--admin-bg-icon-box`, which is the page background *and* the recessed tile;
+ * `iconBoxHovered` is the same row hover over that.
+ */
+type Surface = 'panel' | 'panelHovered' | 'iconBox' | 'iconBoxHovered'
+const SURFACES: Surface[] = ['panel', 'panelHovered', 'iconBox', 'iconBoxHovered']
+
+function surfaceColor(surface: Surface, theme: Theme): Rgba {
   const palette = palettes()[theme]
-  const panel = parseColor(resolve(palette['--admin-bg-panel'], palette))
+  const token = (name: string): Rgba => parseColor(resolve(palette[name], palette))
+  const hover = token('--admin-bg-hover')
+  const base = surface.startsWith('panel') ? token('--admin-bg-panel') : token('--admin-bg-icon-box')
+  return surface.endsWith('Hovered') ? flatten(hover, base) : base
+}
+
+function measure(tone: ChipTone, theme: Theme, surface: Surface = 'panel'): number {
+  const { fill, ink } = classesFor(tone)
   return contrastRatio(
     parseColor(tokenForUtility(ink, theme)),
-    flatten(parseColor(tokenForUtility(fill, theme)), panel),
+    flatten(parseColor(tokenForUtility(fill, theme)), surfaceColor(surface, theme)),
   )
 }
 
 describe('status chip contrast', () => {
-  it.each(TONES.flatMap((tone) => THEMES.map((theme) => [tone, theme] as const)))(
-    'the %s chip clears AA in %s',
-    (tone, theme) => {
-      expect(measure(tone, theme)).toBeGreaterThanOrEqual(AA_SMALL_TEXT)
-    },
-  )
+  it.each(
+    TONES.flatMap((tone) =>
+      THEMES.flatMap((theme) => SURFACES.map((surface) => [tone, theme, surface] as const)),
+    ),
+  )('the %s chip clears AA in %s on the %s', (tone, theme, surface) => {
+    expect(measure(tone, theme, surface)).toBeGreaterThanOrEqual(AA_SMALL_TEXT)
+  })
+
+  it.each(TONES)('the %s fill is opaque, so no surface can change it', (tone) => {
+    // The whole reason the four surfaces above agree. A translucent fill takes
+    // its rendered colour from the ground, and the ground under a chip moves:
+    // `ui/table.tsx` line ~77 puts `hover:bg-state-hover` on every `TableRow`.
+    // Asserted on the alpha rather than inferred from the ratios, because a
+    // near-opaque fill would still pass the ratios by a hair and then fail the
+    // moment a token was nudged.
+    const { fill } = classesFor(tone)
+    for (const theme of THEMES) {
+      expect(parseColor(tokenForUtility(fill, theme))[3], `${tone} in ${theme}`).toBe(1)
+    }
+  })
+
+  it('measures a surface difference, so the four surfaces are not decoration', () => {
+    // Guard the guard, part three. The four surfaces above all agree — which is
+    // the point, and also means that on their own they could not tell a working
+    // composite from a broken one. So assert the two halves of the property
+    // separately:
+    //
+    //   a TRANSLUCENT fill's ratio depends on the surface,
+    //   an OPAQUE one's does not.
+    //
+    // `--admin-accent-bg-green` is the 8% tint the `good` chip used to wear and
+    // is still declared for Badge, so it is a live translucent value, not a hex
+    // copied in here to argue with itself.
+    const { light } = palettes()
+    const ink = parseColor(resolve(light['--admin-chip-ink-good'], light))
+    const tint = parseColor(resolve(light['--admin-accent-bg-green'], light))
+    expect(tint[3], 'the accent tint stopped being translucent').toBeLessThan(1)
+    const onPanel = contrastRatio(ink, flatten(tint, surfaceColor('panel', 'light')))
+    const onHover = contrastRatio(ink, flatten(tint, surfaceColor('panelHovered', 'light')))
+    expect(onPanel, 'a hovered row is darker, so a tint on it contrasts less').toBeGreaterThan(
+      onHover,
+    )
+
+    for (const tone of TONES) {
+      for (const theme of THEMES) {
+        const ratios = SURFACES.map((surface) => measure(tone, theme, surface))
+        expect(new Set(ratios).size, `${tone} in ${theme} varies with its surface`).toBe(1)
+      }
+    }
+  })
 
   it('reads the pairing out of the real variant table', () => {
     // Guard the guard, part one. If `classesFor` ever stopped finding the classes
     // the table actually sets, every assertion above would be measuring something
     // other than the shipped chip. Pin two tones by name.
     expect(classesFor('good')).toEqual({
-      fill: 'bg-accent-green-soft',
+      fill: 'bg-chip-good-fill',
       ink: 'text-chip-good-ink',
     })
     expect(classesFor('neutral')).toEqual({
-      fill: 'bg-surface-icon-box',
+      fill: 'bg-chip-neutral-fill',
       ink: 'text-chip-neutral-ink',
     })
   })
 
   it('follows a var() reference rather than stopping at it', () => {
-    // `--admin-chip-ink-neutral` is `var(--admin-font-secondary)` and
-    // `--admin-chip-ink-accent` is `var(--admin-accent-blue-fill)`. Unresolved,
-    // `parseColor` would throw rather than pass — but a future resolver bug that
-    // returned a default instead would pass silently, so assert the values.
+    // `--admin-chip-ink-neutral` is `var(--admin-font-secondary)`,
+    // `--admin-chip-bg-neutral` is `var(--admin-bg-icon-box)` and
+    // `--admin-chip-ink-accent` is `var(--admin-accent-blue)` in dark.
+    // Unresolved, `parseColor` would throw rather than pass — but a future
+    // resolver bug that returned a default instead would pass silently, so
+    // assert the values.
     const { light, dark } = palettes()
     expect(resolve(light['--admin-chip-ink-neutral'], light)).toBe('#474747')
     expect(resolve(dark['--admin-chip-ink-neutral'], dark)).toBe('#b3b3b3')
-    expect(resolve(light['--admin-chip-ink-accent'], light)).toBe('#0f766e')
+    expect(resolve(light['--admin-chip-bg-neutral'], light)).toBe('#f0f0f0')
+    expect(resolve(dark['--admin-chip-bg-neutral'], dark)).toBe('#2a2a2a')
     expect(resolve(dark['--admin-chip-ink-accent'], dark)).toBe('#14b8a6')
   })
 
@@ -200,12 +281,16 @@ describe('status chip contrast', () => {
   })
 
   it('leaves a margin over the threshold rather than sitting on it', () => {
-    // The worst pairing measured 4.64:1 when this landed. Recorded as a floor, not
+    // The worst pairing is `critical` in light, 5.59:1. Recorded as a floor, not
     // as an equality: a token nudge that took it to 4.51 would still pass every
-    // assertion above while being one rounding away from failing.
+    // assertion above while being one rounding away from failing. The first cut
+    // of this chip had 0.14 of margin and lost all of it to a row hover, which is
+    // why the bar here is a whole point over AA and not a tenth.
     const worst = Math.min(
-      ...TONES.flatMap((tone) => THEMES.map((theme) => measure(tone, theme))),
+      ...TONES.flatMap((tone) =>
+        THEMES.flatMap((theme) => SURFACES.map((surface) => measure(tone, theme, surface))),
+      ),
     )
-    expect(worst).toBeGreaterThanOrEqual(4.6)
+    expect(worst).toBeGreaterThanOrEqual(5.5)
   })
 })

@@ -154,6 +154,24 @@
      Applies to PROSE ONLY — tables and charts fill the width, and there is no
      page width cap (see `app/AdminLayout.tsx`). */
   --admin-size-measure: 70ch;
+  /* The narrowest a page header's text column may be before the action cluster
+     stops sitting beside it. theme.css points `--container-header-text` here,
+     giving `basis-header-text` — a FLEX BASIS, so it is the width flexbox uses
+     to decide whether the two fit on one line, not a hard minimum: the column
+     grows past it when there is room and shrinks under it when it is alone on
+     its own line in a narrow viewport.
+     20rem = 320px: wide enough that the header's title and description still
+     set as prose. It is a judgement, but the cost of NOT having it was
+     measured, in Chromium, on `/dev/chart-gallery` in Spanish. With `flex-1`
+     (base size `0%`, confirmed by reading the computed `flex-basis`) the column
+     went 241px at a 560 viewport, 181 at 500, 101 at 420, 61 at 380 and **1px
+     wide by 5591px tall** at 320 — one character per line — and the action
+     cluster stayed on the title's line at every one of those widths. With this
+     basis it wraps from 560 down and the column is 462 / 322 / 282 / 222px.
+
+     The alternative, a media query, cannot work here: whether the two fit
+     depends on how wide the caller's buttons are, which no breakpoint knows. */
+  --admin-size-header-text-min: 20rem;
 
   /* -- Radii -------------------------------------------------------------
      4px on controls and 8px on panels are the legacy literals: ui/button.tsx
@@ -264,42 +282,68 @@
   --admin-accent-border-amber: rgba(245, 158, 11, 0.2);
   --admin-accent-border-orange: rgba(249, 115, 22, 0.2);
 
-  /* -- Status-chip ink (UI-0) --------------------------------------------
-     THE INK A STATUS CHIP WEARS ON ITS SOFT FILL. Five tones, one per state
-     the design names: good / warning / critical / accent / neutral.
+  /* -- Status-chip fill and ink (UI-0) -----------------------------------
+     A STATUS CHIP'S SURFACE AND THE INK ON IT. Five tones, one per state the
+     design names: good / warning / critical / accent / neutral.
 
-     These exist because the accent tokens above cannot do this job. Measured
-     against the 8% soft fills, `badgeVariantContrast.test.ts` records the
-     three hued badge variants at 3.49 / 2.99 / 3.41:1 in LIGHT — all under
-     WCAG AA 1.4.3's 4.5:1, and chip text is 11px, so 4.5 is the threshold.
-     A soft tint over white is a near-white surface; the accents were picked
-     to sit on the PANEL (>=3:1 for icons and borders), not to be read on a
-     tint of themselves. Two different jobs, so two different tokens — the
-     design's own third principle rather than a workaround.
+     ## Why the fills are OPAQUE, and are not the `--admin-accent-bg-*` above
 
-     Light takes the redesign's own status inks verbatim (`--good` #15803d,
-     `--warn` #b45309, `--crit` #b91c1c), which are already the darker steps
-     for exactly this reason. Dark takes the redesign's dark inks (#4ade80,
-     #fbbf24, #f87171).
+     Every `--admin-accent-bg-*` is a translucent tint — `rgba(16,185,129,.08)`.
+     Translucent means the colour a chip actually renders is a function of what
+     is behind it, and a chip is not on a fixed surface: `ui/table.tsx`'s
+     `TableRow` carries `hover:bg-state-hover`, so the ordinary act of hovering
+     a row repaints the surface under every chip in it.
 
-     Two deviations from the prototype, both because its value fails here:
-       accent, light  the prototype pairs #0d9488 with its accent tint, which
-                      measures 3.40:1. `--admin-accent-blue-fill` #0f766e is
-                      the repo's existing text-safe teal and gives 4.97:1.
-       critical, dark the prototype's #f87171 is kept; note that the dark
-                      `--admin-accent-red` #ef4444 would have been 4.31:1.
+     Measured in Chromium on `/dev/chart-gallery` rather than assumed: hovering
+     a row puts `--admin-bg-hover` rgba(0,0,0,.04) over the #ffffff panel, so
+     the surface is #f5f5f5, the 8% green tint composites to rgb(226,240,235)
+     and #15803d on it is 4.28:1 — under WCAG AA 1.4.3's 4.5 for the chip's
+     11px text. On `--admin-bg-icon-box` #f0f0f0 — the recessed surface
+     `charts/KpiTile.tsx` sets every KPI on, and in light the same hex as the
+     page background `--admin-bg-outer` — the same pairing is 4.12:1.
+
+     So each tone gets its own OPAQUE fill, which is also what the prototype
+     does (`--good-soft:#e7f6ec; --warn-soft:#fdf3e3; --crit-soft:#fdeaea;
+     --accent-soft:#e6f5f3`, and the dark values below, all taken verbatim). An
+     opaque fill renders the same colour on every surface, so the pairing is a
+     property of the chip and cannot be changed by the thing under it.
+     `--admin-chip-bg-neutral` is the exception, and it is a reference rather
+     than a hex: the prototype's neutral chip is `background:var(--panel-2)`,
+     its recessed neutral surface, and this palette's counterpart for that role
+     is `--admin-bg-icon-box`. The hexes are NOT the prototype's (#f5f8f8 light,
+     #1b201f dark) — the token port keeps the legacy admin greys throughout, and
+     a neutral chip has to match the recessed surfaces already on the page, not
+     the prototype's. Referencing rather than copying is what stops the two
+     drifting.
+
+     ## The inks
+
+     The prototype's own status inks do not clear 4.5 on its own fills: #15803d
+     on #e7f6ec is 4.49 and #0d9488 on #e6f5f3 is 3.34. Light therefore steps
+     each hue one further down — green-800 #166534 (6.38), amber-800 #92400e
+     (6.45), teal-800 #115e59 (6.76) — and keeps the prototype's #b91c1c, which
+     already measures 5.59. Dark takes the prototype's inks unchanged (#4ade80
+     8.99, #fbbf24 9.22, #f87171 6.19) and uses the identity accent, 5.62 on the
+     dark teal fill.
 
      Neutral is `--admin-font-secondary` because a neutral chip is body ink on
      a recessed surface and there is nothing hued to preserve.
 
-     Every pairing, both themes, worst case 4.64:1. Re-derived from THIS FILE
-     and from the real `ui/chipVariants.ts` class table by
-     `styles/chipVariantContrast.test.ts`, so neither a token nudge nor a
-     variant re-pairing can quietly drop one under the line. */
-  --admin-chip-ink-good: #15803d;
-  --admin-chip-ink-warning: #b45309;
+     Worst pairing across both themes: 5.59:1, so there is over a point of
+     headroom rather than the 0.14 the translucent fills left. Re-derived from
+     THIS FILE and from the real `ui/chipVariants.ts` class table by
+     `styles/chipVariantContrast.test.ts`, which measures every tone on four
+     surfaces (panel, hovered panel, icon box, hovered icon box) and fails a
+     fill that is not opaque. */
+  --admin-chip-bg-good: #e7f6ec;
+  --admin-chip-bg-warning: #fdf3e3;
+  --admin-chip-bg-critical: #fdeaea;
+  --admin-chip-bg-accent: #e6f5f3;
+  --admin-chip-bg-neutral: var(--admin-bg-icon-box);
+  --admin-chip-ink-good: #166534;
+  --admin-chip-ink-warning: #92400e;
   --admin-chip-ink-critical: #b91c1c;
-  --admin-chip-ink-accent: var(--admin-accent-blue-fill);
+  --admin-chip-ink-accent: #115e59;
   --admin-chip-ink-neutral: var(--admin-font-secondary);
 
   /* -- Data visualisation (#79) -------------------------------------------
@@ -482,11 +526,18 @@
   --admin-accent-border-amber: rgba(245, 158, 11, 0.15);
   --admin-accent-border-orange: rgba(249, 115, 22, 0.15);
 
-  /* Status-chip ink, dark. Selected against the 10% fills over #171717 rather
-     than flipped from light — see the light block for the whole argument.
-     `accent` can be the identity accent here (6.23:1) because the dark fill is
-     dark; `critical` is a step lighter than `--admin-accent-red`, which would
-     have measured 4.31:1. */
+  /* Status-chip fill and ink, dark. The prototype's own dark chip values,
+     verbatim: `--good-soft:#10281a --warn-soft:#2e2310 --crit-soft:#2e1414
+     --accent-soft:#10312e` under `--good:#4ade80 --warn:#fbbf24
+     --crit:#f87171 --accent:#14b8a6`. They measure 8.99 / 9.22 / 6.19 / 5.62,
+     so unlike light no step was needed. Opaque for the same reason as light —
+     see the light block for the whole argument. `accent` can be the identity
+     `--admin-accent-blue` here because the fill is dark. */
+  --admin-chip-bg-good: #10281a;
+  --admin-chip-bg-warning: #2e2310;
+  --admin-chip-bg-critical: #2e1414;
+  --admin-chip-bg-accent: #10312e;
+  --admin-chip-bg-neutral: var(--admin-bg-icon-box);
   --admin-chip-ink-good: #4ade80;
   --admin-chip-ink-warning: #fbbf24;
   --admin-chip-ink-critical: #f87171;

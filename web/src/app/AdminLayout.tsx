@@ -189,9 +189,8 @@ function AdminShell() {
               row is *better* for having the width; it is prose that becomes
               unreadable, and the same measurement put the empty-state description
               at 132 characters per line where about 70 is the limit. So the
-              constraint moved onto the text — `max-w-measure` (70ch) on the
-              description in `PageTopBar`, `max-w-prose` in `ui/error-state.tsx`
-              — and the container fills,
+              constraint moved onto the text — `max-w-prose` on the description in
+              `PageTopBar` and in `ui/error-state.tsx` — and the container fills,
               which is also what ForMaps' own `AppShell` does (no `maxWidth`
               anywhere in it).
 

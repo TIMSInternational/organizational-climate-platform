@@ -219,20 +219,26 @@ UI-0 off the legacy `#2E9098`, which measured below the chroma floor and read
 grey), the selected-nav fill and the focus-ring colour. `green` = success,
 `red` = destructive/error, `amber`/`orange` = warning.
 
-### Status-chip ink
+### Status-chip fill and ink
 
-An accent is chosen to clear 3:1 against the **panel**, which is right for a
-border or an icon and not enough for 11px text sitting on a *tint of itself*.
-So a status chip does not wear the accent:
+A status chip uses neither half of the accent palette. An accent **ink** is
+chosen to clear 3:1 against the panel, which is right for a border or an icon
+and not enough for 11px text sitting on a tint of itself. And an
+`--admin-accent-bg-*` **fill** is translucent, so what it renders as depends on
+what is behind it — and a chip has no fixed ground: `ui/table.tsx` puts
+`hover:bg-state-hover` on every `TableRow`, so hovering a row repaints the
+surface under every chip in it and drags a translucent fill down with it.
 
 | Pattern | Utility | Use |
 | --- | --- | --- |
-| `--admin-chip-ink-<tone>` | `text-chip-<tone>-ink` | The word inside a `ui/Chip`, on its `bg-accent-*-soft` fill |
+| `--admin-chip-bg-<tone>` | `bg-chip-<tone>-fill` | The opaque surface of a `ui/Chip` |
+| `--admin-chip-ink-<tone>` | `text-chip-<tone>-ink` | The word inside it, measured against that fill |
 
 Five tones — `good`, `warning`, `critical`, `accent`, `neutral` — selected per
-theme, worst measured pairing 4.64:1 against WCAG AA's 4.5. Never separate an ink
+theme, worst measured pairing 5.59:1 against WCAG AA's 4.5. Never separate an ink
 from the fill it was measured against; `chipVariantContrast.test.ts` re-derives
-every pairing from `ui/chipVariants.ts` and fails if one drifts.
+every pairing from `ui/chipVariants.ts`, on the panel, a hovered row, the icon
+box and a hovered icon box, and fails a fill that is not opaque.
 
 ## Type
 

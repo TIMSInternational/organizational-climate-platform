@@ -32,17 +32,29 @@ import { cn } from '../../lib/cn'
  * tone with a visible hairline, and without a transparent one on the other four
  * they would be 2px shorter than it.
  *
- * ## Why the ink is a chip token and not the accent
+ * ## Why both the fill and the ink are chip tokens
  *
- * Every hued fill here is a `bg-accent-*-soft` — an 8%/10% tint, i.e. very
- * nearly the panel. The accent inks are chosen to clear 3:1 against the PANEL,
- * which is right for a border or an icon and not enough for 11px text:
+ * Neither half of the pair can come from the accent palette.
+ *
+ * The **ink** cannot, because the accent inks are chosen to clear 3:1 against
+ * the PANEL — right for a border or an icon, not enough for 11px text.
  * `styles/badgeVariantContrast.test.ts` measures them at 3.49 / 2.99 / 3.41:1
- * in light. So each tone wears `text-chip-*-ink`, a token picked against the
- * fill below it in each theme. Worst measured pairing 4.64:1 against WCAG AA
- * 1.4.3's 4.5. `styles/chipVariantContrast.test.ts` re-derives all ten pairings
- * by reading THIS table and resolving the classes back through `theme.css` and
- * `tokens.css`, so re-pairing a tone here fails the build.
+ * in light.
+ *
+ * The **fill** cannot, because every `bg-accent-*-soft` is a translucent tint
+ * (`--admin-accent-bg-green` is `rgba(16,185,129,0.08)`) and a translucent fill
+ * renders whatever colour the surface behind it dictates. A chip has no fixed
+ * surface: `ui/table.tsx`'s `TableRow` carries `hover:bg-state-hover`, so
+ * hovering a row repaints the ground under every chip in it. Measured in
+ * Chromium on `/dev/chart-gallery`, that took the `good` chip to 4.28:1 and
+ * `warning` to 4.32:1 — both under 4.5 — while a guard compositing only over
+ * the panel read them as passing. So each tone wears an opaque
+ * `bg-chip-*-fill`, which is what the prototype's `.chip` uses too, paired with
+ * a `text-chip-*-ink` measured against it. Worst pairing across both themes:
+ * 5.59:1. `styles/chipVariantContrast.test.ts` re-derives all ten by reading
+ * THIS table and resolving the classes back through `theme.css` and
+ * `tokens.css` on four different surfaces, so re-pairing a tone here — or
+ * pointing one at a translucent fill again — fails the build.
  */
 export const chipVariants = cva(
   cn(
@@ -53,11 +65,11 @@ export const chipVariants = cva(
   {
     variants: {
       tone: {
-        good: 'bg-accent-green-soft text-chip-good-ink',
-        warning: 'bg-accent-amber-soft text-chip-warning-ink',
-        critical: 'bg-accent-red-soft text-chip-critical-ink',
-        accent: 'bg-accent-blue-soft text-chip-accent-ink',
-        neutral: 'border-line-light bg-surface-icon-box text-chip-neutral-ink',
+        good: 'bg-chip-good-fill text-chip-good-ink',
+        warning: 'bg-chip-warning-fill text-chip-warning-ink',
+        critical: 'bg-chip-critical-fill text-chip-critical-ink',
+        accent: 'bg-chip-accent-fill text-chip-accent-ink',
+        neutral: 'border-line-light bg-chip-neutral-fill text-chip-neutral-ink',
       },
     },
     defaultVariants: {

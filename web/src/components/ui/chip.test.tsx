@@ -107,6 +107,6 @@ describe('Chip', () => {
     render(<Chip tone="good" label="Active" className="ml-2" />)
     const chip = screen.getByText('Active')
     expect(chip.className).toContain('ml-2')
-    expect(chip.className).toContain('bg-accent-green-soft')
+    expect(chip.className).toContain('bg-chip-good-fill')
   })
 })

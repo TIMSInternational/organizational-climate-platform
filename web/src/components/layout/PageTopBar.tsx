@@ -57,9 +57,32 @@ import {
  * because a separator is a sibling with its own margins and the design's rule is
  * a property of the header box.
  *
- * The row is `items-start`, not `items-center`: when the actions wrap to two
- * lines the title must stay pinned to the top of the block rather than drifting
- * to its middle.
+ * ### The header wraps by basis, not by breakpoint
+ *
+ * The header is a two-item flex row — the text column, then the actions — and it
+ * has to become two stacked rows when there is no longer room for both. Getting
+ * that wrong is invisible to the suite, because happy-dom computes no layout:
+ * the first cut of this component paired `flex-wrap` with `min-w-0 flex-1` on
+ * the text column, and `flex: 1 1 0%` gives the column a flex base size of
+ * **zero**, so the two items always "fit" and the wrap never fires at any width.
+ * Measured in Chromium on `/dev/chart-gallery` in Spanish, that column went
+ * 449px at a 768 viewport → 241 at 560 → 101 at 420 → 1px wide by 5591px tall at
+ * 320, one character per line, next to an empty right half — and the actions
+ * never left the title's line at any of them.
+ *
+ * So the text column is `grow basis-header-text` — `flex: 1 1 20rem`. Flexbox
+ * breaks a line when the items' base sizes stop fitting, so the actions drop to
+ * their own full-width line as soon as the text column cannot keep 320px, and
+ * above that they sit beside it and the column grows to fill. `min-w-0` still
+ * rides along, for the case where the column is alone on its line in a viewport
+ * narrower than its own basis. No media query: the trigger is the actual width
+ * of the actions the caller passed, which a breakpoint cannot know.
+ *
+ * The row is `items-start`, not `items-center`: while the two do share a line the
+ * text column stacks three blocks (eyebrow, title, description) against a
+ * one-control-high action cluster — 116px against 28px at 1440, measured — and
+ * centring would float the buttons into the middle of that block instead of
+ * aligning them with the title.
  *
  * Three deliberate deviations from `.ptb`, each because the repo's own layer
  * already answers the question:
@@ -80,7 +103,9 @@ import {
  *   a literal 65ch rather than from a theme key, so it cannot be re-pointed, and
  *   `styles/theme.css` declares `--container-measure` instead. Tables and charts
  *   fill the width; only prose is capped, and there is no page width cap (see
- *   `app/AdminLayout.tsx`).
+ *   `app/AdminLayout.tsx`, whose own comment still names `max-w-prose` for this
+ *   description — that file is deliberately untouched, and this docstring is the
+ *   authoritative statement about this component).
  */
 export interface PageBreadcrumb {
   /** Already-translated text. */
@@ -174,11 +199,16 @@ export function PageTopBar({
         </Breadcrumb>
       )}
 
-      {/* `flex-wrap` rather than a fixed two-column row: the actions slot holds
-          real buttons, and at 320px a title plus two buttons does not fit on one
-          line. Without it the row overflows the panel horizontally. */}
+      {/* `flex-wrap` plus a real flex BASIS on the text column, not `flex-1`.
+          `flex-1` is `flex: 1 1 0%`, and a base size of zero means the two items
+          always fit, so `flex-wrap` never fires and the text column is squeezed
+          to nothing instead — measured at 1px wide at a 320px viewport. With
+          `basis-header-text` (20rem) the line breaks the moment the column
+          cannot hold 320px — measured, that is from a 560px viewport down — and
+          the actions take the next line at full width.
+          See the docstring above; happy-dom cannot see any of this. */}
       <div className="flex flex-wrap items-start justify-between gap-panel">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 grow basis-header-text">
           {/* ForMaps' page eyebrow: `text-[10px] uppercase tracking-[0.2em]
               font-bold` in the muted tone, on its own line above the title. A
               `<p>` rather than a `<span>` so it is a block without needing a
