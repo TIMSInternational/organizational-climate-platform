@@ -130,6 +130,34 @@ public static class ActingUserResolver
         => (await ResolveAsync(currentUser, db.Users.AsNoTracking(), cancellationToken))?.Id;
 
     /// <summary>
+    /// The acting user's row id and the company it belongs to, or null when the <c>sub</c>
+    /// matches nothing.
+    /// </summary>
+    /// <remarks>
+    /// Added for the audit writer (#143), which needs both and needs them from one query:
+    /// <c>audit_logs.user_id</c> and <c>audit_logs.company_id</c> are both foreign keys, and
+    /// the company one is NOT NULL, so an audit row can only be filed under the company on the
+    /// actor's own row. The claim is not used for it — <c>companyId</c> is whatever the token
+    /// said when it was minted, and a user moved between companies since would file rows under
+    /// the wrong tenant.
+    ///
+    /// Reads through <c>AsNoTracking</c> and hands back values rather than the entity, for the
+    /// reason <see cref="ResolveIdAsync"/> gives. It shares the private ordering below rather
+    /// than repeating it; one ordering in one place is the point of this class.
+    ///
+    /// <c>CompanyId</c> comes back nullable because <c>users.company_id</c> is (#191's
+    /// company-less SuperAdmin). The caller decides what an unattributable actor means.
+    /// </remarks>
+    public static async Task<(Guid UserId, Guid? CompanyId)?> ResolveIdAndCompanyAsync(
+        CurrentUser currentUser,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var user = await ResolveAsync(currentUser, db.Users.AsNoTracking(), cancellationToken);
+        return user is null ? null : (user.Id, user.CompanyId);
+    }
+
+    /// <summary>
     /// The one ordering. <c>PersonaExternalId</c>, then — only for a <c>sub</c> that matches
     /// no <c>PersonaExternalId</c>, and only when it parses — <c>Id</c>.
     /// </summary>

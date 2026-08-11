@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using System.Text.Json;
 using ClimateProject.Api.Infrastructure;
+using ClimateProject.Api.Infrastructure.Auditing;
+using ClimateProject.Application.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Reports;
 using ClimateProject.Domain.Entities;
@@ -17,7 +19,16 @@ public static class ReportEndpoints
 
         group.MapGet("", ListAsync);
         group.MapPost("", CreateAsync);
-        group.MapGet("/{id:guid}", GetAsync);
+
+        // "Who read this report" is one of the three questions #143 exists to answer, and a
+        // read answers to nothing by default -- auditing every GET would bury the trail under
+        // dashboard polling, so the ones that matter say so. The list above is not marked: it
+        // returns metadata, not a report's contents.
+        group.MapGet("/{id:guid}", GetAsync)
+            .WithMetadata(new AuditSensitiveReadAttribute(AuditVerbs.Read));
+
+        // Already a POST, so already audited. Left here as the answer to "who exported this
+        // data" -- it is audited by the method, not by this comment.
         group.MapPost("/{id:guid}/download", DownloadAsync);
     }
 
