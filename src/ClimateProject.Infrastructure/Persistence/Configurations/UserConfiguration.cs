@@ -20,6 +20,13 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.DepartmentId).HasColumnName("department_id");
         builder.Property(u => u.ManagerId).HasColumnName("manager_id");
         builder.Property(u => u.IsActive).HasColumnName("is_active").IsRequired();
+
+        // No HasDefaultValueSql, deliberately (#284). User.SecurityStamp initialises itself
+        // to a fresh Guid, so the application always sends a value and a database-side
+        // default would never be reached by anything this code inserts. The backfill of the
+        // rows that predate the column is done once, inside the migration.
+        builder.Property(u => u.SecurityStamp).HasColumnName("security_stamp").IsRequired();
+
         builder.Property(u => u.LastLoginAt).HasColumnName("last_login_at");
         builder.Property(u => u.ConsentUpdatedAt).HasColumnName("consent_updated_at");
         builder.Property(u => u.CreatedAt).HasColumnName("created_at").IsRequired();

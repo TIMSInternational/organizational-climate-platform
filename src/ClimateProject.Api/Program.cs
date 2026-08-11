@@ -222,6 +222,17 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             ValidateLifetime = true,
             NameClaimType = "sub",
         };
+
+        // Revocation (#284). The signature and lifetime checks above say the token was minted
+        // by a holder of the secret and has not expired; this says the session it represents
+        // has not been ended since. It runs here, in authentication, rather than in the
+        // authorization policy below, for two reasons: the refusal is a 401 (the client's
+        // authFetch turns that into "sign in again", which is exactly what happened), and
+        // authentication also covers endpoints that read a token without RequireAuthorization.
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = SecurityStampValidation.ValidateAsync,
+        };
     })
     // Forces the Configure delegate above to run at host-startup time (via the
     // options-validation hosted service that runs after builder.Build()), so a
@@ -235,18 +246,26 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
 // Every authorized endpoint in this app uses the bare RequireAuthorization(), i.e. this
 // policy -- so adding the deactivation check here enforces it product-wide in one place (#280).
 //
-// It reads the token's own isActive claim rather than the database: no per-request user
-// lookup is added, and no token minted by another issuer against the shared TrackingJwtSecret
-// is locked out for lacking a claim it never wrote (see HasDeactivatedAccountClaim). What it
-// buys is that a token saying "deactivated" is refused by the API itself. Before this, the
-// only thing anywhere that read that claim was a client-side redirect in the SPA.
+// It reads the token's own isActive claim rather than the database, so no token minted by
+// another issuer against the shared TrackingJwtSecret is locked out for lacking a claim it
+// never wrote (see HasDeactivatedAccountClaim). What it buys is that a token saying
+// "deactivated" is refused by the API itself. Before this, the only thing anywhere that read
+// that claim was a client-side redirect in the SPA.
 //
 // It is a second line of defence, not the fix: every path that mints a token -- /auth/login,
 // /auth/signup, /auth/google, /auth/refresh and POST /invitations/{token}/accept -- goes
 // through AuthEndpoints.IssueTokenForAsync, which refuses to mint one in the first place.
-// Neither layer revokes a token that was issued while the account was still active --
-// deactivating a user does not end their current session before the token's 24h expiry, and
-// that is a separate change.
+//
+// Neither layer revokes a token that was issued while the account was still ACTIVE:
+// deactivating a user still does not end their current session before the token's 24h expiry.
+// #284 built the mechanism that could -- rotating User.SecurityStamp ends every session the
+// user has open, and the JwtBearerEvents hook above enforces it -- but the only two places
+// that rotate it are the two password paths #284 names. Wiring deactivation into it is a
+// change to UserEndpoints, and still a separate one.
+//
+// (This comment used to say "no per-request user lookup is added" of the policy. That is
+// still true of the policy, but no longer true of the request: #284's OnTokenValidated hook
+// reads the acting user's stamp on every request whose token carries the claim.)
 builder.Services.AddAuthorization(options =>
 {
     options.DefaultPolicy = new AuthorizationPolicyBuilder()

@@ -73,7 +73,10 @@ public class DeactivatedTokenAuthorizationTests : IAsyncLifetime
             Email: _user.Email,
             Name: _user.Name,
             CompanyId: _user.CompanyId?.ToString() ?? string.Empty,
-            IsActive: isActive));
+            IsActive: isActive,
+            // The seeded row's real stamp, so #284's revocation check passes and the only
+            // thing that can refuse these tokens is the isActive claim this class is about.
+            SecurityStamp: _user.SecurityStamp));
     }
 
     private HttpClient ClientWith(string token)
