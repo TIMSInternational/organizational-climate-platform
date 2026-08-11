@@ -13,7 +13,22 @@
  * suppressed before it renders any cell at all.
  */
 
+/**
+ * The floor itself, as a number the product can show as well as enforce.
+ *
+ * Company Settings renders this value as a *locked* control — the redesign's
+ * point being that the guarantee is only credible if the number you are promised
+ * is demonstrably the number the code applies. A page that wrote its own `5`
+ * beside a predicate that defaulted to some other value would be advertising a
+ * promise nothing keeps, so both read this one constant.
+ *
+ * It is the platform *minimum*, not the whole rule: `isSuppressed` and
+ * `ProtectedCell` both still take a `threshold`, because a company may be held to
+ * a higher floor. Lower is what is refused.
+ */
+export const ANONYMITY_FLOOR = 5
+
 /** Whether a reading is below the anonymity floor and must be withheld. */
-export function isSuppressed(responses: number, threshold = 5): boolean {
+export function isSuppressed(responses: number, threshold = ANONYMITY_FLOOR): boolean {
   return responses < threshold
 }

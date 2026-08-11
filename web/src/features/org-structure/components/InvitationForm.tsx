@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import RoleSelector from './RoleSelector'
 import { useTranslation } from '../../../i18n'
+import { Button } from '../../../components/ui'
 
 export interface InvitationFormValues {
   invitationType: string
@@ -59,7 +60,9 @@ export default function InvitationForm({ allowCompanyAdminSetup, onSubmit }: Inv
           <RoleSelector value={values.role} onChange={(role) => setValues({ ...values, role })} />
         </label>
       )}
-      <button type="submit" disabled={submitting}>{submitting ? t('common.sending') : t('users.sendInvitation')}</button>
+      <Button type="submit" variant="primary" disabled={submitting}>
+        {submitting ? t('common.sending') : t('users.sendInvitation')}
+      </Button>
     </form>
   )
 }

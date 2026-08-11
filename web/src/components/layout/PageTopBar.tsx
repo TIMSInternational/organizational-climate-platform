@@ -138,7 +138,15 @@ export function PageTopBar({
           real buttons, and at 320px a title plus two buttons does not fit on one
           line. Without it the row overflows the panel horizontally. */}
       <div className="flex flex-wrap items-center justify-between gap-inline">
-        <div className="min-w-0 flex-1">
+        {/* `basis-64` is what makes the `flex-wrap` above actually wrap. With
+            `flex-1` alone the title block shrinks instead of wrapping, so on a
+            narrow viewport a page with actions squeezed its description into a
+            column two or three characters wide while the buttons kept their
+            full width — measured on /admin/companies/:id/users at 390px, where
+            "Who can see what." came out one word per line. A flex basis wider
+            than the remaining room forces the actions onto their own line
+            instead. Nothing changes at any width where both fit. */}
+        <div className="min-w-0 flex-1 basis-64">
           {/* ForMaps' page eyebrow: `text-[10px] uppercase tracking-[0.2em]
               font-bold` in the muted tone, on its own line above the title. A
               `<p>` rather than a `<span>` so it is a block without needing a
