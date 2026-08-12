@@ -545,7 +545,7 @@
     "creating": "Creando...",
     "createCompany": "Crear Empresa",
     "companyDashboard": "Panel de Empresa",
-    "organizationInsights": "Información y gestión de toda la organización",
+    "organizationInsights": "Dónde está la organización hoy, y lo único que más merece tu atención.",
     "searchEmployeesDepartments": "Buscar encuestas, empleados, departamentos...",
     "searchResults": "Resultados de Búsqueda",
     "totalEmployees": "Total de Empleados",
@@ -1195,7 +1195,7 @@
     "journeyLabel": "Ciclo de vida del microclima",
     "journeyDraft": "Las preguntas y la audiencia están definidas. Aún no se recopila nada.",
     "journeyActive": "Abierto para respuestas.",
-    "listDescription": "Un pulso breve que puedes lanzar en una sala. Los resultados aparecen a medida que la gente responde, y siguen siendo anónimos con el mismo piso de {minimum}.",
+    "listDescription": "Un pulso de cinco minutos que puedes lanzar en una sala. Los resultados aparecen a medida que la gente responde, y siguen siendo anónimos con el mismo piso de {minimum}.",
     "kpiLive": "En vivo ahora",
     "kpiLiveSub": "abiertas a respuestas",
     "kpiDrafts": "Borradores",
@@ -1322,7 +1322,7 @@
       "saved": "Se guardaron tus preferencias de notificaciones.",
       "loadError": "No se pudieron cargar tus preferencias de notificaciones."
     },
-    "inboxDescription": "Todo lo que la plataforma te ha enviado.",
+    "inboxDescription": "Lo que cambió mientras no estabas.",
     "unreadOnly": "Solo no leídas",
     "unread": "No leída",
     "read": "Leída",
@@ -1352,7 +1352,7 @@
   },
   "profile": {
     "title": "Tu perfil",
-    "description": "Los datos de tu cuenta, tu contrase\u00f1a, tus preferencias y tu actividad reciente.",
+    "description": "Tus datos, cómo se te notifica y los dispositivos con una sesión abierta.",
     "loadError": "No se pudo cargar tu perfil.",
     "eyebrow": "Cuenta",
     "accountTitle": "Detalles",
@@ -1497,6 +1497,7 @@
     "activeRate": "Tasa Activa"
   },
   "surveys": {
+    "templatesDescription": "Empieza desde algo que ya funciona. Las plantillas se instancian en el servidor, así que las preguntas llegan intactas.",
     "templatesEyebrow": "Biblioteca",
     "title": "Encuestas",
     "createSurvey": "Crear Encuesta",
@@ -1989,7 +1990,7 @@
     "noCohortValue": "sin valor del grupo"
   },
   "insights": {
-    "description": "Hallazgos generados por IA a partir de sus encuestas y microclimas",
+    "description": "Generado a partir de las respuestas de esta empresa. Cada hallazgo nombra la evidencia de la que proviene y puede descartarse con un motivo.",
     "insightTitle": "Título",
     "priority": "Prioridad",
     "typeTrend": "Tendencia",

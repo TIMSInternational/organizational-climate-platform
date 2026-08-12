@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Plus } from 'lucide-react'
 import { Link } from 'react-router'
 import { listMicroclimates, type Microclimate } from '../api/microclimates'
 import MicroclimateList from '../components/MicroclimateList'
@@ -108,7 +109,13 @@ export default function MicroclimatesListPage() {
               <Link to="/microclimates/analytics">{t('microclimates.analytics')}</Link>
             </Button>
             <Button asChild variant="primary">
-              <Link to="/microclimates/new">{t('common.newMicroclimate')}</Link>
+              <Link to="/microclimates/new">
+                {/* The design puts a plus on every create action. Same
+                    `<Plus aria-hidden>` the dashboard's "New survey" uses, so the
+                    two primaries are one control with one shape. */}
+                <Plus aria-hidden="true" />
+                {t('common.newMicroclimate')}
+              </Link>
             </Button>
           </>
         }

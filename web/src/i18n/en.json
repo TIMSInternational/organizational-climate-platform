@@ -545,7 +545,7 @@
     "creating": "Creating...",
     "createCompany": "Create Company",
     "companyDashboard": "Company Dashboard",
-    "organizationInsights": "Organization-wide insights and management",
+    "organizationInsights": "Where the organisation stands today, and the one thing most worth your attention.",
     "searchEmployeesDepartments": "Search surveys, employees, departments...",
     "searchResults": "Search Results",
     "totalEmployees": "Total Employees",
@@ -1195,7 +1195,7 @@
     "journeyLabel": "Microclimate lifecycle",
     "journeyDraft": "Questions and audience are set. Nothing is being collected yet.",
     "journeyActive": "Open for responses.",
-    "listDescription": "A short pulse you can run in a room. Results appear as people answer, and stay anonymous at the same floor of {minimum}.",
+    "listDescription": "A five-minute pulse you can run in a room. Results appear as people answer, and stay anonymous at the same floor of {minimum}.",
     "kpiLive": "Live now",
     "kpiLiveSub": "open for responses",
     "kpiDrafts": "Drafts",
@@ -1322,7 +1322,7 @@
       "saved": "Your notification preferences were saved.",
       "loadError": "Your notification preferences could not be loaded."
     },
-    "inboxDescription": "Everything the platform has sent you.",
+    "inboxDescription": "What changed while you were away.",
     "unreadOnly": "Unread only",
     "unread": "Unread",
     "read": "Read",
@@ -1352,7 +1352,7 @@
   },
   "profile": {
     "title": "Your profile",
-    "description": "Your account details, password, preferences and recent activity.",
+    "description": "Your details, how you are notified, and the devices holding a session.",
     "loadError": "Your profile could not be loaded.",
     "eyebrow": "Account",
     "accountTitle": "Details",
@@ -1497,6 +1497,7 @@
     "activeRate": "Active Rate"
   },
   "surveys": {
+    "templatesDescription": "Start from something that already works. Templates instantiate server-side, so the questions arrive intact.",
     "templatesEyebrow": "Library",
     "title": "Surveys",
     "createSurvey": "Create Survey",
@@ -1989,7 +1990,7 @@
     "noCohortValue": "no cohort value"
   },
   "insights": {
-    "description": "AI-generated findings from your survey and microclimate results",
+    "description": "Generated from this company\u2019s own responses. Every insight names the evidence it came from and can be dismissed with a reason.",
     "insightTitle": "Title",
     "priority": "Priority",
     "typeTrend": "Trend",

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Plus } from 'lucide-react'
 import { Link } from 'react-router'
 import {
   createDepartment,
@@ -260,6 +261,9 @@ export default function DepartmentsPage() {
               setCreating((open) => !open)
             }}
           >
+            {/* The plus belongs to the create affordance, not to the button: this
+                one control toggles, and a "+ Cancel" would be nonsense. */}
+            {creating ? null : <Plus aria-hidden="true" />}
             {creating ? t('common.cancel') : t('departments.newDepartment')}
           </Button>
         }
