@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useId, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { Plus, Trash2 } from 'lucide-react'
-import { useTranslation, type TranslateFn } from '../../../i18n'
+import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { WizardStepper, type WizardStep } from '../../../components/wizard'
+import { KpiTile } from '../../../components/charts'
 import {
   Alert,
   AlertDescription,
@@ -16,6 +17,7 @@ import {
   TextField,
   TextareaField,
 } from '../../../components/ui'
+import { cn } from '../../../lib/cn'
 import { useCompanyScope } from '../../../company-context'
 import { listDepartments, type Department } from '../../org-structure/api/departments'
 import { createSurvey } from '../api/surveyCreate'
@@ -27,6 +29,7 @@ import {
   type SurveyTemplateListItem,
 } from '../api/surveyTemplates'
 import SurveyQuestionList from '../components/SurveyQuestionList'
+import SurveyWizardSetup from '../components/SurveyWizardSetup'
 import { useSurveyDraft } from '../useSurveyDraft'
 import {
   SurveyDraftIndicator,
@@ -43,6 +46,7 @@ import {
   needsBothLanguages,
   scheduledDays,
   startsFromTemplate,
+  surveyQuestionCount,
   wizardStepErrors,
   type ContentLanguage,
   type SurveyWizardValues,
@@ -79,6 +83,36 @@ const ALL_CATEGORIES = '__all__'
  * why the surveys list is empty in every environment. `surveyTemplates.ts` says the
  * quiet part out loud in its own docstring: "Choosing one belongs to the wizard
  * (#108), which can also supply the localized title". This is that wizard.
+ *
+ * ## What the redesign changed, and what it deliberately did not
+ *
+ * Nothing about the flow. #265 built the steps, #266 the autosave and #267 the template
+ * path, and all three behaviours are load-bearing and settled: a conflict stops autosave
+ * and an error does not, and template mode instantiates server-side with a read-only
+ * questions preview. None of that is touched here.
+ *
+ * What changed is what the page tells you about itself while you use it.
+ *
+ * - **Step state moved into a rail** (`WizardStepper`). It now says, for every step and
+ *   at all times, whether it is complete, current, *n outstanding* or locked. Before,
+ *   the only way to find out what a step still wanted was to walk to it and press
+ *   Continue.
+ * - **The setup panel** under the rail keeps the two decisions that change the rest of
+ *   the wizard — the template and the content language — visible after the basics step
+ *   they were made on has scrolled out of reach.
+ * - **The review step leads with three readings** (questions, days open, departments)
+ *   in `KpiTile`, then the facts. It used to be a flat definition list in which "12
+ *   questions" and "Periodic Survey" were set identically; a count and a category are
+ *   not the same kind of statement and no longer look like it.
+ * - **Paired fields sit side by side** — the two template pickers, the two dates. A
+ *   screenshot at 1440 showed a 512px column of fields beside 600px of nothing.
+ *
+ * The readings it renders are in the mono face with tabular figures — the step ordinals,
+ * the completion meter, the three review tiles, the review dates and each question card's
+ * position — which is the rule that makes this product read as an instrument. Two numbers
+ * on this page deliberately are not: the value inside the "expected respondents" box,
+ * which is a control rather than a reading, and the clock time inside "Draft saved at
+ * {time}", which arrives already inside a translated sentence.
  *
  * ## It is the microclimate wizard's sibling, on purpose
  *
@@ -331,6 +365,21 @@ export default function SurveyCreatePage() {
   }
 
   const currentStep = SURVEY_WIZARD_STEPS[stepIndex]
+  const templateQuestionCount = template === null ? null : template.questions.length
+  const questionCount = surveyQuestionCount(values, templateQuestionCount)
+  const days = scheduledDays(values)
+  // The selected ids the catalogue can actually put a name to. The two collections are
+  // fetched against different scopes, so neither is a subset of the other by
+  // construction. `values.departmentIds` can arrive verbatim from a restored draft
+  // (`applyRestored` above; `draftValuesFrom` copies the array and reconciles nothing),
+  // and `SurveyDraftEndpoints.Mine` filters drafts by user and expiry only -- not by
+  // company -- so a draft written under one company context comes back under another.
+  // Meanwhile the catalogue is a fetch the effect above deliberately lets fail without
+  // blocking the flow, which leaves it empty. Either way `departments` can hold fewer of
+  // these ids than the selection does.
+  const namedDepartments = departments.filter((d) => values.departmentIds.includes(d.id))
+  // Only then is "n of {total}" a true statement about the same set of things.
+  const departmentsAllNamed = namedDepartments.length === values.departmentIds.length
 
   return (
     <div>
@@ -341,6 +390,15 @@ export default function SurveyCreatePage() {
           { label: t('navigation.surveys'), href: '/surveys' },
           { label: t('surveys.wizardTitle') },
         ]}
+        // Which of the two creation paths this is, stated once and at the top. It
+        // decides which endpoint runs and whether the questions step is an editor or a
+        // preview, so it is the single most consequential thing about the page -- and it
+        // was previously readable only from the second select on the basics step, which
+        // stops being on screen the moment that step is left.
+        badge={{
+          text: fromTemplate ? t('surveys.modeFromTemplate') : t('surveys.modeBlank'),
+          variant: fromTemplate ? 'default' : 'secondary',
+        }}
       />
 
       {submitError && (
@@ -376,30 +434,44 @@ export default function SurveyCreatePage() {
           current: stepIndex + 1,
           total: SURVEY_WIZARD_STEPS.length,
         })}
+        aside={
+          <SurveyWizardSetup
+            // `null` where no template is chosen, `undefined` while the detail is in
+            // flight -- the panel shows those differently, and collapsing them here
+            // would make a loading template look like a blank survey.
+            templateName={fromTemplate ? (template?.name ?? undefined) : null}
+            languageName={languageLabel(t, values.language)}
+          />
+        }
       >
         {currentStep === 'basics' && (
           <div className="grid gap-panel-gap">
-            <SelectField
-              label={t('surveys.templateCategoryFilter')}
-              description={t('surveys.templateCategoryFilterHelp')}
-              value={templateCategory === '' ? ALL_CATEGORIES : templateCategory}
-              onChange={(next) => setTemplateCategory(next === ALL_CATEGORIES ? '' : next)}
-              options={[
-                { value: ALL_CATEGORIES, label: t('surveys.allCategories') },
-                ...categoryOptions.map((code) => ({ value: code, label: code })),
-              ]}
-            />
+            {/* The filter and the picker it filters, side by side: they are one
+                decision made in two moves, and stacking them put the list of
+                templates a scroll away from the control that narrows it. */}
+            <div className="grid gap-panel-gap md:grid-cols-2">
+              <SelectField
+                label={t('surveys.templateCategoryFilter')}
+                description={t('surveys.templateCategoryFilterHelp')}
+                value={templateCategory === '' ? ALL_CATEGORIES : templateCategory}
+                onChange={(next) => setTemplateCategory(next === ALL_CATEGORIES ? '' : next)}
+                options={[
+                  { value: ALL_CATEGORIES, label: t('surveys.allCategories') },
+                  ...categoryOptions.map((code) => ({ value: code, label: code })),
+                ]}
+              />
 
-            <SelectField
-              label={t('surveys.startFromTemplate')}
-              description={t('surveys.startFromTemplateHelp')}
-              value={values.templateId === '' ? NO_TEMPLATE : values.templateId}
-              onChange={(next) => patch({ templateId: next === NO_TEMPLATE ? '' : next })}
-              options={[
-                { value: NO_TEMPLATE, label: t('surveys.startBlank') },
-                ...templates.map((option) => ({ value: option.id, label: option.name })),
-              ]}
-            />
+              <SelectField
+                label={t('surveys.startFromTemplate')}
+                description={t('surveys.startFromTemplateHelp')}
+                value={values.templateId === '' ? NO_TEMPLATE : values.templateId}
+                onChange={(next) => patch({ templateId: next === NO_TEMPLATE ? '' : next })}
+                options={[
+                  { value: NO_TEMPLATE, label: t('surveys.startBlank') },
+                  ...templates.map((option) => ({ value: option.id, label: option.name })),
+                ]}
+              />
+            </div>
 
             {templateError !== null && (
               <Alert variant="destructive" role="alert">
@@ -407,22 +479,42 @@ export default function SurveyCreatePage() {
               </Alert>
             )}
 
-            <SelectField
-              label={t('surveys.contentLanguage')}
-              // Not a choice in template mode: `/use` takes no language and infers it
-              // from the template's own questions, so a select here would be a control
-              // that silently does nothing.
-              disabled={fromTemplate}
-              description={fromTemplate ? t('surveys.contentLanguageFromTemplate') : undefined}
-              value={values.language}
-              onChange={(next) => patch({ language: next as ContentLanguage })}
-              options={CONTENT_LANGUAGES.map((code) => ({
-                value: code,
-                label: languageLabel(t, code),
-              }))}
-            />
+            <Separator />
+
+            {/* Language and type together, ahead of the title: both change what the
+                rest of the form asks for -- `both` splits every title, description and
+                question into two boxes -- so they belong before the boxes they split,
+                not scattered among them. */}
+            <div className="grid gap-panel-gap md:grid-cols-2">
+              <SelectField
+                label={t('surveys.contentLanguage')}
+                // Not a choice in template mode: `/use` takes no language and infers it
+                // from the template's own questions, so a select here would be a control
+                // that silently does nothing.
+                disabled={fromTemplate}
+                description={fromTemplate ? t('surveys.contentLanguageFromTemplate') : undefined}
+                value={values.language}
+                onChange={(next) => patch({ language: next as ContentLanguage })}
+                options={CONTENT_LANGUAGES.map((code) => ({
+                  value: code,
+                  label: languageLabel(t, code),
+                }))}
+              />
+
+              <SelectField
+                required
+                label={t('surveys.typeLabel')}
+                value={values.type}
+                onChange={(next) => patch({ type: next })}
+                options={SURVEY_TYPES.map((code) => ({ value: code, label: typeLabel(t, code) }))}
+              />
+            </div>
+
             {both ? (
-              <>
+              // The two language columns side by side rather than stacked: they are the
+              // same sentence twice, and reading them as a pair is how a missing or
+              // mismatched translation becomes obvious.
+              <div className="grid gap-panel-gap md:grid-cols-2">
                 <TextField
                   required
                   label={t('surveys.titleEn')}
@@ -435,7 +527,7 @@ export default function SurveyCreatePage() {
                   value={values.titleEs}
                   onChange={(next) => patch({ titleEs: next })}
                 />
-              </>
+              </div>
             ) : (
               <TextField
                 required
@@ -447,16 +539,8 @@ export default function SurveyCreatePage() {
               />
             )}
 
-            <SelectField
-              required
-              label={t('surveys.typeLabel')}
-              value={values.type}
-              onChange={(next) => patch({ type: next })}
-              options={SURVEY_TYPES.map((code) => ({ value: code, label: typeLabel(t, code) }))}
-            />
-
             {both ? (
-              <>
+              <div className="grid gap-panel-gap md:grid-cols-2">
                 <TextareaField
                   label={t('surveys.descriptionEn')}
                   value={values.descriptionEn}
@@ -467,7 +551,7 @@ export default function SurveyCreatePage() {
                   value={values.descriptionEs}
                   onChange={(next) => patch({ descriptionEs: next })}
                 />
-              </>
+              </div>
             ) : (
               <TextareaField
                 label={t('surveys.descriptionLabel')}
@@ -486,20 +570,34 @@ export default function SurveyCreatePage() {
 
         {currentStep === 'schedule' && (
           <div className="grid gap-panel-gap">
-            <TextField
-              required
-              type="datetime-local"
-              label={t('surveys.startDate')}
-              value={values.startDate}
-              onChange={(next) => patch({ startDate: next })}
-            />
-            <TextField
-              required
-              type="datetime-local"
-              label={t('surveys.endDate')}
-              value={values.endDate}
-              onChange={(next) => patch({ endDate: next })}
-            />
+            <div className="grid gap-panel-gap md:grid-cols-2">
+              <TextField
+                required
+                type="datetime-local"
+                label={t('surveys.startDate')}
+                value={values.startDate}
+                onChange={(next) => patch({ startDate: next })}
+              />
+              <TextField
+                required
+                type="datetime-local"
+                label={t('surveys.endDate')}
+                value={values.endDate}
+                onChange={(next) => patch({ endDate: next })}
+              />
+            </div>
+            {/* The span the two dates add up to, as a reading, the moment they make one.
+                Rendered only when `scheduledDays` has an answer: a "0" beside two empty
+                boxes is a measurement of nothing, and the step's own validation is
+                already the thing that says the dates are missing. */}
+            {days !== null && (
+              <KpiTile
+                className="md:max-w-field"
+                label={t('surveys.readingDaysOpen')}
+                value={days}
+                locale={locale}
+              />
+            )}
           </div>
         )}
 
@@ -510,20 +608,27 @@ export default function SurveyCreatePage() {
               {departments.length === 0 ? (
                 <p className="m-0 text-fg-secondary">{t('surveys.departmentsAll')}</p>
               ) : (
-                departments.map((department) => (
-                  <CheckboxField
-                    key={department.id}
-                    label={department.name}
-                    checked={values.departmentIds.includes(department.id)}
-                    onChange={(checked) =>
-                      patch({
-                        departmentIds: checked
-                          ? [...values.departmentIds, department.id]
-                          : values.departmentIds.filter((id) => id !== department.id),
-                      })
-                    }
-                  />
-                ))
+                // Packed and wrapping rather than stacked: a company with thirty
+                // departments is a step you scroll for. Not a column grid either --
+                // rendering three departments into `lg:grid-cols-3` spread them across
+                // the whole panel with roughly 200px of nothing between each name, which
+                // reads as three unrelated controls rather than one list.
+                <div className="flex flex-wrap gap-x-section gap-y-inline">
+                  {departments.map((department) => (
+                    <CheckboxField
+                      key={department.id}
+                      label={department.name}
+                      checked={values.departmentIds.includes(department.id)}
+                      onChange={(checked) =>
+                        patch({
+                          departmentIds: checked
+                            ? [...values.departmentIds, department.id]
+                            : values.departmentIds.filter((id) => id !== department.id),
+                        })
+                      }
+                    />
+                  ))}
+                </div>
               )}
             </fieldset>
 
@@ -579,7 +684,20 @@ export default function SurveyCreatePage() {
               <Card key={question.key}>
                 <CardContent className="grid gap-panel-gap">
                   <div className="flex items-center justify-between gap-inline">
-                    <h3 className="m-0">{t('surveys.questionPosition', { position: index + 1 })}</h3>
+                    <div className="flex min-w-0 items-center gap-inline">
+                      {/* The same mono ordinal the step rail uses, for the same reason:
+                          a position is a reading. `aria-hidden` because the heading
+                          beside it already says "Question 3" in words. */}
+                      <span
+                        aria-hidden="true"
+                        className="grid size-6 flex-none place-items-center rounded-md bg-surface-icon-box font-mono text-xs font-semibold tabular-nums text-fg-secondary"
+                      >
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <h3 className="m-0 min-w-0 truncate">
+                        {t('surveys.questionPosition', { position: index + 1 })}
+                      </h3>
+                    </div>
                     <Button
                       variant="outline"
                       type="button"
@@ -719,6 +837,51 @@ export default function SurveyCreatePage() {
 
         {currentStep === 'review' && (
           <div className="grid gap-panel-gap">
+            {/* The three numbers first, as readings, then the facts. A count of
+                questions and the name of a survey type were previously set
+                identically in one definition list, which made the shape of the survey
+                something you had to read for rather than see. */}
+            <div className="grid gap-panel-gap sm:grid-cols-3">
+              <KpiTile
+                label={t('surveys.questions')}
+                value={questionCount}
+                sub={
+                  fromTemplate ? t('surveys.readingFromTemplate') : t('surveys.readingWrittenHere')
+                }
+                locale={locale}
+              />
+              <KpiTile
+                label={t('surveys.readingDaysOpen')}
+                value={days ?? 0}
+                // Zero days and "no dates set" are different statements; the sub-line
+                // is what keeps the tile from asserting the first when it means the
+                // second. Review is only reachable with valid dates, so this is a
+                // backstop rather than an expected state.
+                sub={days === null ? t('surveys.readingNoDates') : undefined}
+                locale={locale}
+              />
+              {/* The value is the selection, which is always true; the sub-line is a
+                  ratio, which is only true while the catalogue names every id in that
+                  selection. It did not check, so a restored draft naming five
+                  departments read "5" over "of 3" above a row naming three, and a
+                  catalogue whose fetch had failed read "2" over "of 0" -- a reading no
+                  instrument should ever be able to show. */}
+              <KpiTile
+                label={t('surveys.departmentsLabel')}
+                value={values.departmentIds.length}
+                sub={
+                  values.departmentIds.length === 0
+                    ? t('surveys.departmentsAll')
+                    : departmentsAllNamed
+                      ? t('surveys.readingOfDepartments', { total: departments.length })
+                      : namedDepartments.length === 0
+                        ? t('surveys.readingDepartmentsUnlisted')
+                        : t('surveys.readingDepartmentsPartial')
+                }
+                locale={locale}
+              />
+            </div>
+
             <dl className="m-0 grid gap-inline">
               <Review
                 label={t('surveys.startFromTemplate')}
@@ -730,27 +893,22 @@ export default function SurveyCreatePage() {
                 label={t('surveys.contentLanguage')}
                 value={languageLabel(t, values.language)}
               />
-              <Review
-                label={t('surveys.stepSchedule')}
-                value={reviewSchedule(values, t)}
-              />
+              {/* The dates themselves, not the span between them -- the span is the
+                  tile above. Both are readings, so both are mono. */}
+              <Review mono label={t('surveys.startDate')} value={reviewDate(values.startDate, locale)} />
+              <Review mono label={t('surveys.endDate')} value={reviewDate(values.endDate, locale)} />
+              {/* Names when there are names. With none -- the failed catalogue again --
+                  this row used to fall to `Review`'s em dash, which reads as "none
+                  selected" directly under a tile reading 2. */}
               <Review
                 label={t('surveys.departmentsLabel')}
                 value={
                   values.departmentIds.length === 0
                     ? t('surveys.departmentsAll')
-                    : departments
-                        .filter((d) => values.departmentIds.includes(d.id))
-                        .map((d) => d.name)
-                        .join(', ')
+                    : namedDepartments.length === 0
+                      ? t('surveys.readingDepartmentsUnlisted')
+                      : namedDepartments.map((d) => d.name).join(', ')
                 }
-              />
-              <Review
-                label={t('surveys.questions')}
-                value={reviewQuestionCount(
-                  fromTemplate ? (template?.questions.length ?? 0) : values.questions.length,
-                  t,
-                )}
               />
             </dl>
 
@@ -785,22 +943,20 @@ export default function SurveyCreatePage() {
 }
 
 /**
- * Two keys rather than one with a `{count}`: `createTranslator` does plain `{name}`
- * interpolation and has no plural rules, so one key produces "1 questions" -- it did, and
- * rendering the review step is what showed it. English and Spanish happen to pluralise
- * this the same way, which is why two keys suffice.
+ * One end of the schedule, as the review step should show it.
+ *
+ * The wizard holds `<input type="datetime-local">` text — `2026-09-01T09:00`, local
+ * wall clock — which is a machine format and reads as one. This is the same instant in
+ * the reader's own locale.
+ *
+ * An empty string for an unparseable value rather than a fallback: `Review` renders an
+ * em dash for empty, and "Invalid Date" is worse than saying nothing. Review is only
+ * reachable once `scheduleErrors` has passed, so neither case is expected.
  */
-function reviewQuestionCount(count: number, t: TranslateFn): string {
-  return count === 1
-    ? t('surveys.reviewQuestionCountOne')
-    : t('surveys.reviewQuestionCount', { count })
-}
-
-/** Same singular/plural reason as the question count above. */
-function reviewSchedule(values: SurveyWizardValues, t: (k: string, p?: Record<string, string | number>) => string): string {
-  const days = scheduledDays(values)
-  if (days === null) return ''
-  return days === 1 ? t('surveys.reviewRunsForOneDay') : t('surveys.reviewRunsForDays', { count: days })
+function reviewDate(value: string, locale: string): string {
+  const when = new Date(value)
+  if (Number.isNaN(when.getTime())) return ''
+  return when.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 /** The title as the review step should show it, whichever language columns are in use. */
@@ -811,11 +967,21 @@ function reviewTitle(values: SurveyWizardValues): string {
   return (values.language === 'es' ? values.titleEs : values.titleEn).trim()
 }
 
-function Review({ label, value }: { label: string; value: string }) {
+/**
+ * One row of the review list.
+ *
+ * `mono` is not decoration: it marks the value as a *reading* — a date, a count, an
+ * identifier — and readings are set in the mono face with tabular figures throughout
+ * this product, while prose stays in the sans face. A survey's title and its type are
+ * prose; its start and end are not.
+ */
+function Review({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex flex-wrap gap-inline">
       <dt className="min-w-40 font-medium text-fg-secondary">{label}</dt>
-      <dd className="m-0 min-w-0 break-words">{value.length > 0 ? value : '—'}</dd>
+      <dd className={cn('m-0 min-w-0 break-words', mono && 'font-mono tabular-nums')}>
+        {value.length > 0 ? value : '—'}
+      </dd>
     </div>
   )
 }

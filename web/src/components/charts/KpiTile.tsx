@@ -117,13 +117,22 @@ export default function KpiTile({
         className,
       )}
     >
-      <div className="text-2xs font-semibold uppercase tracking-label text-fg-tertiary">
+      {/* `text-fg-secondary`, not `text-fg-tertiary`, and it is a contrast fix rather
+          than a preference. Measured against `styles/tokens.css` on this tile's own
+          recessed surface: `--admin-font-tertiary` is **3.42:1** in light (#818181 on
+          #f0f0f0) and **3.68:1** in dark (#818181 on #2a2a2a). This line is 10px, so
+          WCAG AA 1.4.3 wants 4.5:1 in both. `--admin-font-secondary` is 8.15:1 and
+          6.85:1. The same swap `features/surveys/respondContrast.test.ts` made for the
+          same reason — it bans `text-fg-tertiary` from that feature by name, and this
+          component's first caller is a page inside it. */}
+      <div className="text-2xs font-semibold uppercase tracking-label text-fg-secondary">
         {label}
       </div>
       <div className="mt-0.5 font-mono text-3xl font-semibold tracking-tight tabular-nums">
         {value === null ? EM_DASH : formatMetric(value, format, locale)}
       </div>
-      <div className="mt-px flex items-center gap-1 text-xs text-fg-tertiary">
+      {/* Same measurement as the label above; this line is 11px. */}
+      <div className="mt-px flex items-center gap-1 text-xs text-fg-secondary">
         {hasChange && (
           <span
             className={cn(

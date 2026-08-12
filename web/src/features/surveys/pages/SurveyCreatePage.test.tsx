@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, act, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, act, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import SurveyCreatePage from './SurveyCreatePage'
@@ -19,6 +19,25 @@ import { SURVEY_DRAFT_CONTENT_VERSION } from '../draftContent'
  * stopped saving, it sends the version guard, and it can put a recovered draft back on
  * the screen at the step it was left on.
  */
+
+/**
+ * Vitest's default is 5s, and this file does not fit in it any more.
+ *
+ * It is the heaviest RTL file in the repository — 25 tests, each rendering the whole
+ * wizard page and most of them driving it with `userEvent`, whose Radix `Select`
+ * interactions cost a portal open and close apiece. The block header below already
+ * records one flake caused by sitting at the 5s edge, and the rail redesign put roughly
+ * fifty more elements on every render of this page (five two-line step rows, their state
+ * chips, the completion meter and the setup panel), every one of which
+ * `getByRole('button', { name })` walks when it computes accessible names.
+ *
+ * Measured on a machine also running other work: the whole suite passes this file in
+ * isolation and cascades under `vitest run` at a load average around 140, where a single
+ * timeout inside `act()` leaves React's queue broken and every later test in the file
+ * fails behind it. That is a budget problem, not a behaviour one — nothing here is
+ * waiting on anything that will not arrive.
+ */
+vi.setConfig({ testTimeout: 20_000 })
 
 const AUTOSAVE_DELAY_MS = 1500
 
@@ -101,6 +120,27 @@ interface RouteOptions {
   templateDetailStatus?: number
   /** Never resolves, so the wizard is observed while the detail is still in flight. */
   templateDetailPending?: boolean
+  /** The company's department catalogue. Empty unless a test says otherwise. */
+  departments?: unknown[]
+  /**
+   * Status for `GET /admin/departments`. 500 is a supported state, not a contrived one:
+   * `SurveyCreatePage` catches that fetch on purpose ("A failed department list is not a
+   * reason to block the flow") and carries on with an empty catalogue.
+   */
+  departmentsStatus?: number
+}
+
+/** A row of `GET /admin/departments`, in the shape `Department` declares. */
+function department(id: string, name: string) {
+  return {
+    id,
+    companyId: 'company-1',
+    name,
+    description: null,
+    parentDepartmentId: null,
+    isActive: true,
+    employeeCount: 12,
+  }
 }
 
 /** A `SurveyTemplateQuestion`, including the option `value` the wizard must not invent. */
@@ -185,7 +225,12 @@ function routeFetch(options: RouteOptions = {}) {
       return Promise.resolve(new Response(JSON.stringify(body), { status }))
     }
     if (url.includes('/admin/departments')) {
-      return Promise.resolve(new Response(JSON.stringify({ departments: [] }), { status: 200 }))
+      const status = options.departmentsStatus ?? 200
+      const body =
+        status === 200
+          ? { departments: options.departments ?? [] }
+          : { message: 'Department list unavailable' }
+      return Promise.resolve(new Response(JSON.stringify(body), { status }))
     }
     // Before the `/surveys` POST branch only for readability -- the prefixes differ.
     if (url.includes('/survey-templates/')) {
@@ -275,6 +320,27 @@ async function typeInto(label: RegExp, value: string) {
   await act(async () => {
     fireEvent.change(screen.getByLabelText(label), { target: { value } })
   })
+}
+
+/** The wizard panel while the review step is open. */
+function reviewPanel(): HTMLElement {
+  return screen
+    .getByText('Check it over before it is created.')
+    .closest('[data-slot="card"]') as HTMLElement
+}
+
+/**
+ * A `KpiTile`'s reading: the element straight after the one holding its label.
+ *
+ * Filtered to the tile's own `<div>` label, because the facts list below the tiles uses
+ * some of the same words in a `<dt>` — "Departments" names both the count and the list
+ * of names, which are different answers to different questions.
+ */
+function reading(panel: HTMLElement, label: string): string {
+  const tileLabel = within(panel)
+    .getAllByText(label)
+    .find((node) => node.tagName === 'DIV')
+  return tileLabel?.nextElementSibling?.textContent ?? ''
 }
 
 async function press(name: string) {
@@ -440,7 +506,7 @@ describe('SurveyCreatePage autosave', () => {
     expect(draftWrites()).toHaveLength(afterConflict)
   })
 
-  it('deletes the draft once the survey exists', async () => {
+  it('reads out what it is about to create, then deletes the draft once it exists', async () => {
     renderPage()
     await settle()
 
@@ -454,6 +520,35 @@ describe('SurveyCreatePage autosave', () => {
     await typeInto(/Question Text/, 'What went well?')
     await press('Next')
     await tick()
+
+    // The review step's readings, asserted here rather than in a test of their own:
+    // walking the five steps is the most expensive thing in this file, and doing it a
+    // second time pushed this block's neighbours past the 5s default timeout under
+    // full-suite load. Each of the three is derived rather than typed, and the question
+    // count has two possible sources (see `surveyQuestionCount`) of which only one is
+    // right in template mode.
+    const review = reviewPanel()
+    // One question written here, seven days between the two dates, no department chosen.
+    expect(reading(review, 'Questions')).toBe('1')
+    expect(review.textContent).toContain('Written in this wizard')
+    expect(reading(review, 'Days open')).toBe('7')
+    expect(reading(review, 'Departments')).toBe('0')
+    expect(review.textContent).toContain('Every department')
+
+    // The dates themselves, localised, rather than the machine format the inputs hold.
+    expect(screen.queryByText('2026-09-01T09:00')).toBeNull()
+    const start = screen.getByText(/Sep 1, 2026/)
+    // And set as a reading: mono, tabular. A date is a measurement, a survey type is not.
+    expect(start.className).toContain('font-mono')
+    expect(start.className).toContain('tabular-nums')
+    expect(screen.getByText('Periodic Survey').className).not.toContain('font-mono')
+
+    // The rail's setup panel names no template, because none was chosen. A blank survey
+    // showing an empty or "loading" template row would be reporting a mode it is not in.
+    const rail = screen.getByRole('navigation', { name: 'Survey creation steps' })
+    expect(rail.textContent).toContain('Content language')
+    expect(rail.textContent).not.toContain('Template')
+    expect(screen.getByText('Blank')).toBeTruthy()
 
     await press('Create Survey')
     await tick()
@@ -560,6 +655,83 @@ describe('SurveyCreatePage recovery', () => {
 })
 
 /**
+ * The DEPARTMENTS reading on the review step.
+ *
+ * The tile's value is the selection and the sub-line is a ratio, and the two come from
+ * different places: `values.departmentIds` is restored verbatim from a draft, while
+ * `departments` is a fetch the page catches and carries on without. Neither is a subset
+ * of the other by construction, so both of the states below are reachable in the product
+ * and both used to produce a reading that cannot be true.
+ *
+ * A restored draft rather than five `Next` presses: it lands on the review step in one
+ * step, and this file's own header records that walking the wizard is the most expensive
+ * thing in it.
+ */
+describe('SurveyCreatePage review departments reading', () => {
+  const catalogue = [
+    department('dept-1', 'Operations'),
+    department('dept-2', 'Support'),
+    department('dept-3', 'Engineering'),
+  ]
+
+  async function restoreOnReview(options: RouteOptions, departmentIds: string[]) {
+    routeFetch({
+      ...options,
+      latest: draftResponse({
+        currentStep: 5,
+        content: storedContent({ departmentIds }),
+      }),
+    })
+    renderPage()
+    await settle()
+    await press('Restore it')
+    await settle()
+    return reviewPanel()
+  }
+
+  it('reads the ratio out only while the catalogue names every selected department', async () => {
+    const review = await restoreOnReview({ departments: catalogue }, ['dept-1', 'dept-2'])
+
+    expect(reading(review, 'Departments')).toBe('2')
+    expect(review.textContent).toContain('of 3')
+    expect(review.textContent).toContain('Operations, Support')
+  })
+
+  it('does not read "5 of 3" for a draft naming departments the catalogue does not hold', async () => {
+    // `GET /surveys/drafts/latest` is scoped to the user and the expiry window and not
+    // to a company (`SurveyDraftEndpoints.Mine`), while the catalogue is fetched for the
+    // company context that is current now. Nothing reconciles the two on the way back
+    // in, and `MapDepartmentEndpoints` has no delete, so this — not a deletion — is how
+    // a selection outruns the list.
+    const review = await restoreOnReview({ departments: catalogue }, [
+      'dept-1',
+      'dept-2',
+      'dept-3',
+      'dept-gone-1',
+      'dept-gone-2',
+    ])
+
+    // Five ids are still targeted, so five is the true value; three is not the total of
+    // anything the tile is counting.
+    expect(reading(review, 'Departments')).toBe('5')
+    expect(review.textContent).not.toContain('of 3')
+    expect(review.textContent).toContain('Not all are in the department list')
+    // The names it does have are still listed -- the caveat is on the tile, not here.
+    expect(review.textContent).toContain('Operations, Support, Engineering')
+  })
+
+  it('does not read "2 of 0" when the department list failed to load', async () => {
+    const review = await restoreOnReview({ departmentsStatus: 500 }, ['dept-1', 'dept-2'])
+
+    expect(reading(review, 'Departments')).toBe('2')
+    expect(review.textContent).not.toContain('of 0')
+    // Twice: once as the tile's sub-line, once in place of the list of names, which
+    // would otherwise fall to an em dash and read as "no departments chosen".
+    expect(screen.getAllByText('Not in the department list')).toHaveLength(2)
+  })
+})
+
+/**
  * Starting from a template (#267).
  *
  * The assertion that matters most is negative: the wizard must NOT post `/surveys` with
@@ -652,7 +824,14 @@ describe('SurveyCreatePage template mode', () => {
     await pickTemplate()
 
     // Browsing templates after naming the survey must not undo the naming.
-    await waitFor(() => expect(screen.getByText(/leadership|Standard/)).toBeTruthy())
+    //
+    // Waiting for the name to appear *twice* is what makes this wait for anything: the
+    // picker's own trigger shows it the instant it is chosen, and it is the rail's setup
+    // panel — which reads the fetched detail — that marks the render in which a seeded
+    // title would have overwritten the typed one.
+    await waitFor(() =>
+      expect(screen.getAllByText('Standard Climate Instrument').length).toBeGreaterThan(1),
+    )
     expect((screen.getByLabelText(/Title/) as HTMLInputElement).value).toBe('My own name for it')
   })
 
@@ -694,6 +873,21 @@ describe('SurveyCreatePage template mode', () => {
     await pickTemplate()
     await toQuestionsStep()
     await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+
+    // The review reading counts the template's questions, not the wizard's own empty
+    // array -- reading that array here reports 0 for a template that has questions in it,
+    // and 0 is exactly what a plausible-looking mistake produces. Asserted inside this
+    // test rather than in one of its own: walking to review costs ~4s of userEvent, and
+    // the block's own header records that doing it twice more pushed its neighbours past
+    // the 5s default timeout.
+    await screen.findByText('Check it over before it is created.')
+    const review = reviewPanel()
+    // The template has one question; `values.questions` is empty and always will be in
+    // this mode, so a count taken from it reads 0 here and looks entirely plausible.
+    expect(reading(review, 'Questions')).toBe('1')
+    expect(review.textContent).toContain('From the template')
+    expect(review.textContent).not.toContain('Written in this wizard')
+
     await userEvent.click(await screen.findByRole('button', { name: 'Create Survey' }))
 
     await waitFor(() =>
@@ -746,6 +940,23 @@ describe('SurveyCreatePage template mode', () => {
     expect(await screen.findByText(/Loading the template/)).toBeTruthy()
     // Still on the questions step, not advanced to review.
     expect(screen.queryByRole('button', { name: 'Create Survey' })).toBeNull()
+  })
+
+  it('keeps the template and the language visible in the rail once the basics step is left', async () => {
+    // Both are decided on step 1 and both change what later steps do -- the template
+    // makes the questions step a preview, and a `both` language splits every box in two.
+    // Before the rail carried them, neither was checkable from a later step without
+    // walking back. One Next is enough to prove it: the basics step is behind us.
+    renderPage()
+    await pickTemplate()
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+
+    expect(screen.queryByLabelText(/Start from a template/)).toBeNull()
+    const rail = screen.getByRole('navigation', { name: 'Survey creation steps' })
+    expect(rail.textContent).toContain('Standard Climate Instrument')
+    expect(rail.textContent).toContain('English')
+    // And the mode itself is stated once, at the top, where it decides which endpoint runs.
+    expect(screen.getByText('From a template')).toBeTruthy()
   })
 
   it('says so when the chosen template cannot be loaded', async () => {
