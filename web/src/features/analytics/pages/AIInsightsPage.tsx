@@ -167,7 +167,11 @@ export default function AIInsightsPage() {
 
   return (
     <div>
-      <PageTopBar title={t('navigation.aiInsights')} description={t('insights.description')} />
+      <PageTopBar
+        eyebrow={t('navigation.analytics')}
+        title={t('navigation.aiInsights')}
+        description={t('insights.description')}
+      />
 
       {loading ? (
         <p>{t('common.loading')}</p>

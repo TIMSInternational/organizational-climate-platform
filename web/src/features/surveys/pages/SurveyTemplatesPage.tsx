@@ -76,6 +76,7 @@ export default function SurveyTemplatesPage() {
   return (
     <div>
       <PageTopBar
+        eyebrow={t('surveys.templatesEyebrow')}
         title={t('navigation.surveyTemplates')}
         description={t('navigation.surveyTemplatesDesc')}
       />

@@ -654,7 +654,6 @@
     "editCompany": "Editar Empresa",
     "manageUsers": "Gestionar Usuarios",
     "manageDemographicFields": "Gestionar Campos Demográficos",
-    "viewReports": "Ver informes",
     "viewAnalytics": "Ver analítica",
     "demographicFields": "Campos Demográficos",
     "companyProfileAdminOnly": "Los detalles del perfil de la empresa solo son visibles para un administrador de la plataforma.",
@@ -928,6 +927,7 @@
     "selectLanguage": "Seleccionar Idioma"
   },
   "microclimates": {
+    "eyebrow": "Sesiones en vivo",
     "title": "Título",
     "dashboardTitle": "Microclimas",
     "createMicroclimate": "Crear Microclima",
@@ -1282,6 +1282,7 @@
     "home": "Inicio"
   },
   "notifications": {
+    "eyebrow": "Bandeja de entrada",
     "title": "Notificaciones",
     "markAsRead": "Marcar como Leído",
     "markAllAsRead": "Marcar Todas como Leídas",
@@ -1496,6 +1497,7 @@
     "activeRate": "Tasa Activa"
   },
   "surveys": {
+    "templatesEyebrow": "Biblioteca",
     "title": "Encuestas",
     "createSurvey": "Crear Encuesta",
     "editSurvey": "Editar Encuesta",

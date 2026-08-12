@@ -145,6 +145,7 @@ export default function CompanyDetailPage() {
           is SuperAdmin-only, and a company_admin reaches this page as their own
           company's home. A crumb they would be 403'd on is worse than none. */}
       <PageTopBar
+        eyebrow={t('navigation.companyAdministration')}
         title={t('navigation.companySettings')}
         description={t('companySettings.description', { threshold: ANONYMITY_FLOOR })}
         // The company's own name belongs in the Identity tile, where it is the

@@ -93,6 +93,7 @@ export default function MicroclimatesListPage() {
   return (
     <div>
       <PageTopBar
+        eyebrow={t('microclimates.eyebrow')}
         title={t('navigation.microclimates')}
         // Not `navigation.microclimatesDesc` ("Real-time team feedback"): the nav
         // blurb has to fit a tooltip. The floor is named here, with the number

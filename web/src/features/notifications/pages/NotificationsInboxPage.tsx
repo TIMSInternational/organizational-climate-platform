@@ -185,6 +185,7 @@ export default function NotificationsInboxPage() {
   return (
     <div className="grid gap-panel-gap">
       <PageTopBar
+        eyebrow={t('notifications.eyebrow')}
         title={t('notifications.title')}
         description={t('notifications.inboxDescription')}
         actions={
