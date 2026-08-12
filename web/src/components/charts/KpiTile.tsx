@@ -119,12 +119,16 @@ export default function KpiTile({
     >
       {/* `text-fg-secondary`, not `text-fg-tertiary`, and it is a contrast fix rather
           than a preference. Measured against `styles/tokens.css` on this tile's own
-          recessed surface: `--admin-font-tertiary` is **3.42:1** in light (#818181 on
-          #f0f0f0) and **3.68:1** in dark (#818181 on #2a2a2a). This line is 10px, so
-          WCAG AA 1.4.3 wants 4.5:1 in both. `--admin-font-secondary` is 8.15:1 and
-          6.85:1. The same swap `features/surveys/respondContrast.test.ts` made for the
-          same reason — it bans `text-fg-tertiary` from that feature by name, and this
-          component's first caller is a page inside it. */}
+          recessed surface: `--admin-font-tertiary` #818181 over `--admin-bg-icon-box`
+          is **3.42:1** in light and **3.68:1** in dark. This line is 10px, so WCAG AA
+          1.4.3 wants 4.5:1 in both. `--admin-font-secondary` is 8.15:1 and 6.85:1.
+
+          Failing in BOTH themes is what let it survive: this project's usual contrast
+          bug is light-only, so a reviewer who checked dark saw nothing wrong either
+          way. Two lanes found it independently, with the same numbers, and both
+          pinned it — `features/surveys/respondContrast.test.ts` and
+          `features/surveys/resultsContrast.test.ts` each ban `text-fg-tertiary` from
+          this file by name. */}
       <div className="text-2xs font-semibold uppercase tracking-label text-fg-secondary">
         {label}
       </div>

@@ -165,4 +165,109 @@ describe('ClimateMap', () => {
     )
     expect(container.textContent).toContain('under 8 responses')
   })
+
+  describe('the readings are formatted, not printed raw', () => {
+    it('writes the cell in the reader’s locale', () => {
+      // A bare `{score}` is `1.9` in every locale, so the Spanish page showed
+      // `1.9` in the grid beside `1,9` in the findings card next to it and `3,3`
+      // in the caption above it -- three number formats for the same readings.
+      const { container } = rtlRender(
+        <TranslationProvider initialLocale="es">
+          <ClimateMap
+            dimensions={[DIMENSIONS[0]]}
+            rows={rowsAt([1.9])}
+            target={3.3}
+            decimals={1}
+          />
+        </TranslationProvider>,
+      )
+      expect(container.textContent).toContain('1,9')
+      expect(container.textContent).not.toContain('1.9')
+    })
+
+    it('holds every reading to the same number of decimals', () => {
+      // `4` above `3.8` in one column is not a column of tabular figures.
+      const { container } = render(
+        <ClimateMap dimensions={DIMENSIONS} rows={rowsAt([4, 3.8])} target={3.3} decimals={1} />,
+      )
+      // The visible reading is the bare text node between the two sr-only spans.
+      const cells = [...container.querySelectorAll('td div')] as HTMLElement[]
+      const visible = cells.map((cell) =>
+        [...cell.childNodes]
+          .filter((node) => node.nodeType === node.TEXT_NODE)
+          .map((node) => node.textContent)
+          .join(''),
+      )
+      expect(visible).toEqual(['4.0', '3.8'])
+    })
+
+    it('announces the target in the same format as the cell', () => {
+      const { container } = rtlRender(
+        <TranslationProvider initialLocale="es">
+          <ClimateMap
+            dimensions={[DIMENSIONS[0]]}
+            rows={rowsAt([1.9])}
+            target={3.3}
+            deadBandAt={0.2}
+            extremeAt={1}
+            decimals={1}
+          />
+        </TranslationProvider>,
+      )
+      expect(container.textContent).toContain('3,3')
+    })
+  })
+
+  describe('a map with no target', () => {
+    // `buildClimateMap` returns this when the floor has taken every group: the
+    // rows stay so the reader can see the groups exist, and there is no disclosed
+    // cell for a target to be the mean of.
+    const rows = [
+      { id: 'fin', label: 'Finance', responses: 0, scores: [] },
+      { id: 'legal', label: 'Legal', responses: 0, scores: [] },
+    ]
+
+    it('protects every cell rather than colouring one against nothing', () => {
+      const { container } = render(<ClimateMap dimensions={DIMENSIONS} rows={rows} target={null} />)
+      expect(container.querySelectorAll('[role="img"]')).toHaveLength(
+        DIMENSIONS.length * rows.length,
+      )
+      // No coloured cell at all: `td div` is the disclosed rendering.
+      expect(container.querySelectorAll('td div')).toHaveLength(0)
+    })
+
+    it('drops the colour scale from the legend and keeps the protected key', () => {
+      const { container } = render(<ClimateMap dimensions={DIMENSIONS} rows={rows} target={null} />)
+      expect(container.textContent).not.toContain('Below target')
+      expect(container.textContent).toContain('under 5 responses')
+    })
+
+    it('keeps every row, so the groups are still visible', () => {
+      render(<ClimateMap dimensions={DIMENSIONS} rows={rows} target={null} />)
+      expect(screen.getByText('Finance')).toBeTruthy()
+      expect(screen.getByText('Legal')).toBeTruthy()
+    })
+
+    // Deliberately no test for "a disclosed row with a null target is still
+    // protected": the cell branch tests `target === null` before it narrows, so
+    // dropping that check is a type error rather than a passing build. The
+    // compiler is the guard, and a test that cannot go red would only look like
+    // one.
+  })
+
+  it('fills its container rather than shrink-wrapping to the readings', () => {
+    // happy-dom does no layout, so this asserts the decision rather than the
+    // pixels: a `w-auto` table left a 439px grid in the top-left of a 769px
+    // panel, measured in Chromium at 1440. The approved design's own grid is
+    // `98px repeat(6, minmax(52px,1fr))` -- the readings take the slack.
+    const { container } = render(
+      <ClimateMap dimensions={DIMENSIONS} rows={rowsAt([74, 61])} target={70} />,
+    )
+    const table = container.querySelector('table') as HTMLElement
+    expect(table.className).toContain('w-full')
+    expect(table.className).not.toContain('w-auto')
+    // And the label column is the one that shrinks, so the slack lands on the
+    // readings rather than on the group names.
+    expect((container.querySelector('th[scope="row"]') as HTMLElement).className).toContain('w-px')
+  })
 })
