@@ -624,8 +624,8 @@ describe('DashboardPage', () => {
     renderDashboard()
 
     const cycle = await screen.findByRole('list', { name: 'Steps of the survey cycle' })
-    expect(within(cycle).getByText(/^still open, past /).textContent).toContain('2/1/2026')
-    expect(screen.getByRole('cell', { name: '2/1/2026' })).toBeTruthy()
+    expect(within(cycle).getByText(/^still open, past /).textContent).toContain('Feb 1')
+    expect(screen.getByRole('cell', { name: 'Feb 1' })).toBeTruthy()
   })
 
   it('gives a plain employee their own dashboard, with a real way to answer each survey', async () => {

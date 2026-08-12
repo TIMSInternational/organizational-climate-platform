@@ -95,7 +95,7 @@ describe('ActionPlanList due dates', () => {
     // else in this suite could ever notice the classes going missing.
     renderList([plan()])
 
-    const date = screen.getByText('9/30/2026')
+    const date = screen.getByText('Sep 30')
     expect(date.className).toContain('font-mono')
     expect(date.className).toContain('tabular-nums')
 

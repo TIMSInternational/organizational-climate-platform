@@ -13,6 +13,7 @@ import {
   TableRow,
 } from '../../../components/ui'
 import { invitationStatusLabelKey, invitationTypeLabelKey, roleLabelKey } from '../labels'
+import { calendarDay } from '../../../lib/calendarDay'
 
 interface InvitationListProps {
   invitations: Invitation[]
@@ -102,7 +103,7 @@ export default function InvitationList({ invitations, onResend }: InvitationList
                       </Badge>
                     </TableCell>
                     <TableCell className="font-mono text-sm tabular-nums text-fg-secondary">
-                      {new Date(invitation.expiresAt).toLocaleDateString(locale)}
+                      {calendarDay(Date.parse(invitation.expiresAt), locale)}
                     </TableCell>
                     <TableCell className="text-right">
                       {invitation.status !== 'accepted' && (

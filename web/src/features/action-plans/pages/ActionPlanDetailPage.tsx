@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { calendarDay } from '../../../lib/calendarDay'
 import { useParams } from 'react-router'
 import {
   getActionPlan,
@@ -154,7 +155,7 @@ export default function ActionPlanDetailPage() {
     )
   }
 
-  const dueDate = new Date(plan.dueDate).toLocaleDateString(locale, { timeZone: 'UTC' })
+  const dueDate = calendarDay(Date.parse(plan.dueDate), locale)
 
   return (
     <div>

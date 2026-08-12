@@ -2,7 +2,7 @@ import { Link } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { EmptyState, Table } from '../../../components/ui'
 import { statusLabel } from '../../surveys/surveyVocabulary'
-import { calendarDay } from '../calendarDay'
+import { calendarDay } from '../../../lib/calendarDay'
 
 /**
  * The columns the company and department dashboards genuinely share.

@@ -4,6 +4,7 @@ import { useTranslation } from '../../../i18n'
 import { Badge, EmptyState, Table } from '../../../components/ui'
 import { priorityLabel, statusLabel } from '../actionPlanVocabulary'
 import { isPastDue } from '../actionPlanRollup'
+import { calendarDay } from '../../../lib/calendarDay'
 
 // dueDate is a calendar date, not a moment -- the API sends it as a UTC-midnight
 // instant (see actionPlans.ts's normalizeDueDate). Formatting with the *local*
@@ -11,7 +12,7 @@ import { isPastDue } from '../actionPlanRollup'
 // UTC midnight is still "yesterday evening" there. Forcing timeZone: 'UTC' here
 // makes this match the calendar date the user actually picked.
 function formatDueDate(dueDate: string, locale: string): string {
-  return new Date(dueDate).toLocaleDateString(locale, { timeZone: 'UTC' })
+  return calendarDay(Date.parse(dueDate), locale)
 }
 
 interface ActionPlanListProps {

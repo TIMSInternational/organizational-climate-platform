@@ -91,7 +91,7 @@ describe('MicroclimateList readings', () => {
   it('sets the counts, the rate and the date in mono with tabular figures', () => {
     renderList([session({ responseCount: 19, targetParticipantCount: 23 })])
 
-    for (const text of ['19 of 23', '83%', '8/21/2026']) {
+    for (const text of ['19 of 23', '83%', 'Aug 21']) {
       const cell = screen.getByText(text)
       expect(cell.className).toContain('font-mono')
       expect(cell.className).toContain('tabular-nums')

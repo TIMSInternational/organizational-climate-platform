@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { calendarDay } from '../../../lib/calendarDay'
 import { Link } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { useCompanyScope } from '../../../company-context'
@@ -222,7 +223,7 @@ export default function MicroclimateAnalyticsPage() {
                             audience, so there is no rate rather than a rate of
                             nothing. */}
                         <td>{rate === null ? '—' : `${Math.round(rate)}%`}</td>
-                        <td>{new Date(microclimate.createdAt).toLocaleDateString(locale)}</td>
+                        <td>{calendarDay(Date.parse(microclimate.createdAt), locale)}</td>
                       </tr>
                     )
                   })}

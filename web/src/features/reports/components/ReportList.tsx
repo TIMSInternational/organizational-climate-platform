@@ -1,6 +1,7 @@
 import type { ReportListItem } from '../api/reports'
 import { useTranslation } from '../../../i18n'
 import { Badge, Button, EmptyState, Table } from '../../../components/ui'
+import { calendarDay } from '../../../lib/calendarDay'
 
 /**
  * Status values the backend actually writes (`ReportEndpoints.CreateAsync`), mapped to a
@@ -115,7 +116,7 @@ export default function ReportList({ reports, downloadingId, onDownload }: Repor
               <td>
                 <Badge variant="secondary">{label(t, STATUS_KEYS, report.status)}</Badge>
               </td>
-              <td>{new Date(report.createdAt).toLocaleDateString(locale)}</td>
+              <td>{calendarDay(Date.parse(report.createdAt), locale)}</td>
               <td>
                 {/* Only a completed report can be downloaded -- the backend answers
                     400 otherwise. Disabling the button is not belt-and-braces: the
