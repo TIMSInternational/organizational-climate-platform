@@ -29,9 +29,19 @@ import {
  * each, and not one of them can ever be reported. That is knowable *before* the
  * field is created, from two numbers the app already has, and it is the single
  * most useful thing this screen can tell an administrator. So the table states it,
- * per field, in words — and where the figure itself falls under the floor it is
- * withheld rather than printed. See `components/demographicReach.ts` for why the
- * mean is a proof in one direction and not in the other.
+ * per field, in words — as a **verdict** ("too narrow"), and the padlock sits on
+ * that verdict rather than over the arithmetic behind it.
+ *
+ * The mean itself is printed whatever it says, including under the floor. That is
+ * deliberate and it is the opposite of what this comment used to claim: both of the
+ * mean's operands are already on screen in the same frame — the headcount in the
+ * "Active people" tile, the value count in the same row — so a padlock over a
+ * number the reader can do in their head would advertise a guarantee that nothing
+ * enforces, on the one screen whose subject is that guarantee. What the floor
+ * actually covers is a *measured* group, and those are suppressed cell by cell
+ * where they are rendered. `DemographicFieldList` makes that argument in full;
+ * `components/demographicReach.ts` covers why the mean proves "too narrow" and
+ * never proves the converse.
  *
  * ## Two calls, one of them optional
  *
