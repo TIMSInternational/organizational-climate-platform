@@ -237,7 +237,13 @@ describe('DashboardPage', () => {
       await waitFor(() => expect(fetch).toHaveBeenCalled())
       expect(requestedPath()).toContain('/dashboard/department-admin')
       expect(requestedPath()).not.toContain('departmentId')
-      expect(await screen.findByRole('heading', { level: 1, name: 'Engineering' })).toBeTruthy()
+      // The redesign's header shape, matching every other screen: the page is titled after
+      // what it *is*, and the scope it is about sits in the eyebrow above. Before this, a
+      // leader's document heading was "Engineering" while all twelve other screens titled
+      // themselves after the screen — so the department name is asserted as the eyebrow,
+      // not as the `h1`, and both halves are pinned so neither can quietly move back.
+      expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeTruthy()
+      expect(screen.getByText('Engineering')).toBeTruthy()
     },
   )
 
@@ -289,6 +295,33 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByRole('columnheader', { name: 'Target' })).toBeTruthy()
     expect(screen.getByRole('cell', { name: '12' })).toBeTruthy()
+  })
+
+  /**
+   * The rule the whole redesign rests on: every reading is `font-mono tabular-nums` and
+   * prose stays in the sans face. This table sat directly under four `KpiTile`s that honour
+   * it while rendering its own response counts in the proportional face — two faces for the
+   * same kind of number on one screen, which is exactly what stops it reading as an
+   * instrument.
+   *
+   * Asserted from both sides so it cannot pass vacuously: the reading is mono AND the survey
+   * name beside it is not. A blanket `font-mono` on the table would satisfy the first alone.
+   */
+  it('sets the survey table readings in mono and its prose in the sans face', async () => {
+    setToken(tokenFor('company_admin', 'c1'))
+    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+
+    renderDashboard()
+
+    // `7` is the survey row's own `responseCount`. Asserted on that and not on the Target
+    // column's `12` — the first version of this test read Target, so dropping mono from the
+    // responses cell left it green. (`20` is the company-wide total, not in this table.)
+    const responses = await screen.findByRole('cell', { name: '7' })
+    expect(responses.className).toContain('font-mono')
+    expect(responses.className).toContain('tabular-nums')
+
+    const title = screen.getByRole('cell', { name: 'Company-wide pulse' })
+    expect(title.className).not.toContain('font-mono')
   })
 
   it('does link a company_admin to the survey page, which their role can load', async () => {

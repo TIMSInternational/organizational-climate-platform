@@ -251,17 +251,27 @@ describe('ProfilePage', () => {
   })
 
   /**
-   * The API has no token revocation (#284), so a password change leaves every other session
-   * signed in for up to 24 hours — and somebody on this form is quite likely there *because*
-   * they think they were compromised. The disclosure is standing copy, shown before they
-   * submit rather than in the success alert, and it must survive a refactor of this card.
+   * `#284` landed: rotating `User.SecurityStamp` in `PUT /profile/password` invalidates every
+   * token minted under the old stamp, so a password change DOES sign every other device out
+   * immediately. Somebody on this form is quite likely there *because* they think they were
+   * compromised, so the sentence stays as standing copy shown before they submit — but it now
+   * reassures rather than warns, and it must survive a refactor of this card.
+   *
+   * The negative assertion is the point of this test. The copy said the opposite for as long
+   * as the API behaved that way, and nothing failed when `#284` made it false, because the
+   * API fix and this card are on different branches — the lie exists only in the merge. So
+   * the old sentence is banned by name here: if it ever comes back, this reddens.
    */
-  it('warns that other sessions stay signed in, before the change is submitted', async () => {
+  it('states that other sessions are signed out, before the change is submitted', async () => {
     renderPage()
 
     expect(
-      await screen.findByText(/does not sign out your other devices/i),
+      await screen.findByText(/signs out every other device immediately/i),
     ).toBeTruthy()
+    // The pre-#284 claim must never return: it tells a compromised user they are still
+    // exposed when they are not.
+    expect(screen.queryByText(/does not sign out your other devices/i)).toBeNull()
+    expect(screen.queryByText(/stays signed in for up to 24 hours/i)).toBeNull()
     // Present from the outset, not only after a successful save.
     expect(screen.queryByText('Your password was changed.')).toBeNull()
   })

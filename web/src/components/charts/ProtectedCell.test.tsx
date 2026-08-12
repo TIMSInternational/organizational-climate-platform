@@ -135,6 +135,70 @@ describe('ProtectedCell', () => {
     expect(label).not.toContain('charts.')
   })
 
+  /**
+   * The word is this component's job, not the caller's. It used to be composed by
+   * each call site, gated on the caller re-deriving `isSuppressed` by hand with the
+   * same two arguments — and `DepartmentList` simply never did it, so it rendered a
+   * hatched padlocked box with nothing saying what it meant.
+   */
+  describe('the word beside the padlock', () => {
+    // The leaf, not the wrapper: the wrapper's `textContent` is also "Protected"
+    // because the word is its only text, so matching on text alone finds the
+    // wrapper first and every assertion below reads the wrong element.
+    const wordOf = (container: HTMLElement) =>
+      [...container.querySelectorAll('span')].find(
+        (el) => el.textContent === 'Protected' && el.children.length === 0,
+      )
+
+    it('renders by default, so a caller cannot forget it', () => {
+      const { container } = render(<ProtectedCell responses={3}>{null}</ProtectedCell>)
+      expect(wordOf(container)).toBeTruthy()
+    })
+
+    it('is announced once, not twice', () => {
+      // The word sits *beside* the box, not inside it, so `role="img"` does not
+      // swallow it — without `aria-hidden` assistive technology reads the box's
+      // accessible name and then the word, hearing "protected" twice. Nothing
+      // caught this when the contract landed; a mutation removing the attribute
+      // passed all 500 tests across charts and microclimates.
+      const { container } = render(<ProtectedCell responses={3}>{null}</ProtectedCell>)
+      expect(wordOf(container)?.getAttribute('aria-hidden')).toBe('true')
+      // And the statement is still on the box, so it is announced exactly once.
+      // Case-insensitive: the unnamed string opens with "Protected — withheld
+      // below 5 responses" and the named one lowercases it after the description.
+      expect(container.querySelector('[role="img"]')?.getAttribute('aria-label') ?? '').toMatch(
+        /protected/i,
+      )
+    })
+
+    it('is omitted where a surface already carries the statement', () => {
+      // `ClimateMap` (a legend under the whole matrix) and `LiveOpenAnswers` (a
+      // badge above and a sentence below) are the two opt-outs; see `showWord`.
+      const { container } = render(
+        <ProtectedCell responses={3} showWord={false}>
+          {null}
+        </ProtectedCell>,
+      )
+      expect(wordOf(container)).toBeUndefined()
+      // The box itself is unaffected — still hatched, locked and labelled for AT.
+      expect(container.querySelector('[role="img"]')).toBeTruthy()
+    })
+
+    it('sizes the box, not the word, from suppressedClassName', () => {
+      // Callers size the box for one 12px padlock (`w-7`, `h-5 w-14`). If the class
+      // landed on the wrapper instead, the word would be clipped by a width chosen
+      // before the word existed.
+      const { container } = render(
+        <ProtectedCell responses={3} suppressedClassName="h-5 w-7">
+          {null}
+        </ProtectedCell>,
+      )
+      const box = container.querySelector('[role="img"]')
+      expect(box?.className).toContain('w-7')
+      expect(wordOf(container)?.className ?? '').not.toContain('w-7')
+    })
+  })
+
   describe('isSuppressed', () => {
     it('is the same decision the component makes', () => {
       expect(isSuppressed(4)).toBe(true)

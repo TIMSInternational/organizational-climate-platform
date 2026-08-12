@@ -72,6 +72,13 @@ export default function LiveOpenAnswers({ words, responseCount }: LiveOpenAnswer
         responses={responseCount}
         threshold={MINIMUM_RESPONDENTS}
         description={title}
+        // The second legitimate opt-out, for the opposite reason to `ClimateMap`'s:
+        // not too little room for the word but too much of the word already. This
+        // panel states it twice around the hatch — the `liveProtectedChip` badge
+        // above carries a padlock and the word, and `liveProtectedDescription`
+        // below names the floor in a sentence. A third "PROTECTED" inside the box
+        // would be the same statement three times in one panel.
+        showWord={false}
         // The hatch has to read as a withheld *panel*, not as a withheld figure:
         // at cell size it looks like a rendering glitch in the middle of a page.
         // Not taller than this, though — `ProtectedCell` centres a 12px padlock,
