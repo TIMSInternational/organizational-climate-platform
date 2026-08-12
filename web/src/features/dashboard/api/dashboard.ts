@@ -57,7 +57,21 @@ export interface DashboardCompanySummary {
   createdAt: string
 }
 
-/** One department's participation. */
+/**
+ * One department's headcount and response total.
+ *
+ * **Not a participation rate, and the two fields must not be divided.**
+ * `DashboardQueries.DepartmentSummaries` counts the responses with no survey
+ * predicate — `r.DepartmentId == d.Id && r.CompanyId == companyId &&
+ * r.IsComplete` — so `completedResponseCount` is a running total across every
+ * survey the department has ever been sent, while `memberCount` is the headcount
+ * today. Their quotient passes 1 on a company's second survey and keeps climbing.
+ *
+ * The list is also capped: `DashboardEndpoints.cs` passes
+ * `DepartmentRowLimit = 12`, so on a larger company most departments have no row
+ * here at all. An absent department is one that was not reported on, which is not
+ * the same claim as one that reported nothing — see `DepartmentList.tsx`.
+ */
 export interface DashboardDepartmentSummary {
   id: string
   name: string

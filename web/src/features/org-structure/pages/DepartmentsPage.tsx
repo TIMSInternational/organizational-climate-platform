@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router'
 import {
   createDepartment,
   listDepartments,
   updateDepartment,
   type Department,
 } from '../api/departments'
-import DepartmentList from '../components/DepartmentList'
+import { getCompanyAdminDashboard } from '../../dashboard/api/dashboard'
+import DepartmentList, { type DepartmentReading } from '../components/DepartmentList'
 import DepartmentForm, { type DepartmentFormValues } from '../components/DepartmentForm'
-import { Network, CircleCheck, Users } from 'lucide-react'
-import { KPIDisplay } from '../../../components/charts'
+import { KpiTile, isSuppressed } from '../../../components/charts'
 import { useCompanyScope } from '../../../company-context'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
@@ -19,10 +20,24 @@ import {
   CardHeader,
   CardTitle,
   EmptyState,
+  Input,
   LoadingRegion,
   NetworkError,
   SkeletonText,
 } from '../../../components/ui'
+
+/**
+ * The anonymity floor this screen states and enforces.
+ *
+ * `charts/ProtectedCell.tsx` defaults to the same 5. It is named here because the
+ * page description, the "under the floor" tile and every suppressed cell all have
+ * to agree about it, and three separate literals would be three places to drift.
+ *
+ * A constant rather than a fetched value because there is nothing to fetch:
+ * `api/companySettings.ts` carries `anonymousSurveys` and no threshold field, so
+ * the platform has no per-company floor to read yet.
+ */
+const FLOOR = 5
 
 /**
  * Departments, as a destination of their own (#142).
@@ -60,10 +75,26 @@ import {
  *
  * Unlike `SurveyTemplatesPage`, which pushes its filters to the server because
  * the endpoint takes them, `GET /admin/departments` accepts **only** `companyId`.
- * It returns one company's full, flat list ordered by name. Filtering that array
- * in the browser is therefore not a second implementation of a server rule — the
- * server has no such rule — and the parent-name column needs the whole array in
- * memory regardless.
+ * It returns one company's full, flat list ordered by name
+ * (`DepartmentEndpoints.cs`, `.OrderBy(d => d.Name)`). Filtering that array in the
+ * browser is therefore not a second implementation of a server rule — the server
+ * has no such rule — and both the parent-name column and the tree need the whole
+ * array in memory regardless.
+ *
+ * ## The redesign: a structure with a reading on it
+ *
+ * The screen was a flat alphabetical list with a KPI card grid over it. It is now
+ * the reporting structure itself — depth-first, indented, `departmentRows` — with
+ * a measurement beside every row and the anonymity floor stated on both. The four
+ * numbers above it moved from `KPIDisplay` cards to the redesign's flat `KpiTile`
+ * strip, because on this page the numbers are context for the table rather than
+ * the content of the page.
+ *
+ * The fourth tile is new and is the one worth defending: **how many departments
+ * can never be reported on their own**. It is derived, not fetched — a department
+ * with fewer people than the floor cannot gather enough responses whatever it
+ * answers — and it is the number an administrator needs *before* sending a survey,
+ * not after.
  */
 export default function DepartmentsPage() {
   const { t, locale } = useTranslation()
@@ -72,6 +103,7 @@ export default function DepartmentsPage() {
   const companyId = scope.companyId
 
   const [departments, setDepartments] = useState<Department[]>([])
+  const [readings, setReadings] = useState<ReadonlyMap<string, DepartmentReading> | undefined>()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -90,14 +122,49 @@ export default function DepartmentsPage() {
     }
     setLoading(true)
     setError(null)
-    try {
-      setDepartments(await listDepartments(baseUrl, companyId))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
-    } finally {
-      setLoading(false)
+    // The two calls are independent and the page must not serialise them, but
+    // they are NOT equally important, so this is not a `Promise.all`: that would
+    // reject the pair when only the optional half failed.
+    //
+    // The list is the page. Losing it is `NetworkError` with a retry.
+    //
+    // The readings are an enrichment: `GET /dashboard/company-admin` is the only
+    // response this client can ask for that carries completed responses for more
+    // than one department at once (`DashboardDepartmentSummary`; the department
+    // dashboard answers for one department at a time). If it fails, the Responses
+    // column is dropped rather than filled with zeroes — a zero is a measurement,
+    // and "we could not ask" is not one.
+    //
+    // It answers for at most `DepartmentRowLimit` departments (12, in
+    // `DashboardEndpoints.cs`), ordered by name, and no row carries a flag saying
+    // the list was cut. `DepartmentList` therefore treats a department absent from
+    // this map as unmeasured rather than as a zero; the same rule, one level down.
+    const [list, dashboard] = await Promise.allSettled([
+      listDepartments(baseUrl, companyId),
+      getCompanyAdminDashboard(baseUrl, { companyId, lang: locale }),
+    ])
+
+    if (dashboard.status === 'fulfilled') {
+      setReadings(
+        new Map(
+          dashboard.value.departments.map((department) => [
+            department.id,
+            { responses: department.completedResponseCount },
+          ]),
+        ),
+      )
+    } else {
+      setReadings(undefined)
     }
-  }, [baseUrl, companyId, t])
+
+    if (list.status === 'fulfilled') {
+      setDepartments(list.value)
+    } else {
+      const reason: unknown = list.reason
+      setError(reason instanceof Error ? reason.message : t('errors.generic'))
+    }
+    setLoading(false)
+  }, [baseUrl, companyId, locale, t])
 
   useEffect(() => {
     void reload()
@@ -117,6 +184,11 @@ export default function DepartmentsPage() {
 
   const activeCount = departments.filter((department) => department.isActive).length
   const employeeCount = departments.reduce((total, d) => total + d.employeeCount, 0)
+  // Structural, not measured: a department with fewer people than the floor can
+  // never gather enough responses to be reported on its own, whatever it answers.
+  const underFloorCount = departments.filter((department) =>
+    isSuppressed(department.employeeCount, FLOOR),
+  ).length
 
   async function handleCreate(values: DepartmentFormValues) {
     if (!companyId) return
@@ -151,7 +223,10 @@ export default function DepartmentsPage() {
   if (scope.status === 'needs-selection') {
     return (
       <div>
-        <PageTopBar title={t('navigation.departments')} description={t('navigation.departmentsDesc')} />
+        <PageTopBar
+          title={t('navigation.departments')}
+          description={t('departments.pageDescription', { threshold: FLOOR })}
+        />
         <EmptyState
           title={t('companyContext.chooseACompany')}
           description={t('companyContext.chooseACompanyDescription')}
@@ -163,7 +238,10 @@ export default function DepartmentsPage() {
   if (scope.status === 'no-company') {
     return (
       <div>
-        <PageTopBar title={t('navigation.departments')} description={t('navigation.departmentsDesc')} />
+        <PageTopBar
+          title={t('navigation.departments')}
+          description={t('departments.pageDescription', { threshold: FLOOR })}
+        />
         <p role="alert">{t('common.noCompanyAssociated')}</p>
       </div>
     )
@@ -173,7 +251,7 @@ export default function DepartmentsPage() {
     <div>
       <PageTopBar
         title={t('navigation.departments')}
-        description={t('navigation.departmentsDesc')}
+        description={t('departments.pageDescription', { threshold: FLOOR })}
         actions={
           <Button
             variant="primary"
@@ -264,57 +342,71 @@ export default function DepartmentsPage() {
               {/* Counts come from the full list, not the filtered one: they
                   describe the company, and a summary that moved as you typed in
                   the search box would be describing the search instead. */}
-              {/* The ForMaps admin shell leads a data view with a KPI band rather
-                  than a sentence, so the three numbers that describe the company are
-                  the first thing read. `summaryLine` is kept in the catalogue and
-                  used as the band's accessible summary — the figures are unchanged,
-                  only their presentation. */}
-              <div className="mb-panel-gap">
-                <KPIDisplay
-                  columns={3}
+              {/* `KpiTile`, not `KPIDisplay`. They are not duplicates: `KPIDisplay`
+                  is the card grid a page uses when the KPI *is* the content, and
+                  this page's content is the table. `KpiTile` is the redesign's flat
+                  strip form — a four-across row of readings between the header and
+                  the work — which is the role these four numbers actually play here.
+                  Every value in it is `font-mono tabular-nums`, the same
+                  instrument-face rule the table below follows. */}
+              <div className="mb-panel-gap grid grid-cols-2 gap-inline lg:grid-cols-4">
+                <KpiTile
+                  label={t('departments.kpiTotalDepartments')}
+                  value={departments.length}
                   locale={locale}
-                  kpis={[
-                    {
-                      id: 'total',
-                      label: t('departments.kpiTotalDepartments'),
-                      value: departments.length,
-                      icon: Network,
-                    },
-                    {
-                      id: 'active',
-                      label: t('departments.kpiActiveDepartments'),
-                      value: activeCount,
-                      icon: CircleCheck,
-                    },
-                    {
-                      id: 'employees',
-                      label: t('departments.kpiAssignedEmployees'),
-                      value: employeeCount,
-                      icon: Users,
-                      // The only card in this band with somewhere else to go: the
-                      // two department counts are counting the very list below
-                      // them, but the people are on the users page. `companyId` is
-                      // non-null here — the whole panel is behind a guard for it.
-                      action: {
-                        label: t('dashboard.manageUsers'),
-                        href: `/admin/companies/${companyId}/users`,
-                      },
-                    },
-                  ]}
+                  sub={t('departments.kpiTotalSub')}
+                />
+                <KpiTile
+                  label={t('departments.kpiActiveDepartments')}
+                  value={activeCount}
+                  locale={locale}
+                  sub={t('departments.kpiInactiveSub', {
+                    count: departments.length - activeCount,
+                  })}
+                />
+                <KpiTile
+                  label={t('departments.kpiAssignedEmployees')}
+                  value={employeeCount}
+                  locale={locale}
+                  sub={
+                    // The only tile in this band with somewhere else to go: the two
+                    // department counts are counting the very list below them, but
+                    // the people are on the users page. `companyId` is non-null
+                    // here — the whole panel is behind a guard for it.
+                    <Link
+                      className="text-accent-blue hover:underline"
+                      to={`/admin/companies/${companyId}/users`}
+                    >
+                      {t('dashboard.manageUsers')}
+                    </Link>
+                  }
+                />
+                <KpiTile
+                  label={t('departments.kpiUnderFloor', { threshold: FLOOR })}
+                  value={underFloorCount}
+                  // Departments too small to be reported is not good news going up.
+                  higherIsBetter={false}
+                  locale={locale}
+                  sub={t('departments.kpiUnderFloorSub')}
                 />
               </div>
 
-              <div className="mb-panel-gap flex flex-wrap items-end gap-inline">
-                <label className="grid gap-1">
+              {/* The filter row reads as one instrument panel rather than two
+                  loose controls, on the same recessed surface the tiles use. Both
+                  controls stay native: `ui/Checkbox` is a Radix button, and the
+                  suite reaches this one by its label as a real checkbox. */}
+              <div className="mb-panel-gap flex flex-wrap items-end gap-4 rounded-lg border border-line-light bg-surface-icon-box p-3">
+                <label className="grid gap-1 text-2xs font-semibold uppercase tracking-label text-fg-tertiary">
                   {t('common.search')}
-                  <input
+                  <Input
                     type="search"
+                    className="w-64 max-w-full"
                     value={query}
                     placeholder={t('departments.searchDepartments')}
                     onChange={(event) => setQuery(event.target.value)}
                   />
                 </label>
-                <label className="flex items-center gap-inline">
+                <label className="flex h-control-md items-center gap-2 text-sm text-fg-secondary">
                   <input
                     type="checkbox"
                     checked={showInactive}
@@ -333,6 +425,8 @@ export default function DepartmentsPage() {
                 <DepartmentList
                   departments={visible}
                   parentLookup={departments}
+                  readings={readings}
+                  threshold={FLOOR}
                   onEdit={(department) => {
                     setCreating(false)
                     setEditing(department)

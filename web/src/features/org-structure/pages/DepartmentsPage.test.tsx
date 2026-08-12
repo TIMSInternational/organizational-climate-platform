@@ -40,11 +40,41 @@ function renderPage() {
   )
 }
 
-/** Answers the list endpoint with whatever `rows()` currently returns. */
+/**
+ * Answers the list endpoint with whatever `rows()` currently returns.
+ *
+ * Everything else 404s, including `GET /dashboard/company-admin` — which is the
+ * page's *optional* half, so these tests double as the check that losing it costs
+ * the reading and nothing else.
+ */
 function serveList(rows: () => Department[]) {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
     if (/\/admin\/departments\?/.test(String(input))) {
       return Promise.resolve(new Response(JSON.stringify({ departments: rows() }), { status: 200 }))
+    }
+    return Promise.resolve(new Response(null, { status: 404 }))
+  })
+}
+
+/** One department's line in `GET /dashboard/company-admin`. */
+interface Reading {
+  id: string
+  name: string
+  memberCount: number
+  completedResponseCount: number
+}
+
+/** Serves both halves: the department list, and the response counts behind it. */
+function serveListAndReadings(rows: () => Department[], readings: () => Reading[]) {
+  vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+    const url = String(input)
+    if (/\/admin\/departments\?/.test(url)) {
+      return Promise.resolve(new Response(JSON.stringify({ departments: rows() }), { status: 200 }))
+    }
+    if (/\/dashboard\/company-admin/.test(url)) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ companyId: OWN, departments: readings() }), { status: 200 }),
+      )
     }
     return Promise.resolve(new Response(null, { status: 404 }))
   })
@@ -136,8 +166,14 @@ describe('DepartmentsPage states', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'Retry' }))
 
+    // Counts calls to the LIST endpoint, not calls in total. One load is now two
+    // requests -- the list and the readings -- so `length > 1` would be satisfied
+    // by the first render alone and this test could no longer fail.
     await waitFor(() => {
-      expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThan(1)
+      const listCalls = vi
+        .mocked(fetch)
+        .mock.calls.filter((call) => /\/admin\/departments\?/.test(String(call[0])))
+      expect(listCalls.length).toBeGreaterThan(1)
     })
   })
 })
@@ -279,5 +315,197 @@ describe('DepartmentsPage create and edit', () => {
 
     const put = vi.mocked(fetch).mock.calls.find((call) => call[1]?.method === 'PUT')
     expect(Object.keys(JSON.parse(String(put?.[1]?.body))).sort()).toEqual(['description', 'isActive', 'name'])
+  })
+})
+
+describe('DepartmentsPage as an instrument', () => {
+  it('sets every reading in the mono, tabular face and leaves the names in the sans one', () => {
+    // The one typographic rule the whole redesign turns on. happy-dom does no
+    // layout, so the class list is what is checkable here — and a number that is
+    // NOT in the mono face is the defect, so both halves are asserted.
+    serveList(() => [department({ name: 'Engineering', employeeCount: 57 })])
+
+    renderPage()
+
+    return screen.findByText('Engineering').then((name) => {
+      const row = name.closest('tr')!
+      const people = within(row).getByText('57')
+      expect(people.className).toContain('font-mono')
+      expect(people.className).toContain('tabular-nums')
+      expect(name.className).not.toContain('font-mono')
+    })
+  })
+
+  it('says a department under the floor can never be reported on its own', async () => {
+    serveList(() => [department({ name: 'Finance', employeeCount: 4 })])
+
+    renderPage()
+
+    const row = (await screen.findByText('Finance')).closest('tr')!
+    expect(within(row).getByText('Under 5')).toBeTruthy()
+    // The headcount itself is not secret -- it is org structure, not a response.
+    expect(within(row).getByText('4')).toBeTruthy()
+  })
+
+  it('marks a department that clears the floor as reportable, in a word', async () => {
+    serveList(() => [department({ name: 'Engineering', employeeCount: 57 })])
+
+    renderPage()
+
+    const row = (await screen.findByText('Engineering')).closest('tr')!
+    expect(within(row).getByText('Yes')).toBeTruthy()
+    expect(within(row).queryByText('Under 5')).toBeNull()
+  })
+
+  it('protects a response reading under the floor instead of blanking it', async () => {
+    // 3 responses from 48 people. The cell must be shown as withheld -- an empty
+    // cell reads as missing data rather than as a guarantee being enforced.
+    serveListAndReadings(
+      () => [department({ id: 'sup', name: 'Support', employeeCount: 48 })],
+      () => [{ id: 'sup', name: 'Support', memberCount: 48, completedResponseCount: 3 }],
+    )
+
+    renderPage()
+
+    const row = (await screen.findByText('Support')).closest('tr')!
+    const protectedCell = within(row).getByRole('img')
+    expect(protectedCell.getAttribute('aria-label')).toContain('protected')
+    // And it never says how far under the floor it is: publishing "3" beside a
+    // known headcount is exactly what the floor exists to prevent.
+    expect(row.textContent).not.toContain('3')
+    expect(protectedCell.getAttribute('aria-label')).not.toContain('3')
+  })
+
+  it('shows the response count once the floor is met', async () => {
+    serveListAndReadings(
+      () => [department({ id: 'eng', name: 'Engineering', employeeCount: 48 })],
+      () => [{ id: 'eng', name: 'Engineering', memberCount: 48, completedResponseCount: 24 }],
+    )
+
+    renderPage()
+
+    const row = (await screen.findByText('Engineering')).closest('tr')!
+    const reading = within(row).getByText('24')
+    expect(reading.className).toContain('font-mono')
+    expect(reading.className).toContain('tabular-nums')
+    expect(within(row).queryByRole('img')).toBeNull()
+  })
+
+  it('reports the responses as a count and never as a share of the headcount', async () => {
+    // `completedResponseCount` carries no survey predicate in
+    // `DashboardQueries.DepartmentSummaries`, so it is every completed response
+    // the department has ever submitted and it passes the headcount as soon as a
+    // company runs its second survey. Divided by `memberCount` this row read
+    // "270%" against a progress bar pinned at 100 — the two contradicting each
+    // other on the screen's only measured column.
+    serveListAndReadings(
+      () => [department({ id: 'ops', name: 'Operations', employeeCount: 40 })],
+      () => [{ id: 'ops', name: 'Operations', memberCount: 40, completedResponseCount: 108 }],
+    )
+
+    renderPage()
+
+    const row = (await screen.findByText('Operations')).closest('tr')!
+    expect(within(row).getByText('108')).toBeTruthy()
+    expect(row.textContent).not.toContain('%')
+    // And nothing claims a scale it does not have.
+    expect(within(row).queryByRole('progressbar')).toBeNull()
+    // The units are stated once, in the column header, so the count cannot be
+    // mistaken for a rate.
+    expect(screen.getByText('completed, all surveys')).toBeTruthy()
+  })
+
+  it('reads a department the dashboard did not report on as unmeasured, never as protected', async () => {
+    // `DashboardEndpoints.cs` caps the summary list at `DepartmentRowLimit = 12`
+    // with no total and no truncation flag, so a thirteenth department simply has
+    // no line in the payload. Calling that zero put a padlock and the words
+    // "protected -- withheld below 5 responses" on data the app never asked for.
+    serveListAndReadings(
+      () => [
+        department({ id: 'seen', name: 'Engineering', employeeCount: 40 }),
+        department({ id: 'unseen', name: 'Research', employeeCount: 40 }),
+      ],
+      () => [{ id: 'seen', name: 'Engineering', memberCount: 40, completedResponseCount: 33 }],
+    )
+
+    renderPage()
+
+    const row = (await screen.findByText('Research')).closest('tr')!
+    expect(within(row).getByText('Not measured')).toBeTruthy()
+    expect(within(row).queryByRole('img')).toBeNull()
+    expect(row.textContent).not.toContain('protected')
+    // The department that *was* reported on is unaffected.
+    const measured = screen.getByText('Engineering').closest('tr')!
+    expect(within(measured).getByText('33')).toBeTruthy()
+  })
+
+  it('still reads a department whose reported member count is zero', async () => {
+    // The reading does not divide by anything any more, so a zero headcount on
+    // the dashboard line cannot blank the cell. It used to: `?? employeeCount`
+    // never fired, because 0 is not nullish, and the row rendered an em dash.
+    serveListAndReadings(
+      () => [department({ id: 'ghost', name: 'Ghost', employeeCount: 30 })],
+      () => [{ id: 'ghost', name: 'Ghost', memberCount: 0, completedResponseCount: 9 }],
+    )
+
+    renderPage()
+
+    const row = (await screen.findByText('Ghost')).closest('tr')!
+    // Name, Parent, People, Reportable, Responses, Actions. Read by position so
+    // the assertion is about the measured cell and not about the em dash the
+    // Parent column legitimately carries for a root department.
+    const responsesCell = within(row).getAllByRole('cell')[4]
+    expect(responsesCell.textContent).toBe('9')
+    expect(within(responsesCell).getByText('9').className).toContain('font-mono')
+  })
+
+  it('drops the responses column rather than filling it with zeroes when the readings fail', async () => {
+    // `serveList` 404s the dashboard. A column of zeroes would claim a measurement
+    // that was never taken.
+    serveList(() => [department({ name: 'Engineering' })])
+
+    renderPage()
+    await screen.findByText('Engineering')
+
+    expect(screen.queryByText('Responses')).toBeNull()
+    expect(screen.queryByText('completed, all surveys')).toBeNull()
+    // The list itself is unaffected: the optional half failing is not a page error.
+    expect(screen.getByText('People')).toBeTruthy()
+    expect(screen.queryByText('Failed to load departments. Please try again.')).toBeNull()
+  })
+
+  it('orders a child directly under its parent rather than alphabetically', async () => {
+    serveList(() => [
+      // Alphabetical, the order the API sends: the child of Alpha sorts before Beta.
+      department({ id: 'alpha', name: 'Alpha' }),
+      department({ id: 'beta', name: 'Beta' }),
+      department({ id: 'child', name: 'Zeta', parentDepartmentId: 'alpha' }),
+    ])
+
+    renderPage()
+    // "Alpha" is on screen twice: as a row, and as the child's resolved parent.
+    await screen.findAllByText('Alpha')
+
+    const names = screen
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => within(row).getAllByRole('cell')[0].querySelector('.font-medium')?.textContent)
+    expect(names).toEqual(['Alpha', 'Zeta', 'Beta'])
+  })
+
+  it('counts the departments that can never be reported on their own', async () => {
+    serveList(() => [
+      department({ id: 'a', name: 'Alpha', employeeCount: 40 }),
+      department({ id: 'b', name: 'Beta', employeeCount: 4 }),
+      department({ id: 'c', name: 'Gamma', employeeCount: 1 }),
+    ])
+
+    renderPage()
+    await screen.findByText('Alpha')
+
+    // `.parentElement`, not `.closest('div')` -- the label IS a div, so `closest`
+    // returns the label itself and the assertion would look inside the wrong box.
+    const tile = screen.getByText('Under the floor').parentElement!
+    expect(within(tile).getByText('2')).toBeTruthy()
   })
 })
