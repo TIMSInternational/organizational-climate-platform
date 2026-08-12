@@ -8,6 +8,7 @@ import CompanySettingsForm, { type CompanySettingsFormValues } from '../componen
 import { AnonymityFloorNotice, AnonymityFloorReading } from '../components/AnonymityFloor'
 import DepartmentList from '../components/DepartmentList'
 import DepartmentForm, { type DepartmentFormValues } from '../components/DepartmentForm'
+import { surveyFrequencyLabelKey } from '../labels'
 import { useTranslation } from '../../../i18n'
 import { ChartColumn, FileText, Tags, Users } from 'lucide-react'
 import { ANONYMITY_FLOOR } from '../../../components/charts'
@@ -225,7 +226,16 @@ export default function CompanyDetailPage() {
               <>
                 <SettingReadout
                   label={t('dashboard.surveyFrequency')}
-                  value={settings.surveyFrequency}
+                  // Translated where the cadence is one of the conventional four,
+                  // and echoed verbatim otherwise — the field is free text on the
+                  // wire (`CompanyEndpoints.cs` validates only non-emptiness), so
+                  // the raw fallback is the ordinary path here, not a safety net.
+                  // Printing it raw for every value meant a Spanish administrator
+                  // read `quarterly` under *Frecuencia de encuestas*.
+                  value={(() => {
+                    const key = surveyFrequencyLabelKey(settings.surveyFrequency)
+                    return key ? t(key) : settings.surveyFrequency
+                  })()}
                 />
                 <AnonymityFloorReading />
                 <SettingReadout

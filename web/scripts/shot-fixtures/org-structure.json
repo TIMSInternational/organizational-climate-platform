@@ -1,4 +1,23 @@
 {
+  "PUT /admin/companies/*/settings": {
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "settings": {
+      "surveyFrequency": "quarterly",
+      "microclimateEnabled": true,
+      "aiInsightsEnabled": true,
+      "anonymousSurveys": true,
+      "dataRetentionDays": 2555,
+      "timezone": "America/Bogota",
+      "language": "es"
+    },
+    "branding": {
+      "logoUrl": null,
+      "primaryColor": "#0d9488",
+      "secondaryColor": "#0f766e",
+      "fontFamily": "Poppins",
+      "customCss": null
+    }
+  },
   "GET /admin/companies": {
     "companies": [
       {
@@ -586,6 +605,7 @@
     "country": "Colombia",
     "subscriptionTier": "enterprise",
     "isActive": true,
-    "createdAt": "2025-03-14T09:12:00Z"
+    "createdAt": "2025-03-14T09:12:00Z",
+    "userCount": 208
   }
 }

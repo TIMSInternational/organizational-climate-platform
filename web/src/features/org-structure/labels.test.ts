@@ -4,6 +4,7 @@ import {
   invitationStatusLabelKey,
   invitationTypeLabelKey,
   roleLabelKey,
+  surveyFrequencyLabelKey,
 } from './labels'
 import en from '../../i18n/en.json'
 import es from '../../i18n/es.json'
@@ -57,6 +58,38 @@ describe('org-structure wire-token labels', () => {
       expect(typeof lookup(en, key!)).toBe('string')
       expect(typeof lookup(es, key!)).toBe('string')
     }
+  })
+
+  describe('survey frequency, the one that is not a closed set', () => {
+    it('maps the four conventional cadences into both catalogues', () => {
+      // ActionPlanValidation.ValidMeasurementFrequencies, and Company.cs defaults
+      // SurveyFrequency to quarterly. Printing these raw put `quarterly` under
+      // *Frecuencia de encuestas* on the Spanish Company Settings readout.
+      for (const frequency of ['daily', 'weekly', 'monthly', 'quarterly']) {
+        const key = surveyFrequencyLabelKey(frequency)
+        expect(key, `no key for ${frequency}`).toBeTruthy()
+        expect(typeof lookup(en, key!), `${key} missing from en`).toBe('string')
+        expect(typeof lookup(es, key!), `${key} missing from es`).toBe('string')
+      }
+    })
+
+    it('is case-insensitive, because nothing validates the column', () => {
+      // CompanyEndpoints.cs assigns it after a bare IsNullOrWhiteSpace check, so
+      // casing is whatever the caller sent.
+      expect(surveyFrequencyLabelKey('Quarterly')).toBe('companySettings.frequencyQuarterly')
+      expect(surveyFrequencyLabelKey('  MONTHLY  ')).toBe('companySettings.frequencyMonthly')
+    })
+
+    it('returns null for a cadence outside the four, so the caller echoes the server', () => {
+      // Unlike the closed sets, this is the ORDINARY path: the field is free text,
+      // so a value the product has never used must render as itself rather than
+      // blank. If this ever starts inventing prose, an unvalidated string becomes
+      // an English lie on a Spanish page.
+      expect(surveyFrequencyLabelKey('biannual')).toBeNull()
+      expect(surveyFrequencyLabelKey('every other Tuesday')).toBeNull()
+      expect(surveyFrequencyLabelKey('')).toBeNull()
+      expect(surveyFrequencyLabelKey('toString')).toBeNull()
+    })
   })
 
   it('returns null for a token it has never heard of, rather than inventing prose', () => {

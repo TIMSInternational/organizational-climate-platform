@@ -133,7 +133,13 @@ describe('CompanyDetailPage readings', () => {
     // in the Identity tile.
     expect((await screen.findAllByText('Northwind Logistics')).length).toBe(2)
     expect(screen.getByText('northwind.example')).toBeTruthy()
-    expect(await screen.findByText('quarterly')).toBeTruthy()
+    // `Quarterly`, not the wire token `quarterly`: the cadence goes through
+    // `surveyFrequencyLabelKey` so a Spanish administrator stops reading English
+    // under *Frecuencia de encuestas*. These assertions previously pinned the raw
+    // token, i.e. the defect. A cadence outside the conventional four still renders
+    // verbatim — `labels.test.ts` covers that, since the field is free text on the
+    // wire and the fallback is the ordinary path rather than a safety net.
+    expect(await screen.findByText('Quarterly')).toBeTruthy()
     expect(screen.getByText('730 days')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Load settings' })).toBeNull()
   })
@@ -145,7 +151,7 @@ describe('CompanyDetailPage readings', () => {
     serve()
 
     renderPage()
-    await screen.findByText('quarterly')
+    await screen.findByText('Quarterly')
 
     const settingsCalls = vi
       .mocked(fetch)
@@ -184,7 +190,7 @@ describe('CompanyDetailPage readings', () => {
       'northwind.example',
       'Transportation',
       '208',
-      'quarterly',
+      'Quarterly',
       '730 days',
       'Enabled',
     ]
@@ -283,7 +289,7 @@ describe('CompanyDetailPage partial failures', () => {
     expect(
       await screen.findByText('Company profile details are only visible to a platform administrator.'),
     ).toBeTruthy()
-    expect(await screen.findByText('quarterly')).toBeTruthy()
+    expect(await screen.findByText('Quarterly')).toBeTruthy()
     expect(screen.getByText('Locked')).toBeTruthy()
     expect(screen.getByText('Operations')).toBeTruthy()
   })
@@ -295,7 +301,7 @@ describe('CompanyDetailPage partial failures', () => {
 
     await waitFor(async () => {
       renderPage()
-      expect(await screen.findByText('quarterly')).toBeTruthy()
+      expect(await screen.findByText('Quarterly')).toBeTruthy()
     })
 
     expect(screen.queryByRole('button', { name: 'Edit company' })).toBeNull()
@@ -307,7 +313,7 @@ describe('CompanyDetailPage editing', () => {
     serve()
 
     renderPage()
-    await screen.findByText('quarterly')
+    await screen.findByText('Quarterly')
 
     expect(screen.queryByRole('button', { name: 'Save settings' })).toBeNull()
 

@@ -81,3 +81,36 @@ export function invitationStatusLabelKey(status: string): string | null {
 export function invitationTypeLabelKey(type: string): string | null {
   return INVITATION_TYPE_KEYS.get(type) ?? null
 }
+
+/**
+ * A company's survey cadence.
+ *
+ * **This one is not a closed vocabulary, and that is the point.**
+ * `CompanyEndpoints.cs:229` assigns `SurveyFrequency` straight from the request
+ * after a bare `IsNullOrWhiteSpace` check — no allow-list, no enum — so the column
+ * can hold any string a caller sends. `Company.cs:28` defaults it to `quarterly`,
+ * and the values the product actually uses are the four below, matching
+ * `ActionPlanValidation.ValidMeasurementFrequencies`.
+ *
+ * So unlike the three maps above, `null` here is the *ordinary* answer rather than
+ * the "API grew a case this build never heard of" answer, and the caller's
+ * raw-token fallback is load bearing rather than defensive. Translating the four
+ * conventional values is still worth doing — a Spanish administrator was reading
+ * `quarterly` under *Frecuencia de encuestas*, which is the same defect the role
+ * and invitation maps above exist to fix — but nothing here may start treating this
+ * as a validated set.
+ */
+const SURVEY_FREQUENCY_KEYS = new Map<string, string>([
+  ['daily', 'companySettings.frequencyDaily'],
+  ['weekly', 'companySettings.frequencyWeekly'],
+  ['monthly', 'companySettings.frequencyMonthly'],
+  ['quarterly', 'companySettings.frequencyQuarterly'],
+])
+
+/**
+ * Case-insensitive, unlike the closed sets above: the values are unvalidated, so
+ * `Quarterly` is as likely to arrive as `quarterly` and both name one cadence.
+ */
+export function surveyFrequencyLabelKey(frequency: string): string | null {
+  return SURVEY_FREQUENCY_KEYS.get(frequency.trim().toLowerCase()) ?? null
+}
