@@ -203,6 +203,11 @@ export default function ClimateMap({
                           responses={0}
                           threshold={threshold}
                           description={description}
+                          // The one honest opt-out. `charts.protectedLegend` under
+                          // this matrix makes the statement for every cell at once,
+                          // and an `h-7` cell has no room for a word anyway — a
+                          // dense grid repeating "protected" is noise, not clarity.
+                          showWord={false}
                           suppressedClassName="h-7 w-full"
                         >
                           {null}

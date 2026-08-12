@@ -2,7 +2,7 @@ import { Link } from 'react-router'
 import type { Microclimate } from '../api/microclimates'
 import { useTranslation } from '../../../i18n'
 import { Badge, EmptyState, Table } from '../../../components/ui'
-import { ProtectedCell, isSuppressed } from '../../../components/charts'
+import { ProtectedCell } from '../../../components/charts'
 import { statusBadgeVariant, statusLabel } from '../microclimateVocabulary'
 import { MINIMUM_RESPONDENTS, participationPercent } from '../microclimatePrivacy'
 
@@ -120,46 +120,20 @@ export default function MicroclimateList({ microclimates }: { microclimates: Mic
                 {microclimate.status === 'draft' ? (
                   <span className="text-fg-tertiary">{t('microclimates.resultsPending')}</span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5">
-                    <ProtectedCell
-                      responses={microclimate.responseCount}
-                      threshold={MINIMUM_RESPONDENTS}
-                      description={name}
-                      // The lock is an inline glyph in a table cell, so it needs a
-                      // box of its own — `ProtectedCell` sizes to its content, and
-                      // its content when suppressed is one 12px padlock.
-                      suppressedClassName="h-5 w-7"
-                    >
-                      <Link to={`/microclimates/${microclimate.id}/results`}>
-                        {t('microclimates.openResults')}
-                      </Link>
-                    </ProtectedCell>
-                    {/* The word, beside the hatch. Hatched-and-locked alone is a
-                        texture; the redesign asks for hatched, locked *and
-                        labelled*, because a texture is what a reader has to guess
-                        at. `aria-hidden` because `ProtectedCell` already carries
-                        the same statement as its accessible name — assistive
-                        technology should hear it once, not twice.
-
-                        Both this and the cell decide with `isSuppressed` called on
-                        the same two arguments, so they cannot disagree about which
-                        rows are locked.
-
-                        A closed session with *zero* responses is locked too, and
-                        deliberately not given a distinct "nothing to show" state.
-                        Splitting the two would publish the one fact
-                        `ProtectedCell` is written never to publish — how far under
-                        the floor a cell sits — because "no responses" and
-                        "protected" would then be readable as 0 versus 1..4. */}
-                    {isSuppressed(microclimate.responseCount, MINIMUM_RESPONDENTS) && (
-                      <span
-                        aria-hidden="true"
-                        className="text-2xs font-semibold uppercase tracking-label text-accent-amber-ink"
-                      >
-                        {t('charts.protectedWord')}
-                      </span>
-                    )}
-                  </span>
+                  <ProtectedCell
+                    responses={microclimate.responseCount}
+                    threshold={MINIMUM_RESPONDENTS}
+                    description={name}
+                    // The lock is an inline glyph in a table cell, so it needs a
+                    // box of its own — `ProtectedCell` sizes to its content, and
+                    // its content when suppressed is one 12px padlock. The word
+                    // beside it is the cell's own now, and is not sized by this.
+                    suppressedClassName="h-5 w-7"
+                  >
+                    <Link to={`/microclimates/${microclimate.id}/results`}>
+                      {t('microclimates.openResults')}
+                    </Link>
+                  </ProtectedCell>
                 )}
               </td>
               <td className="font-mono tabular-nums text-fg-secondary">

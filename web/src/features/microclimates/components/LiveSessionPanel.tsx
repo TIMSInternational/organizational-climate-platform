@@ -3,7 +3,7 @@ import type { Microclimate } from '../api/microclimates'
 import { useTranslation } from '../../../i18n'
 import { cn } from '../../../lib/cn'
 import { Button, EmptyState, Progress } from '../../../components/ui'
-import { ProtectedCell, isSuppressed } from '../../../components/charts'
+import { ProtectedCell } from '../../../components/charts'
 import { MINIMUM_RESPONDENTS, participationPercent } from '../microclimatePrivacy'
 import { statusLabel } from '../microclimateVocabulary'
 
@@ -145,14 +145,6 @@ export default function LiveSessionPanel({ sessions }: { sessions: readonly Micr
                   </Link>
                 </Button>
               </ProtectedCell>
-              {isSuppressed(session.responseCount, MINIMUM_RESPONDENTS) && (
-                <span
-                  aria-hidden="true"
-                  className="text-2xs font-semibold uppercase tracking-label text-accent-amber-ink"
-                >
-                  {t('charts.protectedWord')}
-                </span>
-              )}
             </div>
           </div>
         )
