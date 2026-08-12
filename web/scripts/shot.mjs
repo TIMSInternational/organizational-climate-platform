@@ -47,9 +47,12 @@ import {
   API_ORIGIN,
   STORAGE_KEYS,
   buildDevToken,
+  choosePort,
+  parseViteOrigin,
   classifyRequest,
   compileFixtures,
   matchFixture,
+  waitForServer,
 } from './shot-harness.mjs'
 
 const WEB_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -68,7 +71,7 @@ const { values, positionals } = parseArgs({
     lang: { type: 'string', default: 'en' },
     fixtures: { type: 'string' },
     server: { type: 'string' },
-    port: { type: 'string', default: '5199' },
+    port: { type: 'string', default: 'auto' },
     settle: { type: 'string', default: '400' },
     viewport: { type: 'boolean', default: false },
     help: { type: 'boolean', default: false },
@@ -96,7 +99,9 @@ Options:
   --server <url>     reuse a dev server already running at this URL instead of
                      starting one. It must have been started with
                      VITE_API_BASE_URL=${API_ORIGIN}
-  --port <n>         port for the dev server this script starts (default 5199)
+  --port <n>         port for the dev server this script starts. Default 'auto':
+                     a free port claimed from the OS, so two worktrees
+                     screenshotting at once cannot photograph each other
   --settle <ms>      extra wait after network idle (default 400)
   --viewport         clip to the viewport instead of capturing the full page
   --help             show this
@@ -137,25 +142,22 @@ async function loadFixtures() {
   return compileFixtures(JSON.parse(await readFile(fixturesPath, 'utf8')))
 }
 
-/** Resolves once the dev server answers, or rejects after ~30s. */
-async function waitForServer(url) {
-  for (let attempt = 0; attempt < 150; attempt += 1) {
-    try {
-      const response = await fetch(url, { redirect: 'manual' })
-      if (response.status < 500) return
-    } catch {
-      // Not listening yet.
-    }
-    await new Promise((done) => setTimeout(done, 200))
-  }
-  throw new Error(`dev server never answered at ${url}`)
-}
-
 /**
- * Starts `vite` on `--port` and returns `{ origin, stop }`, or reuses `--server`.
+ * Starts `vite` and returns `{ origin, stop }`, or reuses `--server`.
  *
- * `--strictPort` so a busy port is an error rather than a silent move to another one,
- * which would leave this script screenshotting whatever was already there.
+ * ## Two checks, because one of them was not enough
+ *
+ * The port is claimed from the OS (or proved free, when one was named) *before* vite
+ * is spawned, and the wait then rejects if that vite dies. `--strictPort` alone was
+ * not enough and the comment here used to say it was: it stops vite from moving to
+ * another port, but the vite that refuses to move simply exits, and a poll that
+ * accepts any listener then hands the browser to whatever already held the port. In
+ * this repository that is a plausible-looking screenshot of a *different worktree* —
+ * the thing a screenshot is evidence against.
+ *
+ * `--server` is the caller's own dev server and is deliberately not policed this way;
+ * they said which one to use. The `/undefined/` and external-origin reports at the end
+ * of `main()` are what cover a wrongly-configured one.
  */
 async function startServer() {
   if (values.server) {
@@ -165,13 +167,14 @@ async function startServer() {
     return { origin, stop: async () => {} }
   }
 
-  const origin = `http://127.0.0.1:${values.port}`
+  const port = await choosePort(values.port)
+  const origin = `http://127.0.0.1:${port}`
   const child = spawn(
     process.execPath,
     [
       resolve(WEB_ROOT, 'node_modules', 'vite', 'bin', 'vite.js'),
       '--port',
-      values.port,
+      String(port),
       '--strictPort',
       '--host',
       '127.0.0.1',
@@ -186,7 +189,31 @@ async function startServer() {
   )
   child.stderr.on('data', (chunk) => process.stderr.write(`[vite] ${chunk}`))
 
-  await waitForServer(origin)
+  // Vite's banner is the only authority on which port it actually bound. choosePort
+  // makes a collision very unlikely; reading the port back makes photographing the
+  // wrong app impossible, which is not the same guarantee. See parseViteOrigin.
+  let banner = ''
+  let reported = null
+  child.stdout.on('data', (chunk) => {
+    banner += chunk
+    reported = reported ?? parseViteOrigin(banner)
+  })
+
+  let exit = null
+  child.on('exit', (code, signal) => {
+    exit = signal === null ? `exited with code ${code}` : `was killed by ${signal}`
+  })
+
+  await waitForServer(origin, { deadReason: () => exit })
+
+  if (reported && reported !== origin) {
+    // vite bound a different port than the one we proved free, which means something
+    // took it in between. Follow vite rather than the assumption.
+    process.stdout.write(`shot: vite bound ${reported}, not ${origin}; following vite\n`)
+    process.stdout.write(`shot: dev server started at ${reported}\n`)
+    return { origin: reported, stop: async () => void child.kill('SIGTERM') }
+  }
+
   process.stdout.write(`shot: dev server started at ${origin}\n`)
   return { origin, stop: async () => void child.kill('SIGTERM') }
 }

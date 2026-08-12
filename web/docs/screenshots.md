@@ -39,6 +39,13 @@ cd web && npm run shot -- /admin/companies /tmp/shots/companies-dark.png --theme
 
 Then **read the PNG**. A file on disk is not evidence; the picture is.
 
+Each run takes a free port from the OS, so two worktrees screenshotting at the same
+time cannot photograph each other. That is not a precaution against nothing: the harness
+used to default to a fixed port and poll it, `--strictPort` made vite *exit* rather than
+move when another lane already held it, and the poll then accepted the other lane's
+server — producing a perfectly plausible PNG of a different codebase. If you pass
+`--port` yourself and something is already listening there, the run now fails instead.
+
 ### Options
 
 | Option | Default | What it does |
@@ -53,7 +60,7 @@ Then **read the PNG**. A file on disk is not evidence; the picture is.
 | `--lang en\|es` | `en` | Sets `preferredLocale`. Use it — half the copy defects in this app only appear in Spanish. |
 | `--fixtures <file>` | `scripts/shot-fixtures/default.json` | API responses (see below). |
 | `--server <url>` | — | Reuse a dev server instead of starting one. It must have been started with `VITE_API_BASE_URL=http://api.shot.invalid`. |
-| `--port <n>` | `5199` | Port for the dev server `shot` starts. Not 5173, so it does not fight a `npm run dev` you already have open. |
+| `--port <n>` | `auto` | Port for the dev server `shot` starts. `auto` claims a free one from the OS; a port you name is proved free before vite is spawned, and the run fails rather than screenshotting whatever already held it. |
 | `--settle <ms>` | `400` | Extra wait after network idle and web fonts. |
 | `--viewport` | off | Clip to the viewport instead of capturing the full page. |
 
