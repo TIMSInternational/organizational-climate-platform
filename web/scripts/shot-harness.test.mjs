@@ -10,6 +10,8 @@ import {
   compileFixtures,
   matchFixture,
   waitForServer,
+  nextViewportHeight,
+  SCROLL_TOLERANCE,
 } from './shot-harness.mjs'
 import { createServer } from 'node:net'
 import { decodeJwtPayload } from '../src/auth/jwt.ts'
@@ -324,6 +326,32 @@ describe('parseViteOrigin', () => {
   it('returns null on a partial banner, so a caller keeps waiting', () => {
     expect(parseViteOrigin('')).toBeNull()
     expect(parseViteOrigin('  VITE v8.2.0  ready in 407 ms')).toBeNull()
+  })
+
+  it('grows the window by exactly the hidden height', () => {
+    // 900 tall showing 1320 of content: the window has to gain the missing 420.
+    expect(nextViewportHeight({ innerHeight: 900, overflow: 420 })).toBe(1320)
+  })
+
+  it('stops once nothing is hidden', () => {
+    expect(nextViewportHeight({ innerHeight: 1320, overflow: 0 })).toBeNull()
+  })
+
+  it('ignores sub-pixel overflow rather than looping on it', () => {
+    // A container a fraction of a pixel taller than its content is not a clipped
+    // screen; treating it as one is how a grow loop fails to terminate.
+    expect(nextViewportHeight({ innerHeight: 900, overflow: SCROLL_TOLERANCE })).toBeNull()
+    expect(nextViewportHeight({ innerHeight: 900, overflow: SCROLL_TOLERANCE + 1 })).toBe(903)
+  })
+
+  it('clamps at the cap instead of asking for an unbounded PNG', () => {
+    expect(nextViewportHeight({ innerHeight: 900, overflow: 999_999, cap: 5000 })).toBe(5000)
+  })
+
+  it('gives up at the cap rather than returning it forever', () => {
+    // Without this the caller loops: handed 5000 on every pass, it resizes to the same
+    // height, measures the same overflow and never reaches its exit condition.
+    expect(nextViewportHeight({ innerHeight: 5000, overflow: 800, cap: 5000 })).toBeNull()
   })
 
   it('takes the first 127.0.0.1 URL, so a later Network line cannot displace it', () => {

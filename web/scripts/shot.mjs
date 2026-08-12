@@ -53,7 +53,27 @@ import {
   compileFixtures,
   matchFixture,
   waitForServer,
+  nextViewportHeight,
+  SCROLL_TOLERANCE,
 } from './shot-harness.mjs'
+
+/**
+ * The worst vertical overflow hidden inside any scroll container on the page, in CSS px.
+ *
+ * Runs in the browser, so it is written as a standalone function with no closure over
+ * anything in this module. Only `auto`/`scroll` containers count: an `overflow: hidden`
+ * element is deliberately clipped by its author and growing the window would not reveal
+ * it, while the document's own overflow is already what `fullPage` handles.
+ */
+function worstInternalOverflow() {
+  let worst = 0
+  for (const el of document.querySelectorAll('*')) {
+    const overflowY = getComputedStyle(el).overflowY
+    if (overflowY !== 'auto' && overflowY !== 'scroll') continue
+    worst = Math.max(worst, el.scrollHeight - el.clientHeight)
+  }
+  return worst
+}
 
 const WEB_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DEFAULT_COMPANY_ID = '11111111-1111-1111-1111-111111111111'
@@ -324,11 +344,40 @@ async function main() {
       )
     }
 
+    // Grow the window until nothing is left hidden inside a scroll container. See
+    // `nextViewportHeight` for why `fullPage` alone silently captures one viewport here.
+    let grownTo = height
+    let residual = 0
+    if (!values.viewport) {
+      for (let pass = 0; pass < 8; pass += 1) {
+        residual = await page.evaluate(worstInternalOverflow)
+        const next = nextViewportHeight({ innerHeight: grownTo, overflow: residual })
+        if (next === null) break
+        await page.setViewportSize({ width, height: next })
+        grownTo = next
+        // The app re-lays-out on resize (a taller viewport can change how much a
+        // min-height container claims), so the next pass measures again rather than
+        // trusting the first number.
+        await page.waitForTimeout(150)
+        residual = await page.evaluate(worstInternalOverflow)
+      }
+    }
+
     await mkdir(dirname(outPath), { recursive: true })
     await page.screenshot({ path: outPath, fullPage: !values.viewport })
+    const grewBy = grownTo === height ? '' : `, grown to ${width}x${grownTo}`
     process.stdout.write(
-      `shot: wrote ${outPath} (${route}, ${theme}, ${width}x${height}@${scale}x)\n`,
+      `shot: wrote ${outPath} (${route}, ${theme}, ${width}x${height}@${scale}x${grewBy})\n`,
     )
+    // Loud, because a partial screenshot that announces success is the defect this
+    // whole mechanism exists to remove.
+    if (!values.viewport && residual > SCROLL_TOLERANCE) {
+      process.stdout.write(
+        `shot: WARNING -- ${residual}px is still hidden inside a scroll container, so this `
+          + 'PNG is NOT the whole screen. Re-run with a larger --height, or with --viewport '
+          + 'if you meant to clip.\n',
+      )
+    }
   } finally {
     await browser.close()
     await server.stop()

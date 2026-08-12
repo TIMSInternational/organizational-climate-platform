@@ -263,3 +263,43 @@ export function parseViteOrigin(banner) {
   const found = /http:\/\/127\.0\.0\.1:(\d+)/.exec(stripAnsi(banner))
   return found ? `http://127.0.0.1:${found[1]}` : null
 }
+
+/**
+ * Sub-pixel slack. A scroll container is routinely a fraction of a pixel taller than its
+ * content, so a bare `scrollHeight > clientHeight` reports overflow on a screen that has
+ * none and the grow loop never settles.
+ */
+export const SCROLL_TOLERANCE = 2
+
+/**
+ * The window height that would let an internal scroll container show all of itself, or
+ * null when it already does.
+ *
+ * ## Why `fullPage: true` is not enough on this app
+ *
+ * `AdminLayout` is `h-dvh` with the page content in `<main id="main" class="… overflow-y-auto">`.
+ * The document therefore never grows past one viewport no matter how long the screen is,
+ * and Playwright's `fullPage` — which expands to the *document* scroll height — captures
+ * exactly the viewport and reports success. Every acceptance screenshot taken on this
+ * project before this helper existed is exactly `width x height` at the requested scale,
+ * including screens whose content is half again as tall.
+ *
+ * That is the worst failure mode a verification tool can have: it is not that it fails,
+ * it is that it produces a plausible image of the top of the screen and calls it the
+ * screen. Two independent lane reviews reported defects in the lower half of pages whose
+ * authors had "rendered and checked" them.
+ *
+ * So the window is grown to fit the content instead. Growing the *window* rather than
+ * unsetting the container's `overflow` keeps every width-driven layout decision — the
+ * `md:` breakpoints, the grid column counts, the table min-content widths — exactly as a
+ * user at this width would see them; only the amount of vertical room changes.
+ *
+ * @param innerHeight current window height
+ * @param overflow    worst `scrollHeight - clientHeight` among internal scrollers
+ * @param cap         refuse to grow past this, so a runaway page cannot ask for a 500MB PNG
+ */
+export function nextViewportHeight({ innerHeight, overflow, cap = 20000 }) {
+  if (!(overflow > SCROLL_TOLERANCE)) return null
+  const wanted = innerHeight + overflow
+  return wanted > cap ? (innerHeight >= cap ? null : cap) : wanted
+}
