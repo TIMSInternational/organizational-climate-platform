@@ -4,6 +4,8 @@ import {
   STORAGE_KEYS,
   buildDevToken,
   choosePort,
+  parseViteOrigin,
+  stripAnsi,
   classifyRequest,
   compileFixtures,
   matchFixture,
@@ -295,5 +297,44 @@ describe('shot harness: waiting for the server watches the server', () => {
       }),
     ).resolves.toBeUndefined()
     expect(calls).toBe(3)
+  })
+})
+
+describe('parseViteOrigin', () => {
+  /**
+   * `choosePort` makes a collision unlikely; this makes a wrong screenshot impossible.
+   * The two are not the same guarantee — a port proved free is released before vite
+   * binds it, and that gap is where a concurrent run can steal it.
+   */
+  it('reads the port vite reports', () => {
+    expect(parseViteOrigin('  ➜  Local:   http://127.0.0.1:5200/')).toBe('http://127.0.0.1:5200')
+  })
+
+  it('survives the ANSI escapes vite puts INSIDE the URL', () => {
+    // The shape that actually broke a first attempt at this: vite bolds the port, so
+    // the digits do not follow the colon and a naive `:(\d+)` finds nothing. The
+    // symptom was "no URL printed" against a server that had printed one.
+    const real =
+      '\n  \u001b[32m\u001b[1mVITE\u001b[22m v8.2.0\u001b[39m ready\n\n' +
+      '  \u001b[32m➜\u001b[39m  \u001b[1mLocal\u001b[22m:   ' +
+      '\u001b[36mhttp://127.0.0.1:\u001b[1m5411\u001b[22m/\u001b[39m\n'
+    expect(parseViteOrigin(real)).toBe('http://127.0.0.1:5411')
+  })
+
+  it('returns null on a partial banner, so a caller keeps waiting', () => {
+    expect(parseViteOrigin('')).toBeNull()
+    expect(parseViteOrigin('  VITE v8.2.0  ready in 407 ms')).toBeNull()
+  })
+
+  it('takes the first 127.0.0.1 URL, so a later Network line cannot displace it', () => {
+    expect(parseViteOrigin('Local: http://127.0.0.1:5200/\nNetwork: http://127.0.0.1:5201/'))
+      .toBe('http://127.0.0.1:5200')
+  })
+})
+
+describe('stripAnsi', () => {
+  it('removes colour escapes and leaves the text', () => {
+    expect(stripAnsi('\u001b[36mhttp://x\u001b[39m')).toBe('http://x')
+    expect(stripAnsi('plain')).toBe('plain')
   })
 })

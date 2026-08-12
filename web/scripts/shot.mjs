@@ -48,6 +48,7 @@ import {
   STORAGE_KEYS,
   buildDevToken,
   choosePort,
+  parseViteOrigin,
   classifyRequest,
   compileFixtures,
   matchFixture,
@@ -188,12 +189,31 @@ async function startServer() {
   )
   child.stderr.on('data', (chunk) => process.stderr.write(`[vite] ${chunk}`))
 
+  // Vite's banner is the only authority on which port it actually bound. choosePort
+  // makes a collision very unlikely; reading the port back makes photographing the
+  // wrong app impossible, which is not the same guarantee. See parseViteOrigin.
+  let banner = ''
+  let reported = null
+  child.stdout.on('data', (chunk) => {
+    banner += chunk
+    reported = reported ?? parseViteOrigin(banner)
+  })
+
   let exit = null
   child.on('exit', (code, signal) => {
     exit = signal === null ? `exited with code ${code}` : `was killed by ${signal}`
   })
 
   await waitForServer(origin, { deadReason: () => exit })
+
+  if (reported && reported !== origin) {
+    // vite bound a different port than the one we proved free, which means something
+    // took it in between. Follow vite rather than the assumption.
+    process.stdout.write(`shot: vite bound ${reported}, not ${origin}; following vite\n`)
+    process.stdout.write(`shot: dev server started at ${reported}\n`)
+    return { origin: reported, stop: async () => void child.kill('SIGTERM') }
+  }
+
   process.stdout.write(`shot: dev server started at ${origin}\n`)
   return { origin, stop: async () => void child.kill('SIGTERM') }
 }

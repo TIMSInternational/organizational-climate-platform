@@ -229,3 +229,37 @@ export async function waitForServer(url, options = {}) {
   }
   throw new Error(`dev server never answered at ${url}`)
 }
+
+/**
+ * Removes ANSI colour/style escapes so a URL can be read out of a coloured banner.
+ *
+ * Vite bolds the port number *inside* the URL it prints, so the bytes are
+ * `http://127.0.0.1:\x1b[1m5411\x1b[22m/`. Anything parsing that banner must strip the
+ * escapes first or it concludes no URL was printed at all.
+ */
+export function stripAnsi(text) {
+  // eslint-disable-next-line no-control-regex
+  return String(text).replace(/\x1b\[[0-9;]*m/g, '')
+}
+
+/**
+ * The origin vite actually bound, read out of its startup banner, or null if the banner
+ * has not printed one yet.
+ *
+ * ## Why this is here as well as {@link choosePort}
+ *
+ * `choosePort` asks the OS for a free port and hands the number to vite, which removes
+ * the collision for every practical purpose. What it cannot remove is the gap between
+ * proving a port free and vite binding it: the socket is closed in between, so a
+ * concurrent process can take it, and then vite either moves or dies while `origin`
+ * still says the old number.
+ *
+ * That gap is small and it is exactly the gap that produced a wrong screenshot once
+ * already, so the origin is confirmed against what vite reports rather than assumed.
+ * Cheap, and it turns "almost certainly the right server" into "provably the server we
+ * spawned".
+ */
+export function parseViteOrigin(banner) {
+  const found = /http:\/\/127\.0\.0\.1:(\d+)/.exec(stripAnsi(banner))
+  return found ? `http://127.0.0.1:${found[1]}` : null
+}
