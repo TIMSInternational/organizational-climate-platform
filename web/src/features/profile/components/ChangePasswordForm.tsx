@@ -35,18 +35,25 @@ export interface ChangePasswordFormProps {
  * 4. **The reader is told this does not sign their other devices out** — always, before they
  *    submit, not only in a success message. See below.
  *
- * ## Other sessions stay signed in. Issue #284.
+ * ## Other sessions ARE signed out. Issue #284, which has landed.
  *
- * The API issues a stateless 24-hour JWT and has no way to revoke one: no denylist, no
- * security stamp, no refresh-token table. A password change writes the new hash and nothing
- * else, so a session that is already open — including an attacker's — keeps working for up
- * to 24 hours.
+ * This comment used to say the opposite, and so did the copy: the API had no revocation, so
+ * a password change left every other session — including an attacker's — working for up to
+ * 24 hours. That was true when this card was written and it is now false. `#284` (426431d,
+ * PR #301) added `User.SecurityStamp`, rotates it in `PUT /profile/password`
+ * (`ProfileEndpoints.cs`, "The revocation itself (#284)"), and `SecurityStampValidation`
+ * refuses any token carrying a stale stamp. Every token minted before the change stops
+ * validating immediately.
  *
  * Somebody changing their password on this form is quite likely doing it *because* they
- * think they were compromised, which makes the gap worth a sentence of standing copy rather
- * than a silence. `profile.passwordOtherSessionsNote` is rendered unconditionally next to
- * the submit button, and a test asserts it is there. Delete both when #284 lands, not
- * before.
+ * think they were compromised, so the sentence stays — but as the reassurance it now is
+ * rather than the warning it was. Telling that person their other devices are still signed
+ * in, when they are not, is the worst direction for this particular error to point.
+ *
+ * **This is a cross-branch claim.** `#284` is on `main`; it is not on the UI integration
+ * branch this card was redesigned on, where the old 24-hour behaviour is still the code. So
+ * neither side was wrong on its own and nothing failed — the sentence only becomes a lie in
+ * the merge. **This card must not ship to an API without `#284`.**
  *
  * The server's own rejection text (wrong current password, policy failures) is rendered
  * verbatim rather than replaced with a generic message: "Password must be at least 12

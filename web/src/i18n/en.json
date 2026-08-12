@@ -1366,7 +1366,7 @@
     "changePassword": "Change password",
     "passwordMismatch": "The new passwords do not match.",
     "passwordSaved": "Your password was changed.",
-    "passwordOtherSessionsNote": "Changing your password does not sign out your other devices. A session that is already open stays signed in for up to 24 hours.",
+    "passwordOtherSessionsNote": "Changing your password signs out every other device immediately. This one stays signed in.",
     "preferencesTitle": "Preferences",
     "preferencesDescription": "Applied here as soon as you save, and stored on your account so the emails we send you use your language.",
     "preferencesSaved": "Your preferences were saved.",

@@ -1366,7 +1366,7 @@
     "changePassword": "Cambiar contrase\u00f1a",
     "passwordMismatch": "Las nuevas contrase\u00f1as no coinciden.",
     "passwordSaved": "Tu contrase\u00f1a se cambi\u00f3.",
-    "passwordOtherSessionsNote": "Cambiar tu contrase\u00f1a no cierra la sesi\u00f3n en tus otros dispositivos. Una sesi\u00f3n ya abierta sigue activa hasta 24 horas.",
+    "passwordOtherSessionsNote": "Cambiar tu contrase\u00f1a cierra la sesi\u00f3n en todos tus otros dispositivos de inmediato. Este sigue con la sesi\u00f3n abierta.",
     "preferencesTitle": "Preferencias",
     "preferencesDescription": "Se aplican aqu\u00ed en cuanto guardas y quedan en tu cuenta, para que los correos que te enviamos usen tu idioma.",
     "preferencesSaved": "Tus preferencias se guardaron.",
