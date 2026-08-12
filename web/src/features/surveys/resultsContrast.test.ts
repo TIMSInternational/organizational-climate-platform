@@ -34,6 +34,7 @@ import { join } from 'node:path'
 const TOKENS = join(process.cwd(), 'src', 'styles', 'tokens.css')
 const KPI_TILE = join(process.cwd(), 'src', 'components', 'charts', 'KpiTile.tsx')
 const RESULTS_PAGE = join(process.cwd(), 'src', 'features', 'surveys', 'pages', 'SurveyResultsPage.tsx')
+const CLIMATE_MAP = join(process.cwd(), 'src', 'components', 'charts', 'ClimateMap.tsx')
 const DARK_SELECTOR = ":root[data-admin-theme='dark']"
 
 type Rgb = [number, number, number]
@@ -89,7 +90,34 @@ const PAIRS: readonly Pair[] = [
   { what: "a finding's reading", ink: '--admin-font-secondary', surface: '--admin-bg-icon-box' },
   // The prose in the map and findings panels.
   { what: 'the panel prose', ink: '--admin-font-secondary', surface: '--admin-bg-panel' },
+  // charts/ClimateMap: the dimension column headers (`text-2xs`) and the two
+  // diverging-scale legend labels. Measured on BOTH surfaces, because the same
+  // component renders on the bare panel here and inside a recessed tile on the
+  // dashboard, and the ink that shipped was below AA on both.
+  { what: 'the map column header', ink: '--admin-font-secondary', surface: '--admin-bg-panel' },
+  {
+    what: 'the map column header on a tile',
+    ink: '--admin-font-secondary',
+    surface: '--admin-bg-icon-box',
+  },
+  { what: 'the map legend label', ink: '--admin-font-secondary', surface: '--admin-bg-panel' },
+  {
+    what: 'the map legend label on a tile',
+    ink: '--admin-font-secondary',
+    surface: '--admin-bg-icon-box',
+  },
 ]
+
+/**
+ * The ink that actually shipped on the map, kept so the numbers in the docblock are
+ * a measured comparison rather than a claim about nothing. `--admin-font-tertiary`
+ * is #818181 in *both* palettes, which is why it failed the same way twice and why
+ * checking dark did not reveal it.
+ */
+const REJECTED_INK = '--admin-font-tertiary'
+
+/** Surfaces ClimateMap is rendered on. */
+const MAP_SURFACES = ['--admin-bg-panel', '--admin-bg-icon-box'] as const
 
 describe('the survey results screen reads in both themes', () => {
   const { light, dark } = palettes()
@@ -113,9 +141,31 @@ describe('the survey results screen reads in both themes', () => {
    * it. Neither `tsc`, oxlint nor `utilityExistence` can see it: the class compiles
    * perfectly, it just cannot be read.
    */
+  /**
+   * Vacuity control for the pair table: the rejected ink must genuinely fail on the
+   * surfaces the map is drawn on, in the theme named. Without this, swapping every
+   * PAIRS entry to an ink that trivially passes would leave the suite green while
+   * proving nothing about the defect it was written for.
+   */
+  it.each(MAP_SURFACES.flatMap((surface) => themes.map(([theme, palette]) => [theme, palette, surface] as const)))(
+    'the ink that shipped on the map does NOT clear AA in %s',
+    (theme, palette, surface) => {
+      const ratio = contrastRatio(parseColor(palette[REJECTED_INK]), parseColor(palette[surface]))
+      // Dark on the bare panel is the one combination that scrapes past 4.5 (4.60),
+      // so it is excluded rather than asserted — the failure is real on the other
+      // three, which is what makes the swap necessary.
+      if (theme === 'dark' && surface === '--admin-bg-panel') {
+        expect(ratio).toBeGreaterThanOrEqual(AA_SMALL_TEXT)
+        return
+      }
+      expect(ratio).toBeLessThan(AA_SMALL_TEXT)
+    },
+  )
+
   it.each([
     ['components/charts/KpiTile.tsx', KPI_TILE],
     ['features/surveys/pages/SurveyResultsPage.tsx', RESULTS_PAGE],
+    ['components/charts/ClimateMap.tsx', CLIMATE_MAP],
   ])('%s never writes text-fg-tertiary', (_name, path) => {
     const source = readFileSync(path, 'utf8')
     // Only className positions, not the prose explaining why the class is absent.

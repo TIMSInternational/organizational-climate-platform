@@ -78,12 +78,22 @@ describe('ProtectedCell', () => {
           <span>74</span>
         </ProtectedCell>,
       )
+      // All three surfaces assert on the BARE NUMBER, not on the phrase
+      // `${responses} response`. Three verifier lanes independently landed the same
+      // finding here: with the phrase form, appending the raw count to the
+      // accessible name or the tooltip — `title={`${label} (${responses})`}` — left
+      // 416 tests green, because a bare `(3)` contains no "3 response" substring.
+      // The leak that actually matters is the digit; the sentence around it is
+      // whatever the leaking code happened to write. The count reached this
+      // component precisely so it could be withheld, so the guard has to cover
+      // every surface it could reach, in the form a leak would really take.
       expect(container.textContent ?? '').not.toContain(String(responses))
       const label = container.querySelector('[role="img"]')?.getAttribute('aria-label') ?? ''
-      expect(label).not.toContain(`${responses} response`)
-      // The title attribute is a second surface that would leak it just as well.
+      expect(label).not.toContain(String(responses))
+      // The title attribute is a second surface that would leak it just as well —
+      // and the one a mouse user actually reads.
       expect(container.querySelector('[role="img"]')?.getAttribute('title') ?? '').not.toContain(
-        `${responses} response`,
+        String(responses),
       )
     })
 

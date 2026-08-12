@@ -32,3 +32,23 @@ export const ANONYMITY_FLOOR = 5
 export function isSuppressed(responses: number, threshold = ANONYMITY_FLOOR): boolean {
   return responses < threshold
 }
+
+/**
+ * The diagonal hatch that says *withheld* rather than *empty* — one value, because
+ * it shipped as two.
+ *
+ * `ProtectedCell` paints the cell and `ClimateMap`'s legend paints the key that
+ * explains it. Both hand-rolled the same gradient, and when the cell's stripe token
+ * was corrected the legend's copy was left behind on `--admin-border-light`, which
+ * in the dark palette is the *same hex* as the surface it sits on
+ * (`--admin-bg-icon-box`, `#2a2a2a`). So the fixed cell showed a hatch while the key
+ * beside it rendered a blank box — a legend disagreeing with the thing it is a
+ * legend for, which is worse than either being wrong alone.
+ *
+ * `--admin-border-hover` (`#d0d0d0` light / `#444444` dark) is a visible texture
+ * against that surface in both themes. `protectedHatch.test.ts` reads the token out
+ * of this constant, measures it against the surface, and sweeps `src/` so a third
+ * hand-rolled copy fails instead of quietly diverging again.
+ */
+export const PROTECTED_HATCH =
+  '[background-image:repeating-linear-gradient(135deg,var(--admin-border-hover)_0_5px,transparent_5px_10px)]'

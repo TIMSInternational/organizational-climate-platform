@@ -1,7 +1,7 @@
 import { Lock } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { cn } from '../../lib/cn'
-import { ANONYMITY_FLOOR, isSuppressed } from './suppression'
+import { ANONYMITY_FLOOR, PROTECTED_HATCH, isSuppressed } from './suppression'
 
 /**
  * The anonymity floor, made visible.
@@ -94,16 +94,10 @@ export default function ProtectedCell({
         // Authored as a gradient rather than an asset so it inherits the theme's
         // line colour instead of shipping two PNGs.
         //
-        // `--admin-border-hover`, NOT `--admin-border-light`. In the dark palette
-        // `--admin-border-light` and `--admin-bg-icon-box` are the *same value*,
-        // #2a2a2a (tokens.css lines 392 and 399), so the stripes were painted in
-        // the background colour and the cell rendered as a plain empty box —
-        // exactly the "reads as missing data" failure this component exists to
-        // prevent, shipped inside the component that prevents it. Light was 1.02:1
-        // (#eeeeee on #f0f0f0), i.e. equally absent. `--admin-border-hover` is
-        // #d0d0d0 / #444444 and is a visible texture against the surface in both.
-        // `protectedHatch.test.ts` fails if that ever stops being true.
-        '[background-image:repeating-linear-gradient(135deg,var(--admin-border-hover)_0_5px,transparent_5px_10px)]',
+        // Shared with `ClimateMap`'s legend key rather than written out here: the
+        // two copies had already drifted onto different stripe tokens once, leaving
+        // the key blank beside a hatched cell. See `PROTECTED_HATCH`.
+        PROTECTED_HATCH,
         className,
         suppressedClassName,
       )}

@@ -3,7 +3,7 @@ import { Table } from '../ui'
 import { formatMetric } from './formatMetric'
 import { DIVERGING_COLORS, divergingPair } from './palette'
 import ProtectedCell from './ProtectedCell'
-import { isSuppressed } from './suppression'
+import { PROTECTED_HATCH, isSuppressed } from './suppression'
 
 /**
  * Score against a target, by group and dimension — the dashboard's hero.
@@ -157,7 +157,15 @@ export default function ClimateMap({
               <th
                 key={dimension.key}
                 scope="col"
-                className="px-1 pb-1.5 text-left text-2xs font-semibold uppercase tracking-label text-fg-tertiary"
+                // `text-fg-secondary`, not `text-fg-tertiary`. These are `text-2xs`
+                // dimension names, so WCAG AA wants 4.5:1, and `--admin-font-tertiary`
+                // (#818181, the same value in both palettes) gives 3.90:1 on
+                // `--admin-bg-panel` and 3.42:1 on `--admin-bg-icon-box` — this map
+                // appears on both surfaces. `--admin-font-secondary` clears it
+                // everywhere (9.29 / 8.15 light, 8.55 / 6.85 dark). Same correction
+                // `KpiTile` already took for its label; `resultsContrast.test.ts`
+                // measures the pair and bans the utility by name in this file.
+                className="px-1 pb-1.5 text-left text-2xs font-semibold uppercase tracking-label text-fg-secondary"
               >
                 {dimension.label}
               </th>
@@ -263,7 +271,9 @@ export default function ClimateMap({
             because that is what every cell is. */}
         {target !== null && (
           <>
-            <span className="text-fg-tertiary">{t('charts.belowTargetLegend')}</span>
+            {/* No ink override: the wrapper's `text-fg-secondary` already reads at
+                AA on both surfaces, where `text-fg-tertiary` measured 3.90:1. */}
+            <span>{t('charts.belowTargetLegend')}</span>
             <span className="flex gap-0.5" aria-hidden="true">
               {DIVERGING_COLORS.map((color) => (
                 <span
@@ -273,13 +283,13 @@ export default function ClimateMap({
                 />
               ))}
             </span>
-            <span className="text-fg-tertiary">{t('charts.aboveTargetLegend')}</span>
+            <span>{t('charts.aboveTargetLegend')}</span>
           </>
         )}
         <span className="inline-flex items-center gap-1.5">
           <span
             aria-hidden="true"
-            className="inline-block h-2 w-5 rounded-xs border border-dashed border-line-default bg-surface-icon-box [background-image:repeating-linear-gradient(135deg,var(--admin-border-light)_0_5px,transparent_5px_10px)]"
+            className={`inline-block h-2 w-5 rounded-xs border border-dashed border-line-default bg-surface-icon-box ${PROTECTED_HATCH}`}
           />
           {t('charts.protectedLegend', { threshold })}
         </span>

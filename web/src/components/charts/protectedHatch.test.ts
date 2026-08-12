@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync, globSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import tokensCss from '../../styles/tokens.css?raw'
 import protectedCellSource from './ProtectedCell.tsx?raw'
+import { PROTECTED_HATCH } from './suppression'
 
 /**
  * The protected hatch has to be *visible*, in both themes.
@@ -59,11 +62,35 @@ function contrast(a: string, b: string): number {
   return (lighter + 0.05) / (darker + 0.05)
 }
 
-/** The token the hatch gradient is painted in, read out of the component. */
+/** The token the hatch gradient is painted in, read out of the shared constant. */
 function hatchToken(): string {
-  const match = /repeating-linear-gradient\(135deg,var\((--[a-z0-9-]+)\)/.exec(protectedCellSource)
-  if (!match) throw new Error('ProtectedCell no longer paints a 135deg repeating gradient')
+  const match = /repeating-linear-gradient\(135deg,var\((--[a-z0-9-]+)\)/.exec(PROTECTED_HATCH)
+  if (!match) throw new Error('PROTECTED_HATCH no longer paints a 135deg repeating gradient')
   return match[1]
+}
+
+const SRC = join(process.cwd(), 'src')
+
+/**
+ * Every place in `src/` that writes a 135deg repeating gradient by hand, with the
+ * token it paints in — so a second copy cannot drift off the shared constant the way
+ * `ClimateMap`'s legend key did.
+ */
+function handRolledHatches(): { file: string; token: string }[] {
+  const found: { file: string; token: string }[] = []
+  for (const relativePath of globSync('**/*.{ts,tsx}', { cwd: SRC })) {
+    // The constant's own definition is the one legitimate literal, and this file
+    // quotes the gradient in its own prose and regexes.
+    if (relativePath === 'components/charts/suppression.ts') continue
+    if (relativePath.endsWith('protectedHatch.test.ts')) continue
+    const source = readFileSync(join(SRC, relativePath), 'utf8')
+    for (const match of source.matchAll(
+      /repeating-linear-gradient\(135deg,\s*var\((--[a-z0-9-]+)\)/g,
+    )) {
+      found.push({ file: relativePath, token: match[1] })
+    }
+  }
+  return found
 }
 
 describe('the fixtures themselves', () => {
@@ -83,6 +110,27 @@ describe('the protected hatch', () => {
     // The surface it is painted on. `bg-surface-icon-box` maps to
     // `--admin-bg-icon-box` through theme.css.
     expect(protectedCellSource).toContain('bg-surface-icon-box')
+  })
+
+  it('is the shared constant everywhere, not a second hand-rolled copy', () => {
+    // `ClimateMap`'s legend key was a second literal. When the cell's stripe token
+    // was corrected the key kept `--admin-border-light` — identical to the surface
+    // in dark — so the fixed cell showed a hatch while its own legend showed a
+    // blank box. Both now spread `PROTECTED_HATCH`; anything else fails here.
+    const strays = handRolledHatches().filter(({ token: used }) => used !== token)
+    expect(
+      strays.map(({ file, token: used }) => `${relative('.', file)} paints the hatch in ${used}`),
+      'Use PROTECTED_HATCH from components/charts/suppression rather than writing the gradient out',
+    ).toEqual([])
+  })
+
+  it('the sweep for stray copies is not vacuous', () => {
+    // Guard the guard. If the regex or the glob stopped matching, the check above
+    // would pass by finding nothing. `ProtectedCell` and `ClimateMap` both consume
+    // the constant, so neither writes the gradient literally any more — what must
+    // still be findable is the constant itself.
+    expect(PROTECTED_HATCH).toMatch(/^\[background-image:repeating-linear-gradient\(135deg,var\(--/)
+    expect(globSync('**/*.{ts,tsx}', { cwd: SRC }).length).toBeGreaterThan(100)
   })
 
   it.each([
