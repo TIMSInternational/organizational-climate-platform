@@ -46,6 +46,24 @@ The legacy variants were solid saturated fills. Here they are the token layer's
 status pills actually looked like and what stays legible in both themes.
 `destructive` keeps a solid fill.
 
+### `Chip` sits beside `Badge`, and is not a Badge variant
+
+`Chip` (UI-0) is the redesign's **status** pill: a fixed 20px box, 11px semibold,
+five tones — `good` / `warning` / `critical` / `accent` / `neutral` — and a `label`
+that is a required `string`, so colour can never be the only carrier of the state
+(WCAG 1.4.1).
+
+It is separate from `Badge` because Badge's hued variants take their ink from the
+accents, and `styles/badgeVariantContrast.test.ts` measures three of them failing
+WCAG AA in light. A chip that passes cannot reuse those pairings, and re-inking
+Badge would move 50 call sites across 34 files. `chip.tsx` sets out the full
+argument; if Badge's inks are ever fixed the two can merge.
+
+Each tone wears a `text-chip-*-ink` token measured against the fill beneath it,
+per theme. `styles/chipVariantContrast.test.ts` re-derives all ten pairings from
+the real variant table, `theme.css` and `tokens.css`, so re-pairing a tone fails
+the build.
+
 ### `Form` and the `FormField` Controller are not ported
 
 The legacy `form.tsx` was shadcn's `react-hook-form` binding. Nothing in this app

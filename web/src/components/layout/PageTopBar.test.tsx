@@ -141,4 +141,95 @@ describe('PageTopBar', () => {
     expect(container.querySelector('[data-slot="badge"]')).toBeNull()
     expect(container.querySelector('button')).toBeNull()
   })
+
+  /**
+   * The page layout rule (UI-0): header, then the KPI row, then the work.
+   *
+   * happy-dom does no layout, so none of this can be measured here — the
+   * geometry is looked at in `/dev/chart-gallery`, in both themes. What a test
+   * *can* pin is that the classes carrying it are on the element, because the
+   * failure mode is silent: a header that loses its rule still renders, and 27
+   * pages then run into their content with nothing between.
+   */
+  describe('the .ptb geometry', () => {
+    function topBar(container: HTMLElement): HTMLElement {
+      const element = container.querySelector<HTMLElement>('[data-slot="page-top-bar"]')
+      expect(element, 'the header root is findable').not.toBeNull()
+      return element!
+    }
+
+    it('closes itself with a hairline rule, 14px under the content', () => {
+      const { container } = renderTopBar({ title: 'Companies' })
+      const classes = topBar(container).className.split(/\s+/)
+      expect(classes).toContain('border-b')
+      expect(classes).toContain('border-line-light')
+      expect(classes).toContain('pb-3.5')
+    })
+
+    it('leaves 16px between the rule and whatever the page puts next', () => {
+      const { container } = renderTopBar({ title: 'Companies' })
+      // `mb-panel` is --admin-size-panel-padding, 16px. It was `mb-section`
+      // (24px) with a `<Separator />` inside before UI-0.
+      expect(topBar(container).className.split(/\s+/)).toContain('mb-panel')
+    })
+
+    it('draws the rule itself rather than delegating to a Separator element', () => {
+      // A separator is a sibling with margins of its own, so the 14px/16px split
+      // above cannot be expressed with one. Its absence is the assertion.
+      const { container } = renderTopBar({ title: 'Companies' })
+      expect(container.querySelector('[data-slot="separator"]')).toBeNull()
+    })
+
+    it('sets the title at the header size, not at the bare h1 size', () => {
+      // index.css gives a bare `h1` --admin-text-3xl (24px). The redesign's page
+      // header is a step down from that; without the class it inherits 24px.
+      const { container } = renderTopBar({ title: 'Companies' })
+      expect(container.querySelector('h1')!.className.split(/\s+/)).toContain('text-2xl')
+    })
+
+    it('caps the description and nothing else', () => {
+      // Only prose is capped: tables and charts fill the width. The assertion is
+      // that the cap sits on the `<p>` and not on the header box around it.
+      const { container } = renderTopBar({
+        title: 'Companies',
+        description: 'Every company on the platform',
+      })
+      const description = container.querySelector('p:not([data-slot="page-eyebrow"])')!
+      expect(description.className.split(/\s+/)).toContain('max-w-measure')
+      expect(topBar(container).className).not.toContain('max-w-measure')
+    })
+
+    it('aligns the actions with the title, not with the middle of the block', () => {
+      // `items-start`, not `items-center`. While the two share a line the text
+      // column is three lines tall (eyebrow, title, description) against a
+      // one-control-high action cluster, so centring floats the buttons into the
+      // middle of the block.
+      const { container } = renderTopBar({ title: 'Companies', actions: <button>New</button> })
+      const row = container.querySelector('h1')!.closest('.justify-between')!
+      expect(row.className.split(/\s+/)).toContain('items-start')
+    })
+
+    it('gives the text column a flex basis, so the actions can wrap off its line', () => {
+      // THE ONE THING happy-dom CANNOT SEE, so it is asserted as the mechanism.
+      //
+      // Flexbox breaks a line when the items' flex BASE sizes stop fitting.
+      // `flex-1` is `flex: 1 1 0%` — base size zero — so a row of `flex-wrap`
+      // plus `flex-1` never wraps at any width; it shrinks the text column
+      // toward nothing instead, which measured 1px wide by 5591px tall at a 320px
+      // viewport with the right half of the header empty. `basis-header-text` is
+      // 20rem, so the actions drop to their own line before the title is squeezed.
+      //
+      // The `flex-1` assertion is not redundant with the `basis-*` one: `flex-1`
+      // is shorthand for all three of grow/shrink/basis, so leaving it beside
+      // `basis-header-text` would re-zero the basis depending on order.
+      const { container } = renderTopBar({ title: 'Companies', actions: <button>New</button> })
+      const row = container.querySelector('h1')!.closest('.justify-between')!
+      expect(row.className.split(/\s+/)).toContain('flex-wrap')
+      const textColumn = container.querySelector('h1')!.closest('.justify-between > *')!
+      const classes = textColumn.className.split(/\s+/)
+      expect(classes).toContain('basis-header-text')
+      expect(classes).toContain('grow')
+      expect(classes).not.toContain('flex-1')
+    })
+  })
 })
