@@ -85,11 +85,25 @@ export default function ProtectedCell({
       title={label}
       className={cn(
         'flex items-center justify-center rounded border border-dashed border-line-default',
-        'bg-surface-icon-box text-fg-light',
+        // `text-fg-tertiary`, not `text-fg-light`: the padlock is the message, and
+        // `--admin-font-light` is #999 on #f0f0f0 in light (2.0:1) and #555 on
+        // #2a2a2a in dark (2.2:1) — a glyph a reader has to hunt for. #818181 is
+        // the same value in both themes and clears 3:1 against both surfaces.
+        'bg-surface-icon-box text-fg-tertiary',
         // The hatch is what distinguishes "withheld" from "empty" at a glance.
         // Authored as a gradient rather than an asset so it inherits the theme's
         // line colour instead of shipping two PNGs.
-        '[background-image:repeating-linear-gradient(135deg,var(--admin-border-light)_0_5px,transparent_5px_10px)]',
+        //
+        // `--admin-border-hover`, NOT `--admin-border-light`. In the dark palette
+        // `--admin-border-light` and `--admin-bg-icon-box` are the *same value*,
+        // #2a2a2a (tokens.css lines 392 and 399), so the stripes were painted in
+        // the background colour and the cell rendered as a plain empty box —
+        // exactly the "reads as missing data" failure this component exists to
+        // prevent, shipped inside the component that prevents it. Light was 1.02:1
+        // (#eeeeee on #f0f0f0), i.e. equally absent. `--admin-border-hover` is
+        // #d0d0d0 / #444444 and is a visible texture against the surface in both.
+        // `protectedHatch.test.ts` fails if that ever stops being true.
+        '[background-image:repeating-linear-gradient(135deg,var(--admin-border-hover)_0_5px,transparent_5px_10px)]',
         className,
         suppressedClassName,
       )}
