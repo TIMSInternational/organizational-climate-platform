@@ -87,7 +87,16 @@ export default function DashboardSurveyTable({
 
   return (
     <Table>
-      <thead>
+      {/* The redesign's column label: `text-2xs`, uppercase, letterspaced — the same
+          micro-label the Departments and Company Settings tables use, so two tables one
+          click apart do not label themselves differently.
+
+          `text-fg-secondary`, not `text-fg-tertiary`. The other tables reach for tertiary
+          here, but `--admin-font-tertiary` is #818181 in BOTH palettes and measures 3.90:1
+          on the panel and 3.42:1 on the recessed surface — under the 4.5:1 that `text-2xs`
+          needs, which is the exact pairing the survey-results lane had to fix in
+          `ClimateMap`. Secondary clears it on both surfaces in both themes. */}
+      <thead className="text-2xs uppercase tracking-label text-fg-secondary">
         <tr>
           <th>{t('surveys.surveyName')}</th>
           <th>{t('common.status')}</th>
@@ -107,13 +116,21 @@ export default function DashboardSurveyTable({
               )}
             </td>
             <td>{statusLabel(t, survey.status)}</td>
-            <td>{survey.responseCount}</td>
+            {/* Every reading is mono with tabular figures — the rule the whole redesign
+                rests on, and the one this table was missing while the KPI tiles directly
+                above it honoured it. Two faces for the same kind of number on one screen is
+                exactly what stops it reading as an instrument. */}
+            <td className="font-mono tabular-nums">{survey.responseCount}</td>
             {/* An em dash, not "0": a survey with no invitation total has no target, and
                 printing zero would read as "nobody was invited". */}
-            {showTarget && <td>{survey.targetAudienceCount ?? '—'}</td>}
+            {showTarget && (
+              <td className="font-mono tabular-nums">{survey.targetAudienceCount ?? '—'}</td>
+            )}
             {/* UTC, not the browser's zone: these are calendar days, and a reader
                 west of UTC was shown the day before. See `calendarDay`. */}
-            <td>{calendarDay(Date.parse(survey.endDate), locale)}</td>
+            <td className="whitespace-nowrap font-mono tabular-nums">
+              {calendarDay(Date.parse(survey.endDate), locale)}
+            </td>
           </tr>
         ))}
       </tbody>

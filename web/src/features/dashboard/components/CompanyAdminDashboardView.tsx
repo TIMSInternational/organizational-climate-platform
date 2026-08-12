@@ -13,10 +13,11 @@ import {
   type DepartmentReading,
 } from '../companyClimate'
 import DashboardState from './DashboardState'
+import { KpiRow, MonoReadings, SectionHeading } from './dashboardGrammar'
 import DashboardSurveyTable from './DashboardSurveyTable'
 import { calendarDay } from '../calendarDay'
 import { acceptsResponses } from '../../surveys/surveyVocabulary'
-import { useTranslation, type TranslateFn, type TranslateParams } from '../../../i18n'
+import { useTranslation, type TranslateFn } from '../../../i18n'
 import { JourneyTimeline, PageTopBar, QuickActions, type JourneyStep, type QuickAction } from '../../../components/layout'
 import { ClimateMap, KpiTile } from '../../../components/charts'
 import { Button, EmptyState } from '../../../components/ui'
@@ -155,7 +156,7 @@ export default function CompanyAdminDashboardView({ companyId }: CompanyAdminDas
       <DashboardState loading={loading} failed={failed} error={error} onRetry={reload}>
         {data && (
           <div className="flex flex-col gap-section">
-            <div className="grid grid-cols-1 gap-panel-gap sm:grid-cols-2 xl:grid-cols-4">
+            <KpiRow>
               {/* Not a percentage: this counts responses, not people, so three surveys can
                   put one person on the numerator three times and "150%" would read as a
                   bug rather than as a reading. Stated as a rate per 100 people, which is
@@ -170,6 +171,7 @@ export default function CompanyAdminDashboardView({ companyId }: CompanyAdminDas
                 locale={locale}
                 sub={
                   <MonoReadings
+                    locale={locale}
                     t={t}
                     messageKey="dashboard.responsesFromPeople"
                     params={{ completed: data.completedResponseCount, people: data.userCount }}
@@ -223,7 +225,7 @@ export default function CompanyAdminDashboardView({ companyId }: CompanyAdminDas
                   </span>
                 }
               />
-            </div>
+            </KpiRow>
 
             <section>
               <SectionHeading>{t('dashboard.responseRateByDepartment')}</SectionHeading>
@@ -258,7 +260,8 @@ export default function CompanyAdminDashboardView({ companyId }: CompanyAdminDas
                       drop it under the map instead, which is what the wrap is for. */}
                   <div className="min-w-64 max-w-prose flex-1">
                     <p className="mb-0 text-xs text-fg-secondary">
-                      <MonoReadings t={t} messageKey="dashboard.mapTargetNote" params={{ target }} />
+                      <MonoReadings
+                    locale={locale} t={t} messageKey="dashboard.mapTargetNote" params={{ target }} />
                     </p>
                     {unmeasurable > 0 && (
                       <p className="mb-0 mt-1 text-xs text-fg-tertiary">
@@ -329,92 +332,6 @@ export default function CompanyAdminDashboardView({ companyId }: CompanyAdminDas
   )
 }
 
-/**
- * The 13px semibold heading the redesign puts over every block.
- *
- * An `<h2>` because it sits under the page's one `<h1>` in `PageTopBar`; the size comes
- * from `text-base`, which is this theme's 13px shell default, rather than from the bare
- * `h2` rule (20px), because the redesign's section headings are quieter than its readings
- * on purpose.
- */
-function SectionHeading({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-inline text-base">{children}</h2>
-}
-
-/**
- * The substitution marker. U+241F is the *printable symbol for* the unit separator, a
- * character no sentence in either catalogue contains — checked against both files —
- * and one no author would reach for, which is why it is safe to split on.
- */
-const READING_MARK = '␟'
-
-/**
- * A translated sentence whose interpolated numbers are set in mono, and its prose is not.
- *
- * The thesis of the redesign is that every *reading* is `font-mono tabular-nums` and
- * every piece of prose stays in the sans face — that one rule is what makes the
- * product read as a measuring device. `KpiTile` and `ClimateMap` honour it because
- * they are handed a number and render it themselves. A sentence like "…{rate}
- * responses per 100 people, against {target} across the organisation" does not: `t`
- * returns one flat string, so the readings inside it came out in the sans face on the
- * screen the other twelve are copied from.
- *
- * Splitting on the placeholders in the *English* would not survive translation — the
- * Spanish puts them in a different order and a different sentence. So each numeric
- * value is substituted as a marker, the catalogue does the ordering, and the markers
- * are swapped back for mono spans afterwards. String params (a department name) are
- * prose and pass straight through.
- *
- * The value is stringified exactly as `t` would have (`String`, not `toLocaleString`),
- * so this changes the typeface and nothing else about what is printed.
- */
-function MonoReadings({
-  t,
-  messageKey,
-  params,
-}: {
-  t: TranslateFn
-  messageKey: string
-  params: TranslateParams
-}) {
-  const readings: string[] = []
-  const marked: TranslateParams = {}
-  for (const [name, value] of Object.entries(params)) {
-    if (typeof value === 'number') {
-      marked[name] = `${READING_MARK}${readings.length}${READING_MARK}`
-      readings.push(String(value))
-    } else {
-      marked[name] = value
-    }
-  }
-
-  // One `<span>` and not a fragment. `KpiTile` lays its sub-line out as a flex row, so
-  // a fragment put every prose piece and every reading in as its OWN flex item: measured
-  // in Spanish at 1280, "262 respuestas completadas de 208 personas" broke into two
-  // columns with the sentence wrapping inside the first. Wrapped, it is one inline run
-  // that simply wraps as text.
-  //
-  // Every marker contributes exactly two elements to the split, so the readings are
-  // always at the odd indices however many there are and wherever the catalogue put
-  // them — including two of them side by side, which yields an empty prose piece
-  // between rather than breaking the alternation.
-  return (
-    <span>
-      {t(messageKey, marked)
-        .split(READING_MARK)
-        .map((piece, index) =>
-          index % 2 === 1 ? (
-            <span key={index} className="font-mono tabular-nums">
-              {readings[Number(piece)]}
-            </span>
-          ) : (
-            piece
-          ),
-        )}
-    </span>
-  )
-}
-
 /** One department as a `ClimateMap` row. `rate` is non-null by construction — see `measurableDepartments`. */
 function toClimateRow(reading: DepartmentReading) {
   return {
@@ -462,7 +379,7 @@ function NeedsAttention({
   target: number | null
   comparable: boolean
 }) {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const state = !comparable || target === null ? 'unmeasured' : worst === null ? 'clear' : 'behind'
 
   const CHIP = 'flex size-7 shrink-0 items-center justify-center rounded-lg'
@@ -495,6 +412,7 @@ function NeedsAttention({
         <p className="mb-0 mt-0.5 text-sm text-fg-secondary">
           {state === 'behind' && worst !== null ? (
             <MonoReadings
+              locale={locale}
               t={t}
               messageKey="dashboard.attentionEvidence"
               params={{
@@ -507,6 +425,7 @@ function NeedsAttention({
             />
           ) : state === 'clear' ? (
             <MonoReadings
+              locale={locale}
               t={t}
               messageKey="dashboard.attentionClearEvidence"
               params={{ target: target ?? 0 }}
