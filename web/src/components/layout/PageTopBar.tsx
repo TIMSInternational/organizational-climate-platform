@@ -89,7 +89,7 @@ import {
  *
  * - **`<h1>`, not `<h2>`.** The prototype nests its screens inside a page that
  *   already has an `<h1>` in the caption above the shell; here the page title is
- *   the document's heading, 27 callers render exactly one of them, and demoting
+ *   the document's heading, every caller renders exactly one of them, and demoting
  *   it would break the heading outline for AT.
  * - **20px, not 19px.** `text-2xl` is the type scale's step here, and the scale
  *   is a checked port (`styles/tokens.test.ts` pins it at eight `rem` sizes). A
@@ -122,7 +122,7 @@ export interface PageTopBarProps {
    *
    * Already translated. **Normally omitted**: left off, the component names the
    * area itself from the nav section the current route sits in, which is right
-   * for all 27 callers and stays right when a nav entry changes group. Pass it
+   * for every caller and stays right when a nav entry changes group. Pass it
    * only where a page belongs somewhere the nav does not say, and pass `null` to
    * suppress it — `undefined` means "derive it", which is not the same request.
    */
@@ -264,9 +264,9 @@ export function PageTopBar({
  * cover the route.
  *
  * Reads the JWT the same way `AdminLayout` and `SidebarUserMenu` do, rather than
- * taking role and company as props: the eyebrow has to be right on all 27 callers
- * without any of them being edited, and threading two claims through 27 call
- * sites is exactly the per-page duplication deriving it was meant to avoid.
+ * taking role and company as props: the eyebrow has to be right on every caller
+ * without any of them being edited, and threading two claims through every call
+ * site is exactly the per-page duplication deriving it was meant to avoid.
  *
  * Needs a router, like the breadcrumbs above it already did — `useLocation`
  * throws outside one, so this adds no constraint the component did not have.
