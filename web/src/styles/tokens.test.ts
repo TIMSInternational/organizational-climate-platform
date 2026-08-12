@@ -5,7 +5,7 @@ import tokensCss from './tokens.css?raw'
 import themeCss from './theme.css?raw'
 import indexCss from '../index.css?raw'
 import adminThemeSource from '../theme/adminTheme.ts?raw'
-import publicSurveySource from '../features/surveys/pages/PublicSurveyRespondPage.tsx?raw'
+import respondShellSource from '../components/layout/RespondShell.tsx?raw'
 
 /**
  * The token layer is a port, not a design. These tests pin the two things a
@@ -154,7 +154,11 @@ describe('control density', () => {
    */
   it('keeps the content cap for the pages that have no rail to drift away from', () => {
     expect(token('--admin-size-content-max')).toBe('1280px')
-    expect(publicSurveySource).toMatch(/max-w-content/)
+    // `RespondShell` is where the cap now lives: it frames all three respond
+    // routes -- `/survey/:id`, `/surveys/:id/respond` and
+    // `/microclimates/:id/respond` -- which were three divergent copies of one
+    // standalone centred layout before, only one of which had ever been given one.
+    expect(respondShellSource).toMatch(/max-w-content/)
   })
 
   it('gives the page header a flex basis wide enough to be worth wrapping for', () => {

@@ -382,11 +382,47 @@ describe('SurveyRespondPage settings', () => {
     expect(legends[1].textContent).toContain('Pregunta 2 de 2')
   })
 
-  it('shows a countdown when the survey sets a time limit', async () => {
+  /**
+   * The countdown moved out of an inline `Alert` in the run of the page and into
+   * the instrument panel, as a labelled reading. So the assertion is on the
+   * reading rather than on the old sentence — and on the typography, because
+   * "set every reading in mono with tabular figures" is the one rule the redesign
+   * rests on and a countdown that reflows a pixel every second is exactly what
+   * tabular figures exist to prevent.
+   */
+  it('shows a countdown when the survey sets a time limit, as a mono reading', async () => {
     respondWith(view({ timeLimitMinutes: 10 }))
     renderPage()
 
-    expect(await screen.findByText('Queda 10:00')).toBeTruthy()
+    const countdown = await screen.findByText('10:00')
+    expect(countdown.className).toContain('font-mono')
+    expect(countdown.className).toContain('tabular-nums')
+    // Labelled, so a bare "10:00" is never left to be guessed at.
+    expect(screen.getByText('Tiempo restante')).toBeTruthy()
+  })
+
+  it('replaces the countdown with an alert once the suggested time is up', async () => {
+    respondWith(view({ timeLimitMinutes: 10 }))
+    // Started eleven minutes ago, so the deadline is already behind us.
+    const startedAt = new Date(Date.now() - 11 * 60_000).toISOString()
+    respondWith(
+      view({
+        timeLimitMinutes: 10,
+        inProgress: {
+          responseId: 'r1',
+          sessionId: 'session-1',
+          isComplete: false,
+          language: 'es',
+          startTime: startedAt,
+          completionTime: null,
+          answers: [],
+        },
+      }),
+    )
+    renderPage()
+
+    expect(await screen.findByText('Se agotó el tiempo sugerido')).toBeTruthy()
+    expect(screen.queryByText('Tiempo restante')).toBeNull()
   })
 })
 
@@ -682,5 +718,193 @@ describe('SurveyRespondPage unavailable states', () => {
     failWith(500, 'Something exploded')
     renderPage()
     expect(await screen.findByText('Something exploded')).toBeTruthy()
+  })
+})
+
+/**
+ * The redesign. Three claims, each of which a green suite could otherwise be made
+ * to hold while the page looked nothing like the design.
+ */
+describe('SurveyRespondPage as an instrument', () => {
+  /**
+   * "The anonymity promise should be present and legible, not buried." It used to
+   * be an `Alert` in the run of the page: above the fold once, then out of sight for
+   * the rest of a forty-question survey. It is now the first thing in the panel that
+   * `sticky` holds beside the questions — and, on a phone, the block a respondent
+   * reads before the first question rather than after the last.
+   *
+   * **What this case can and cannot hold.** It asserts placement and DOM order,
+   * which is all it names. The `toContain('sticky')` line below is a spelling
+   * check and nothing more: the class was present, correct and completely inert
+   * for the whole of this branch's first pass, because an ancestor's
+   * `overflow-x-auto` had made itself the panel's scrollport. Whether the panel
+   * actually sticks is asserted in `components/layout/respondSticky.test.tsx`,
+   * which computes it.
+   */
+  it('puts the anonymity promise inside the panel that stays with the questions', async () => {
+    respondWith(view({ anonymous: true }))
+    renderPage()
+
+    const panel = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
+    expect(within(panel).getByText('Esta encuesta es anónima')).toBeTruthy()
+    expect(panel.className).toContain('sticky')
+
+    // And it comes before the form in the DOM, which is the order a phone renders.
+    const form = document.querySelector('form')
+    expect(form).toBeTruthy()
+    expect(panel.compareDocumentPosition(form!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  /**
+   * Colour never carries the state alone (WCAG 1.4.1). Green means anonymous and
+   * blue means identified, but the chip spells out which.
+   */
+  it('names the anonymity state in a word beside the colour, both ways round', async () => {
+    respondWith(view({ anonymous: true }))
+    const first = renderPage()
+    expect(await screen.findByText('Anónima')).toBeTruthy()
+    first.unmount()
+
+    respondWith(view({ anonymous: false }))
+    renderPage()
+    expect(await screen.findByText('No anónima')).toBeTruthy()
+    expect(screen.queryByText('Anónima')).toBeNull()
+  })
+
+  /**
+   * Every reading is set in mono with tabular figures; prose stays in the sans
+   * face. The progress fraction is the reading a respondent watches change, so it is
+   * also the one a proportional face would reflow on every answer.
+   */
+  it('sets the progress fraction in mono, and keeps the sentence for a screen reader', async () => {
+    respondWith(view({ showProgress: true, questions: [question(), question({ id: 'q2' })] }))
+    renderPage()
+
+    const reading = await screen.findByText('0 / 2')
+    expect(reading.className).toContain('font-mono')
+    expect(reading.className).toContain('tabular-nums')
+    // Hidden from assistive tech, because the sentence below it says the same fact
+    // in words and hearing both is hearing it twice.
+    expect(reading.getAttribute('aria-hidden')).toBe('true')
+    expect(screen.getByText('0 de 2 preguntas respondidas')).toBeTruthy()
+
+    await userEvent.click(screen.getAllByRole('radio', { name: 'Muy de acuerdo' })[0])
+    expect(screen.getByText('1 / 2')).toBeTruthy()
+  })
+
+  /**
+   * The question index is a reading too. `1/24` read aloud is not what "Question 1
+   * of 24" says, so the glyph form is hidden and the sentence is the accessible one
+   * — both inside the `<legend>`, which is what names the radio group.
+   */
+  it('numbers each question as a mono reading with the sentence beside it', async () => {
+    respondWith(view({ questions: [question(), question({ id: 'q2' })] }))
+    renderPage()
+
+    const marker = await screen.findByText('1/2')
+    expect(marker.className).toContain('font-mono')
+    expect(marker.className).toContain('tabular-nums')
+    expect(marker.getAttribute('aria-hidden')).toBe('true')
+    expect(marker.closest('legend')?.textContent).toContain('Pregunta 1 de 2')
+  })
+
+  /**
+   * The receipt. A respondent who has just handed over their answers with no copy
+   * of them gets one reading back — the server's own count of what was stored.
+   */
+  it('reports what was recorded as a reading once the response is submitted', async () => {
+    respondWith(view())
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
+
+    expect(await screen.findByText('Respuestas registradas')).toBeTruthy()
+    expect(screen.getByText('de 1 preguntas')).toBeTruthy()
+  })
+
+  /**
+   * Protected is shown, never hidden — and the count behind it never is. A
+   * suppressed demographic is named with the padlock and the word beside it rather
+   * than quietly dropped from a plain success message.
+   */
+  it('labels a suppressed demographic as protected, and publishes no count', async () => {
+    vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) =>
+      Promise.resolve(
+        init?.method === 'POST'
+          ? new Response(
+              JSON.stringify({
+                responseId: 'r1',
+                sessionId: 'session-1',
+                isComplete: true,
+                isAnonymous: true,
+                alreadySubmitted: false,
+                language: 'es',
+                answeredQuestionCount: 1,
+                questionCount: 1,
+                suppressedDemographics: ['departamento'],
+              }),
+              { status: 201 },
+            )
+          : new Response(JSON.stringify(view()), { status: 200 }),
+      ),
+    )
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
+
+    expect(await screen.findByText('Protegido')).toBeTruthy()
+    expect(screen.getByText(/departamento/)).toBeTruthy()
+  })
+
+  /**
+   * Every reading in the panel is one row of it.
+   *
+   * The closing date used to sit in a `sm:grid-cols-2 lg:grid-cols-1
+   * xl:grid-cols-2` wrapper whose only other child renders when the survey turned
+   * progress OFF — the rarer case. With progress on, that grid held one child in
+   * two columns, so CLOSES rendered at half the panel width with a stranded empty
+   * cell beside it at every viewport from 640px up: measured in Chromium at
+   * 1440x900, a 197px tile under three 402px ones.
+   *
+   * happy-dom cannot measure that, but it can see the cause. Each reading is a
+   * direct child of the panel, so there is no intermediate track for one of them to
+   * be laid out in.
+   */
+  it('gives every panel reading its own full-width row', async () => {
+    respondWith(view({ showProgress: true }))
+    renderPage()
+
+    const panel = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
+    const closes = within(panel).getByText('Cierra').closest('div')
+    expect(closes, 'the CLOSES reading renders').toBeTruthy()
+    expect(
+      closes!.parentElement,
+      'A wrapper here is a second grid inside the panel, and the wrapper this '
+        + 'replaced held one child in two columns whenever `showProgress` was on — '
+        + 'a half-width tile with a hole beside it.',
+    ).toBe(panel)
+
+    // The tiles above it are direct children too, which is what "the same width"
+    // means when nothing can be measured.
+    expect(within(panel).getByText('Respondidas').closest('div')!.parentElement).toBe(panel)
+    expect(panel.children.length).toBeGreaterThanOrEqual(3)
+  })
+
+  /**
+   * And the second reading appears in that same column when the survey turns
+   * progress off — the case the two-column wrapper was built for. It is a row of
+   * the panel like every other one now.
+   */
+  it('adds the question count as another row when progress is off', async () => {
+    respondWith(view({ showProgress: false, questions: [question(), question({ id: 'q2' })] }))
+    renderPage()
+
+    const panel = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
+    expect(within(panel).queryByText('Respondidas')).toBeNull()
+    const count = within(panel).getByText('Preguntas').closest('div')
+    expect(count!.parentElement).toBe(panel)
+    expect(within(count!).getByText('2')).toBeTruthy()
   })
 })

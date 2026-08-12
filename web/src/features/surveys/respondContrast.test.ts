@@ -43,6 +43,21 @@ const TOKENS = join(process.cwd(), 'src', 'styles', 'tokens.css')
 const FEATURE = join(process.cwd(), 'src', 'features', 'surveys')
 const DARK_SELECTOR = ":root[data-admin-theme='dark']"
 
+/**
+ * Two files outside `features/surveys/` that render this same page.
+ *
+ * `components/layout/RespondShell.tsx` is the frame all three respond routes now
+ * share — the eyebrow, the reading labels and the reading sub-lines are its ink,
+ * not the feature's. `microclimates/pages/MicroclimateRespondPage.tsx` is the third
+ * respond route, built from the same tiles and answered by the same people. A ban
+ * that stops at a directory boundary is a ban the next edit walks around, and the
+ * blind spot this file exists for does not care which folder the class is in.
+ */
+const ALSO_SWEPT = [
+  join(process.cwd(), 'src', 'components', 'layout', 'RespondShell.tsx'),
+  join(process.cwd(), 'src', 'features', 'microclimates', 'pages', 'MicroclimateRespondPage.tsx'),
+]
+
 type Rgba = [number, number, number, number]
 
 function declarations(block: string): Record<string, string> {
@@ -134,6 +149,33 @@ const PAIRS: readonly Pair[] = [
   { what: 'a warning alert body', ink: '--admin-font-secondary', fill: '--admin-accent-bg-amber', base: '--admin-bg-panel' },
   { what: 'an info alert body', ink: '--admin-font-secondary', fill: '--admin-accent-bg-blue', base: '--admin-bg-panel' },
   { what: 'a destructive alert body', ink: '--admin-font-secondary', fill: '--admin-accent-bg-red', base: '--admin-bg-panel' },
+  // The instrument panel the redesign added: reading tiles on the recessed
+  // surface, and the mono index chip on the same surface inside a question card.
+  { what: 'a reading label and its sub-line', ink: '--admin-font-secondary', fill: '--admin-bg-icon-box', base: '--admin-bg-panel' },
+  { what: 'a reading value', ink: '--admin-font-primary', fill: '--admin-bg-icon-box', base: '--admin-bg-panel' },
+  { what: 'the question index chip', ink: '--admin-font-secondary', fill: '--admin-bg-icon-box', base: '--admin-bg-card' },
+  // The anonymity state chip. Secondary ink on the soft fill, not the accent --
+  // see REJECTED_INK_ON_SOFT below for the measurement that decided it.
+  { what: 'the anonymous chip word', ink: '--admin-font-secondary', fill: '--admin-accent-bg-green', base: '--admin-bg-panel' },
+  { what: 'the not-anonymous chip word', ink: '--admin-font-secondary', fill: '--admin-accent-bg-blue', base: '--admin-bg-panel' },
+]
+
+/**
+ * The obvious ink for a green chip on a green fill, measured and rejected.
+ *
+ * The first draft of the anonymity chip set the word in `text-accent-green`
+ * (`text-accent-blue` for the identified case), which is what any reader would
+ * reach for and what every other soft-filled pill in this app looks like it does.
+ * `alertVariants` does not: it puts `text-fg-primary` on the fill and reserves the
+ * accent for the `[&>svg]`. This asserts WHY, so nobody re-derives it from taste.
+ *
+ * These are asserted to FAIL, deliberately. If a palette change ever lifts them
+ * over AA the test goes red and the ban above can be revisited, which is the
+ * opposite of the usual stale-comment failure mode.
+ */
+const REJECTED_INK_ON_SOFT: readonly Pair[] = [
+  { what: 'accent green on the soft green fill', ink: '--admin-accent-green', fill: '--admin-accent-bg-green', base: '--admin-bg-panel' },
+  { what: 'accent blue on the soft blue fill', ink: '--admin-accent-blue', fill: '--admin-accent-bg-blue', base: '--admin-bg-panel' },
 ]
 
 describe('the respond page reads in both themes', () => {
@@ -152,6 +194,14 @@ describe('the respond page reads in both themes', () => {
     )
   })
 
+  it.each(REJECTED_INK_ON_SOFT.map((pair) => [pair.what, pair] as const))(
+    '%s is under AA in light, which is why the chip word is not inked with it',
+    (_what, pair) => {
+      const surface = flatten(parseColor(light[pair.fill]), parseColor(light[pair.base]))
+      expect(contrastRatio(parseColor(light[pair.ink]), surface)).toBeLessThan(AA_SMALL_TEXT)
+    },
+  )
+
   /**
    * The two utilities measured to fail above. Banned from this feature by name so a
    * later edit reaching for the obvious class fails here rather than in production —
@@ -160,13 +210,23 @@ describe('the respond page reads in both themes', () => {
   const LOW_CONTRAST_INKS = ['text-fg-tertiary', 'text-accent-red']
 
   it.each(LOW_CONTRAST_INKS)('never writes %s, which fails AA on this page', (utility) => {
-    const offenders = globSync('**/*.tsx', { cwd: FEATURE })
-      .filter((file) => !/\.test\.tsx$/.test(file))
+    const swept = [
+      ...globSync('**/*.tsx', { cwd: FEATURE })
+        .filter((file) => !/\.test\.tsx$/.test(file))
+        .map((file) => join(FEATURE, file)),
+      ...ALSO_SWEPT,
+    ]
+    // Guard the guard: an empty sweep passes vacuously, and the two files added by
+    // path would go unnoticed if either were renamed.
+    expect(swept.length).toBeGreaterThan(10)
+
+    const offenders = swept
       .filter((file) => {
-        const source = readFileSync(join(FEATURE, file), 'utf8')
+        const source = readFileSync(file, 'utf8')
         // Only className positions, not the prose explaining why the class is absent.
         return new RegExp(`className=(?:"|\\{)[^\`]*?\\b${utility}\\b`, 's').test(source)
       })
+      .map((file) => file.replace(`${process.cwd()}/`, ''))
 
     expect(offenders).toEqual([])
   })
