@@ -65,6 +65,15 @@
   --color-accent-amber: var(--admin-accent-amber);
   --color-accent-orange: var(--admin-accent-orange);
 
+  /* The ink that goes with each state hue, so `text-accent-amber-ink` is a real
+     utility and never has to be guessed — the same pairing `-ink` already means
+     for the sequential and diverging ramps below. Use these whenever the hue
+     carries a *word*; the plain accent above is for hairlines, tints and icons.
+     Values and the measurements behind them live in ./tokens.css. */
+  --color-accent-green-ink: var(--admin-accent-green-ink);
+  --color-accent-amber-ink: var(--admin-accent-amber-ink);
+  --color-accent-red-ink: var(--admin-accent-red-ink);
+
   /* -- Data visualisation (#79) ------------------------------------------
      Exposed as utilities so a chart can write `fill-chart-series-1` rather
      than an inline hex. Values and rationale live in ./tokens.css; nothing

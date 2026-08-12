@@ -6,7 +6,11 @@ import ActionPlansListPage from './ActionPlansListPage'
 import type { ActionPlan } from '../api/actionPlans'
 import { TranslationProvider } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
-import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
+import {
+  CompanyContextProvider,
+  COMPANY_CONTEXT_STORAGE_KEY,
+  useCompanyContext,
+} from '../../../company-context'
 
 /**
  * #124. This page is the one every other lane's TODO pointed at: it was the
@@ -31,6 +35,21 @@ function routeFetch() {
       : { actionPlans: [{ id: 'p1', title: 'Raise engagement', companyId: 'chosen-co', departmentId: null, dueDate: '2026-12-01T00:00:00Z', status: 'not_started', priority: 'high', createdAt: '2026-01-01T00:00:00Z' }] }
     return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
   })
+}
+
+/**
+ * A one-button stand-in for the real company switcher, so a test can change the
+ * company *while the page is mounted* — which is the case the page's own reload
+ * callbacks exist for, and the only way to reach the company-switch branch of the
+ * departments lookup without mounting the whole shell.
+ */
+function CompanySwitcherHarness() {
+  const { selectCompany } = useCompanyContext()
+  return (
+    <button type="button" onClick={() => selectCompany('second-co')}>
+      switch company
+    </button>
+  )
 }
 
 function renderPage() {
@@ -135,11 +154,14 @@ function plan(overrides: Partial<ActionPlan> = {}): ActionPlan {
 }
 
 /** A fresh `Response` per call — a body can only be read once. */
-function routePlans(plans: ActionPlan[]) {
+function routePlans(plans: ActionPlan[], departments: { id: string; name: string }[] = []) {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.includes('/action-plan-templates')) {
       return Promise.resolve(new Response(JSON.stringify({ templates: [] }), { status: 200 }))
+    }
+    if (url.includes('/admin/departments')) {
+      return Promise.resolve(new Response(JSON.stringify({ departments }), { status: 200 }))
     }
     if (init?.method === 'POST') {
       return Promise.resolve(
@@ -159,6 +181,21 @@ function routePlans(plans: ActionPlan[]) {
     }
     return Promise.resolve(new Response(JSON.stringify({ actionPlans: plans }), { status: 200 }))
   })
+}
+
+/**
+ * The KPI tile whose label is `label`.
+ *
+ * Matched on the label element specifically — `Completed` is also a status badge
+ * in the table and an option in the status filter, so a bare `getByText` finds
+ * three of them.
+ */
+function kpiTile(label: string): HTMLElement {
+  const heading = screen
+    .getAllByText(label)
+    .find((node) => node.className.includes('tracking-label'))
+  if (!heading?.parentElement) throw new Error(`no KPI tile labelled ${label}`)
+  return heading.parentElement
 }
 
 function planUrls(): string[] {
@@ -275,6 +312,162 @@ describe('ActionPlansListPage listing surface', () => {
 
     const confirmation = await screen.findByText(/Action plan .*Reduce attrition.* created\./)
     expect(confirmation).toBeTruthy()
+  })
+
+  it('resolves the From column from the departments endpoint', async () => {
+    // The link back to where the finding was measured. `GET /admin/departments`
+    // is gated by the same `CanAccessCompany` rule as `GET /action-plans`, so this
+    // adds no permission the page did not already need.
+    routePlans([plan({ departmentId: 'd1' })], [{ id: 'd1', name: 'Support' }])
+    renderPage()
+
+    const from = await screen.findByRole('link', { name: /Measured in Support/ })
+    expect(from.getAttribute('href')).toBe('/departments')
+  })
+
+  it('still lists the plans when the departments lookup fails', async () => {
+    // Failing the whole page because one lookup table was unreachable would hide
+    // every plan to avoid one missing chip.
+    routePlans([plan({ departmentId: 'd1' })])
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/admin/departments')) return Promise.reject(new Error('down'))
+      if (url.includes('/action-plan-templates')) {
+        return Promise.resolve(new Response(JSON.stringify({ templates: [] }), { status: 200 }))
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ actionPlans: [plan({ departmentId: 'd1' })] }), { status: 200 }),
+      )
+    })
+    renderPage()
+
+    expect(await screen.findByText('Raise engagement')).toBeTruthy()
+    expect(screen.getByText('Department not listed')).toBeTruthy()
+  })
+
+  it('never says a department is not listed while the departments lookup is in flight', async () => {
+    // The two requests are independent, and `GET /admin/departments` is the slower
+    // of them in the field. With the table gated on the plans response alone, every
+    // departmented row spent that window rendering "Department not listed" — a
+    // false provenance claim on the one column this screen was redesigned around —
+    // and then flipped to the real name. The failure case above asserts the same
+    // string, so it cannot tell "failed" from "not yet"; this one can, because it
+    // holds the departments promise open and asks what is on screen meanwhile.
+    let releaseDepartments: (() => void) | undefined
+    const departmentsArrived = new Promise<void>((resolve) => {
+      releaseDepartments = resolve
+    })
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/admin/departments')) {
+        return departmentsArrived.then(
+          () => new Response(JSON.stringify({ departments: [{ id: 'd1', name: 'Support' }] }), { status: 200 }),
+        )
+      }
+      if (url.includes('/action-plan-templates')) {
+        return Promise.resolve(new Response(JSON.stringify({ templates: [] }), { status: 200 }))
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ actionPlans: [plan({ departmentId: 'd1' })] }), { status: 200 }),
+      )
+    })
+    renderPage()
+
+    // The plans response has landed: the KPI strip is gated on it and on nothing
+    // else, so this is the exact moment the table used to appear.
+    // Generous timeouts on every wait in the two new tests: the assertions are
+    // about *what is on screen*, not about how fast it arrives, and a tight
+    // default turns machine load into a red that says nothing.
+    await waitFor(() => expect(kpiTile('Open')).toBeTruthy(), { timeout: 5000 })
+    expect(screen.queryByText('Department not listed')).toBeNull()
+    // And it is the skeleton that is standing in, not an empty From cell.
+    expect(screen.queryByText('Raise engagement')).toBeNull()
+
+    releaseDepartments!()
+    expect(
+      await screen.findByRole('link', { name: /Measured in Support/ }, { timeout: 5000 }),
+    ).toBeTruthy()
+    expect(screen.queryByText('Department not listed')).toBeNull()
+  })
+
+  it('does not carry the previous company departments answer into a switch', async () => {
+    // The same false claim as above, arrived at from the other side: with the
+    // settled flag latched true by the first company, the second company's plans
+    // would render against the first company's (now wrong) names, or against no
+    // names at all, for the length of the second lookup.
+    setToken(tokenFor({ role: 'super_admin', companyId: '' }))
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'first-co')
+    let releaseSecond: (() => void) | undefined
+    const secondArrived = new Promise<void>((resolve) => {
+      releaseSecond = resolve
+    })
+    let departmentCalls = 0
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/admin/departments')) {
+        departmentCalls += 1
+        const body = JSON.stringify({
+          departments: [{ id: 'd1', name: departmentCalls === 1 ? 'Support' : 'Operations' }],
+        })
+        return departmentCalls === 1
+          ? Promise.resolve(new Response(body, { status: 200 }))
+          : secondArrived.then(() => new Response(body, { status: 200 }))
+      }
+      if (url.includes('/action-plan-templates')) {
+        return Promise.resolve(new Response(JSON.stringify({ templates: [] }), { status: 200 }))
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ actionPlans: [plan({ departmentId: 'd1' })] }), { status: 200 }),
+      )
+    })
+
+    render(
+      <TranslationProvider>
+        <MemoryRouter>
+          <CompanyContextProvider>
+            <CompanySwitcherHarness />
+            <ActionPlansListPage />
+          </CompanyContextProvider>
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+    await screen.findByRole('link', { name: /Measured in Support/ }, { timeout: 5000 })
+
+    await userEvent.click(screen.getByRole('button', { name: 'switch company' }))
+    await waitFor(() => expect(departmentCalls).toBe(2), { timeout: 5000 })
+    expect(screen.queryByText('Department not listed')).toBeNull()
+    expect(screen.queryByRole('link', { name: /Measured in Support/ })).toBeNull()
+
+    releaseSecond!()
+    expect(
+      await screen.findByRole('link', { name: /Measured in Operations/ }, { timeout: 5000 }),
+    ).toBeTruthy()
+  })
+
+  it('reads the KPI strip off the whole company, not off the filtered table', async () => {
+    // A strip wired to the filtered array still renders four plausible numbers,
+    // which is exactly how a wrong one survives review.
+    routePlans([
+      plan({ id: 'p1', title: 'Raise engagement', status: 'in_progress', dueDate: '2099-12-01T00:00:00.000Z' }),
+      plan({ id: 'p2', title: 'Reduce attrition', status: 'completed', priority: 'low' }),
+    ])
+    renderPage()
+    await screen.findByText('Raise engagement')
+
+    const strip = () => ({
+      open: within(kpiTile('Open')).getByText('1'),
+      completed: within(kpiTile('Completed')).getByText('1'),
+    })
+    expect(strip().open).toBeTruthy()
+    expect(strip().completed).toBeTruthy()
+
+    await userEvent.type(screen.getByLabelText('Search'), 'attrition')
+    expect(screen.queryByText('Raise engagement')).toBeNull()
+
+    // Unmoved: one open plan and one completed plan is still the truth about the
+    // company, whatever the search box is showing.
+    expect(strip().open).toBeTruthy()
+    expect(strip().completed).toBeTruthy()
   })
 
   it('refuses to submit a blank KPI row, which the server would happily persist', async () => {
