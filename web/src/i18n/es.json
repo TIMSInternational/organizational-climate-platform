@@ -1434,6 +1434,7 @@
     "notYetEnforcedNote": "Intentos Máximos de Inicio de Sesión y Tiempo de Espera de Sesión se guardan pero la API aún no los aplica: actualmente no bloquean cuentas ni expiran sesiones antes de tiempo."
   },
   "shell": {
+    "account": "Cuenta",
     "settings": "Configuración",
     "signOut": "Cerrar sesión",
     "theme": "Tema",
@@ -1667,6 +1668,7 @@
     "globalTemplate": "Global",
     "companyTemplate": "Empresa",
     "timesUsed": "Veces usada",
+    "reviewQuestionCount": "{count} preguntas",
     "useTemplate": "Usar esta plantilla",
     "questionLanguage": "Idioma de las preguntas",
     "noTemplateQuestionsDescription": "Esta plantilla no tiene preguntas, así que todavía no puede crear una encuesta utilizable.",

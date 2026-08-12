@@ -1434,6 +1434,7 @@
     "notYetEnforcedNote": "Max login attempts and Session timeout are saved but not yet enforced by the API — they do not currently lock out accounts or expire sessions early."
   },
   "shell": {
+    "account": "Account",
     "settings": "Settings",
     "signOut": "Sign out",
     "theme": "Theme",
@@ -1667,6 +1668,7 @@
     "globalTemplate": "Global",
     "companyTemplate": "Company",
     "timesUsed": "Times Used",
+    "reviewQuestionCount": "{count} questions",
     "useTemplate": "Use This Template",
     "questionLanguage": "Language of the questions",
     "noTemplateQuestionsDescription": "This template has no questions, so it cannot create a usable survey yet.",
