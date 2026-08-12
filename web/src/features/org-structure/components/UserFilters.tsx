@@ -24,7 +24,9 @@ export default function UserFilters({ value, onChange }: UserFiltersProps) {
   const { t } = useTranslation()
 
   return (
-    <div className="mb-panel-gap w-full max-w-sm">
+    // No bottom margin: the page's toolbar row owns the spacing around this and
+    // the roster count that sits beside it.
+    <div className="w-full max-w-sm">
       <Input
         type="search"
         aria-label={t('users.searchByNameOrEmail')}

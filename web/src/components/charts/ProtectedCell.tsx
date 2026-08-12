@@ -1,7 +1,7 @@
 import { Lock } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { cn } from '../../lib/cn'
-import { isSuppressed } from './suppression'
+import { ANONYMITY_FLOOR, isSuppressed } from './suppression'
 
 /**
  * The anonymity floor, made visible.
@@ -35,7 +35,7 @@ export interface ProtectedCellProps {
    */
   responses: number
   /**
-   * The anonymity floor. Defaults to 5.
+   * The anonymity floor. Defaults to `ANONYMITY_FLOOR` (5).
    *
    * Passed in rather than read from a constant because it is a per-company
    * setting: Company Settings can raise it, and the redesign shows it there as
@@ -58,7 +58,7 @@ export interface ProtectedCellProps {
 
 export default function ProtectedCell({
   responses,
-  threshold = 5,
+  threshold = ANONYMITY_FLOOR,
   description,
   children,
   className,

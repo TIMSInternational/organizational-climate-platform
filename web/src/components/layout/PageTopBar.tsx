@@ -209,6 +209,12 @@ export function PageTopBar({
           See the docstring above; happy-dom cannot see any of this. */}
       <div className="flex flex-wrap items-start justify-between gap-panel">
         <div className="min-w-0 grow basis-header-text">
+      {/* `feat/ui-4-admin` found this same defect independently and fixed it with
+          `basis-64` instead: it measured the description on
+          /admin/companies/:id/users at 390px coming out one word per line. Same
+          bug, same shape of fix; this keeps the named token rather than the
+          number, and `items-start` because the text block is taller than the
+          buttons beside it. */}
           {/* ForMaps' page eyebrow: `text-[10px] uppercase tracking-[0.2em]
               font-bold` in the muted tone, on its own line above the title. A
               `<p>` rather than a `<span>` so it is a block without needing a
