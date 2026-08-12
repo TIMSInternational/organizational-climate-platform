@@ -1431,7 +1431,6 @@
     "totalResponses": "Total Responses",
     "searchSurveys": "Search surveys by title, description, or tags...",
     "createNewSurvey": "Create New Survey",
-    "allStatus": "All Status",
     "allTypes": "All Types",
     "allTime": "All Time",
     "lastWeek": "Last Week",
@@ -1647,7 +1646,16 @@
     "contentLanguageFromTemplate": "Taken from the template's own questions — a template is always instantiated in the language it was written in.",
     "templateQuestionsReadOnly": "These questions come from the template and are copied exactly, including each option's stable value — which is what lets surveys built from this template be compared with one another. They cannot be edited here.",
     "validationTemplateLoading": "Loading the template's questions.",
-    "validationTemplateNoQuestions": "This template has no questions. Pick another one, or start blank and write your own."
+    "validationTemplateNoQuestions": "This template has no questions. Pick another one, or start blank and write your own.",
+    "filterByStatus": "Filter by status",
+    "participation": "Participation",
+    "closes": "Closes",
+    "open": "Open",
+    "openNamed": "Open {title}",
+    "noParticipationTarget": "No expected number of respondents was set for this survey, so it has no participation rate.",
+    "use": "Use",
+    "useNamed": "Use {name}",
+    "previewNamed": "Preview {name}"
   },
   "users": {
     "userManagement": "User Management",

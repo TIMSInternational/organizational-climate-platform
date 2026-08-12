@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { Plus, Trash2 } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
@@ -130,8 +130,27 @@ export default function SurveyCreatePage() {
   const companyId = scope.companyId
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const keyPrefix = useId()
+  const [searchParams] = useSearchParams()
 
-  const [values, setValues] = useState<SurveyWizardValues>(() => emptyWizardValues('en'))
+  /**
+   * `?template={id}` — how the catalogue hands a template to this wizard.
+   *
+   * Read once, into the *initial* state, and never again: a later change to the
+   * query string must not reach up and overwrite a choice the author has since made
+   * in the picker. It seeds `templateId` and nothing else — the effect below then
+   * loads the template and reports its language exactly as it does for a template
+   * picked here, so there is one code path and the URL cannot reach anything the
+   * picker could not.
+   *
+   * Not validated as a GUID: an id that is not one simply fails to load and surfaces
+   * `templateError`, which is the same outcome as a deleted template and a better
+   * one than a silently blank picker.
+   */
+  const [values, setValues] = useState<SurveyWizardValues>(() => {
+    const initial = emptyWizardValues('en')
+    const requested = searchParams.get('template')
+    return requested === null || requested === '' ? initial : { ...initial, templateId: requested }
+  })
   const [stepIndex, setStepIndex] = useState(0)
   const [departments, setDepartments] = useState<Department[]>([])
   const [templates, setTemplates] = useState<SurveyTemplateListItem[]>([])

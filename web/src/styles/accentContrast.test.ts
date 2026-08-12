@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { buttonVariants } from '../components/ui/buttonVariants'
 
 /**
  * The accent is two tokens, and this is the guard that keeps it that way.
@@ -45,6 +46,7 @@ import { join } from 'node:path'
  */
 
 const TOKENS = join(process.cwd(), 'src', 'styles', 'tokens.css')
+const THEME = join(process.cwd(), 'src', 'styles', 'theme.css')
 const DARK_SELECTOR = ":root[data-admin-theme='dark']"
 
 function declarations(block: string): Record<string, string> {
@@ -188,6 +190,76 @@ describe('the accent is split into an identity token and a fill token', () => {
           `separated from the panel than the resting fill (${resting.toFixed(2)}:1)`,
       ).toBeGreaterThan(resting)
     }
+  })
+
+  /**
+   * The rule above, followed through to the one component that has to obey it.
+   *
+   * Splitting the accent only helps if the call sites move. `buttonVariants`
+   * paired `text-fg-on-accent` with `bg-accent-blue` — the identity token — which
+   * is 3.74:1 in light and 2.49:1 in dark against a label the base classes set at
+   * `text-base` (0.8125rem = 13px, normal text under WCAG 1.4.3, so 4.5:1). The
+   * catalogue grid on /surveys/templates puts six of those buttons on one screen.
+   *
+   * Nothing else would have caught it: `tokenDiscipline` sees a token-shaped class
+   * and passes it, `utilityExistence` does not enter cva tables, and the ratio
+   * lives in tokens.css where no component test looks.
+   *
+   * Every step here is *derived* rather than restated — the class comes out of the
+   * variant table, the custom property out of theme.css, the hex out of tokens.css
+   * — so this cannot agree with itself while the button is wrong.
+   */
+  const themeVars = Object.fromEntries(
+    [...readFileSync(THEME, 'utf8').matchAll(/(--color-[\w-]+):\s*var\((--admin-[\w-]+)\)/g)].map(
+      (m) => [m[1], m[2]],
+    ),
+  )
+
+  /** `bg-accent-blue-fill` -> the `--admin-*` token theme.css maps it to. */
+  function tokenFor(utility: string): string {
+    const property = `--color-${utility.replace(/^(?:bg|text)-/, '')}`
+    const token = themeVars[property]
+    expect(token, `theme.css declares no ${property}, so ${utility} compiles to nothing`).toBeTruthy()
+    return token
+  }
+
+  function classes(variant: 'primary'): string[] {
+    return buttonVariants({ variant }).split(/\s+/).filter(Boolean)
+  }
+
+  it.each(THEMES)('in %s, the primary button carries its label at AA', (theme) => {
+    const t = p[theme]
+    const found = classes('primary')
+    const background = found.find((c) => /^bg-/.test(c))
+    const ink = found.find((c) => /^text-(?!base$)/.test(c))
+    expect(background, 'the primary variant names no background class').toBeTruthy()
+    expect(ink, 'the primary variant names no text colour class').toBeTruthy()
+
+    const ratio = contrast(t[tokenFor(background!)], t[tokenFor(ink!)])
+    expect(
+      ratio,
+      `${ink} on ${background} is ${ratio.toFixed(2)}:1 in ${theme}; the button label is ` +
+        'text-base (13px), which 1.4.3 counts as normal text. Put it on ' +
+        'bg-accent-blue-fill, not bg-accent-blue.',
+    ).toBeGreaterThanOrEqual(AA_TEXT)
+  })
+
+  it.each(THEMES)('in %s, the primary button stays legible while hovered', (theme) => {
+    const t = p[theme]
+    // `opacity-90` would have been the easy hover and it is the wrong one: fading
+    // the fill toward the panel gives back exactly the contrast the fill exists to
+    // provide. The paired hover token moves per theme instead (light darkens, dark
+    // lightens) and is measured above.
+    const hover = classes('primary')
+      .map((c) => /^hover:(?:not-disabled:)?(bg-.+)$/.exec(c)?.[1])
+      .find(Boolean)
+    expect(hover, 'the primary variant changes no background on hover').toBeTruthy()
+    const ink = classes('primary').find((c) => /^text-(?!base$)/.test(c))!
+
+    const ratio = contrast(t[tokenFor(hover!)], t[tokenFor(ink)])
+    expect(ratio, `hovered primary is ${ratio.toFixed(2)}:1 in ${theme}`).toBeGreaterThanOrEqual(
+      AA_TEXT,
+    )
   })
 
   it('reads real values out of tokens.css — the vacuity control', () => {

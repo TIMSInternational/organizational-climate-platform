@@ -51,6 +51,16 @@
   --color-accent-green: var(--admin-accent-green);
   --color-accent-red: var(--admin-accent-red);
   --color-accent-blue: var(--admin-accent-blue);
+  /* The identity accent above carries white at 3.74:1 light / 2.49:1 dark, so
+     `text-fg-on-accent` may not sit on `bg-accent-blue`. These two are the
+     surfaces it may sit on: the resting fill is 5.47:1 with white in both
+     themes, and the hover step is 7.58:1 light / 4.51:1 dark — it moves in
+     opposite directions per theme so it also stays off the panel. `tokens.css`
+     states the rule and `accentContrast.test.ts` re-derives every ratio from it.
+     Without these two lines the rule is unfollowable, because the utility to
+     follow it with does not exist. */
+  --color-accent-blue-fill: var(--admin-accent-blue-fill);
+  --color-accent-blue-fill-hover: var(--admin-accent-blue-fill-hover);
   --color-accent-purple: var(--admin-accent-purple);
   --color-accent-amber: var(--admin-accent-amber);
   --color-accent-orange: var(--admin-accent-orange);

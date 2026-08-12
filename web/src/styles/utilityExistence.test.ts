@@ -338,6 +338,43 @@ describe('utility existence', () => {
     expect(nonCompiling(['text-chart-seq-8-ink'])).toEqual(['text-chart-seq-8-ink'])
   })
 
+  /**
+   * The button variant table, checked as classes.
+   *
+   * The sweep above deliberately does not enter cva tables (see the header), and
+   * that exemption has now cost something: `buttonVariants.primary` is where
+   * `text-fg-on-accent` meets its fill, so the class naming that fill has to be a
+   * real utility or the button renders transparent with white text on the panel.
+   * `--color-accent-blue-fill` was added to theme.css for exactly this call site
+   * and nothing else references it, so without this case the wiring is unchecked
+   * in both directions.
+   *
+   * Every variant and size is swept rather than just `primary`, because a table
+   * checked one entry at a time is a table that will grow an unchecked entry.
+   */
+  it('compiles every class in the button variant table', async () => {
+    const { buttonVariants } = await import('../components/ui/buttonVariants')
+    const variants = [
+      'default',
+      'primary',
+      'destructive',
+      'outline',
+      'secondary',
+      'ghost',
+      'link',
+    ] as const
+    const sizes = ['default', 'sm', 'lg', 'icon'] as const
+
+    const candidates = candidatesOf(
+      variants.flatMap((variant) => sizes.map((size) => buttonVariants({ variant, size }))),
+    )
+    expect(candidates.length, 'the variant table contributed no candidates').toBeGreaterThan(20)
+    expect(nonCompiling(candidates)).toEqual([])
+    // The class the accent split turns on, named explicitly: a rename in
+    // theme.css must fail here rather than silently un-style the button.
+    expect(candidates).toContain('bg-accent-blue-fill')
+  })
+
   it('does not descend into cva variant tables', () => {
     // The exclusion that removed the largest group of false positives. If this
     // regresses, `destructive` and `sm` start reading as broken classes.
