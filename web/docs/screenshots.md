@@ -39,6 +39,32 @@ cd web && npm run shot -- /admin/companies /tmp/shots/companies-dark.png --theme
 
 Then **read the PNG**. A file on disk is not evidence; the picture is.
 
+### The window is grown to fit the screen
+
+`AdminLayout` is `h-dvh` with the page inside `<main id="main" class="… overflow-y-auto">`,
+so **the document never gets taller than one viewport** however long the screen is. That
+made Playwright's `fullPage` a no-op: it expands to the *document* scroll height, which
+here is the viewport, and it reported success either way. Every screenshot taken before
+this was fixed came out exactly `width × height` at the requested scale — `2880×1800` at
+the defaults — including screens half again as tall. The dashboard is 1357px at 1440 wide,
+so **a third of it was never in the picture**, and two lane reviews found defects in the
+lower half of pages whose authors had "rendered and checked" them.
+
+So `shot` now measures the worst overflow inside any `auto`/`scroll` container and grows
+the *window* until nothing is hidden, re-measuring after each resize because a taller
+viewport can change how much a `min-height` container claims. It says so when it does:
+
+```
+shot: wrote …/dash.png (/dashboard, light, 1440x900@2x, grown to 1440x1357)
+```
+
+Growing the window rather than unsetting the container's `overflow` keeps every
+width-driven decision — the `md:` breakpoints, grid column counts, table min-content
+widths — exactly as a user at that width sees them; only vertical room changes. If it
+cannot fit the screen within its 20000px cap it prints a `WARNING` naming the pixels still
+hidden, because a partial screenshot that announces success is the whole problem. Pass
+`--viewport` when you deliberately want just the fold.
+
 Each run takes a free port from the OS, so two worktrees screenshotting at the same
 time cannot photograph each other. That is not a precaution against nothing: the harness
 used to default to a fixed port and poll it, `--strictPort` made vite *exit* rather than
