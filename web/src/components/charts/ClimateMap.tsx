@@ -171,8 +171,20 @@ export default function ClimateMap({
                         style={{
                           backgroundColor: fill,
                           color: ink,
+                          // `outline` + `outlineOffset`, NOT a two-step box-shadow.
+                          // The gap an offset outline leaves is not painted at all,
+                          // so whatever surface the chart is standing on shows
+                          // through it. The previous spelling painted that gap with
+                          // `--admin-bg-panel`, which is only correct when the map
+                          // sits directly on the page panel; on the dashboard it
+                          // stands on `--admin-bg-icon-box`, and the mismatch drew a
+                          // white halo in light and a near-black one in dark around
+                          // the one cell this ring exists to draw the eye to.
                           ...(severelyBelow
-                            ? { boxShadow: `0 0 0 2px var(--admin-bg-panel), 0 0 0 3.5px ${DIVERGING_COLORS[0]}` }
+                            ? {
+                                outline: `1.5px solid ${DIVERGING_COLORS[0]}`,
+                                outlineOffset: '2px',
+                              }
                             : {}),
                         }}
                       >
