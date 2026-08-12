@@ -106,7 +106,49 @@ describe('ClimateMap', () => {
       const { container } = render(
         <ClimateMap dimensions={DIMENSIONS} rows={suppressed} target={70} />,
       )
-      expect(container.textContent ?? '').not.toContain('4 response')
+      // The bare number, not the phrase `4 response`. A leak takes whatever shape
+      // the leaking code wrote; the digit is the part that re-identifies people.
+      // Same correction made in `ProtectedCell.test.tsx`.
+      expect(container.textContent ?? '').not.toContain('4')
+    })
+  })
+
+  describe('a raised per-company floor reaches the cells', () => {
+    // `threshold` is forwarded to every `ProtectedCell`, and dropping that one prop
+    // left all 22 tests here green. It does not blank the cell — the call passes
+    // `responses={0}`, so `0 < 5` still suppresses on the default — which is why
+    // the obvious assertion (a protected cell is rendered) cannot see it. What it
+    // breaks is the floor the cell *states*: a company held to 10 would have every
+    // suppressed cell announce "below 5 responses", advertising a floor lower than
+    // the one being enforced, on the component whose whole job is that promise.
+    //
+    // The existing 'states the floor in the legend' test cannot catch it either:
+    // ClimateMap renders that legend itself from its own `threshold`, so it is true
+    // whatever it forwards.
+    const belowRaisedFloor = [{ id: 'sup', label: 'Support', responses: 7, scores: [79, 81] }]
+
+    it('announces the raised floor on the cell, not the default', () => {
+      const { container } = render(
+        <ClimateMap dimensions={DIMENSIONS} rows={belowRaisedFloor} target={70} threshold={10} />,
+      )
+      const labels = [...container.querySelectorAll('[role="img"]')].map(
+        (cell) => cell.getAttribute('aria-label') ?? '',
+      )
+      expect(labels).toHaveLength(DIMENSIONS.length)
+      for (const label of labels) {
+        expect(label).toContain('10')
+        expect(label).not.toContain('5 response')
+      }
+    })
+
+    it('suppresses a row the default floor would have published', () => {
+      // 7 responses clears the platform minimum of 5 and is withheld anyway,
+      // because this company is held to 10.
+      const { container } = render(
+        <ClimateMap dimensions={DIMENSIONS} rows={belowRaisedFloor} target={70} threshold={10} />,
+      )
+      expect(container.textContent).not.toContain('79')
+      expect(container.textContent).not.toContain('81')
     })
   })
 

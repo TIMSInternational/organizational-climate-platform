@@ -219,6 +219,32 @@ describe('DepartmentsPage listing', () => {
     expect(within(row!).getByText('Engineering')).toBeTruthy()
   })
 
+  it('keeps a hidden parent’s child indented, rather than re-rooting it', async () => {
+    // The other half of the same guarantee, and the half nothing covered.
+    // `DepartmentList` calls `departmentRows(departments, structure)`; that second
+    // argument is what makes depth a property of the whole company rather than of
+    // whatever survived the filter. Dropping it left this page's suite AND
+    // `departmentHierarchy`'s green — the helper is exercised with both arguments
+    // directly, and the assertion above reads the Parent column, which resolves
+    // through a different map (`byId` from `parentLookup`) than the indent does.
+    //
+    // Without it, hiding the inactive parent promotes Platform to a root and its
+    // indent guide disappears, so the tree silently reshapes itself while you type.
+    serveList(() => [
+      department({ id: 'parent', name: 'Engineering', isActive: false }),
+      department({ id: 'child', name: 'Platform', parentDepartmentId: 'parent' }),
+    ])
+
+    renderPage()
+    await screen.findByText('Platform')
+    await userEvent.click(screen.getByLabelText('Show inactive'))
+
+    const row = screen.getByText('Platform').closest('tr')
+    // One guide span per level, so the count IS the depth. Still 1 with the parent
+    // filtered out of the rendered rows.
+    expect(row!.querySelectorAll('span[aria-hidden="true"] > span')).toHaveLength(1)
+  })
+
   it('filters by search and says so rather than claiming there are none', async () => {
     serveList(() => [
       department({ id: 'a', name: 'Engineering' }),

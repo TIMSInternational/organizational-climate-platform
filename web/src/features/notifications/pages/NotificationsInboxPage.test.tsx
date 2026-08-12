@@ -204,6 +204,37 @@ describe('NotificationsInboxPage', () => {
     await waitFor(() => expect(screen.queryByText('Survey ready')).toBeNull())
   })
 
+  it('removes every row from the filtered view after Mark All as Read, not just one', async () => {
+    // The bulk path has its own branch for this — `unreadOnly ? filter : map` in
+    // `handleMarkAllRead` — and nothing exercised it. Replacing that ternary with an
+    // unconditional `map` left all 109 notifications tests green, because the bulk
+    // test below never turns the filter on. Under that mutant, pressing Mark All as
+    // Read while "Unread only" is active leaves every row on screen with its badge
+    // flipped to Read: a list contradicting its own filter, which is exactly what
+    // the single-row path has a dedicated test for directly above.
+    vi.mocked(fetch).mockResolvedValue(listResponse(unreadRow, row('n3', 'Plan due')))
+    renderPage()
+    await screen.findByText('Survey ready')
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Unread only' }))
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(row('n1', 'Survey ready', '2026-08-03T08:00:00Z')), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(row('n3', 'Plan due', '2026-08-03T08:00:00Z')), { status: 200 }),
+      )
+    await userEvent.click(screen.getByRole('button', { name: 'Mark All as Read' }))
+
+    // Both rows leave the view, rather than staying and reading "Read" beneath a
+    // filter that says unread.
+    await waitFor(() => expect(screen.queryByText('Survey ready')).toBeNull())
+    expect(screen.queryByText('Plan due')).toBeNull()
+  })
+
   it('groups the inbox by recency, with a heading and a mono count per group', async () => {
     const now = new Date('2026-08-10T12:00:00Z')
     vi.setSystemTime(now)
