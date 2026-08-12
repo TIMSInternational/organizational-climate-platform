@@ -61,6 +61,20 @@ export type InsightType = (typeof INSIGHT_TYPES)[number]
 /** The priorities we ship a label for, lowest first. Also not a closed set. */
 export const INSIGHT_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const
 
+/**
+ * The stored value that means "critical", as the API writes it.
+ *
+ * Named here rather than typed inline at each call site because two surfaces
+ * already compare against it — the AI Insights headline count and the card's
+ * priority rail — and a page that spelled it `'Critical'` would silently count
+ * zero. It is the wire value, never a label: pass it through
+ * {@link insightPriorityLabel} to show it to anyone.
+ */
+export const CRITICAL_PRIORITY = 'critical'
+
+/** The stored value that means "high". Same rules as {@link CRITICAL_PRIORITY}. */
+export const HIGH_PRIORITY = 'high'
+
 export type InsightPriority = (typeof INSIGHT_PRIORITIES)[number]
 
 const TYPE_KEYS: Record<string, string> = {
