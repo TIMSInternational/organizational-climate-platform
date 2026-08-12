@@ -114,6 +114,69 @@ describe('ProfilePage', () => {
     expect(screen.getByText('Profile updated')).toBeTruthy()
   })
 
+  /**
+   * `/profile` is in no nav section for any role, so the derived eyebrow is null and the
+   * page has to name its own area. Without this the header loses its top line entirely,
+   * which is invisible in a DOM diff and obvious on screen.
+   */
+  it('names its own area, because the nav does not cover this route', async () => {
+    renderPage()
+    await screen.findByDisplayValue('A Person')
+    const eyebrow = document.querySelector('[data-slot="page-eyebrow"]')
+    expect(eyebrow?.textContent).toBe('Account')
+  })
+
+  /**
+   * The typographic rule the whole redesign runs on: a reading is set in the mono face
+   * with tabular figures, prose is not. Both account dates and every activity timestamp
+   * are readings.
+   */
+  it('sets every date reading in the mono face with tabular figures', async () => {
+    renderPage()
+    await screen.findByDisplayValue('A Person')
+
+    const memberSince = screen.getByText('Member since').nextElementSibling
+    expect(memberSince?.className).toContain('font-mono')
+    expect(memberSince?.className).toContain('tabular-nums')
+
+    const when = screen.getByText('Profile updated').closest('tr')?.firstElementChild
+    expect(when?.className).toContain('font-mono')
+    expect(when?.className).toContain('tabular-nums')
+  })
+
+  /**
+   * happy-dom does no layout, so this asserts the cause rather than the symptom.
+   *
+   * A `whitespace-nowrap` timestamp cell gives the cell a min-content width equal to the
+   * whole date, and `<Table>`'s `overflow-x-auto` container cannot hold it in: the Card
+   * around it is a grid item whose `min-width: auto` resolves to min-content, so the width
+   * propagates past the container and the shell panel scrolls sideways instead. Measured in
+   * Chromium at 390px the page column reached 415px and both the Result heading and the
+   * Succeeded/Failed words were clipped off the right edge. Guarding the class keeps the
+   * regression from being re-introduced by a change that no rendering test would catch.
+   */
+  it('leaves the timestamp cell able to shrink, so a phone never scrolls sideways', async () => {
+    renderPage()
+    await screen.findByDisplayValue('A Person')
+
+    const when = screen.getByText('Profile updated').closest('tr')?.firstElementChild
+    expect(when?.className).not.toContain('whitespace-nowrap')
+  })
+
+  /**
+   * "Never" is a word, not a reading — setting it in the mono face would claim it is a
+   * measurement and would sit oddly in a column of dates that are.
+   */
+  it('leaves a missing sign-in date in the sans face, because it is a word', async () => {
+    vi.mocked(getProfile).mockResolvedValue({ ...PROFILE, lastLoginAt: null })
+    renderPage()
+
+    await screen.findByText('Never')
+    const lastLogin = screen.getByText('Last sign-in').nextElementSibling
+    expect(lastLogin?.textContent).toBe('Never')
+    expect(lastLogin?.className).not.toContain('font-mono')
+  })
+
   it('saves the name and refreshes the activity list', async () => {
     const renamed = { ...PROFILE, name: 'Renamed Person' }
     vi.mocked(updateProfile).mockResolvedValue(renamed)

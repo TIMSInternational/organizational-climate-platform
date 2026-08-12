@@ -1,0 +1,191 @@
+{
+  "GET /notifications/mine": {
+    "notifications": [
+      {
+        "id": "aaaaaaaa-0000-0000-0000-000000000001",
+        "userId": "00000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "type": "survey_completion",
+        "channel": "in_app",
+        "priority": "medium",
+        "status": "delivered",
+        "title": "Survey closed",
+        "message": "Q2 Climate — all staff reached 84% participation and closed.",
+        "data": null,
+        "templateId": null,
+        "scheduledFor": "2026-08-11T13:48:00Z",
+        "sentAt": "2026-08-11T13:48:02Z",
+        "deliveredAt": "2026-08-11T13:48:03Z",
+        "openedAt": null,
+        "failedAt": null,
+        "failureReason": null,
+        "retryCount": 0,
+        "createdAt": "2026-08-11T13:48:00Z"
+      },
+      {
+        "id": "aaaaaaaa-0000-0000-0000-000000000002",
+        "userId": "00000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "type": "ai_insight_alert",
+        "channel": "in_app",
+        "priority": "high",
+        "status": "delivered",
+        "title": "Insight generated",
+        "message": "A critical insight was raised for Support: psychological safety is two quarters below the company benchmark.",
+        "data": null,
+        "templateId": null,
+        "scheduledFor": "2026-08-11T09:05:00Z",
+        "sentAt": "2026-08-11T09:05:01Z",
+        "deliveredAt": "2026-08-11T09:05:02Z",
+        "openedAt": null,
+        "failedAt": null,
+        "failureReason": null,
+        "retryCount": 0,
+        "createdAt": "2026-08-11T09:05:00Z"
+      },
+      {
+        "id": "aaaaaaaa-0000-0000-0000-000000000003",
+        "userId": "00000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "type": "deadline_reminder",
+        "channel": "in_app",
+        "priority": "high",
+        "status": "delivered",
+        "title": "Action plan due",
+        "message": "Rebalance Support queue ownership is due in 5 days.",
+        "data": null,
+        "templateId": null,
+        "scheduledFor": "2026-08-11T07:20:00Z",
+        "sentAt": "2026-08-11T07:20:01Z",
+        "deliveredAt": "2026-08-11T07:20:02Z",
+        "openedAt": null,
+        "failedAt": null,
+        "failureReason": null,
+        "retryCount": 0,
+        "createdAt": "2026-08-11T07:20:00Z"
+      },
+      {
+        "id": "aaaaaaaa-0000-0000-0000-000000000004",
+        "userId": "00000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "type": "action_plan_alert",
+        "channel": "in_app",
+        "priority": "medium",
+        "status": "opened",
+        "title": "Plan closed",
+        "message": "Recognition programme rollout was marked complete.",
+        "data": null,
+        "templateId": null,
+        "scheduledFor": "2026-08-10T16:40:00Z",
+        "sentAt": "2026-08-10T16:40:01Z",
+        "deliveredAt": "2026-08-10T16:40:02Z",
+        "openedAt": "2026-08-10T17:02:00Z",
+        "failedAt": null,
+        "failureReason": null,
+        "retryCount": 0,
+        "createdAt": "2026-08-10T16:40:00Z"
+      },
+      {
+        "id": "aaaaaaaa-0000-0000-0000-000000000005",
+        "userId": "00000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "type": "user_invitation",
+        "channel": "in_app",
+        "priority": "low",
+        "status": "opened",
+        "title": "New member",
+        "message": "J. Adeyemi joined People.",
+        "data": null,
+        "templateId": null,
+        "scheduledFor": "2026-08-09T11:15:00Z",
+        "sentAt": "2026-08-09T11:15:01Z",
+        "deliveredAt": "2026-08-09T11:15:02Z",
+        "openedAt": "2026-08-09T12:00:00Z",
+        "failedAt": null,
+        "failureReason": null,
+        "retryCount": 0,
+        "createdAt": "2026-08-09T11:15:00Z"
+      },
+      {
+        "id": "aaaaaaaa-0000-0000-0000-000000000006",
+        "userId": "00000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "type": "quantum_entanglement_alert",
+        "channel": "in_app",
+        "priority": "low",
+        "status": "opened",
+        "title": "A type this build has never heard of",
+        "message": "Renders as the raw wire value rather than as a blank chip.",
+        "data": null,
+        "templateId": null,
+        "scheduledFor": "2026-08-06T10:00:00Z",
+        "sentAt": "2026-08-06T10:00:01Z",
+        "deliveredAt": "2026-08-06T10:00:02Z",
+        "openedAt": "2026-08-06T10:30:00Z",
+        "failedAt": null,
+        "failureReason": null,
+        "retryCount": 0,
+        "createdAt": "2026-08-06T10:00:00Z"
+      }
+    ]
+  },
+  "GET /profile": {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "companyName": "Northwind Logistics",
+    "email": "m.herrera@northwind.example",
+    "name": "María Herrera",
+    "role": "company_admin",
+    "departmentId": "44444444-4444-4444-4444-444444444444",
+    "departmentName": "Support",
+    "managerId": null,
+    "isActive": true,
+    "hasPassword": true,
+    "lastLoginAt": "2026-08-11T09:14:00Z",
+    "createdAt": "2025-03-14T09:12:00Z",
+    "demographics": {}
+  },
+  "GET /profile/preferences": {
+    "display": {
+      "language": "es",
+      "timezone": "America/Mexico_City",
+      "theme": "system",
+      "dashboardLayout": "default"
+    },
+    "notifications": {
+      "emailSurveys": true,
+      "emailMicroclimates": true,
+      "emailActionPlans": true,
+      "emailReminders": false,
+      "digestFrequency": "weekly"
+    }
+  },
+  "GET /profile/activity": {
+    "activity": [
+      {
+        "id": "bbbbbbbb-0000-0000-0000-000000000001",
+        "action": "profile.preferences_update",
+        "resource": "profile",
+        "resourceId": "00000000-0000-0000-0000-000000000001",
+        "success": true,
+        "timestamp": "2026-08-11T09:20:00Z"
+      },
+      {
+        "id": "bbbbbbbb-0000-0000-0000-000000000002",
+        "action": "profile.password_change",
+        "resource": "profile",
+        "resourceId": "00000000-0000-0000-0000-000000000001",
+        "success": false,
+        "timestamp": "2026-08-10T18:02:00Z"
+      },
+      {
+        "id": "bbbbbbbb-0000-0000-0000-000000000003",
+        "action": "profile.update",
+        "resource": "profile",
+        "resourceId": "00000000-0000-0000-0000-000000000001",
+        "success": true,
+        "timestamp": "2026-06-18T11:02:00Z"
+      }
+    ]
+  }
+}

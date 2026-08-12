@@ -68,7 +68,21 @@ export default function ProfileActivityList({ entries }: ProfileActivityListProp
                 const labelPath = ACTION_LABEL_PATH[entry.action]
                 return (
                   <TableRow key={entry.id}>
-                    <TableCell>{formatNotificationTimestamp(entry.timestamp, locale)}</TableCell>
+                    {/* A reading, so the mono face with tabular figures — which is also
+                        what keeps a column of timestamps aligned rather than ragged.
+
+                        Deliberately NOT `whitespace-nowrap`, and the omission is load-bearing.
+                        A nowrap cell has a min-content width equal to the whole timestamp, and
+                        `<Table>`'s own `overflow-x-auto` wrapper cannot absorb that: this Card
+                        is a grid item, so its `min-width: auto` resolves to its min-content and
+                        the intrinsic width propagates straight past the wrapper. Measured at
+                        390px with the class present, the page column stretched to 415px and the
+                        shell panel — not the table — scrolled sideways, clipping the very
+                        Succeeded/Failed word that has to sit beside the colour. Letting the
+                        date wrap onto a second line keeps all three columns on screen. */}
+                    <TableCell className="font-mono tabular-nums">
+                      {formatNotificationTimestamp(entry.timestamp, locale)}
+                    </TableCell>
                     <TableCell>{labelPath ? t(labelPath) : entry.action}</TableCell>
                     <TableCell>
                       <Badge variant={entry.success ? 'success' : 'destructive'}>
