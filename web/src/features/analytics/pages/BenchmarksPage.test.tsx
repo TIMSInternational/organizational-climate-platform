@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import BenchmarksPage from './BenchmarksPage'
@@ -86,8 +86,9 @@ describe('BenchmarksPage scope handling', () => {
 
     renderPage()
 
-    const globalRow = (await screen.findByText('Industry average')).closest('tr')!
-    const ownRow = screen.getByText('Our 2026 baseline').closest('tr')!
+    const table = await screen.findByRole('table')
+    const globalRow = within(table).getByText('Industry average').closest('tr')!
+    const ownRow = within(table).getByText('Our 2026 baseline').closest('tr')!
     // BenchmarkList renders the shared analytics.scope* labels rather than a
     // benchmarks-only pair: #94's AnalyticsDashboardPage and this page render the
     // same component, so one vocabulary keeps the two surfaces from disagreeing
@@ -140,7 +141,7 @@ describe('BenchmarksPage scope handling', () => {
 
     renderPage()
 
-    await screen.findByText('Our 2026 baseline')
+    await within(await screen.findByRole('table')).findByText('Our 2026 baseline')
     expect(screen.queryByText('Rival baseline')).toBeNull()
   })
 
@@ -192,33 +193,57 @@ describe('BenchmarksPage headline counts', () => {
    * than by label: "This company" and "Platform-wide" are also the scope badges
    * in every row of the table below.
    */
-  it('counts the readable, platform-wide, own-company and selected benchmarks', async () => {
+  /**
+   * The strip that used to sit here counted benchmark RECORDS -- how many exist, how many
+   * are platform-wide, how many are selected. Every number was true and none of them was
+   * why anyone opens this screen, so the approved design replaced it with the read-out
+   * below: this company against its cohort. What is asserted is that the three tiles carry
+   * the company's index, the cohort's median and the percentile, in that order.
+   */
+  it('reads this company against its cohort rather than counting benchmark records', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [
-        /\/admin\/benchmarks(\?|$)/,
-        () => [
-          listRow('g1', 'Industry average', null),
-          listRow('g2', 'Regional average', null),
-          listRow('o1', 'Our 2026 baseline', OWN),
+      [/\/surveys\/s1\/analytics/, () => ({
+        surveyId: 's1',
+        summary: {},
+        questions: [
+          { questionId: 'q1', order: 0, type: 'likert', text: 'a', category: 'safety', answeredCount: 24, distribution: [], average: 3.75, median: 4 },
+          { questionId: 'q2', order: 1, type: 'likert', text: 'b', category: 'workload', answeredCount: 24, distribution: [], average: 3.0, median: 3 },
         ],
-      ],
+        breakdowns: [],
+        isSuppressed: false,
+        minimumGroupSize: 5,
+      })],
+      [/\/surveys(\?|$)/, () => ({ surveys: [{ id: 's1', title: 'Q3 Climate Survey', status: 'closed', endDate: '2026-08-05T00:00:00Z' }] })],
+      [/\/admin\/benchmarks\/g1$/, () => ({
+        ...detail('g1', 'Manufacturing cohort', null),
+        metrics: [
+          { id: 'm1', benchmarkId: 'g1', metricName: 'safety', value: 69, unit: 'index', percentile: null, sampleSize: 42 },
+          { id: 'm2', benchmarkId: 'g1', metricName: 'workload', value: 66, unit: 'index', percentile: null, sampleSize: 42 },
+          { id: 'm3', benchmarkId: 'g1', metricName: 'overall_index', value: 68, unit: 'index', percentile: 68, sampleSize: 42 },
+        ],
+      })],
+      [/\/admin\/benchmarks(\?|$)/, () => [listRow('g1', 'Manufacturing cohort', null)]],
     ])
 
     const { container } = renderPage()
-    await screen.findByText('Our 2026 baseline')
 
-    const tiles = () =>
-      [...container.querySelectorAll('[data-slot="kpi-tile"]')].map((tile) => tile.textContent)
-    expect(tiles()).toEqual([
-      'Benchmarks3',
-      'Platform-wide2to compare against',
-      'This company1',
-      'Selected0',
-    ])
+    const readout = await waitFor(() => {
+      const found = container.querySelector('[data-slot="cohort-readout"]')
+      expect(found, 'the cohort read-out never rendered').not.toBeNull()
+      return found!
+    })
 
-    await userEvent.click(screen.getByRole('checkbox', { name: /Our 2026 baseline/ }))
-    await waitFor(() => expect(tiles()[3]).toBe('Selected1'))
+    const tiles = [...readout.querySelectorAll('[data-slot="kpi-tile"]')].map((t) => t.textContent)
+    // safety 3.75 -> 69, workload 3.0 -> 50, so the index is 60 against a cohort median 68.
+    expect(tiles[0]).toContain('60')
+    expect(tiles[1]).toContain('68')
+    expect(tiles[2]).toContain('68')
+
+    // One bar per dimension the SURVEY scored, each carrying the cohort's median as a tick.
+    const rows = container.querySelectorAll('[data-slot="cohort-dimension-row"]')
+    expect(rows.length).toBe(2)
+    expect(container.querySelectorAll('[data-slot="cohort-median-tick"]').length).toBe(2)
   })
 })
 
@@ -522,7 +547,7 @@ describe('BenchmarksPage single-selection readings', () => {
 
     renderPage()
 
-    const table = (await screen.findByText('Our 2026 baseline')).closest('table')!
+    const table = await screen.findByRole('table')
     // Same digit count on both rows, which is the only way tabular figures line a
     // column up. `0.9` next to `0.92` does not.
     expect(table.textContent).toContain('0.92')
