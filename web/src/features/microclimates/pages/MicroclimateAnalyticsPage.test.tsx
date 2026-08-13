@@ -145,3 +145,21 @@ describe('MicroclimateAnalyticsPage', () => {
     expect(link.getAttribute('href')).toBe('/microclimates/m1/results')
   })
 })
+
+describe('MicroclimateAnalyticsPage KPI strip', () => {
+  /**
+   * The redesign's flat strip, asserted through `data-slot` rather than through label text
+   * -- the labels also appear in the panels below, so `getByText` could pass by matching
+   * one of those. `KPIDisplay` renders no `data-slot="kpi-tile"`, so reverting this screen
+   * to the old card grid fails here; without this the whole suite stayed green through the
+   * conversion, which is what makes it worth writing.
+   */
+  it('renders its readings as the redesign\u2019s KPI tiles', async () => {
+    routeFetch(row())
+    const { container } = renderPage()
+    await screen.findByText('All sessions')
+
+    const tiles = [...container.querySelectorAll('[data-slot="kpi-tile"]')]
+    expect(tiles.length).toBeGreaterThan(0)
+  })
+})

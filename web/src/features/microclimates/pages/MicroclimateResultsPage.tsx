@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
-import { KPIDisplay, PieChart, type Kpi, type PieSlice } from '../../../components/charts'
+import { KpiTile, PieChart, type Kpi, type PieSlice } from '../../../components/charts'
 import {
   Alert,
   AlertDescription,
@@ -32,6 +32,7 @@ import {
   statusBadgeVariant,
   statusLabel,
 } from '../microclimateVocabulary'
+import { KpiRow } from '../../dashboard/components/dashboardGrammar'
 
 /**
  * #129 — what one microclimate found.
@@ -170,7 +171,22 @@ export default function MicroclimateResultsPage() {
       />
 
       <H2>{t('microclimates.participationRate')}</H2>
-      <KPIDisplay kpis={resultsKpis(live, t)} columns={4} locale={locale} />
+      {/* The redesign's flat strip, not the old `KPIDisplay` card grid. The numbers here
+          are context for the split below them rather than the content of the screen, which
+          is exactly the split `charts/KpiTile.tsx` draws between the two. `KpiRow` fixes
+          the column count at four; the old `columns` prop is what let callers produce the
+          ragged rows it exists to prevent. */}
+      <KpiRow>
+        {resultsKpis(live, t).map((kpi) => (
+          <KpiTile
+            key={kpi.id}
+            label={kpi.label}
+            value={kpi.value}
+            format={kpi.format}
+            locale={locale}
+          />
+        ))}
+      </KpiRow>
 
       <div className="mt-panel-gap flex flex-wrap items-center gap-inline">
         <span className="text-fg-secondary">{t('microclimates.kpiEngagement')}</span>
