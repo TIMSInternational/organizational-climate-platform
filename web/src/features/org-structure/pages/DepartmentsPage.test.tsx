@@ -8,6 +8,24 @@ import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
 import type { Department } from '../api/departments'
 
+/**
+ * The URLs of requests for company-scoped DATA.
+ *
+ * The company-name eyebrow (`useCompanyName`) reads the caller's OWN `/profile` on every
+ * page that carries it, and that request addresses no company and takes no id — it is
+ * precisely not the thing these scoping guards are about. So it is filtered out here by
+ * name rather than by loosening the assertions to "some request was fine", which would
+ * have let a genuinely wrong company-scoped call through unnoticed.
+ */
+function dataRequestUrls(): string[] {
+  return vi
+    .mocked(fetch)
+    .mock.calls.map((call) => String(call[0]))
+    .filter((url) => !/\/profile(\?|$)/.test(url))
+}
+
+
+
 function tokenFor(claims: Record<string, unknown>): string {
   const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
   return `header.${body}.signature`
@@ -49,6 +67,10 @@ function renderPage() {
  */
 function serveList(rows: () => Department[]) {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+    // The company-name eyebrow reads the caller's own profile.
+    if (/\/profile(\?|$)/.test(String(input))) {
+      return Promise.resolve(new Response(JSON.stringify({ companyName: 'Acme Corporation' }), { status: 200 }))
+    }
     if (/\/admin\/departments\?/.test(String(input))) {
       return Promise.resolve(new Response(JSON.stringify({ departments: rows() }), { status: 200 }))
     }
@@ -68,6 +90,10 @@ interface Reading {
 function serveListAndReadings(rows: () => Department[], readings: () => Reading[]) {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
     const url = String(input)
+    // The company-name eyebrow reads the caller's own profile.
+    if (/\/profile(\?|$)/.test(url)) {
+      return Promise.resolve(new Response(JSON.stringify({ companyName: 'Acme Corporation' }), { status: 200 }))
+    }
     if (/\/admin\/departments\?/.test(url)) {
       return Promise.resolve(new Response(JSON.stringify({ departments: rows() }), { status: 200 }))
     }
@@ -99,7 +125,7 @@ describe('DepartmentsPage scoping', () => {
     renderPage()
 
     expect(await screen.findByText('Engineering')).toBeTruthy()
-    const urls = vi.mocked(fetch).mock.calls.map((call) => String(call[0]))
+    const urls = dataRequestUrls()
     expect(urls.some((url) => url.includes(`companyId=${OWN}`))).toBe(true)
   })
 
@@ -113,7 +139,7 @@ describe('DepartmentsPage scoping', () => {
     renderPage()
 
     expect(await screen.findByText('Choose a company')).toBeTruthy()
-    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+    expect(dataRequestUrls()).toEqual([])
   })
 
   it('never falls back to a super_admin own companyId claim', async () => {
@@ -124,7 +150,7 @@ describe('DepartmentsPage scoping', () => {
     renderPage()
 
     expect(await screen.findByText('Choose a company')).toBeTruthy()
-    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+    expect(dataRequestUrls()).toEqual([])
   })
 
   it('loads the company a super_admin selected', async () => {
@@ -136,7 +162,7 @@ describe('DepartmentsPage scoping', () => {
     renderPage()
 
     expect(await screen.findByText('Operations')).toBeTruthy()
-    const urls = vi.mocked(fetch).mock.calls.map((call) => String(call[0]))
+    const urls = dataRequestUrls()
     expect(urls.some((url) => url.includes('companyId=chosen-co'))).toBe(true)
   })
 })
@@ -533,5 +559,23 @@ describe('DepartmentsPage as an instrument', () => {
     // returns the label itself and the assertion would look inside the wrong box.
     const tile = screen.getByText('Under the floor').parentElement!
     expect(within(tile).getByText('2')).toBeTruthy()
+  })
+})
+
+describe('the company-name eyebrow', () => {
+  /**
+   * The brief puts the COMPANY on this screen's eyebrow, not the nav section. Left to
+   * itself `PageTopBar` derives "Administration". All three of this page's headers carry
+   * it -- the list, the empty state and the no-company state -- so the label does not
+   * vanish when the table does.
+   */
+  it('names the company, not the nav section', async () => {
+    serveList(() => [department()])
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe('Acme Corporation')
+    })
   })
 })

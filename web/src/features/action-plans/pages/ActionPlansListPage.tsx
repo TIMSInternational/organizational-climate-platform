@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCompanyName } from '../../../company-context/useCompanyName'
 import { Link } from 'react-router'
 import {
   listActionPlans,
@@ -55,6 +56,7 @@ import {
 // company chosen for them.
 export default function ActionPlansListPage() {
   const { t, locale } = useTranslation()
+  const companyName = useCompanyName()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const scope = useCompanyScope()
   const companyId = scope.companyId
@@ -221,6 +223,8 @@ export default function ActionPlansListPage() {
   return (
     <div>
       <PageTopBar
+        // The design's eyebrow here is the company, not the nav section.
+        eyebrow={companyName}
         title={t('navigation.actionPlans')}
         // The longer line, not `navigation.actionPlansDesc` ("Track improvement
         // initiatives"): the nav blurb has to fit a tooltip, and this header is
