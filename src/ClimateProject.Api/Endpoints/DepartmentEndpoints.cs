@@ -38,7 +38,25 @@ public static class DepartmentEndpoints
         var departments = await db.Departments
             .Where(d => d.CompanyId == companyId)
             .OrderBy(d => d.Name)
-            .Select(d => new DepartmentListItem(d.Id, d.CompanyId, d.Name, d.Description, d.ParentDepartmentId, d.IsActive, d.EmployeeCount))
+            // COUNTED, never read from `departments.employee_count`. That column is
+            // denormalised and **nothing in this codebase has ever written to it** -- no
+            // user create, invitation accept, bulk import, department move or deactivation
+            // touches it -- so it is 0 for every department in every environment, and this
+            // endpoint reported "0 employees" for a department with nine people in it.
+            //
+            // The predicate is `SurveyAggregation`'s headcount predicate exactly (active
+            // users in the department). It has to be: that number is the DENOMINATOR of
+            // per-department participation on the results screen, so a Departments page
+            // counting one population while participation counts another would put two
+            // different headcounts for the same team on two screens.
+            .Select(d => new DepartmentListItem(
+                d.Id,
+                d.CompanyId,
+                d.Name,
+                d.Description,
+                d.ParentDepartmentId,
+                d.IsActive,
+                db.Users.Count(u => u.DepartmentId == d.Id && u.IsActive)))
             .ToListAsync(cancellationToken);
 
         return Results.Ok(new DepartmentListResponse(departments));
@@ -102,7 +120,9 @@ public static class DepartmentEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         return Results.Json(
-            new DepartmentDetail(department.Id, department.CompanyId, department.Name, department.Description, department.ParentDepartmentId, department.IsActive, department.EmployeeCount),
+            // A department created a line ago has no members, so this is 0 rather than a
+            // query -- but it is 0 because it was COUNTED, not because the dead column is.
+            new DepartmentDetail(department.Id, department.CompanyId, department.Name, department.Description, department.ParentDepartmentId, department.IsActive, 0),
             statusCode: 201);
     }
 
@@ -124,8 +144,16 @@ public static class DepartmentEndpoints
             return Results.Forbid();
         }
 
-        return Results.Ok(new DepartmentDetail(department.Id, department.CompanyId, department.Name, department.Description, department.ParentDepartmentId, department.IsActive, department.EmployeeCount));
+        var employeeCount = await CountEmployeesAsync(db, department.Id, cancellationToken);
+        return Results.Ok(new DepartmentDetail(department.Id, department.CompanyId, department.Name, department.Description, department.ParentDepartmentId, department.IsActive, employeeCount));
     }
+
+    /// <summary>
+    /// A department's headcount, derived. See the note in <see cref="ListAsync"/> for why
+    /// this is never <c>Department.EmployeeCount</c>.
+    /// </summary>
+    private static Task<int> CountEmployeesAsync(ClimateProjectDbContext db, Guid departmentId, CancellationToken cancellationToken)
+        => db.Users.CountAsync(u => u.DepartmentId == departmentId && u.IsActive, cancellationToken);
 
     private static async Task<IResult> UpdateAsync(
         Guid id,
@@ -186,6 +214,7 @@ public static class DepartmentEndpoints
         department.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(new DepartmentDetail(department.Id, department.CompanyId, department.Name, department.Description, department.ParentDepartmentId, department.IsActive, department.EmployeeCount));
+        var employeeCount = await CountEmployeesAsync(db, department.Id, cancellationToken);
+        return Results.Ok(new DepartmentDetail(department.Id, department.CompanyId, department.Name, department.Description, department.ParentDepartmentId, department.IsActive, employeeCount));
     }
 }

@@ -62,6 +62,18 @@ public static class TrackingInternalEndpoints
             .Where(u => managerIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, cancellationToken);
 
+        // Headcount is COUNTED, not read from `departments.employee_count`. Nothing in this
+        // codebase has ever written that column, so this feed reported
+        // `cantidad_colaboradores: 0` for every nodo it has ever published -- to an EXTERNAL
+        // consumer, which had no way to tell a genuinely empty team from the column never
+        // having been maintained. One grouped query rather than a count per department, so
+        // the shape of this endpoint's database work does not change with the org chart.
+        var activeUsersByDepartment = await db.Users
+            .Where(u => u.CompanyId == companyGuid && u.DepartmentId != null && u.IsActive)
+            .GroupBy(u => u.DepartmentId!.Value)
+            .Select(g => new { DepartmentId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.DepartmentId, x => x.Count, cancellationToken);
+
         var nodos = departments.Select(d => new NodoInternalDto(
             NodoId: TrackingIdentifiers.ExternalNodoId(d),
             Nombre: d.Name,
@@ -71,7 +83,7 @@ public static class TrackingInternalEndpoints
             LiderId: d.ManagerId.HasValue && managers.TryGetValue(d.ManagerId.Value, out var manager)
                 ? TrackingIdentifiers.ExternalPersonaId(manager)
                 : null,
-            CantidadColaboradores: d.EmployeeCount,
+            CantidadColaboradores: activeUsersByDepartment.TryGetValue(d.Id, out var headcount) ? headcount : 0,
             Activo: d.IsActive,
             CompanyId: d.CompanyId.ToString()))
             .ToList();
