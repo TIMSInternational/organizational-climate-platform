@@ -75,7 +75,7 @@ function AdminShell() {
   const sections = withUnreadBadge(buildNavSections(role, companyId), unreadCount)
 
   return (
-    <div className="flex h-dvh flex-col bg-surface-outer">
+    <div className="flex h-dvh flex-col bg-surface-shell">
       {/* First focusable thing on the page, so a keyboard user is not made to Tab
           through the whole sidebar on every navigation. `#main` matches the id
           below and is SkipLink's own default. */}
@@ -87,7 +87,7 @@ function AdminShell() {
           // own -- it sits on the page surface, and only the content column is a
           // card. A filled rail plus a filled content panel reads as two competing
           // surfaces with a seam down the middle.
-          className="hidden shrink-0 flex-col overflow-y-auto md:flex"
+          className="on-shell hidden shrink-0 flex-col overflow-y-auto md:flex"
           style={{
             width: collapsed
               ? 'var(--admin-size-sidebar-collapsed)'
@@ -148,7 +148,7 @@ function AdminShell() {
               eye landed on. The bar is chrome floating in the shell's gutter; the
               card below is the only panel. */}
           <header
-            className="flex shrink-0 items-center justify-end gap-inline"
+            className="on-shell flex shrink-0 items-center justify-end gap-inline"
             style={{ minHeight: 40, padding: '10px 12px 10px 16px' }}
           >
             {/* #124's company-context selector. Renders `null` for every role but

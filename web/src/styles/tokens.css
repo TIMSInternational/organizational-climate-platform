@@ -204,6 +204,39 @@
   color-scheme: light;
 
   --admin-bg-outer: #f0f0f0;
+
+  /* -- The shell: rail, top strip and the gutter they sit in (UI-0) -------
+     The application chrome is INK, and the content card is the only light
+     surface on the page. These are separate tokens rather than a change to
+     `--admin-bg-outer` because that token is also the ground of the sign-in
+     screen (`AuthShell`) and of the survey-answering screen (`RespondShell`),
+     neither of which is application chrome and neither of which should go dark
+     just because the admin rail did.
+
+     Identical in both themes, deliberately: the shell is the one region whose
+     colour does not invert, so the product has a constant frame and only the
+     page inside it changes. `--admin-bg-shell` is a shade lighter than the dark
+     theme's own card (#171717), which keeps the light-theme relationship --
+     chrome recedes, card advances -- true in dark as well.
+
+     Contrast, measured against these values (styles/shellInkContrast.test.ts
+     re-derives all of it and fails if any drifts):
+       --admin-shell-font       on shell  10.27:1   on raised  8.85:1
+       --admin-shell-font-label on shell   5.90:1   on raised  5.08:1
+       --admin-shell-font-strong on shell 16.56:1   on raised 14.26:1
+     The label clears 4.5:1 on BOTH grounds and not merely on the rail, because
+     the user menu lifts to `--admin-shell-bg-raised` and prints the signed-in
+     person's role in that ink -- the lighter ground is the binding one. */
+  --admin-bg-shell: #1b1f24;
+  /* The user menu, which opens INSIDE the rail. It lifts rather than staying
+     flush so the popover reads as above the rail rather than as a hole in it. */
+  --admin-shell-bg-raised: #262b31;
+  --admin-shell-bg-hover: rgba(255, 255, 255, 0.08);
+  --admin-shell-bg-active: rgba(255, 255, 255, 0.14);
+  --admin-shell-font-strong: #ffffff;
+  --admin-shell-font: #c8ccd2;
+  --admin-shell-font-label: #939ba6;
+  --admin-shell-border: rgba(255, 255, 255, 0.12);
   --admin-bg-panel: #ffffff;
   --admin-bg-card: #ffffff;
   --admin-bg-card-hover: #fafafa;
@@ -499,6 +532,39 @@
   color-scheme: dark;
 
   --admin-bg-outer: #1d1d1d;
+
+  /* -- The shell: rail, top strip and the gutter they sit in (UI-0) -------
+     The application chrome is INK, and the content card is the only light
+     surface on the page. These are separate tokens rather than a change to
+     `--admin-bg-outer` because that token is also the ground of the sign-in
+     screen (`AuthShell`) and of the survey-answering screen (`RespondShell`),
+     neither of which is application chrome and neither of which should go dark
+     just because the admin rail did.
+
+     Identical in both themes, deliberately: the shell is the one region whose
+     colour does not invert, so the product has a constant frame and only the
+     page inside it changes. `--admin-bg-shell` is a shade lighter than the dark
+     theme's own card (#171717), which keeps the light-theme relationship --
+     chrome recedes, card advances -- true in dark as well.
+
+     Contrast, measured against these values (styles/shellInkContrast.test.ts
+     re-derives all of it and fails if any drifts):
+       --admin-shell-font       on shell  10.27:1   on raised  8.85:1
+       --admin-shell-font-label on shell   5.90:1   on raised  5.08:1
+       --admin-shell-font-strong on shell 16.56:1   on raised 14.26:1
+     The label clears 4.5:1 on BOTH grounds and not merely on the rail, because
+     the user menu lifts to `--admin-shell-bg-raised` and prints the signed-in
+     person's role in that ink -- the lighter ground is the binding one. */
+  --admin-bg-shell: #1b1f24;
+  /* The user menu, which opens INSIDE the rail. It lifts rather than staying
+     flush so the popover reads as above the rail rather than as a hole in it. */
+  --admin-shell-bg-raised: #262b31;
+  --admin-shell-bg-hover: rgba(255, 255, 255, 0.08);
+  --admin-shell-bg-active: rgba(255, 255, 255, 0.14);
+  --admin-shell-font-strong: #ffffff;
+  --admin-shell-font: #c8ccd2;
+  --admin-shell-font-label: #939ba6;
+  --admin-shell-border: rgba(255, 255, 255, 0.12);
   --admin-bg-panel: #171717;
   --admin-bg-card: #1e1e1e;
   --admin-bg-card-hover: #222222;

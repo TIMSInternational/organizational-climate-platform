@@ -428,6 +428,37 @@
  * nothing ever defined them, so they rendered as unstyled text.
  * ------------------------------------------------------------------------- */
 @layer components {
+  /* ---------------------------------------------------------------------------
+   * The shell's ink region.
+   *
+   * Applied to the rail and the top strip -- the two pieces of chrome -- and NOT to
+   * the content column, which stays a light card. It re-points the generic ink and
+   * hover tokens at the shell palette for its subtree, which recolours
+   * `RoleBasedNav`, `SidebarBrand` and `SidebarUserMenu` in one place: all three set
+   * their colours from `var(--admin-font-*)` inline, so overriding the variables is
+   * what lets the chrome inherit a dark ground without editing, and re-testing, every
+   * component that draws on it.
+   *
+   * `--admin-bg-overlay` is remapped too. The user menu opens INSIDE the rail with
+   * `background: var(--admin-bg-overlay)`, which in light is a translucent white --
+   * a light popover hanging out of a dark rail, printing light ink on itself. It
+   * lifts to `--admin-shell-bg-raised` instead.
+   * ------------------------------------------------------------------------- */
+  .on-shell {
+    --admin-font-primary: var(--admin-shell-font-strong);
+    --admin-font-secondary: var(--admin-shell-font);
+    --admin-font-tertiary: var(--admin-shell-font-label);
+    --admin-font-light: var(--admin-shell-font-label);
+    --admin-font-section-label: var(--admin-shell-font-label);
+    --admin-bg-hover: var(--admin-shell-bg-hover);
+    --admin-bg-active: var(--admin-shell-bg-active);
+    --admin-bg-overlay: var(--admin-shell-bg-raised);
+    --admin-border-light: var(--admin-shell-border);
+    --admin-border-hover: var(--admin-shell-border);
+    --admin-border-default: var(--admin-shell-border);
+    color: var(--admin-shell-font);
+  }
+
   /* Legacy navigation/RoleBasedNav.tsx section heading:
      `pt-2 pb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.06em]`
      with `color: var(--admin-font-light)`. */
@@ -489,11 +520,17 @@
     color: var(--admin-font-primary);
   }
 
+  /* `--admin-accent-blue-FILL`, not `--admin-accent-blue`. tokens.css says in as many
+     words that `--admin-font-on-accent` may ONLY ever sit on the fill token, and this
+     rule was the one place in the product that broke it: white on #0d9488 measures
+     3.74:1, under the 4.5:1 this 13px row needs. On the fill it is 5.47:1. The rule
+     existed before the shell went dark and was wrong then too -- the ink ground just
+     made it visible. */
   .nav-row[data-nav-state='selected'],
   .nav-sub-row[data-nav-state='selected'],
   .nav-row[data-nav-state='selected']:hover,
   .nav-sub-row[data-nav-state='selected']:hover {
-    background: var(--admin-accent-blue);
+    background: var(--admin-accent-blue-fill);
     color: var(--admin-font-on-accent);
   }
 
