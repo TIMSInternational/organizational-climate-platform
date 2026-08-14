@@ -155,3 +155,18 @@ describe('SurveyTemplatesPage', () => {
     expect(await screen.findByText('No Templates Found')).toBeTruthy()
   })
 })
+
+describe('the curated page eyebrow', () => {
+  /**
+   * The approved design gives this screen the eyebrow "Library". Left to itself
+   * `PageTopBar` derives the NAV SECTION instead, which can only ever be one of three
+   * words ("Administration", "Workspace", "Communication") — so the design's curated
+   * label is a prop the page has to pass, and deleting that prop is completely silent:
+   * every other test in this file still passed with it removed. Hence this one.
+   */
+  it('names the design’s section, not the nav section', () => {
+    renderPage()
+    const eyebrow = document.querySelector('[data-slot="page-eyebrow"]')
+    expect(eyebrow?.textContent).toBe('Library')
+  })
+})

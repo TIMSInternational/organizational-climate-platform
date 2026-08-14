@@ -545,7 +545,7 @@
     "creating": "Creando...",
     "createCompany": "Crear Empresa",
     "companyDashboard": "Panel de Empresa",
-    "organizationInsights": "Información y gestión de toda la organización",
+    "organizationInsights": "Dónde está la organización hoy, y lo único que más merece tu atención.",
     "searchEmployeesDepartments": "Buscar encuestas, empleados, departamentos...",
     "searchResults": "Resultados de Búsqueda",
     "totalEmployees": "Total de Empleados",
@@ -654,7 +654,6 @@
     "editCompany": "Editar Empresa",
     "manageUsers": "Gestionar Usuarios",
     "manageDemographicFields": "Gestionar Campos Demográficos",
-    "viewReports": "Ver informes",
     "viewAnalytics": "Ver analítica",
     "demographicFields": "Campos Demográficos",
     "companyProfileAdminOnly": "Los detalles del perfil de la empresa solo son visibles para un administrador de la plataforma.",
@@ -928,6 +927,7 @@
     "selectLanguage": "Seleccionar Idioma"
   },
   "microclimates": {
+    "eyebrow": "Sesiones en vivo",
     "title": "Título",
     "dashboardTitle": "Microclimas",
     "createMicroclimate": "Crear Microclima",
@@ -1195,7 +1195,7 @@
     "journeyLabel": "Ciclo de vida del microclima",
     "journeyDraft": "Las preguntas y la audiencia están definidas. Aún no se recopila nada.",
     "journeyActive": "Abierto para respuestas.",
-    "listDescription": "Un pulso breve que puedes lanzar en una sala. Los resultados aparecen a medida que la gente responde, y siguen siendo anónimos con el mismo piso de {minimum}.",
+    "listDescription": "Un pulso de cinco minutos que puedes lanzar en una sala. Los resultados aparecen a medida que la gente responde, y siguen siendo anónimos con el mismo piso de {minimum}.",
     "kpiLive": "En vivo ahora",
     "kpiLiveSub": "abiertas a respuestas",
     "kpiDrafts": "Borradores",
@@ -1282,6 +1282,7 @@
     "home": "Inicio"
   },
   "notifications": {
+    "eyebrow": "Bandeja de entrada",
     "title": "Notificaciones",
     "markAsRead": "Marcar como Leído",
     "markAllAsRead": "Marcar Todas como Leídas",
@@ -1321,7 +1322,7 @@
       "saved": "Se guardaron tus preferencias de notificaciones.",
       "loadError": "No se pudieron cargar tus preferencias de notificaciones."
     },
-    "inboxDescription": "Todo lo que la plataforma te ha enviado.",
+    "inboxDescription": "Lo que cambió mientras no estabas.",
     "unreadOnly": "Solo no leídas",
     "unread": "No leída",
     "read": "Leída",
@@ -1351,7 +1352,7 @@
   },
   "profile": {
     "title": "Tu perfil",
-    "description": "Los datos de tu cuenta, tu contrase\u00f1a, tus preferencias y tu actividad reciente.",
+    "description": "Tus datos, cómo se te notifica y los dispositivos con una sesión abierta.",
     "loadError": "No se pudo cargar tu perfil.",
     "eyebrow": "Cuenta",
     "accountTitle": "Detalles",
@@ -1496,6 +1497,8 @@
     "activeRate": "Tasa Activa"
   },
   "surveys": {
+    "templatesDescription": "Empieza desde algo que ya funciona. Las plantillas se instancian en el servidor, así que las preguntas llegan intactas.",
+    "templatesEyebrow": "Biblioteca",
     "title": "Encuestas",
     "createSurvey": "Crear Encuesta",
     "editSurvey": "Editar Encuesta",
@@ -1932,7 +1935,19 @@
     "invalidFormat": "Formato inválido"
   },
   "benchmarks": {
-    "description": "Compare sus resultados con referencias globales y de su empresa",
+    "yourIndex": "Tu índice",
+    "cohortMedianLabel": "Mediana del grupo",
+    "yourPercentile": "Tu percentil",
+    "companiesCount": "{count} empresas",
+    "byDimension": "Por dimensión",
+    "cohortMedianLegend": "mediana del grupo",
+    "bandUpper": "Tercio superior",
+    "bandMiddle": "Tercio medio",
+    "bandLower": "Tercio inferior",
+    "noCohortTitle": "Todavía no hay un grupo con el que comparar",
+    "noCohortDescription": "Debe existir una referencia para este sector y tamaño de empresa antes de poder comparar a esta empresa.",
+    "records": "Registros de referencia",
+    "description": "Cómo se lee esta empresa frente a su grupo del sector. El grupo es anónimo en ambos sentidos.",
     "newBenchmark": "Nueva referencia",
     "createBenchmark": "Crear referencia",
     "scope": "Alcance",
@@ -1987,7 +2002,7 @@
     "noCohortValue": "sin valor del grupo"
   },
   "insights": {
-    "description": "Hallazgos generados por IA a partir de sus encuestas y microclimas",
+    "description": "Generado a partir de las respuestas de esta empresa. Cada hallazgo nombra la evidencia de la que proviene y puede descartarse con un motivo.",
     "insightTitle": "Título",
     "priority": "Prioridad",
     "typeTrend": "Tendencia",

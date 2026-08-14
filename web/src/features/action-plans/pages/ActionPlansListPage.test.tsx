@@ -7,10 +7,28 @@ import type { ActionPlan } from '../api/actionPlans'
 import { TranslationProvider } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import {
+
   CompanyContextProvider,
   COMPANY_CONTEXT_STORAGE_KEY,
   useCompanyContext,
 } from '../../../company-context'
+
+/**
+ * The URLs of requests for company-scoped DATA.
+ *
+ * The company-name eyebrow (`useCompanyName`) reads the caller's OWN `/profile` on every
+ * page that carries it, and that request addresses no company and takes no id — it is
+ * precisely not the thing these scoping guards are about. So it is filtered out here by
+ * name rather than by loosening the assertions to "some request was fine", which would
+ * have let a genuinely wrong company-scoped call through unnoticed.
+ */
+function dataRequestUrls(): string[] {
+  return vi
+    .mocked(fetch)
+    .mock.calls.map((call) => String(call[0]))
+    .filter((url) => !/\/profile(\?|$)/.test(url))
+}
+
 
 /**
  * #124. This page is the one every other lane's TODO pointed at: it was the
@@ -30,6 +48,12 @@ function tokenFor(claims: Record<string, unknown>): string {
 function routeFetch() {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
     const url = String(input)
+    // The company-name eyebrow reads the caller's own profile. Served here so the header
+    // renders what the design asks for; it is deliberately excluded from the scoping
+    // assertions by `dataRequestUrls`.
+    if (/\/profile(\?|$)/.test(url)) {
+      return Promise.resolve(new Response(JSON.stringify({ companyName: 'Acme Corporation' }), { status: 200 }))
+    }
     const body = url.includes('/action-plan-templates')
       ? { templates: [] }
       : { actionPlans: [{ id: 'p1', title: 'Raise engagement', companyId: 'chosen-co', departmentId: null, dueDate: '2026-12-01T00:00:00Z', status: 'not_started', priority: 'high', createdAt: '2026-01-01T00:00:00Z' }] }
@@ -82,7 +106,7 @@ describe('ActionPlansListPage company scoping', () => {
     renderPage()
 
     expect(await screen.findByText('Choose a company')).toBeTruthy()
-    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+    expect(dataRequestUrls()).toEqual([])
   })
 
   it('never falls back to a super_admin own companyId claim', async () => {
@@ -93,7 +117,7 @@ describe('ActionPlansListPage company scoping', () => {
     renderPage()
 
     expect(await screen.findByText('Choose a company')).toBeTruthy()
-    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+    expect(dataRequestUrls()).toEqual([])
   })
 
   it('loads the company a super_admin selected, and asks the API for that one', async () => {
@@ -102,7 +126,7 @@ describe('ActionPlansListPage company scoping', () => {
     renderPage()
 
     expect(await screen.findByText('Raise engagement')).toBeTruthy()
-    const urls = vi.mocked(fetch).mock.calls.map((call) => String(call[0]))
+    const urls = dataRequestUrls()
     expect(urls.some((url) => url.includes('companyId=chosen-co'))).toBe(true)
     expect(urls.some((url) => url.includes('their-own-row'))).toBe(false)
   })
@@ -114,8 +138,8 @@ describe('ActionPlansListPage company scoping', () => {
     setToken(tokenFor({ role: 'company_admin', companyId: 'their-co' }))
     renderPage()
 
-    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled())
-    const urls = vi.mocked(fetch).mock.calls.map((call) => String(call[0]))
+    await waitFor(() => expect(dataRequestUrls().length).toBeGreaterThan(0))
+    const urls = dataRequestUrls()
     expect(urls.every((url) => url.includes('companyId=their-co'))).toBe(true)
     expect(urls.some((url) => url.includes('someone-elses-co'))).toBe(false)
   })
@@ -128,7 +152,7 @@ describe('ActionPlansListPage company scoping', () => {
     expect((await screen.findByRole('alert')).textContent).toBe(
       'No company is associated with your account.',
     )
-    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+    expect(dataRequestUrls()).toEqual([])
   })
 })
 
@@ -488,5 +512,22 @@ describe('ActionPlansListPage listing surface', () => {
     expect(
       vi.mocked(fetch).mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST'),
     ).toBe(false)
+  })
+})
+
+describe('the company-name eyebrow', () => {
+  /**
+   * The brief puts the COMPANY on this screen's eyebrow, not the nav section. Left to
+   * itself `PageTopBar` derives "Workspace", so this is a prop the page has to pass, and
+   * deleting it is silent -- every other test in this file passed with it removed.
+   */
+  it('names the company, not the nav section', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: 'their-co' }))
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe('Acme Corporation')
+    })
   })
 })

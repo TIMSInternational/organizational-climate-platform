@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { getSuperAdminDashboard } from '../api/dashboard'
 import { useDashboardData } from '../useDashboardData'
-import { calendarDay } from '../calendarDay'
+import { calendarDay } from '../../../lib/calendarDay'
 import DashboardState from './DashboardState'
 import { KpiRow, MonoReadings, SectionHeading } from './dashboardGrammar'
 import { useTranslation } from '../../../i18n'

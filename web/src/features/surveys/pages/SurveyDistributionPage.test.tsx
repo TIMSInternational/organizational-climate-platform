@@ -263,8 +263,10 @@ describe('SurveyDistributionPage', () => {
     expect(screen.getByRole('heading', { name: 'Spanish' })).toBeTruthy()
 
     const urls = fetchMock.mock.calls.map((call) => String(call[0]))
-    expect(urls).toContain('undefined/surveys/s1?lang=en')
-    expect(urls).toContain('undefined/surveys/s1?lang=es')
+    // Path and query only -- see the note in SurveyResultsPage.test.tsx on why the API
+    // base is not pinned here.
+    expect(urls.some((url) => /\/surveys\/s1\?lang=en$/.test(url))).toBe(true)
+    expect(urls.some((url) => /\/surveys\/s1\?lang=es$/.test(url))).toBe(true)
   })
 
   it('surfaces a failed action instead of leaving the page looking successful', async () => {

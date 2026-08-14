@@ -26,6 +26,15 @@ function row(overrides: Partial<SurveyListItem> = {}): SurveyListItem {
   }
 }
 
+/**
+ * The company-name eyebrow reads the caller's own `/profile`. It is answered separately
+ * from the survey list because a single `Response` cannot serve both — see the note on the
+ * mock conversion below.
+ */
+function profileResponse() {
+  return new Response(JSON.stringify({ companyName: 'Acme Corporation' }), { status: 200 })
+}
+
 function ok(...rows: SurveyListItem[]) {
   return new Response(JSON.stringify({ surveys: rows }), { status: 200 })
 }
@@ -41,7 +50,11 @@ function renderPage() {
 }
 
 function lastUrl(fetchMock: ReturnType<typeof vi.fn>): string {
-  return String(fetchMock.mock.calls[fetchMock.mock.calls.length - 1][0])
+  // The SURVEY request, not merely the most recent one: the company-name eyebrow's
+  // /profile lookup can land last, and an assertion about survey scoping that read it
+  // would pass no matter what this page sent.
+  const urls = fetchMock.mock.calls.map((call) => String(call[0])).filter((url) => !url.includes('/profile'))
+  return urls[urls.length - 1]
 }
 
 beforeEach(() => {
@@ -63,7 +76,9 @@ describe('SurveysListPage', () => {
     // companyId, and overwrites the scope with their own company for anyone else. So
     // omitting it is correct for both roles — and it is why this page needs neither a
     // role gate nor a claim read, unlike /action-plans.
-    const fetchMock = vi.fn().mockResolvedValue(ok(row()))
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row())),
+    )
     vi.stubGlobal('fetch', fetchMock)
     renderPage()
 
@@ -78,7 +93,9 @@ describe('SurveysListPage', () => {
     // server's.
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(ok(row({ status: 'active' }), row({ id: 's2', title: 'Next quarter', status: 'scheduled' })))
+      .mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row({ status: 'active' }), row({ id: 's2', title: 'Next quarter', status: 'scheduled' }))),
+    )
     vi.stubGlobal('fetch', fetchMock)
     renderPage()
     await screen.findByText('Q3 climate survey')
@@ -94,9 +111,11 @@ describe('SurveysListPage', () => {
       'fetch',
       vi
         .fn()
-        .mockResolvedValue(
+        .mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : 
           ok(row({ status: 'active' }), row({ id: 's2', title: 'Next quarter', status: 'scheduled' })),
         ),
+    ),
     )
     renderPage()
     await screen.findByText('Q3 climate survey')
@@ -115,9 +134,11 @@ describe('SurveysListPage', () => {
       'fetch',
       vi
         .fn()
-        .mockResolvedValue(
+        .mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : 
           ok(row({ status: 'active' }), row({ id: 's2', title: 'Next quarter', status: 'scheduled' })),
         ),
+    ),
     )
     renderPage()
     await screen.findByText('Q3 climate survey')
@@ -136,7 +157,9 @@ describe('SurveysListPage', () => {
   })
 
   it('marks the selected chip with aria-pressed, so the state is not carried by colour alone', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(row({ status: 'active' }))))
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row({ status: 'active' }))),
+    ))
     renderPage()
     await screen.findByText('Q3 climate survey')
 
@@ -149,7 +172,9 @@ describe('SurveysListPage', () => {
   it('does not refetch on every keystroke in the search box', async () => {
     // Draft-vs-applied filter state. Typing eight characters must not issue eight
     // requests.
-    const fetchMock = vi.fn().mockResolvedValue(ok(row()))
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row())),
+    )
     vi.stubGlobal('fetch', fetchMock)
     renderPage()
     await screen.findByText('Q3 climate survey')
@@ -167,7 +192,9 @@ describe('SurveysListPage', () => {
     // list would promise filters that match nothing.
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(ok(row(), row({ id: 's2', title: 'Weekly pulse', type: 'pulse' }))),
+      vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row(), row({ id: 's2', title: 'Weekly pulse', type: 'pulse' }))),
+    ),
     )
     renderPage()
     await screen.findByText('Weekly pulse')
@@ -179,7 +206,9 @@ describe('SurveysListPage', () => {
   })
 
   it('degrades a null targetAudienceCount to the bare count, never a fabricated denominator', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(row({ targetAudienceCount: null }))))
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row({ targetAudienceCount: null }))),
+    ))
     renderPage()
 
     await screen.findByText('Q3 climate survey')
@@ -193,7 +222,9 @@ describe('SurveysListPage', () => {
     // while Responses tested only for null and printed "5 of 0" in the same row.
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(ok(row({ responseCount: 5, targetAudienceCount: 0 }))),
+      vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row({ responseCount: 5, targetAudienceCount: 0 }))),
+    ),
     )
     renderPage()
     await screen.findByText('Q3 climate survey')
@@ -214,7 +245,9 @@ describe('SurveysListPage', () => {
     // the evidence that it stopped; this is the evidence it stays stopped.
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(ok(row({ responseCount: 175, targetAudienceCount: 208 }))),
+      vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row({ responseCount: 175, targetAudienceCount: 208 }))),
+    ),
     )
     renderPage()
 
@@ -232,7 +265,9 @@ describe('SurveysListPage', () => {
     // min-content width an auto-layout table column is sized from. Rendering it at
     // 1024px is what established that; happy-dom cannot tell the two apart.
     const long = 'Leadership360DegreeFeedbackAndCalibrationCycleForAllPeopleManagers'
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(row({ title: long }))))
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row({ title: long }))),
+    ))
     renderPage()
 
     expect((await screen.findByText(long)).className).toContain('wrap-anywhere')
@@ -243,7 +278,9 @@ describe('SurveysListPage', () => {
     // quantity twice. The figure is the reading, and it is set in the mono face.
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(ok(row({ responseCount: 175, targetAudienceCount: 208 }))),
+      vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row({ responseCount: 175, targetAudienceCount: 208 }))),
+    ),
     )
     const { container } = renderPage()
     await screen.findByText('Q3 climate survey')
@@ -259,7 +296,9 @@ describe('SurveysListPage', () => {
   it('clamps the bar at full while still printing a participation above 100', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(ok(row({ responseCount: 56, targetAudienceCount: 50 }))),
+      vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row({ responseCount: 56, targetAudienceCount: 50 }))),
+    ),
     )
     const { container } = renderPage()
     await screen.findByText('Q3 climate survey')
@@ -272,7 +311,9 @@ describe('SurveysListPage', () => {
   it('draws no bar at all when the survey declares no expected audience', async () => {
     // A bar at zero would say "nobody responded", which is a different statement from
     // "there is nothing to measure against".
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(row({ targetAudienceCount: null }))))
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row({ targetAudienceCount: null }))),
+    ))
     const { container } = renderPage()
     await screen.findByText('Q3 climate survey')
 
@@ -281,7 +322,9 @@ describe('SurveysListPage', () => {
   })
 
   it('names each row action for the survey it opens', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(row())))
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row())),
+    ))
     renderPage()
 
     const link = await screen.findByRole('link', { name: 'Open Q3 climate survey' })
@@ -290,7 +333,9 @@ describe('SurveysListPage', () => {
 
   it('falls back to a label when a survey has no title in any language', async () => {
     // The resolver returns null rather than an empty string or a key path (#195).
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(row({ title: null }))))
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row({ title: null }))),
+    ))
     renderPage()
 
     expect(await screen.findByText('Untitled survey')).toBeTruthy()
@@ -307,5 +352,27 @@ describe('SurveysListPage', () => {
     expect(await screen.findByText('Boom')).toBeTruthy()
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(await screen.findByText('Q3 climate survey')).toBeTruthy()
+  })
+})
+
+describe('the company-name eyebrow', () => {
+  /**
+   * The brief puts the COMPANY on this screen's eyebrow, not the nav section. It comes
+   * from the caller's own `/profile`, the one source every role that can open this screen
+   * is permitted to read -- `/admin/companies/{id}` would 403 for a leader.
+   */
+  it('names the company, not the nav section', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((input: RequestInfo | URL) =>
+        Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row())),
+      ),
+    )
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe('Acme Corporation')
+    })
   })
 })

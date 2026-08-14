@@ -166,6 +166,7 @@ export default function DemographicFieldsPage() {
   return (
     <div>
       <PageTopBar
+        eyebrow={t('navigation.companyAdministration')}
         title={t('navigation.demographicFields')}
         description={t('demographicFields.pageDescription', { threshold: FLOOR })}
         breadcrumbs={[

@@ -22,6 +22,9 @@
 
   /* -- Surfaces ---------------------------------------------------------- */
   --color-surface-outer: var(--admin-bg-outer);
+  /* The application chrome's ground. NOT `--admin-bg-outer`: that one still belongs to
+     the sign-in and survey-answering screens, which are not chrome. */
+  --color-surface-shell: var(--admin-bg-shell);
   --color-surface-panel: var(--admin-bg-panel);
   --color-surface-card: var(--admin-bg-card);
   --color-surface-card-hover: var(--admin-bg-card-hover);

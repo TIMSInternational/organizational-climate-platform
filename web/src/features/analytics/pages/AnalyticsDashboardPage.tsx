@@ -9,7 +9,7 @@ import { getToken } from '../../../auth/token'
 import { decodeJwtPayload } from '../../../auth/jwt'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
-import { KPIDisplay, type Kpi } from '../../../components/charts'
+import { KpiTile, type Kpi } from '../../../components/charts'
 import {
   Alert,
   AlertDescription,
@@ -18,6 +18,9 @@ import {
   NetworkError,
   SkeletonText,
 } from '../../../components/ui'
+import { ArrowRight } from 'lucide-react'
+import { Link } from 'react-router'
+import { KpiRow, SectionHeading } from '../../dashboard/components/dashboardGrammar'
 
 /**
  * The analytics dashboard for one company: benchmarks, and the AI insights raised against
@@ -165,12 +168,42 @@ export default function AnalyticsDashboardPage() {
         </Alert>
       )}
 
-      <KPIDisplay
-        kpis={kpis}
-        title={t('analytics.overview')}
-        locale={locale}
-        isLoading={benchmarksLoading || insightsLoading}
-      />
+      {/* The redesign's flat strip. `KpiTile` has no `action` prop and does not need one:
+          its sub-line takes a node, so the "Continue →" link this band exists for becomes
+          the line under each reading instead of a link on a card's floor. Nothing is lost
+          in the conversion, which was the only reason this screen had stayed on the card
+          grid.
+
+          The skeleton replaces `KPIDisplay`'s `isLoading`: a strip of tiles reading zero
+          while two requests are still in flight is a screen stating three wrong facts. */}
+      <SectionHeading>{t('analytics.overview')}</SectionHeading>
+      {benchmarksLoading || insightsLoading ? (
+        <SkeletonText lines={2} />
+      ) : (
+        <KpiRow>
+          {kpis.map((kpi) => (
+            <KpiTile
+              key={kpi.id}
+              label={kpi.label}
+              value={kpi.value}
+              higherIsBetter={kpi.higherIsBetter}
+              locale={locale}
+              sub={
+                kpi.action ? (
+                  <Link
+                    to={kpi.action.href}
+                    className="inline-flex items-center gap-1 font-medium text-accent-blue no-underline hover:underline"
+                  >
+                    {kpi.action.label}
+                    {/* Decorative: the link text already says where it goes. */}
+                    <ArrowRight aria-hidden="true" className="size-3" />
+                  </Link>
+                ) : undefined
+              }
+            />
+          ))}
+        </KpiRow>
+      )}
 
       <H2>{t('analytics.benchmarks')}</H2>
       {benchmarksError ? (

@@ -15,7 +15,7 @@ import {
 import DashboardState from './DashboardState'
 import { KpiRow, MonoReadings, SectionHeading } from './dashboardGrammar'
 import DashboardSurveyTable from './DashboardSurveyTable'
-import { calendarDay } from '../calendarDay'
+import { calendarDay } from '../../../lib/calendarDay'
 import { acceptsResponses } from '../../surveys/surveyVocabulary'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { JourneyTimeline, PageTopBar, QuickActions, type JourneyStep, type QuickAction } from '../../../components/layout'

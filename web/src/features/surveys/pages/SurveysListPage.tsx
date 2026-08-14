@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCompanyName } from '../../../company-context/useCompanyName'
 import { listSurveys, type SurveyListItem } from '../api/surveys'
 import SurveyList from '../components/SurveyList'
 import SurveyFilters from '../components/SurveyFilters'
@@ -48,6 +49,7 @@ import { Button, LoadingRegion, NetworkError, SkeletonText } from '../../../comp
  */
 export default function SurveysListPage() {
   const { t } = useTranslation()
+  const companyName = useCompanyName()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [surveys, setSurveys] = useState<SurveyListItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -102,6 +104,8 @@ export default function SurveysListPage() {
   return (
     <div>
       <PageTopBar
+        // The design's eyebrow here is the company, not the nav section.
+        eyebrow={companyName}
         title={t('navigation.surveys')}
         description={t('surveys.surveyManagementDesc')}
         actions={

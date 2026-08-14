@@ -133,7 +133,14 @@ public class TrackingInternalEndpointsTests : IAsyncLifetime
 
         var child = Assert.Single(envelope.Data.Nodos, n => n.Nombre == "Engineering");
         Assert.Equal(_legacyChildNodoId, child.NodoId);
-        Assert.Equal(3, child.CantidadColaboradores);
+        // ONE, not the three this department's `employee_count` column claims. The fixture
+        // sets that column to 3 and then seeds a single user, and the divergence is
+        // deliberate: nothing in the product has ever written `employee_count`, so it is 0
+        // in every real database and any value it holds here is fiction. Reading it made
+        // this feed publish a headcount to an external consumer that no user table agreed
+        // with. Asserting the counted value against a column that disagrees is what stops
+        // the projection quietly going back to `d.EmployeeCount`.
+        Assert.Equal(1, child.CantidadColaboradores);
         Assert.Equal(parent.NodoId, child.NodoPadreId);
         Assert.Equal(_legacyManagerPersonaId, child.LiderId);
     }

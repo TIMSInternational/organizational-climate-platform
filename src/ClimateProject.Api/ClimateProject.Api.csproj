@@ -19,6 +19,15 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!--
+      The id of the local user-secrets store. NOT a secret itself: it names a file under
+      ~/.microsoft/usersecrets/ which never enters the repository. Without this line the
+      Development configuration carries no InternalApiKey and the host refuses to start,
+      so the API could be run only from the single working copy where somebody had added
+      it by hand and left it uncommitted. A fresh clone, CI, or any second worktree got
+      "Missing InternalApiKey configuration" and no indication of the cause.
+    -->
+    <UserSecretsId>727a5cc7-ac91-4063-83eb-1255759d052d</UserSecretsId>
   </PropertyGroup>
 
   <!--

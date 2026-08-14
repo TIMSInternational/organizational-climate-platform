@@ -545,7 +545,7 @@
     "creating": "Creating...",
     "createCompany": "Create Company",
     "companyDashboard": "Company Dashboard",
-    "organizationInsights": "Organization-wide insights and management",
+    "organizationInsights": "Where the organisation stands today, and the one thing most worth your attention.",
     "searchEmployeesDepartments": "Search surveys, employees, departments...",
     "searchResults": "Search Results",
     "totalEmployees": "Total Employees",
@@ -654,7 +654,6 @@
     "editCompany": "Edit company",
     "manageUsers": "Manage users",
     "manageDemographicFields": "Manage demographic fields",
-    "viewReports": "View reports",
     "viewAnalytics": "View analytics",
     "demographicFields": "Demographic fields",
     "companyProfileAdminOnly": "Company profile details are only visible to a platform administrator.",
@@ -928,6 +927,7 @@
     "selectLanguage": "Select Language"
   },
   "microclimates": {
+    "eyebrow": "Live sessions",
     "title": "Title",
     "dashboardTitle": "Microclimates",
     "createMicroclimate": "Create Microclimate",
@@ -1195,7 +1195,7 @@
     "journeyLabel": "Microclimate lifecycle",
     "journeyDraft": "Questions and audience are set. Nothing is being collected yet.",
     "journeyActive": "Open for responses.",
-    "listDescription": "A short pulse you can run in a room. Results appear as people answer, and stay anonymous at the same floor of {minimum}.",
+    "listDescription": "A five-minute pulse you can run in a room. Results appear as people answer, and stay anonymous at the same floor of {minimum}.",
     "kpiLive": "Live now",
     "kpiLiveSub": "open for responses",
     "kpiDrafts": "Drafts",
@@ -1282,6 +1282,7 @@
     "home": "Home"
   },
   "notifications": {
+    "eyebrow": "Inbox",
     "title": "Notifications",
     "markAsRead": "Mark as Read",
     "markAllAsRead": "Mark All as Read",
@@ -1321,7 +1322,7 @@
       "saved": "Your notification preferences were saved.",
       "loadError": "Your notification preferences could not be loaded."
     },
-    "inboxDescription": "Everything the platform has sent you.",
+    "inboxDescription": "What changed while you were away.",
     "unreadOnly": "Unread only",
     "unread": "Unread",
     "read": "Read",
@@ -1351,7 +1352,7 @@
   },
   "profile": {
     "title": "Your profile",
-    "description": "Your account details, password, preferences and recent activity.",
+    "description": "Your details, how you are notified, and the devices holding a session.",
     "loadError": "Your profile could not be loaded.",
     "eyebrow": "Account",
     "accountTitle": "Details",
@@ -1496,6 +1497,8 @@
     "activeRate": "Active Rate"
   },
   "surveys": {
+    "templatesDescription": "Start from something that already works. Templates instantiate server-side, so the questions arrive intact.",
+    "templatesEyebrow": "Library",
     "title": "Surveys",
     "createSurvey": "Create Survey",
     "editSurvey": "Edit Survey",
@@ -1932,7 +1935,19 @@
     "invalidFormat": "Invalid format"
   },
   "benchmarks": {
-    "description": "Compare your results against global and company benchmarks",
+    "yourIndex": "Your index",
+    "cohortMedianLabel": "Cohort median",
+    "yourPercentile": "Your percentile",
+    "companiesCount": "{count} companies",
+    "byDimension": "By dimension",
+    "cohortMedianLegend": "cohort median",
+    "bandUpper": "Upper third",
+    "bandMiddle": "Middle third",
+    "bandLower": "Lower third",
+    "noCohortTitle": "No cohort to compare against yet",
+    "noCohortDescription": "A benchmark for this industry and company size has to exist before this company can be read against it.",
+    "records": "Benchmark records",
+    "description": "How this company reads against its industry cohort. The cohort is anonymised in both directions.",
     "newBenchmark": "New benchmark",
     "createBenchmark": "Create benchmark",
     "scope": "Scope",
@@ -1987,7 +2002,7 @@
     "noCohortValue": "no cohort value"
   },
   "insights": {
-    "description": "AI-generated findings from your survey and microclimate results",
+    "description": "Generated from this company\u2019s own responses. Every insight names the evidence it came from and can be dismissed with a reason.",
     "insightTitle": "Title",
     "priority": "Priority",
     "typeTrend": "Trend",

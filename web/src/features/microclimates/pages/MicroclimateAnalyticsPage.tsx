@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { calendarDay } from '../../../lib/calendarDay'
 import { Link } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { useCompanyScope } from '../../../company-context'
 import { PageTopBar } from '../../../components/layout'
 import {
   BarChart,
-  KPIDisplay,
+  KpiTile,
   PieChart,
   type ChartDatum,
   type Kpi,
@@ -27,6 +28,7 @@ import {
   statusBadgeVariant,
   statusLabel,
 } from '../microclimateVocabulary'
+import { KpiRow, SectionHeading } from '../../dashboard/components/dashboardGrammar'
 
 /** Sessions in the "responses by session" chart. Beyond this the labels collide. */
 const MAX_BARS = 10
@@ -162,12 +164,24 @@ export default function MicroclimateAnalyticsPage() {
             />
           ) : (
             <>
-              <KPIDisplay
-                kpis={summaryKpis(summary, t)}
-                columns={3}
-                locale={locale}
-                title={t('microclimates.summaryMetrics')}
-              />
+              {/* `SectionHeading` + `KpiRow`, the dashboards' grammar, in place of the old
+                  card grid. The heading was `KPIDisplay`'s own `title` prop; it becomes a
+                  real heading so the band is announced the same way every other section on
+                  the page is. Five readings wrap 4-then-1 at `xl` when an average
+                  participation rate exists — the row's count is fixed at four by design,
+                  and dropping a reading to make it even would be the worse trade. */}
+              <SectionHeading>{t('microclimates.summaryMetrics')}</SectionHeading>
+              <KpiRow>
+                {summaryKpis(summary, t).map((kpi) => (
+                  <KpiTile
+                    key={kpi.id}
+                    label={kpi.label}
+                    value={kpi.value}
+                    format={kpi.format}
+                    locale={locale}
+                  />
+                ))}
+              </KpiRow>
 
               <H2>{t('microclimates.analyticsResponsesBySession')}</H2>
               <BarChart
@@ -222,7 +236,7 @@ export default function MicroclimateAnalyticsPage() {
                             audience, so there is no rate rather than a rate of
                             nothing. */}
                         <td>{rate === null ? '—' : `${Math.round(rate)}%`}</td>
-                        <td>{new Date(microclimate.createdAt).toLocaleDateString(locale)}</td>
+                        <td>{calendarDay(Date.parse(microclimate.createdAt), locale)}</td>
                       </tr>
                     )
                   })}

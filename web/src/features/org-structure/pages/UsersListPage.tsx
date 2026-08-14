@@ -160,6 +160,7 @@ export default function UsersListPage() {
   return (
     <div>
       <PageTopBar
+        eyebrow={t('navigation.companyAdministration')}
         title={t('navigation.users')}
         description={t('users.rosterDescription')}
         // /admin/companies/:id is loadable by a super_admin and by the

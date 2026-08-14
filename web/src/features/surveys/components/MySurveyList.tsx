@@ -2,6 +2,7 @@ import type { MySurveyListItem } from '../api/surveys'
 import { useTranslation } from '../../../i18n'
 import { Badge, EmptyState, Table } from '../../../components/ui'
 import { typeLabel } from '../surveyVocabulary'
+import { calendarDay } from '../../../lib/calendarDay'
 
 interface MySurveyListProps {
   surveys: readonly MySurveyListItem[]
@@ -58,7 +59,7 @@ export default function MySurveyList({ surveys }: MySurveyListProps) {
             </td>
             <td>{typeLabel(t, survey.type)}</td>
             <td>{survey.questionCount}</td>
-            <td>{new Date(survey.endDate).toLocaleDateString(locale)}</td>
+            <td>{calendarDay(Date.parse(survey.endDate), locale)}</td>
             <td>
               <span className="flex flex-wrap gap-inline">
                 {/* Anonymity is the single fact a respondent most needs before they

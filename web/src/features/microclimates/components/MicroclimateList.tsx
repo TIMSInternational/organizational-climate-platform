@@ -5,6 +5,7 @@ import { Badge, EmptyState, Table } from '../../../components/ui'
 import { ProtectedCell } from '../../../components/charts'
 import { statusBadgeVariant, statusLabel } from '../microclimateVocabulary'
 import { MINIMUM_RESPONDENTS, participationPercent } from '../microclimatePrivacy'
+import { calendarDay } from '../../../lib/calendarDay'
 
 /**
  * The microclimate listing.
@@ -137,7 +138,7 @@ export default function MicroclimateList({ microclimates }: { microclimates: Mic
                 )}
               </td>
               <td className="font-mono tabular-nums text-fg-secondary">
-                {new Date(microclimate.createdAt).toLocaleDateString(locale)}
+                {calendarDay(Date.parse(microclimate.createdAt), locale)}
               </td>
             </tr>
           )

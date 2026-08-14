@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCompanyName } from '../../../company-context/useCompanyName'
+import { Plus } from 'lucide-react'
 import { Link } from 'react-router'
 import {
   createDepartment,
@@ -98,6 +100,7 @@ const FLOOR = 5
  */
 export default function DepartmentsPage() {
   const { t, locale } = useTranslation()
+  const companyName = useCompanyName()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const scope = useCompanyScope()
   const companyId = scope.companyId
@@ -224,6 +227,7 @@ export default function DepartmentsPage() {
     return (
       <div>
         <PageTopBar
+          eyebrow={companyName}
           title={t('navigation.departments')}
           description={t('departments.pageDescription', { threshold: FLOOR })}
         />
@@ -239,6 +243,7 @@ export default function DepartmentsPage() {
     return (
       <div>
         <PageTopBar
+          eyebrow={companyName}
           title={t('navigation.departments')}
           description={t('departments.pageDescription', { threshold: FLOOR })}
         />
@@ -250,6 +255,9 @@ export default function DepartmentsPage() {
   return (
     <div>
       <PageTopBar
+        // The design's eyebrow here is the company, not the nav section. All three of
+        // this page's headers get it, so the label does not vanish on the empty state.
+        eyebrow={companyName}
         title={t('navigation.departments')}
         description={t('departments.pageDescription', { threshold: FLOOR })}
         actions={
@@ -260,6 +268,9 @@ export default function DepartmentsPage() {
               setCreating((open) => !open)
             }}
           >
+            {/* The plus belongs to the create affordance, not to the button: this
+                one control toggles, and a "+ Cancel" would be nonsense. */}
+            {creating ? null : <Plus aria-hidden="true" />}
             {creating ? t('common.cancel') : t('departments.newDepartment')}
           </Button>
         }

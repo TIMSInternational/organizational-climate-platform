@@ -14,6 +14,7 @@ import {
   TableRow,
 } from '../../../components/ui'
 import { roleLabelKey } from '../labels'
+import { calendarDay } from '../../../lib/calendarDay'
 
 /**
  * The roster: who can see what.
@@ -135,7 +136,7 @@ export default function UserList({ users, departments, onEdit }: UserListProps) 
                   </TableCell>
                   <TableCell className="font-mono text-sm tabular-nums text-fg-secondary">
                     {user.lastLoginAt
-                      ? new Date(user.lastLoginAt).toLocaleDateString(locale)
+                      ? calendarDay(Date.parse(user.lastLoginAt), locale)
                       : t('users.neverSignedIn')}
                   </TableCell>
                   <TableCell className="text-right">

@@ -169,7 +169,9 @@ describe('SurveyResultsPage', () => {
     // participation counter beside the distributions could disagree with the one
     // beside the breakdowns while both were individually correct.
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(fetch).mock.calls[0][0]).toBe('undefined/surveys/s1/analytics?lang=en')
+    // Path and query, not the whole URL: pinning the base made this fail whenever
+    // VITE_API_BASE_URL was set, which is the normal state of a configured dev machine.
+    expect(String(vi.mocked(fetch).mock.calls[0][0])).toMatch(/\/surveys\/s1\/analytics\?lang=en$/)
   })
 
   it('shows participation, per-question results and the breakdown', async () => {

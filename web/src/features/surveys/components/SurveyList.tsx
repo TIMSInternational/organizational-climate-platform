@@ -6,6 +6,7 @@ import { cn } from '../../../lib/cn'
 import { Button, EmptyState, Table } from '../../../components/ui'
 import { statusLabel, typeLabel } from '../surveyVocabulary'
 import { surveyResponseReading } from '../surveyListView'
+import { calendarDay } from '../../../lib/calendarDay'
 
 interface SurveyListProps {
   surveys: readonly SurveyListItem[]
@@ -190,7 +191,7 @@ export default function SurveyList({ surveys }: SurveyListProps) {
                   )}
                 </td>
                 <td className="whitespace-nowrap font-mono tabular-nums text-fg-secondary">
-                  {new Date(survey.endDate).toLocaleDateString(locale)}
+                  {calendarDay(Date.parse(survey.endDate), locale)}
                 </td>
                 <td className="text-right">
                   {/* Named for the row it opens: five links all reading "Open" are

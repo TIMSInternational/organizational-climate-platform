@@ -269,3 +269,44 @@ describe('AnalyticsDashboardPage', () => {
     expect(document.querySelector('table')).toBeNull()
   })
 })
+
+describe('AnalyticsDashboardPage KPI strip', () => {
+  // Its own setup: this block sits outside the suite above, whose `beforeEach` is what
+  // installs the fetch mock.
+  beforeEach(() => {
+    setToken(tokenFor('company_admin'))
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    cleanup()
+    window.localStorage.clear()
+    vi.unstubAllGlobals()
+  })
+
+  /**
+   * The redesign's flat strip, asserted through `data-slot` rather than through label text
+   * -- the labels also appear in the panels below, so `getByText` could pass by matching
+   * one of those. `KPIDisplay` renders no `data-slot="kpi-tile"`, so reverting this screen
+   * to the old card grid fails here; without this the whole suite stayed green through the
+   * conversion, which is what makes it worth writing.
+   */
+  it('renders its readings as the redesign\u2019s KPI tiles', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse([benchmarkRow()]))
+      .mockResolvedValueOnce(jsonResponse([insightRow()]))
+    const { container } = renderPage()
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('[data-slot="kpi-tile"]').length).toBeGreaterThan(0)
+    })
+    // The band exists to link out to the pages its numbers live on. `KpiTile` has no
+    // `action` prop, so the links ride in the sub-line -- and if that were dropped in the
+    // conversion the screen would look right and do nothing.
+    const links = [...container.querySelectorAll('[data-slot="kpi-tile"] a')].map((a) =>
+      a.getAttribute('href'),
+    )
+    expect(links).toContain('/analytics/benchmarks')
+    expect(links).toContain('/analytics/ai-insights')
+  })
+})

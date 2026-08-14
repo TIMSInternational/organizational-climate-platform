@@ -399,20 +399,26 @@ describe('RoleBasedNav row states', () => {
   )
 
   it.each([".nav-row[data-nav-state='selected']", ".nav-sub-row[data-nav-state='selected']"])(
-    'fills %s with the accent, the rail’s only remaining selection affordance',
+    'fills %s with the accent FILL, the rail’s only remaining selection affordance',
     (selector) => {
       const declarations = declarationsFor(selector)
-      expect(declarations, `${selector} declares no fill`).toMatch(/background:\s*var\(--admin-accent-blue\)/)
+      expect(declarations, `${selector} declares no fill`).toMatch(/background:\s*var\(--admin-accent-blue-fill\)/)
       expect(declarations, `${selector} declares no on-accent text`).toMatch(/color:\s*var\(--admin-font-on-accent\)/)
     },
   )
 
+  /**
+   * The FILL token, not the identity accent. `tokens.css` says `--admin-font-on-accent`
+   * may only ever sit on the fill, and this rule broke that: white on `--admin-accent-blue`
+   * is 3.74:1, under AA for a 13px row. On the fill it is 5.47:1. Changed when the shell
+   * went dark, but it was wrong on the light rail too.
+   */
   it('keeps the selected fill on a hovered selected row', () => {
     // Same rule, reached through the `:hover` member of its selector list, so
     // this fails if only the resting selectors survive.
     for (const selector of [".nav-row[data-nav-state='selected']:hover", ".nav-sub-row[data-nav-state='selected']:hover"]) {
       expect(declarationsFor(selector), `${selector} does not keep the fill`).toMatch(
-        /background:\s*var\(--admin-accent-blue\)/,
+        /background:\s*var\(--admin-accent-blue-fill\)/,
       )
     }
   })

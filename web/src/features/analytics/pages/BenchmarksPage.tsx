@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import {
   addBenchmarkMetric,
   createBenchmark,
@@ -14,7 +15,6 @@ import { followPriorPeriodChain } from '../benchmarkAnalysis'
 import {
   SUPER_ADMIN,
   canWriteBenchmark,
-  isGlobalBenchmark,
   newBenchmarkCompanyId,
   readableBenchmarks,
   type BenchmarkScope,
@@ -29,7 +29,7 @@ import { decodeJwtPayload } from '../../../auth/jwt'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { Button, EmptyState, ErrorState } from '../../../components/ui'
-import { KpiTile } from '../../../components/charts'
+import CohortReadoutSection from '../components/CohortReadoutSection'
 
 /**
  * List, compare and trend the benchmarks the caller may read.
@@ -70,7 +70,8 @@ import { KpiTile } from '../../../components/charts'
  * tile, and counting the rows on screen makes that impossible by construction.
  */
 export default function BenchmarksPage() {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
+  const [searchParams] = useSearchParams()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const token = getToken()
   const claims = token ? decodeJwtPayload(token) : null
@@ -201,11 +202,20 @@ export default function BenchmarksPage() {
     return <ErrorState title={t('benchmarks.loadFailed')} description={error} />
   }
 
-  const globalCount = benchmarks.filter(isGlobalBenchmark).length
+  // Resolved exactly as `CohortReadoutSection` resolves it -- URL first, then the first
+  // readable benchmark -- so the eyebrow can never name a different cohort from the one
+  // the bars below are drawn against. The NAME is the descriptor ("Manufacturing ·
+  // 500-1000 staff"); industry and size live only on the detail, which the list omits.
+  const cohortLabel =
+    (benchmarks.find((benchmark) => benchmark.id === searchParams.get('cohort')) ?? benchmarks[0])
+      ?.name ?? null
 
   return (
     <div>
       <PageTopBar
+        // The design's eyebrow here is the cohort this company is read against, which is
+        // a property of the data rather than of the route.
+        eyebrow={cohortLabel}
         title={t('navigation.benchmarks')}
         description={t('benchmarks.description')}
         actions={
@@ -244,22 +254,14 @@ export default function BenchmarksPage() {
         />
       ) : (
         <>
-          {/* The KPI strip. Every one of these is counted from the list the page
-              already holds — nothing here is a second request, and nothing is a
-              figure the API does not carry. */}
-          <div className="grid grid-cols-1 gap-inline sm:grid-cols-2 xl:grid-cols-4">
-            <KpiTile label={t('analytics.kpiBenchmarks')} value={benchmarks.length} />
-            <KpiTile
-              label={t('analytics.scopeGlobal')}
-              value={globalCount}
-              sub={t('benchmarks.cohortAvailable')}
-            />
-            <KpiTile
-              label={t('analytics.scopeCompany')}
-              value={benchmarks.length - globalCount}
-            />
-            <KpiTile label={t('benchmarks.selected')} value={selectedIds.length} />
-          </div>
+          {/* The approved read-out: this company against its cohort. It replaces a strip
+              that counted benchmark RECORDS — a true set of numbers about the wrong
+              subject, since nobody opens Benchmarks to learn how many benchmarks exist.
+              The record admin below it is unchanged and still the only way to create one. */}
+          {companyId && (
+            <CohortReadoutSection companyId={companyId} benchmarks={benchmarks} locale={locale} />
+          )}
+
 
           <section className="mt-section">
             <h2 className="mb-inline text-base">{t('benchmarks.allBenchmarks')}</h2>

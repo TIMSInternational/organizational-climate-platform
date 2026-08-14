@@ -23,6 +23,7 @@ import {
   Table,
 } from '../../../components/ui'
 import { languageLabel, statusLabel, typeLabel } from '../surveyVocabulary'
+import { calendarDay } from '../../../lib/calendarDay'
 
 /**
  * One survey: structure, targeting, status and participation at a glance.
@@ -191,11 +192,11 @@ export default function SurveyDetailPage() {
           </tr>
           <tr>
             <th scope="row">{t('surveys.startDate')}</th>
-            <td>{new Date(survey.startDate).toLocaleDateString(locale)}</td>
+            <td>{calendarDay(Date.parse(survey.startDate), locale)}</td>
           </tr>
           <tr>
             <th scope="row">{t('surveys.endDate')}</th>
-            <td>{new Date(survey.endDate).toLocaleDateString(locale)}</td>
+            <td>{calendarDay(Date.parse(survey.endDate), locale)}</td>
           </tr>
           <tr>
             <th scope="row">{t('surveys.responses')}</th>
