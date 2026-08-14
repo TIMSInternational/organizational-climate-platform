@@ -1,7 +1,17 @@
 import type { ReactNode } from 'react'
-import { LanguageSwitcher } from '../../i18n'
-import { SkipLink } from '../ui'
+import { EyeOff, Waves } from 'lucide-react'
+import { LanguageSwitcher, useTranslation } from '../../i18n'
+import { Chip, SkipLink } from '../ui'
 import { ThemeSwitcher } from './ShellControls'
+
+/**
+ * The wordmark, split for its two-tone treatment. Same two halves as
+ * `SidebarBrand`, and `i18n/noHardcodedStrings.test.ts` already exempts both by
+ * name for the reason written out there: `CLIMA|TE` is one logotype, and where the
+ * seam falls is a property of the drawn mark rather than of the language.
+ */
+const BRAND_LEAD = 'CLIMA'
+const BRAND_TAIL = 'TE'
 
 /**
  * The frame the three respond flows share: `/survey/:id`, `/surveys/:id/respond`
@@ -31,11 +41,18 @@ import { ThemeSwitcher } from './ShellControls'
  * `AuthShell`: `ShellControls` is the only other place it has ever lived, and that
  * is inside the authenticated shell.
  *
- * ## The header carries the product name and nothing else
+ * ## The header carries the brand and the anonymity state, and nothing else
  *
- * No wordmark lockup, no navigation, no account. Somebody who followed a link out
- * of an email needs to know what site they are on; they need nothing else, and
- * anything else here would be a claim about a tenant.
+ * It used to carry the words "Organizational Climate Platform" in plain grey, with
+ * the two pickers floating beside them — no mark, no wordmark, nothing that says
+ * this is the same product that emailed the respondent. For most employees this is
+ * the *only* screen of this product they ever see, so it now opens on the lockup
+ * the signed-in rail opens on, and (when the survey is anonymous) on the chip that
+ * states it before the first question is read.
+ *
+ * Still no navigation and no account: somebody who followed a link out of an email
+ * needs to know what site they are on and that nobody can trace the answers back to
+ * them. Anything else here would be a claim about a tenant.
  */
 export interface RespondShellProps {
   /** Already-translated label for the skip link, e.g. "Skip to the survey". */
@@ -45,10 +62,27 @@ export interface RespondShellProps {
    * `/survey/:id` passes `survey`, which is the anchor its own test pins.
    */
   contentId?: string
+  /**
+   * Whether responses to the thing being answered are anonymous. Puts the
+   * "Anonymous" chip beside the lockup when it is.
+   *
+   * Defaults to **off**, deliberately. Anonymity is a per-survey setting the shell
+   * cannot know, and a chip that appears by default would be this page making the
+   * one promise it is least entitled to guess at. Callers that have the flag pass
+   * it; the ones that do not are unaffected.
+   */
+  anonymous?: boolean
   children: ReactNode
 }
 
-export function RespondShell({ skipLabel, contentId = 'respond', children }: RespondShellProps) {
+export function RespondShell({
+  skipLabel,
+  contentId = 'respond',
+  anonymous = false,
+  children,
+}: RespondShellProps) {
+  const { t } = useTranslation('surveyRespond')
+
   return (
     <div className="flex min-h-dvh flex-col bg-surface-outer">
       {/* First focusable thing on the page, so a keyboard user is not made to Tab
@@ -59,10 +93,15 @@ export function RespondShell({ skipLabel, contentId = 'respond', children }: Res
           is the only panel, and a filled bar here would read as a second surface
           with a seam between them. */}
       <header className="mx-auto flex w-full max-w-content flex-wrap items-center justify-between gap-inline px-gutter py-inline">
-        {/* The product name, which `i18n/noHardcodedStrings.test.ts` allows
-            explicitly: it is a proper noun and is not translated. */}
-        <span className="text-sm font-medium text-fg-secondary">
-          Organizational Climate Platform
+        <span className="flex flex-wrap items-center gap-inline">
+          <BrandLockup />
+          {/* Beside the lockup rather than inside the form, because it is the
+              answer to the question a respondent asks before they read anything:
+              can this come back to me. `Chip` requires the word, so the tint is
+              never the only carrier of it. */}
+          {anonymous ? (
+            <Chip tone="accent" label={t('anonymousChip')} icon={<EyeOff aria-hidden="true" />} />
+          ) : null}
         </span>
         <span className="flex flex-wrap items-center gap-inline">
           <LanguageSwitcher compact />
@@ -95,6 +134,63 @@ export function RespondShell({ skipLabel, contentId = 'respond', children }: Res
         {children}
       </main>
     </div>
+  )
+}
+
+/**
+ * The mark and the wordmark, with nothing attached to them.
+ *
+ * ## Why this exists rather than a call to `SidebarBrand`
+ *
+ * `SidebarBrand` is the *head of the rail*: it takes `collapsed` and
+ * `onToggleCollapsed` and draws a collapse toggle beside the lockup. Neither the
+ * respond header nor the sign-in card has a rail to collapse, so calling it would
+ * mean rendering a control that toggles nothing. Its `Mark` is a module-private
+ * function there, so the lockup itself could not be reached without exporting it.
+ *
+ * So the lockup is defined once, here, and the two shells that are not
+ * `AdminLayout` — the respond header and `auth/LoginPage` — both render *this*.
+ * Every part of it is `SidebarBrand`'s verbatim: the same `Waves` glyph (this
+ * product has no logo asset; `public/favicon.svg` is still the stock Vite bolt),
+ * the same 28px tinted tile, the same two-tone `CLIMA|TE`. The one deliberate
+ * follow-up is that `SidebarBrand` should call this too rather than keep its own
+ * copy — that is an edit to the rail, with the rail's own tests, not a side effect
+ * of giving the respondent a wordmark.
+ *
+ * ## The two sizes that are not tokens
+ *
+ * The tile's `rounded-md` is 6px against `SidebarBrand`'s one-off `borderRadius: 7`
+ * (7 is between `--admin-radius-lg` and `--admin-radius-xl` and has no token), and
+ * the wordmark is `text-xl` — 16px against the prototype's 15. Both round to the
+ * nearest existing step rather than earning a one-off value; the 28px tile, which
+ * is what makes the lockup line up with the controls beside it, is exact.
+ *
+ * ## Contrast
+ *
+ * `text-accent-blue` is 3.74:1 on the panel, under AA for text this size. That is
+ * correct here and nowhere else on these pages: WCAG 1.4.3 exempts text that is
+ * part of a logotype, and this half-word is the drawn mark rather than copy —
+ * which is also why `features/surveys/respondContrast.test.ts` measures the chip
+ * word and the prose but not this. Nothing else in either shell inks with it.
+ */
+export function BrandLockup() {
+  return (
+    <span data-slot="brand-lockup" className="flex items-center gap-inline">
+      {/* `aria-hidden` for `SidebarBrand`'s reason: the wordmark beside it already
+          names the product, and an announced "Waves" would be noise. */}
+      <span
+        aria-hidden="true"
+        className="grid size-icon-box shrink-0 place-items-center rounded-md bg-accent-blue-soft text-accent-blue"
+      >
+        <Waves className="size-icon" />
+      </span>
+      {/* One `<span>`, two coloured halves — not two words with a space, which is
+          what a screen reader would otherwise announce. */}
+      <span className="whitespace-nowrap text-xl font-bold tracking-tight">
+        <span className="text-fg-primary">{BRAND_LEAD}</span>
+        <span className="text-accent-blue">{BRAND_TAIL}</span>
+      </span>
+    </span>
   )
 }
 

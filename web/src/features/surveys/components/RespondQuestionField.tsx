@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { Textarea } from '../../../components/ui'
+// Not re-exported from `components/ui`, so it is imported by path — the same shape
+// as every other primitive that is not in the barrel yet.
+import { SegmentedScale } from '../../../components/ui/SegmentedScale'
 import {
+  DEFAULT_SCALE_MAX,
+  DEFAULT_SCALE_MIN,
+  NUMERIC_SCALE_TYPES,
   answerShapeOf,
   choicesFor,
   isAnswered,
@@ -37,6 +43,14 @@ export interface RespondQuestionFieldProps {
  * label association for free. `index.css` already styles both in the element layer,
  * with `accent-color: var(--admin-accent-blue)`, so they are themed in light and dark
  * without a single class here. `MicroclimateRespondPage` set the same precedent.
+ *
+ * **One shape is the exception, and it is the design's:** a likert or rating
+ * question with no authored options is a bare 1–5 scale, and it renders as
+ * `SegmentedScale` — a `role="radiogroup"` of full-width segments. The natives were
+ * ~13px targets on the screen most people answer on a phone, and their two anchor
+ * words sat under the first two dots rather than under the ends of the row. See
+ * `isNumericScale` for exactly which questions that is, and `SegmentedScale` for
+ * why it is a radiogroup rather than the prototype's row of toggle buttons.
  *
  * ## Every control emits the stable option value
  *
@@ -147,6 +161,14 @@ export default function RespondQuestionField({
             onChange={onChange}
             onAnnounce={onAnnounce}
           />
+        ) : isNumericScale(question) ? (
+          <ScaleAnswer
+            question={question}
+            answer={answer}
+            disabled={disabled}
+            legendId={legendId}
+            onChange={onChange}
+          />
         ) : (
           <ChoiceAnswer
             question={question}
@@ -202,6 +224,67 @@ function TextAnswer({ question, answer, disabled, invalid, errorId, onChange }: 
         onChange={(event) => onChange({ ...answer, value: event.target.value })}
       />
     </div>
+  )
+}
+
+/**
+ * Whether the question is answered on a bare numeric scale.
+ *
+ * A likert or rating question that configures no option set — exactly the case
+ * `choicesFor` answers by generating the points between `scaleMin` and `scaleMax`.
+ * A likert question that DOES carry authored options is a set of labelled choices
+ * and keeps the radio treatment, because a segment can hold "1" and not "Strongly
+ * disagree with the way this is handled".
+ *
+ * The bounds are checked here rather than left to `SegmentedScale`, which renders
+ * nothing for an empty scale: an inverted `scaleMax < scaleMin` would otherwise
+ * leave the question with no control at all instead of falling through to the
+ * choice branch, which is what it does today.
+ */
+function isNumericScale(question: SurveyRespondQuestion): boolean {
+  if (!NUMERIC_SCALE_TYPES.includes(question.type)) return false
+  if ((question.options?.length ?? 0) > 0) return false
+  return (question.scaleMax ?? DEFAULT_SCALE_MAX) >= (question.scaleMin ?? DEFAULT_SCALE_MIN)
+}
+
+/**
+ * The 1–5 scale as the approved employee design draws it: five full-width segments
+ * with the anchor words under the ENDS of the row.
+ *
+ * It replaces five native radios ~13px across — far under the 24px WCAG 2.2 target
+ * minimum — with the two anchors floating under the first two of them, reading as
+ * two unrelated labels rather than as the ends of a scale. `SegmentedScale` keeps
+ * the radio-group semantics the natives gave for free (one tab stop, arrow keys,
+ * `aria-checked`) and emits the same stable codes `choicesFor` produces, so nothing
+ * about the submitted payload changes.
+ *
+ * `labelledBy` is the question's own `<legend>`: the group is named by the question
+ * it answers, exactly as the `<fieldset>` named the radios.
+ */
+function ScaleAnswer({
+  question,
+  answer,
+  disabled,
+  legendId,
+  onChange,
+}: Pick<AnswerControlProps, 'question' | 'answer' | 'disabled' | 'onChange'> & {
+  legendId: string
+}) {
+  return (
+    <SegmentedScale
+      className="mt-2"
+      min={question.scaleMin ?? DEFAULT_SCALE_MIN}
+      max={question.scaleMax ?? DEFAULT_SCALE_MAX}
+      // The author's own anchor words, which are content rather than copy. A survey
+      // that set neither gets an unannotated row instead of an invented pair.
+      minLabel={question.scaleLabelMin ?? ''}
+      maxLabel={question.scaleLabelMax ?? ''}
+      value={answer?.value ?? null}
+      required={question.required}
+      disabled={disabled}
+      labelledBy={legendId}
+      onChange={(value) => onChange({ ...answer, value })}
+    />
   )
 }
 

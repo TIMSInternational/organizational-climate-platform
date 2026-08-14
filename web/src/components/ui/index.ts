@@ -197,3 +197,9 @@ export { LiveRegion, type LiveRegionProps } from './live-region'
 // Date selection (#77 follow-up: originally skipped, ported with locale wiring).
 export { Calendar, type CalendarProps } from './calendar'
 export { DatePicker, type DatePickerProps } from './date-picker'
+
+// The likert/rating control the employee redesign introduced. Exported here like
+// every other primitive so callers stop deep-importing the module path — the
+// respond form and the microclimate page both reached for it before it was in the
+// barrel, which is the moment a primitive has earned its place in one.
+export { SegmentedScale, type SegmentedScaleProps } from './SegmentedScale'

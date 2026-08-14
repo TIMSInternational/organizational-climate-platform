@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import DashboardPage from './DashboardPage'
 import { TranslationProvider } from '../../../i18n'
@@ -7,6 +7,7 @@ import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../co
 import { setToken } from '../../../auth/token'
 import type {
   CompanyAdminDashboard,
+  DashboardPendingSurvey,
   DepartmentAdminDashboard,
   EmployeeDashboard,
   SuperAdminDashboard,
@@ -17,8 +18,40 @@ function tokenFor(role: string, companyId = 'c1'): string {
   return `header.${btoa(JSON.stringify({ role, companyId }))}.signature`
 }
 
-function jsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), { status: 200 })
+/**
+ * Answers `fetch` from the URL, with a fresh `Response` on every call.
+ *
+ * Both halves are load-bearing, and each of them replaces a way the previous stub was
+ * wrong rather than merely inconvenient.
+ *
+ * **By URL, not by call order.** The employee's Home makes two requests — its own payload
+ * and `LastOutcomePanel`'s `/dashboard/employee/last-outcome` — and the panel is a child,
+ * so *its* effect fires first. A stub that answered the first call with the dashboard
+ * payload therefore handed the panel a body with no `plansOpenedSince` on it and took the
+ * whole page down. Which request lands first is not something the page promises; the URL
+ * it asks for is.
+ *
+ * **A fresh `Response` per call.** A body may be read once, so a single shared instance
+ * serves whoever gets there first and hands everybody after them a consumed body — which
+ * `authFetch` reports as "Request failed: 503" in place of the server's own message, and
+ * which would make a Retry that genuinely re-requested indistinguishable from one that did
+ * nothing at all.
+ *
+ * `lastOutcome` defaults to `null` — the endpoint's own answer for "this company has never
+ * closed a survey", which keeps the panel silent in the cases that are not about it.
+ */
+function serves(
+  dashboard: unknown,
+  { status = 200, lastOutcome = null }: { status?: number; lastOutcome?: unknown } = {},
+): void {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const forPanel = String(input).includes('/last-outcome')
+    return Promise.resolve(
+      new Response(JSON.stringify(forPanel ? lastOutcome : dashboard), {
+        status: forPanel ? 200 : status,
+      }),
+    )
+  })
 }
 
 function superAdminPayload(): SuperAdminDashboard {
@@ -110,16 +143,24 @@ function employeePayload(overrides: Partial<EmployeeDashboard> = {}): EmployeeDa
     completedSurveyCount: 3,
     unreadNotificationCount: 2,
     nextDeadline: '2026-02-01T00:00:00Z',
-    pendingSurveys: [
-      {
-        id: 's1',
-        title: 'Company-wide pulse',
-        type: 'general_climate',
-        startDate: '2026-01-01T00:00:00Z',
-        endDate: '2026-02-01T00:00:00Z',
-        questionCount: 8,
-      },
-    ],
+    pendingSurveys: [pendingSurvey()],
+    ...overrides,
+  }
+}
+
+/** One survey the reader still owes an answer to. */
+function pendingSurvey(overrides: Partial<DashboardPendingSurvey> = {}): DashboardPendingSurvey {
+  return {
+    id: 's1',
+    title: 'Company-wide pulse',
+    type: 'general_climate',
+    startDate: '2026-01-01T00:00:00Z',
+    endDate: '2026-02-01T00:00:00Z',
+    questionCount: 8,
+    // The survey's own setting. False by default, like `SurveySettings`'s own default:
+    // nothing routed through this page turns on the anonymity chip, and a fixture that
+    // promised anonymity everywhere would be the wrong thing to make free.
+    anonymous: false,
     ...overrides,
   }
 }
@@ -149,10 +190,35 @@ function stepDot(title: HTMLElement): HTMLElement {
   return dot
 }
 
-/** The path of the single request the page made. */
+/**
+ * Every URL the page has asked its own dashboard endpoint for, in call order —
+ * `LastOutcomePanel`'s parallel `/dashboard/employee/last-outcome` excluded.
+ */
+function dashboardRequests(): string[] {
+  return vi
+    .mocked(fetch)
+    .mock.calls.map(([url]) => String(url))
+    .filter((url) => !url.includes('/last-outcome'))
+}
+
+/**
+ * The path of the one request the page made for its own payload — the request the role
+ * dispatch chose, which is what every case below is about.
+ *
+ * Not `mock.calls[0]`. The employee view mounts `LastOutcomePanel` as a child, so the
+ * panel's effect fires before its parent's and the *first* call is the panel's: an
+ * assertion that an employee is sent to `/dashboard/employee` would then be satisfied by
+ * `/dashboard/employee/last-outcome` no matter where the page itself went. The panel's
+ * request is excluded by name, and it is an error for more than one to remain — a page
+ * asking two role endpoints is the dispatch bug these cases exist to catch.
+ */
 function requestedPath(): string {
-  const [url] = vi.mocked(fetch).mock.calls[0] as [string]
-  return url
+  const [path, ...extra] = dashboardRequests()
+  if (path === undefined) throw new Error('the page has made no dashboard request yet')
+  if (extra.length > 0) {
+    throw new Error(`the page asked for more than one dashboard: ${[path, ...extra].join(', ')}`)
+  }
+  return path
 }
 
 /** The ambient zone, so a case that sets its own can put it back. */
@@ -167,6 +233,9 @@ describe('DashboardPage', () => {
     cleanup()
     window.localStorage.clear()
     vi.unstubAllGlobals()
+    // A no-op unless a case pinned the clock, and the reason one can: the employee heading
+    // is a greeting chosen from the reader's own hour.
+    vi.useRealTimers()
     if (AMBIENT_TZ === undefined) delete process.env.TZ
     else process.env.TZ = AMBIENT_TZ
   })
@@ -180,7 +249,7 @@ describe('DashboardPage', () => {
    */
   it('asks for the platform overview for a super_admin who has selected no company', async () => {
     setToken(tokenFor('super_admin', ''))
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(superAdminPayload()))
+    serves(superAdminPayload())
 
     renderDashboard()
 
@@ -198,7 +267,7 @@ describe('DashboardPage', () => {
   it('asks for the tenant dashboard once a super_admin has picked a company', async () => {
     setToken(tokenFor('super_admin', ''))
     window.localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'c9')
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+    serves(companyPayload())
 
     renderDashboard()
 
@@ -211,7 +280,7 @@ describe('DashboardPage', () => {
     // server; a client that helpfully sent its own idea of the tenant would be choosing
     // a scope, which is the shape the endpoint refuses.
     setToken(tokenFor('company_admin', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+    serves(companyPayload())
 
     renderDashboard()
 
@@ -230,7 +299,7 @@ describe('DashboardPage', () => {
     'asks for the department dashboard for a %s, and sends no department id',
     async (role) => {
       setToken(tokenFor(role, 'c1'))
-      vi.mocked(fetch).mockResolvedValue(jsonResponse(departmentPayload()))
+      serves(departmentPayload())
 
       renderDashboard()
 
@@ -255,7 +324,7 @@ describe('DashboardPage', () => {
    */
   it('does not link a department leader to a survey page their role is refused', async () => {
     setToken(tokenFor('leader', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(departmentPayload()))
+    serves(departmentPayload())
 
     renderDashboard()
 
@@ -274,7 +343,7 @@ describe('DashboardPage', () => {
    */
   it('shows a department leader no tenant-wide target column', async () => {
     setToken(tokenFor('leader', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(departmentPayload()))
+    serves(departmentPayload())
 
     renderDashboard()
 
@@ -289,7 +358,7 @@ describe('DashboardPage', () => {
 
   it('still shows the company dashboard both participation columns, which are its own scope', async () => {
     setToken(tokenFor('company_admin', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+    serves(companyPayload())
 
     renderDashboard()
 
@@ -309,7 +378,7 @@ describe('DashboardPage', () => {
    */
   it('sets the survey table readings in mono and its prose in the sans face', async () => {
     setToken(tokenFor('company_admin', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+    serves(companyPayload())
 
     renderDashboard()
 
@@ -326,7 +395,7 @@ describe('DashboardPage', () => {
 
   it('does link a company_admin to the survey page, which their role can load', async () => {
     setToken(tokenFor('company_admin', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+    serves(companyPayload())
 
     renderDashboard()
 
@@ -347,7 +416,7 @@ describe('DashboardPage', () => {
    */
   it('plots each department against the organisation on the climate map', async () => {
     setToken(tokenFor('company_admin', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+    serves(companyPayload())
 
     renderDashboard()
 
@@ -371,7 +440,7 @@ describe('DashboardPage', () => {
       ...payload.departments,
       { id: 'd2', name: 'Finance', memberCount: 40, completedResponseCount: 3 },
     ]
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(payload))
+    serves(payload)
 
     renderDashboard()
 
@@ -388,7 +457,7 @@ describe('DashboardPage', () => {
   /** The finding, its evidence, and the two things to do about it. */
   it('names the department furthest behind, with its evidence and two actions', async () => {
     setToken(tokenFor('company_admin', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+    serves(companyPayload())
 
     renderDashboard()
 
@@ -414,7 +483,7 @@ describe('DashboardPage', () => {
     setToken(tokenFor('company_admin', 'c1'))
     const payload = companyPayload()
     payload.departments = [{ id: 'd1', name: 'Engineering', memberCount: 6, completedResponseCount: 9 }]
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(payload))
+    serves(payload)
 
     renderDashboard()
 
@@ -438,7 +507,7 @@ describe('DashboardPage', () => {
       { id: 'd1', name: 'Marketing', memberCount: 12, completedResponseCount: 6 },
       { id: 'd2', name: 'Customer Support', memberCount: 18, completedResponseCount: 11 },
     ]
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(payload))
+    serves(payload)
 
     const { container } = renderDashboard()
 
@@ -457,7 +526,7 @@ describe('DashboardPage', () => {
    */
   it('sets the readings inside the finding in mono and leaves the prose alone', async () => {
     setToken(tokenFor('company_admin', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+    serves(companyPayload())
 
     renderDashboard()
 
@@ -490,7 +559,7 @@ describe('DashboardPage', () => {
       { id: 'd1', name: 'Operations', memberCount: 8, completedResponseCount: 4 },
       { id: 'd2', name: 'Support', memberCount: 6, completedResponseCount: 1 },
     ]
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(payload))
+    serves(payload)
 
     renderDashboard()
 
@@ -516,7 +585,7 @@ describe('DashboardPage', () => {
       { id: 'd1', name: 'Operations', memberCount: 0, completedResponseCount: 0 },
       { id: 'd2', name: 'Support', memberCount: 0, completedResponseCount: 0 },
     ]
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(payload))
+    serves(payload)
 
     renderDashboard()
 
@@ -533,7 +602,7 @@ describe('DashboardPage', () => {
     const payload = companyPayload()
     payload.departmentCount = 0
     payload.departments = []
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(payload))
+    serves(payload)
 
     renderDashboard()
 
@@ -543,7 +612,7 @@ describe('DashboardPage', () => {
 
   it('offers three quick actions that all land somewhere that exists', async () => {
     setToken(tokenFor('company_admin', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+    serves(companyPayload())
 
     renderDashboard()
 
@@ -569,7 +638,7 @@ describe('DashboardPage', () => {
    */
   it('does not call a survey closed while its status still accepts responses', async () => {
     setToken(tokenFor('company_admin', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+    serves(companyPayload())
 
     renderDashboard()
 
@@ -595,7 +664,7 @@ describe('DashboardPage', () => {
     setToken(tokenFor('company_admin', 'c1'))
     const payload = companyPayload()
     payload.ongoingSurveys = [{ ...payload.ongoingSurveys[0], status: 'closed' }]
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(payload))
+    serves(payload)
 
     renderDashboard()
 
@@ -619,7 +688,7 @@ describe('DashboardPage', () => {
     // in CI's own zone would prove nothing. Restored by the suite's `afterEach`.
     process.env.TZ = 'America/Chicago'
     setToken(tokenFor('company_admin', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(companyPayload()))
+    serves(companyPayload())
 
     renderDashboard()
 
@@ -628,21 +697,49 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('cell', { name: 'Feb 1' })).toBeTruthy()
   })
 
+  /**
+   * The employee's own landing page, and the thing that makes it a landing page rather
+   * than a report: a way IN to every survey it names.
+   *
+   * The redesign moved where those ways in are drawn — the nearest survey is now a task
+   * card with "Start answering" on it and the rest are quieter rows with "Answer" — so the
+   * assertion is on the hrefs and not on which of the two shapes a given survey got. The
+   * page owes the reader a route into each outstanding survey; the arrangement is
+   * `EmployeeDashboardView`'s business and its own suite's.
+   *
+   * TWO pending surveys, where this case used to send one: "a real way to answer EACH
+   * survey" is the property, and with a single survey a page that linked only the first
+   * one — or only ever the count that used to sit in a tile — passes just the same.
+   */
   it('gives a plain employee their own dashboard, with a real way to answer each survey', async () => {
+    // The heading is chosen from the reader's own clock, so the clock is pinned rather
+    // than left to whatever hour CI happens to run at. Local parts, so the hour is 9 in
+    // every zone. Undone by `vi.useRealTimers()` in `afterEach`.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date(2026, 0, 15, 9, 0, 0))
     setToken(tokenFor('employee', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(employeePayload()))
+    serves(
+      employeePayload({
+        pendingSurveyCount: 2,
+        pendingSurveys: [pendingSurvey(), pendingSurvey({ id: 's2', title: 'Weekly pulse' })],
+      }),
+    )
 
     renderDashboard()
 
-    await waitFor(() => expect(fetch).toHaveBeenCalled())
-    expect(requestedPath()).toContain('/dashboard/employee')
-    expect(await screen.findByRole('heading', { level: 1, name: 'Welcome back, Ana' })).toBeTruthy()
+    await waitFor(() => expect(requestedPath()).toContain('/dashboard/employee'))
+    // Addressed to the person and naming them. This is the one page in the product written
+    // in that voice, and an admin view reaching an employee would be titled after a report.
+    expect(await screen.findByRole('heading', { level: 1, name: 'Good morning, Ana' })).toBeTruthy()
+
+    // Both surveys are named, and both are reachable. The hrefs are the half that survived
+    // the redesign untouched: titles alone would be satisfied by a page that lists what is
+    // outstanding without offering any way to answer it.
     expect(screen.getByText('Company-wide pulse')).toBeTruthy()
-    // The row links somewhere that exists, which is the difference between this page and
-    // the listing it replaces as a landing destination.
-    expect(screen.getByRole('link', { name: 'Answer' }).getAttribute('href')).toBe(
-      '/surveys/s1/respond',
-    )
+    expect(screen.getByText('Weekly pulse')).toBeTruthy()
+    const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'))
+    expect(hrefs).toContain('/surveys/s1/respond')
+    expect(hrefs).toContain('/surveys/s2/respond')
   })
 
   /**
@@ -655,19 +752,30 @@ describe('DashboardPage', () => {
    */
   it('falls back to the per-user dashboard for a role it has never heard of', async () => {
     setToken(tokenFor('auditor', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(employeePayload()))
+    serves(employeePayload())
 
     renderDashboard()
 
-    await waitFor(() => expect(fetch).toHaveBeenCalled())
-    expect(requestedPath()).toContain('/dashboard/employee')
+    // Waited on through `requestedPath`, which ignores the outcome panel's parallel call:
+    // `toHaveBeenCalled` can be satisfied by that one alone, and this case is about where
+    // the PAGE went.
+    await waitFor(() => expect(requestedPath()).toContain('/dashboard/employee'))
   })
 
+  /**
+   * The failure path: say so, say why in the server's own words, and offer a way out of it.
+   *
+   * The retry is asserted by USING it, not by finding the button. A control that renders
+   * and does nothing is the failure this case is worth writing about, and it looks
+   * identical to a working one from the outside — so the second load serves a payload and
+   * the page has to both re-request and draw what came back.
+   *
+   * `LastOutcomePanel` answers normally throughout: what is under test is Home's own
+   * failure, not a page-wide outage, and the panel is silent either way.
+   */
   it('says so, and offers a retry, when the dashboard cannot be loaded', async () => {
     setToken(tokenFor('employee', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(
-      new Response(JSON.stringify({ message: 'Service unavailable' }), { status: 503 }),
-    )
+    serves({ message: 'Service unavailable' }, { status: 503 })
 
     renderDashboard()
 
@@ -675,22 +783,42 @@ describe('DashboardPage', () => {
     // The server's own message, not a generic one: "check your connection" would send
     // someone chasing a network problem that is not there.
     expect(screen.getByText('Service unavailable')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+    await waitFor(() => expect(dashboardRequests()).toHaveLength(1))
+
+    serves(employeePayload())
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    // A second request really leaves for the same endpoint...
+    await waitFor(() => expect(dashboardRequests()).toHaveLength(2))
+    expect(dashboardRequests()[1]).toContain('/dashboard/employee')
+    // ...and the page is the loaded one afterwards, rather than the error with a spent
+    // button on it.
+    expect(await screen.findByRole('link', { name: 'Start answering' })).toBeTruthy()
+    expect(screen.queryByText('Unable to fetch dashboard data')).toBeNull()
   })
 
+  /**
+   * The quiet state, said plainly and in words.
+   *
+   * The second assertion is the old "no deadline banner when there is no deadline" one,
+   * re-aimed. That banner is gone from the redesign entirely — it only ever appeared when
+   * something was already due, which the task card's own chip says where the reader is
+   * already looking — so the thing that could now announce a phantom obligation is the task
+   * card itself. Nothing that offers a way into a survey, and no closing date, may be drawn
+   * on a page whose whole message is that nothing is owed.
+   */
   it('tells an employee with nothing outstanding that there is nothing outstanding', async () => {
     setToken(tokenFor('employee', 'c1'))
-    vi.mocked(fetch).mockResolvedValue(
-      jsonResponse(
-        employeePayload({ pendingSurveyCount: 0, pendingSurveys: [], nextDeadline: null }),
-      ),
-    )
+    serves(employeePayload({ pendingSurveyCount: 0, pendingSurveys: [], nextDeadline: null }))
 
     renderDashboard()
 
     expect(await screen.findByText('Nothing is waiting for you')).toBeTruthy()
-    // No deadline banner when there is no deadline -- an empty one would read as an
-    // outstanding obligation.
-    expect(screen.queryByText(/The next survey closes on/)).toBeNull()
+    const waysIn = screen
+      .queryAllByRole('link')
+      .map((link) => link.getAttribute('href') ?? '')
+      .filter((href) => href.includes('/respond'))
+    expect(waysIn).toEqual([])
+    expect(screen.queryByText(/closes/i)).toBeNull()
   })
 })

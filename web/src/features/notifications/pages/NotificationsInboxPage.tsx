@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
-import { Badge, Button, Checkbox } from '../../../components/ui'
+import { Badge, Button, Checkbox, EmptyState } from '../../../components/ui'
 import {
   isUnread,
   listMyNotifications,
@@ -223,7 +223,21 @@ export default function NotificationsInboxPage() {
       {loading ? (
         <p>{t('common.loading')}</p>
       ) : notifications.length === 0 ? (
-        <p>{unreadOnly ? t('notifications.noUnread') : t('notifications.noNotifications')}</p>
+        /* The same centred block Home and My surveys use, rather than the bare
+           left-aligned line this screen rendered before it: three pages that all
+           mean "nothing here yet" read as one product only if they are drawn the
+           same way. `fill` because this IS the page when it fires — see the prop's
+           note on `ui/error-state.tsx`.
+
+           Only the TITLE varies with the filter. The body says what will bring a
+           notification in, which is the right thing to read on an inbox that has
+           never had one and the wrong thing to read over a list of read ones —
+           things have come in there, they are simply not unread. */
+        <EmptyState
+          fill
+          title={unreadOnly ? t('notifications.noUnread') : t('notifications.emptyTitle')}
+          description={unreadOnly ? undefined : t('notifications.emptyBody')}
+        />
       ) : (
         <div className="grid gap-section">
           {groups.map((group) => (

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import MicroclimateRespondPage from './MicroclimateRespondPage'
@@ -30,6 +30,32 @@ function spanishMicroclimate(): PublicMicroclimateDetail {
           { order: 0, value: 'strongly_agree', label: 'Muy de acuerdo' },
           { order: 1, value: 'disagree', label: 'En desacuerdo' },
         ],
+      },
+    ],
+  }
+}
+
+/**
+ * The shape the design's 'pulse' screen is drawn for: one 1–5 question with no
+ * option set of its own, which is what `isNumericScale` calls a numeric scale and
+ * what `MicroclimateEndpoints.cs` validates as `rating is >= 1 and <= 5`.
+ */
+function pulseMicroclimate(): PublicMicroclimateDetail {
+  return {
+    id: 'm1',
+    title: 'Pulso semanal',
+    status: 'active',
+    language: 'both',
+    resolvedLocale: 'es',
+    fallbackFields: [],
+    questions: [
+      {
+        id: 'q1',
+        text: '¿Qué tan apoyado se sintió esta semana?',
+        type: 'likert',
+        required: true,
+        order: 0,
+        options: null,
       },
     ],
   }
@@ -174,20 +200,50 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
     expect(headers.get('Authorization')).toBeNull()
   })
 
-  it('counts answers as a mono reading, and says the same thing in words', async () => {
+  /**
+   * The rail is gone, and this is what replaced the case that used to measure its
+   * answered-count tile.
+   *
+   * The tile and the anonymity promise sat in a `lg:grid-cols-3` right-hand panel
+   * that the design never drew — it survived the employee redesign only because
+   * `components/layout/respondSticky.test.tsx` asserted a sticky panel on this
+   * route. The drawing is one column: eyebrow, question, scale, optional box, a
+   * single Send, and the anonymity line as the footnote under it. The two survey
+   * routes moved their instrument to a bottom bar; the pulse has no bar either.
+   */
+  it('draws one column with no rail beside it and no bar under it', async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response(JSON.stringify(spanishMicroclimate()), { status: 200 }),
     )
-    renderPage()
+    const { container } = renderPage()
+    await screen.findByRole('heading', { name: 'Pulso semanal' })
 
-    const reading = await screen.findByText('0 / 1')
-    expect(reading.className).toContain('font-mono')
-    expect(reading.className).toContain('tabular-nums')
-    expect(reading.getAttribute('aria-hidden')).toBe('true')
-    expect(screen.getByText('0 de 1 preguntas respondidas')).toBeTruthy()
+    const columns = container.querySelectorAll('[data-slot="pulse-column"]')
+    expect(columns, 'the pulse is exactly one column').toHaveLength(1)
+    const column = columns[0]
 
-    await userEvent.click(screen.getByLabelText('Muy de acuerdo'))
-    expect(screen.getByText('1 / 1')).toBeTruthy()
+    // The rail was a labelled region ("Sobre esta sesión") in its own grid track,
+    // and the survey routes' instrument is a `respond-submit-bar`. Neither is drawn
+    // here, so neither may be present.
+    expect(screen.queryByRole('region', { name: 'Sobre esta sesión' })).toBeNull()
+    expect(container.querySelector('[data-slot="respond-submit-bar"]')).toBeNull()
+    expect(
+      [...container.querySelectorAll('[class]')].filter((element) =>
+        /grid-cols-|sticky/.test(element.getAttribute('class') ?? ''),
+      ),
+      'no multi-column track and nothing pinned — the pulse is a plain reading order',
+    ).toEqual([])
+
+    // The answered count went with the rail. Position, when a session has more than
+    // one question, is carried by the per-question numbering instead.
+    expect(screen.queryByText('0 / 1')).toBeNull()
+    expect(screen.queryByText('0 de 1 preguntas respondidas')).toBeNull()
+
+    // The anonymity line is the FOOTNOTE the design draws: last in the column,
+    // after the Send button rather than beside the questions.
+    const note = screen.getByText('Su nombre no se envía con sus respuestas').closest('section')
+    expect(note, 'the anonymity note is its own section').toBeTruthy()
+    expect(column.lastElementChild, 'and it is the last thing in the column').toBe(note)
   })
 
   /**
@@ -206,11 +262,158 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
       return found!
     })
     expect(legend.textContent).toContain('(obligatoria)')
-    // The mono index reading, with the sentence beside it for a screen reader.
-    expect(legend.textContent).toContain('Pregunta 1 de 1')
-    const marker = screen.getByText('1/1')
+  })
+
+  /**
+   * A session that asks TWO questions has positions worth keeping track of, so the
+   * mono index reading and the sentence beside it both come back.
+   */
+  it('numbers the questions once there is more than one of them', async () => {
+    const detail = spanishMicroclimate()
+    detail.questions.push({ ...detail.questions[0], id: 'q2', text: '¿Y esta semana?', order: 1 })
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(detail), { status: 200 }))
+    renderPage()
+
+    const legend = await waitFor(() => {
+      const found = document.querySelector('legend')
+      expect(found).toBeTruthy()
+      return found!
+    })
+    expect(legend.textContent).toContain('Pregunta 1 de 2')
+    const marker = screen.getByText('1/2')
     expect(marker.className).toContain('font-mono')
     expect(marker.getAttribute('aria-hidden')).toBe('true')
+  })
+
+  /**
+   * The design's pulse screen numbers nothing, and it is right not to: "1/1" and
+   * "Question 1 of 1" are two ways of saying there is no position to keep track of,
+   * on the one screen whose whole job is to ask a single thing and get out of the
+   * way. The required marker stays — that is not decoration.
+   */
+  it('numbers nothing when the session asks a single question', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(pulseMicroclimate()), { status: 200 }),
+    )
+    renderPage()
+
+    const legend = await waitFor(() => {
+      const found = document.querySelector('legend')
+      expect(found).toBeTruthy()
+      return found!
+    })
+    expect(legend.textContent).toContain('(obligatoria)')
+    expect(legend.textContent).not.toContain('Pregunta 1 de 1')
+    expect(screen.queryByText('1/1')).toBeNull()
+  })
+
+  /**
+   * The 1–5 scale is `ui/SegmentedScale`, not a row of native radios.
+   *
+   * A native radio is ~13px against the 24px WCAG 2.2 target minimum, on the screen
+   * most often answered on a phone. Asserted through the rendered DOM rather than by
+   * reading the source: `data-slot` is the primitive's own handle, and a segment is
+   * a `<button role="radio">` where the control it replaces was an `<input>`.
+   */
+  it('answers an unlabelled 1–5 question on segments rather than on 13px radios', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(pulseMicroclimate()), { status: 200 }),
+    )
+    const { container } = renderPage()
+    await screen.findByRole('heading', { name: 'Pulso semanal' })
+
+    const scale = container.querySelector('[data-slot="segmented-scale"]')
+    expect(scale, 'the 1–5 scale is the SegmentedScale primitive').toBeTruthy()
+    const points = within(scale as HTMLElement).getAllByRole('radio')
+    expect(points.map((point) => point.textContent)).toEqual(['1', '2', '3', '4', '5'])
+    expect(points.every((point) => point.tagName === 'BUTTON')).toBe(true)
+    // The anchors under the ends of the row come from the catalogue, not from a
+    // literal — nothing in the payload names the ends of an unlabelled scale.
+    expect(within(scale as HTMLElement).getByText('Bajo')).toBeTruthy()
+    expect(within(scale as HTMLElement).getByText('Alto')).toBeTruthy()
+    // The page still has no native radio to fall back to.
+    expect(container.querySelector('input[type="radio"]')).toBeNull()
+  })
+
+  it('submits the scale point as the integer the server validates, not as a label', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify(pulseMicroclimate()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 201 }))
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('radio', { name: '4' }))
+    await userEvent.click(screen.getByRole('button', { name: /enviar|submit/i }))
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+    const body = JSON.parse(
+      String((vi.mocked(fetch).mock.calls[1][1] as RequestInit).body),
+    ) as { answers: Record<string, string> }
+    // `MicroclimateEndpoints.cs` accepts a numeric-scale answer only as an int 1–5
+    // when the question configures no options of its own.
+    expect(body.answers.q1).toBe('4')
+  })
+
+  /**
+   * An authored option set is not a numeric scale — its values are words, and
+   * `SegmentedScale` draws an integer run — so those questions keep the choice list
+   * they had. This is the branch the server also validates differently.
+   */
+  it('keeps the choice list for a scale question that configures its own options', async () => {
+    const detail = pulseMicroclimate()
+    detail.questions[0].options = [
+      { order: 0, value: 'never', label: 'Nunca' },
+      { order: 1, value: 'always', label: 'Siempre' },
+    ]
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(detail), { status: 200 }))
+    const { container } = renderPage()
+
+    expect(await screen.findByLabelText('Nunca')).toBeTruthy()
+    expect(container.querySelector('[data-slot="segmented-scale"]')).toBeNull()
+  })
+
+  /**
+   * "One question, large, centred, no scroll." The whole column — heading, form and
+   * footnote — is capped at the prose measure and centred, not just the form inside
+   * a wider grid. A pulse is answered in seconds and should not read like a
+   * twelve-question climate survey.
+   */
+  it('draws the question in a centred column at the prose measure', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(pulseMicroclimate()), { status: 200 }),
+    )
+    const { container } = renderPage()
+    await screen.findByRole('heading', { name: 'Pulso semanal' })
+
+    const column = container.querySelector('[data-slot="pulse-column"]')
+    expect(column).toBeTruthy()
+    expect(column!.className).toContain('max-w-measure')
+    expect(column!.className).toContain('mx-auto')
+    // And the form is inside it rather than beside it, so the cap applies to the
+    // questions too.
+    expect(container.querySelector('form')?.closest('[data-slot="pulse-column"]')).toBe(column)
+  })
+
+  /**
+   * The design's box under the scale — "Anything you want to add?" — is a textarea.
+   * This branch was a single-line `<input type="text">` with no accessible name at
+   * all: a `<legend>` names the FIELDSET, never the control inside it.
+   */
+  it('answers an open question in a named textarea rather than a one-line input', async () => {
+    const detail = pulseMicroclimate()
+    detail.questions[0].type = 'open_ended'
+    detail.questions[0].required = false
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(detail), { status: 200 }))
+    const { container } = renderPage()
+    await screen.findByRole('heading', { name: 'Pulso semanal' })
+
+    const box = container.querySelector('[data-slot="textarea"]')
+    expect(box, 'free text is the Textarea primitive').toBeTruthy()
+    expect(box!.tagName).toBe('TEXTAREA')
+    expect(container.querySelector('input[type="text"]')).toBeNull()
+    // Named by the question it answers, through the legend that holds it.
+    const legend = container.querySelector('legend')
+    expect(box!.getAttribute('aria-labelledby')).toBe(legend!.id)
+    expect(legend!.id.length).toBeGreaterThan(0)
   })
 
   it('tells a respondent that a session is not taking answers, rather than showing a form', async () => {

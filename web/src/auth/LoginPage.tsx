@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
+import { ShieldCheck } from 'lucide-react'
 import { AuthRequestError, login } from './api'
 import { AuthShell } from './AuthShell'
 import { AuthPending } from './AuthPending'
@@ -9,6 +10,7 @@ import { setToken } from './token'
 import { resolveInitialRoute } from '../app/resolveInitialRoute'
 import { useTranslation } from '../i18n'
 import { Alert, AlertDescription, Button, Separator, TextField } from '../components/ui'
+import { BrandLockup } from '../components/layout'
 
 /**
  * Sign in.
@@ -31,6 +33,29 @@ import { Alert, AlertDescription, Button, Separator, TextField } from '../compon
  *   Note the server answers 401 identically for a wrong password and a
  *   deactivated account, on purpose; this page does not try to tell them apart
  *   (see `AccountInactivePage`).
+ *
+ * ## What the employee redesign changed, and why each was a link to nowhere
+ *
+ * **"Create an account" is gone.** Employees arrive by bulk import or by
+ * `/accept-invitation/:token`. `POST /auth/signup` derives the company from the
+ * email domain and 400s when no company is registered for it, so for the
+ * overwhelming majority of the people who reach this page that link led to a form
+ * that could only refuse them. `/register` still exists and is still routed — this
+ * page simply stops advertising it as the way in.
+ *
+ * **Password help is copy, not a control.** There is no password-reset endpoint
+ * anywhere in this API: `/auth` is login, signup, google, refresh and the
+ * admin-only reset-credentials. A "Forgot your password?" link — which the
+ * prototype drew, and which `auth.forgotPassword` has been sitting in the
+ * catalogue waiting for — would have to point at a route that cannot exist. So the
+ * page says the true thing instead, in plain text, and `auth.forgotPassword` stays
+ * orphaned on purpose.
+ *
+ * **The brand lockup and the assurance line.** `BrandLockup` is the same mark and
+ * wordmark the signed-in rail and the respond header wear, so the screen every
+ * role shares is recognisably this product before anyone types anything; the line
+ * under the card answers the question an employee about to answer an anonymous
+ * survey is actually asking, which is what signing in has to do with their answers.
  */
 export default function LoginPage() {
   const { t } = useTranslation()
@@ -83,11 +108,12 @@ export default function LoginPage() {
   return (
     <AuthShell
       title={t('auth.signIn')}
-      description={t('auth.welcome')}
+      description={t('auth.signInDetail')}
+      brand={<BrandLockup />}
       footer={
         <>
-          <span className="text-fg-secondary">{t('auth.dontHaveAccount')}</span>
-          <Link to="/register">{t('auth.createAccount')}</Link>
+          <ShieldCheck aria-hidden="true" className="size-icon shrink-0 text-accent-blue" />
+          <span className="max-w-prose text-fg-secondary">{t('auth.signInAssurance')}</span>
         </>
       }
     >
@@ -114,6 +140,11 @@ export default function LoginPage() {
           placeholder={t('auth.passwordPlaceholder')}
           onChange={setPassword}
         />
+        {/* Static copy, and it must stay static: see the note above this component
+            about the reset endpoint that does not exist. Rendered inside the form,
+            under the field it is about, where the prototype put the link it
+            replaces. */}
+        <p className="text-sm text-fg-secondary">{t('auth.passwordHelp')}</p>
         <Button type="submit" variant="primary">
           {t('auth.signIn')}
         </Button>
