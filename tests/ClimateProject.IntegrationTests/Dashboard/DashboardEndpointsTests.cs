@@ -92,9 +92,16 @@ public class DashboardEndpointsTests : IAsyncLifetime
         // would: 140 completed responses across every department, 200 people invited. Only
         // two of those responses are Engineering's, which is what makes it visible when a
         // department's page reaches for the survey row instead of the response rows.
+        //
+        // The two surveys an Engineering employee owes an answer to differ in their
+        // anonymity setting, deliberately and in opposite directions: the company-wide pulse
+        // is anonymous, the Engineering-only one is not. A fixture where both agreed would
+        // let a projection that returned a constant -- or read the wrong survey's setting --
+        // pass every assertion below.
         _companyWideSurveyId = await SeedSurveyAsync(
             db, companyA.Id, authorA, "Company-wide pulse", SurveyStatuses.Active, now.AddDays(30),
-            responseCount: CompanyWideResponseCount, targetAudienceCount: CompanyWideTargetAudience);
+            responseCount: CompanyWideResponseCount, targetAudienceCount: CompanyWideTargetAudience,
+            anonymous: true);
         _engineeringOnlySurveyId = await SeedSurveyAsync(db, companyA.Id, authorA, "Engineering only", SurveyStatuses.Active, now.AddDays(10));
         await SeedSurveyAsync(db, companyA.Id, authorA, "Not published yet", SurveyStatuses.Draft, now.AddDays(60));
         await SeedSurveyAsync(db, companyB.Id, authorB, "Other tenant survey", SurveyStatuses.Active, now.AddDays(20));
@@ -153,6 +160,12 @@ public class DashboardEndpointsTests : IAsyncLifetime
     /// other assertion in this file could produce.
     /// </param>
     /// <param name="targetAudienceCount">The author-entered tenant-wide invited headcount.</param>
+    /// <param name="anonymous">
+    /// The survey's own <c>Settings.Anonymous</c>, i.e. the promise the respond page will
+    /// make about it. Defaults to false, which is <c>SurveySettings</c>'s own default and
+    /// therefore the safe one: a fixture that silently made every survey anonymous would be
+    /// a fixture in which the dangerous direction is never exercised.
+    /// </param>
     private static async Task<Guid> SeedSurveyAsync(
         ClimateProjectDbContext db,
         Guid companyId,
@@ -161,7 +174,8 @@ public class DashboardEndpointsTests : IAsyncLifetime
         string status,
         DateTimeOffset endDate,
         int responseCount = 0,
-        int? targetAudienceCount = null)
+        int? targetAudienceCount = null,
+        bool anonymous = false)
     {
         var now = DateTimeOffset.UtcNow;
         var survey = new Survey
@@ -178,6 +192,7 @@ public class DashboardEndpointsTests : IAsyncLifetime
             Status = status,
             ResponseCount = responseCount,
             TargetAudienceCount = targetAudienceCount,
+            Settings = new SurveySettings { Anonymous = anonymous },
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -583,6 +598,68 @@ public class DashboardEndpointsTests : IAsyncLifetime
         // Nobody has answered anything AS THIS USER: the seeded responses are anonymous
         // rows with no user id.
         Assert.Equal(0, body.CompletedSurveyCount);
+    }
+
+    /// <summary>
+    /// Home's task card leads with an "Anonymous" chip, so the flag behind it has to be the
+    /// survey's own and not the page's assumption.
+    ///
+    /// <para>
+    /// Both directions, in one request, against two surveys the same reader owes an answer
+    /// to: the company-wide pulse is anonymous and the Engineering-only survey is not. A
+    /// projection hardcoded either way passes half of this and fails the other half, which
+    /// is the point -- the expensive mistake here is not a missing chip but a chip printed
+    /// over a survey that records who answered.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Each_pending_survey_carries_its_own_anonymity_setting()
+    {
+        var client = await ClientAsync(Roles.Employee, _companyADomain, _companyAId, _engineeringId);
+
+        var body = (await (await client.GetAsync("/dashboard/employee")).Content
+            .ReadFromJsonAsync<EmployeeDashboard>())!;
+
+        Assert.True(
+            body.PendingSurveys.Single(s => s.Id == _companyWideSurveyId).Anonymous,
+            "The anonymous survey came back unmarked, so its card would offer no promise at all.");
+        Assert.False(
+            body.PendingSurveys.Single(s => s.Id == _engineeringOnlySurveyId).Anonymous,
+            "A survey that records who answered came back marked anonymous.");
+    }
+
+    /// <summary>
+    /// The same fact, read off both screens that state it.
+    ///
+    /// <para>
+    /// The chip on Home is a promise the respond page has to keep, and the two are served by
+    /// different handlers over different projections. This asserts they cannot drift: for
+    /// every survey in the queue, <c>/dashboard/employee</c> and <c>/surveys/{id}/respond</c>
+    /// report the same anonymity. It is the reason the dashboard reads
+    /// <c>Survey.Settings.Anonymous</c> rather than anything of its own.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Home_and_the_respond_page_never_disagree_about_anonymity()
+    {
+        var client = await ClientAsync(Roles.Employee, _companyADomain, _companyAId, _engineeringId);
+
+        var body = (await (await client.GetAsync("/dashboard/employee")).Content
+            .ReadFromJsonAsync<EmployeeDashboard>())!;
+
+        // Vacuity control: the loop below proves nothing about a queue that is empty, or
+        // one whose surveys happen to agree with each other.
+        Assert.Equal(2, body.PendingSurveys.Count);
+        Assert.Equal(2, body.PendingSurveys.Select(s => s.Anonymous).Distinct().Count());
+
+        foreach (var pending in body.PendingSurveys)
+        {
+            var respondResponse = await client.GetAsync($"/surveys/{pending.Id}/respond");
+            Assert.Equal(HttpStatusCode.OK, respondResponse.StatusCode);
+            var respond = (await respondResponse.Content.ReadFromJsonAsync<SurveyRespondView>())!;
+
+            Assert.Equal(respond.Anonymous, pending.Anonymous);
+        }
     }
 
     [Fact]
