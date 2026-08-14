@@ -972,11 +972,26 @@ function WhatHappensRow({
  * reading wants to be. The confirmation says "The survey closes on 11 September
  * 2026" in the run of a sentence, where the abbreviation is the thing that reads
  * wrong.
+ *
+ * ## `timeZone: 'UTC'`, and it is a correctness fix rather than a preference
+ *
+ * A survey's `endDate` is the END OF A CALENDAR DAY, and the API stamps it as one:
+ * the seeded Q3 closes at `2026-08-05T23:59:59+00:00`. Formatted in the reader's own
+ * zone, that instant is **6 August** in Madrid and in Tokyo — so every respondent east
+ * of UTC was told a deadline one day later than the one the server enforces, on the
+ * screen whose entire job is to say when to answer by.
+ *
+ * This is the bug `lib/calendarDay.ts` exists to prevent, and it survived the sweep
+ * that routed every date through it because that sweep matched `toLocaleDateString`
+ * and this reaches for `Intl.DateTimeFormat`. `calendarDay` itself is not used here:
+ * it renders one short form ("11 sept") by design, and this needs two styles, one of
+ * them a long form that sits inside a sentence. Same rule, different presentation —
+ * so the rule is copied rather than the helper.
  */
 function formatDate(value: string, locale: string, dateStyle: 'medium' | 'long' = 'medium'): string {
   const parsed = Date.parse(value)
   if (Number.isNaN(parsed)) return value
-  return new Intl.DateTimeFormat(locale, { dateStyle }).format(parsed)
+  return new Intl.DateTimeFormat(locale, { dateStyle, timeZone: 'UTC' }).format(parsed)
 }
 
 /** The wall-clock time a response was accepted, e.g. "09:14". */

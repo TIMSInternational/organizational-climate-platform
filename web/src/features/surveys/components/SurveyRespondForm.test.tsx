@@ -406,6 +406,36 @@ describe('SurveyRespondForm layout', () => {
     expect(within(panel).getByText('Tiempo restante')).toBeTruthy()
     expect(within(panel).getByText('10:00')).toBeTruthy()
   })
+
+  /**
+   * The closing date is a CALENDAR DAY, and it is read in UTC.
+   *
+   * The API stamps `endDate` as the end of one — the seeded Q3 closes at
+   * `2026-08-05T23:59:59+00:00`. Formatted in the reader's own zone that instant is
+   * **6 August** in Tokyo and in Madrid, so every respondent east of UTC was told a
+   * deadline a day later than the one the server enforces, on the screen whose whole
+   * job is to say when to answer by.
+   *
+   * **This test forces a timezone, and it has to.** CI and this machine both run in
+   * UTC, where the wrong code and the right code render the same string — which is
+   * exactly how the bug survived a sweep that routed every other date through
+   * `lib/calendarDay.ts`. Without the stub this case cannot fail.
+   */
+  it('reads the closing date as a calendar day, not in the reader’s timezone', async () => {
+    const original = process.env.TZ
+    process.env.TZ = 'Asia/Tokyo'
+    try {
+      // 23:59:59Z — the last second of 5 August in UTC, already the 6th in Tokyo.
+      respondWith(view({ endDate: '2026-08-05T23:59:59+00:00' }))
+      renderForm()
+
+      const panel = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
+      expect(within(panel).getByText('5 ago 2026')).toBeTruthy()
+      expect(within(panel).queryByText('6 ago 2026')).toBeNull()
+    } finally {
+      process.env.TZ = original
+    }
+  })
 })
 
 /**
