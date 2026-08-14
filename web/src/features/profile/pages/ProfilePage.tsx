@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { setToken } from '../../../auth/token'
 import { PageTopBar } from '../../../components/layout'
 import { ErrorState, LoadingRegion } from '../../../components/ui'
 import { useTranslation } from '../../../i18n'
@@ -156,7 +157,12 @@ export default function ProfilePage() {
               {profile.hasPassword && (
                 <ChangePasswordForm
                   onSubmit={async (currentPassword, newPassword) => {
-                    await changePassword(baseUrl, currentPassword, newPassword)
+                    // Store the replacement token BEFORE anything else fires a request.
+                    // The change signed every session for this account out, this one
+                    // included (#284), so the token in localStorage is dead the moment the
+                    // response lands and `refreshActivity` below would 401 and bounce the
+                    // user to the login page off the back of their own successful save.
+                    setToken(await changePassword(baseUrl, currentPassword, newPassword))
                     refreshActivity()
                   }}
                 />

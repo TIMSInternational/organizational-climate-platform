@@ -130,6 +130,79 @@ public static class ActingUserResolver
         => (await ResolveAsync(currentUser, db.Users.AsNoTracking(), cancellationToken))?.Id;
 
     /// <summary>
+    /// The acting user's row id and the company it belongs to, or null when the <c>sub</c>
+    /// matches nothing.
+    /// </summary>
+    /// <remarks>
+    /// Added for the audit writer (#143), which needs both and needs them from one query:
+    /// <c>audit_logs.user_id</c> and <c>audit_logs.company_id</c> are both foreign keys, and
+    /// the company one is NOT NULL, so an audit row can only be filed under the company on the
+    /// actor's own row. The claim is not used for it — <c>companyId</c> is whatever the token
+    /// said when it was minted, and a user moved between companies since would file rows under
+    /// the wrong tenant.
+    ///
+    /// Reads through <c>AsNoTracking</c> and hands back values rather than the entity, for the
+    /// reason <see cref="ResolveIdAsync"/> gives. It shares the private ordering below rather
+    /// than repeating it; one ordering in one place is the point of this class.
+    ///
+    /// <c>CompanyId</c> comes back nullable because <c>users.company_id</c> is (#191's
+    /// company-less SuperAdmin). The caller decides what an unattributable actor means.
+    /// </remarks>
+    public static async Task<(Guid UserId, Guid? CompanyId)?> ResolveIdAndCompanyAsync(
+        CurrentUser currentUser,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var user = await ResolveAsync(currentUser, db.Users.AsNoTracking(), cancellationToken);
+        return user is null ? null : (user.Id, user.CompanyId);
+    }
+
+    /// <summary>
+    /// The acting user's current <c>SecurityStamp</c>, or null when the <c>sub</c> matches
+    /// nothing. One round trip, not two — this one runs on every authenticated request.
+    /// </summary>
+    /// <remarks>
+    /// This is the read half of #284's revocation check, and it is the only caller in this
+    /// class that is on the hot path: the JWT bearer handler runs it for every request that
+    /// presents a token carrying a <c>securityStamp</c> claim, where
+    /// <see cref="ResolveAsync(CurrentUser, ClimateProjectDbContext, CancellationToken)"/>'s
+    /// two sequential SELECTs would be two round trips added to every one of them.
+    ///
+    /// So it fetches both candidate rows in a single statement and applies the ordering in
+    /// memory. The result is the same row the two-step resolver returns, for every
+    /// <c>sub</c>, including a colliding one — <c>SecurityStampMatchesActingUserResolverTests</c>
+    /// asserts that against a seeded collision rather than leaving it as a claim here. What
+    /// it must not become is an <c>OR</c> whose ordering is left to the database: the
+    /// <c>WHERE</c> here is unordered on purpose *because* nothing downstream of it reads
+    /// row order — the <c>PersonaExternalId</c>-first rule is re-applied below, in C#, on a
+    /// list that holds at most two rows (<c>persona_external_id</c> is uniquely indexed and
+    /// <c>id</c> is the primary key).
+    ///
+    /// Takes the raw <c>sub</c> string rather than a <see cref="CurrentUser"/>: the caller is
+    /// authentication, which runs before anything has decided the token is well-formed
+    /// enough to project, and <c>ClaimsPrincipalExtensions.GetCurrentUser</c> throws on a
+    /// token with no <c>sub</c> claim.
+    /// </remarks>
+    public static async Task<Guid?> ResolveSecurityStampAsync(
+        string sub,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        Guid? id = Guid.TryParse(sub, out var parsed) ? parsed : null;
+
+        var candidates = await db.Users
+            .AsNoTracking()
+            .Where(u => u.PersonaExternalId == sub || (id != null && u.Id == id))
+            .Select(u => new { u.PersonaExternalId, u.SecurityStamp })
+            .ToListAsync(cancellationToken);
+
+        var match = candidates.FirstOrDefault(c => c.PersonaExternalId == sub)
+            ?? candidates.FirstOrDefault();
+
+        return match?.SecurityStamp;
+    }
+
+    /// <summary>
     /// The one ordering. <c>PersonaExternalId</c>, then — only for a <c>sub</c> that matches
     /// no <c>PersonaExternalId</c>, and only when it parses — <c>Id</c>.
     /// </summary>

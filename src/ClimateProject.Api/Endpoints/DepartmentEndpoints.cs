@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Security.Claims;
+using ClimateProject.Api.Infrastructure.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Domain.Entities;
@@ -66,6 +68,7 @@ public static class DepartmentEndpoints
         CreateDepartmentRequest request,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
+        AuditEntry audit,
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
@@ -119,6 +122,14 @@ public static class DepartmentEndpoints
         db.Departments.Add(department);
         await db.SaveChangesAsync(cancellationToken);
 
+        // The audit row for this request is written either way (#143); this is the id it would
+        // otherwise have no way to know. A create has nothing in its route to name the row it
+        // made, and no endpoint in this application returns a Location header for the writer to
+        // read one out of -- so a create records its subject only if the handler says what it
+        // was. See AuditEntry, and docs/decisions/audit-logging.md for the endpoints still to
+        // be given this line.
+        audit.SetResourceId(department.Id);
+
         return Results.Json(
             // A department created a line ago has no members, so this is 0 rather than a
             // query -- but it is 0 because it was COUNTED, not because the dead column is.
@@ -160,6 +171,7 @@ public static class DepartmentEndpoints
         UpdateDepartmentRequest request,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
+        AuditEntry audit,
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
@@ -173,6 +185,15 @@ public static class DepartmentEndpoints
         {
             return Results.Forbid();
         }
+
+        // Read before anything below writes to the entity. This is #143's "before/after where
+        // meaningful", and this handler is the worked example for the same reason CreateAsync
+        // is the worked example for resource_id: the middleware sees an HTTP request, not a
+        // change tracker, so only a handler holding both values can record them. Names and an
+        // active flag -- nothing here is a secret or free text, which is the rule
+        // AuditEntry.RecordChange states.
+        var nameBefore = department.Name;
+        var activeBefore = department.IsActive;
 
         var name = request.Name?.Trim();
         if (!string.IsNullOrWhiteSpace(name) && name != department.Name)
@@ -214,6 +235,22 @@ public static class DepartmentEndpoints
         department.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
+        // After the save, so a request that threw on the way out records no diff it did not
+        // make. Identical values are dropped by RecordChange, so a no-op PUT records nothing.
+        audit.RecordChange("name", nameBefore, department.Name);
+        audit.RecordChange(
+            "isActive",
+            activeBefore.ToString(CultureInfo.InvariantCulture),
+            department.IsActive.ToString(CultureInfo.InvariantCulture));
+
+        // BOTH sides of the merge, and the count is deliberately NOT `department.EmployeeCount`.
+        // That column is denormalised and nothing in this codebase has ever written it, so it
+        // reads 0 for every department -- which is what made the Departments screen report
+        // `PEOPLE 0`, `EMPLOYEES ASSIGNED 0` and `UNDER THE FLOOR 5`, i.e. tell an admin that no
+        // department could be reported at all, beside a RESPONSES column showing 6/5/5/5.
+        // `CountEmployeesAsync` counts active users with the predicate `SurveyAggregation` uses,
+        // because that number is the denominator of per-department participation. #143's audit
+        // trail is orthogonal to it; taking main's line wholesale would have restored the bug.
         var employeeCount = await CountEmployeesAsync(db, department.Id, cancellationToken);
         return Results.Ok(new DepartmentDetail(department.Id, department.CompanyId, department.Name, department.Description, department.ParentDepartmentId, department.IsActive, employeeCount));
     }

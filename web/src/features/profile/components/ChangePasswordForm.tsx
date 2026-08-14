@@ -32,28 +32,39 @@ export interface ChangePasswordFormProps {
  *    branch nothing could reach.
  * 3. **Every field is cleared on success.** Leaving a password sitting in an input after the
  *    save has completed serves nothing and survives a screen share.
- * 4. **The reader is told this does not sign their other devices out** — always, before they
+ * 4. **The reader is told their other devices will be signed out** — always, before they
  *    submit, not only in a success message. See below.
  *
- * ## Other sessions ARE signed out. Issue #284, which has landed.
+ * ## Other sessions are signed out. Issue #284.
  *
- * This comment used to say the opposite, and so did the copy: the API had no revocation, so
- * a password change left every other session — including an attacker's — working for up to
- * 24 hours. That was true when this card was written and it is now false. `#284` (426431d,
- * PR #301) added `User.SecurityStamp`, rotates it in `PUT /profile/password`
- * (`ProfileEndpoints.cs`, "The revocation itself (#284)"), and `SecurityStampValidation`
- * refuses any token carrying a stale stamp. Every token minted before the change stops
- * validating immediately.
+ * The API rotates the account's security stamp on a password change, so every token minted
+ * before it — every other device, and anyone holding a stolen session — is refused from that
+ * moment. This form's own session is replaced by the token the response carries; `ProfilePage`
+ * stores it.
  *
- * Somebody changing their password on this form is quite likely doing it *because* they
- * think they were compromised, so the sentence stays — but as the reassurance it now is
- * rather than the warning it was. Telling that person their other devices are still signed
- * in, when they are not, is the worst direction for this particular error to point.
+ * Somebody changing their password on this form is quite likely doing it *because* they think
+ * they were compromised, and whether the act ends that compromise is the single most useful
+ * thing to know before submitting. So the disclosure stayed, with the fact reversed:
+ * `profile.passwordOtherSessionsNote` said the opposite and was removed from both locales in
+ * #284, and `profile.passwordSignsOutOtherDevices` replaced it in the same place.
  *
- * **This is a cross-branch claim.** `#284` is on `main`; it is not on the UI integration
- * branch this card was redesigned on, where the old 24-hour behaviour is still the code. So
- * neither side was wrong on its own and nothing failed — the sentence only becomes a lie in
- * the merge. **This card must not ship to an API without `#284`.**
+ * ## Resolved here, in the merge, which is the only place it was ever wrong
+ *
+ * This was a genuine cross-branch defect and both sides had predicted it. `#284` landed on
+ * `main`; the redesign of this card happened on the UI integration branch, where the old
+ * 24-hour behaviour was still the code and the old sentence was still true. **Neither side
+ * was wrong on its own and no test failed on either.**
+ *
+ * The merge is where it bites, and in two ways at once. The sentence becomes a lie — telling
+ * a possibly-compromised person their other devices are still signed in, when #284 has just
+ * signed them out, is the worst direction for this particular error to point. And the key the
+ * redesigned JSX rendered, `profile.passwordOtherSessionsNote`, was DELETED from both
+ * catalogues by #284, so keeping the redesign's markup would have rendered a missing key.
+ *
+ * Resolution: `main`'s key and `main`'s fact, in the redesign's recessed surface — minus the
+ * amber left rule, which the redesign chose while this was a caveat. It is reassurance now,
+ * and a warning tone would argue with the sentence it frames.
+
  *
  * The server's own rejection text (wrong current password, policy failures) is rendered
  * verbatim rather than replaced with a generic message: "Password must be at least 12
@@ -150,18 +161,17 @@ export default function ChangePasswordForm({ onSubmit }: ChangePasswordFormProps
           {/* Unconditional, and above the button rather than in the success alert: it is
               something to know before choosing to submit, not afterwards.
 
-              The redesign gives it the recessed surface and a left rule in the warning
-              tone so it reads as a standing property of this action rather than as a
-              caption — but it is not an `Alert`, because nothing has gone wrong and an
-              alert that is always on screen is one nobody reads. The wording itself is
-              unchanged and must stay that way until #284 actually lands; see the note on
-              this component. */}
-          {/* `border-y border-r border-l-4` rather than `border border-l-4`: the
-              shorthand sets all four widths at once and whether it or the left-only
-              width wins would depend on the order Tailwind happens to emit them in.
-              Naming the three plain sides separately leaves no property set twice. */}
-          <p className="mb-0 rounded-lg border-y border-r border-l-4 border-line-light border-l-accent-amber bg-surface-icon-box p-3 text-sm text-fg-secondary">
-            {t('profile.passwordOtherSessionsNote')}
+              The redesign gives it the recessed surface so it reads as a standing property
+              of this action rather than as a caption — but it is not an `Alert`, because
+              nothing has gone wrong and an alert that is always on screen is one nobody
+              reads.
+
+              The amber left rule the redesign paired with this is deliberately NOT here.
+              That accent was chosen while the sentence was a caveat ("your other devices
+              stay signed in"). #284 reversed the fact, so the sentence is now reassurance,
+              and a warning tone would argue with the words inside it. */}
+          <p className="mb-0 rounded-lg border border-line-light bg-surface-icon-box p-3 text-sm text-fg-secondary">
+            {t('profile.passwordSignsOutOtherDevices')}
           </p>
 
           <div>

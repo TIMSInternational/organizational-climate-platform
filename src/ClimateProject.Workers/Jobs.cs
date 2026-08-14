@@ -240,3 +240,71 @@ public sealed class SurveyDraftRetentionWorker(
         }
     }
 }
+
+/// <summary>
+/// The storage-limitation sweep (GDPR Art. 5(1)(e)) on a timer. Runs
+/// <see cref="RetentionCleanupJob.RunAsync"/> -- the same entry point
+/// <c>POST /gdpr/retention-cleanup</c> runs -- so the scheduled sweep and the manual one
+/// cannot come to disagree about what has expired (#144).
+///
+/// <para><b>Here rather than in a scheduler of its own.</b> #144 asks for retention cleanup to
+/// be scheduled and says it belongs alongside #101's jobs. It takes the same advisory lease as
+/// every other job in this file, so it stays single-flight across however many instances are
+/// running -- which matters more here than elsewhere, because two concurrent sweeps would both
+/// be issuing deletes.</para>
+///
+/// <para><b>Capped per tick.</b> Each category deletes at most
+/// <c>Scheduling:RetentionCleanupBatchSize</c> rows, so a first sweep over an accumulated
+/// backlog drains over several ticks rather than becoming one enormous transaction held under
+/// the lease. The HTTP route passes no cap, on the same reasoning
+/// <c>DELETE /surveys/drafts/expired</c> uses: a human asking for the sweep by hand is asking
+/// it to finish.</para>
+///
+/// <para><b>Scheduled is not the same as running.</b> This host is built by no workflow and
+/// deployed as no service, exactly as <see cref="SurveyDraftRetentionWorker"/> records, so
+/// nothing ticks this in production until #275. Until then the only thing that sweeps is a
+/// super admin calling the route.</para>
+///
+/// <para><b>Daily.</b> Every window here is measured in days or months -- a year of
+/// notifications, ninety days past an invitation's expiry -- so nothing observable depends on
+/// the sweep being prompt. Daily keeps each run's work small without asking the database a
+/// question whose answer changes once a day.</para>
+/// </summary>
+public sealed class RetentionCleanupWorker(
+    IServiceScopeFactory scopeFactory,
+    WorkerHeartbeats heartbeats,
+    IOptions<WorkerSchedulingOptions> options,
+    ILogger<RetentionCleanupWorker> logger)
+    : ScheduledJobWorker(
+        WorkerJobs.RetentionCleanup,
+        options.Value.RetentionCleanupInterval,
+        scopeFactory,
+        heartbeats,
+        logger)
+{
+    private readonly int _batchSize = options.Value.RetentionCleanupBatchSize;
+
+    protected override async Task RunOnceAsync(
+        IServiceProvider services,
+        DateTimeOffset nowUtc,
+        CancellationToken cancellationToken)
+    {
+        var db = services.GetRequiredService<ClimateProjectDbContext>();
+        var loggerFactory = services.GetRequiredService<ILoggerFactory>();
+
+        var result = await RetentionCleanupJob.RunAsync(
+            db, loggerFactory, nowUtc, _batchSize, cancellationToken);
+
+        foreach (var category in result.Categories.Where(c => c.MoreRemaining))
+        {
+            // Only worth a line when the cap actually bit. A category reporting a backlog day
+            // after day means rows arrive faster than the retention window lets them go, which
+            // is a policy question rather than a scheduling one.
+            logger.LogInformation(
+                "Retention cleanup took its full batch of {Deleted} from {Category}; more rows remain for the " +
+                "next tick.",
+                category.Deleted,
+                category.Category);
+        }
+    }
+}

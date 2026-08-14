@@ -1,13 +1,19 @@
 namespace ClimateProject.Application.Profile;
 
 /// <summary>
-/// The <c>audit_logs.action</c> vocabulary written by the profile routes (#136).
+/// The <c>audit_logs.action</c> vocabulary for the caller's own account (#136).
 ///
-/// <c>audit_logs</c> has existed since #56's schema pass and, until now, **nothing in the
-/// application ever wrote a row to it** -- so <c>GET /profile/activity</c> would have been
-/// an endpoint that is correct, tested, and permanently empty. The two events a person can
-/// cause on their own account are therefore recorded here, which is what makes the activity
-/// history a real feature rather than a shape.
+/// <c>audit_logs</c> has existed since #56's schema pass and, when #136 landed, nothing in the
+/// application wrote a row to it -- so <c>GET /profile/activity</c> would have been an
+/// endpoint that is correct, tested, and permanently empty. The three events a person can
+/// cause on their own account were therefore recorded by the profile routes themselves.
+///
+/// **#143 moved the writing.** Every audited request now goes through one writer,
+/// <c>AuditWritingMiddleware</c>, which derives an action from the route
+/// (<c>{resource}.{verb}</c>). These constants survive as the *names* the profile routes ask
+/// that writer to use, via <c>ProfileEndpoints.RecordActivity</c>: they are what
+/// <c>/profile/activity</c> and its tests read back, and a route-derived
+/// <c>profile.password.update</c> is not that.
 ///
 /// Constants rather than inline literals so the writer and the tests cannot drift, matching
 /// how <c>NotificationTypes</c> and <c>Roles</c> are handled.

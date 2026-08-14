@@ -1,6 +1,7 @@
 using ClimateProject.Api;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Api.Infrastructure;
+using ClimateProject.Api.Infrastructure.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Cors;
 using ClimateProject.Application.Email;
@@ -15,14 +16,12 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using System.Globalization;
 using System.Text;
-using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -154,8 +153,17 @@ builder.Services.AddOptions<DatabaseOptions>()
     })
     .ValidateOnStart();
 
-builder.Services.AddDbContext<ClimateProjectDbContext>((sp, options) =>
-    options.UseNpgsql(sp.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString));
+// AuditLogAppendOnlyInterceptor makes an UPDATE or DELETE of an audit row throw rather than
+// succeed (#143). Registered on the context itself, not in one endpoint, because the property
+// wanted is "nothing in this process can rewrite the trail" -- see the interceptor for what
+// that does and does not cover, and for why the complete version is a database grant.
+builder.Services.AddDbContext<ClimateProjectDbContext>((sp, options) => options
+    .UseNpgsql(sp.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString)
+    .AddInterceptors(AuditLogAppendOnlyInterceptor.Instance));
+
+// One per request, shared by the audit middleware and whichever handler runs. Handlers use it
+// to name what they did; nothing about it can stop a row being written. See AuditEntry.
+builder.Services.AddScoped<AuditEntry>();
 
 // InternalApiKey guards /api/internal/*, which TrackingInternalEndpoints maps unconditionally.
 // Before #189 an unset key meant those routes were mapped and every call 500'd with "Internal
@@ -222,6 +230,17 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             ValidateLifetime = true,
             NameClaimType = "sub",
         };
+
+        // Revocation (#284). The signature and lifetime checks above say the token was minted
+        // by a holder of the secret and has not expired; this says the session it represents
+        // has not been ended since. It runs here, in authentication, rather than in the
+        // authorization policy below, for two reasons: the refusal is a 401 (the client's
+        // authFetch turns that into "sign in again", which is exactly what happened), and
+        // authentication also covers endpoints that read a token without RequireAuthorization.
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = SecurityStampValidation.ValidateAsync,
+        };
     })
     // Forces the Configure delegate above to run at host-startup time (via the
     // options-validation hosted service that runs after builder.Build()), so a
@@ -235,18 +254,26 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
 // Every authorized endpoint in this app uses the bare RequireAuthorization(), i.e. this
 // policy -- so adding the deactivation check here enforces it product-wide in one place (#280).
 //
-// It reads the token's own isActive claim rather than the database: no per-request user
-// lookup is added, and no token minted by another issuer against the shared TrackingJwtSecret
-// is locked out for lacking a claim it never wrote (see HasDeactivatedAccountClaim). What it
-// buys is that a token saying "deactivated" is refused by the API itself. Before this, the
-// only thing anywhere that read that claim was a client-side redirect in the SPA.
+// It reads the token's own isActive claim rather than the database, so no token minted by
+// another issuer against the shared TrackingJwtSecret is locked out for lacking a claim it
+// never wrote (see HasDeactivatedAccountClaim). What it buys is that a token saying
+// "deactivated" is refused by the API itself. Before this, the only thing anywhere that read
+// that claim was a client-side redirect in the SPA.
 //
 // It is a second line of defence, not the fix: every path that mints a token -- /auth/login,
 // /auth/signup, /auth/google, /auth/refresh and POST /invitations/{token}/accept -- goes
 // through AuthEndpoints.IssueTokenForAsync, which refuses to mint one in the first place.
-// Neither layer revokes a token that was issued while the account was still active --
-// deactivating a user does not end their current session before the token's 24h expiry, and
-// that is a separate change.
+//
+// Neither layer revokes a token that was issued while the account was still ACTIVE:
+// deactivating a user still does not end their current session before the token's 24h expiry.
+// #284 built the mechanism that could -- rotating User.SecurityStamp ends every session the
+// user has open, and the JwtBearerEvents hook above enforces it -- but the only two places
+// that rotate it are the two password paths #284 names. Wiring deactivation into it is a
+// change to UserEndpoints, and still a separate one.
+//
+// (This comment used to say "no per-request user lookup is added" of the policy. That is
+// still true of the policy, but no longer true of the request: #284's OnTokenValidated hook
+// reads the acting user's stamp on every request whose token carries the claim.)
 builder.Services.AddAuthorization(options =>
 {
     options.DefaultPolicy = new AuthorizationPolicyBuilder()
@@ -339,32 +366,24 @@ builder.Services.AddScoped<INotificationSender>(sp => sp.GetRequiredService<Emai
 
 builder.Services.AddOpenApi();
 
-// POST /microclimates/{id}/responses is the app's only unauthenticated write surface (approved
-// 2026-07-31 for microclimates configured with AnonymousResponses). With no per-respondent
-// identity and no persisted individual response rows to reconcile against later, a single
-// visitor/bot holding the microclimate's GUID could otherwise inflate ResponseCount/
-// EngagementLevel/the word cloud without bound. Partition per client IP -- generous enough for
-// legitimate shared-IP participation (office NAT, etc.) but bounded against a scripted flood.
-builder.Services.AddRateLimiter(options =>
-{
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddPolicy(MicroclimateEndpoints.ResponseSubmissionRateLimiterPolicy, httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 30,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-            }));
+// Rate limiting (#146). Every policy, limit and partition key lives in RateLimitPolicies;
+// this line is only the registration. Two of the policies predate #146 (the microclimate and
+// survey public-submission surfaces) and are unchanged in their limits -- what #146 added is
+// the authentication and public-token classes, a coarse global ceiling with an explicit
+// carve-out for the App Runner probe paths, and a shared notion of "which caller is this"
+// that is not the socket peer. See RateLimitPolicies and ClientIpResolver.
+builder.Services.AddClimateProjectRateLimiting();
 
-    // POST /surveys/{id}/responses and GET /surveys/{id}/respond (#118). Its own policy
-    // rather than the microclimate one -- the partition and limits live with the
-    // endpoints, in SurveyResponseEndpoints.
-    options.AddPolicy(
-        SurveyResponseEndpoints.ResponseSubmissionRateLimiterPolicy,
-        SurveyResponseEndpoints.PartitionResponseSubmission);
-});
+// Security response headers and the request-body ceiling (#146). See SecurityHardening.
+builder.Services.AddClimateProjectSecurityOptions();
+
+// Kestrel's own body ceiling, raised from its 30 MiB default to the upload ceiling so that
+// Kestrel does not reject a legitimate bulk import before the middleware has decided which
+// ceiling applies. The middleware is what enforces the strict default per request.
+builder.WebHost.ConfigureKestrel((context, kestrelOptions) =>
+    kestrelOptions.Limits.MaxRequestBodySize =
+        context.Configuration.GetValue<long?>("Security:MaxUploadBodyBytes")
+        ?? new SecurityOptions().MaxUploadBodyBytes);
 
 var app = builder.Build();
 
@@ -393,8 +412,30 @@ app.UseExceptionHandler(errorApp =>
     });
 });
 
+// Before UseCors so the headers are attached to every response the pipeline can produce,
+// including the exception handler's 500 above.
+app.UseClimateProjectSecurityHeaders();
+
 app.UseCors("Frontend");
+
+// After UseCors so a 413 still carries the CORS headers the browser needs in order to read
+// it, and before authentication so an oversized body is refused without a token or database
+// round trip.
+app.UseClimateProjectRequestSizeLimit();
+
 app.UseAuthentication();
+
+// Between authentication and authorization, on purpose (#143). After UseAuthentication because
+// it reads HttpContext.User to attribute the row; before UseAuthorization so that a mutating
+// request refused by the authorization middleware is still recorded, rather than disappearing
+// before anything sees it. That second half only helps when the caller is identifiable -- a
+// 403 for a deactivated account is recorded, a 401 with no token cannot be, because
+// audit_logs.company_id is NOT NULL and there is no tenant to file it under.
+//
+// It audits every POST/PUT/PATCH/DELETE that reaches an endpoint, with no per-endpoint opt-in
+// -- that is the whole requirement of the issue.
+app.UseAuditLogging();
+
 app.UseAuthorization();
 app.UseRateLimiter();
 
@@ -497,6 +538,8 @@ app.MapDemographicSnapshotEndpoints();
 app.MapSearchEndpoints();
 app.MapSystemStatusEndpoints();
 app.MapDashboardEndpoints();
+app.MapAuditEndpoints();
+app.MapGdprEndpoints();
 
 app.Run();
 

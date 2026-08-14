@@ -5,6 +5,16 @@
     <ProjectReference Include="..\ClimateProject.Infrastructure\ClimateProject.Infrastructure.csproj" />
   </ItemGroup>
 
+  <!--
+    Same arrangement ClimateProject.Infrastructure already uses for ClimateProject.UnitTests.
+    Added for #146 so the rate-limiting partition functions can be exercised directly: they
+    are pure functions of an HttpContext, and asserting on the partition key they return is
+    the only way to prove the App Runner proxy fix without a production-shaped deployment.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="ClimateProject.IntegrationTests" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />

@@ -3575,6 +3575,12 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnName("search_vector")
                         .HasComputedColumnSql("to_tsvector('simple', coalesce(name, '') || ' ' || coalesce(email, '') || ' ' || translate(coalesce(email, ''), '@._-', '    '))", true);
 
+                    b.Property<Guid>("SecurityStamp")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("security_stamp")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");

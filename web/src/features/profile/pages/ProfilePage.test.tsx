@@ -230,7 +230,7 @@ describe('ProfilePage', () => {
   })
 
   it('sends both passwords and clears the fields once the change succeeds', async () => {
-    vi.mocked(changePassword).mockResolvedValue(undefined)
+    vi.mocked(changePassword).mockResolvedValue('replacement-token')
     renderPage()
 
     const current = await screen.findByLabelText(/Current password/)
@@ -251,29 +251,61 @@ describe('ProfilePage', () => {
   })
 
   /**
-   * `#284` landed: rotating `User.SecurityStamp` in `PUT /profile/password` invalidates every
-   * token minted under the old stamp, so a password change DOES sign every other device out
-   * immediately. Somebody on this form is quite likely there *because* they think they were
-   * compromised, so the sentence stays as standing copy shown before they submit — but it now
-   * reassures rather than warns, and it must survive a refactor of this card.
-   *
-   * The negative assertion is the point of this test. The copy said the opposite for as long
-   * as the API behaved that way, and nothing failed when `#284` made it false, because the
-   * API fix and this card are on different branches — the lie exists only in the merge. So
-   * the old sentence is banned by name here: if it ever comes back, this reddens.
+   * A password change now revokes every session for the account (#284), the one that made it
+   * included — so the replacement token in the response is this page's next session. Dropping
+   * it means the very next request 401s and `authFetch` sends the user to the login page off
+   * the back of their own successful save.
    */
-  it('states that other sessions are signed out, before the change is submitted', async () => {
+  it('stores the replacement token before anything else is fetched', async () => {
+    // Every token the page sees when it loads its activity list, in order. The last entry is
+    // the reload the password change triggers, and it has to be the replacement -- storing
+    // the token after that request goes out would be a 401 and a bounce to /login.
+    const tokensAtActivityLoad: (string | null)[] = []
+
+    localStorage.setItem('climate_platform_token', 'stale-token')
+    vi.mocked(changePassword).mockResolvedValue('replacement-token')
+    vi.mocked(getProfileActivity).mockImplementation(async () => {
+      tokensAtActivityLoad.push(localStorage.getItem('climate_platform_token'))
+      return ACTIVITY
+    })
+
     renderPage()
 
-    expect(
-      await screen.findByText(/signs out every other device immediately/i),
-    ).toBeTruthy()
-    // The pre-#284 claim must never return: it tells a compromised user they are still
-    // exposed when they are not.
-    expect(screen.queryByText(/does not sign out your other devices/i)).toBeNull()
-    expect(screen.queryByText(/stays signed in for up to 24 hours/i)).toBeNull()
+    await userEvent.type(await screen.findByLabelText(/Current password/), 'Current1Pass')
+    await userEvent.type(screen.getByLabelText(/^New password/), 'Rep1acementPass')
+    await userEvent.type(screen.getByLabelText(/Confirm new password/), 'Rep1acementPass')
+    await userEvent.click(screen.getByRole('button', { name: 'Change password' }))
+
+    await waitFor(() => expect(changePassword).toHaveBeenCalledTimes(1))
+    expect(localStorage.getItem('climate_platform_token')).toBe('replacement-token')
+
+    // The initial load ran on the old token; the refresh after the change ran on the new one.
+    await waitFor(() => expect(tokensAtActivityLoad).toEqual(['stale-token', 'replacement-token']))
+  })
+
+  /**
+   * Somebody on this form is quite likely there *because* they think they were compromised,
+   * so whether the act ends that compromise is the most useful thing to know before
+   * submitting. The disclosure is standing copy, shown before they submit rather than in the
+   * success alert, and it must survive a refactor of this card. Until #284 it said the
+   * opposite, truthfully; this asserts it now says the new truth.
+   */
+  it('warns that other devices will be signed out, before the change is submitted', async () => {
+    renderPage()
+
+    expect(await screen.findByText(/signs you out everywhere else/i)).toBeTruthy()
     // Present from the outset, not only after a successful save.
     expect(screen.queryByText('Your password was changed.')).toBeNull()
+
+    // Kept from the UI branch's version of this test, which the merge would otherwise have
+    // dropped. The pre-#284 claim must never return: it tells somebody who came here BECAUSE
+    // they think they were compromised that they are still exposed, when #284 has just ended
+    // it. That sentence was true for as long as the API behaved that way and nothing failed
+    // when #284 made it false — the API fix and the redesigned card were on different
+    // branches, so the lie only ever existed in this merge. Banned by name, so it reddens if
+    // it comes back.
+    expect(screen.queryByText(/does not sign out your other devices/i)).toBeNull()
+    expect(screen.queryByText(/stays signed in for up to 24 hours/i)).toBeNull()
   })
 
   it('surfaces the server rejection verbatim rather than a generic message', async () => {

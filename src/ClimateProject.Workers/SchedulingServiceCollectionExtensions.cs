@@ -71,6 +71,7 @@ public static class SchedulingServiceCollectionExtensions
         services.AddHostedService<DigestWorker>();
         services.AddHostedService<ScheduledReportWorker>();
         services.AddHostedService<SurveyDraftRetentionWorker>();
+        services.AddHostedService<RetentionCleanupWorker>();
         services.AddHostedService<WorkerHeartbeatMonitor>();
 
         return services;

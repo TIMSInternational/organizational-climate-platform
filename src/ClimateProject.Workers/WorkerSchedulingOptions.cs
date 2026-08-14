@@ -52,6 +52,13 @@ public sealed class WorkerSchedulingOptions
 
     public TimeSpan SurveyDraftRetentionInterval { get; set; } = TimeSpan.FromHours(1);
 
+    /// <summary>
+    /// How often the GDPR storage-limitation sweep runs (#144). Daily: every window it
+    /// enforces is measured in days or months, so nothing observable depends on it being
+    /// prompt, and a daily tick keeps each run's delete small.
+    /// </summary>
+    public TimeSpan RetentionCleanupInterval { get; set; } = TimeSpan.FromDays(1);
+
     /// <summary>How often the in-process liveness check runs. See <c>WorkerHeartbeatMonitor</c>.</summary>
     public TimeSpan HeartbeatMonitorInterval { get; set; } = TimeSpan.FromMinutes(5);
 
@@ -80,6 +87,14 @@ public sealed class WorkerSchedulingOptions
     public int SurveyDraftRetentionBatchSize { get; set; } = SurveyDraftRetentionJob.DefaultBatchSize;
 
     /// <summary>
+    /// Rows deleted per retention-cleanup category per tick. A cap, not a target, for the same
+    /// reason as the draft cap: the first sweep over an accumulated backlog must not become one
+    /// enormous transaction. Whatever a tick does not reach waits a day, and nothing in the
+    /// product can see the difference.
+    /// </summary>
+    public int RetentionCleanupBatchSize { get; set; } = RetentionCleanupJob.DefaultBatchSize;
+
+    /// <summary>
     /// Fail the host at startup on a configuration that cannot work, rather than at the first
     /// tick. #189 established that principle for the API: a process that boots misconfigured
     /// reports a healthy deploy and then does nothing useful. A zero interval is worse here
@@ -93,6 +108,7 @@ public sealed class WorkerSchedulingOptions
         Require(DigestInterval, nameof(DigestInterval));
         Require(ScheduledReportInterval, nameof(ScheduledReportInterval));
         Require(SurveyDraftRetentionInterval, nameof(SurveyDraftRetentionInterval));
+        Require(RetentionCleanupInterval, nameof(RetentionCleanupInterval));
         Require(HeartbeatMonitorInterval, nameof(HeartbeatMonitorInterval));
 
         Require(NotificationBatchSize, nameof(NotificationBatchSize));
@@ -101,6 +117,7 @@ public sealed class WorkerSchedulingOptions
         Require(DigestMaxUsersPerRun, nameof(DigestMaxUsersPerRun));
         Require(ScheduledReportBatchSize, nameof(ScheduledReportBatchSize));
         Require(SurveyDraftRetentionBatchSize, nameof(SurveyDraftRetentionBatchSize));
+        Require(RetentionCleanupBatchSize, nameof(RetentionCleanupBatchSize));
 
         if (HeartbeatStaleTolerance <= 0)
         {

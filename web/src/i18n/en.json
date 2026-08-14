@@ -1378,7 +1378,7 @@
     "changePassword": "Change password",
     "passwordMismatch": "The new passwords do not match.",
     "passwordSaved": "Your password was changed.",
-    "passwordOtherSessionsNote": "Changing your password signs out every other device immediately. This one stays signed in.",
+    "passwordSignsOutOtherDevices": "Changing your password signs you out everywhere else. Any session already open on another device stops working right away.",
     "preferencesTitle": "Preferences",
     "preferencesDescription": "Applied here as soon as you save, and stored on your account so the emails we send you use your language.",
     "preferencesSaved": "Your preferences were saved.",
