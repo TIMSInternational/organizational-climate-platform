@@ -13,7 +13,7 @@ import type { SurveyRespondView } from '../../features/surveys/api/surveyRespons
 import type { PublicMicroclimateDetail } from '../../features/microclimates/api/microclimates'
 
 /**
- * The instrument panel must actually stick.
+ * The respond instrument must actually stick.
  *
  * ## The defect this exists to stop coming back
  *
@@ -29,25 +29,78 @@ import type { PublicMicroclimateDetail } from '../../features/microclimates/api/
  * `getBoundingClientRect().top = -238` where `top-gutter` asks for 12. The
  * anonymity promise left the screen after the first question and never came back.
  *
+ * ## What the employee redesign moved, and what it did not
+ *
+ * On the two SURVEY routes there is no right-hand panel any more. The approved
+ * design cuts the rail — its position cost the form a third of the width, left a
+ * column of white space below the fold, and, because it collapsed at `lg`, drew
+ * nothing at all on a phone, which is where this page is mostly answered. Its
+ * contents were redistributed rather than dropped, and they went to two different
+ * places for two different reasons:
+ *
+ * - the anonymity promise became the first full-width block of the page. It is in
+ *   view because it is FIRST, not because it sticks, so it is no longer this file's
+ *   business; `features/surveys/components/SurveyRespondForm.test.tsx` ("puts the
+ *   anonymity promise above the questions, not beside them") is what holds it there.
+ * - the answered count and the two actions ride `[data-slot="respond-submit-bar"]`,
+ *   a bar stuck to the BOTTOM of the viewport — the one thing on the page that still
+ *   has to follow a respondent down a twelve-question form.
+ *
+ * So the property is unchanged and only the element and the direction moved: the
+ * box that must stay in view has to actually stick, and no ancestor's overflow may
+ * swallow it.
+ *
+ * ## The third route has nothing to stick at all, and what is asserted there instead
+ *
+ * `/microclimates/:id/respond` kept the old rail longer than either survey route did,
+ * and it kept it BECAUSE OF THIS FILE: the page's own comments cited the case below as
+ * the reason for its `lg:grid-cols-3` layout and `lg:sticky lg:top-gutter` panel. That
+ * is a test dictating a design. The approved design's `pulse` screen draws one narrow
+ * centred column — eyebrow, one large question, the scale, an optional box, a single
+ * Send, and the anonymity line as a footnote — with no rail and no bottom bar, and the
+ * page now matches it.
+ *
+ * The case was not deleted, because the route did not stop having a shape worth
+ * pinning; it was re-pointed at the property that survives the rail:
+ *
+ * - **nothing on that page is sticky**, so the rail cannot come back by accident and
+ *   a bar the design does not draw cannot be added without this going red. Not
+ *   vacuous: `installStylesheet` compiles both sticky shapes, which is what the
+ *   `loads the real stylesheet` case above proves.
+ * - **no ancestor of the column would clip or capture it**, measured with the same
+ *   `scrollportAncestors` walk as the two survey cases. On a non-sticky column the
+ *   consequence is different — the box is not unpinned, it is CUT — but the cause is
+ *   the identical `overflow` on an ancestor, and the walker is the identical one.
+ * - **the Send action is reachable without a horizontal scroll**: the question card
+ *   can shrink below its own min-content width (`min-w-0`), so a long option label
+ *   cannot widen the card, the column and then the document, and push the button off
+ *   the side of a phone.
+ *
  * ## Why the assertions look the way they do
  *
  * The test that named this behaviour before asserted `panel.className` contained
  * `'sticky'`, which is true of a broken page and a working one alike — happy-dom
- * does no layout, so no test in this suite can measure where the panel ends up.
+ * does no layout, so no test in this suite can measure where the box ends up.
  *
  * What happy-dom *does* do is resolve selectors and compute styles, so this
  * compiles the real `src/index.css` through the real Tailwind compiler (the
  * approach `styles/tableOverflow.test.ts` established), puts it in the document,
  * renders the real page, and asserts the two things that are computable:
  *
- * 1. the panel itself computes `position: sticky` with `top: 12px` — through the
- *    `lg` media query, which happy-dom evaluates against its 1024px `innerWidth`;
+ * 1. the sticky box itself computes `position: sticky` with the offset it claims —
+ *    `bottom: 0px` for the survey bar. The same reading run over every element of the
+ *    microclimate page is what proves the pulse has no such box left;
  * 2. no ancestor of it computes an `overflow` that would make that ancestor the
- *    panel's scrollport.
+ *    box's scrollport.
  *
  * (2) is the cause rather than the symptom, which is the only half of this a
  * layout-free DOM can hold. Adding `overflow-x-auto` back to `RespondShell`'s
  * `<main>` reddens it.
+ *
+ * The survey bar carries one assertion the old panel could not: it is re-read at a
+ * 390px viewport. `sticky bottom-0` and `lg:sticky lg:bottom-0` are indistinguishable
+ * at happy-dom's default 1024px, and the second is the exact defect the redesign was
+ * for — an instrument that is not there on the screen the form is answered on.
  */
 
 const WEB = process.cwd()
@@ -109,16 +162,36 @@ function flattenLayers(css: string): string {
  * The utilities this file needs compiled.
  *
  * `@source` scanning does not run through the `compile()` API, so the candidate list
- * is explicit. `overflow-x-auto` is here as the NEGATIVE control — `detects an
- * ancestor that would swallow the sticky panel` needs the rule to exist in the
- * stylesheet for the walker to have anything to find.
+ * is explicit. Three groups: what the survey bar is written in (`sticky bottom-0`),
+ * the whole `overflow` family, and `min-w-0`.
+ *
+ * `lg:sticky lg:top-gutter` stays compiled even though no page writes it any more.
+ * It is the shape the cut microclimate rail was written in, and it is exactly what
+ * the "nothing on this page is sticky" sweep has to be able to SEE: a class that
+ * does not compile computes nothing, so the sweep would find nothing and go green
+ * against a rail that had come back. Same reasoning as the overflow family below.
+ *
+ * The overflow family is the NEGATIVE control, and it is a family rather than the one
+ * class `RespondShell` actually regressed with. The ancestor sweep can only see a
+ * property that computes to something, so a class that is not in this list is a guard
+ * this file would let through: with only `overflow-x-auto` compiled, the same defect
+ * rewritten as `overflow-hidden` on `<main>` computes nothing, the sweep finds
+ * nothing, and the test goes green on a broken page.
  */
 const CANDIDATES = [
   'lg:sticky',
   'lg:top-gutter',
   'sticky',
   'top-gutter',
+  'bottom-0',
+  'overflow-auto',
+  'overflow-clip',
+  'overflow-hidden',
+  'overflow-scroll',
   'overflow-x-auto',
+  'overflow-x-hidden',
+  'overflow-y-auto',
+  'overflow-y-hidden',
   'min-w-0',
 ]
 
@@ -133,7 +206,71 @@ let stylesheet: string
  */
 const SCROLLPORT_VALUES = ['auto', 'scroll', 'hidden', 'clip', 'overlay']
 
-/** The panel's ancestors, nearest first, up to and including `<html>`. */
+/**
+ * Every way the guard can be written, read separately — because the DOM under this
+ * test does not fold them into each other.
+ *
+ * MEASURED rather than assumed: happy-dom's computed style does NOT expand the
+ * `overflow` shorthand onto the two axes. `<main class="overflow-hidden">` computes
+ * `overflowX === ''`, so a sweep that read only the axes reported "no scrollport"
+ * against the exact defect this file exists for, merely rewritten in the shorthand
+ * — a green test on a broken page. The shorthand is therefore its own reading, and
+ * it is split, because `overflow: hidden auto` is legal and sets the two axes to two
+ * different things.
+ */
+function overflowTokens(computed: CSSStyleDeclaration): string[] {
+  return [computed.overflow, computed.overflowX, computed.overflowY]
+    .flatMap((value) => value.split(/\s+/))
+    .filter((token) => token.length > 0)
+}
+
+/**
+ * happy-dom's default viewport width, and the one every `lg:` assertion here reads
+ * against — `lg` is 64rem/1024px, so this is exactly on the boundary.
+ */
+const DEFAULT_VIEWPORT_WIDTH = 1024
+
+/** A phone. What the redesign cut the right-hand rail for. */
+const PHONE_VIEWPORT_WIDTH = 390
+
+/**
+ * happy-dom evaluates media queries against its browser frame's viewport, which is
+ * reachable only through `window.happyDOM` — not part of the DOM `Window` type, so
+ * it is taken through a narrow structural cast rather than a blanket `any`.
+ */
+function setViewportWidth(width: number): void {
+  const frame = window as unknown as {
+    happyDOM: { setViewport(viewport: { width: number }): void }
+  }
+  frame.happyDOM.setViewport({ width })
+}
+
+/**
+ * `element`'s own classes, re-resolved at whatever the viewport is NOW.
+ *
+ * MEASURED, and the reason this is not simply `getComputedStyle(element)`: happy-dom
+ * caches an element's computed style and a viewport change does not invalidate it.
+ * After `setViewport({ width: 390 })`, `matchMedia('(width >= 64rem)')` correctly
+ * returns false while `getComputedStyle(theSameElement)` keeps handing back the `lg`
+ * answer it computed at 1024 — so a second reading of the same node is an assertion
+ * that cannot fail, which is worse than no assertion at all. A node created after the
+ * change resolves correctly, so the phone reading is taken on a fresh probe wearing
+ * the class attribute of the real rendered box. The classes are the thing under test;
+ * the node they hang on is not.
+ */
+function stickinessAtCurrentViewport(element: Element): { position: string; bottom: string } {
+  const probe = document.createElement('div')
+  probe.setAttribute('class', element.getAttribute('class') ?? '')
+  document.body.append(probe)
+  try {
+    const computed = getComputedStyle(probe)
+    return { position: computed.position, bottom: computed.bottom }
+  } finally {
+    probe.remove()
+  }
+}
+
+/** The sticky box's ancestors, nearest first, up to and including `<html>`. */
 function ancestorsOf(element: Element): Element[] {
   const chain: Element[] = []
   let current = element.parentElement
@@ -151,16 +288,28 @@ function describeElement(element: Element): string {
   }>`
 }
 
+/**
+ * Every element under `root` that computes `position: sticky`.
+ *
+ * The inverse reading of the two survey assertions, for the one route whose design
+ * pins nothing: instead of naming a box and asking whether it sticks, it asks the
+ * whole page whether anything does. Descriptions rather than nodes so a failure names
+ * the offender.
+ */
+function stickyElements(root: Element): string[] {
+  return [...root.querySelectorAll('*')]
+    .filter((element) => getComputedStyle(element).position === 'sticky')
+    .map(describeElement)
+}
+
 /** Ancestors that would capture a `position: sticky` descendant. */
 function scrollportAncestors(element: Element): string[] {
   return ancestorsOf(element)
-    .filter((ancestor) => {
-      const computed = getComputedStyle(ancestor)
-      return (
-        SCROLLPORT_VALUES.includes(computed.overflowX)
-        || SCROLLPORT_VALUES.includes(computed.overflowY)
-      )
-    })
+    .filter((ancestor) =>
+      overflowTokens(getComputedStyle(ancestor)).some((token) =>
+        SCROLLPORT_VALUES.includes(token),
+      ),
+    )
     .map(describeElement)
 }
 
@@ -271,7 +420,24 @@ function renderAt(path: string, pattern: string, element: React.ReactElement) {
   )
 }
 
-describe('the respond instrument panel sticks', () => {
+/**
+ * The bar, reached THROUGH the control the respondent finishes from.
+ *
+ * `closest` rather than a bare `querySelector('[data-slot=…]')`: the slot is an
+ * attribute anyone can put on anything, and what this file is claiming is that the
+ * box which sticks is the INSTRUMENT — the reading and the actions that used to be
+ * in the rail. Reaching it from the submit button proves the containment by
+ * construction, so if the actions ever move back out of the bar this stops finding
+ * it rather than measuring an empty div.
+ */
+async function findSubmitBar(): Promise<HTMLElement> {
+  const submit = await screen.findByRole('button', { name: 'Enviar mis respuestas' })
+  const bar = submit.closest('[data-slot="respond-submit-bar"]')
+  expect(bar, 'the submit action rides the sticky bar').toBeTruthy()
+  return bar as HTMLElement
+}
+
+describe('the respond instrument sticks', () => {
   beforeAll(async () => {
     const entry = await readFile(join(SRC, 'index.css'), 'utf8')
     const compiled = await compile(entry, {
@@ -293,8 +459,18 @@ describe('the respond instrument panel sticks', () => {
     // No `globals: true` in vite.config.ts, so RTL's auto-cleanup never registers.
     cleanup()
     document.head.innerHTML = ''
+    // `cleanup()` removes RTL's own containers and nothing else, so the hand-written
+    // probe markup the two control cases assign to `document.body.innerHTML` would
+    // otherwise still be in the document when the next case sweeps it. Measured: the
+    // microclimate case below found `<section id="panel" class="lg:sticky …">` and
+    // `<div id="bar" class="sticky bottom-0">` left over from `detects an ancestor
+    // that would swallow the sticky panel`, on a page that renders neither.
+    document.body.innerHTML = ''
     window.localStorage.clear()
     vi.unstubAllGlobals()
+    // A case that reads the bar on a phone must not leave the next one measuring
+    // `lg:` utilities against a 390px window.
+    setViewportWidth(DEFAULT_VIEWPORT_WIDTH)
   })
 
   it('loads the real stylesheet', () => {
@@ -302,22 +478,50 @@ describe('the respond instrument panel sticks', () => {
     // make `position: sticky` fail and every overflow assertion pass vacuously.
     expect(stylesheet.length).toBeGreaterThan(1000)
     installStylesheet()
-    document.body.innerHTML = '<div id="probe" class="lg:sticky lg:top-gutter"></div>'
-    const probe = getComputedStyle(document.getElementById('probe')!)
-    expect(probe.position, '`lg:sticky` compiles and the `lg` query matches').toBe('sticky')
-    expect(probe.top, '`lg:top-gutter` is --admin-size-shell-gutter').toBe('12px')
+    document.body.innerHTML =
+      '<div id="panel-probe" class="lg:sticky lg:top-gutter"></div>'
+      + '<div id="bar-probe" class="sticky bottom-0"></div>'
+
+    // The microclimate panel's pair, which also proves the `lg` query is evaluated
+    // rather than dropped.
+    const panelProbe = getComputedStyle(document.getElementById('panel-probe')!)
+    expect(panelProbe.position, '`lg:sticky` compiles and the `lg` query matches').toBe('sticky')
+    expect(panelProbe.top, '`lg:top-gutter` is --admin-size-shell-gutter').toBe('12px')
+
+    // The survey bar's pair. Unprefixed on purpose: it sticks at every width.
+    const barProbe = getComputedStyle(document.getElementById('bar-probe')!)
+    expect(barProbe.position, '`sticky` compiles').toBe('sticky')
+    expect(barProbe.bottom, '`bottom-0` compiles to a length, not to `calc()`').toBe('0px')
   })
 
   it('detects an ancestor that would swallow the sticky panel', () => {
     // The companion the sweeps below need: they are all "found nothing", so they
-    // would also pass against a walker that can never find anything. This is the
-    // exact shape `RespondShell`'s `<main>` had.
+    // would also pass against a walker that can never find anything.
+    //
+    // Two guards and two sticky shapes, all four combinations. `overflow-x-auto` is
+    // the exact class `RespondShell`'s `<main>` had, and it reaches `overflow-y`
+    // only through the used-value promotion — so the walker has to read the axis the
+    // author did NOT write. `overflow-hidden` is the shorthand, the form a
+    // wide-content guard is most often written in, and it is only visible here if
+    // the computed style expands it onto both axes.
     installStylesheet()
-    document.body.innerHTML =
-      '<main class="overflow-x-auto"><section id="panel" class="lg:sticky lg:top-gutter"></section></main>'
-    const panel = document.getElementById('panel')!
-    expect(getComputedStyle(panel).position).toBe('sticky')
-    expect(scrollportAncestors(panel)).toEqual(['<main class="overflow-x-auto">'])
+    for (const guard of ['overflow-x-auto', 'overflow-hidden']) {
+      document.body.innerHTML =
+        `<main class="${guard}">`
+        + '<section id="panel" class="lg:sticky lg:top-gutter"></section>'
+        + '<div id="bar" class="sticky bottom-0"></div>'
+        + '</main>'
+      const panel = document.getElementById('panel')!
+      const bar = document.getElementById('bar')!
+      expect(getComputedStyle(panel).position).toBe('sticky')
+      expect(getComputedStyle(bar).position).toBe('sticky')
+      expect(scrollportAncestors(panel), `${guard} above a top-sticky panel`).toEqual([
+        `<main class="${guard}">`,
+      ])
+      expect(scrollportAncestors(bar), `${guard} above a bottom-sticky bar`).toEqual([
+        `<main class="${guard}">`,
+      ])
+    }
   })
 
   it('is sticky with nothing above it that scrolls on /surveys/:id/respond', async () => {
@@ -327,25 +531,37 @@ describe('the respond instrument panel sticks', () => {
     installStylesheet()
     renderAt('/surveys/s1/respond', '/surveys/:id/respond', <SurveyRespondPage />)
 
-    const panel = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
-    const computed = getComputedStyle(panel)
-    expect(computed.position, 'the panel is sticky at `lg`').toBe('sticky')
-    expect(computed.top, 'and offset by the shell gutter').toBe('12px')
+    const bar = await findSubmitBar()
+    const computed = getComputedStyle(bar)
+    expect(computed.position, 'the bar is sticky').toBe('sticky')
+    expect(computed.bottom, 'and pinned to the bottom edge of its scrollport').toBe('0px')
 
     // The walk has to have reached the shell, or "no scrollport" is a claim about
-    // nothing. `RespondShell` gives `<main>` the id it also uses as the skip target.
-    const chain = ancestorsOf(panel)
+    // nothing. `RespondShell` gives `<main>` the id it also uses as the skip target,
+    // and the bar is the last child of the `<form>` rather than a sibling of it.
+    const chain = ancestorsOf(bar)
+    expect(chain.some((element) => element.tagName === 'FORM')).toBe(true)
     expect(chain.some((element) => element.tagName === 'MAIN')).toBe(true)
     expect(chain.some((element) => element.tagName === 'HTML')).toBe(true)
 
     expect(
-      scrollportAncestors(panel),
-      'An `overflow` on ANY ancestor makes that ancestor the panel\'s scrollport, '
-        + 'and none of them scrolls — the document does — so the panel stops sticking '
-        + 'and the anonymity promise scrolls off the top. Put the wide-content guard on '
-        + 'the wide row itself (see RespondQuestionField\'s ranking <ol>), never on a '
-        + 'box the panel sits inside.',
+      scrollportAncestors(bar),
+      'An `overflow` on ANY ancestor makes that ancestor the bar\'s scrollport, '
+        + 'and none of them scrolls — the document does — so the bar stops sticking '
+        + 'and the answered count and both actions scroll off the bottom. Put the '
+        + 'wide-content guard on the wide row itself (see RespondQuestionField\'s '
+        + 'ranking <ol>), never on a box the bar sits inside.',
     ).toEqual([])
+
+    // The rail was cut because it drew nothing below `lg` — on a phone, which is
+    // where this page is mostly answered. `lg:sticky` would satisfy every assertion
+    // above, because happy-dom's window is exactly 1024px, and would reintroduce
+    // that defect at the bottom of the screen instead of the side. So the same box
+    // is re-read on a phone.
+    setViewportWidth(PHONE_VIEWPORT_WIDTH)
+    const onPhone = stickinessAtCurrentViewport(bar)
+    expect(onPhone.position, 'the bar sticks on a phone too, not only from `lg` up').toBe('sticky')
+    expect(onPhone.bottom).toBe('0px')
   })
 
   it('is sticky with nothing above it that scrolls on the public /survey/:id', async () => {
@@ -355,21 +571,82 @@ describe('the respond instrument panel sticks', () => {
     installStylesheet()
     renderAt('/survey/s1', '/survey/:id', <PublicSurveyRespondPage />)
 
-    const panel = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
-    expect(getComputedStyle(panel).position).toBe('sticky')
-    expect(scrollportAncestors(panel)).toEqual([])
+    const bar = await findSubmitBar()
+    expect(getComputedStyle(bar).position).toBe('sticky')
+    expect(getComputedStyle(bar).bottom).toBe('0px')
+
+    // Same vacuity control as the authenticated route: this shell is assembled by a
+    // different page component, so "no scrollport" has to be a claim about a walk
+    // that actually reached one.
+    const chain = ancestorsOf(bar)
+    expect(chain.some((element) => element.tagName === 'MAIN')).toBe(true)
+    expect(chain.some((element) => element.tagName === 'HTML')).toBe(true)
+
+    expect(scrollportAncestors(bar)).toEqual([])
   })
 
-  it('is sticky with nothing above it that scrolls on /microclimates/:id/respond', async () => {
+  /**
+   * The pulse pins nothing, so this measures what is left: that it stays a plain
+   * reading order, and that nothing above it can clip that order or push the one
+   * action off the side of a phone. See the third section of this file's docstring
+   * for why the case reads this way rather than asserting a rail that the approved
+   * design never drew.
+   */
+  it('pins nothing, and nothing above the column clips it, on /microclimates/:id/respond', async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response(JSON.stringify(microclimate()), { status: 200 }),
     )
     installStylesheet()
-    renderAt('/microclimates/m1/respond', '/microclimates/:id/respond', <MicroclimateRespondPage />)
+    const { container } = renderAt(
+      '/microclimates/m1/respond',
+      '/microclimates/:id/respond',
+      <MicroclimateRespondPage />,
+    )
 
-    const panel = await screen.findByRole('region', { name: 'Sobre esta sesión' })
-    expect(getComputedStyle(panel).position).toBe('sticky')
-    expect(scrollportAncestors(panel)).toEqual([])
+    // Reached through the control the respondent finishes from, for `findSubmitBar`'s
+    // reason: what is claimed is a property of the column the Send button is IN, so
+    // the containment is proved by construction rather than by a lucky selector.
+    const submit = await screen.findByRole('button', { name: 'Enviar' })
+    const column = submit.closest('[data-slot="pulse-column"]')
+    expect(column, 'the Send action is inside the one column the design draws').toBeTruthy()
+
+    // The rail is gone and no bar replaced it. Not vacuous: `installStylesheet`
+    // compiles `sticky`, `lg:sticky`, `bottom-0` and `top-gutter`, which the
+    // `loads the real stylesheet` case measures directly — so a rail or a bar
+    // reintroduced in either shape computes `sticky` here and is named.
+    // The RENDERED tree, not `document.body`: the control cases above write probe
+    // markup straight into the body, and a sweep of the body would report their
+    // leftovers as this page's.
+    expect(
+      stickyElements(container),
+      'The approved `pulse` screen is one column with nothing pinned to the '
+        + 'viewport. A right-hand rail was kept on this route for months because '
+        + 'this file asserted one; do not put it back to satisfy a test.',
+    ).toEqual([])
+
+    // The walk has to have reached the shell, or "no scrollport" is a claim about
+    // nothing.
+    const chain = ancestorsOf(column!)
+    expect(chain.some((element) => element.tagName === 'MAIN')).toBe(true)
+    expect(chain.some((element) => element.tagName === 'HTML')).toBe(true)
+
+    expect(
+      scrollportAncestors(column!),
+      'An `overflow` on any ancestor makes that ancestor a scrollport, and none of '
+        + 'them scrolls — the document does. On this column the cost is not a box '
+        + 'that stops sticking but a column that is CUT, with the Send button and '
+        + 'the anonymity footnote below the cut. Put the wide-content guard on the '
+        + 'wide row itself, never on a box the column sits inside.',
+    ).toEqual([])
+
+    // Reachable without a horizontal scroll: the question card is a grid item, so
+    // its automatic minimum size is its min-content width. Without `min-w-0` a long
+    // unbroken option label widens the card, the card widens the column and the
+    // column widens the document — and the button goes off the side of a phone.
+    // `detects a card that cannot shrink`, below, is the control for this reading.
+    const card = document.querySelector('form fieldset')
+    expect(card, 'the question renders in a fieldset inside the form').toBeTruthy()
+    expect(getComputedStyle(card!).minWidth).toBe('0px')
   })
 })
 
@@ -449,3 +726,4 @@ describe('the wide-content guard sits on the wide row', () => {
     expect(getComputedStyle(document.getElementById('list')!).overflowX).not.toBe('auto')
   })
 })
+

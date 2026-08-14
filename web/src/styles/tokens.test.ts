@@ -180,13 +180,28 @@ describe('control density', () => {
 })
 
 describe('colour palette', () => {
-  it('is the legacy Twenty-CRM admin palette, unchanged', () => {
-    expect(token('--admin-bg-outer')).toBe('#f0f0f0')
+  it('is the admin palette: blue on the shell, white inside', () => {
+    // No longer byte-for-byte legacy Twenty-CRM. Federico asked for "blue on the
+    // shell, white inside", so `--admin-bg-shell` went navy and the content ground
+    // went white -- and the light neutrals were re-biased from green-grey to
+    // blue-grey, because a green-biased grey under a navy chrome reads as two
+    // unrelated products. Values only; whether any of these pairings is legible is
+    // measured in the contrast suites next door (`shellInkContrast`,
+    // `chipVariantContrast`, `accentContrast`, ...). Two different claims, kept in
+    // two places on purpose: this one catches a value changing AT ALL, those catch a
+    // value changing into something unreadable.
+    expect(token('--admin-bg-outer')).toBe('#ffffff')
     expect(token('--admin-bg-panel')).toBe('#ffffff')
-    expect(token('--admin-border-default')).toBe('#e0e0e0')
-    expect(token('--admin-font-primary')).toBe('#141414')
-    expect(token('--admin-font-secondary')).toBe('#474747')
-    expect(token('--admin-font-tertiary')).toBe('#818181')
+    expect(token('--admin-border-default')).toBe('#dbe3ee')
+    expect(token('--admin-font-primary')).toBe('#0d1626')
+    expect(token('--admin-font-secondary')).toBe('#44536b')
+    expect(token('--admin-font-tertiary')).toBe('#78879c')
+    // The shell frame itself. Pinned because it is the one token the redesign is
+    // ABOUT: it is what "blue on the shell" means, and it is deliberately a separate
+    // token from `--admin-bg-outer`, which is also the ground of the sign-in and
+    // survey-answering screens and must stay white.
+    expect(token('--admin-bg-shell')).toBe('#122c4d')
+    expect(darkToken('--admin-bg-shell')).toBe('#0a1c31')
     // The brand accent. NOT byte-for-byte legacy any more: UI-0 revalued it from
     // the legacy `#2e9098` (oklch chroma 0.089, under the 0.1 floor, which is why
     // the product read grey) to the validated teal, and split off a darker fill

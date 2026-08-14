@@ -122,10 +122,12 @@ describe('LoginPage failure triage', () => {
     expect(await screen.findByText('Sign-in is turned off')).toBeTruthy()
   })
 
-  it('offers a way to the register page', async () => {
-    renderAuthRoutes('/login')
-    expect(screen.getByRole('link', { name: 'Create an account' }).getAttribute('href')).toBe('/register')
-  })
+  // The "offers a way to the register page" test that used to sit here is gone,
+  // not moved: the link it asserted was removed on purpose. `POST /auth/signup`
+  // derives the company from the email domain and 400s when none is registered for
+  // it, so for the employees who reach this page it led to a refusal.
+  // `LoginPage.test.tsx` now asserts the absence, and `/register` itself is still
+  // routed and still tested below.
 })
 
 describe('RegisterPage', () => {

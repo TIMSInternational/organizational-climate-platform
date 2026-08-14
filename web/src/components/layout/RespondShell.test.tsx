@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
-import { RespondShell, RespondCaption, RespondReading } from './RespondShell'
+import { RespondShell, RespondCaption, RespondReading, BrandLockup } from './RespondShell'
+import { SidebarBrand } from './SidebarBrand'
 import { TranslationProvider } from '../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../i18n/locale'
 
@@ -10,6 +11,13 @@ function renderShell(children: React.ReactNode = <p>body</p>) {
       <RespondShell skipLabel="Skip to the survey">{children}</RespondShell>
     </TranslationProvider>,
   )
+}
+
+/** The `d` of every path in an element's first `<svg>`, i.e. the glyph itself. */
+function glyph(root: Element | null | undefined): string {
+  const svg = root?.querySelector('svg')
+  if (!svg) return ''
+  return [...svg.querySelectorAll('path')].map((path) => path.getAttribute('d')).join('|')
 }
 
 afterEach(() => {
@@ -81,6 +89,90 @@ describe('RespondShell', () => {
     const main = container.querySelector('main')
     expect(main?.className).toContain('max-w-content')
     expect(main?.className).toContain('mx-auto')
+  })
+
+  /**
+   * The header used to read "Organizational Climate Platform" in plain grey text,
+   * with the two pickers floating beside it. For most employees this is the only
+   * screen of this product they ever see, and it carried nothing that connects it
+   * to the email that sent them here.
+   */
+  it('opens on the brand lockup rather than on the product name in plain text', () => {
+    const { container } = renderShell()
+
+    const lockup = container.querySelector('[data-slot="brand-lockup"]')
+    expect(lockup).toBeTruthy()
+    expect(lockup?.textContent).toBe('CLIMATE')
+    expect(screen.queryByText('Organizational Climate Platform')).toBeNull()
+  })
+
+  /**
+   * "Reuse rather than re-draw." Comparing the rendered path data is the assertion
+   * that actually holds: two components can both *say* `Waves` in a comment, and a
+   * later edit that reaches for a different lucide glyph here compiles, renders and
+   * looks deliberate. This fails.
+   */
+  it('draws the same mark the signed-in rail draws, not a second one', () => {
+    const respond = render(<BrandLockup />)
+    const respondMark = glyph(respond.container.querySelector('[data-slot="brand-lockup"]'))
+    cleanup()
+
+    const rail = render(
+      <TranslationProvider>
+        <SidebarBrand collapsed={false} onToggleCollapsed={() => {}} />
+      </TranslationProvider>,
+    )
+    const railMark = glyph(rail.container.querySelector('[data-slot="sidebar-brand"]'))
+
+    // Guard the guard: two empty strings would compare equal.
+    expect(respondMark.length).toBeGreaterThan(0)
+    expect(respondMark).toBe(railMark)
+  })
+
+  /**
+   * Default off. Anonymity is a per-survey setting the shell cannot know, and the
+   * microclimate route and `/survey/:id` both mounted this frame before the prop
+   * existed — a chip that appeared by default would be the shell making the one
+   * promise it is least entitled to guess at, on their pages.
+   */
+  it('makes no anonymity claim unless it is told to', () => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    renderShell()
+
+    expect(screen.queryByText('Anonymous')).toBeNull()
+  })
+
+  it('states anonymity beside the lockup when the survey is anonymous', () => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    const { container } = render(
+      <TranslationProvider>
+        <RespondShell skipLabel="Skip to the survey" anonymous>
+          <p>body</p>
+        </RespondShell>
+      </TranslationProvider>,
+    )
+
+    const chip = screen.getByText('Anonymous')
+    // The word, not only the tint: `Chip` requires the label for WCAG 1.4.1, and
+    // an icon-only anonymity signal is exactly what that rule exists to prevent.
+    expect(chip.getAttribute('data-slot')).toBe('chip')
+    // In the header beside the lockup, which is the point of moving it out of the
+    // form: it is read before the first question, not after it.
+    expect(container.querySelector('header')?.contains(chip)).toBe(true)
+  })
+
+  it('translates the anonymity chip rather than hardcoding the English word', () => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    render(
+      <TranslationProvider>
+        <RespondShell skipLabel="Saltar" anonymous>
+          <p>body</p>
+        </RespondShell>
+      </TranslationProvider>,
+    )
+
+    expect(screen.getByText('Anónima')).toBeTruthy()
+    expect(screen.queryByText('Anonymous')).toBeNull()
   })
 })
 

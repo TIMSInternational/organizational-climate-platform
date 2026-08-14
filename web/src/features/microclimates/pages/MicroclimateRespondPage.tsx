@@ -9,17 +9,35 @@ import {
   AlertDescription,
   AlertTitle,
   Button,
-  Progress,
+  Textarea,
 } from '../../../components/ui'
-import { RespondCaption, RespondShell } from '../../../components/layout'
+import { RespondShell } from '../../../components/layout'
+import { SegmentedScale } from '../../../components/ui/SegmentedScale'
 import MicroclimateContentNotice from '../components/MicroclimateContentNotice'
+
+/**
+ * The scale a likert or rating question is answered on when it configures no
+ * options of its own — the same 1–5 run `MicroclimateEndpoints.cs` validates a
+ * submitted answer against (`int.TryParse(answer, …) && rating is >= 1 and <= 5`).
+ * Named here so the control and the server's contract cannot drift apart silently.
+ */
+const SCALE_MIN = 1
+const SCALE_MAX = 5
+
+/** The `<legend>` that names one question's group of controls. */
+function questionLegendId(questionId: string): string {
+  return `microclimate-question-${questionId}`
+}
 
 function QuestionInput({
   question,
+  legendId,
   value,
   onChange,
 }: {
   question: Question
+  /** Id of the `<legend>` holding the question, for controls that need naming. */
+  legendId: string
   value: string
   onChange: (value: string) => void
 }) {
@@ -52,24 +70,48 @@ function QuestionInput({
           stacked
         />
       )
-    // likert and rating render identically -- a 1-5 radiogroup unless the question
+    // likert and rating render identically -- a 1-5 scale unless the question
     // configures its own option set. They stay distinct types because they mean
     // different things (agreement vs quality), not because they look different.
     case 'likert':
-    case 'rating': {
-      const scale =
-        question.options && question.options.length > 0
-          ? question.options
-          : ['1', '2', '3', '4', '5'].map((n, order) => ({ order, value: n, label: n }))
+    case 'rating':
+      // An AUTHORED option set is not a numeric scale: its values are words
+      // (`strongly_agree`), and `SegmentedScale` draws the points of an inclusive
+      // integer run and emits `String(point)`. Those questions keep the choice list
+      // they already had -- and the server validates them against their own option
+      // values rather than against 1-5, so the two branches match the two branches
+      // `MicroclimateEndpoints.cs` validates with.
+      if (question.options && question.options.length > 0) {
+        return (
+          <ChoiceList
+            choices={question.options.map((option) => ({
+              value: option.value,
+              label: option.label ?? option.value,
+            }))}
+            question={question}
+            value={value}
+            onChange={onChange}
+          />
+        )
+      }
       return (
-        <ChoiceList
-          choices={scale.map((option) => ({ value: option.value, label: option.label ?? option.value }))}
-          question={question}
-          value={value}
+        <SegmentedScale
+          min={SCALE_MIN}
+          max={SCALE_MAX}
+          // Nothing in the payload names the ends of an unlabelled 1-5 scale -- a
+          // microclimate question carries no anchor words, only a `text` -- so the
+          // generic pair is used rather than inventing an anchor the author never
+          // wrote. An authored scale states its own ends, and takes the branch above.
+          minLabel={t('charts.levelLow')}
+          maxLabel={t('charts.levelHigh')}
+          // '' means unanswered, which is not a point on the scale.
+          value={value === '' ? null : value}
           onChange={onChange}
+          // The group's name, exactly as `ChoiceList` names its radiogroup.
+          label={question.text ?? undefined}
+          required={question.required}
         />
       )
-    }
     case 'yes_no':
       return (
         <ChoiceList
@@ -84,10 +126,17 @@ function QuestionInput({
       )
     case 'open_ended':
     default:
+      // A `<textarea>`, not the single-line `<input type="text">` this used to be:
+      // the design draws free text as the box under the scale ("Anything you want to
+      // add?"), and one 32px line for a sentence someone is invited to write is the
+      // control telling them not to bother.
+      //
+      // `aria-labelledby` because a `<legend>` names the FIELDSET, not the control
+      // inside it -- so this box had no accessible name at all before. Same fix
+      // `surveys/RespondQuestionField.tsx` already carries for its comment box.
       return (
-        <input
-          type="text"
-          className="w-full"
+        <Textarea
+          aria-labelledby={legendId}
           required={question.required}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -171,13 +220,49 @@ function toPageError(err: unknown): PageError {
 /**
  * Answering a live microclimate session, without an account.
  *
- * ## The redesign
+ * ## The pulse, drawn the way the approved design draws it
  *
- * This page used to be an unstyled `<h1>`, a stack of bare `<fieldset>`s and a
- * naked `<button>` — the only screen in the product with no layout at all, and the
- * only one an ordinary employee ever sees. It now uses `RespondShell`, the same
- * standalone centred frame as the two survey respond routes, so the three read as
- * one product.
+ * The employee design's `pulse` screen is **one narrow centred column and nothing
+ * else**: a small eyebrow, one large question, the segmented scale, an optional box
+ * for free text, a single Send, and the anonymity line as a footnote under it. It is
+ * a screen usually opened from a link in a meeting and answered in seconds, which is
+ * a different act from working through a twelve-question climate survey.
+ *
+ * What was here until now was a three-column `lg:grid-cols-3` layout with a
+ * `lg:sticky` right-hand rail carrying the anonymity promise and an answered-count
+ * tile. **That rail was not a design decision — it was a test's.**
+ * `components/layout/respondSticky.test.tsx` asserted a sticky panel on this route,
+ * so the page kept one after the redesign had already cut the rail from the two
+ * survey respond routes (their instrument moved to a bottom bar, which the design
+ * does draw for a long form and does *not* draw here). The drawing has no rail and
+ * no bar, so this page now has neither, and that test case was re-pointed at the
+ * property that still holds on this route rather than left asserting a box that no
+ * longer exists.
+ *
+ * Three consequences worth stating plainly:
+ *
+ * - **The answered-count tile is gone.** It was the rail's instrument, and the pulse
+ *   draws no progress at all. A session with more than one question still numbers
+ *   them (`1/2`, and the sentence beside it), which is the position information the
+ *   tile was standing in for.
+ * - **The anonymity note is now the footnote it is drawn as**, last in the column
+ *   rather than beside the questions. On a one-question pulse the whole column is a
+ *   screenful, so "last" is still in view; it no longer needs to stick to stay there.
+ * - **`RespondCaption` is not used here**, though the two survey routes use it. Its
+ *   `<h1>` is `text-2xl` — the same size this design gives the *question* — so on a
+ *   screen whose whole job is to ask one thing, the session's name would compete with
+ *   the ask. The eyebrow and the heading are inlined below at the design's weighting:
+ *   context small, question large.
+ *
+ * The 1–5 scale is `ui/SegmentedScale` rather than a row of native radios: a native
+ * radio is ~13px against the 24px WCAG 2.2 target minimum, on the screen that is
+ * most often answered on a phone. **What that costs, stated plainly:** a button
+ * group has no native `required`, so the browser no longer blocks submitting an
+ * unanswered required scale question — it is `aria-required` and the word in the
+ * legend now. The server never enforced it either (`MicroclimateEndpoints.cs`
+ * validates the answers it is *sent*, not the ones it is not), so nothing that was
+ * guaranteed has been lost; but a client-side check is the honest next step, and it
+ * needs copy this catalogue does not have yet.
  *
  * ## Why the anonymity statement is on this page at all
  *
@@ -188,6 +273,13 @@ function toPageError(err: unknown): PageError {
  * token, so no name and no account leaves this page with the answers. That is a
  * description of the request, not a promise about the server, and the copy says
  * exactly that much.
+ *
+ * ## Submitting is unchanged, and there is no receipt to build
+ *
+ * `POST /microclimates/{id}/responses` returns an empty 201 and individual responses
+ * are not persisted against a respondent, so there is nothing to show back. The
+ * confirmation stays the `role="status"` alert it already was — the design's `done`
+ * screen belongs to the survey flow, which has a submission to describe.
  */
 export default function MicroclimateRespondPage() {
   const { t } = useTranslation()
@@ -230,7 +322,6 @@ export default function MicroclimateRespondPage() {
 
   const questions = microclimate?.questions ?? []
   const total = questions.length
-  const answered = questions.filter((question) => (answers[question.id] ?? '') !== '').length
 
   return (
     <RespondShell skipLabel={t('microclimates.respondSkip')} contentId="questions">
@@ -256,11 +347,27 @@ export default function MicroclimateRespondPage() {
             <AlertDescription>{t('microclimates.notAcceptingResponses')}</AlertDescription>
           </Alert>
         ) : (
-          <>
-            <RespondCaption
-              eyebrow={t('microclimates.respondEyebrow')}
-              title={microclimate.title ?? t('microclimates.respondUntitled')}
-            />
+          /* The whole screen: one column, capped at the prose measure and centred.
+             No grid, no rail, no bar — every part of the pulse is in reading order
+             down this one box, which is also why nothing on this page has to stick
+             to stay in view. */
+          <div
+            data-slot="pulse-column"
+            className="mx-auto grid w-full max-w-measure gap-panel-gap"
+          >
+            {/* The design's pulse heads the column with a small line naming the kind
+                of thing, then goes straight to the ask. So the eyebrow keeps the
+                shell's eyebrow treatment and the session's own name is set at
+                `text-lg` — an `<h1>` for the document outline, deliberately quieter
+                than the 20px question below it. */}
+            <header className="grid gap-1">
+              <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
+                {t('microclimates.respondEyebrow')}
+              </span>
+              <h1 className="text-lg font-semibold tracking-tight text-fg-primary">
+                {microclimate.title ?? t('microclimates.respondUntitled')}
+              </h1>
+            </header>
 
             <MicroclimateContentNotice
               language={microclimate.language}
@@ -268,109 +375,94 @@ export default function MicroclimateRespondPage() {
               fallbackFields={microclimate.fallbackFields}
             />
 
-            {/* Panel first in the DOM and moved to the last column from `lg` up, so
-                the anonymity statement and the progress reading come BEFORE the
-                first question on a phone — which is how a five-minute pulse is
-                actually answered — and stay in view beside the questions on a wide
-                screen.
-
-                `lg:sticky` here is only real while no ancestor sets `overflow`:
-                the other axis is then promoted to `auto` and that ancestor becomes
-                this panel's scrollport instead of the document. `RespondShell`'s
-                `<main>` carried `overflow-x-auto` and does not scroll, which made
-                this class inert on all three respond routes.
-                `components/layout/respondSticky.test.tsx` is the guard against it
-                coming back. */}
-            <div className="grid gap-panel-gap lg:grid-cols-3">
-              <section
-                aria-label={t('microclimates.respondPanelLabel')}
-                className="grid gap-panel-gap self-start lg:sticky lg:top-gutter lg:col-start-3 lg:row-start-1"
-              >
-                <AnonymityNote />
-
-                <div className="grid gap-inline rounded-lg border border-line-light bg-surface-icon-box p-3">
-                  <span className="text-2xs font-semibold uppercase tracking-label text-fg-secondary">
-                    {t('microclimates.respondProgressReading')}
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    className="font-mono text-3xl font-semibold tracking-tight tabular-nums text-fg-primary"
-                  >
-                    {`${answered} / ${total}`}
-                  </span>
-                  {/* `bg-surface-panel` track: `Progress` defaults to
-                      `bg-surface-icon-box`, which is the tile it sits on, so an
-                      empty bar was invisible. */}
-                  <Progress
-                    className="bg-surface-panel"
-                    value={total === 0 ? 0 : Math.round((answered / total) * 100)}
-                    aria-label={t('microclimates.respondProgressReading')}
-                  />
-                  <span className="text-xs text-fg-secondary">
-                    {t('microclimates.respondProgressCount', { answered, total })}
-                  </span>
-                </div>
-
-              </section>
-
-              <form
-                onSubmit={handleSubmit}
-                className="grid gap-panel-gap lg:col-span-2 lg:col-start-1 lg:row-start-1"
-              >
-                {questions.map((question, index) => (
+            <form onSubmit={handleSubmit} className="grid gap-section">
+              {questions.map((question, index) => {
+                const legendId = questionLegendId(question.id)
+                return (
                   <fieldset
                     key={question.id}
-                    className="rounded-xl border border-line-panel bg-surface-card p-panel transition-colors focus-within:border-accent-blue-ring"
+                    // `min-w-0` because this is a grid item, and a grid item's
+                    // automatic minimum size is its MIN-CONTENT width -- a long
+                    // unbroken option label would otherwise widen the card, the
+                    // column and the document, and send the Send button off the
+                    // side of a phone. `respondSticky.test.tsx` measures it.
+                    className="min-w-0 rounded-xl border border-line-panel bg-surface-card p-panel transition-colors focus-within:border-accent-blue-ring"
                   >
                     {/* `float-left w-full` closes the card's frame: a `<legend>`
                         in its default flow is cut out of the fieldset's own
                         border, so the question straddles the top edge and the
                         card reads as a form group rather than as a panel. The
                         block below clears the float. */}
-                    <legend className="float-left w-full text-base font-medium text-fg-primary">
-                      {/* The position as a reading: mono, tabular, and hidden from
-                          assistive tech because the sentence beside it is what
-                          "3/8" is supposed to say out loud. */}
-                      <span
-                        aria-hidden="true"
-                        className="mr-inline inline-flex items-center rounded-md bg-surface-icon-box px-2 py-0.5 font-mono text-xs font-semibold tabular-nums text-fg-secondary"
-                      >
-                        {`${index + 1}/${total}`}
+                    <legend id={legendId} className="float-left w-full">
+                      {/* Nothing numbers a session that asks ONE question: "1/1"
+                          and "Question 1 of 1" are two ways of saying there is no
+                          position to keep track of, and the design's pulse screen
+                          draws neither. Both come back the moment there is a
+                          second question to be somewhere in — and with the rail's
+                          answered-count tile gone, this is now the only thing on
+                          the page reporting position. */}
+                      {total > 1 && (
+                        <>
+                          {/* The position as a reading: mono, tabular, and hidden
+                              from assistive tech because the sentence beside it is
+                              what "3/8" is supposed to say out loud. */}
+                          <span
+                            aria-hidden="true"
+                            className="mr-inline inline-flex items-center rounded-md bg-surface-icon-box px-2 py-0.5 font-mono text-xs font-semibold tabular-nums text-fg-secondary"
+                          >
+                            {`${index + 1}/${total}`}
+                          </span>
+                          <span className="sr-only">
+                            {t('microclimates.respondQuestionPosition', {
+                              position: index + 1,
+                              total,
+                            })}
+                          </span>
+                        </>
+                      )}
+                      {/* The one thing being asked, at the size the design gives it
+                          — 20px, and the largest type on the screen. This is the
+                          whole page for most respondents. */}
+                      <span className="text-2xl font-semibold tracking-tight text-fg-primary">
+                        {question.text}
                       </span>
-                      <span className="sr-only">
-                        {t('microclimates.respondQuestionPosition', {
-                          position: index + 1,
-                          total,
-                        })}
-                      </span>
-                      {question.text}{' '}
                       {/* The WORD carries whether an answer is required, never a
                           colour -- WCAG 1.4.1, and the same rule the survey
-                          respond field keeps. */}
-                      <span className="font-normal text-fg-secondary">
+                          respond field keeps. On its own line under the question
+                          now: at 20px an inline marker read as part of the ask. */}
+                      <span className="mt-1 block text-sm font-normal text-fg-secondary">
                         {question.required
                           ? t('microclimates.respondRequiredMarker')
                           : t('microclimates.respondOptionalMarker')}
                       </span>
                     </legend>
-                    <div className="clear-both mt-row">
+                    <div className="clear-both mt-panel-gap">
                       <QuestionInput
                         question={question}
+                        legendId={legendId}
                         value={answers[question.id] ?? ''}
                         onChange={(value) => setAnswers({ ...answers, [question.id]: value })}
                       />
                     </div>
                   </fieldset>
-                ))}
+                )
+              })}
 
-                <div className="flex flex-wrap gap-inline">
-                  <Button type="submit" variant="primary" disabled={submitting}>
-                    {submitting ? t('common.submitting') : t('common.submit')}
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </>
+              {/* One action. The design draws a single Send and no second control:
+                  there is no draft to save on a session whose responses are not
+                  persisted against a respondent. */}
+              <div className="flex flex-wrap gap-inline">
+                <Button type="submit" variant="primary" size="lg" disabled={submitting}>
+                  {submitting ? t('common.submitting') : t('common.submit')}
+                </Button>
+              </div>
+            </form>
+
+            {/* The footnote, where the drawing puts it. It used to ride the sticky
+                rail; on a column this short it is on screen with the Send button
+                that precedes it, which is the moment it is actually read. */}
+            <AnonymityNote />
+          </div>
         )}
       </Surface>
     </RespondShell>

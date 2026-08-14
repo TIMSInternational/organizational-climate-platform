@@ -303,13 +303,45 @@ describe('NotificationsInboxPage', () => {
     expect(link.getAttribute('href')).toBe('/settings/notifications')
   })
 
-  it('says so when the inbox is empty, differently for the filtered view', async () => {
+  /**
+   * The empty inbox is drawn by the shared primitive, not by a `<p>`.
+   *
+   * It rendered a bare left-aligned line reading "No notifications" while Home and
+   * My surveys both centred an icon, a title and a body for the same situation —
+   * three screens saying "nothing here yet" three different ways. The assertions
+   * below are on the primitive's own contract (`data-slot`, `data-fill`, and
+   * `role="status"` rather than `alert`, because an empty list is not a failure),
+   * so putting the paragraph back fails here rather than only looking wrong.
+   */
+  it('draws the empty inbox as the shared centred empty state, not a bare line', async () => {
     vi.mocked(fetch).mockResolvedValue(listResponse())
-    renderPage()
-    expect(await screen.findByText('No notifications')).toBeTruthy()
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.queryByText('Loading...')).toBeNull())
+
+    const empty = container.querySelector('[data-slot="error-state"]')
+    expect(empty, 'the empty inbox is an EmptyState, not a paragraph').toBeTruthy()
+    expect(empty!.getAttribute('role')).toBe('status')
+    // `fill` is what centres it in the card instead of leaving it clinging to the
+    // heading with 400–1100px of dead space under it.
+    expect(empty!.getAttribute('data-fill')).toBe('true')
+    expect(within(empty as HTMLElement).getByText('Nothing has come in yet')).toBeTruthy()
+    expect(
+      within(empty as HTMLElement).getByText(/You will be told here when a survey opens/),
+    ).toBeTruthy()
+  })
+
+  it('says the filtered view is empty differently, and drops the body that would be untrue there', async () => {
+    // "You will be told here when a survey opens…" is right for an inbox that has
+    // never had anything in it, and wrong over a list of notifications that HAVE
+    // arrived and have simply been read.
+    vi.mocked(fetch).mockResolvedValue(listResponse())
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.queryByText('Loading...')).toBeNull())
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Unread only' }))
     expect(await screen.findByText('You have no unread notifications')).toBeTruthy()
+    expect(screen.queryByText(/You will be told here when a survey opens/)).toBeNull()
+    expect(container.querySelector('[data-slot="error-state"]')).toBeTruthy()
   })
 
   it('reports a failed load instead of showing an empty inbox', async () => {

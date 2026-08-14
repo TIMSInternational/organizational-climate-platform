@@ -47,6 +47,11 @@ export {
   RespondShell,
   RespondCaption,
   RespondReading,
+  // The mark-plus-wordmark lockup. Lives in RespondShell because that is what
+  // needed it first — the respond pages open on nothing but the product's name,
+  // and for most employees they are the only screen they ever see — but sign-in
+  // needs the same lockup, so it is exported rather than deep-imported.
+  BrandLockup,
   type RespondShellProps,
 } from './RespondShell'
 export { SidebarBrand, type SidebarBrandProps } from './SidebarBrand'

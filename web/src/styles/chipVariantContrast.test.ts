@@ -256,11 +256,14 @@ describe('status chip contrast', () => {
     // Unresolved, `parseColor` would throw rather than pass — but a future
     // resolver bug that returned a default instead would pass silently, so
     // assert the values.
+    // The light values moved with the blue-on-the-shell recolour (the neutrals are
+    // blue-biased now); what this test asserts is unchanged — that the resolver
+    // FOLLOWS the reference instead of returning a default.
     const { light, dark } = palettes()
-    expect(resolve(light['--admin-chip-ink-neutral'], light)).toBe('#474747')
-    expect(resolve(dark['--admin-chip-ink-neutral'], dark)).toBe('#b3b3b3')
-    expect(resolve(light['--admin-chip-bg-neutral'], light)).toBe('#f0f0f0')
-    expect(resolve(dark['--admin-chip-bg-neutral'], dark)).toBe('#2a2a2a')
+    expect(resolve(light['--admin-chip-ink-neutral'], light)).toBe('#44536b')
+    expect(resolve(dark['--admin-chip-ink-neutral'], dark)).toBe('#a8b6c9')
+    expect(resolve(light['--admin-chip-bg-neutral'], light)).toBe('#f3f7fb')
+    expect(resolve(dark['--admin-chip-bg-neutral'], dark)).toBe('#18212f')
     expect(resolve(dark['--admin-chip-ink-accent'], dark)).toBe('#14b8a6')
   })
 

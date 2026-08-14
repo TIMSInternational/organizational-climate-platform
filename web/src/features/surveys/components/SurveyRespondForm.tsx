@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react'
 import { Link } from 'react-router'
-import { EyeOff, Info, Lock, ShieldCheck } from 'lucide-react'
+import { Clock, EyeOff, FileText, Info, Lock, ShieldCheck } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import {
   Alert,
@@ -10,6 +18,12 @@ import {
   LiveRegion,
   Progress,
 } from '../../../components/ui'
+// Straight from the module rather than from `components/charts`, which is the one
+// place this project asks callers to import charts from. The floor is a policy
+// about data, not a chart, and this is the one page an unauthenticated visitor
+// loads — reaching through the barrel would put every chart module in its import
+// graph to read a single integer.
+import { ANONYMITY_FLOOR } from '../../../components/charts/suppression'
 import { RespondCaption, RespondReading } from '../../../components/layout'
 import {
   answeredCount,
@@ -20,6 +34,8 @@ import {
   type AnswerMap,
   type AnswerState,
 } from '../respondAnswers'
+import { respondDimensions, type RespondSection } from '../respondDimensions'
+import { UNCATEGORISED_DIMENSION } from '../surveyResultsMap'
 import { clearSessionId, ensureSessionId } from '../respondSession'
 import {
   SurveyRespondError,
@@ -30,18 +46,24 @@ import {
 } from '../api/surveyResponses'
 import { questionFieldId } from '../respondFieldIds'
 import RespondQuestionField from './RespondQuestionField'
+// Cross-feature, and the established pattern for this module: microclimates and
+// analytics both reach for the dashboard's grammar helpers. `MonoReadings` is where
+// "a translated sentence whose numbers are readings" is solved once.
+import { MonoReadings } from '../../dashboard/components/dashboardGrammar'
 
 export interface SurveyRespondFormProps {
   surveyId: string
   /**
    * True on the unauthenticated `/survey/:id` route.
    *
-   * Changes exactly one thing: what a 401 means. Behind `RequireAuth` a 401 is a
+   * Changes exactly two things. **What a 401 means:** behind `RequireAuth` a 401 is a
    * stale token and the answer is "sign in again"; on the public route it means the
    * survey is either closed or not open to anonymous respondents, and the server
    * deliberately does not say which — telling an unauthenticated visitor "this exists
    * but is not anonymous" is a disclosure about a tenant's survey they have no claim
-   * to.
+   * to. And **whether the confirmation offers a way back into the app**: a visitor
+   * holding nothing but a link has no Home to be sent to, so the link is not drawn
+   * for them rather than drawn and then bounced off `RequireAuth`.
    */
   publicEntry?: boolean
 }
@@ -63,14 +85,24 @@ type LoadState =
  * `Survey.Settings` already decides the shape of this page, so nothing here is a
  * product decision taken locally: `ShowProgress` gates the progress bar,
  * `AllowPartialResponses` gates the save-and-continue button, `RandomizeQuestions`
- * gates the shuffle and `TimeLimitMinutes` gates the countdown. Each one is off
- * unless the survey turned it on.
+ * gates the shuffle — and, through `respondDimensions`, the dimension headings —
+ * and `TimeLimitMinutes` gates the countdown. Each one is off unless the survey
+ * turned it on.
  *
  * **`AutoSave` is the exception, and it is a gap rather than a decision.** The
  * setting exists on `SurveySettingsDto`, but `SurveyRespondView` — the payload this
  * page is served — does not carry it, so this page cannot know whether the author
  * asked for it. Auto-saving anyway would be inventing behaviour for every survey that
  * did not; the save button is offered instead, gated on the flag that *is* served.
+ *
+ * ## The shape the approved employee design asks for
+ *
+ * One column, not two. The anonymity promise is the first block on the page, the
+ * questions run under dimension headings beneath it, and the answered count and the
+ * two actions ride a bar stuck to the bottom of the viewport. The design's note says
+ * why the instrument panel that used to hold all three moved: its position cost the
+ * form a third of the width, left a column of white space below the fold, and did
+ * not exist at all on a phone — which is where this page is mostly answered.
  */
 export default function SurveyRespondForm({ surveyId, publicEntry = false }: SurveyRespondFormProps) {
   const { t, locale } = useTranslation('surveyRespond')
@@ -83,6 +115,11 @@ export default function SurveyRespondForm({ surveyId, publicEntry = false }: Sur
   const [busy, setBusy] = useState<'idle' | 'saving' | 'submitting'>('idle')
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [result, setResult] = useState<SurveySubmissionResult | null>(null)
+  // The wall-clock moment the server accepted the response, kept because nothing in
+  // `SurveySubmissionResult` carries one and the confirmation says "submitted at
+  // 09:14". Recorded here rather than read off the clock while rendering, so the
+  // time does not creep forward every time the confirmation re-renders.
+  const [submittedAt, setSubmittedAt] = useState<number | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const [now, setNow] = useState(() => Date.now())
 
@@ -142,6 +179,20 @@ export default function SurveyRespondForm({ surveyId, publicEntry = false }: Sur
     [view],
   )
 
+  // Read out of `view` into a scalar first, so the memo below depends on a boolean
+  // rather than on the whole payload — and so the dependency array is exactly what
+  // it looks like.
+  const randomizeQuestions = view?.randomizeQuestions ?? false
+
+  // The grouping is `respondDimensions`' decision, never this page's: the same
+  // normalisation the results screen aggregates by, so the respondent is asked under
+  // the headings the analysis will report under. It returns the whole form either
+  // way — `sectioned: false` means "print no headings", not "here is half of it".
+  const dimensions = useMemo(
+    () => respondDimensions(questions, randomizeQuestions),
+    [questions, randomizeQuestions],
+  )
+
   const announce = useCallback((message: string) => setAnnouncement(message), [])
 
   function updateAnswer(questionId: string, next: AnswerState): void {
@@ -173,6 +224,7 @@ export default function SurveyRespondForm({ surveyId, publicEntry = false }: Sur
         // Nothing left to resume, and on a shared browser the id must not outlive
         // the response it belongs to.
         clearSessionId(view.id)
+        setSubmittedAt(Date.now())
         setResult(submission)
       } else {
         announce(t('progressSaved'))
@@ -223,7 +275,13 @@ export default function SurveyRespondForm({ surveyId, publicEntry = false }: Sur
   if (result) {
     return (
       <RespondSurface>
-        <Submitted result={result} />
+        <Submitted
+          result={result}
+          endDate={view?.endDate ?? null}
+          submittedAt={submittedAt}
+          locale={locale}
+          publicEntry={publicEntry}
+        />
       </RespondSurface>
     )
   }
@@ -258,146 +316,98 @@ export default function SurveyRespondForm({ surveyId, publicEntry = false }: Sur
         fallbackCount={view.fallbackFields.length}
       />
 
-      {/* One row on a phone, two columns from `lg` up: the questions take two
-          thirds and the instrument panel the last third. The panel is FIRST in the
-          DOM and moved to column three by `col-start`, so a respondent on a phone
-          — which is how this page is mostly answered — meets the anonymity promise
-          and the progress reading before the first question rather than after the
-          last one. On a wide screen `lg:sticky lg:top-gutter` keeps both in view
-          while the questions scroll past.
+      {/* The promise, first and full width.
+          It used to be the top tile of a right-hand rail. The rail held the right
+          content and put it in the wrong place: a third of the width gone from the
+          form, a column of white space below the fold, and — because it collapsed at
+          `lg` — nothing at all on a phone until after the last question. Here it is
+          the first thing every respondent reads on every viewport, which is what a
+          promise that decides whether they answer honestly is worth. */}
+      <AnonymityNotice anonymous={view.anonymous} />
 
-          That last part depends on something outside this file: NO ancestor of the
-          panel may set `overflow` on either axis, because the used value of the
-          other axis is then promoted to `auto` and that ancestor becomes the
-          panel's scrollport. `RespondShell`'s `<main>` used to carry
-          `overflow-x-auto` and never scrolls itself — the document does — so the
-          panel was pinned to a box that never moved and left the viewport with the
-          questions. `components/layout/respondSticky.test.tsx` is the guard, and
-          `RespondShell` records the measurement. */}
-      <div className="grid gap-panel-gap lg:grid-cols-3">
-        <section
-          aria-label={t('panelLabel')}
-          className="grid gap-panel-gap self-start lg:sticky lg:top-gutter lg:col-start-3 lg:row-start-1"
-        >
-          <AnonymityNotice anonymous={view.anonymous} />
+      {/* The rail's readings, relocated rather than deleted: when the survey closes,
+          how long it suggests, and — only when the survey turned progress off — how
+          many questions there are.
+          `grid-flow-col` with `auto-cols-fr` from `sm` up, NOT `sm:grid-cols-2`.
+          A fixed track count strands an empty cell whenever the optional readings are
+          absent, which is the common case: the rail shipped exactly that defect, a
+          197px CLOSES tile beside a hole at every viewport from 640px up. Auto
+          columns are as wide as there are readings to put in them. */}
+      <section
+        aria-label={t('panelLabel')}
+        className="grid gap-panel-gap sm:grid-flow-col sm:auto-cols-fr"
+      >
+        <RespondReading label={t('closesReading')} value={formatDate(view.endDate, locale)} />
+        {remainingMs !== null && remainingMs > 0 && (
+          <RespondReading
+            label={t('timeReading')}
+            value={formatDuration(remainingMs)}
+            sub={t('timeLimitHelp', { minutes: view.timeLimitMinutes ?? 0 })}
+          />
+        )}
+        {/* Only when the survey turned progress OFF. With the count in the bottom
+            bar, `Questions 5` says the same thing the denominator of `0 of 5`
+            already said, and two readings of one fact is what makes an instrument
+            read as decoration. */}
+        {!view.showProgress && (
+          <RespondReading label={t('questionsReading')} value={String(total)} />
+        )}
+      </section>
 
-          {view.showProgress && (
-            <div className="grid gap-inline rounded-lg border border-line-light bg-surface-icon-box p-3">
-              <span className="text-2xs font-semibold uppercase tracking-label text-fg-secondary">
-                {t('progressReading')}
-              </span>
-              {/* The reading, in mono with tabular figures — the one typographic
-                  rule that makes this read as an instrument. `aria-hidden` because
-                  the sentence below says the same thing in words, and a screen
-                  reader announcing "0 / 1" and then "0 of 1 questions answered" is
-                  the same fact twice. */}
-              <span
-                aria-hidden="true"
-                className="font-mono text-3xl font-semibold tracking-tight tabular-nums text-fg-primary"
-              >
-                {`${answered} / ${total}`}
-              </span>
-              {/* The track is `bg-surface-panel`, not the default. `Progress`'s
-                  own track is `bg-surface-icon-box` — the same token this tile
-                  sits on — so at zero answers the bar vanished into the tile
-                  completely. Seen in Chromium; invisible to happy-dom, which
-                  computes no colour at all. */}
-              <Progress
-                className="bg-surface-panel"
-                value={total === 0 ? 0 : Math.round((answered / total) * 100)}
-                aria-label={t('progressLabel')}
-              />
-              <span className="text-xs text-fg-secondary">
-                {t('progressCount', { answered, total })}
-              </span>
-            </div>
-          )}
+      {/* `noValidate`: the browser's own required-field bubbles are untranslated,
+          land on a radio rather than on the question, and cannot be announced.
+          `missingRequired` does the same job with copy from the catalogue and moves
+          focus onto the question itself. */}
+      <form onSubmit={handleSubmit} noValidate className="grid gap-panel-gap">
+        {/* The expired countdown stays with the questions: it is an alert about what
+            the respondent is doing right now, and `role="alert"` beside the form is
+            where it will be read. */}
+        {remainingMs !== null && remainingMs <= 0 && (
+          <Alert variant="warning" role="alert">
+            <Info aria-hidden="true" />
+            <AlertTitle>{t('timeLimitExpired')}</AlertTitle>
+            <AlertDescription>{t('timeLimitExpiredHelp')}</AlertDescription>
+          </Alert>
+        )}
 
-          {remainingMs !== null && remainingMs > 0 && (
-            <RespondReading
-              label={t('timeReading')}
-              value={formatDuration(remainingMs)}
-              sub={t('timeLimitHelp', { minutes: view.timeLimitMinutes ?? 0 })}
-            />
-          )}
-
-          {/* One reading per row, flush with every tile above it, and NOT a
-              two-column grid. It was `sm:grid-cols-2 lg:grid-cols-1
-              xl:grid-cols-2`, which put CLOSES in a half-width tile with a
-              stranded empty cell beside it at every viewport from 640px up —
-              because its second child only exists when the survey turned progress
-              OFF, which is the rarer case. Measured in Chromium at 1440x900: a
-              402px panel with a 197px CLOSES tile under three 402px ones. A column
-              of readings that are all the same width is also what makes them
-              scannable as one instrument. */}
-          <RespondReading label={t('closesReading')} value={formatDate(view.endDate, locale)} />
-          {/* Only when the survey turned progress OFF. With the progress tile
-              above it, `Questions 5` says the same thing the denominator of
-              `0 / 5` already said, and two tiles reporting one fact is what
-              makes an instrument panel read as decoration. */}
-          {!view.showProgress && (
-            <RespondReading label={t('questionsReading')} value={String(total)} />
-          )}
-        </section>
-
-        {/* `noValidate`: the browser's own required-field bubbles are untranslated,
-            land on a radio rather than on the question, and cannot be announced.
-            `missingRequired` does the same job with copy from the catalogue and moves
-            focus onto the question itself. */}
-        <form
-          onSubmit={handleSubmit}
-          noValidate
-          className="grid gap-panel-gap lg:col-span-2 lg:col-start-1 lg:row-start-1"
-        >
-          {/* The expired countdown stays with the questions rather than in the
-              panel: it is an alert about what the respondent is doing right now,
-              and `role="alert"` beside the form is where it will be read. */}
-          {remainingMs !== null && remainingMs <= 0 && (
-            <Alert variant="warning" role="alert">
-              <Info aria-hidden="true" />
-              <AlertTitle>{t('timeLimitExpired')}</AlertTitle>
-              <AlertDescription>{t('timeLimitExpiredHelp')}</AlertDescription>
-            </Alert>
-          )}
-
-          {questions.map((question, index) => (
-            <RespondQuestionField
-              key={question.id}
-              question={question}
-              position={index + 1}
-              total={total}
-              answer={answers[question.id]}
-              invalid={invalidIds.includes(question.id)}
-              disabled={busy !== 'idle'}
-              onChange={(next) => updateAnswer(question.id, next)}
-              onAnnounce={announce}
-            />
-          ))}
-
-          {submitError && (
-            <Alert variant="destructive" role="alert">
-              <AlertTitle>{t('submitFailed')}</AlertTitle>
-              <AlertDescription>{submitError}</AlertDescription>
-            </Alert>
-          )}
-
-          <div className="flex flex-wrap gap-inline">
-            <Button type="submit" variant="primary" disabled={busy !== 'idle'}>
-              {busy === 'submitting' ? tRoot('common.submitting') : t('submitResponse')}
-            </Button>
-            {view.allowPartialResponses && (
-              <Button
-                type="button"
-                variant="secondary"
+        {dimensions.sections.map((section) => (
+          <Fragment key={section.key}>
+            {dimensions.sectioned && <DimensionHeading section={section} total={total} />}
+            {section.questions.map((question, index) => (
+              <RespondQuestionField
+                key={question.id}
+                question={question}
+                // `firstIndex` is the section's 1-based place in READING order, so
+                // the numbering runs 1..n down the page across every heading rather
+                // than restarting inside each one.
+                position={section.firstIndex + index}
+                total={total}
+                answer={answers[question.id]}
+                invalid={invalidIds.includes(question.id)}
                 disabled={busy !== 'idle'}
-                onClick={() => void send(false)}
-              >
-                {busy === 'saving' ? t('savingProgress') : t('saveProgress')}
-              </Button>
-            )}
-          </div>
-        </form>
-      </div>
+                onChange={(next) => updateAnswer(question.id, next)}
+                onAnnounce={announce}
+              />
+            ))}
+          </Fragment>
+        ))}
+
+        {submitError && (
+          <Alert variant="destructive" role="alert">
+            <AlertTitle>{t('submitFailed')}</AlertTitle>
+            <AlertDescription>{submitError}</AlertDescription>
+          </Alert>
+        )}
+
+        <SubmitBar
+          answered={answered}
+          total={total}
+          showProgress={view.showProgress}
+          allowPartialResponses={view.allowPartialResponses}
+          busy={busy}
+          onSave={() => void send(false)}
+        />
+      </form>
 
       <LiveRegion>{announcement}</LiveRegion>
     </RespondSurface>
@@ -422,6 +432,160 @@ function RespondSurface({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * The heading over one run of questions, with the range it covers.
+ *
+ * The design prints `PSYCHOLOGICAL SAFETY ———— 1–2 OF 12`: an eyebrow, a rule that
+ * takes up the slack, and a reading of where in the form the respondent is. Its note
+ * says why an ungrouped run of twelve questions is the thing being fixed — twelve on
+ * one page is right, because a wizard makes "save and finish later" meaningless and
+ * hides how much is left, but an unsectioned list tells the respondent nothing about
+ * what is being asked.
+ *
+ * The rule is `aria-hidden` decoration. The range is not: it is the same fact the
+ * question index gives, at the granularity of the section, and it is set in mono
+ * with tabular figures like every other reading on this page.
+ */
+function DimensionHeading({ section, total }: { section: RespondSection; total: number }) {
+  const { t } = useTranslation('surveyRespond')
+  const { t: tRoot } = useTranslation()
+
+  // "3 of 12" for a section of one, "1–2 of 12" for the rest. A range whose ends are
+  // equal reads as an error rather than as a single question.
+  const range =
+    section.firstIndex === section.lastIndex
+      ? t('dimensionPosition', { position: section.firstIndex, total })
+      : t('dimensionRange', { from: section.firstIndex, to: section.lastIndex, total })
+
+  return (
+    <div className="flex items-center gap-inline pt-2">
+      <h2 className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
+        {dimensionLabel(section.key, tRoot)}
+      </h2>
+      <span aria-hidden="true" className="h-px flex-1 bg-line-light" />
+      <span className="font-mono text-xs tabular-nums text-fg-secondary">{range}</span>
+    </div>
+  )
+}
+
+/**
+ * A dimension's heading, from the catalogue rather than from the database.
+ *
+ * `Question.Category` is a free-text `varchar(100)` the server neither controls nor
+ * translates, so printing it raw would put an English heading over a Spanish survey
+ * — the same silent substitution the content-i18n rules forbid. The catalogue holds
+ * the vocabulary the product actually ships (`psychological_safety`, `workload`,
+ * `enps`…), keyed by the stored value, and answers for everything else in words that
+ * are true whatever the category said:
+ *
+ * - the `UNCATEGORISED_DIMENSION` sentinel — questions with no category at all —
+ *   gets `dimensionNone`, because "other questions" is exactly what they are;
+ * - a category nobody has translated gets `dimensionUnknown`.
+ *
+ * The root translator is used rather than the scoped one so the miss is detectable:
+ * `createTranslator` returns the key it was given, so `label === path` is the miss,
+ * with no second lookup and no list to keep in step.
+ */
+function dimensionLabel(key: string, tRoot: (key: string) => string): string {
+  if (key === UNCATEGORISED_DIMENSION) return tRoot('surveyRespond.dimensionNone')
+  const path = `surveyRespond.dimensions.${key}`
+  const label = tRoot(path)
+  return label === path ? tRoot('surveyRespond.dimensionUnknown') : label
+}
+
+/**
+ * The bar the respondent finishes from, stuck to the bottom of the viewport.
+ *
+ * It carries what the right-hand rail used to: how much is answered, and the two
+ * things that can be done about it. The design's reasoning is that a respondent
+ * eight questions into twelve should never have to scroll to find out how many are
+ * left or to stop for the day — and on a phone, where this page is mostly answered,
+ * the rail was not rendered at all.
+ *
+ * ## Why `sticky` and not `fixed`
+ *
+ * `fixed` takes the bar out of flow and it then overlaps the last question at the
+ * end of the document, where there is nothing left to scroll. `sticky` is in flow:
+ * it rides the viewport while there is content below it and comes to rest above the
+ * panel's bottom edge when there is not.
+ *
+ * There is no negative bottom margin on it, deliberately. Sticky positioning
+ * constrains the MARGIN box, so `-mb-panel` with `bottom-0` would push the bar's
+ * border box that far below the viewport and clip it — the full bleed is horizontal
+ * only.
+ *
+ * ## What stays gated
+ *
+ * `ShowProgress` is a survey setting, and it gates the whole progress cluster here
+ * exactly as it gated the tile before. A survey that turned progress off gets a bar
+ * of two buttons, and the question count moves up to the readings row.
+ */
+function SubmitBar({
+  answered,
+  total,
+  showProgress,
+  allowPartialResponses,
+  busy,
+  onSave,
+}: {
+  answered: number
+  total: number
+  showProgress: boolean
+  allowPartialResponses: boolean
+  busy: 'idle' | 'saving' | 'submitting'
+  onSave: () => void
+}) {
+  const { t, locale } = useTranslation('surveyRespond')
+  const { t: tRoot } = useTranslation()
+
+  return (
+    <div
+      data-slot="respond-submit-bar"
+      className="sticky bottom-0 -mx-panel flex flex-wrap items-center justify-between gap-panel-gap border-t border-line-panel bg-surface-panel px-panel py-card"
+    >
+      {showProgress && (
+        <span className="flex min-w-0 items-center gap-inline">
+          {/* The track is `bg-surface-icon-box` against the panel it sits on, which
+              is `Progress`'s own default — unlike the tile this replaced, where the
+              track and the tile were the same token and the bar vanished at zero. */}
+          <Progress
+            className="w-32"
+            value={total === 0 ? 0 : Math.round((answered / total) * 100)}
+            aria-label={t('progressLabel')}
+          />
+          {/* Numerals in mono, prose in sans — `MonoReadings` exists for exactly this
+              sentence shape, and the rule is not decorative: the countdown two
+              readings away is already asserted `font-mono tabular-nums`, so setting
+              this one in the sans face made a single instrument print its two
+              readings in two typefaces. Tabular figures come with it, which is what
+              stops the line reflowing on every answer. */}
+          <span className="text-sm text-fg-secondary">
+            <MonoReadings
+              t={t}
+              messageKey="answeredOfTotal"
+              params={{ answered, total }}
+              locale={locale}
+            />
+          </span>
+        </span>
+      )}
+
+      {/* Save first, submit last, which is the order the design draws and the order
+          the two actions are reached in: the destination is on the right. */}
+      <span className="flex flex-wrap gap-inline">
+        {allowPartialResponses && (
+          <Button type="button" variant="secondary" disabled={busy !== 'idle'} onClick={onSave}>
+            {busy === 'saving' ? t('savingProgress') : t('saveAndFinishLater')}
+          </Button>
+        )}
+        <Button type="submit" variant="primary" disabled={busy !== 'idle'}>
+          {busy === 'submitting' ? tRoot('common.submitting') : t('submitResponse')}
+        </Button>
+      </span>
+    </div>
+  )
+}
+
+/**
  * The anonymity promise, stated precisely and in both directions.
  *
  * Telling someone a survey is anonymous is part of the consent, not decoration — and
@@ -433,16 +597,15 @@ function RespondSurface({ children }: { children: React.ReactNode }) {
  * too small is not recorded either, so "not linked to you" is a description of the
  * row rather than a promise about who looks at it.
  *
- * ## Why it is the first thing in the panel, and not an alert in the flow
+ * ## Why it is the first block on the page
  *
  * This is the only surface an ordinary employee ever sees, and it decides whether
- * they answer honestly. So the promise sits at the top of the instrument panel:
- * first on a phone, and held in view by `sticky` on a wide screen while the
- * questions scroll past it — measured at 1440x900 on /survey/s1, the panel is at
- * `rect.top = 12px` at the page's maximum scroll, which is `top-gutter`. It was a
- * plain `Alert` in the run of the page before,
- * which put it above the fold once and then out of sight for the rest of a
- * forty-question survey.
+ * they answer honestly. It was a plain `Alert` in the run of the page once — above
+ * the fold and then out of sight for the rest of a forty-question survey — and then
+ * the top tile of a sticky right-hand rail, which held it in view on a wide screen
+ * and did not exist at all below `lg`. It is now the first full-width block under
+ * the title on every viewport, which is the one placement that does not depend on
+ * the width of the screen it is read on.
  *
  * ## The state is carried by a word, never by the colour
  *
@@ -604,8 +767,27 @@ function AlreadyCompleted() {
   )
 }
 
+/** The `<h2>` that names the what-happens-now list to assistive technology. */
+const WHAT_HAPPENS_HEADING_ID = 'respond-what-happens-now'
+
 /**
  * The confirmation.
+ *
+ * The design calls this the moment the respondent is most owed something: they have
+ * just handed over forty answers, they will never be shown a copy of them, and the
+ * page they are looking at is the last one most of them will ever see. So it answers
+ * the three questions that are actually outstanding — what happens to the answers,
+ * when the survey closes, when results come back — and then says plainly why there
+ * is no copy.
+ *
+ * ## Everything here is already in hand
+ *
+ * No second request. The close date is `SurveyRespondView.endDate`, the count is the
+ * server's own `answeredQuestionCount`, the floor is the platform constant Company
+ * Settings shows as a locked control, and the anonymity wording is the flag the form
+ * has been rendering all along. A confirmation that had to fetch something could
+ * fail after a response was accepted, which is the one failure this page must never
+ * have.
  *
  * `suppressedDemographics` is surfaced rather than dropped. A respondent whose
  * department is too small for its answers to stay anonymous has had that field
@@ -613,8 +795,29 @@ function AlreadyCompleted() {
  * the same silent substitution the content-i18n rules forbid, wearing a different
  * hat.
  */
-function Submitted({ result }: { result: SurveySubmissionResult }) {
+function Submitted({
+  result,
+  endDate,
+  submittedAt,
+  locale,
+  publicEntry,
+}: {
+  result: SurveySubmissionResult
+  /** `SurveyRespondView.endDate`, or null if the view never loaded. */
+  endDate: string | null
+  /** When the server accepted it, or null on the already-submitted path. */
+  submittedAt: number | null
+  locale: string
+  publicEntry: boolean
+}) {
   const { t } = useTranslation('surveyRespond')
+
+  // `alreadySubmitted` means the server matched an existing complete response for
+  // this session, so nothing was written just now — "submitted at 09:14" would be a
+  // statement about a moment that did not happen. The receipt below is still the
+  // server's own count of what is stored, which is true in both cases.
+  const justSubmitted = !result.alreadySubmitted && submittedAt !== null
+  const closesOn = endDate === null ? null : formatDate(endDate, locale, 'long')
 
   return (
     <div className="grid gap-panel-gap">
@@ -627,6 +830,15 @@ function Submitted({ result }: { result: SurveySubmissionResult }) {
           {result.alreadySubmitted ? t('alreadyCompletedBody') : t('thankYouBody')}
         </AlertDescription>
       </Alert>
+
+      {justSubmitted && (
+        <p className="max-w-prose text-base text-fg-secondary">
+          {t('submittedSummary', {
+            count: result.answeredQuestionCount,
+            time: formatTime(submittedAt, locale),
+          })}
+        </p>
+      )}
 
       {/* The receipt. A respondent who has just handed over forty answers with no
           copy of them gets one reading back: how many of the questions were
@@ -670,22 +882,121 @@ function Submitted({ result }: { result: SurveySubmissionResult }) {
           </AlertDescription>
         </Alert>
       )}
+
+      <section
+        aria-labelledby={WHAT_HAPPENS_HEADING_ID}
+        className="overflow-hidden rounded-xl border border-line-light"
+      >
+        <h2
+          id={WHAT_HAPPENS_HEADING_ID}
+          className="border-b border-line-light bg-surface-icon-box px-card py-2 text-2xs font-semibold uppercase tracking-label text-fg-secondary"
+        >
+          {t('whatHappensNowTitle')}
+        </h2>
+        <ul className="grid">
+          <WhatHappensRow
+            icon={<Lock aria-hidden="true" className="size-icon" />}
+            title={t('happensPooledTitle')}
+            body={t('happensPooledBody', { floor: ANONYMITY_FLOOR })}
+          />
+          {/* Dropped rather than guessed at when the payload never loaded — a date
+              is the one part of this the page cannot approximate. */}
+          {closesOn !== null && (
+            <WhatHappensRow
+              icon={<Clock aria-hidden="true" className="size-icon" />}
+              title={t('happensClosesTitle', { date: closesOn })}
+              body={t('happensClosesBody')}
+            />
+          )}
+          <WhatHappensRow
+            icon={<FileText aria-hidden="true" className="size-icon" />}
+            title={t('happensResultsTitle')}
+            body={t('happensResultsBody')}
+          />
+        </ul>
+      </section>
+
+      {/* Only for a respondent who has an account to go back to. On `/survey/:id`
+          the visitor may hold nothing but the link they followed, and a Home link
+          there is a round trip through `RequireAuth` to a sign-in form nobody asked
+          for. */}
+      {!publicEntry && (
+        <p>
+          <Button asChild variant="secondary">
+            <Link to="/dashboard">{t('backToHome')}</Link>
+          </Button>
+        </p>
+      )}
+
+      <p className="max-w-prose text-sm text-fg-secondary">{t('noCopyNote')}</p>
     </div>
   )
 }
 
 /**
- * `medium` rather than `long`.
+ * One row of the what-happens-now list: an icon that is decoration, a claim, and the
+ * sentence that makes the claim checkable.
  *
- * The closing date is a reading in the instrument panel now, not a sentence in the
- * run of the page. `long` renders "11 de septiembre de 2026", which wrapped onto
- * two lines inside the tile at every width measured; `medium` is "11 sept 2026",
- * which is the same fact at the size a reading wants to be.
+ * The icon is `text-fg-secondary` rather than the accent. Three accent glyphs down a
+ * confirmation reads as three statuses, and none of these is a status — they are the
+ * same fact told in three parts.
  */
-function formatDate(value: string, locale: string): string {
+function WhatHappensRow({
+  icon,
+  title,
+  body,
+}: {
+  icon: React.ReactNode
+  /** Already-translated. */
+  title: string
+  /** Already-translated. */
+  body: string
+}) {
+  return (
+    <li className="flex items-start gap-inline border-b border-line-light p-card last:border-b-0">
+      <span className="shrink-0 pt-0.5 text-fg-secondary">{icon}</span>
+      <span className="grid gap-0.5">
+        <span className="text-base font-medium text-fg-primary">{title}</span>
+        <span className="text-sm text-fg-secondary">{body}</span>
+      </span>
+    </li>
+  )
+}
+
+/**
+ * `medium` for a reading, `long` for a sentence.
+ *
+ * The closing date is a reading in the row above the questions, and `long` renders
+ * "11 de septiembre de 2026", which wrapped onto two lines inside the tile at every
+ * width measured; `medium` is "11 sept 2026", which is the same fact at the size a
+ * reading wants to be. The confirmation says "The survey closes on 11 September
+ * 2026" in the run of a sentence, where the abbreviation is the thing that reads
+ * wrong.
+ *
+ * ## `timeZone: 'UTC'`, and it is a correctness fix rather than a preference
+ *
+ * A survey's `endDate` is the END OF A CALENDAR DAY, and the API stamps it as one:
+ * the seeded Q3 closes at `2026-08-05T23:59:59+00:00`. Formatted in the reader's own
+ * zone, that instant is **6 August** in Madrid and in Tokyo — so every respondent east
+ * of UTC was told a deadline one day later than the one the server enforces, on the
+ * screen whose entire job is to say when to answer by.
+ *
+ * This is the bug `lib/calendarDay.ts` exists to prevent, and it survived the sweep
+ * that routed every date through it because that sweep matched `toLocaleDateString`
+ * and this reaches for `Intl.DateTimeFormat`. `calendarDay` itself is not used here:
+ * it renders one short form ("11 sept") by design, and this needs two styles, one of
+ * them a long form that sits inside a sentence. Same rule, different presentation —
+ * so the rule is copied rather than the helper.
+ */
+function formatDate(value: string, locale: string, dateStyle: 'medium' | 'long' = 'medium'): string {
   const parsed = Date.parse(value)
   if (Number.isNaN(parsed)) return value
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(parsed)
+  return new Intl.DateTimeFormat(locale, { dateStyle, timeZone: 'UTC' }).format(parsed)
+}
+
+/** The wall-clock time a response was accepted, e.g. "09:14". */
+function formatTime(value: number, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(value)
 }
 
 function formatDuration(ms: number): string {

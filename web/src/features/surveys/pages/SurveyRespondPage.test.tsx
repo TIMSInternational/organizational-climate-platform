@@ -98,6 +98,35 @@ function lastSubmission(): Record<string, unknown> {
   return JSON.parse((posts[posts.length - 1][1] as RequestInit).body as string) as Record<string, unknown>
 }
 
+/**
+ * The progress sentence, read off the sticky bar rather than matched as one string.
+ *
+ * `MonoReadings` sets the NUMERALS in mono and leaves the prose in the sans face, so
+ * "0 de 2 respondidas" is spread across several elements and `getByText` with an exact
+ * string cannot match it. Reading the bar's own `textContent` asserts the same fact and
+ * is strictly stronger than the query it replaces: an exact-text query was satisfied by
+ * the sentence appearing ANYWHERE on the page, which is what the old rail also did.
+ */
+function progressSentence(): string {
+  const bar = document.querySelector('[data-slot="respond-submit-bar"]')
+  return (bar?.textContent ?? '').replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * The numerals inside the bar, in order.
+ *
+ * "Every reading is `font-mono tabular-nums`, every piece of prose is not" is the rule
+ * the redesign rests on — the countdown two readings away is asserted against it — so
+ * the figures a respondent watches change are checked to BE readings, not merely to be
+ * present.
+ */
+function progressReadings(): string[] {
+  const bar = document.querySelector('[data-slot="respond-submit-bar"]')
+  return Array.from(bar?.querySelectorAll('.font-mono.tabular-nums') ?? []).map(
+    (node) => node.textContent ?? '',
+  )
+}
+
 beforeEach(() => {
   window.localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
   vi.stubGlobal('fetch', vi.fn())
@@ -292,44 +321,80 @@ describe('SurveyRespondPage required questions', () => {
 })
 
 describe('SurveyRespondPage settings', () => {
+  /**
+   * `ShowProgress` is the author's setting and it gates the whole progress cluster.
+   *
+   * The cluster moved: it was a tile in the right-hand rail, and the redesign put it
+   * in the bar stuck to the bottom of the viewport, beside the two actions. The gate
+   * did not move with it — a survey that turned progress off still gets no bar and no
+   * count, and this asserts BOTH halves so that "gated" cannot be satisfied by a page
+   * that simply never draws it.
+   *
+   * The presence half is scoped to the bar rather than to the document, because
+   * "somewhere on the page" is what the rail also satisfied.
+   */
   it('shows progress only when the survey asks for it', async () => {
     respondWith(view({ showProgress: false }))
     const first = renderPage()
-    await screen.findByRole('heading', { name: 'Clima laboral 2026' })
+    // The bar itself renders either way — otherwise the two nulls below would hold on
+    // a page that had not finished loading.
+    await screen.findByRole('button', { name: 'Enviar mis respuestas' })
     expect(screen.queryByRole('progressbar')).toBeNull()
+    expect(progressSentence()).not.toContain('respondidas')
     first.unmount()
 
     respondWith(view({ showProgress: true }))
-    renderPage()
-    expect(await screen.findByRole('progressbar')).toBeTruthy()
-    expect(screen.getByText('0 de 1 preguntas respondidas')).toBeTruthy()
+    const { container } = renderPage()
+    await screen.findByRole('button', { name: 'Enviar mis respuestas' })
+    const bar = container.querySelector('[data-slot="respond-submit-bar"]') as HTMLElement | null
+    expect(bar, 'the form ends in the sticky bar the rail became').toBeTruthy()
+    expect(within(bar!).getByRole('progressbar')).toBeTruthy()
+    expect(progressSentence()).toContain('0 de 1 respondidas')
   })
 
+  /**
+   * And the figure counts up as answers are given — the fact the respondent is
+   * actually watching. Asserted in words and in the bar's own `aria-valuenow`, which
+   * is the half a screen reader gets.
+   */
   it('counts an answer into the progress figure', async () => {
     respondWith(view({ showProgress: true }))
     renderPage()
 
-    await userEvent.click(await screen.findByRole('radio', { name: 'En desacuerdo' }))
-    expect(screen.getByText('1 de 1 preguntas respondidas')).toBeTruthy()
+    await screen.findByRole('progressbar')
+    expect(progressSentence()).toContain('0 de 1 respondidas')
+    await userEvent.click(screen.getByRole('radio', { name: 'En desacuerdo' }))
+    expect(progressSentence()).toContain('1 de 1 respondidas')
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('100')
   })
 
+  /**
+   * `AllowPartialResponses` gates the save button, which rides the bottom bar now
+   * rather than the rail. Same gate, same reason: offering "save and finish later" on
+   * a survey the server will not accept a partial write for is a promise the page
+   * cannot keep.
+   */
   it('offers save-and-continue only when partial responses are allowed', async () => {
     respondWith(view({ allowPartialResponses: false }))
     const first = renderPage()
-    await screen.findByRole('heading', { name: 'Clima laboral 2026' })
-    expect(screen.queryByRole('button', { name: 'Guardar y continuar después' })).toBeNull()
+    await screen.findByRole('button', { name: 'Enviar mis respuestas' })
+    expect(screen.queryByRole('button', { name: 'Guardar y terminar después' })).toBeNull()
     first.unmount()
 
     respondWith(view({ allowPartialResponses: true }))
     renderPage()
-    expect(await screen.findByRole('button', { name: 'Guardar y continuar después' })).toBeTruthy()
+    const save = await screen.findByRole('button', { name: 'Guardar y terminar después' })
+    expect(
+      save.closest('[data-slot="respond-submit-bar"]'),
+      'the save action belongs to the bar the respondent finishes from, not to a rail',
+    ).toBeTruthy()
   })
 
   it('saves progress without completing the response, and says so', async () => {
     respondWith(view({ allowPartialResponses: true, questions: [question({ required: true })] }))
     const { container } = renderPage()
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Guardar y continuar después' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Guardar y terminar después' }))
 
     await waitFor(() => expect(lastSubmission().isComplete).toBe(false))
     // A partial save is not held to the required-question rule: the respondent is
@@ -722,37 +787,65 @@ describe('SurveyRespondPage unavailable states', () => {
 })
 
 /**
- * The redesign. Three claims, each of which a green suite could otherwise be made
- * to hold while the page looked nothing like the design.
+ * The redesign, claim by claim — each one a thing a green suite could otherwise be
+ * made to hold while the page looked nothing like the design.
+ *
+ * The right-hand rail is gone. Everything it carried is still here and is asserted
+ * here, in the place the approved design moved it to: the anonymity promise to a
+ * full-width block above the questions, the answered count and both actions to the
+ * bar stuck to the bottom of the viewport, the closing date and the countdown to a
+ * row of readings under the title. The properties below are the rail's; only the
+ * addresses changed.
  */
 describe('SurveyRespondPage as an instrument', () => {
   /**
-   * "The anonymity promise should be present and legible, not buried." It used to
-   * be an `Alert` in the run of the page: above the fold once, then out of sight for
-   * the rest of a forty-question survey. It is now the first thing in the panel that
-   * `sticky` holds beside the questions — and, on a phone, the block a respondent
-   * reads before the first question rather than after the last.
+   * "The anonymity promise should be present and legible, not buried." The property
+   * is unchanged; the place it is kept has moved twice.
    *
-   * **What this case can and cannot hold.** It asserts placement and DOM order,
-   * which is all it names. The `toContain('sticky')` line below is a spelling
-   * check and nothing more: the class was present, correct and completely inert
-   * for the whole of this branch's first pass, because an ancestor's
-   * `overflow-x-auto` had made itself the panel's scrollport. Whether the panel
-   * actually sticks is asserted in `components/layout/respondSticky.test.tsx`,
-   * which computes it.
+   * It was an `Alert` in the run of the page — above the fold once, then out of sight
+   * for the rest of a forty-question survey. Then it was the top tile of a sticky
+   * right-hand rail, which held it in view on a wide screen and, because the rail
+   * collapsed below `lg`, did not render it AT ALL on a phone — which is where this
+   * page is mostly answered. The redesign deletes the rail: the promise is now the
+   * first full-width block under the title, ahead of the questions on every viewport.
+   *
+   * **What this case can and cannot hold.** It asserts placement and DOM order, which
+   * is all it names, and it can no longer lean on a `sticky` spelling check — that
+   * line was inert for the whole of this branch's first pass, because an ancestor's
+   * `overflow-x-auto` had made itself the panel's scrollport. What replaces it is the
+   * one thing that would bring the rail's real defect back: a viewport gate on the
+   * block. Computed positioning for the boxes on this page that do stick is measured
+   * in `components/layout/respondSticky.test.tsx`; the promise no longer needs to.
    */
-  it('puts the anonymity promise inside the panel that stays with the questions', async () => {
+  it('keeps the anonymity promise ahead of the questions, on every viewport', async () => {
     respondWith(view({ anonymous: true }))
     renderPage()
 
-    const panel = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
-    expect(within(panel).getByText('Esta encuesta es anónima')).toBeTruthy()
-    expect(panel.className).toContain('sticky')
+    const heading = await screen.findByRole('heading', { name: 'Esta encuesta es anónima' })
+    const promise = heading.closest('section')
+    expect(promise, 'the promise renders as its own block').toBeTruthy()
+    // The whole promise travelled, not just its title: the chip that carries the
+    // state in a word, and the sentence that says what is not recorded.
+    expect(within(promise!).getByText('Anónima')).toBeTruthy()
+    expect(within(promise!).getByText(/sin su nombre/)).toBeTruthy()
 
-    // And it comes before the form in the DOM, which is the order a phone renders.
     const form = document.querySelector('form')
     expect(form).toBeTruthy()
-    expect(panel.compareDocumentPosition(form!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // Same parent as the form: a full-width block of the one column the page now is,
+    // rather than a child of a side rail beside it. A re-introduced rail would make
+    // the promise's parent the column instead of the surface.
+    expect(promise!.parentElement).toBe(form!.parentElement)
+    // And it comes before the form in the DOM, which is the order a phone renders.
+    expect(promise!.compareDocumentPosition(form!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    // A spelling check, and the only one worth keeping here: `hidden` plus a
+    // breakpoint prefix is exactly how the rail came to not exist on a phone, and it
+    // compiles perfectly well. happy-dom does no layout, so this is checked as text.
+    expect(
+      promise!.className.split(/\s+/).filter((name) => name === 'hidden' || /^(sm|md|lg|xl|2xl):/.test(name)),
+      'A viewport-gated promise is the rail defect wearing new classes: legible on a '
+        + 'laptop, absent on the phone the survey is actually answered on.',
+    ).toEqual([])
   })
 
   /**
@@ -772,24 +865,48 @@ describe('SurveyRespondPage as an instrument', () => {
   })
 
   /**
-   * Every reading is set in mono with tabular figures; prose stays in the sans
-   * face. The progress fraction is the reading a respondent watches change, so it is
-   * also the one a proportional face would reflow on every answer.
+   * The progress figure is the one reading a respondent watches change, so it is also
+   * the one a proportional face would reflow on every answer — which is what tabular
+   * figures exist to prevent. That half of the rule is unchanged by the redesign and
+   * is asserted below.
+   *
+   * **What changed.** The rail's tile printed the fraction TWICE: a glyph form
+   * (`0 / 2`) set in mono and `aria-hidden`, plus a sentence underneath for anyone
+   * listening, because "zero slash two" is not what "0 of 2 answered" says. The
+   * bottom bar prints it once, as the sentence, with tabular figures on it. So the
+   * assertion inverts rather than disappearing: there is no hidden glyph to check
+   * for, and the sentence — the accessible rendering, now the only one — must NOT be
+   * hidden from assistive technology. The `font-mono` half is not asserted here; see
+   * the note in the repair report, and `SurveyRespondForm.tsx`'s own comment, for why
+   * the sentence stays in the sans face.
+   *
+   * The bar's `aria-valuenow` is asserted beside it because it is the machine-
+   * readable copy of the same fact, and it is what a hidden glyph used to be for.
    */
-  it('sets the progress fraction in mono, and keeps the sentence for a screen reader', async () => {
+  it('sets the progress figure in tabular figures, and keeps the sentence a screen reader hears', async () => {
     respondWith(view({ showProgress: true, questions: [question(), question({ id: 'q2' })] }))
     renderPage()
 
-    const reading = await screen.findByText('0 / 2')
-    expect(reading.className).toContain('font-mono')
-    expect(reading.className).toContain('tabular-nums')
-    // Hidden from assistive tech, because the sentence below it says the same fact
-    // in words and hearing both is hearing it twice.
-    expect(reading.getAttribute('aria-hidden')).toBe('true')
-    expect(screen.getByText('0 de 2 preguntas respondidas')).toBeTruthy()
+    await screen.findByRole('progressbar')
+    expect(progressSentence()).toContain('0 de 2 respondidas')
+    // The two figures are READINGS — mono with tabular figures — while the words
+    // around them stay in the sans face. Asserted as the numerals themselves rather
+    // than as a class on the sentence, because that is the rule: `10:00` two readings
+    // away in this same bar is checked the same way.
+    expect(progressReadings()).toEqual(['0', '2'])
+    // Announced, not hidden: this sentence is the only rendering of the fact now, so
+    // there is nothing for it to defer to.
+    const sentence = document.querySelector('[data-slot="respond-submit-bar"] span span')
+    expect(sentence?.closest('[aria-hidden="true"]')).toBeNull()
+
+    const bar = screen.getByRole('progressbar')
+    expect(bar.getAttribute('aria-label')).toBe('Respuestas completadas')
+    expect(bar.getAttribute('aria-valuenow')).toBe('0')
 
     await userEvent.click(screen.getAllByRole('radio', { name: 'Muy de acuerdo' })[0])
-    expect(screen.getByText('1 / 2')).toBeTruthy()
+    expect(progressSentence()).toContain('1 de 2 respondidas')
+    expect(progressReadings()).toEqual(['1', '2'])
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50')
   })
 
   /**
@@ -854,31 +971,58 @@ describe('SurveyRespondPage as an instrument', () => {
     await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
     await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
 
-    expect(await screen.findByText('Protegido')).toBeTruthy()
-    expect(screen.getByText(/departamento/)).toBeTruthy()
+    const chip = await screen.findByText('Protegido')
+    const notice = chip.closest('[data-slot="alert"]')
+    expect(notice, 'the chip belongs to the suppression notice, not to the page at large').toBeTruthy()
+    // The padlock beside the word, which is the pair the rest of the redesign uses
+    // for a value that exists and is withheld.
+    expect(notice!.querySelector('.lucide-lock')).toBeTruthy()
+    // Named, in the notice itself. Scoped, because the redesigned confirmation says
+    // "reported as averages per department" in the what-happens-now list as well, and
+    // an unscoped match would be satisfied by that sentence alone.
+    expect(within(notice as HTMLElement).getByText(/deliberadamente: departamento/)).toBeTruthy()
+
+    // THE GUARD. `SurveySubmissionResult` carries the suppressed field NAMES and no
+    // cohort size, and the notice must never acquire one: "your department (3
+    // people)" is the disclosure suppression exists to prevent, and the floor itself
+    // ("fewer than 5") narrows the cohort for anyone reading over a shoulder. No
+    // digit at all is the assertion, because either number is one.
+    expect(
+      notice!.textContent,
+      'The suppression notice prints no figure: not the cohort size, not the floor.',
+    ).not.toMatch(/\d/)
   })
 
   /**
-   * Every reading in the panel is one row of it.
+   * Every reading gets a track of its own, and the track count follows the readings.
    *
-   * The closing date used to sit in a `sm:grid-cols-2 lg:grid-cols-1
-   * xl:grid-cols-2` wrapper whose only other child renders when the survey turned
-   * progress OFF — the rarer case. With progress on, that grid held one child in
-   * two columns, so CLOSES rendered at half the panel width with a stranded empty
-   * cell beside it at every viewport from 640px up: measured in Chromium at
+   * The defect this was written for: the closing date used to sit in a `sm:grid-cols-2
+   * lg:grid-cols-1 xl:grid-cols-2` wrapper whose only other child renders when the
+   * survey turned progress OFF — the rarer case. With progress on, that grid held one
+   * child in two columns, so CLOSES rendered at half the panel width with a stranded
+   * empty cell beside it at every viewport from 640px up: measured in Chromium at
    * 1440x900, a 197px tile under three 402px ones.
    *
-   * happy-dom cannot measure that, but it can see the cause. Each reading is a
-   * direct child of the panel, so there is no intermediate track for one of them to
-   * be laid out in.
+   * **The shape it guards has changed, the defect has not.** The rail is gone and the
+   * readings row it left behind is horizontal from `sm` up, so "its own full-width
+   * row" is now true only on a phone; above that each reading is its own auto-sized
+   * COLUMN. What survives verbatim is the thing that produced the hole — a fixed
+   * track count with a conditional child — so this asserts the two halves of that a
+   * layout-free DOM can see: every reading is a direct child of the section (no
+   * intermediate track for one of them to be laid out inside), and the section has
+   * exactly as many cells as it has readings, in each configuration.
+   *
+   * `auto-cols-fr` versus `grid-cols-N` is a spelling check, like the `sticky` one
+   * this file used to carry. It is kept because it names the exact cause: happy-dom
+   * cannot measure a 197px tile, but it can read the class that produces one.
    */
-  it('gives every panel reading its own full-width row', async () => {
+  it('gives every panel reading its own track, and never leaves an empty one', async () => {
     respondWith(view({ showProgress: true }))
-    renderPage()
+    const first = renderPage()
 
     const panel = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
     const closes = within(panel).getByText('Cierra').closest('div')
-    expect(closes, 'the CLOSES reading renders').toBeTruthy()
+    expect(closes, 'the CLOSES reading survived the rail it used to live in').toBeTruthy()
     expect(
       closes!.parentElement,
       'A wrapper here is a second grid inside the panel, and the wrapper this '
@@ -886,25 +1030,51 @@ describe('SurveyRespondPage as an instrument', () => {
         + 'a half-width tile with a hole beside it.',
     ).toBe(panel)
 
-    // The tiles above it are direct children too, which is what "the same width"
-    // means when nothing can be measured.
-    expect(within(panel).getByText('Respondidas').closest('div')!.parentElement).toBe(panel)
-    expect(panel.children.length).toBeGreaterThanOrEqual(3)
+    // One reading, one cell. This is the case that produced the stranded column.
+    expect(panel.children.length, 'no cell without a reading in it').toBe(1)
+    expect(panel.className).toContain('auto-cols-fr')
+    expect(
+      panel.className,
+      'A fixed track count is the defect itself: the optional readings are absent in '
+        + 'the common case, and a track that does not count them strands a hole.',
+    ).not.toMatch(/grid-cols-\d/)
+    first.unmount()
+
+    // And with a second reading, both are direct children of the same section — two
+    // readings, two cells, no wrapper around either.
+    respondWith(view({ showProgress: true, timeLimitMinutes: 10 }))
+    renderPage()
+
+    const withTime = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
+    expect(within(withTime).getByText('Cierra').closest('div')!.parentElement).toBe(withTime)
+    expect(within(withTime).getByText('Tiempo restante').closest('div')!.parentElement).toBe(withTime)
+    expect(withTime.children.length).toBe(2)
   })
 
   /**
-   * And the second reading appears in that same column when the survey turns
-   * progress off — the case the two-column wrapper was built for. It is a row of
-   * the panel like every other one now.
+   * And the second reading appears in that same section when the survey turns
+   * progress off — the case the fixed two-column wrapper was built for, and the one
+   * that used to strand a cell. It is a track of the readings row like every other
+   * one now.
+   *
+   * The QUESTIONS reading exists only in this case, and that is the point: with
+   * progress on, the bottom bar's `0 of 12` already says how many questions there
+   * are, and two readings of one fact is what makes an instrument read as
+   * decoration. So the absence asserted here is the progress cluster's, page-wide —
+   * the count moving up is what replaces it, not something shown beside it.
    */
-  it('adds the question count as another row when progress is off', async () => {
+  it('adds the question count as another reading when progress is off', async () => {
     respondWith(view({ showProgress: false, questions: [question(), question({ id: 'q2' })] }))
     renderPage()
 
     const panel = await screen.findByRole('region', { name: 'Sobre esta encuesta' })
-    expect(within(panel).queryByText('Respondidas')).toBeNull()
     const count = within(panel).getByText('Preguntas').closest('div')
     expect(count!.parentElement).toBe(panel)
     expect(within(count!).getByText('2')).toBeTruthy()
+
+    // Nowhere on the page, not just nowhere in this section: the progress cluster is
+    // off, and the question count is what stands in for it.
+    expect(screen.queryByRole('progressbar')).toBeNull()
+    expect(progressSentence()).not.toContain('respondidas')
   })
 })

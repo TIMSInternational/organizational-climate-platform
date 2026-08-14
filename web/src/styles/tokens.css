@@ -8,13 +8,22 @@
  * are in the stylesheet, so they are correct on the very first paint and there
  * is no flash of unstyled/mis-themed content and no JS on the critical path.
  *
- * Colour values are Twenty-CRM's admin palette (dark from theme-dark.css,
- * light from theme-light.css) and are byte-for-byte the legacy values.
+ * Colour values STARTED as Twenty-CRM's admin palette (dark from theme-dark.css,
+ * light from theme-light.css), byte-for-byte. They are no longer: the neutrals —
+ * every surface, every line and every ink — were revalued when the shell went
+ * navy, so that the light greys are blue-biased and belong under it rather than
+ * reading as a second product's chrome. See "The shell" and "The light neutrals"
+ * below for the values and the reasoning; `employee-screens.html` design note 08
+ * is where the decision was taken. The accents, the status chips and the whole
+ * chart palette are untouched — the ask was the shell and the ground, not the
+ * brand.
  *
  * Every non-colour value below cites the legacy declaration it came from.
  * `../README.md` § "Provenance" is the same table in one place, and
- * `./tokens.test.ts` asserts these values so a later edit that drifts from the
- * legacy surface fails the build rather than the eye.
+ * `./tokens.test.ts` asserts these values so a later edit that drifts fails the
+ * build rather than the eye. That test still names the legacy hexes, which is
+ * how this recolour announced itself; it is the one place the new values have to
+ * be re-pinned by hand.
  *
  * THEMING
  *   Light is the default, matching the legacy default mode.
@@ -203,59 +212,104 @@
    * ====================================================================== */
   color-scheme: light;
 
-  --admin-bg-outer: #f0f0f0;
+  --admin-bg-outer: #ffffff;
 
   /* -- The shell: rail, top strip and the gutter they sit in (UI-0) -------
-     The application chrome is INK, and the content card is the only light
-     surface on the page. These are separate tokens rather than a change to
-     `--admin-bg-outer` because that token is also the ground of the sign-in
-     screen (`AuthShell`) and of the survey-answering screen (`RespondShell`),
-     neither of which is application chrome and neither of which should go dark
-     just because the admin rail did.
+     The application chrome is NAVY and everything inside the frame is WHITE.
+     These are separate tokens rather than a change to `--admin-bg-outer`
+     because that token is also the ground of the sign-in screen (`AuthShell`)
+     and of the survey-answering screen (`RespondShell`), neither of which is
+     application chrome and neither of which should be recoloured just because
+     the admin rail was.
 
-     Identical in both themes, deliberately: the shell is the one region whose
-     colour does not invert, so the product has a constant frame and only the
-     page inside it changes. `--admin-bg-shell` is a shade lighter than the dark
-     theme's own card (#171717), which keeps the light-theme relationship --
-     chrome recedes, card advances -- true in dark as well.
+     THE SHELL NOW INVERTS, AND THAT IS A DECISION RATHER THAN A DRIFT. It was
+     `#1b1f24` in both themes and this block used to say so on purpose -- "the
+     one region whose colour does not invert". The employee redesign
+     (`employee-screens.html`, design note 08) replaces the ink slate with navy
+     `#122c4d`, and gives dark its own deeper `#0a1c31`: a single navy over a
+     `#0b111b` page would be the LIGHTER of the two surfaces there, so the frame
+     would read as content. The HUE is what stays constant across the themes and
+     only its depth moves, which is the constant-frame property the old comment
+     was really describing. `shellInkContrast.test.ts` holds that shape, and it
+     now derives the ink list from `.on-shell` in `index.css` instead of naming
+     three tokens, so a fourth shell ink cannot be added without being measured.
 
      Contrast, measured against these values (styles/shellInkContrast.test.ts
      re-derives all of it and fails if any drifts):
-       --admin-shell-font       on shell  10.27:1   on raised  8.85:1
-       --admin-shell-font-label on shell   5.90:1   on raised  5.08:1
-       --admin-shell-font-strong on shell 16.56:1   on raised 14.26:1
+                                   light: shell / raised   dark: shell / raised
+       --admin-shell-font-strong        12.61 / 10.46          15.39 / 11.93
+       --admin-shell-font                9.70 /  8.05          11.84 /  9.18
+       --admin-shell-font-label          6.54 /  5.43           6.61 /  5.13
      The label clears 4.5:1 on BOTH grounds and not merely on the rail, because
      the user menu lifts to `--admin-shell-bg-raised` and prints the signed-in
      person's role in that ink -- the lighter ground is the binding one. */
-  --admin-bg-shell: #1b1f24;
+  --admin-bg-shell: #122c4d;
   /* The user menu, which opens INSIDE the rail. It lifts rather than staying
-     flush so the popover reads as above the rail rather than as a hole in it. */
-  --admin-shell-bg-raised: #262b31;
+     flush so the popover reads as above the rail rather than as a hole in it.
+     The redesign has no token for this surface, so it is the rail's own navy
+     lifted by 1.20:1 -- slightly more than `#262b31` lifted `#1b1f24` (1.16:1)
+     and no more than that, because two things are measured against it and both
+     get worse as it lightens: `--admin-shell-font-label`, which the user menu
+     prints the signed-in person's role in, and `--admin-focus-ring`. A lift to
+     `#1b3d64` looked right and put the ring at 2.95:1, under WCAG 1.4.11's 3:1
+     for a focus indicator, on the one surface in the product where a keyboard
+     user opens a menu. */
+  --admin-shell-bg-raised: #193961;
   --admin-shell-bg-hover: rgba(255, 255, 255, 0.08);
   --admin-shell-bg-active: rgba(255, 255, 255, 0.14);
-  --admin-shell-font-strong: #ffffff;
-  --admin-shell-font: #c8ccd2;
-  --admin-shell-font-label: #939ba6;
+  /* Three steps, because `.on-shell` re-points three ink roles at them. The
+     redesign has two (`--shell-ink #eef3f9`, `--shell-ink-2 #9db3cd`) and uses
+     the lighter one for both the brand and a hovered row; `--admin-shell-font`
+     is the step this palette keeps between them, so the rail's resting row text
+     stays distinct from its wordmark as it does today. */
+  --admin-shell-font-strong: #eef3f9;
+  --admin-shell-font: #c8d8ec;
+  --admin-shell-font-label: #9db3cd;
+  /* Left translucent rather than taking the redesign's opaque `--shell-line`
+     `#1f4270`: `.on-shell` points all three border roles here, and they are
+     drawn on the rail AND on the raised user menu, so a hairline that composites
+     against whatever is under it is correct on both grounds and one hex is not. */
   --admin-shell-border: rgba(255, 255, 255, 0.12);
   --admin-bg-panel: #ffffff;
   --admin-bg-card: #ffffff;
-  --admin-bg-card-hover: #fafafa;
+  --admin-bg-card-hover: #f9fbfd;
   --admin-bg-input: #ffffff;
-  --admin-bg-icon-box: #f0f0f0;
+  --admin-bg-icon-box: #f3f7fb;
   --admin-bg-overlay: rgba(255, 255, 255, 0.8);
   --admin-bg-hover: rgba(0, 0, 0, 0.04);
   --admin-bg-active: rgba(0, 0, 0, 0.08);
 
-  --admin-border-default: #e0e0e0;
-  --admin-border-hover: #d0d0d0;
-  --admin-border-light: #eeeeee;
-  --admin-border-panel: #e0e0e0;
+  /* -- The light neutrals are BLUE-BIASED, not achromatic (UI-0) ----------
+     The legacy greys (#e0e0e0 lines, #141414/#474747/#818181/#999999 inks) were
+     hue-free, which was right under a hue-free `#1b1f24` chrome. Under the navy
+     rail they are not: an achromatic grey beside `#122c4d` reads warm, and the
+     redesign's note 08 names this as the second consequence of recolouring the
+     shell -- "a green-biased grey under a navy rail reads as two unrelated
+     products". So every neutral takes the redesign's blue-biased step at
+     roughly its own lightness: `--line #dbe3ee`, `--line-2 #eaeff6`, and the
+     four inks `--ink #0d1626`, `--ink-2 #44536b`, `--ink-3 #78879c`,
+     `--ink-4 #9aa7b9`.
 
-  --admin-font-primary: #141414;
-  --admin-font-secondary: #474747;
-  --admin-font-tertiary: #818181;
-  --admin-font-light: #999999;
-  --admin-font-section-label: #999999;
+     The RANKING is unchanged, which is what stops this being a re-layering:
+     primary is still the only ink for a heading, secondary is still the only
+     one that clears AA on both white surfaces (7.79:1 on the panel, 7.24:1 on
+     the recessed one), and tertiary still does NOT (3.66 / 3.40, where the greys
+     gave 3.90 / 3.42). Every guard that was written around "tertiary is not a
+     body ink" -- `resultsContrast`, `themeDiscipline`, `respondContrast` --
+     therefore still measures the same failure it was written for. */
+  --admin-border-default: #dbe3ee;
+  /* One step darker than the line, as #d0d0d0 was to #e0e0e0. `ProtectedCell`
+     paints its hatch in this, so it has to stay separable from the recessed
+     surface it is drawn on: 1.40:1, against protectedHatch's floor of 1.2. */
+  --admin-border-hover: #cbd3de;
+  --admin-border-light: #eaeff6;
+  --admin-border-panel: #dbe3ee;
+
+  --admin-font-primary: #0d1626;
+  --admin-font-secondary: #44536b;
+  --admin-font-tertiary: #78879c;
+  --admin-font-light: #9aa7b9;
+  --admin-font-section-label: #9aa7b9;
   /* Text on a solid accent fill — the selected nav row in the legacy
      RoleBasedNav is `color: '#fff'` on `--admin-accent-blue`.
      ONLY ever place this on `--admin-accent-blue-fill`, never on
@@ -353,11 +407,14 @@
 
      Measured in Chromium on `/dev/chart-gallery` rather than assumed: hovering
      a row puts `--admin-bg-hover` rgba(0,0,0,.04) over the #ffffff panel, so
-     the surface is #f5f5f5, the 8% green tint composites to rgb(226,240,235)
-     and #15803d on it is 4.28:1 — under WCAG AA 1.4.3's 4.5 for the chip's
-     11px text. On `--admin-bg-icon-box` #f0f0f0 — the recessed surface
-     `charts/KpiTile.tsx` sets every KPI on, and in light the same hex as the
-     page background `--admin-bg-outer` — the same pairing is 4.12:1.
+     the surface is #f5f5f5, the 8% green tint composites to rgb(227,240,236)
+     and #15803d on it is 4.29:1 — under WCAG AA 1.4.3's 4.5 for the chip's
+     11px text. On `--admin-bg-icon-box` #f3f7fb — the recessed surface
+     `charts/KpiTile.tsx` sets every KPI on — the same pairing is 4.34:1.
+     (It was 4.12:1 when both that surface and `--admin-bg-outer` were #f0f0f0.
+     The navy shell moved the recessed surface to a blue-biased near-white and
+     the page ground to #ffffff, so they are no longer the same hex; the tint
+     still lands under 4.5 on both, which is the whole reason for this block.)
 
      So each tone gets its own OPAQUE fill, which is also what the prototype
      does (`--good-soft:#e7f6ec; --warn-soft:#fdf3e3; --crit-soft:#fdeaea;
@@ -367,11 +424,12 @@
      `--admin-chip-bg-neutral` is the exception, and it is a reference rather
      than a hex: the prototype's neutral chip is `background:var(--panel-2)`,
      its recessed neutral surface, and this palette's counterpart for that role
-     is `--admin-bg-icon-box`. The hexes are NOT the prototype's (#f5f8f8 light,
-     #1b201f dark) — the token port keeps the legacy admin greys throughout, and
-     a neutral chip has to match the recessed surfaces already on the page, not
-     the prototype's. Referencing rather than copying is what stops the two
-     drifting.
+     is `--admin-bg-icon-box`. It stays a reference even now that the two agree
+     on a value — the recolour gave `--admin-bg-icon-box` the employee
+     redesign's own `--panel-2` (#f3f7fb / #18212f) — because what a neutral
+     chip has to match is the recessed surface on the page beside it, whatever
+     that becomes, and not a hex copied from a prototype. Referencing rather
+     than copying is what stopped these two drifting through this change.
 
      ## The inks
 
@@ -508,8 +566,8 @@
   /* Chart furniture. Recessive on purpose -- grid and axes must not compete
      with the marks. The gap colour is the surface, used as the 2px spacer
      between adjacent fills. */
-  --admin-chart-grid: #ebebeb;
-  --admin-chart-axis: #b3b3b3;
+  --admin-chart-grid: #eaeff6;
+  --admin-chart-axis: #9aa7b9;
   --admin-chart-surface-gap: #ffffff;
 
   --admin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
@@ -519,7 +577,9 @@
   /* The legacy focus ring pointed at --ring, which was set to the *lightest*
      font colour and then wrapped in hsl() — so it computed to nothing and no
      ring rendered. Fixed here rather than ported: the ring is the blue accent,
-     which clears 3:1 against every surface in both themes. */
+     which clears 3:1 against every surface in both themes. Since the shell went
+     navy the binding surface is `--admin-shell-bg-raised`, at 3.12:1 in light —
+     see the note there, which is where the headroom is spent. */
   --admin-focus-ring: var(--admin-accent-blue);
   --admin-focus-ring-width: 2px;
   --admin-focus-ring-offset: 2px;
@@ -531,59 +591,60 @@
 :root[data-admin-theme='dark'] {
   color-scheme: dark;
 
-  --admin-bg-outer: #1d1d1d;
+  --admin-bg-outer: #0b111b;
 
-  /* -- The shell: rail, top strip and the gutter they sit in (UI-0) -------
-     The application chrome is INK, and the content card is the only light
-     surface on the page. These are separate tokens rather than a change to
-     `--admin-bg-outer` because that token is also the ground of the sign-in
-     screen (`AuthShell`) and of the survey-answering screen (`RespondShell`),
-     neither of which is application chrome and neither of which should go dark
-     just because the admin rail did.
-
-     Identical in both themes, deliberately: the shell is the one region whose
-     colour does not invert, so the product has a constant frame and only the
-     page inside it changes. `--admin-bg-shell` is a shade lighter than the dark
-     theme's own card (#171717), which keeps the light-theme relationship --
-     chrome recedes, card advances -- true in dark as well.
-
-     Contrast, measured against these values (styles/shellInkContrast.test.ts
-     re-derives all of it and fails if any drifts):
-       --admin-shell-font       on shell  10.27:1   on raised  8.85:1
-       --admin-shell-font-label on shell   5.90:1   on raised  5.08:1
-       --admin-shell-font-strong on shell 16.56:1   on raised 14.26:1
-     The label clears 4.5:1 on BOTH grounds and not merely on the rail, because
-     the user menu lifts to `--admin-shell-bg-raised` and prints the signed-in
-     person's role in that ink -- the lighter ground is the binding one. */
-  --admin-bg-shell: #1b1f24;
-  /* The user menu, which opens INSIDE the rail. It lifts rather than staying
-     flush so the popover reads as above the rail rather than as a hole in it. */
-  --admin-shell-bg-raised: #262b31;
+  /* -- The shell, dark ----------------------------------------------------
+     See the light block for the whole argument. The two values that differ here
+     are `--admin-bg-shell`, which deepens so the frame is never the lighter of
+     frame-and-page, and `--admin-shell-font-label`, which follows it down.
+     Everything else is one value across both themes, as it was before. */
+  --admin-bg-shell: #0a1c31;
+  /* The user menu, which opens INSIDE the rail — see the light block. */
+  --admin-shell-bg-raised: #12314f;
   --admin-shell-bg-hover: rgba(255, 255, 255, 0.08);
   --admin-shell-bg-active: rgba(255, 255, 255, 0.14);
-  --admin-shell-font-strong: #ffffff;
-  --admin-shell-font: #c8ccd2;
-  --admin-shell-font-label: #939ba6;
+  --admin-shell-font-strong: #eef3f9;
+  --admin-shell-font: #c8d8ec;
+  --admin-shell-font-label: #8ba3bf;
   --admin-shell-border: rgba(255, 255, 255, 0.12);
-  --admin-bg-panel: #171717;
-  --admin-bg-card: #1e1e1e;
-  --admin-bg-card-hover: #222222;
-  --admin-bg-input: #1e1e1e;
-  --admin-bg-icon-box: #2a2a2a;
+  /* The dark surfaces are the redesign's own dark block: `--panel #121a26`,
+     `--panel-2 #18212f` and `--icon-box #1d2735`. The LADDER is the one this
+     palette already had -- panel, then a lifted card, then the recessed tile --
+     but the redesign puts its recessed surface BETWEEN the panel and the card
+     rather than above both, which is the light relationship (`#f3f7fb` sits
+     below the white card) finally holding in dark too. `--admin-bg-card` is the
+     step furthest from the panel here, so `--admin-font-tertiary` still fails AA
+     on it (3.91:1) — the pairing `themeDiscipline.test.ts` exists to catch. */
+  --admin-bg-panel: #121a26;
+  --admin-bg-card: #1d2735;
+  --admin-bg-card-hover: #223045;
+  --admin-bg-input: #1d2735;
+  --admin-bg-icon-box: #18212f;
   --admin-bg-overlay: rgba(0, 0, 0, 0.5);
   --admin-bg-hover: rgba(255, 255, 255, 0.06);
   --admin-bg-active: rgba(255, 255, 255, 0.1);
 
-  --admin-border-default: #333333;
-  --admin-border-hover: #444444;
-  --admin-border-light: #2a2a2a;
-  --admin-border-panel: #333333;
+  /* Blue-biased, for the reason the light block gives. The redesign's dark
+     `--line #26313f` / `--line-2 #1e2734` and its four dark inks `#eef3f9`,
+     `#a8b6c9`, `#74839a`, `#5d6b80`.
 
-  --admin-font-primary: #ebebeb;
-  --admin-font-secondary: #b3b3b3;
-  --admin-font-tertiary: #818181;
-  --admin-font-light: #555555;
-  --admin-font-section-label: #666666;
+     `--admin-border-panel` is the tightest measurement in this file. The card's
+     edge against the navy shell is carried entirely by the hairline in dark --
+     the panel and the shell are 1.02:1 apart, which is normal for a dark UI --
+     and #26313f on #0a1c31 is **1.3026:1** against shellInkContrast's floor of
+     1.30. Do not darken this token or lighten `--admin-bg-shell` by eye; there
+     is a quarter of a percent of headroom and the test is the only thing that
+     can see it. */
+  --admin-border-default: #26313f;
+  --admin-border-hover: #33404f;
+  --admin-border-light: #1e2734;
+  --admin-border-panel: #26313f;
+
+  --admin-font-primary: #eef3f9;
+  --admin-font-secondary: #a8b6c9;
+  --admin-font-tertiary: #74839a;
+  --admin-font-light: #5d6b80;
+  --admin-font-section-label: #5d6b80;
   --admin-font-on-accent: #ffffff;
 
   --admin-accent-green: #10b981;
@@ -647,12 +708,15 @@
      #14b8a6 measures L 0.704 and is rejected.
 
      Same six hue families in the same order, re-stepped and re-validated
-     against the dark panel #171717: all inside L 0.48-0.67, all above the
-     chroma floor, worst adjacent CVD dE 12.8 (deutan), worst adjacent
-     normal-vision dE 29.4, all >= 3:1.
+     against the dark panel: all inside L 0.48-0.67, all above the chroma floor,
+     worst adjacent CVD dE 12.8 (deutan), worst adjacent normal-vision dE 29.4,
+     all >= 3:1. The surface was #171717 when these were selected and is #121a26
+     since the recolour, which is a shade lighter and so costs each series about
+     a tenth of a point of contrast — worst of the six, series 2, goes 3.81 ->
+     3.71, still clear of the 3:1 floor. Re-run with the current surface:
 
        node scripts/validate_palette.js \
-         "#0d9488,#c026d3,#ea580c,#3b82f6,#65a30d,#8b5cf6" --mode dark --surface "#171717"
+         "#0d9488,#c026d3,#ea580c,#3b82f6,#65a30d,#8b5cf6" --mode dark --surface "#121a26"
 
      Series 1 is unchanged across modes: the brand teal already sits inside both
      bands and clears 3:1 against both surfaces. */
@@ -699,9 +763,11 @@
   --admin-chart-div-pos-1-ink: #f0fdfa;
   --admin-chart-div-pos-2-ink: #02100f;
 
-  --admin-chart-grid: #2a2a2a;
-  --admin-chart-axis: #818181;
-  --admin-chart-surface-gap: #171717;
+  --admin-chart-grid: #1e2734;
+  --admin-chart-axis: #74839a;
+  /* The 2px spacer between adjacent fills IS the surface, so it follows
+     `--admin-bg-panel`. Left at #171717 it would have been a visible seam. */
+  --admin-chart-surface-gap: #121a26;
 
   --admin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --admin-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);

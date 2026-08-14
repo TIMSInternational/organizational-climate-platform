@@ -1,3 +1,4 @@
+using System.Net.Mime;
 using System.Security.Claims;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Dashboard;
@@ -71,6 +72,24 @@ public static class DashboardEndpoints
     /// <summary>Surveys shown in a dashboard list.</summary>
     private const int SurveyRowLimit = 5;
 
+    /// <summary>
+    /// Action plans named in "what came of the last one". A short narrative of what
+    /// happened after a survey closed, not the plan directory -- <c>/action-plans</c> is
+    /// that, and <c>openPlanCount</c> carries the full tally either way.
+    /// </summary>
+    private const int PlanRowLimit = 5;
+
+    /// <summary>
+    /// The dimension name <c>SurveyAggregation.DepartmentBreakdown</c> stamps on the
+    /// department breakdown. A literal there and a literal here is one literal too many,
+    /// but the aggregation exposes no constant to bind to and inventing one is a change to
+    /// a file this work does not own. The coupling is guarded rather than trusted:
+    /// <c>EmployeeLastOutcomeEndpointTests</c> asserts a non-zero protected count against a
+    /// fixture built to produce one, which is exactly the assertion a renamed dimension
+    /// would silently turn into a zero.
+    /// </summary>
+    private const string DepartmentDimension = "department";
+
     public static void MapDashboardEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/dashboard").RequireAuthorization();
@@ -79,6 +98,7 @@ public static class DashboardEndpoints
         group.MapGet("/company-admin", CompanyAdminAsync);
         group.MapGet("/department-admin", DepartmentAdminAsync);
         group.MapGet("/employee", EmployeeAsync);
+        group.MapGet("/employee/last-outcome", EmployeeLastOutcomeAsync);
     }
 
     /// <summary>
@@ -446,9 +466,184 @@ public static class DashboardEndpoints
                     s.Type,
                     s.StartDate,
                     s.EndDate,
-                    s.QuestionCount))
+                    s.QuestionCount,
+                    // Carried straight through from the survey row. `SurveyRespondView`
+                    // sends the same field from the same place, so the chip on this card
+                    // and the promise on the page it opens are one fact, not two.
+                    s.Anonymous))
                 .ToList()));
     }
+
+    // ------------------------------------------------------------------
+    // Employee — what came of the last one
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// <c>GET /dashboard/employee/last-outcome</c> — the panel that answers the question
+    /// anonymity leaves open.
+    ///
+    /// ## Why an employee may read this at all
+    ///
+    /// No role gate, exactly like <see cref="EmployeeAsync"/> and for the same reason: the
+    /// acting user is resolved from their own row and every figure below is scoped to the
+    /// company on that row. There is no argument that could widen it, so there is no role
+    /// question to ask.
+    ///
+    /// ## Why it is not a side door into results
+    ///
+    /// All four <c>/surveys/{id}/results</c> routes go through
+    /// <c>SurveyEndpoints.CanAdminister</c>, so this handler serving the same survey to an
+    /// employee has to be more than "returns less". Two properties keep it honest:
+    ///
+    /// <list type="number">
+    /// <item><b>Nothing scored is ever computed.</b> The aggregation is fed no questions
+    /// and no answers, so <c>SurveyAggregate.Questions</c> is empty by construction and
+    /// every segment's question list with it. There is no per-question, per-segment or
+    /// per-dimension number in memory for a later edit to accidentally serialise, which is
+    /// a stronger guarantee than a projection that carefully leaves them out.</item>
+    /// <item><b>A protected department is counted and never named.</b> Suppression exists
+    /// to hide a group small enough that the group is the person, so publishing "Finance
+    /// was withheld" would defeat it in the act of announcing it. The withheld names are
+    /// filtered out of the plan list too — see
+    /// <see cref="DashboardPlanOpened.DepartmentName"/> for why a nameless row beats a
+    /// missing one.</item>
+    /// </list>
+    ///
+    /// The responses and the departments <em>are</em> fed in whole, because those are the
+    /// inputs the suppression decision actually reads. What is withheld from the
+    /// aggregation is precisely what would be a leak coming out of it.
+    ///
+    /// ## Below the survey floor
+    ///
+    /// A survey under <c>SurveyResultsPrivacy.MinimumRespondents</c> comes back from the
+    /// aggregation with no breakdowns at all, so both department counts are zero here while
+    /// <c>responseCount</c> still reports the handful of answers. That is the existing rule
+    /// showing through rather than a special case: below that floor the product declines to
+    /// describe the shape of who answered, and this panel is not the surface that gets to
+    /// overrule it.
+    /// </summary>
+    private static async Task<IResult> EmployeeLastOutcomeAsync(
+        string? lang,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+
+        var actingUserId = await SurveyEndpoints.ResolveActingUserIdAsync(currentUser, db, cancellationToken);
+        if (actingUserId is null)
+        {
+            return SurveyEndpoints.ActingUserRequired();
+        }
+
+        var me = await db.Users
+            .Where(u => u.Id == actingUserId.Value)
+            .Select(u => new { u.CompanyId })
+            .FirstAsync(cancellationToken);
+
+        // A user with no company belongs to no tenant (#191). Nothing has closed for them,
+        // which is the same answer as a tenant that has never closed a survey.
+        if (me.CompanyId is not Guid myCompanyId)
+        {
+            return NoLastOutcome();
+        }
+
+        var survey = await DashboardQueries
+            .LatestClosedSurvey(db.Surveys, myCompanyId)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (survey is null)
+        {
+            return NoLastOutcome();
+        }
+
+        var responseRows = await DashboardQueries
+            .SurveyResponses(db.Responses, survey.Id, myCompanyId)
+            .ToListAsync(cancellationToken);
+
+        var departments = await DashboardQueries
+            .AggregationDepartments(db.Departments, db.Users, myCompanyId)
+            .ToListAsync(cancellationToken);
+
+        var noDemographics = new Dictionary<string, string>(StringComparer.Ordinal);
+        var aggregate = SurveyAggregation.Compute(
+            // Empty, and this is the load-bearing line of the handler. Questions and
+            // answers feed nothing in the aggregation but the per-question and per-segment
+            // figures -- exactly what this endpoint may not return -- so streaming the
+            // answer table for them would be cost with no output, and their absence turns
+            // "we do not serialise the scores" into "there are no scores to serialise".
+            questions: [],
+            responses: [.. responseRows.Select(r => new AggregationResponse(
+                r.ResponseId,
+                r.Language,
+                r.DepartmentId,
+                r.IsComplete,
+                r.StartTime,
+                r.CompletionTime,
+                r.TotalTimeSeconds,
+                noDemographics))],
+            answers: [],
+            departments: departments,
+            // No participation rate is rendered here, and the aggregation's own answer for
+            // "no invited headcount" is null rather than a fabricated denominator.
+            targetAudienceCount: null);
+
+        // Absent below the survey floor, where the aggregation returns no breakdowns at
+        // all. Empty is then the correct reading of both counts -- see the summary above.
+        var byDepartment = aggregate.Breakdowns
+            .FirstOrDefault(b => string.Equals(b.Dimension, DepartmentDimension, StringComparison.Ordinal));
+        var segments = byDepartment?.Segments ?? [];
+
+        // The withheld ids never leave this method. They exist only to decide which names
+        // may -- see the plan projection below.
+        var protectedDepartmentIds = new HashSet<Guid>();
+        foreach (var segment in segments)
+        {
+            if (segment.IsSuppressed && Guid.TryParse(segment.Key, out var withheldId))
+            {
+                protectedDepartmentIds.Add(withheldId);
+            }
+        }
+
+        var openPlans = DashboardQueries.OpenPlansOpenedSince(db.ActionPlans, myCompanyId, survey.EndDate);
+        var openPlanCount = await openPlans.CountAsync(cancellationToken);
+        var planRows = await DashboardQueries
+            .PlansOpened(openPlans, db.Departments, PlanRowLimit)
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(new EmployeeLastOutcome(
+            survey.Id,
+            LocalizedContent.ResolveText(survey.TitleEn, survey.TitleEs, lang, survey.Language),
+            survey.EndDate,
+            aggregate.Summary.CompletedCount,
+            segments.Count,
+            segments.Count(s => s.IsSuppressed),
+            SurveyResultsPrivacy.MinimumSegmentRespondents,
+            [.. planRows.Select(p => new DashboardPlanOpened(
+                p.DepartmentId is Guid departmentId && !protectedDepartmentIds.Contains(departmentId)
+                    ? p.DepartmentName
+                    : null,
+                p.CreatedAt))],
+            openPlanCount));
+    }
+
+    /// <summary>
+    /// There is no last one. A JSON <c>null</c> at 200 rather than a 404 or a zero-filled
+    /// payload: the panel is absent, not empty, and the client's job is to hide it. A 404
+    /// would say the route was wrong, and a shape full of zeroes would render as "0 answers
+    /// across 0 departments" — a sentence about a survey that never happened.
+    /// </summary>
+    /// <remarks>
+    /// Written as text rather than as <c>Results.Json&lt;EmployeeLastOutcome?&gt;(null)</c>,
+    /// which looks like the same thing and is not: the framework's JSON writer returns early
+    /// on a null value, so that overload sends a **zero-length body** stamped
+    /// <c>application/json</c>. Every caller in <c>web/</c> reaches the response through
+    /// <c>authFetch</c> and then calls <c>.json()</c> on it, and <c>.json()</c> throws on an
+    /// empty body. Four bytes of valid JSON parse to null everywhere and need no client to
+    /// special-case a status code. Guarded by
+    /// <c>Nothing_comes_back_when_the_company_has_never_closed_a_survey</c>, which asserts
+    /// the bytes rather than the deserialised value for exactly this reason.
+    /// </remarks>
+    private static IResult NoLastOutcome() => Results.Text("null", MediaTypeNames.Application.Json);
 
     private static DashboardSurveySummary ToSummary(DashboardSurveyRow row, string? lang)
         => new(
