@@ -14,8 +14,35 @@ namespace ClimateProject.IntegrationTests.Support;
 /// full runs at 41 and 73 minutes. Its cause is a count -- see
 /// <see cref="PostgresContainerFixture"/> for the numbers -- so the guard has to be able to
 /// read one, which is what <see cref="AuthWebApplicationFactory.HostsBuilt"/> exists for.
-/// A test that merely passed against the shared fixture would keep passing if someone
-/// reintroduced a per-class factory; asserting the count is what does not.
+/// </para>
+/// <para>
+/// <b>What it asserts is an ABSOLUTE bound, and the distinction is the whole point.</b> The
+/// first version of this class read <c>HostsBuilt</c> before and after its own five touches
+/// of the shared host and asserted the two were equal. That measures a window, not a run: it
+/// would have stayed green while some other class in the assembly booted a host per test
+/// case, because that class's boots fall outside the window. <c>HostsBuilt</c> is a
+/// process-wide monotone counter, so the bound that actually says something is
+/// <see cref="AuthWebApplicationFactory.HostBudget"/> -- a ceiling on the whole run, true at
+/// every instant of it and therefore assertable at whatever instant this class runs.
+/// </para>
+/// <para>
+/// The bound is enforced twice on purpose, and neither is redundant.
+/// <see cref="AuthWebApplicationFactory.CreateHost"/> refuses the boot that breaches it, which
+/// is order-independent and works in a filtered run that never executes this class at all;
+/// the assertion here is what fails if that refusal is ever softened, and it can fail on its
+/// own because the counter is incremented before the refusal.
+/// </para>
+/// <para>
+/// <b>Mutation-proved</b> by reverting <c>LoginEndpointTests</c> (six test cases) to
+/// <c>new AuthWebApplicationFactory(postgres.ConnectionString)</c> in its constructor -- a real
+/// reintroduction of the bug, in a class the change converted, not a poke at the fixture --
+/// and running that class with this one: the refusal threw on the 6th and 7th hosts, and this
+/// assertion then failed reading 7. Note what each half proves. The refusal is
+/// order-independent; THIS assertion is not, since it can only see boots that happened before
+/// it ran, and in that run <c>LoginEndpointTests</c> happened to run first. That is why the
+/// refusal is the primary guard and this is the check on the refusal. Mutating
+/// <see cref="PostgresContainerFixture.App"/> itself would NOT be a proof of either -- that is
+/// the property the sharing tests below assert, so breaking it is a tautology.
 /// </para>
 /// </summary>
 [Collection("Postgres")]
@@ -31,11 +58,32 @@ public class SharedHostTests(PostgresContainerFixture postgres)
 
     private static readonly Lock Gate = new();
 
+    /// <summary>
+    /// The bound on the run, not on this test's own window. See the class remarks for why the
+    /// difference is the entire content of this assertion.
+    /// </summary>
+    [Fact]
+    public void The_run_never_builds_more_application_hosts_than_the_budget()
+    {
+        // Touch the shared host first so the lower bound is not vacuous: whatever else this
+        // filtered run contains, at least the fixture's own host exists by the time we read.
+        _ = postgres.App.Services;
+
+        // The reading is process-wide and monotone, so this is a statement about everything the
+        // run has built so far, whatever ran before this class. Both ends are asserted: an
+        // upper bound alone would still pass against an instrument stuck at zero, which is the
+        // way a counter-based guard usually dies.
+        Assert.InRange(AuthWebApplicationFactory.HostsBuilt, 1, AuthWebApplicationFactory.HostBudget);
+    }
+
+    /// <summary>
+    /// The other half of the count: repeatedly reaching for the shared host must not build one.
+    /// A window measurement, and honest about being one -- it says the property holds for these
+    /// five touches, which is all it can say. The bound above is what covers the run.
+    /// </summary>
     [Fact]
     public void Touching_the_shared_host_does_not_build_another()
     {
-        // Read after the first touch, so the fixture's own build (which may or may not have
-        // happened yet in this filtered run) is outside the window being measured.
         _ = postgres.App.Services;
         var before = AuthWebApplicationFactory.HostsBuilt;
 
