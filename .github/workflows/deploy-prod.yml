@@ -12,12 +12,28 @@ env:
   BOOTSTRAP_STACK_NAME: climate-project-api-bootstrap
   SERVICE_STACK_NAME: climate-project-api-prod
   SERVICE_NAME: climate-project-api-prod
-  # App Runner's own health-check path. Deliberately the *static* /health and not
-  # /ready: App Runner tears down instances that fail this probe, so pointing it at
-  # a database-dependent endpoint would let a transient Postgres blip destroy a
-  # perfectly healthy service. /ready is used as the deploy gate instead, at the end
-  # of this job.
-  HEALTH_CHECK_PATH: /health
+  # App Runner's own health-check path. /ready, which round-trips Postgres -- NOT the
+  # static /health, which this file used to specify for the reason recorded here so it
+  # is not re-argued from scratch: App Runner tears down instances that fail this
+  # probe, so a database-dependent probe lets a Postgres blip destroy a healthy
+  # service.
+  #
+  # That objection was right about the mechanism and wrong about the balance of harm.
+  # /health is a literal that opens no connection, so an instance that has lost its
+  # database passes it FOREVER and is never replaced or drained (#221) -- the deploy
+  # canary below catches a broken rollout once, at rollout, and nothing catches an
+  # instance that degrades afterwards. Trading "a blip might cost an instance" for
+  # "a dead instance serves errors indefinitely" is the wrong way round.
+  #
+  # The blip case is answered by the thresholds instead, not by the path: the service
+  # template gives an instance ~100 seconds of CONTINUOUS failure before replacement,
+  # and the reasoning for each number is on HealthCheckConfiguration there.
+  #
+  # This was blocked until 2026-08-11 for a real reason, not a stale one: while #220
+  # had /ready failing ~50% of probes, pointing App Runner at it would have replaced
+  # instances continuously and turned an intermittent latency bug into a rolling
+  # outage. #220 is fixed and closed; 20 of 20 consecutive /ready probes return 200.
+  HEALTH_CHECK_PATH: /ready
   # Passed explicitly rather than relying on the template defaults. See the comment
   # on the deploy step for why every parameter is now supplied.
   SERVICE_CPU: 0.25 vCPU
@@ -208,6 +224,14 @@ jobs:
       # InternalApiKeySecretArn (added 2026-08-01, after this workflow was last
       # touched on 2026-07-30) would have failed the first dispatch outright unless
       # it had already been supplied by hand.
+      #
+      # CORS_ADDITIONAL_ALLOWED_ORIGIN and CORS_ADDITIONAL_ALLOWED_WILDCARD_ORIGIN are
+      # deliberately NOT in the preflight check above: they are optional (#160), and an
+      # unset repository variable expands to an empty string, which the template's
+      # conditions read as "no second origin" and drop the entry entirely. Passing them
+      # unconditionally is what makes CLEARING one work -- omit them instead and
+      # `aws cloudformation deploy` would keep the previous stack value, so removing a
+      # decommissioned domain from the allowlist would silently not happen.
       - name: Deploy App Runner service stack
         run: |
           set -euo pipefail
@@ -225,6 +249,8 @@ jobs:
               Memory="$SERVICE_MEMORY" \
               CorsAllowedOrigin="${{ vars.CORS_ALLOWED_ORIGIN }}" \
               CorsAllowedWildcardOrigin="${{ vars.CORS_ALLOWED_WILDCARD_ORIGIN }}" \
+              CorsAdditionalAllowedOrigin="${{ vars.CORS_ADDITIONAL_ALLOWED_ORIGIN }}" \
+              CorsAdditionalAllowedWildcardOrigin="${{ vars.CORS_ADDITIONAL_ALLOWED_WILDCARD_ORIGIN }}" \
               TrackingJwtSecretArn="${{ vars.TRACKING_JWT_SECRET_ARN }}" \
               DatabaseConnectionStringSecretArn="${{ vars.DATABASE_CONNECTION_STRING_SECRET_ARN }}" \
               InternalApiKeySecretArn="${{ vars.INTERNAL_API_KEY_SECRET_ARN }}"
@@ -248,22 +274,63 @@ jobs:
       # connection string was wrong or whose database was unreachable -- the deploy
       # was then reported successful and every real request 500'd. /ready performs a
       # `SELECT 1` round-trip, so a 200 here means the instance can actually serve.
+      #
+      # CONSECUTIVE successes, and a failure resets the count to zero. That is the
+      # whole point (#300): the previous version exited 0 on the FIRST 200 of up to
+      # ten attempts, and #220's defect alternated 200 / 30s-timeout at roughly 50%,
+      # so a thoroughly broken instance passed this gate on attempt one about half the
+      # time and on attempt two nearly always. "One green probe proves nothing" is the
+      # standard infra/aws/README.md already specified -- 20+ consecutive -- and this
+      # is that standard implemented rather than described.
       - name: Readiness canary
+        env:
+          # 20 from infra/aws/README.md's acceptance criterion for #220. Against the
+          # alternating-50% signature, 20 consecutive is a 1-in-a-million pass.
+          REQUIRED_CONSECUTIVE: 20
+          PROBE_INTERVAL_SECONDS: 5
+          # A wall clock, not an attempt count: because a failure resets the run, an
+          # attempt budget bounds attempts but not time. 20 probes at 5s spacing needs
+          # ~105s, so 300s absorbs a couple of resets and still fails the job in five
+          # minutes rather than grinding toward the six-hour ceiling.
+          DEADLINE_SECONDS: 300
+          # Above the 9.4s cold-start probe measured post-deploy in #220 (EF model
+          # build plus first pooled connection), below the 30s hang that was #220's
+          # signature. A probe slower than this is a failure for canary purposes --
+          # and since a failure only resets the run, a slow warm-up costs time, not
+          # the deploy.
+          PROBE_TIMEOUT_SECONDS: 15
         run: |
           set -euo pipefail
           URL="${{ steps.service.outputs.base_url }}/ready"
-          for i in $(seq 1 10); do
-            STATUS=$(curl -s -o /tmp/ready_body -w "%{http_code}" "$URL" || echo "000")
-            if [ "$STATUS" = "200" ]; then
-              echo "Readiness check passed:"
-              cat /tmp/ready_body
-              exit 0
+          deadline=$(( $(date +%s) + DEADLINE_SECONDS ))
+          consecutive=0
+          best=0
+          attempt=0
+
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            attempt=$(( attempt + 1 ))
+            status=$(curl -s -o /tmp/ready_body -w "%{http_code}" \
+              --max-time "$PROBE_TIMEOUT_SECONDS" "$URL" || echo "000")
+
+            if [ "$status" = "200" ]; then
+              consecutive=$(( consecutive + 1 ))
+              [ "$consecutive" -gt "$best" ] && best=$consecutive
+              echo "probe $attempt: 200 ($consecutive/$REQUIRED_CONSECUTIVE consecutive)"
+              if [ "$consecutive" -ge "$REQUIRED_CONSECUTIVE" ]; then
+                echo "Readiness canary passed: $REQUIRED_CONSECUTIVE consecutive 200s in $attempt probes."
+                cat /tmp/ready_body
+                exit 0
+              fi
+            else
+              echo "probe $attempt: status $status -- run of $consecutive reset to 0"
+              [ -s /tmp/ready_body ] && cat /tmp/ready_body
+              consecutive=0
             fi
-            echo "Attempt $i: status $STATUS, retrying in 10s..."
-            [ -s /tmp/ready_body ] && cat /tmp/ready_body
-            sleep 10
+
+            sleep "$PROBE_INTERVAL_SECONDS"
           done
-          echo "Readiness check failed after 10 attempts" >&2
+
+          echo "::error::Readiness canary failed: needed $REQUIRED_CONSECUTIVE consecutive 200s from $URL within ${DEADLINE_SECONDS}s, and the longest run in $attempt probes was $best. A run that keeps resetting is the #220 signature -- an intermittently-failing database connection, not a cold start." >&2
           exit 1
 
       # The step that makes deploy drift impossible to miss. /version now reports the
@@ -275,10 +342,7 @@ jobs:
       - name: Verify deployed commit matches this run
         run: |
           set -euo pipefail
-          URL="${{ steps.service.outputs.base_url }}/version"
-          BODY="$(curl -sSf "$URL")"
-          echo "$BODY"
-          DEPLOYED_COMMIT="$(printf '%s' "$BODY" | jq -r '.commit')"
+          DEPLOYED_COMMIT="$(scripts/read-deployed-commit.sh "${{ steps.service.outputs.base_url }}")"
           if [ "$DEPLOYED_COMMIT" != "$GITHUB_SHA" ]; then
             echo "::error::Live service reports commit '$DEPLOYED_COMMIT' but this run deployed '$GITHUB_SHA'. The rollout did not take effect." >&2
             exit 1

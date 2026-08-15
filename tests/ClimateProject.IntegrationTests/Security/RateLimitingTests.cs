@@ -157,9 +157,10 @@ public class RateLimitingTests : IClassFixture<WebApplicationFactory<Program>>
     [Fact]
     public async Task Health_is_never_limited_however_far_past_the_ceiling_it_goes()
     {
-        // App Runner polls /health every 10 seconds (HealthCheckConfiguration in the service
-        // template). A 429 reads as an unhealthy instance and tears the service down. The
-        // ceiling is set to 2 here so that twenty requests is emphatically past it.
+        // /health is no longer what App Runner polls (that is /ready, since #221), but it is
+        // still the endpoint reached for by anything asking "is the process up" during an
+        // incident -- which is precisely when the global ceiling is most likely to be busy.
+        // The ceiling is set to 2 here so that twenty requests is emphatically past it.
         var client = ClientOf(HostWith(("RateLimiting:GlobalPermitsPerMinute", "2")));
 
         for (var i = 0; i < 20; i++)
@@ -171,8 +172,10 @@ public class RateLimitingTests : IClassFixture<WebApplicationFactory<Program>>
     [Fact]
     public async Task Ready_is_never_limited_however_far_past_the_ceiling_it_goes()
     {
-        // /ready is the deploy gate and how #220 is monitored, so it matters as much as
-        // /health. It is really requested here rather than asserted as set membership. This
+        // /ready is App Runner's health-check target (#221), the deploy gate, and how #220 is
+        // monitored -- so this is now the carve-out whose loss takes production down, not
+        // merely the one that fails a deploy. It is really requested here rather than
+        // asserted as set membership. This
         // host has no reachable database, so every answer is the endpoint's own 503 "not
         // ready" branch -- which is the interesting case, because an instance that cannot
         // reach Postgres is exactly when the probe is being polled hardest and must still

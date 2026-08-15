@@ -12,7 +12,12 @@ Deployment is split into two CloudFormation stacks. `climate-project-api-bootstr
 gh workflow run deploy-prod.yml --repo TIMSInternational/organizational-climate-platform --ref main
 ```
 
-This runs `.github/workflows/deploy-prod.yml`, which verifies its configuration is complete, tests the API, builds and pushes the image to ECR (stamping the commit SHA and build timestamp into the image, reported by `/version`), **applies EF Core migrations**, deploys the service stack passing **all 11 template parameters explicitly**, gates on `/ready` (which round-trips Postgres, unlike the static `/health`), and finally asserts the live `/version` reports the commit the run just built.
+This runs `.github/workflows/deploy-prod.yml`, which verifies its configuration is complete, tests the API, builds and pushes the image to ECR (stamping the commit SHA and build timestamp into the image, reported by `/version`), **applies EF Core migrations**, deploys the service stack passing **every template parameter explicitly**, gates on **20 consecutive** `/ready` probes (which round-trip Postgres, unlike the static `/health`), and finally asserts the live `/version` reports the commit the run just built.
+
+Two things watch it from outside a deploy:
+
+- **`.github/workflows/deploy-drift.yml`** runs daily and fails if the live `/version` commit has fallen more than 20 commits, or 14 days, behind `main` — the "all green, all stale" failure this project has hit twice (#158). It reuses `scripts/read-deployed-commit.sh`, the same reader the deploy's own assertion uses. Point it at a new hostname by setting the `PROD_API_BASE_URL` repository variable; it falls back to the App Runner URL at the bottom of this file.
+- **`scripts/verify-prod-deploy-invariants.py`**, in CI's `deploy-path-lint` job, pins the properties of these two files that a linter cannot see: that the App Runner health check probes `/ready` rather than a literal, that the canary counts *consecutive* successes, and that the optional second CORS origin is droppable rather than empty. Each check is also run against a deliberately broken copy, so a check that has silently stopped looking at anything fails as loudly as a real regression.
 
 ### Configuration the automated path requires
 
@@ -25,8 +30,10 @@ error minutes in:
 | `AWS_ACCOUNT_ID` | variable | `747814092517` |
 | `CORS_ALLOWED_ORIGIN` | variable | Exact production frontend origin |
 | `CORS_ALLOWED_WILDCARD_ORIGIN` | variable | Vercel preview pattern |
+| `CORS_ADDITIONAL_ALLOWED_ORIGIN` | variable, **optional** | A *second* exact origin, for the custom domain of #160. Leave unset and nothing is wired; the template drops the index-1 variable entirely rather than binding an empty origin. |
+| `CORS_ADDITIONAL_ALLOWED_WILDCARD_ORIGIN` | variable, **optional** | A *second* wildcard pattern. Same rule, and here it is load-bearing: an empty wildcard pattern fails the host at startup, because `CorsOriginMatcher` rejects a pattern with no `*`. |
 | `TRACKING_JWT_SECRET_ARN` | variable | Secrets Manager ARN |
-| `DATABASE_CONNECTION_STRING_SECRET_ARN` | variable | Secrets Manager ARN (runtime). The secret it points at currently holds a **port 6543** string, which is **wrong** — see "Connection pooling" below. It should be the session pooler, 5432, same as the migration string. Fixing it is steps 1–2 of "Arming the guard"; step 3 flips `Database__RequireSessionPooler` in the service template so it cannot regress. |
+| `DATABASE_CONNECTION_STRING_SECRET_ARN` | variable | Secrets Manager ARN (runtime). The secret it points at holds a **port 5432** (session pooler) string, same endpoint as the migration string — corrected 2026-08-10, closing #220. Only step 3 of "Arming the guard" is outstanding: `Database__RequireSessionPooler` is still `"false"`, so a regression to 6543 would warn rather than refuse to boot. |
 | `INTERNAL_API_KEY_SECRET_ARN` | variable | Secrets Manager ARN |
 | `MIGRATION_DATABASE_CONNECTION_STRING` | **secret** | **Session pooler: the same host as the runtime string, port 5432, username `postgres.<project-ref>`.** Not 6543, and **not** `db.<project-ref>.supabase.co` — that host is IPv6-only and unreachable from GitHub Actions. See below. |
 
@@ -173,7 +180,7 @@ gating on `/health` therefore called this service healthy while half its databas
 requests were hanging. This is the same class of blind spot #189 fixed at startup, appearing
 again at steady state.
 
-### Cause 1 — the runtime string points at the transaction pooler (**still open**, owner-gated)
+### Cause 1 — the runtime string pointed at the transaction pooler (**fixed 2026-08-10**)
 
 Port 6543 is Supavisor's **transaction** pooler. Transaction mode assigns a different backend
 to each statement. That is right for short-lived serverless clients that connect, run one
@@ -181,18 +188,21 @@ statement and disconnect; it is wrong for a long-running ASP.NET Core service, w
 client-side pool holds connections open across statements and expects session state to persist
 between them. The two pooling models fight, and the visible result is intermittent hangs.
 
-The fix is to change that connection string's port from **6543 to 5432** — the session pooler.
-Same host, same password, same `postgres.<project-ref>` username; **only the port changes**,
+The fix was to change that connection string's port from **6543 to 5432** — the session pooler.
+Same host, same password, same `postgres.<project-ref>` username; **only the port changed**,
 exactly as for the migration string described above. The value lives in **AWS Secrets Manager**
-as `climate-project-api/prod/database-connection-string`, so it cannot be fixed by any change
-to this repository and needs someone with write access to that secret.
+as `climate-project-api/prod/database-connection-string`, so no change to this repository could
+have done it; it needed someone with write access to that secret.
 
-Until it is fixed, the API logs a **startup warning** naming #220 whenever it sees port 6543
-(`DatabaseConnectionStringPolicy`, wired up in `src/ClimateProject.Api/Program.cs`). It is
-deliberately a warning rather than a hard startup failure: the live secret still says 6543, and
-a hard guard shipped today would stop production booting on the next deploy — converting an
-intermittently-slow service into a fully-down one, to complain about a value that deploy cannot
-change.
+**Done on 2026-08-10** (secret version `f22f6c08`, AWSCURRENT; the 6543 value is retained as
+AWSPREVIOUS, so rolling back is a `put-secret-value` plus a redeploy). Verified by measurement
+rather than by deploy status: **20 of 20 consecutive `/ready` probes returned 200**, median
+~0.37s, and the transaction-pooler warning is **absent** from the App Runner log stream. #220
+closed 2026-08-11.
+
+The API still logs a **startup warning** naming #220 whenever it sees port 6543
+(`DatabaseConnectionStringPolicy`, wired up in `src/ClimateProject.Api/Program.cs`). It remains
+a warning rather than a hard failure only because step 3 below has not been taken.
 
 #### Arming the guard: `Database:RequireSessionPooler`
 
@@ -208,17 +218,29 @@ silences the warning, so it is a ratchet rather than a mute button —
 test pins that.
 
 Do these in order. Steps 1–2 need someone with write access to the secret; only step 3 is a
-change to this repository.
+change to this repository. **Steps 1 and 2 are done; step 3 is the one still open.**
 
-1. **Flip the secret.** Change `climate-project-api/prod/database-connection-string` from port
-   6543 to **5432**. Host, username and password are unchanged — only the port.
-2. **Redeploy and verify.** Confirm **20+ consecutive** `/ready` probes return 200. The defect
-   is intermittent and alternates, so one green probe proves nothing. Confirm also that the
-   `TRANSACTION pooler` warning is **gone** from the App Runner logs — that is the app telling
-   you it read the new value, and it is a stronger signal than the probes.
-3. **Arm the guard.** Set `Database__RequireSessionPooler` to `"true"` in
+1. ✅ **Flip the secret** — done 2026-08-10. `climate-project-api/prod/database-connection-string`
+   moved from port 6543 to **5432**; host, username and password unchanged.
+2. ✅ **Redeploy and verify** — done 2026-08-10. **20 of 20 consecutive** `/ready` probes
+   returned 200, and the `TRANSACTION pooler` warning is **gone** from the App Runner logs. The
+   defect alternates, so one green probe would have proved nothing; the absent warning is the
+   stronger of the two signals, because it is the app reporting what value it actually read.
+3. ☐ **Arm the guard.** Set `Database__RequireSessionPooler` to `"true"` in
    `infra/aws/climate-project-api-prod-service.yml` and redeploy. From then on a connection
    string on 6543 fails startup instead of logging, so the port cannot regress silently.
+
+Two notes for whoever takes step 3, neither of which changes the order above:
+
+- The **live stack does not carry this variable at all.** `climate-project-api-prod` was last
+  updated 2026-08-05, before #298 added it, and the app defaults the flag to `false` when the
+  variable is absent — so today's behaviour is correct by accident of the default. The deploy
+  that flips it to `"true"` is also the first deploy that introduces it.
+- That deploy can now **fail closed**, which is new and is the point. Since #221 the App Runner
+  health check probes `/ready`, so a service that refuses to boot fails its health check and
+  the rollout is rejected rather than reported successful. Before #221 the note here was the
+  opposite warning: a bad flip would have passed a static `/health` and had to be caught by
+  probing.
 
 Doing step 3 before step 1 breaks the deploy — that is the whole reason the flag exists. Steps 1
 and 3 are therefore two separate changes, never one: a CloudFormation deploy cannot write a
@@ -286,6 +308,39 @@ connection string specifies `Maximum Pool Size` itself, that value is honoured a
 is not applied. That is deliberate, so the pool can be retuned in an incident without a
 redeploy. Both behaviours are unit-tested.
 
+## Health checks: `/health` is liveness, `/ready` is readiness
+
+Two endpoints, two questions, and collapsing them back into one is the mistake to avoid:
+
+| | asks | touches the database | who polls it |
+|---|---|---|---|
+| `/health` | is the process up? | **no** — a static literal | nothing automated; a human, and `GET /` redirects to it |
+| `/ready` | can this instance serve? | **yes** — `SELECT 1` | App Runner's health check, and the deploy canary |
+
+The App Runner health check points at **`/ready`** (#221). It used to point at `/health`, which
+was defended on the grounds that a database-dependent probe lets a Postgres blip tear down a
+healthy container. That is a real mechanism, but the trade was the wrong way round: `/health`
+opens no connection, so an instance that has lost its database **passes forever** and is never
+replaced or drained. The deploy canary catches a broken *rollout*, once; nothing caught an
+instance that degraded afterwards.
+
+The blip case is answered by the thresholds instead of by the path. In
+`climate-project-api-prod-service.yml`:
+
+| setting | value | why |
+|---|---|---|
+| `Interval` | 20 (App Runner's maximum) | every probe is now a real query, from every instance; at `MaxSize` 25 that is 1.25 queries/second against the connection budget above |
+| `Timeout` | 5 | ~13× the 0.37s median measured in #220. The failure it must catch is a 30s hang, not slowness, so a tighter timeout only improves detection |
+| `UnhealthyThreshold` | 5 | ~100s of **continuous** failure before replacement — long enough that a Supavisor failover does not start a churn |
+| `HealthyThreshold` | 3 | at 1, a ~50%-intermittent instance is declared healthy on its first lucky 200. Costs 60s per rollout; 20 (the canary's bar) would cost 400s |
+
+The thing to keep hold of when retuning any of them: **replacing an instance does not fix a
+database outage.** A fresh instance fails the same probe, so thresholds tight enough to react
+to a blip convert a slow database into a replacement loop.
+
+`scripts/verify-prod-deploy-invariants.py` pins the path, the ranges, and the ~100s window, and
+fails CI if a later edit quietly restores `/health` or a single-probe `HealthyThreshold`.
+
 ## Manual path (what actually deployed the currently-live service)
 
 Used as a workaround while GitHub Actions is billing-blocked. Requires local AWS CLI access with permissions to read the bootstrap stack, push to ECR, and deploy the service stack (or the `climate-project-github-deploy-prod` role, if assumable locally).
@@ -347,6 +402,13 @@ Used as a workaround while GitHub Actions is billing-blocked. Requires local AWS
    > at), then add `InternalApiKeySecretArn=<that-secret-arn>` to the command above for that
    > first run.
    >
+   > `CorsAdditionalAllowedOrigin` and `CorsAdditionalAllowedWildcardOrigin` **do** have a
+   > default (`""`), so omitting them never fails a deploy. The catch is the other direction:
+   > the same reuse rule means omitting them cannot **remove** an origin either. To take one
+   > out of the allowlist, pass it explicitly empty — `CorsAdditionalAllowedOrigin=` — which
+   > the CLI sends as an empty `ParameterValue` rather than `UsePreviousValue`, and the
+   > template's condition then drops the environment variable entirely.
+   >
    > **As of #189 the consequence of getting this wrong is worse than it used to be.** The
    > host now validates `InternalApiKey` and the connection string at startup
    > (`.ValidateOnStart()`). An unset value therefore means the service **does not boot**,
@@ -354,7 +416,11 @@ Used as a workaround while GitHub Actions is billing-blocked. Requires local AWS
    > to per-request 500s on `/api/internal/*`. Prefer the automated path, which passes every
    > parameter explicitly and refuses to start if any is missing.
 
-6. Confirm the service is healthy by checking the `ServiceUrl` stack output and hitting `/health`.
+6. Confirm the service is healthy by checking the `ServiceUrl` stack output and hitting
+   **`/ready`, not `/health`** — and hitting it **20+ times consecutively**, which is what the
+   automated path's canary does. `/health` is a static literal and answers 200 from an instance
+   that cannot reach Postgres at all; a single `/ready` 200 proves little, because #220's
+   defect alternated. See "Health checks" above.
 
 ## Stack and resource name reference
 
