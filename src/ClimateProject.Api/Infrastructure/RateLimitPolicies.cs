@@ -88,14 +88,16 @@ public sealed class RateLimitingOptions
 /// <see cref="PartitionGlobal"/>.
 /// </para>
 /// <para>
-/// <b>The probe carve-out is load-bearing, and holds only what needs it.</b> <c>/health</c>
+/// <b>The probe carve-out is load-bearing, and holds only what needs it.</b> <c>/ready</c>
 /// is what App Runner's own health check polls (<c>HealthCheckConfiguration.Path</c> in the
-/// service template, every 10 seconds) and <c>/ready</c> is how #220 is monitored and how a
-/// deploy is gated. A 429 to either reads to App Runner as an unhealthy instance and would
-/// tear the service down -- a rate limiter that causes the outage it was added to prevent.
-/// Those two are <see cref="UnlimitedPaths"/> and nothing else is: <c>/version</c> and
-/// <c>/</c> are cheap and unauthenticated but nothing polls them, so they take the ordinary
-/// ceiling like any other route. <c>RateLimitingTests</c> proves both halves.
+/// service template, every 20 seconds since #221) as well as being the deploy gate and the
+/// #220 monitor; <c>/health</c> is the liveness endpoint a human reaches for. A 429 to the
+/// polled one reads to App Runner as an unhealthy instance and would tear the service down
+/// -- a rate limiter that causes the outage it was added to prevent. Both are
+/// <see cref="UnlimitedPaths"/> and nothing else is: <c>/version</c> and <c>/</c> are cheap
+/// and unauthenticated, and although the deploy and the daily drift check do read
+/// <c>/version</c>, they read it once each, so it takes the ordinary ceiling like any other
+/// route. <c>RateLimitingTests</c> proves both halves.
 /// </para>
 /// </summary>
 public static class RateLimitPolicies
@@ -168,11 +170,14 @@ public static class RateLimitPolicies
 
     /// <summary>
     /// Paths that are never rate limited, at any layer, because something outside the product
-    /// polls them and reads a 429 as an outage: <c>/health</c> is App Runner's own health
-    /// check target and <c>/ready</c> is the deploy gate and the #220 monitor. Both are
-    /// unauthenticated on purpose and neither touches user-supplied input -- <c>/health</c> is
-    /// a static literal and <c>/ready</c> issues one <c>SELECT 1</c>. Nothing else belongs
-    /// here; see the class remarks for why <c>/</c> and <c>/version</c> were removed.
+    /// polls them and reads a 429 as an outage: <c>/ready</c> is App Runner's own health check
+    /// target (#221), the deploy gate and the #220 monitor, and <c>/health</c> is the liveness
+    /// endpoint. Both are unauthenticated on purpose and neither touches user-supplied input
+    /// -- <c>/health</c> is a static literal and <c>/ready</c> issues one <c>SELECT 1</c>.
+    /// Removing <c>/ready</c> because it is "only" the deploy gate is the specific mistake to
+    /// avoid: since #221 it is the polled one, and a 429 there gets instances replaced.
+    /// Nothing else belongs here; see the class remarks for why <c>/</c> and <c>/version</c>
+    /// were removed.
     /// </summary>
     public static readonly IReadOnlySet<string> UnlimitedPaths =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "/health", "/ready" };

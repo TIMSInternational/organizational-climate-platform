@@ -129,6 +129,17 @@ jobs:
       - name: Verify OIDC trust policy matches live IAM
         run: python scripts/verify-oidc-trust-subs.py
 
+      # Same reasoning, applied to the service template and the deploy workflow
+      # together: that the health check probes the database rather than a literal
+      # (#221), that the readiness canary counts CONSECUTIVE successes (#300), and
+      # that the optional second CORS origin is droppable rather than empty (#160).
+      # All three are invisible to cfn-lint and actionlint, and reverting any of them
+      # is a plausible-looking one-line edit. The canary part executes the shipped
+      # loop against a local /ready that alternates 200 and 503, which is why this
+      # step takes ~15s rather than being instant.
+      - name: Verify production deploy invariants
+        run: python scripts/verify-prod-deploy-invariants.py
+
   workflow-lint:
     name: workflow-lint
     runs-on: ubuntu-latest
