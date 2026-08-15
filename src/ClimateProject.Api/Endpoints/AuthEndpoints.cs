@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
+using ClimateProject.Application.Tracking;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.AspNetCore.RateLimiting;
@@ -313,7 +314,15 @@ public static class AuthEndpoints
         }
 
         var token = jwtTokenService.IssueToken(new TokenClaims(
-            Sub: user.PersonaExternalId ?? user.Id.ToString(),
+            // TrackingIdentifiers.ExternalPersonaId, not an inline `PersonaExternalId ?? Id`
+            // (#153). /api/internal/personas derives persona_id through that same method, and
+            // climate-tracking compares the two against each other: its persona cache is
+            // filled from that endpoint while its authorization reads this claim
+            // (CurrentUser.PersonaExternalId, matched against a plan's
+            // responsable_ejecucion and involucrados). This is the nodoId story of #151 with
+            // a different claim, so it gets the same answer -- one derivation, not two copies
+            // of the same conditional, which is how nodoId drifted in the first place.
+            Sub: TrackingIdentifiers.ExternalPersonaId(user),
             Role: user.Role,
             NodoId: await NodoClaimResolver.ResolveAsync(db, user, cancellationToken),
             Email: user.Email,
