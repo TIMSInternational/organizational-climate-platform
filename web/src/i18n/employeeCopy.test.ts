@@ -308,10 +308,15 @@ describe('employee copy', () => {
    * an example of it.
    */
   it('names each shipped dimension distinctly, and none of them generically', () => {
-    // The one deliberate collision: `safety` is the same construct as
-    // `psychological_safety`, stored two ways, so it must carry the same words. Any
-    // other pair sharing wording is two constructs the respondent cannot tell apart.
-    const ALIASES = [['psychological_safety', 'safety']]
+    // No deliberate collisions. The catalogue used to alias `safety` to the
+    // psychological_safety heading so the demo's shorthand vocabulary rendered its
+    // full name — but `Question.Category` is authored free text, and for a client
+    // whose `safety` questions mean occupational safety (protective equipment,
+    // incident reporting), that alias filed them under a different construct. Wrong
+    // beats uninformative: an uncatalogued `safety` now renders the author's own
+    // word via the fallback, which is never false. Any entry appearing here again
+    // must alias a genuinely identical construct, not a plausible neighbour.
+    const ALIASES: string[][] = []
 
     /** A set of key-groups as one comparable, order-free value. */
     const asSets = (groups: string[][]) =>

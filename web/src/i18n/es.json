@@ -2095,7 +2095,6 @@
     "suppressedBody": "Para mantener su respuesta anónima, estos datos sobre usted no se guardaron con ella deliberadamente: {fields}",
     "dimensions": {
       "psychological_safety": "Seguridad psicológica",
-      "safety": "Seguridad psicológica",
       "workload": "Carga de trabajo",
       "trust": "Confianza",
       "recognition": "Reconocimiento",
