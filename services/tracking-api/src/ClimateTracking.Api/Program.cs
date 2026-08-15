@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Text;
 using ClimateTracking.Api.Endpoints;
 using ClimateTracking.Application.Auth;
 using ClimateTracking.Infrastructure.ExternalApi;
@@ -7,7 +6,6 @@ using ClimateTracking.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,8 +17,20 @@ builder.Services.AddDbContext<ClimateTrackingDbContext>(options =>
 
 var trackingJwtSecret = builder.Configuration["TrackingJwtSecret"]
     ?? throw new InvalidOperationException("Missing TrackingJwtSecret configuration.");
-var procomerCompanyId = builder.Configuration["ProcomerCompanyId"]
-    ?? throw new InvalidOperationException("Missing ProcomerCompanyId configuration.");
+
+// IsNullOrWhiteSpace, not `?? throw` (#153). appsettings.json ships `"ProcomerCompanyId": ""`,
+// so a deployment that forgets to override it has a present-but-blank value: the null check
+// this replaced never fired, the host started, and MatchingTenantRequirement was built with
+// "" as the tenant everyone is compared against. climate-project-api mints
+// `companyId: user.CompanyId?.ToString() ?? string.Empty`, so its company-less super_admins
+// carry a blank companyId claim -- which that blank expectation matched, handing every one of
+// them this tenant's whole API. Refusing to start is the only safe reading of "no tenant
+// configured"; MatchingTenantHandler holds the same line at authorization time.
+var procomerCompanyId = builder.Configuration["ProcomerCompanyId"];
+if (string.IsNullOrWhiteSpace(procomerCompanyId))
+{
+    throw new InvalidOperationException("Missing ProcomerCompanyId configuration.");
+}
 
 builder.Services.AddClimateProjectClient(new ClimateProjectClientOptions
 {
@@ -35,18 +45,12 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        // Without this, the handler remaps well-known claim names ("sub" -> NameIdentifier
-        // URI, "role" -> Role URI, etc.) before CurrentUser reads them by their raw names.
-        options.MapInboundClaims = false;
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(trackingJwtSecret)),
-            ValidateIssuer = false,
-            ValidateAudience = false,
-            ValidateLifetime = true,
-            NameClaimType = "sub",
-        };
+        // Both values come from TrackingTokenValidation and nothing else is set here, so the
+        // contract this service accepts tokens under is one referenceable thing rather than a
+        // handful of literals in a startup file (#153). ClimateProject.IntegrationTests
+        // compiles against that same type to prove a token minted over there is accepted here.
+        options.MapInboundClaims = TrackingTokenValidation.MapInboundClaims;
+        options.TokenValidationParameters = TrackingTokenValidation.CreateParameters(trackingJwtSecret);
     });
 
 builder.Services.AddOpenApi();

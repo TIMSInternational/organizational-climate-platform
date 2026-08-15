@@ -5,8 +5,10 @@ namespace ClimateTracking.IntegrationTests;
 
 public class PostgresFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+    // Image through the constructor, not .WithImage(): Testcontainers 4.14.0 obsoletes the
+    // parameterless builder, and this solution builds with TreatWarningsAsErrors. Same shape
+    // ClimateProject.IntegrationTests' PostgresContainerFixture uses.
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("climate_tracking_test")
         .WithUsername("test")
         .WithPassword("test")
