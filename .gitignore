@@ -19,6 +19,22 @@ dist/
 __pycache__/
 *.pyc
 
+# Local toolchain artifacts. Nothing below is authored — it is what the toolchain
+# writes into the working tree when the stack is run on a developer machine.
+
+# A sandboxed dotnet/NuGet HOME, created by `HOME=$PWD/.dotnet-home dotnet ...`.
+# It carries the whole NuGet package cache: ~2,690 files, the bulk of the noise.
+/.dotnet-home/
+
+# macOS writes Library/Application Support/Microsoft/DeveloperTools when HOME is
+# pointed at the repo root, as above. Anchored with a leading slash so it can only
+# ever match the repo root and never a source directory named Library/ deeper in.
+/Library/
+
+# Logs from running Postgres and friends by hand (.pg-local.log). Matches the rule
+# web/.gitignore already applies on the frontend side.
+*.log
+
 # Per-domain pipeline report directories (#171). The eight that had accumulated in
 # the repo root are now committed under docs/pipeline-reports/; a fresh pipeline run
 # must not repopulate the root. Both patterns are anchored with a leading slash so
