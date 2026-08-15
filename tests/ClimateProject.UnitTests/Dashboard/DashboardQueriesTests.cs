@@ -112,6 +112,41 @@ public class DashboardQueriesTests
         Assert.Contains("COUNT", sql, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The deliberate opposite of
+    /// <see cref="The_aggregation_headcount_counts_active_members_only"/>, pinned so that
+    /// neither count can be "unified" into the other without a failure that points here.
+    ///
+    /// <para>
+    /// The member count in <c>DepartmentSummaries</c> counts members ACTIVE OR NOT, and
+    /// that is not an org-chart nicety — it is the denominator of the company dashboard's
+    /// all-time completed-responses-per-person reading. That numerator keeps the responses
+    /// of members deactivated since (a response row owns its department id forever), and
+    /// the organisation target beside it divides by every user row, so the matching
+    /// population is the department's whole history. The aggregation headcount is the
+    /// per-survey case — one survey's respondents can only be active members — which is
+    /// why it filters and this must not. <c>DepartmentSummaries</c>' remarks carry the
+    /// full argument.
+    /// </para>
+    /// <para>
+    /// Asserted as the absence of <c>is_active</c> anywhere in the rendered SQL: this
+    /// projection selects no flag column from any table, so the fragment can only appear
+    /// if someone adds the active filter — verified by routing the member count through
+    /// <c>DepartmentHeadcount.Population</c>, which fails this test.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void The_dashboard_member_count_counts_members_active_or_not()
+    {
+        using var db = CreateContext();
+
+        var sql = DashboardQueries
+            .DepartmentSummaries(db.Departments, db.Users, db.Responses, CompanyId, 12)
+            .ToQueryString();
+
+        Assert.DoesNotContain("is_active", sql, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void The_survey_tallies_translate_as_conditional_counts_over_one_group()
     {

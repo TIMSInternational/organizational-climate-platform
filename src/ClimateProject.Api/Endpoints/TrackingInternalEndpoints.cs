@@ -76,8 +76,16 @@ public static class TrackingInternalEndpoints
         // consumer, which had no way to tell a genuinely empty team from the column never
         // having been maintained. One grouped query rather than a count per department, so
         // the shape of this endpoint's database work does not change with the org chart.
-        var activeUsersByDepartment = await db.Users
-            .Where(u => u.CompanyId == companyGuid && u.DepartmentId != null && u.IsActive)
+        //
+        // The population is `DepartmentHeadcount.Population` -- active members only -- not a
+        // predicate written out here. This line used to carry a byte-identical hand-written
+        // copy of that predicate, which is exactly the state that let the product's own
+        // surfaces drift apart before #310; the feed now publishes the same number the
+        // Departments page prints as EMPLOYEES ASSIGNED and the results screens divide by,
+        // by construction. Pinned by `Returns_nodos_with_snake_case_envelope_shape`, whose
+        // fixture seeds a deactivated member that must not be counted.
+        var activeUsersByDepartment = await DepartmentHeadcount
+            .Population(db.Users, companyGuid)
             .GroupBy(u => u.DepartmentId!.Value)
             .Select(g => new { DepartmentId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.DepartmentId, x => x.Count, cancellationToken);
@@ -102,6 +110,14 @@ public static class TrackingInternalEndpoints
         // TrackingIdentifiers.UnassignedNodoId(companyId) -- surface that synthetic nodo here
         // too (only when it's actually in use) so it always resolves to a real entry in this
         // response, exactly like every other nodo_id /personas can emit.
+        //
+        // Counted active or not, unlike the department headcounts above, and deliberately so:
+        // /personas emits every user row of the company, deactivated ones included (with
+        // `activo: false`), so this nodo must exist for exactly the rows that will reference
+        // it. An active-only count would read 0 for a company whose only department-less
+        // users are deactivated, drop the nodo, and leave those personas pointing at a
+        // nodo_id absent from this response. Not a department headcount -- it is the
+        // complement of `DepartmentHeadcount.Population`'s department predicate.
         var unassignedUserCount = await db.Users
             .CountAsync(u => u.CompanyId == companyGuid && u.DepartmentId == null, cancellationToken);
         if (unassignedUserCount > 0)

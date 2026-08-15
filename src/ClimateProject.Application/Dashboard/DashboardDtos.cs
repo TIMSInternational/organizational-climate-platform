@@ -59,8 +59,20 @@ public sealed record DashboardCompanySummary(
     DateTimeOffset CreatedAt);
 
 /// <summary>
-/// One department's participation.
+/// One department row of the company dashboard: its people and their completed responses
+/// across every survey the tenant has run, which the client reads as a
+/// completed-responses-per-person rate against the organisation's own.
 /// </summary>
+/// <param name="MemberCount">
+/// Everyone whose user row points at this department, <b>active or not</b> — deliberately
+/// not the per-survey participation denominator (<c>DepartmentHeadcount.Population</c>,
+/// which counts active members only). <paramref name="CompletedResponseCount"/> spans the
+/// tenant's whole survey history and keeps the responses of members deactivated since, so
+/// the denominator under it keeps those members too; and the organisation rate this row
+/// is compared against divides by the tenant's total user count, so every cell of the
+/// comparison is measured by one rule. <c>DashboardQueries.DepartmentSummaries</c> states
+/// the full argument.
+/// </param>
 /// <param name="CompletedResponseCount">
 /// Completed responses only. A part-finished response is not participation, and counting
 /// it would let a department look engaged on the strength of people who opened a survey
@@ -106,7 +118,20 @@ public sealed record CompanyAdminDashboard(
 /// <summary>
 /// One department's overview, for the person who runs it.
 /// </summary>
-/// <param name="MemberCount">Everyone whose user row points at this department, active or not.</param>
+/// <param name="MemberCount">
+/// Everyone whose user row points at this department, active or not — the same deliberate
+/// choice, for the same reason, as <see cref="DashboardDepartmentSummary"/>'s member
+/// count: the client divides <paramref name="CompletedResponseCount"/>, an all-time
+/// figure that keeps the responses of members deactivated since, by this number. The
+/// per-survey participation denominator is a different population
+/// (<c>DepartmentHeadcount.Population</c>, active members only).
+/// </param>
+/// <param name="ActiveMemberCount">
+/// The members who can still log in and answer — the same population
+/// <c>DepartmentHeadcount.Population</c> defines, sized here by
+/// <c>DashboardQueries.UserCounts</c>' conditional count in the same single statement as
+/// <paramref name="MemberCount"/>. Rendered as context under the all-members figure.
+/// </param>
 /// <param name="ActiveSurveys">
 /// Every figure on these rows is department-scoped, like every figure above them. See
 /// <see cref="DashboardDepartmentSurveySummary"/> for why they are not the company

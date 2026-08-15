@@ -236,7 +236,9 @@ public static class DashboardQueries
                 c.CreatedAt));
 
     /// <summary>
-    /// One company's departments with their headcount and participation, as one statement.
+    /// One company's departments, each with its members and its completed responses --
+    /// the rows the company dashboard reads as a completed-responses-per-person rate --
+    /// as one statement.
     /// </summary>
     /// <remarks>
     /// The company predicate is applied here rather than left to the caller because it is
@@ -244,6 +246,24 @@ public static class DashboardQueries
     /// The response subquery is additionally constrained by company id and not by
     /// department alone -- department ids are globally unique, but relying on that to
     /// enforce a tenant boundary makes the boundary an accident of the id scheme.
+    ///
+    /// <para>
+    /// <b>The member count counts members active or not, and is deliberately NOT
+    /// <see cref="DepartmentHeadcount.Population"/>.</b> It is a rate denominator all the
+    /// same -- the client divides the response count by it -- but of a different rate than
+    /// the one <c>Population</c> serves. A denominator counts the population its numerator
+    /// draws from. The numerator here spans every survey the tenant has ever run and keeps
+    /// the responses of members deactivated since (a response row owns its department id
+    /// forever), and the organisation-level rate these rows are read against divides the
+    /// same all-time numerator by <see cref="UserCounts"/>' total -- every user row, active
+    /// or not. So the matching population is everyone whose row points at the department:
+    /// its whole history, like the numerator's. <c>Population</c> is the opposite case --
+    /// one survey's respondents can only ever be active members, so its denominator is the
+    /// department's present. Counting active only HERE would inflate every department's
+    /// reading without bound as staff turn over, and would measure each department by a
+    /// stricter rule than the company target printed beside it. Pinned by
+    /// <c>The_dashboard_member_count_counts_members_active_or_not</c>.
+    /// </para>
     /// </remarks>
     public static IQueryable<DashboardDepartmentRow> DepartmentSummaries(
         IQueryable<Department> departments,

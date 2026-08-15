@@ -493,6 +493,14 @@ public static class SurveyAggregation
                 continue;
             }
 
+            // Raw, never clamped, so this can legitimately read above 100. The headcount
+            // counts the members who can answer TODAY (`DepartmentHeadcount.Population`,
+            // active only), while a respondent deactivated after answering keeps their
+            // response -- so above 100 is a true reading of a team that shrank mid-window.
+            // Every screen renders this figure as-is, and the dashboards' related
+            // responses-per-100-people reading exceeds 100 by design; clamping here would
+            // erase exactly the signal that says the denominator moved. Pinned by
+            // Participation_above_100_is_reported_raw_not_clamped.
             double? participation = department is { Headcount: > 0 }
                 ? Percent(members.Count, department.Headcount)
                 : null;
