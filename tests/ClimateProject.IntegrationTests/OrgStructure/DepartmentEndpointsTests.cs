@@ -237,7 +237,11 @@ public class DepartmentEndpointsTests : IAsyncLifetime
                     Role = Roles.Employee,
                     // The fourth is deactivated. Participation denominators on the results
                     // screen count active members only, and a Departments page that counted
-                    // leavers would disagree with the very screen it feeds.
+                    // leavers would disagree with the very screen it feeds. That agreement
+                    // is a claim about two files, so it is proved across both rather than
+                    // asserted here: see
+                    // SurveyResultsEndpointsTests.A_departments_headcount_is_the_denominator_the_results_screen_divides_by.
+                    // This test pins only this endpoint's half of it.
                     IsActive = i < 3,
                     CreatedAt = DateTimeOffset.UtcNow,
                     UpdatedAt = DateTimeOffset.UtcNow,

@@ -484,9 +484,14 @@ public static class SurveyResultsEndpoints
             .Select(d => new { d.Id, d.Name })
             .ToListAsync(cancellationToken);
 
-        var headcounts = await db.Users
-            .AsNoTracking()
-            .Where(u => u.CompanyId == companyId && u.DepartmentId != null)
+        // One grouped statement rather than a count per department, so the work here does
+        // not grow with the org chart. The population is `DepartmentHeadcount.Population`
+        // and not a predicate written out again: this count is the DENOMINATOR of
+        // per-department participation, the Departments page prints the same number as
+        // EMPLOYEES ASSIGNED, and a hand-written copy here is exactly how the two came to
+        // disagree about deactivated members.
+        var headcounts = await DepartmentHeadcount
+            .Population(db.Users.AsNoTracking(), companyId)
             .GroupBy(u => u.DepartmentId)
             .Select(g => new { DepartmentId = g.Key, Count = g.Count() })
             .ToListAsync(cancellationToken);

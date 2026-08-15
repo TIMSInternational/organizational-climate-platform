@@ -236,7 +236,9 @@ public static class DashboardQueries
                 c.CreatedAt));
 
     /// <summary>
-    /// One company's departments with their headcount and participation, as one statement.
+    /// One company's departments, each with its members and its completed responses --
+    /// the rows the company dashboard reads as a completed-responses-per-person rate --
+    /// as one statement.
     /// </summary>
     /// <remarks>
     /// The company predicate is applied here rather than left to the caller because it is
@@ -244,6 +246,24 @@ public static class DashboardQueries
     /// The response subquery is additionally constrained by company id and not by
     /// department alone -- department ids are globally unique, but relying on that to
     /// enforce a tenant boundary makes the boundary an accident of the id scheme.
+    ///
+    /// <para>
+    /// <b>The member count counts members active or not, and is deliberately NOT
+    /// <see cref="DepartmentHeadcount.Population"/>.</b> It is a rate denominator all the
+    /// same -- the client divides the response count by it -- but of a different rate than
+    /// the one <c>Population</c> serves. A denominator counts the population its numerator
+    /// draws from. The numerator here spans every survey the tenant has ever run and keeps
+    /// the responses of members deactivated since (a response row owns its department id
+    /// forever), and the organisation-level rate these rows are read against divides the
+    /// same all-time numerator by <see cref="UserCounts"/>' total -- every user row, active
+    /// or not. So the matching population is everyone whose row points at the department:
+    /// its whole history, like the numerator's. <c>Population</c> is the opposite case --
+    /// one survey's respondents can only ever be active members, so its denominator is the
+    /// department's present. Counting active only HERE would inflate every department's
+    /// reading without bound as staff turn over, and would measure each department by a
+    /// stricter rule than the company target printed beside it. Pinned by
+    /// <c>The_dashboard_member_count_counts_members_active_or_not</c>.
+    /// </para>
     /// </remarks>
     public static IQueryable<DashboardDepartmentRow> DepartmentSummaries(
         IQueryable<Department> departments,
@@ -411,17 +431,25 @@ public static class DashboardQueries
     /// aggregation is shared, its suppression decisions are the reason it is shared, and
     /// handing it a deliberately hollowed-out input so that a particular caller's output
     /// happens to be unaffected is how "one aggregation" quietly becomes two.
+    ///
+    /// It counts <see cref="DepartmentHeadcount.Population"/>, which is the same population
+    /// the Departments page prints as EMPLOYEES ASSIGNED. That is not tidiness: this number
+    /// is a participation denominator, and it was a hand-written predicate here that let it
+    /// drift from the page claiming to show it.
     /// </remarks>
     public static IQueryable<AggregationDepartment> AggregationDepartments(
         IQueryable<Department> departments,
         IQueryable<User> users,
         Guid companyId)
-        => departments
+    {
+        var population = DepartmentHeadcount.Population(users, companyId);
+        return departments
             .Where(d => d.CompanyId == companyId)
             .Select(d => new AggregationDepartment(
                 d.Id,
                 d.Name,
-                users.Count(u => u.DepartmentId == d.Id && u.CompanyId == companyId)));
+                population.Count(u => u.DepartmentId == d.Id)));
+    }
 
     /// <summary>
     /// Outstanding action plans opened at or after <paramref name="since"/> -- what the
