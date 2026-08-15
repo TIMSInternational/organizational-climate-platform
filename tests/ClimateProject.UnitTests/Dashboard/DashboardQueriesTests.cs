@@ -77,6 +77,41 @@ public class DashboardQueriesTests
         Assert.Contains("COUNT", sql, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The headcount fed to <c>SurveyAggregation</c> excludes deactivated members, because
+    /// it is a participation DENOMINATOR and the Departments page prints the same number as
+    /// EMPLOYEES ASSIGNED.
+    ///
+    /// <para>
+    /// This is asserted on SQL rather than on a response body for a reason worth writing
+    /// down: <c>/dashboard/employee/last-outcome</c>, the only caller of this method, emits
+    /// no participation rate at all — <c>The_panel_carries_no_score_of_any_kind</c> forbids
+    /// the key — so the headcount this builds is invisible in every response it takes part
+    /// in. There is no black-box test that can fail when this predicate changes. The
+    /// end-to-end proof of the shared population lives on the other builder, in
+    /// <c>SurveyResultsEndpointsTests.A_departments_headcount_is_the_denominator_the_results_screen_divides_by</c>;
+    /// this pins the copy that endpoint cannot reach.
+    /// </para>
+    /// <para>
+    /// <c>u.is_active</c> and not <c>is_active</c>: <c>departments</c> carries a column of
+    /// that name too, and a bare fragment would be satisfied by the wrong table. Verified by
+    /// deleting the filter — the rendered SQL then contains no <c>is_active</c> anywhere,
+    /// because this projection never selects the department's own flag.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void The_aggregation_headcount_counts_active_members_only()
+    {
+        using var db = CreateContext();
+
+        var sql = DashboardQueries
+            .AggregationDepartments(db.Departments, db.Users, CompanyId)
+            .ToQueryString();
+
+        Assert.Contains("u.is_active", sql, StringComparison.Ordinal);
+        Assert.Contains("COUNT", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void The_survey_tallies_translate_as_conditional_counts_over_one_group()
     {

@@ -37,20 +37,26 @@ public static class DepartmentEndpoints
             return Results.Forbid();
         }
 
+        // COUNTED, never read from `departments.employee_count`. That column is
+        // denormalised and **nothing in this codebase has ever written to it** -- no user
+        // create, invitation accept, bulk import, department move or deactivation touches
+        // it -- so it is 0 for every department in every environment, and this endpoint
+        // reported "0 employees" for a department with nine people in it.
+        //
+        // The predicate is `DepartmentHeadcount.Population`, which is also what the two
+        // projections behind `AggregationDepartment.Headcount` count -- and that number is
+        // the DENOMINATOR of per-department participation on the results screen. This line
+        // once carried a comment claiming the same invariant while spelling the predicate
+        // out by hand; the hand-written copies drifted (this one filtered on IsActive, the
+        // denominators did not) and nothing failed, because no test compared the two
+        // surfaces. Both now read one definition, and
+        // `A_departments_headcount_is_the_denominator_the_results_screen_divides_by` fails
+        // if they part again.
+        var headcountPopulation = DepartmentHeadcount.Population(db.Users, companyId);
+
         var departments = await db.Departments
             .Where(d => d.CompanyId == companyId)
             .OrderBy(d => d.Name)
-            // COUNTED, never read from `departments.employee_count`. That column is
-            // denormalised and **nothing in this codebase has ever written to it** -- no
-            // user create, invitation accept, bulk import, department move or deactivation
-            // touches it -- so it is 0 for every department in every environment, and this
-            // endpoint reported "0 employees" for a department with nine people in it.
-            //
-            // The predicate is `SurveyAggregation`'s headcount predicate exactly (active
-            // users in the department). It has to be: that number is the DENOMINATOR of
-            // per-department participation on the results screen, so a Departments page
-            // counting one population while participation counts another would put two
-            // different headcounts for the same team on two screens.
             .Select(d => new DepartmentListItem(
                 d.Id,
                 d.CompanyId,
@@ -58,7 +64,7 @@ public static class DepartmentEndpoints
                 d.Description,
                 d.ParentDepartmentId,
                 d.IsActive,
-                db.Users.Count(u => u.DepartmentId == d.Id && u.IsActive)))
+                headcountPopulation.Count(u => u.DepartmentId == d.Id)))
             .ToListAsync(cancellationToken);
 
         return Results.Ok(new DepartmentListResponse(departments));
@@ -155,16 +161,25 @@ public static class DepartmentEndpoints
             return Results.Forbid();
         }
 
-        var employeeCount = await CountEmployeesAsync(db, department.Id, cancellationToken);
+        var employeeCount = await CountEmployeesAsync(db, department, cancellationToken);
         return Results.Ok(new DepartmentDetail(department.Id, department.CompanyId, department.Name, department.Description, department.ParentDepartmentId, department.IsActive, employeeCount));
     }
 
     /// <summary>
     /// A department's headcount, derived. See the note in <see cref="ListAsync"/> for why
-    /// this is never <c>Department.EmployeeCount</c>.
+    /// this is never <c>Department.EmployeeCount</c>, and
+    /// <see cref="DepartmentHeadcount"/> for who else counts this population.
     /// </summary>
-    private static Task<int> CountEmployeesAsync(ClimateProjectDbContext db, Guid departmentId, CancellationToken cancellationToken)
-        => db.Users.CountAsync(u => u.DepartmentId == departmentId && u.IsActive, cancellationToken);
+    /// <remarks>
+    /// Takes the department rather than its id so the tenant predicate has a company to
+    /// apply. The list route and this one must agree, and they only agree by construction
+    /// if they count the same population -- they used to be two hand-written predicates
+    /// that happened to match.
+    /// </remarks>
+    private static Task<int> CountEmployeesAsync(ClimateProjectDbContext db, Department department, CancellationToken cancellationToken)
+        => DepartmentHeadcount
+            .Population(db.Users, department.CompanyId)
+            .CountAsync(u => u.DepartmentId == department.Id, cancellationToken);
 
     private static async Task<IResult> UpdateAsync(
         Guid id,
@@ -248,10 +263,10 @@ public static class DepartmentEndpoints
         // reads 0 for every department -- which is what made the Departments screen report
         // `PEOPLE 0`, `EMPLOYEES ASSIGNED 0` and `UNDER THE FLOOR 5`, i.e. tell an admin that no
         // department could be reported at all, beside a RESPONSES column showing 6/5/5/5.
-        // `CountEmployeesAsync` counts active users with the predicate `SurveyAggregation` uses,
-        // because that number is the denominator of per-department participation. #143's audit
-        // trail is orthogonal to it; taking main's line wholesale would have restored the bug.
-        var employeeCount = await CountEmployeesAsync(db, department.Id, cancellationToken);
+        // `CountEmployeesAsync` counts `DepartmentHeadcount.Population`, the same definition the
+        // participation denominator divides by. #143's audit trail is orthogonal to it; taking
+        // main's line wholesale would have restored the bug.
+        var employeeCount = await CountEmployeesAsync(db, department, cancellationToken);
         return Results.Ok(new DepartmentDetail(department.Id, department.CompanyId, department.Name, department.Description, department.ParentDepartmentId, department.IsActive, employeeCount));
     }
 }

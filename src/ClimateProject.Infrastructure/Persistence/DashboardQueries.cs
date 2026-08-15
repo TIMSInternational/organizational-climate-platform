@@ -411,17 +411,25 @@ public static class DashboardQueries
     /// aggregation is shared, its suppression decisions are the reason it is shared, and
     /// handing it a deliberately hollowed-out input so that a particular caller's output
     /// happens to be unaffected is how "one aggregation" quietly becomes two.
+    ///
+    /// It counts <see cref="DepartmentHeadcount.Population"/>, which is the same population
+    /// the Departments page prints as EMPLOYEES ASSIGNED. That is not tidiness: this number
+    /// is a participation denominator, and it was a hand-written predicate here that let it
+    /// drift from the page claiming to show it.
     /// </remarks>
     public static IQueryable<AggregationDepartment> AggregationDepartments(
         IQueryable<Department> departments,
         IQueryable<User> users,
         Guid companyId)
-        => departments
+    {
+        var population = DepartmentHeadcount.Population(users, companyId);
+        return departments
             .Where(d => d.CompanyId == companyId)
             .Select(d => new AggregationDepartment(
                 d.Id,
                 d.Name,
-                users.Count(u => u.DepartmentId == d.Id && u.CompanyId == companyId)));
+                population.Count(u => u.DepartmentId == d.Id)));
+    }
 
     /// <summary>
     /// Outstanding action plans opened at or after <paramref name="since"/> -- what the
