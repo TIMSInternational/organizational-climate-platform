@@ -2095,7 +2095,6 @@
     "suppressedBody": "To keep your response anonymous, these details about you were deliberately not saved with it: {fields}",
     "dimensions": {
       "psychological_safety": "Psychological safety",
-      "safety": "Psychological safety",
       "workload": "Workload",
       "trust": "Trust",
       "recognition": "Recognition",

@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { CATALOGUES, LOCALES } from './locale'
+import { CATALOGUES, FALLBACK_LOCALE, LOCALES } from './locale'
+import { createTranslator } from './translate'
 import type { Locale, MessageNode } from './translate'
+// The function the respond form actually prints with, rather than a second copy of
+// its lookup written here. See the sweep below for why that distinction matters.
+import { dimensionLabel } from '../features/surveys/dimensionLabel'
 
 /**
  * The copy contract behind the approved employee design.
@@ -26,12 +30,16 @@ import type { Locale, MessageNode } from './translate'
  *    a well-meaning edit ("say which one, it reads better") is exactly how it would
  *    be crossed.
  *
- * 2. **Every dimension the respond form can actually meet has a heading.** The
- *    categories are `varchar(100)` free text, so the design's headings are a
- *    lookup rather than a controlled vocabulary — and the values that occur are
- *    machine-shaped (`psychological_safety`), not display text. A missing entry
- *    does not render blank; `createTranslator` returns the key, so the respondent
- *    reads `surveyRespond.dimensions.enps` above their questions.
+ * 2. **Every dimension the *product* ships has its own heading.** The categories
+ *    are `varchar(100)` free text, so the catalogue is a lookup rather than a
+ *    controlled vocabulary. `SurveyRespondForm` prints a category the catalogue has
+ *    never heard of in the author's own words, which is right for a word an author
+ *    typed and wrong for the values the product itself chose: those are English
+ *    slugs (`psychological_safety`), so a missing entry puts an English heading over
+ *    a Spanish survey. Hence the sweep over the shipped fixture, and hence the
+ *    second test, which is about what the entries *say* — two dimensions sharing
+ *    wording, or one headed with the generic, is the same collapse the form was
+ *    fixed for, reintroduced from the catalogue side.
  *
  * Plus a plain register of the keys the employee screens are being built against,
  * so that deleting one fails here rather than in whichever page renders it.
@@ -45,6 +53,25 @@ function read(locale: Locale, key: string): string | null {
     node = node[segment]
   }
   return typeof node === 'string' ? node : null
+}
+
+/**
+ * The dimension headings a locale ships, keyed by the stored `Question.Category`.
+ *
+ * Read as a subtree rather than through `read`, because the assertions below are
+ * about the set of entries — a heading nobody looked up is exactly the one that
+ * drifts.
+ */
+function dimensions(locale: Locale): Record<string, string> {
+  const root = CATALOGUES[locale] as MessageNode
+  if (typeof root !== 'object') return {}
+  const scope = root.surveyRespond
+  if (typeof scope !== 'object') return {}
+  const node = scope.dimensions
+  if (typeof node !== 'object') return {}
+  return Object.fromEntries(
+    Object.entries(node).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  )
 }
 
 /** The `{placeholder}` names in a string, sorted. */
@@ -197,26 +224,134 @@ describe('employee copy', () => {
     }
   })
 
-  it('gives every category the respond fixture carries a section heading', () => {
+  /**
+   * ## Why this now calls `dimensionLabel` rather than reading the key itself
+   *
+   * The version of this test that shipped in 97efd72 looked the heading up with
+   * `read` — its own copy of the lookup — so it agreed with itself and never touched
+   * the function whose behaviour it is about. It also opened with a hard-coded
+   * `expect(categories).toEqual(['enps', 'open', …])`, which is a restatement of the
+   * fixture: it can only fail when the fixture changes, and it says nothing about the
+   * product.
+   *
+   * Both are fixed by asking the real function the real question. `dimensionLabel` is
+   * what `SurveyRespondForm` prints, and its *fallback* — the author's own text — is
+   * precisely the wrong answer for these five, because they are the product's own
+   * English slugs and `psychological_safety` sitting over a Spanish survey is the
+   * failure. So the assertion is that the catalogue answered and the fallback did not.
+   *
+   * The vacuity control is now about the walker rather than about the answer: it is
+   * shown to find nothing in a category-free tree and something in the fixture, which
+   * cannot go stale when a question is added to the fixture.
+   */
+  it('resolves every category the respond fixture carries to a catalogued heading', () => {
     const categories = [...categoriesIn(JSON.parse(readFileSync(FIXTURE, 'utf8')))].sort()
 
-    // Vacuity control: a fixture that stopped carrying categories, or a walker that
-    // stopped finding them, would otherwise make the sweep below pass on nothing.
-    expect(categories).toEqual(['enps', 'open', 'priorities', 'psychological_safety', 'workload'])
+    // Vacuity control, in two halves: a walker that stopped finding categories, or a
+    // fixture that stopped carrying them, would make the sweep below pass on nothing.
+    expect(categoriesIn({ questions: [{ id: 'q1', text: 'no category here' }] }).size).toBe(0)
+    expect(
+      categories.length,
+      'the respond fixture carries no categories — the sweep below would be vacuous',
+    ).toBeGreaterThan(3)
 
-    const missing: string[] = []
+    const wrong: string[] = []
     for (const locale of LOCALES) {
+      const t = createTranslator(CATALOGUES[locale], CATALOGUES[FALLBACK_LOCALE])
       for (const category of categories) {
-        const heading = read(locale, `surveyRespond.dimensions.${category}`)
-        if (heading === null || heading.trim() === '') missing.push(`${locale}: ${category}`)
+        const printed = dimensionLabel(category, t)
+        const catalogued = read(locale, `surveyRespond.dimensions.${category}`)
+        // `dimensionLabel`'s fallback for `psychological_safety` is the slug with its
+        // `_` opened out, so this is not merely "non-empty": it is "the catalogue
+        // answered, not the fallback".
+        if (catalogued === null || catalogued.trim() === '' || printed !== catalogued) {
+          wrong.push(`${locale}: ${category} → ${printed}`)
+        }
       }
     }
 
     expect(
-      missing,
-      'A category with no heading renders as its own dotted path above the questions. ' +
-        'Add it under surveyRespond.dimensions in both catalogues.',
+      wrong,
+      'A category with no heading is printed in the survey’s own words instead, and ' +
+        'these are the product’s own English slugs — `psychological_safety` would sit ' +
+        'over a Spanish survey. Add it under surveyRespond.dimensions in both catalogues.',
     ).toEqual([])
+  })
+
+  /**
+   * The sweep above can only ever see the five categories the fixture carries, and
+   * all five are in the catalogue — so on its own it passes whatever the headings
+   * actually say. This is the part that can fail on a bad *value*.
+   *
+   * Two of the *shipped* dimensions must not read the same words. The respondent then
+   * cannot tell whether the form changed subject or the page broke, and the heading's
+   * whole job is to say what is being asked. Nothing else in this directory looks at
+   * what a value says: `catalogues.test.ts` compares the two locales to each other,
+   * and two locales agree perfectly when both are wrong in the same way.
+   *
+   * ## The scope, stated honestly
+   *
+   * This is a claim about **the catalogue**, not about a rendered page. It is not the
+   * general property "no two sections of a survey ever read the same" — that one is
+   * false and cannot be fixed from here; see `dimensionLabel.ts` and the bound test in
+   * `SurveyRespondForm.test.tsx`. What it does hold is that the values the product
+   * itself ships do not put the collapse back from the catalogue side, either by
+   * repeating one another or by being handed the generic wording.
+   *
+   * ## Sets, not arrays
+   *
+   * The comparison is over sorted sets because `Object.entries` yields JSON key order:
+   * an earlier version compared arrays-of-arrays built from it, so swapping two
+   * adjacent lines of `en.json` with no wording change at all reddened the build, with
+   * a diff that showed the same two strings in the other order. That is the
+   * parse-and-dump brittleness this catalogue is supposed to be guarded against, not
+   * an example of it.
+   */
+  it('names each shipped dimension distinctly, and none of them generically', () => {
+    // No deliberate collisions. The catalogue used to alias `safety` to the
+    // psychological_safety heading so the demo's shorthand vocabulary rendered its
+    // full name — but `Question.Category` is authored free text, and for a client
+    // whose `safety` questions mean occupational safety (protective equipment,
+    // incident reporting), that alias filed them under a different construct. Wrong
+    // beats uninformative: an uncatalogued `safety` now renders the author's own
+    // word via the fallback, which is never false. Any entry appearing here again
+    // must alias a genuinely identical construct, not a plausible neighbour.
+    const ALIASES: string[][] = []
+
+    /** A set of key-groups as one comparable, order-free value. */
+    const asSets = (groups: string[][]) =>
+      groups.map((keys) => [...keys].sort().join(' + ')).sort()
+
+    for (const locale of LOCALES) {
+      const entries = Object.entries(dimensions(locale))
+
+      // Vacuity control: an emptied or renamed subtree would make both sweeps below
+      // pass on nothing at all.
+      expect(entries.length, `${locale} has no dimension headings to check`).toBeGreaterThan(5)
+
+      const generic = [
+        read(locale, 'surveyRespond.dimensionUnknown'),
+        read(locale, 'surveyRespond.dimensionNone'),
+      ]
+      expect(
+        entries
+          .filter(([, heading]) => generic.includes(heading))
+          .map(([key]) => key)
+          .sort(),
+        `${locale}: a dimension headed with the generic is indistinguishable from an ` +
+          'uncatalogued one, which is the collapse this heading was fixed for.',
+      ).toEqual([])
+
+      const byHeading = new Map<string, string[]>()
+      for (const [key, heading] of entries) {
+        byHeading.set(heading, [...(byHeading.get(heading) ?? []), key])
+      }
+      const shared = [...byHeading.values()].filter((keys) => keys.length > 1)
+      expect(
+        asSets(shared),
+        `${locale}: a survey carrying both of these would print one heading twice.`,
+      ).toEqual(asSets(ALIASES))
+    }
   })
 
   it('holds every key the employee screens are built against, in both languages', () => {

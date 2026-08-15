@@ -35,7 +35,7 @@ import {
   type AnswerState,
 } from '../respondAnswers'
 import { respondDimensions, type RespondSection } from '../respondDimensions'
-import { UNCATEGORISED_DIMENSION } from '../surveyResultsMap'
+import { dimensionLabel } from '../dimensionLabel'
 import { clearSessionId, ensureSessionId } from '../respondSession'
 import {
   SurveyRespondError,
@@ -456,40 +456,54 @@ function DimensionHeading({ section, total }: { section: RespondSection; total: 
       ? t('dimensionPosition', { position: section.firstIndex, total })
       : t('dimensionRange', { from: section.firstIndex, to: section.lastIndex, total })
 
+  const label = dimensionLabel(section.key, tRoot)
+
   return (
-    <div className="flex items-center gap-inline pt-2">
-      <h2 className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
-        {dimensionLabel(section.key, tRoot)}
+    /*
+      `min-w-0` on the ROW, not only on the eyebrow.
+
+      This row is a grid item of the `<form className="grid">` above, and a grid item's
+      automatic minimum size is its min-content width. The eyebrow below is `truncate`,
+      i.e. `white-space: nowrap`, so the row's min-content width is the whole category
+      on one line — and the track grows to fit it, carrying the page with it. Measured
+      before this class existed: a 100-character category rendered the respond page 983
+      CSS px wide inside a 390 px viewport, ellipsising the eyebrow nine hundred pixels
+      out and carrying the question cards past the viewport edge with it. `truncate` on
+      the child does not bound anything while its parent is free to grow.
+    */
+    <div className="flex min-w-0 items-center gap-inline pt-2">
+      {/*
+        `min-w-0 truncate`, and `title` so nothing is lost.
+
+        Until an uncatalogued category could reach this slot, only the catalogue's own
+        short strings could, and the row could not be overrun. Now the author's
+        own `varchar(100)` lands here: a hundred characters of eyebrow would either
+        squeeze the rule to nothing and push the range off the row, or — with
+        `min-w-0` alone — wrap the eyebrow to three lines and drag the rule and the
+        reading down with it. `truncate` keeps the design's one-line eyebrow and
+        `title` keeps the whole category reachable, which matters because it is the
+        author's text and not ours to discard.
+      */}
+      <h2
+        title={label}
+        className="min-w-0 truncate text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary"
+      >
+        {label}
       </h2>
-      <span aria-hidden="true" className="h-px flex-1 bg-line-light" />
-      <span className="font-mono text-xs tabular-nums text-fg-secondary">{range}</span>
+      {/*
+        `min-w-8` so the rule is still a rule at the point the heading has taken the
+        row: `flex-1` is `flex: 1 1 0%`, whose basis is zero, so it is the first thing
+        a long heading shrinks away to nothing.
+      */}
+      <span aria-hidden="true" className="h-px min-w-8 flex-1 bg-line-light" />
+      {/*
+        `shrink-0`: the range is a reading, not decoration. An ellipsised `1–2 OF…` is
+        worse than an ellipsised heading, because a truncated number reads as a
+        different number.
+      */}
+      <span className="shrink-0 font-mono text-xs tabular-nums text-fg-secondary">{range}</span>
     </div>
   )
-}
-
-/**
- * A dimension's heading, from the catalogue rather than from the database.
- *
- * `Question.Category` is a free-text `varchar(100)` the server neither controls nor
- * translates, so printing it raw would put an English heading over a Spanish survey
- * — the same silent substitution the content-i18n rules forbid. The catalogue holds
- * the vocabulary the product actually ships (`psychological_safety`, `workload`,
- * `enps`…), keyed by the stored value, and answers for everything else in words that
- * are true whatever the category said:
- *
- * - the `UNCATEGORISED_DIMENSION` sentinel — questions with no category at all —
- *   gets `dimensionNone`, because "other questions" is exactly what they are;
- * - a category nobody has translated gets `dimensionUnknown`.
- *
- * The root translator is used rather than the scoped one so the miss is detectable:
- * `createTranslator` returns the key it was given, so `label === path` is the miss,
- * with no second lookup and no list to keep in step.
- */
-function dimensionLabel(key: string, tRoot: (key: string) => string): string {
-  if (key === UNCATEGORISED_DIMENSION) return tRoot('surveyRespond.dimensionNone')
-  const path = `surveyRespond.dimensions.${key}`
-  const label = tRoot(path)
-  return label === path ? tRoot('surveyRespond.dimensionUnknown') : label
 }
 
 /**
