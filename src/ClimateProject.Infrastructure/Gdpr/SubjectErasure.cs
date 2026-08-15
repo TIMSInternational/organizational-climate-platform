@@ -280,12 +280,15 @@ public static class SubjectErasure
         "The account row survives as a pseudonym. Sixteen foreign keys into users are ON DELETE RESTRICT, so a "
         + "row delete is not available without destroying the audit trail and the company's business records.",
 
-        "A session the subject already holds is not ended. The account is deactivated, so no new token can be "
-        + "issued for it -- /auth/login and /auth/refresh both refuse an inactive account -- but an access token "
-        + "minted before the erasure is self-contained and keeps authorising requests until it expires, unless "
-        + "it identifies the account by a legacy persona id, which erasure clears. Revoking an outstanding token "
-        + "needs a per-user security stamp checked on every request, which is #284's work and is not duplicated "
-        + "here.",
+        "The sessions the subject already holds are ended against this API and not against the tracking service. "
+        + "The account is deactivated, so no new token can be issued for it -- /auth/login and /auth/refresh both "
+        + "refuse an inactive account -- and the account's security stamp is rotated, so a token carrying a "
+        + "stamp claim is refused by this API on its next request rather than working until it expires. A token "
+        + "with no stamp claim at all bypasses that check (SecurityStampValidation returns early on a missing "
+        + "claim); every token this API has minted since #284 carries one, so within the 24h lifetime that is "
+        + "the empty set unless some other minter shares the signing secret. The "
+        + "tracking service validates the same shared signing secret and does not consult the stamp, so that same "
+        + "token keeps authorising requests there until it expires, at most 24 hours after the erasure.",
 
         "Rows matched by email address are erased only inside the tenant the caller has authority over. An "
         + "address is not unique across tenants, and an invitation held by another company is that company's "
@@ -317,21 +320,23 @@ public static class SubjectErasure
     /// that nothing downstream can read a live permission off an erased account. Preferences
     /// go back to defaults because a timezone is weakly identifying.</para>
     ///
-    /// <para><c>IsActive = false</c> closes the door on new tokens, not on old ones, and the
-    /// difference matters enough to say here rather than only in the response. It is read at
-    /// <c>AuthEndpoints.IssueTokenForAsync</c>, which every mint in this API goes through, and
-    /// at the <c>/auth/login</c> lookup — both of them mint-time checks. Nothing consults it
-    /// per request: <c>ActingUserResolver</c> resolves the <c>sub</c> claim to this row by id,
-    /// which erasure does not change, so an access token issued before the erasure keeps
-    /// working until it expires. (One shape does die with the erasure, by accident rather than
-    /// design: a token whose <c>sub</c> is a legacy <c>PersonaExternalId</c> stops resolving,
-    /// because that column is cleared above. Every token this API mints for an account without
-    /// one carries the account's own id.) Revoking one needs a per-user security stamp validated on
-    /// every request; that is #284, and a second mechanism invented here would be one more
-    /// thing to keep in step with it. Do not describe an erasure as "ends the subject's
-    /// session" anywhere, for the reason <c>ProfileEndpoints.ChangePasswordAsync</c> gives
-    /// about the identical gap on a password change ("do not summarise this route as 'ends
-    /// the compromise' anywhere").</para>
+    /// <para><c>IsActive = false</c> closes the door on new tokens and nothing more, which is
+    /// why the <c>SecurityStamp</c> rotation next to it is not decoration (#286). The flag is
+    /// read at <c>AuthEndpoints.IssueTokenForAsync</c>, which every mint in this API goes
+    /// through, and at the <c>/auth/login</c> lookup — both of them mint-time checks. Nothing
+    /// consults it per request: <c>ActingUserResolver</c> resolves the <c>sub</c> claim to this
+    /// row by id, which erasure does not change, so on the flag alone an access token issued
+    /// before the erasure kept authorising requests for up to its full 24 hours. A person
+    /// exercising the right to erasure and keeping a live session is the worst instance of
+    /// that gap, so this rotates the stamp the way a deactivation through
+    /// <c>PUT /admin/users/{id}</c> does: <c>SecurityStampValidation</c> compares this column
+    /// against the claim in every presented token during authentication, so the subject's next
+    /// request on a pre-erasure token is a 401.</para>
+    ///
+    /// <para>What that does not reach is a token being presented to <c>services/tracking-api</c>,
+    /// which validates the same shared <c>TrackingJwtSecret</c> and has no equivalent hook — it
+    /// keeps working there until it expires. Said in <see cref="KnownLimitations"/> too, because
+    /// it is the subject's own answer and not only a maintainer's note.</para>
     /// </remarks>
     private static void AnonymiseAccount(User subject, DateTimeOffset erasedAt)
     {
@@ -343,6 +348,7 @@ public static class SubjectErasure
         subject.DepartmentId = null;
         subject.ManagerId = null;
         subject.IsActive = false;
+        subject.SecurityStamp = Guid.NewGuid();
 
         subject.Preferences = new UserPreferences();
 

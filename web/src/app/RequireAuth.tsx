@@ -5,12 +5,27 @@ import { decodeJwtPayload } from '../auth/jwt'
 /**
  * The auth gate on every admin route.
  *
- * ## The deactivated-account branch (#81)
+ * ## The deactivated-account branch (#81), and why no token this API mints
+ * reaches it any more
  *
- * A user can be deactivated *while holding a valid token* — `UserEndpoints`
- * flips `IsActive` and the JWT keeps working until it expires. Every request
- * that token then makes is refused, so without this branch the app renders its
- * whole shell and fails one panel at a time, with no single place saying why.
+ * It was written for a session that outlived its account: `UserEndpoints`
+ * flipped `IsActive` and the JWT kept working until it expired, so without a
+ * branch here the app rendered its whole shell and failed one panel at a time
+ * with no single place saying why.
+ *
+ * Two server changes closed that from both ends. #280 made
+ * `AuthEndpoints.IssueTokenForAsync` — the single mint site — refuse to issue a
+ * token for an inactive account at all, so this API cannot produce
+ * `isActive: "false"`; and #286 made deactivation rotate the user's security
+ * stamp, so a token minted *before* the deactivation is refused with a 401 and
+ * `authFetch` takes that session to `/login`. Between them, a deactivated user
+ * now lands on the login page rather than on `/auth/inactive`.
+ *
+ * The branch stays because the claim is not this API's alone to mint —
+ * `TrackingJwtSecret` is shared with the legacy climate-tracking application —
+ * and because a client-side gate that trusts a claim it stopped checking is a
+ * worse thing to leave behind than a branch that rarely fires. Do not describe
+ * `/auth/inactive` as the destination of a deactivated session anywhere.
  *
  * **`isActive` is a string.** `JwtTokenService` emits
  * `new("isActive", claims.IsActive ? "true" : "false")`, so the claim is `"true"`

@@ -74,12 +74,16 @@ public class EmployeeLastOutcomeEndpointTests : IAsyncLifetime
 
     public EmployeeLastOutcomeEndpointTests(PostgresContainerFixture postgres)
     {
-        _factory = new AuthWebApplicationFactory(postgres.ConnectionString);
+        // The collection's shared host, not a per-class factory: xUnit builds a new class
+        // instance per [Fact], so `new AuthWebApplicationFactory(...)` here is one host per
+        // test CASE -- the #279 pattern the HostBudget guard in CreateHost refuses. This
+        // class predates that conversion on a different lineage; the guard caught the
+        // combination when main was merged into this branch.
+        _factory = postgres.App;
     }
 
     public async Task InitializeAsync()
     {
-        await _factory.ApplyMigrationsAsync();
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
 

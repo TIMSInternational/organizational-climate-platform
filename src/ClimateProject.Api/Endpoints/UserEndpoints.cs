@@ -191,6 +191,46 @@ public static class UserEndpoints
 
         if (request.IsActive.HasValue)
         {
+            // Deactivating has to end the sessions the account already has, not just refuse
+            // it new ones (#286). Tokens here are stateless HS256 with a 24-hour lifetime and
+            // #280's policy reads the isActive claim minted INTO the token, so flipping this
+            // column alone left the deactivated user's browser working for up to a day --
+            // which is the whole window an offboarding exists to close. Rotating the stamp
+            // closes it: SecurityStampValidation compares this column against every presented
+            // token during authentication, so the next request on any token minted before
+            // this save is a 401. Same rotation, same reason, as the two password paths #284
+            // named.
+            //
+            // Keyed on what the save ASKS FOR -- isActive: false -- and not on a true -> false
+            // transition. Both halves of that are load-bearing.
+            //
+            // Not unconditional, because the admin edit dialog sends { name, isActive } on
+            // EVERY save (web/src/features/org-structure/pages/UsersListPage.tsx): rotating
+            // whenever isActive is merely present would sign an ACTIVE user out every time an
+            // administrator corrected a typo in their name -- a revocation with no
+            // deactivation behind it. Those saves carry isActive: true, so they miss this
+            // branch. Reactivating misses it too and needs no rotation of its own: every token
+            // from before the deactivation died at that rotation and cannot come back.
+            //
+            // Not the transition either, because "deactivate this person" has to work on a row
+            // that already reads inactive. That state is reachable and not hypothetical: this
+            // ships to a database whose existing inactive rows were deactivated by the code
+            // this change replaces and never had their stamps rotated, so their holders' tokens
+            // are live right now. Re-deactivating is the exact remediation an administrator
+            // reaches for on noticing somebody still has access, and under a transition guard
+            // it would return 200 and do nothing. The cost is a stamp rotated on every edit of
+            // an already-inactive user; for a row deactivated by THIS code that rotation finds
+            // no session left to end, and for the legacy rows above it is not a cost at all --
+            // it ends the very sessions the transition guard would have left alive.
+            //
+            // The one session this can end mid-task is a super admin deactivating their own
+            // account: no other role may (the guard above), and it is the honest outcome of
+            // the request they made.
+            if (!request.IsActive.Value)
+            {
+                user.SecurityStamp = Guid.NewGuid();
+            }
+
             user.IsActive = request.IsActive.Value;
         }
 
