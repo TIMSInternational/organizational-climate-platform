@@ -264,12 +264,13 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
 // /auth/signup, /auth/google, /auth/refresh and POST /invitations/{token}/accept -- goes
 // through AuthEndpoints.IssueTokenForAsync, which refuses to mint one in the first place.
 //
-// Neither layer revokes a token that was issued while the account was still ACTIVE:
-// deactivating a user still does not end their current session before the token's 24h expiry.
-// #284 built the mechanism that could -- rotating User.SecurityStamp ends every session the
-// user has open, and the JwtBearerEvents hook above enforces it -- but the only two places
-// that rotate it are the two password paths #284 names. Wiring deactivation into it is a
-// change to UserEndpoints, and still a separate one.
+// Neither layer revokes a token that was issued while the account was still ACTIVE, because
+// neither reads anything but the claim the token was minted with. What revokes it is #284's
+// stamp: the JwtBearerEvents hook above refuses any token whose stamp no longer matches the
+// row, and since #286 `PUT /admin/users/{id}` rotates the column when it deactivates
+// somebody -- so a deactivated user's open sessions die on their next request rather than at
+// the token's 24h expiry. This policy stays as the second line of defence it was written to
+// be, not as the thing that ends a session.
 //
 // (This comment used to say "no per-request user lookup is added" of the policy. That is
 // still true of the policy, but no longer true of the request: #284's OnTokenValidated hook

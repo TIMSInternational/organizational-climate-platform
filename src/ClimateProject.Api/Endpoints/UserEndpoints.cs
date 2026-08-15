@@ -191,6 +191,32 @@ public static class UserEndpoints
 
         if (request.IsActive.HasValue)
         {
+            // Deactivating has to end the sessions the account already has, not just refuse
+            // it new ones (#286). Tokens here are stateless HS256 with a 24-hour lifetime and
+            // #280's policy reads the isActive claim minted INTO the token, so flipping this
+            // column alone left the deactivated user's browser working for up to a day --
+            // which is the whole window an offboarding exists to close. Rotating the stamp
+            // closes it: SecurityStampValidation compares this column against every presented
+            // token during authentication, so the next request on any token minted before
+            // this save is a 401. Same rotation, same reason, as the two password paths #284
+            // named.
+            //
+            // Only on the true -> false transition, and the condition is load-bearing rather
+            // than tidiness: the admin edit dialog sends { name, isActive } on EVERY save
+            // (web/src/features/org-structure/pages/UsersListPage.tsx), so an unconditional
+            // rotation here would sign a user out every time an administrator corrected a typo
+            // in their name -- a revocation with no deactivation behind it. Reactivating needs
+            // no rotation either: every token from before the deactivation died at that
+            // rotation and cannot come back.
+            //
+            // The one session this can end mid-task is a super admin deactivating their own
+            // account: no other role may (the guard above), and it is the honest outcome of
+            // the request they made.
+            if (user.IsActive && !request.IsActive.Value)
+            {
+                user.SecurityStamp = Guid.NewGuid();
+            }
+
             user.IsActive = request.IsActive.Value;
         }
 
