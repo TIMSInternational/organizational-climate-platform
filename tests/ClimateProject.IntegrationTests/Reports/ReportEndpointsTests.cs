@@ -4,7 +4,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Localization;
 using ClimateProject.Application.Reports;
+using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using ClimateProject.IntegrationTests.Support;
@@ -132,6 +134,185 @@ public class ReportEndpointsTests : IAsyncLifetime
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
         };
+
+    // ------------------------------------------------------------------
+    // #88 -- real aggregation, through the same path as the results screens
+    // ------------------------------------------------------------------
+
+    private Task<Guid> SeedDepartmentAsync(string name)
+        => WithDbAsync(async db =>
+        {
+            var department = new Department
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _companyId,
+                Name = name,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            };
+            db.Departments.Add(department);
+            await db.SaveChangesAsync();
+            return department.Id;
+        });
+
+    /// <summary>
+    /// Writes one completed response with one answer, the way
+    /// <c>question_responses.response_value</c> requires: a serialised JSON string,
+    /// because the column is jsonb and a bare <c>4</c>-as-text is a different payload.
+    /// Same rule and same reason as <c>SurveyResultsEndpointsTests.SeedAnswerAsync</c>.
+    /// </summary>
+    private Task SeedAnswerAsync(Guid surveyId, Guid questionId, Guid departmentId, string value)
+        => WithDbAsync(async db =>
+        {
+            var responseId = Guid.NewGuid();
+            db.Responses.Add(new Response
+            {
+                Id = responseId,
+                SurveyId = surveyId,
+                CompanyId = _companyId,
+                UserId = null,
+                DepartmentId = departmentId,
+                SessionId = Guid.NewGuid().ToString("N"),
+                Language = "en",
+                IsComplete = true,
+                IsAnonymous = true,
+                StartTime = DateTimeOffset.UtcNow.AddMinutes(-5),
+                CompletionTime = DateTimeOffset.UtcNow,
+                TotalTimeSeconds = 300,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+            db.QuestionResponses.Add(new QuestionResponse
+            {
+                ResponseId = responseId,
+                QuestionId = questionId,
+                ResponseValue = JsonSerializer.Serialize(value),
+                ResponseText = null,
+            });
+            await db.SaveChangesAsync();
+        });
+
+    private async Task WithDbAsync(Func<ClimateProjectDbContext, Task> action)
+    {
+        using var scope = _factory.Services.CreateScope();
+        await action(scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>());
+    }
+
+    private async Task<T> WithDbAsync<T>(Func<ClimateProjectDbContext, Task<T>> action)
+    {
+        using var scope = _factory.Services.CreateScope();
+        return await action(scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>());
+    }
+
+    private async Task<SurveyDetail> CreateSurveyAsync(HttpClient client, string title, string category)
+    {
+        var response = await client.PostAsJsonAsync("/surveys", new CreateSurveyRequest(
+            Title: LocalizedInput.FromBare(title),
+            CompanyId: _companyId,
+            Type: "general_climate",
+            StartDate: DateTimeOffset.UtcNow.AddDays(-1),
+            EndDate: DateTimeOffset.UtcNow.AddDays(14),
+            DepartmentIds: null,
+            Questions:
+            [
+                new CreateSurveyQuestionInput(
+                    LocalizedInput.FromBare("How supported do you feel by leadership?"),
+                    "likert",
+                    Options:
+                    [
+                        new CreateSurveyQuestionOptionInput("1", LocalizedInput.FromBare("Strongly disagree")),
+                        new CreateSurveyQuestionOptionInput("2", LocalizedInput.FromBare("Disagree")),
+                        new CreateSurveyQuestionOptionInput("3", LocalizedInput.FromBare("Neutral")),
+                        new CreateSurveyQuestionOptionInput("4", LocalizedInput.FromBare("Agree")),
+                        new CreateSurveyQuestionOptionInput("5", LocalizedInput.FromBare("Strongly agree")),
+                    ],
+                    Order: 0,
+                    Category: category),
+            ],
+            Language: null));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<SurveyDetail>())!;
+    }
+
+    /// <summary>
+    /// req(#88): the report's survey sections are real aggregation, and they are the SAME
+    /// aggregation the results screens serve -- asserted by fetching
+    /// <c>/surveys/{id}/results</c> in the same test and requiring the two to agree, so
+    /// this test fails if the report ever grows its own arithmetic.
+    ///
+    /// The privacy half is the part that must be impossible to regress: Sales has 2
+    /// completed responses, below <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/>,
+    /// and the results screens suppress it -- so the report must too. The raw persisted
+    /// document is searched for Sales's row to prove the withheld headcount is not
+    /// merely flagged but absent.
+    /// </summary>
+    [Fact]
+    public async Task A_generated_report_aggregates_like_the_results_screen_and_keeps_a_small_department_suppressed()
+    {
+        var engineeringId = await SeedDepartmentAsync("Engineering");
+        var salesId = await SeedDepartmentAsync("Sales");
+
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var survey = await CreateSurveyAsync(client, "Q3 Climate", "leadership");
+        var questionId = survey.Questions.Single().Id;
+        var activate = await client.PutAsJsonAsync($"/surveys/{survey.Id}/status", new UpdateSurveyStatusRequest(SurveyStatuses.Active));
+        activate.EnsureSuccessStatusCode();
+
+        // A draft next to it: nothing to aggregate (content is only editable while no
+        // responses exist), so it must not appear in the report at all.
+        await CreateSurveyAsync(client, "Draft Climate", "leadership");
+
+        for (var i = 0; i < 5; i++)
+        {
+            await SeedAnswerAsync(survey.Id, questionId, engineeringId, "4");
+        }
+
+        await SeedAnswerAsync(survey.Id, questionId, salesId, "2");
+        await SeedAnswerAsync(survey.Id, questionId, salesId, "2");
+
+        var response = await client.PostAsJsonAsync("/admin/reports", new CreateReportRequest(
+            "Q3 Climate Report", null, "climate_summary", _companyId, "pdf", null));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<ReportDetail>();
+        var document = JsonSerializer.Deserialize<ReportOutputDocument>(created!.ReportOutput!, JsonSerializerOptions.Web)!;
+
+        var section = Assert.Single(document.Surveys);
+        Assert.Equal(survey.Id, section.SurveyId);
+        Assert.Equal("Q3 Climate", section.Title);
+        Assert.False(section.IsSuppressed);
+        Assert.Equal(7, section.Participation.CompletedCount);
+
+        // The same survey through the results screen's route. Agreement here is the
+        // whole point of sharing the aggregation.
+        var results = (await client.GetFromJsonAsync<SurveyResultsResponse>(
+            $"/surveys/{survey.Id}/results", JsonSerializerOptions.Web))!;
+        Assert.Equal(results.Summary.CompletedCount, section.Participation.CompletedCount);
+
+        var leadership = Assert.Single(section.Dimensions);
+        Assert.Equal("leadership", leadership.Dimension);
+        Assert.Equal(7, leadership.AnsweredCount);
+        // (4 x 5 + 2 x 2) / 7 = 3.43 -- and byte-for-byte the number /results serves.
+        Assert.Equal(3.43d, leadership.AverageScore);
+        Assert.Equal(results.Questions.Single().Average, leadership.AverageScore);
+
+        var engineering = Assert.Single(section.Departments, d => d.DepartmentId == engineeringId.ToString());
+        Assert.False(engineering.IsSuppressed);
+        Assert.Equal(5, engineering.RespondentCount);
+
+        // The anonymity floor, in the persisted document. Sales's row must say
+        // suppressed-and-zero, and the count 2 may survive ONLY as the breakdown's
+        // reconciliation counter -- never on the department's own row.
+        var sales = Assert.Single(section.Departments, d => d.DepartmentId == salesId.ToString());
+        Assert.True(sales.IsSuppressed);
+        Assert.Equal(0, sales.RespondentCount);
+        Assert.Null(sales.ParticipationRate);
+        Assert.Equal(1, section.SuppressedDepartmentCount);
+        Assert.Equal(2, section.SuppressedRespondentCount);
+        Assert.Equal(SurveyResultsPrivacy.MinimumSegmentRespondents, section.MinimumGroupSize);
+    }
 
     [Fact]
     public async Task Download_increments_count_only_when_completed()

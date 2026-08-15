@@ -147,6 +147,27 @@ public sealed record SurveyQuestionResult(
     IReadOnlyList<SurveyWordFrequency> Words,
     int SuppressedWordCount);
 
+/// <summary>
+/// One dimension of the survey -- a question <c>Category</c> -- rolled up across its
+/// scale questions. This is the number a climate report and a climate map read.
+///
+/// Computed here rather than by any presentation (#88's boundary): a report deriving
+/// its own dimension mean from question rows is exactly the drift the shared
+/// aggregation exists to prevent.
+/// </summary>
+/// <param name="AverageScore">
+/// Mean of the category's per-question averages weighted by each question's answered
+/// count -- arithmetically the pooled mean over every numeric answer, and derived from
+/// the same <see cref="SurveyQuestionResult.Average"/> values every surface displays,
+/// so the rollup can never disagree with the questions it summarises. Null when no
+/// question in the category has a computable average.
+/// </param>
+public sealed record SurveyDimensionResult(
+    string Dimension,
+    int QuestionCount,
+    int AnsweredCount,
+    double? AverageScore);
+
 /// <summary>One question's numbers within one segment. Deliberately not a full distribution -- see <see cref="SurveySegmentResult"/>.</summary>
 public sealed record SurveySegmentQuestionResult(Guid QuestionId, int AnsweredCount, double? Average);
 
@@ -188,10 +209,11 @@ public sealed record SurveyBreakdown(
 /// <summary>
 /// The one aggregation every results surface is a presentation over.
 /// </summary>
-/// <param name="IsSuppressed">True when the survey is below <see cref="SurveyResultsPrivacy.MinimumRespondents"/>. <paramref name="Questions"/> and <paramref name="Breakdowns"/> are then empty; <paramref name="Summary"/> is still populated.</param>
+/// <param name="IsSuppressed">True when the survey is below <see cref="SurveyResultsPrivacy.MinimumRespondents"/>. <paramref name="Questions"/>, <paramref name="Dimensions"/> and <paramref name="Breakdowns"/> are then empty; <paramref name="Summary"/> is still populated.</param>
 public sealed record SurveyAggregate(
     SurveyResultsSummary Summary,
     IReadOnlyList<SurveyQuestionResult> Questions,
+    IReadOnlyList<SurveyDimensionResult> Dimensions,
     IReadOnlyList<SurveyBreakdown> Breakdowns,
     bool IsSuppressed,
     string? SuppressionReason,

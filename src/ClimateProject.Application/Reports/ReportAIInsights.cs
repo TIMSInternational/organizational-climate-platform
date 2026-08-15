@@ -33,12 +33,17 @@ public sealed record ReportAIInsightItem(
 /// The document persisted to <c>reports.report_output</c>.
 ///
 /// <para>
-/// <see cref="GenerationNote"/> exists because aggregation is still stubbed (#88). The AI
-/// insights section is real; everything else is not, and saying so in the document beats a
-/// consumer inferring completeness from a section that happens to be present.
+/// <see cref="Surveys"/> is real aggregation (#88): one <see cref="ReportSurveySection"/> per
+/// non-draft survey of the company, each a projection of the same <c>SurveyAggregate</c> the
+/// results screens serve. <see cref="GenerationNote"/> remains because the document is still
+/// not the whole report -- it names the sections that do not exist yet, and saying so in the
+/// document beats a consumer inferring completeness from a section that happens to be present.
 /// </para>
 /// </summary>
-public sealed record ReportOutputDocument(string GenerationNote, IReadOnlyList<ReportAIInsightItem> AiInsights);
+public sealed record ReportOutputDocument(
+    string GenerationNote,
+    IReadOnlyList<ReportSurveySection> Surveys,
+    IReadOnlyList<ReportAIInsightItem> AiInsights);
 
 /// <summary>
 /// The single path by which a generated report reads AI insights.
