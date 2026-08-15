@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
 using ClimateProject.Api.Endpoints;
+using ClimateProject.Application.Profile;
 using ClimateProject.Application.Tracking;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
@@ -13,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using ProjectAuth = ClimateProject.Application.Auth;
 using TrackingAuth = ClimateTracking.Application.Auth;
 
 namespace ClimateProject.IntegrationTests.Tracking;
@@ -64,6 +66,9 @@ public class CrossServiceTokenTests : IAsyncLifetime
     private const string SharedTrackingJwtSecret = AuthWebApplicationFactory.TestJwtSecret;
 
     private const string Password = "a-good-password";
+
+    /// <summary>Satisfies the default password policy, like <c>SecurityStampRevocationTests</c>'.</summary>
+    private const string ReplacementPassword = "Rep1acementPass";
 
     private readonly AuthWebApplicationFactory _factory;
     private readonly JsonSerializerOptions _snakeCaseOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
@@ -191,6 +196,14 @@ public class CrossServiceTokenTests : IAsyncLifetime
     private Task<string> LeaderTokenAsync(HttpClient client, string email, string name = "Maria Rodriguez")
         => SignUpAndLogInAsync(client, email, name, role: "leader", departmentId: _departmentId, companyId: _companyId);
 
+    /// <summary>A client presenting <paramref name="token"/> to this API, over HTTP.</summary>
+    private HttpClient ClientWith(string token)
+    {
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
     [Fact]
     public async Task Every_claim_the_tracking_service_reads_survives_a_real_login()
     {
@@ -316,6 +329,111 @@ public class CrossServiceTokenTests : IAsyncLifetime
 
         Assert.False(result.IsValid);
         Assert.IsType<SecurityTokenSignatureKeyNotFoundException>(result.Exception);
+    }
+
+    // ------------------------------------------------------------ revocation, and its limit
+
+    /// <summary>
+    /// A KNOWN, BOUNDED GAP, asserted end to end so that it is a decision rather than a
+    /// surprise. Read <c>docs/decisions/cross-service-session-revocation.md</c> before
+    /// changing this test.
+    /// </summary>
+    /// <remarks>
+    /// The two halves below run against the same token: this API refuses it, and
+    /// climate-tracking's validation contract accepts it. Both are real — the refusal is an
+    /// HTTP request through the bearer handler and its <c>OnTokenValidated</c> hook, and the
+    /// acceptance is <see cref="TrackingAuth.TrackingTokenValidation"/>, the type
+    /// climate-tracking's own <c>Program.cs</c> configures its handler from.
+    /// </remarks>
+    [Fact]
+    public async Task A_session_this_api_has_ended_is_still_accepted_by_climate_tracking()
+    {
+        // #284's headline case, told across the seam: a user changes their password because
+        // they believe they are compromised. Every session this API knows about dies at the
+        // rotation. The one in the other service does not.
+        var client = _factory.CreateClient();
+        var email = $"revoked@{_emailDomain}";
+        var token = await LeaderTokenAsync(client, email);
+
+        // Live on BOTH sides first, so neither assertion below is about a token that never
+        // worked in the first place.
+        Assert.Equal(HttpStatusCode.OK, (await ClientWith(token).GetAsync("/profile")).StatusCode);
+        Assert.True(await PassesTrackingTenantGateAsync(await ValidateAsTrackingDoesAsync(token), _companyId.ToString()));
+
+        var change = await ClientWith(token).PutAsJsonAsync(
+            "/profile/password",
+            new ChangePasswordRequest(Password, ReplacementPassword));
+        Assert.Equal(HttpStatusCode.OK, change.StatusCode);
+
+        // This API, from the next request: refused. SecurityStampValidation compared the
+        // token's securityStamp claim against the row the rotation just wrote.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await ClientWith(token).GetAsync("/profile")).StatusCode);
+
+        // climate-tracking, with the same token: admitted, and admitted as the same person.
+        // It has no users table to compare that claim against, and a password change moves
+        // none of the things it does check — the signature is untouched, the token has not
+        // expired, the tenant claim is the same tenant, and the isActive claim still says
+        // what it said when it was minted.
+        var principal = await ValidateAsTrackingDoesAsync(token);
+        Assert.True(await PassesTrackingTenantGateAsync(principal, _companyId.ToString()));
+        Assert.False(TrackingAuth.ClaimsPrincipalExtensions.HasDeactivatedAccountClaim(principal));
+        Assert.Equal(email, TrackingAuth.ClaimsPrincipalExtensions.GetCurrentUser(principal).Email);
+    }
+
+    /// <summary>
+    /// The size of the window the test above leaves open, pinned to the number the decision
+    /// record publishes. If the mint's lifetime changes, this fails and that record is wrong
+    /// until someone updates it.
+    /// </summary>
+    [Fact]
+    public async Task The_window_a_revoked_token_stays_live_over_there_for_is_the_token_lifetime()
+    {
+        var client = _factory.CreateClient();
+        var token = await LeaderTokenAsync(client, $"lifetime@{_emailDomain}");
+
+        var jwt = new JsonWebTokenHandler().ReadJsonWebToken(token);
+
+        // Off the token, not off JwtTokenService.TokenLifetime: that field is private, and a
+        // test reading the constant would agree with the constant no matter what the token
+        // ended up carrying. exp and iat are both whole seconds truncated from the same
+        // instant, so their difference is exact rather than approximate.
+        var issuedAt = DateTimeOffset.FromUnixTimeSeconds(long.Parse(jwt.GetClaim("iat").Value));
+        var expires = new DateTimeOffset(jwt.ValidTo, TimeSpan.Zero);
+
+        Assert.Equal(TimeSpan.FromHours(24), expires - issuedAt);
+    }
+
+    /// <summary>
+    /// The one revocation-adjacent claim both services DO read, read the same way by both.
+    /// </summary>
+    /// <remarks>
+    /// Two implementations exist because no assembly under <c>src/</c> on either side may
+    /// reference the other; this is the only place both are on one compile path, so it is the
+    /// only place the copies can be held together. It is not revocation — see the test above
+    /// for what the claim cannot say — but a service that refused a token the other served,
+    /// or served one the other refused, would be the same class of silent split-brain.
+    /// </remarks>
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("true", false)]
+    [InlineData("True", false)]
+    [InlineData("false", true)]
+    [InlineData("yes", true)]
+    [InlineData("", true)]
+    public void The_two_services_read_the_isActive_claim_identically(string? claim, bool expectedDeactivated)
+    {
+        var claims = new List<Claim> { new("sub", "PER-0231") };
+        if (claim is not null)
+        {
+            claims.Add(new Claim("isActive", claim));
+        }
+
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, authenticationType: "Test"));
+
+        // Asserted against a stated expectation, not just against each other: two predicates
+        // that both answered false to everything would agree perfectly and protect nothing.
+        Assert.Equal(expectedDeactivated, ProjectAuth.ClaimsPrincipalExtensions.HasDeactivatedAccountClaim(principal));
+        Assert.Equal(expectedDeactivated, TrackingAuth.ClaimsPrincipalExtensions.HasDeactivatedAccountClaim(principal));
     }
 
     [Fact]

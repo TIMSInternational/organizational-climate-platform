@@ -22,6 +22,16 @@ namespace ClimateTracking.Application.Auth;
 ///
 /// Keep this the single definition: <c>Program.cs</c> reads both members below and sets
 /// nothing else on the bearer handler.
+///
+/// <b>What this contract cannot check: revocation.</b> climate-project-api refuses a token
+/// whose session has been ended, by comparing a <c>securityStamp</c> claim against the user
+/// row it was minted from on every request (#284). That row is in the other service's
+/// database. This service has no access to it, so a token whose session was ended over there
+/// -- by a password change, an administrator's credential reset, or a deactivation -- still
+/// satisfies everything below until it expires. The window is real, it is bounded by the
+/// token's remaining lifetime, and it is written down in
+/// <c>docs/decisions/cross-service-session-revocation.md</c> along with what closing it would
+/// take. Do not describe this type, or the handler it configures, as validating a session.
 /// </remarks>
 public static class TrackingTokenValidation
 {

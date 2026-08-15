@@ -73,8 +73,25 @@ builder.Services.AddAuthorization(options =>
     // A token that fails signature/expiry checks is a 401 (JwtBearer handles that before
     // this runs); a validly-signed token for the wrong tenant is a 403 (authorization),
     // so the company check lives here, not in JwtBearerEvents.OnTokenValidated.
+    //
+    // The isActive assertion is the same shape and here for the same reason: it is a
+    // statement about a validly-authenticated caller, so 403. It brings this service level
+    // with climate-project-api, whose default policy has refused a token whose own isActive
+    // claim says "false" since #280 while this one accepted it -- the two services validate
+    // the same tokens off the same shared secret, and an asymmetry in what they will do with
+    // one is exactly the class of gap #153 exists to find. HasDeactivatedAccountClaim (not
+    // !GetCurrentUser().IsActive) so that an issuer which never wrote the claim is not locked
+    // out; its remarks carry the rest.
+    //
+    // What this does NOT do is end a session that was live when the account was deactivated:
+    // the claim is minted from the account's state at mint time and never changes afterwards.
+    // That revocation exists only in climate-project-api, as a SecurityStamp this service
+    // cannot see, and the window it leaves open here is stated in
+    // docs/decisions/cross-service-session-revocation.md rather than papered over by this
+    // check.
     options.DefaultPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
+        .RequireAssertion(context => !context.User.HasDeactivatedAccountClaim())
         .AddRequirements(new MatchingTenantRequirement(procomerCompanyId))
         .Build();
 });
