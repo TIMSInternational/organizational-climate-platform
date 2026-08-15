@@ -79,12 +79,16 @@ public class CrossServiceTokenTests : IAsyncLifetime
 
     public CrossServiceTokenTests(PostgresContainerFixture postgres)
     {
-        _factory = new AuthWebApplicationFactory(postgres.ConnectionString);
+        // The collection's shared host, not a per-class factory: xUnit builds a new class
+        // instance per [Fact], so `new AuthWebApplicationFactory(...)` here is one host per
+        // test CASE -- the #279 pattern the HostBudget guard in CreateHost refuses. This
+        // class was written before that conversion landed and merged past it unrebased;
+        // the guard caught the combination on main's first full run.
+        _factory = postgres.App;
     }
 
     public async Task InitializeAsync()
     {
-        await _factory.ApplyMigrationsAsync();
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
 
