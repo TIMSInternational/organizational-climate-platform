@@ -894,13 +894,47 @@ public class GdprEndpointsTests : IAsyncLifetime
             HttpStatusCode.Unauthorized,
             (await subjectClient.PostAsync("/auth/refresh", content: null)).StatusCode);
 
-        // What that does *not* do is revoke the access token already in the subject's hand --
-        // nothing reads IsActive per request. The response says so rather than leaving it to be
-        // discovered, and closing it is #284's per-user security stamp, not a second mechanism
-        // invented here.
+        // Neither refusal is about the token already in the subject's hand; that one is
+        // An_erasure_ends_the_session_the_subject_is_already_holding's fact. What survives the
+        // erasure is the same token presented to the tracking service, which validates the
+        // shared secret and consults no stamp -- stated in the response rather than left for a
+        // regulator to find.
         Assert.Contains(
             SubjectErasure.KnownLimitations,
-            limitation => limitation.Contains("minted before the erasure", StringComparison.Ordinal));
+            limitation => limitation.Contains("does not consult the stamp", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// #286: the access token the subject was holding when they exercised their right to
+    /// erasure stops working, instead of outliving the erasure by up to the token's 24 hours.
+    /// </summary>
+    /// <remarks>
+    /// <c>GET /profile</c> and not <c>/auth/refresh</c>, and the difference is the whole fact.
+    /// Refresh is refused after any erasure by <c>IssueTokenForAsync</c>'s mint-time
+    /// deactivation check (#280) whether the stamp rotated or not, so a fact worded against it
+    /// passes with the rotation removed and proves nothing. <c>/profile</c> reads no
+    /// <c>is_active</c> — before the rotation it answered 200 for an erased subject's
+    /// pre-erasure token — so the 401 here is the rotation and nothing else.
+    /// </remarks>
+    [Fact]
+    public async Task An_erasure_ends_the_session_the_subject_is_already_holding()
+    {
+        var (subjectClient, subjectId, subjectEmail) = await SignInAsync(Roles.Employee);
+        var (adminClient, adminId, _) = await SignInAsync(Roles.CompanyAdmin);
+        await SeedSubjectDataAsync(subjectId, subjectEmail, adminId);
+
+        // Live before the erasure, so the 401 below cannot be a token that never worked.
+        Assert.Equal(HttpStatusCode.OK, (await subjectClient.GetAsync("/profile")).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await adminClient.PostAsJsonAsync("/gdpr/erasure", new ErasureRequest(subjectId, true))).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await subjectClient.GetAsync("/profile")).StatusCode);
+
+        // The administrator who ran the erasure is not signed out by it: the rotation is per
+        // subject, and an erasure that logged the operator out mid-task would be its own bug.
+        Assert.Equal(HttpStatusCode.OK, (await adminClient.GetAsync("/profile")).StatusCode);
     }
 
     private static JsonElement Section(JsonElement export, string entity)

@@ -7,6 +7,7 @@ using ClimateProject.Application.OrgStructure;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using ClimateProject.IntegrationTests.Support;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ClimateProject.IntegrationTests.Auth;
@@ -215,6 +216,46 @@ public class DeactivationEndsSessionTests : IAsyncLifetime
         // dead token and not about an account that stayed locked out.
         var fresh = await LoginAsync(_employee.Email);
         Assert.Equal(HttpStatusCode.OK, (await ClientWith(fresh).GetAsync("/profile")).StatusCode);
+    }
+
+    /// <summary>
+    /// Deactivating somebody who already reads as inactive still ends their sessions. The
+    /// remediation an administrator reaches for on noticing that an offboarded person still
+    /// has access is to deactivate them again, and it has to work.
+    /// </summary>
+    /// <remarks>
+    /// The setup writes <c>is_active</c> straight to the row, which is the state this change
+    /// deploys into rather than a contrivance: every account deactivated by the code before
+    /// this fix had its column flipped and its stamp left alone, so on the day this ships
+    /// those users' tokens are live and their rows already read inactive. A rotation keyed on
+    /// the <c>true -&gt; false</c> transition sees no transition there, answers 200 and leaves
+    /// the token working — which is why the endpoint keys on what the save ASKS FOR instead.
+    ///
+    /// The 200 in the middle is load-bearing: it establishes that the row being inactive is
+    /// not by itself what refuses the token (nothing reads <c>is_active</c> per request), so
+    /// the 401 at the end can only be the rotation this save performed.
+    /// </remarks>
+    [Fact]
+    public async Task Deactivating_a_user_who_is_already_inactive_still_ends_their_session()
+    {
+        var session = await LoginAsync(_employee.Email);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            await db.Users
+                .Where(u => u.Id == _employee.Id)
+                .ExecuteUpdateAsync(set => set.SetProperty(u => u.IsActive, false));
+        }
+
+        Assert.Equal(HttpStatusCode.OK, (await ClientWith(session).GetAsync("/profile")).StatusCode);
+
+        var adminSession = await LoginAsync(_admin.Email);
+        Assert.Equal(HttpStatusCode.OK, (await SetActiveAsync(adminSession, _employee.Id, false)).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            (await ClientWith(session).GetAsync("/profile")).StatusCode);
     }
 
     // ------------------------------------------------------------------ helpers

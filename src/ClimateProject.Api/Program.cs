@@ -267,10 +267,18 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
 // Neither layer revokes a token that was issued while the account was still ACTIVE, because
 // neither reads anything but the claim the token was minted with. What revokes it is #284's
 // stamp: the JwtBearerEvents hook above refuses any token whose stamp no longer matches the
-// row, and since #286 `PUT /admin/users/{id}` rotates the column when it deactivates
-// somebody -- so a deactivated user's open sessions die on their next request rather than at
-// the token's 24h expiry. This policy stays as the second line of defence it was written to
+// row, and since #286 the two paths that deactivate an account rotate the column --
+// `PUT /admin/users/{id}` and the GDPR erasure's SubjectErasure.AnonymiseAccount. So a
+// deactivated user's next request TO THIS API is a 401 rather than a 200 for up to the
+// token's 24h lifetime. This policy stays as the second line of defence it was written to
 // be, not as the thing that ends a session.
+//
+// Scope that claim to this API and no further. services/tracking-api validates tokens against
+// the same shared TrackingJwtSecret, reads the isActive claim the token was minted with, and
+// has no OnTokenValidated hook and no access to users.security_stamp -- so a token minted here
+// before a deactivation keeps authorising requests THERE until it expires. Ending a session
+// across both services needs the stamp check (or an equivalent) on that side too, and nothing
+// in this repository does it today.
 //
 // (This comment used to say "no per-request user lookup is added" of the policy. That is
 // still true of the policy, but no longer true of the request: #284's OnTokenValidated hook
