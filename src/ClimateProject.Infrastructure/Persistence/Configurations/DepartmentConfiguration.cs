@@ -31,6 +31,31 @@ public class DepartmentConfiguration : IEntityTypeConfiguration<Department>
             settings.Property(s => s.NotificationTeams).HasColumnName("settings_notification_teams").IsRequired().HasDefaultValue(false);
         });
 
+        // The nodo_id climate-tracking scopes on is TrackingIdentifiers.ExternalNodoId, i.e.
+        // `LegacyExternalId ?? Id.ToString()`. The Guid half is unique by construction; the
+        // legacy half carried no constraint at all (#155), so the backfill (#154) could hand two
+        // departments the same nodo_id and nothing here would notice. Both consumers break, and
+        // neither breaks visibly at the point of the duplicate:
+        //   * climate-tracking's nodos_cache.ExternalId is a plain unique index, and
+        //     CacheSyncWorker Adds every /nodos row before a single SaveChanges -- so two
+        //     departments sharing a legacy id abort the whole sync on 23505 and leave every
+        //     cached nodo stale, not just the colliding one.
+        //   * DashboardEndpoints.TableroAsync authorizes with `targetNodoId !=
+        //     currentUser.NodoExternalId` and then selects `p.NodoExternalId == targetNodoId`,
+        //     so whichever department won the id answers for the other's action plans.
+        //
+        // Global rather than (company_id, legacy_external_id): nodos_cache has no company column
+        // and neither the tablero comparison nor its query carries a tenant qualifier, so a
+        // per-company constraint would still let two tenants collide on the one key both
+        // services actually compare on.
+        //
+        // Partial, matching the persona_external_id index this mirrors and Company.EmailDomain.
+        // Multiple NULLs stay legal either way -- Postgres indexes NULLs as distinct unless told
+        // NULLS NOT DISTINCT -- so the filter is not what buys that; what it buys is an index
+        // covering only the rows that carry a legacy id, which today is none of them and after
+        // the backfill is still only the migrated ones.
+        builder.HasIndex(d => d.LegacyExternalId).IsUnique().HasFilter("legacy_external_id IS NOT NULL");
+
         builder.HasOne<Company>().WithMany().HasForeignKey(d => d.CompanyId);
         builder.HasOne<Department>().WithMany().HasForeignKey(d => d.ParentDepartmentId).OnDelete(DeleteBehavior.Restrict);
 
