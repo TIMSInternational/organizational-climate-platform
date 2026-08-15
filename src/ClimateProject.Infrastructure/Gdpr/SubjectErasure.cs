@@ -282,8 +282,11 @@ public static class SubjectErasure
 
         "The sessions the subject already holds are ended against this API and not against the tracking service. "
         + "The account is deactivated, so no new token can be issued for it -- /auth/login and /auth/refresh both "
-        + "refuse an inactive account -- and the account's security stamp is rotated, so a token minted before "
-        + "the erasure is refused by this API on its next request rather than working until it expires. The "
+        + "refuse an inactive account -- and the account's security stamp is rotated, so a token carrying a "
+        + "stamp claim is refused by this API on its next request rather than working until it expires. A token "
+        + "with no stamp claim at all bypasses that check (SecurityStampValidation returns early on a missing "
+        + "claim); every token this API has minted since #284 carries one, so within the 24h lifetime that is "
+        + "the empty set unless some other minter shares the signing secret. The "
         + "tracking service validates the same shared signing secret and does not consult the stamp, so that same "
         + "token keeps authorising requests there until it expires, at most 24 hours after the erasure.",
 

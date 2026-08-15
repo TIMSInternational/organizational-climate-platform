@@ -218,9 +218,10 @@ public static class UserEndpoints
             // this change replaces and never had their stamps rotated, so their holders' tokens
             // are live right now. Re-deactivating is the exact remediation an administrator
             // reaches for on noticing somebody still has access, and under a transition guard
-            // it would return 200 and do nothing. The cost is a stamp rotated for nothing when
-            // an administrator edits an already-inactive user's name; that account has no live
-            // session left to end and #280 refuses it a new token, so the rotation is invisible.
+            // it would return 200 and do nothing. The cost is a stamp rotated on every edit of
+            // an already-inactive user; for a row deactivated by THIS code that rotation finds
+            // no session left to end, and for the legacy rows above it is not a cost at all --
+            // it ends the very sessions the transition guard would have left alive.
             //
             // The one session this can end mid-task is a super admin deactivating their own
             // account: no other role may (the guard above), and it is the honest outcome of

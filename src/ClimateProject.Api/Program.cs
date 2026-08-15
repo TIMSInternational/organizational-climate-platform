@@ -266,8 +266,10 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
 //
 // Neither layer revokes a token that was issued while the account was still ACTIVE, because
 // neither reads anything but the claim the token was minted with. What revokes it is #284's
-// stamp: the JwtBearerEvents hook above refuses any token whose stamp no longer matches the
-// row, and since #286 the two paths that deactivate an account rotate the column --
+// stamp: the JwtBearerEvents hook above refuses any token whose stamp claim no longer matches
+// the row -- a token with NO stamp claim bypasses the hook (it returns early), which is empty
+// within the 24h lifetime unless another minter shares the signing secret --
+// and since #286 the two paths that deactivate an account rotate the column --
 // `PUT /admin/users/{id}` and the GDPR erasure's SubjectErasure.AnonymiseAccount. So a
 // deactivated user's next request TO THIS API is a 401 rather than a 200 for up to the
 // token's 24h lifetime. This policy stays as the second line of defence it was written to

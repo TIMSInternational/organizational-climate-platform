@@ -886,7 +886,9 @@ public class GdprEndpointsTests : IAsyncLifetime
             (await adminClient.PostAsJsonAsync("/gdpr/erasure", new ErasureRequest(subjectId, true))).StatusCode);
 
         // No new token can be minted for the account: the password path cannot find it under
-        // the old address, and the authenticated path refuses a deactivated account.
+        // the old address, and the refresh 401s during authentication -- erasure rotated the
+        // stamp, so SecurityStampValidation refuses the old token before #280's mint-time
+        // check (which remains as the backstop) is ever reached.
         var login = await _factory.CreateClient()
             .PostAsJsonAsync("/auth/login", new LoginRequest(subjectEmail, "a-good-password"));
         Assert.Equal(HttpStatusCode.Unauthorized, login.StatusCode);
