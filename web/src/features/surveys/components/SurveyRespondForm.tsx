@@ -35,7 +35,7 @@ import {
   type AnswerState,
 } from '../respondAnswers'
 import { respondDimensions, type RespondSection } from '../respondDimensions'
-import { UNCATEGORISED_DIMENSION } from '../surveyResultsMap'
+import { dimensionLabel } from '../dimensionLabel'
 import { clearSessionId, ensureSessionId } from '../respondSession'
 import {
   SurveyRespondError,
@@ -456,77 +456,54 @@ function DimensionHeading({ section, total }: { section: RespondSection; total: 
       ? t('dimensionPosition', { position: section.firstIndex, total })
       : t('dimensionRange', { from: section.firstIndex, to: section.lastIndex, total })
 
+  const label = dimensionLabel(section.key, tRoot)
+
   return (
-    <div className="flex items-center gap-inline pt-2">
-      <h2 className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
-        {dimensionLabel(section.key, tRoot)}
+    /*
+      `min-w-0` on the ROW, not only on the eyebrow.
+
+      This row is a grid item of the `<form className="grid">` above, and a grid item's
+      automatic minimum size is its min-content width. The eyebrow below is `truncate`,
+      i.e. `white-space: nowrap`, so the row's min-content width is the whole category
+      on one line — and the track grows to fit it, carrying the page with it. Measured
+      before this class existed: a 100-character category rendered the respond page 983
+      CSS px wide inside a 390 px viewport, ellipsising the eyebrow nine hundred pixels
+      out and carrying the question cards past the viewport edge with it. `truncate` on
+      the child does not bound anything while its parent is free to grow.
+    */
+    <div className="flex min-w-0 items-center gap-inline pt-2">
+      {/*
+        `min-w-0 truncate`, and `title` so nothing is lost.
+
+        Until an uncatalogued category could reach this slot, only the catalogue's own
+        short strings could, and the row could not be overrun. Now the author's
+        own `varchar(100)` lands here: a hundred characters of eyebrow would either
+        squeeze the rule to nothing and push the range off the row, or — with
+        `min-w-0` alone — wrap the eyebrow to three lines and drag the rule and the
+        reading down with it. `truncate` keeps the design's one-line eyebrow and
+        `title` keeps the whole category reachable, which matters because it is the
+        author's text and not ours to discard.
+      */}
+      <h2
+        title={label}
+        className="min-w-0 truncate text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary"
+      >
+        {label}
       </h2>
-      <span aria-hidden="true" className="h-px flex-1 bg-line-light" />
-      <span className="font-mono text-xs tabular-nums text-fg-secondary">{range}</span>
+      {/*
+        `min-w-8` so the rule is still a rule at the point the heading has taken the
+        row: `flex-1` is `flex: 1 1 0%`, whose basis is zero, so it is the first thing
+        a long heading shrinks away to nothing.
+      */}
+      <span aria-hidden="true" className="h-px min-w-8 flex-1 bg-line-light" />
+      {/*
+        `shrink-0`: the range is a reading, not decoration. An ellipsised `1–2 OF…` is
+        worse than an ellipsised heading, because a truncated number reads as a
+        different number.
+      */}
+      <span className="shrink-0 font-mono text-xs tabular-nums text-fg-secondary">{range}</span>
     </div>
   )
-}
-
-/**
- * A dimension's heading: the product's words where the product has words, and the
- * survey's own where it has not.
- *
- * `Question.Category` is a free-text `varchar(100)` the server neither controls,
- * trims nor translates (`SurveyEndpoints.AddQuestions`), so the catalogue cannot be
- * a vocabulary — it is a translation table for the ten values the *product* ships
- * (`psychological_safety`, `workload`, `enps`…). Those ten are English slugs the
- * product chose, and printing one of them raw over a Spanish survey would be exactly
- * the silent substitution the content-i18n rules forbid. That is why the lookup
- * comes first, and why `employeeCopy.test.ts` insists every category the shipped
- * fixture carries has an entry.
- *
- * The `UNCATEGORISED_DIMENSION` sentinel — questions with no category at all — gets
- * `dimensionNone`, because "other questions" is exactly what they are.
- *
- * ## Why an uncatalogued category is no longer answered with `dimensionUnknown`
- *
- * Because that was a lie of a quieter kind. `respondDimensions` groups by the raw
- * key, so three uncatalogued categories produce three real sections — and all three
- * used to print "More questions". The respondent saw one heading repeat and could
- * not tell whether the form had changed subject or the page had broken, while the
- * heading's whole job, per the design note above, is to say what is being asked.
- *
- * ## Why printing the author's own text does not reopen the i18n hole
- *
- * The rule the old comment here was written for is that we never substitute one
- * language for another without saying so. Nothing is substituted. `Category` is a
- * SINGLE column — unlike `TextEn`/`TextEs`, which are a pair — so for a value the
- * catalogue has never heard of there is exactly one string in the database and no
- * other language to have preferred over it. It is content: it arrives in the same
- * payload, on the same entity, as the question text this page already prints as
- * authored. Where the survey as a whole resolved to another language,
- * `ContentLanguageNotice` says so already; where it did not — a bilingual survey
- * whose one `Category` serves both renderings — there is no withheld version to
- * disclose, because the column has none.
- *
- * The transformation therefore invents no words: `_` and `-` open out to spaces and
- * runs of whitespace collapse, and that is all. Case is left alone deliberately —
- * the design sets this heading in `uppercase`, so casing is not visible, and
- * "fixing" it is the one part of humanising that could mangle a word the author
- * capitalised on purpose. `team_support` reads TEAM SUPPORT; `Comunicación interna`
- * reads COMUNICACIÓN INTERNA, in the author's own Spanish.
- *
- * `dimensionUnknown` survives for text carrying no letter and no digit — `___`,
- * `--`, `...`. There is nothing to open out there, and a heading of punctuation says
- * less than "more questions" does.
- *
- * The root translator is used rather than the scoped one so the miss is detectable:
- * `createTranslator` returns the key it was given, so `label === path` is the miss,
- * with no second lookup and no list to keep in step.
- */
-function dimensionLabel(key: string, tRoot: (key: string) => string): string {
-  if (key === UNCATEGORISED_DIMENSION) return tRoot('surveyRespond.dimensionNone')
-  const path = `surveyRespond.dimensions.${key}`
-  const label = tRoot(path)
-  if (label !== path) return label
-
-  const authored = key.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
-  return /[\p{L}\p{N}]/u.test(authored) ? authored : tRoot('surveyRespond.dimensionUnknown')
 }
 
 /**
