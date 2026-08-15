@@ -224,20 +224,18 @@ describe('SurveyRespondForm dimension sections', () => {
 
   /**
    * `Question.Category` is free text the server neither controls nor translates, so
-   * the heading comes from the catalogue keyed by the stored value. A value nobody
-   * has translated must not be printed raw — that is an English heading over a
-   * Spanish survey — and a question with no category at all is named as such.
+   * the catalogue is a translation table for the ten values the product ships, not a
+   * vocabulary. A value outside it is the author's own word for what is being asked,
+   * and is printed as such; a question with no category at all is named from the
+   * catalogue, because there is no word to print.
+   *
+   * `hybrid_working` and `mentoring` are deliberately NOT in `surveyRespond.dimensions`
+   * and must not be added: this is the case that proves an uncatalogued category still
+   * names its own section. This example used to be `recognition`, which stopped being
+   * uncatalogued the moment the seeded survey's vocabulary (safety / trust /
+   * recognition / growth / belonging) was added. Pick values no product would ship.
    */
-  it('names an untranslated category and an absent one from the catalogue', async () => {
-    // `hybrid_working` is deliberately NOT in `surveyRespond.dimensions`, and must not be
-    // added: `Question.Category` is free text an author types, so there will always be
-    // values the catalogue has never heard of, and this is the case that proves one of
-    // them is never printed raw — an English heading over a Spanish survey is the silent
-    // substitution the content-i18n rules forbid.
-    //
-    // This example used to be `recognition`, which stopped being untranslated the moment
-    // the real seeded survey's vocabulary (safety / trust / recognition / growth /
-    // belonging) was added to the catalogue. Pick a value no product would ship.
+  it('names an uncatalogued category in the survey’s own words, and an absent one from the catalogue', async () => {
     respondWith(
       view({
         questions: [
@@ -249,8 +247,54 @@ describe('SurveyRespondForm dimension sections', () => {
     renderForm()
 
     await screen.findByText('Pregunta A')
-    expect(headings()).toEqual(['Más preguntas', 'Otras preguntas'])
-    expect(screen.queryByText('hybrid_working')).toBeNull()
+    // The separator is opened out and nothing else is: the design uppercases this
+    // heading in CSS, so inventing case here would be invisible and could only
+    // mangle a word the author capitalised on purpose.
+    expect(headings()).toEqual(['hybrid working', 'Otras preguntas'])
+  })
+
+  /**
+   * The defect this replaced: `respondDimensions` groups by the raw key, so two
+   * uncatalogued categories are two real sections — and both used to be headed
+   * "Más preguntas". The respondent could not tell whether the form had changed
+   * subject or the page had broken. Distinctness is the property, not the wording.
+   */
+  it('never gives two different dimensions the same heading', async () => {
+    respondWith(
+      view({
+        questions: [
+          question({ id: 'a', text: 'Pregunta A', category: 'hybrid_working' }),
+          question({ id: 'b', text: 'Pregunta B', category: 'mentoring' }),
+        ],
+      }),
+    )
+    renderForm()
+
+    await screen.findByText('Pregunta B')
+    const printed = headings()
+    expect(printed).toHaveLength(2)
+    expect(new Set(printed).size, `two sections read the same: ${printed.join(' / ')}`).toBe(2)
+    // And neither fell back to the generic, which is what made them identical.
+    expect(printed).not.toContain('Más preguntas')
+  })
+
+  /**
+   * The generic still has a job. A category of punctuation has nothing to open out,
+   * and a heading reading `___` says less than "more questions" does.
+   */
+  it('falls back to the generic only when the category carries no letter or digit', async () => {
+    respondWith(
+      view({
+        questions: [
+          question({ id: 'a', text: 'Pregunta A', category: '___' }),
+          question({ id: 'b', text: 'Pregunta B', category: 'mentoring' }),
+        ],
+      }),
+    )
+    renderForm()
+
+    await screen.findByText('Pregunta B')
+    expect(headings()).toEqual(['Más preguntas', 'mentoring'])
   })
 })
 

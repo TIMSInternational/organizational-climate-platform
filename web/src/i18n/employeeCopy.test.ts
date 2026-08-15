@@ -26,12 +26,16 @@ import type { Locale, MessageNode } from './translate'
  *    a well-meaning edit ("say which one, it reads better") is exactly how it would
  *    be crossed.
  *
- * 2. **Every dimension the respond form can actually meet has a heading.** The
- *    categories are `varchar(100)` free text, so the design's headings are a
- *    lookup rather than a controlled vocabulary — and the values that occur are
- *    machine-shaped (`psychological_safety`), not display text. A missing entry
- *    does not render blank; `createTranslator` returns the key, so the respondent
- *    reads `surveyRespond.dimensions.enps` above their questions.
+ * 2. **Every dimension the *product* ships has its own heading.** The categories
+ *    are `varchar(100)` free text, so the catalogue is a lookup rather than a
+ *    controlled vocabulary. `SurveyRespondForm` prints a category the catalogue has
+ *    never heard of in the author's own words, which is right for a word an author
+ *    typed and wrong for the values the product itself chose: those are English
+ *    slugs (`psychological_safety`), so a missing entry puts an English heading over
+ *    a Spanish survey. Hence the sweep over the shipped fixture, and hence the
+ *    second test, which is about what the entries *say* — two dimensions sharing
+ *    wording, or one headed with the generic, is the same collapse the form was
+ *    fixed for, reintroduced from the catalogue side.
  *
  * Plus a plain register of the keys the employee screens are being built against,
  * so that deleting one fails here rather than in whichever page renders it.
@@ -45,6 +49,25 @@ function read(locale: Locale, key: string): string | null {
     node = node[segment]
   }
   return typeof node === 'string' ? node : null
+}
+
+/**
+ * The dimension headings a locale ships, keyed by the stored `Question.Category`.
+ *
+ * Read as a subtree rather than through `read`, because the assertions below are
+ * about the set of entries — a heading nobody looked up is exactly the one that
+ * drifts.
+ */
+function dimensions(locale: Locale): Record<string, string> {
+  const root = CATALOGUES[locale] as MessageNode
+  if (typeof root !== 'object') return {}
+  const scope = root.surveyRespond
+  if (typeof scope !== 'object') return {}
+  const node = scope.dimensions
+  if (typeof node !== 'object') return {}
+  return Object.fromEntries(
+    Object.entries(node).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  )
 }
 
 /** The `{placeholder}` names in a string, sorted. */
@@ -214,9 +237,60 @@ describe('employee copy', () => {
 
     expect(
       missing,
-      'A category with no heading renders as its own dotted path above the questions. ' +
-        'Add it under surveyRespond.dimensions in both catalogues.',
+      'A category with no heading is printed in the survey’s own words instead, and ' +
+        'these are the product’s own English slugs — `psychological_safety` would sit ' +
+        'over a Spanish survey. Add it under surveyRespond.dimensions in both catalogues.',
     ).toEqual([])
+  })
+
+  /**
+   * The sweep above can only ever see the five categories the fixture carries, and
+   * all five are in the catalogue — so on its own it passes whatever the headings
+   * actually say. This is the part that can fail on a bad *value*.
+   *
+   * Two sections of one survey must never read the same words. The respondent then
+   * cannot tell whether the form changed subject or the page broke, and the heading's
+   * whole job is to say what is being asked. `SurveyRespondForm` now answers that for
+   * categories the catalogue has never heard of — it prints the author's own word —
+   * but a catalogue that gave two entries the same wording, or gave one of them the
+   * generic "more questions", would put the collapse straight back for the values the
+   * product itself ships. Nothing else in this directory looks at what a value says:
+   * `catalogues.test.ts` compares the two locales to each other, and two locales agree
+   * perfectly when both are wrong in the same way.
+   */
+  it('names each shipped dimension distinctly, and none of them generically', () => {
+    // The one deliberate collision: `safety` is the same construct as
+    // `psychological_safety`, stored two ways, so it must carry the same words. Any
+    // other pair sharing wording is two constructs the respondent cannot tell apart.
+    const ALIASES = [['psychological_safety', 'safety']]
+
+    for (const locale of LOCALES) {
+      const entries = Object.entries(dimensions(locale))
+
+      // Vacuity control: an emptied or renamed subtree would make both sweeps below
+      // pass on nothing at all.
+      expect(entries.length, `${locale} has no dimension headings to check`).toBeGreaterThan(5)
+
+      const generic = [
+        read(locale, 'surveyRespond.dimensionUnknown'),
+        read(locale, 'surveyRespond.dimensionNone'),
+      ]
+      expect(
+        entries.filter(([, heading]) => generic.includes(heading)).map(([key]) => key),
+        `${locale}: a dimension headed with the generic is indistinguishable from an ` +
+          'uncatalogued one, which is the collapse this heading was fixed for.',
+      ).toEqual([])
+
+      const byHeading = new Map<string, string[]>()
+      for (const [key, heading] of entries) {
+        byHeading.set(heading, [...(byHeading.get(heading) ?? []), key])
+      }
+      const shared = [...byHeading.values()].filter((keys) => keys.length > 1)
+      expect(
+        shared,
+        `${locale}: a survey carrying both of these would print one heading twice.`,
+      ).toEqual(ALIASES)
+    }
   })
 
   it('holds every key the employee screens are built against, in both languages', () => {

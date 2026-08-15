@@ -468,18 +468,52 @@ function DimensionHeading({ section, total }: { section: RespondSection; total: 
 }
 
 /**
- * A dimension's heading, from the catalogue rather than from the database.
+ * A dimension's heading: the product's words where the product has words, and the
+ * survey's own where it has not.
  *
- * `Question.Category` is a free-text `varchar(100)` the server neither controls nor
- * translates, so printing it raw would put an English heading over a Spanish survey
- * — the same silent substitution the content-i18n rules forbid. The catalogue holds
- * the vocabulary the product actually ships (`psychological_safety`, `workload`,
- * `enps`…), keyed by the stored value, and answers for everything else in words that
- * are true whatever the category said:
+ * `Question.Category` is a free-text `varchar(100)` the server neither controls,
+ * trims nor translates (`SurveyEndpoints.AddQuestions`), so the catalogue cannot be
+ * a vocabulary — it is a translation table for the ten values the *product* ships
+ * (`psychological_safety`, `workload`, `enps`…). Those ten are English slugs the
+ * product chose, and printing one of them raw over a Spanish survey would be exactly
+ * the silent substitution the content-i18n rules forbid. That is why the lookup
+ * comes first, and why `employeeCopy.test.ts` insists every category the shipped
+ * fixture carries has an entry.
  *
- * - the `UNCATEGORISED_DIMENSION` sentinel — questions with no category at all —
- *   gets `dimensionNone`, because "other questions" is exactly what they are;
- * - a category nobody has translated gets `dimensionUnknown`.
+ * The `UNCATEGORISED_DIMENSION` sentinel — questions with no category at all — gets
+ * `dimensionNone`, because "other questions" is exactly what they are.
+ *
+ * ## Why an uncatalogued category is no longer answered with `dimensionUnknown`
+ *
+ * Because that was a lie of a quieter kind. `respondDimensions` groups by the raw
+ * key, so three uncatalogued categories produce three real sections — and all three
+ * used to print "More questions". The respondent saw one heading repeat and could
+ * not tell whether the form had changed subject or the page had broken, while the
+ * heading's whole job, per the design note above, is to say what is being asked.
+ *
+ * ## Why printing the author's own text does not reopen the i18n hole
+ *
+ * The rule the old comment here was written for is that we never substitute one
+ * language for another without saying so. Nothing is substituted. `Category` is a
+ * SINGLE column — unlike `TextEn`/`TextEs`, which are a pair — so for a value the
+ * catalogue has never heard of there is exactly one string in the database and no
+ * other language to have preferred over it. It is content: it arrives in the same
+ * payload, on the same entity, as the question text this page already prints as
+ * authored. Where the survey as a whole resolved to another language,
+ * `ContentLanguageNotice` says so already; where it did not — a bilingual survey
+ * whose one `Category` serves both renderings — there is no withheld version to
+ * disclose, because the column has none.
+ *
+ * The transformation therefore invents no words: `_` and `-` open out to spaces and
+ * runs of whitespace collapse, and that is all. Case is left alone deliberately —
+ * the design sets this heading in `uppercase`, so casing is not visible, and
+ * "fixing" it is the one part of humanising that could mangle a word the author
+ * capitalised on purpose. `team_support` reads TEAM SUPPORT; `Comunicación interna`
+ * reads COMUNICACIÓN INTERNA, in the author's own Spanish.
+ *
+ * `dimensionUnknown` survives for text carrying no letter and no digit — `___`,
+ * `--`, `...`. There is nothing to open out there, and a heading of punctuation says
+ * less than "more questions" does.
  *
  * The root translator is used rather than the scoped one so the miss is detectable:
  * `createTranslator` returns the key it was given, so `label === path` is the miss,
@@ -489,7 +523,10 @@ function dimensionLabel(key: string, tRoot: (key: string) => string): string {
   if (key === UNCATEGORISED_DIMENSION) return tRoot('surveyRespond.dimensionNone')
   const path = `surveyRespond.dimensions.${key}`
   const label = tRoot(path)
-  return label === path ? tRoot('surveyRespond.dimensionUnknown') : label
+  if (label !== path) return label
+
+  const authored = key.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return /[\p{L}\p{N}]/u.test(authored) ? authored : tRoot('surveyRespond.dimensionUnknown')
 }
 
 /**
