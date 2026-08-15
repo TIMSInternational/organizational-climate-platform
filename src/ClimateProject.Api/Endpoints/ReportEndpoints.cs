@@ -5,6 +5,7 @@ using ClimateProject.Api.Infrastructure.Auditing;
 using ClimateProject.Application.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Reports;
+using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -86,12 +87,45 @@ public static class ReportEndpoints
         db.Reports.Add(report);
         await db.SaveChangesAsync(cancellationToken);
 
-        // Aggregation is still stubbed (#88) -- generation completes synchronously and instantly.
-        // The AI insights section is real: it is read through ReportAIInsights, the one path
-        // (#152) so that a report never silently omits insights by reading the wrong entity.
+        // The AI insights section is read through ReportAIInsights, the one path (#152)
+        // so that a report never silently omits insights by reading the wrong entity.
         var insights = await ReportAIInsights
             .ForCompany(db.AIInsights.AsNoTracking(), report.CompanyId, now)
             .ToListAsync(cancellationToken);
+
+        // The survey sections (#88): one per non-draft survey, each the SAME aggregation
+        // the results screens serve, loaded through the shared SurveyAggregateLoader and
+        // projected by ReportSurveySections -- so the report and /surveys/{id}/results
+        // cannot disagree about the same survey, and every suppression decision
+        // (SurveyResultsPrivacy's floors) is the aggregation's own, carried verbatim.
+        // Drafts are excluded because content is only editable while no responses exist:
+        // a draft has nothing to aggregate, only noise rows of zeros.
+        //
+        // Generation stays synchronous. It streams every answer of every completed
+        // response per survey, which is a page-load-sized cost per survey; a company
+        // with enough surveys and responses for that to hurt is the trigger for making
+        // generation a background job (the status column already models "generating"),
+        // not for a cheaper aggregation.
+        var surveys = await db.Surveys
+            .AsNoTracking()
+            .Where(s => s.CompanyId == report.CompanyId && s.Status != SurveyStatuses.Draft)
+            .OrderByDescending(s => s.CreatedAt)
+            .ThenBy(s => s.Id)
+            .ToListAsync(cancellationToken);
+
+        var sections = new List<ReportSurveySection>(surveys.Count);
+        foreach (var survey in surveys)
+        {
+            // A report is a company document, not a browser request: content resolves
+            // for the survey's own language, with no ?lang to honour. The fallback list
+            // is per-survey plumbing the report does not print -- question text never
+            // reaches the document, only category names and department names do.
+            var locale = SurveyContent.ResolveRequestLocale(null, survey.Language);
+            var fallbackFields = new List<string>();
+            var aggregate = await SurveyAggregateLoader.ComputeAsync(db, survey, locale, fallbackFields, cancellationToken);
+            var surveyTitle = SurveyContent.Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language, "title", fallbackFields);
+            sections.Add(ReportSurveySections.ToSection(survey.Id, surveyTitle, survey.Status, aggregate));
+        }
 
         report.Status = "completed";
         report.GenerationCompletedAt = DateTimeOffset.UtcNow;
@@ -102,7 +136,18 @@ public static class ReportEndpoints
         // payload this API hands a browser -- reportOutput is delivered verbatim to the web app.
         report.ReportOutput = JsonSerializer.Serialize(
             new ReportOutputDocument(
-                "Report aggregation is stubbed -- only the AI insights section is real.",
+                // Honest scope (#88): what the document still does not carry. Each item
+                // is issue-sized on its own; none may be faked in the meantime.
+                // TODO(#88 follow-up): per-question distributions and open-text word
+                //   clouds per survey (SurveyAggregate.Questions, projected like
+                //   ReportSurveySections does departments).
+                // TODO(#88 follow-up): demographic breakdowns beyond department
+                //   (SurveyAggregate.Breakdowns already computes and suppresses them;
+                //   the projection just does not print them yet).
+                // TODO(#88 follow-up): benchmark comparisons (#61's boundary applies:
+                //   reuse BenchmarkEndpoints' source, do not re-derive).
+                "Sections not yet generated: per-question distributions, word clouds, demographic breakdowns, benchmark comparisons.",
+                sections,
                 ReportAIInsights.ToSection(insights)),
             JsonSerializerOptions.Web);
         report.UpdatedAt = DateTimeOffset.UtcNow;

@@ -14,11 +14,12 @@ namespace ClimateProject.Application.Surveys;
 /// implementations means two answers and eventually a support conversation about
 /// which is right. The split: *aggregation* is this class -- pure, in Application,
 /// dependent on nothing but its inputs; *presentation* is the endpoints, of which
-/// there are now four (results, statistics, analytics, real-time-stats) over one
-/// <see cref="SurveyAggregate"/>. #88 adds a fifth presentation. It must call
-/// <see cref="Compute"/> and format the result; it must not re-derive a percentage, a
+/// there are now five (results, statistics, analytics, real-time-stats, and #88's
+/// report generation) over one <see cref="SurveyAggregate"/>. Each must call
+/// <see cref="Compute"/> and format the result; none may re-derive a percentage, a
 /// mean, or a suppression decision. If a report needs a number this does not produce,
-/// the number is added here and every surface gets it at once.
+/// the number is added here and every surface gets it at once -- which is exactly how
+/// the per-dimension rollup arrived.
 ///
 /// **Why it is pure and lives in Application.** ClimateProject.Application references
 /// only Domain, so this cannot reach for EF -- which is the point. The correctness
@@ -71,9 +72,11 @@ public static class SurveyAggregation
         if (!SurveyResultsPrivacy.MeetsSurveyFloor(completed.Count))
         {
             // Counters only. See SurveyResultsPrivacy for why the participation numbers
-            // survive the floor and everything per-question does not.
+            // survive the floor and everything per-question does not. Dimensions are
+            // per-question numbers wearing a category label, so they are withheld too.
             return new SurveyAggregate(
                 summary,
+                [],
                 [],
                 [],
                 IsSuppressed: true,
@@ -99,10 +102,50 @@ public static class SurveyAggregation
         return new SurveyAggregate(
             summary,
             questionResults,
+            DimensionRollup(questionResults),
             breakdowns,
             IsSuppressed: false,
             SuppressionReason: null,
             SurveyResultsPrivacy.MinimumSegmentRespondents);
+    }
+
+    /// <summary>
+    /// Rolls the per-question results up into per-dimension (category) scores.
+    ///
+    /// Derived from the already-computed <see cref="SurveyQuestionResult"/> rows rather
+    /// than from the raw answers, so the rollup is arithmetic over the exact numbers
+    /// every surface displays -- it cannot disagree with them. Only scale questions
+    /// (<see cref="QuestionTypes.NumericScale"/>) carry a score; a categorised
+    /// multiple_choice question still counts toward <c>QuestionCount</c> so a reader can
+    /// see the dimension is wider than its score. Questions with no category belong to
+    /// no dimension -- inventing an "uncategorised" dimension would put a score on a
+    /// grouping nobody designed.
+    /// </summary>
+    private static List<SurveyDimensionResult> DimensionRollup(IReadOnlyList<SurveyQuestionResult> questionResults)
+    {
+        return questionResults
+            .Where(q => !string.IsNullOrWhiteSpace(q.Category))
+            .GroupBy(q => q.Category!, StringComparer.Ordinal)
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .Select(group =>
+            {
+                // Weighted by answered count: a question 40 people answered moves the
+                // dimension more than one 3 people answered, exactly as pooling every
+                // numeric answer would. NumericStats already made Average null for any
+                // question whose values do not all parse, so such a question contributes
+                // no weight here either -- one rule, applied once.
+                var scored = group.Where(q => q.Average is not null).ToList();
+                var weight = scored.Sum(q => q.AnsweredCount);
+
+                return new SurveyDimensionResult(
+                    group.Key,
+                    group.Count(),
+                    group.Sum(q => q.AnsweredCount),
+                    weight == 0
+                        ? null
+                        : Math.Round(scored.Sum(q => q.Average!.Value * q.AnsweredCount) / weight, 2));
+            })
+            .ToList();
     }
 
     /// <summary>
