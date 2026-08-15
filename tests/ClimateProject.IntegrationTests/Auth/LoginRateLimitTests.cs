@@ -43,12 +43,11 @@ public class LoginRateLimitTests : IAsyncLifetime
 
     public LoginRateLimitTests(PostgresContainerFixture postgres)
     {
-        _factory = new AuthWebApplicationFactory(postgres.ConnectionString);
+        _factory = postgres.App;
     }
 
     public async Task InitializeAsync()
     {
-        await _factory.ApplyMigrationsAsync();
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
         db.Companies.Add(_company);
@@ -92,10 +91,24 @@ public class LoginRateLimitTests : IAsyncLifetime
     [Fact]
     public async Task A_correct_password_still_succeeds_after_a_run_of_ordinary_typos()
     {
-        // The product half. A person who mistypes their password several times must not be
-        // locked out, and neither must their colleagues behind the same office address --
-        // which under TestServer is exactly what this is, since every request here shares one
-        // partition key.
+        // The product half: a person who mistypes their password several times must not be
+        // locked out. One client, so one partition -- which is all this test ever exercised.
+        //
+        // It used to claim it also covered "and neither must their colleagues behind the same
+        // office address, since every request here shares one partition key". Deleted rather
+        // than moved, because it was never true of this test even before #279 -- colleagues
+        // sharing a bucket needs two callers and there is one here -- and since #279 it is not
+        // true of the suite either: the shared host trusts one X-Forwarded-For hop and
+        // AuthWebApplicationFactory gives every client its own address.
+        //
+        // Say plainly what stands in its place, because it is less. Nothing asserts that
+        // several people behind one office NAT all still get in: that is a property of the
+        // limit's VALUE (RateLimitPolicies.AuthenticationPermitsPerWindow, 20 a minute, shared
+        // by everyone who presents that one address), not of anything a test drives. What IS
+        // asserted is the partitioning the value is spent against --
+        // RateLimitingTests.The_authentication_policy_buckets_by_the_forwarded_caller exhausts
+        // one named caller and shows a second is still served -- and that a run of typos from
+        // one caller ends in a successful login, which is this test.
         var client = _factory.CreateClient();
 
         for (var attempt = 0; attempt < 5; attempt++)

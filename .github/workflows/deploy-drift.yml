@@ -1,0 +1,139 @@
+name: deploy-drift
+
+# Asks the live service what it is running and compares it to main (#158 slice).
+#
+# The specific failure this exists for has already happened twice. deploy-prod.yml
+# asserts at rollout that /version reports the commit it just built -- but that check
+# only runs when someone dispatches a deploy. Nothing was watching in between, so
+# production sat 156 commits behind main once, and is 218 commits behind as this is
+# written: commit d81ae55, built 2026-08-05. Every health signal was green throughout,
+# because "the service is up" and "the service is current" are different questions and
+# only the first one was being asked.
+#
+# What it deliberately is NOT: a deploy trigger. Drift is a decision for a person --
+# there is a migration step in deploy-prod.yml with a known unsafe window -- so this
+# reports and fails, and someone dispatches the deploy.
+#
+# Alert routing is the remainder of #158. Today the alert is the workflow failure
+# itself, which GitHub emails to the repository's watchers; the job summary carries the
+# detail so the email is actionable without opening logs.
+
+on:
+  schedule:
+    # 13:00 UTC daily = 08:00 in Bogota, so a drift that appears overnight is waiting
+    # at the start of the working day. GitHub queues scheduled runs on a best-effort
+    # basis and routinely delays them by minutes under load -- fine for a daily check,
+    # and the reason this is not scheduled to line up with anything.
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # The App Runner generated hostname is the current answer and is recorded in
+  # infra/aws/README.md ("Live production URL"). It is a `vars` override rather than a
+  # constant because #160 replaces it with a customer-facing domain; when that lands,
+  # set PROD_API_BASE_URL on the repository and this keeps working unchanged.
+  API_BASE_URL: ${{ vars.PROD_API_BASE_URL || 'https://bhgrdkd4gt.us-east-1.awsapprunner.com' }}
+  # Thresholds, not equality. An alert that fires on every merge to main gets muted,
+  # and a muted drift alert is precisely the failure #158 describes -- so these are set
+  # where they mean "a release has been skipped", not "a PR landed". Being a handful of
+  # commits behind between deploys is the normal, healthy state of this repository.
+  MAX_COMMITS_BEHIND: 20
+  MAX_BUILD_AGE_DAYS: 14
+
+jobs:
+  check:
+    name: Compare live /version against main
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history: the check counts commits between the deployed SHA and main,
+          # which needs the deployed commit to be present as an object. At the default
+          # shallow depth of 1 it never is, and every run would report the deployed
+          # commit as unknown to the repository.
+          fetch-depth: 0
+
+      # Same script deploy-prod.yml uses for its post-rollout assertion, so /version's
+      # shape and the ways it can lie ("unknown" from a non-CI build) are handled in one
+      # place rather than two. Only the thing it is compared against differs.
+      - name: Read the live deployed commit
+        id: live
+        run: |
+          set -euo pipefail
+          DEPLOYED_COMMIT="$(scripts/read-deployed-commit.sh "$API_BASE_URL" /tmp/version.json)"
+          echo "deployed_commit=$DEPLOYED_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "built_at=$(jq -r '.builtAt // "unknown"' /tmp/version.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Compare against main
+        env:
+          DEPLOYED_COMMIT: ${{ steps.live.outputs.deployed_commit }}
+          BUILT_AT: ${{ steps.live.outputs.built_at }}
+        run: |
+          set -euo pipefail
+
+          # Resolved explicitly rather than taken from GITHUB_SHA: on a schedule those
+          # agree, but on a manual dispatch from a branch GITHUB_SHA is that branch, and
+          # "behind the branch I happened to dispatch from" is not the question.
+          git fetch --no-tags --quiet origin main
+          MAIN_COMMIT="$(git rev-parse FETCH_HEAD)"
+
+          {
+            echo "## Deployed commit vs main"
+            echo
+            echo "| | commit | detail |"
+            echo "|---|---|---|"
+            echo "| live (\`$API_BASE_URL\`) | \`$DEPLOYED_COMMIT\` | built $BUILT_AT |"
+            echo "| \`origin/main\` | \`$MAIN_COMMIT\` | |"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$DEPLOYED_COMMIT" = "$MAIN_COMMIT" ]; then
+            echo "No drift: production is running the head of main." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # A commit the repository has never heard of is a worse finding than any
+          # distance, and it is not a counting problem: it means the live image was
+          # built from something unpushed, or from history that has since been rewritten.
+          if ! git cat-file -e "${DEPLOYED_COMMIT}^{commit}" 2>/dev/null; then
+            echo "::error::The live service reports commit $DEPLOYED_COMMIT, which does not exist in this repository. The running image was built from an unpushed commit or from history that has since been rewritten -- there is no way to tell what is in production from here." | tee -a "$GITHUB_STEP_SUMMARY" >&2
+            exit 1
+          fi
+
+          BEHIND="$(git rev-list --count "${DEPLOYED_COMMIT}..${MAIN_COMMIT}")"
+          AGE_DAYS="unknown"
+          if [ "$BUILT_AT" != "unknown" ]; then
+            BUILT_EPOCH="$(date -u -d "$BUILT_AT" +%s)"
+            AGE_DAYS=$(( ( $(date -u +%s) - BUILT_EPOCH ) / 86400 ))
+          fi
+
+          echo "Live is **$BEHIND commits** behind main; image is **$AGE_DAYS days** old." >> "$GITHUB_STEP_SUMMARY"
+
+          # Production running something that is not an ancestor of main means main is
+          # not the description of production, whatever the commit distance says.
+          if ! git merge-base --is-ancestor "$DEPLOYED_COMMIT" "$MAIN_COMMIT"; then
+            echo "::error::The live commit $DEPLOYED_COMMIT is not an ancestor of main. Production is running code that is not on main -- a hotfix deployed from a branch, or a force-push to main since the deploy." | tee -a "$GITHUB_STEP_SUMMARY" >&2
+            exit 1
+          fi
+
+          DRIFTED=0
+          if [ "$BEHIND" -gt "$MAX_COMMITS_BEHIND" ]; then
+            echo "::error::Production is $BEHIND commits behind main (threshold $MAX_COMMITS_BEHIND). Dispatch deploy-prod.yml, or raise the threshold deliberately if this is the intended release cadence." >&2
+            DRIFTED=1
+          fi
+          if [ "$AGE_DAYS" != "unknown" ] && [ "$AGE_DAYS" -gt "$MAX_BUILD_AGE_DAYS" ]; then
+            echo "::error::The live image was built $AGE_DAYS days ago (threshold $MAX_BUILD_AGE_DAYS). Commit distance can stay small while a build ages, so this is a separate signal rather than a restatement of the one above." >&2
+            DRIFTED=1
+          fi
+
+          if [ "$DRIFTED" -ne 0 ]; then
+            echo "**DRIFT** -- see the annotations on this run." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "Within thresholds ($MAX_COMMITS_BEHIND commits / $MAX_BUILD_AGE_DAYS days)." >> "$GITHUB_STEP_SUMMARY"

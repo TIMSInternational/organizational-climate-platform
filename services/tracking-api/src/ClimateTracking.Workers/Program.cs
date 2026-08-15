@@ -12,8 +12,17 @@ var connectionString = builder.Configuration.GetConnectionString("ClimateTrackin
 builder.Services.AddDbContext<ClimateTrackingDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-var procomerCompanyId = builder.Configuration["ProcomerCompanyId"]
-    ?? throw new InvalidOperationException("Missing ProcomerCompanyId configuration.");
+// IsNullOrWhiteSpace, not `?? throw`, for the reason ClimateTracking.Api/Program.cs gives at
+// length (#153): appsettings.json ships this blank, so the null check never fired. The damage
+// here is different from the Api's -- a blank tenant is passed to ClimateProjectClient, whose
+// every call becomes `?company_id=` against climate-project-api, so the cache sync 400s or
+// silently syncs nothing rather than over-authorising -- but the misconfiguration is the same
+// one, and it should be refused in the same place: before the host starts.
+var procomerCompanyId = builder.Configuration["ProcomerCompanyId"];
+if (string.IsNullOrWhiteSpace(procomerCompanyId))
+{
+    throw new InvalidOperationException("Missing ProcomerCompanyId configuration.");
+}
 
 builder.Services.AddClimateProjectClient(new ClimateProjectClientOptions
 {

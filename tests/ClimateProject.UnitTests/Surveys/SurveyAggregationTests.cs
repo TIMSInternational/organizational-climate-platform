@@ -762,4 +762,98 @@ public class SurveyAggregationTests
         Assert.Equal([QuestionId, SecondQuestionId], aggregate.Questions.Select(q => q.QuestionId));
         Assert.All(aggregate.Questions, q => Assert.Equal(5, q.AnsweredCount));
     }
+
+    // ==================================================================
+    // Dimension rollup (#88) -- the number a report's climate section prints
+    // ==================================================================
+
+    private static AggregationQuestion Scale(Guid id, int order, string? category)
+        => new(id, order, QuestionTypes.Likert, "How supported do you feel?", category, 1, 5,
+        [
+            new AggregationOption(0, "1", "One"),
+            new AggregationOption(1, "2", "Two"),
+            new AggregationOption(2, "4", "Four"),
+        ]);
+
+    /// <summary>
+    /// The dimension score is the pooled mean over every numeric answer in the category
+    /// -- per-question averages weighted by answered count, so a question 5 people
+    /// answered moves the dimension five times as much as one 1 person answered. A
+    /// categorised choice question widens the dimension's counts but contributes no
+    /// score, for the same reason its own Average is null: its values are codes.
+    /// </summary>
+    [Fact]
+    public void Dimension_scores_pool_the_categorys_scale_questions_weighted_by_answers()
+    {
+        var thirdQuestionId = Guid.Parse("55555555-5555-5555-5555-555555555555");
+        var questions = new List<AggregationQuestion>
+        {
+            Scale(QuestionId, 0, "leadership"),
+            Scale(SecondQuestionId, 1, "leadership"),
+            new(thirdQuestionId, 2, QuestionTypes.MultipleChoice, "Where do you work?", "environment", null, null,
+                [new AggregationOption(0, "1", "Remote"), new AggregationOption(1, "4", "Office")]),
+        };
+
+        var responses = Enumerable.Range(1, 5).Select(n => Response(ResponseId(n))).ToList();
+        var answers = new List<AggregationAnswer>();
+        // First leadership question: everyone answers 4 (average 4, weight 5).
+        answers.AddRange(responses.Select(r => new AggregationAnswer(r.ResponseId, QuestionId, Stored("4"), null)));
+        // Second leadership question: one person answers 1 (average 1, weight 1).
+        answers.Add(new AggregationAnswer(ResponseId(1), SecondQuestionId, Stored("1"), null));
+        // The choice question's numeric-looking codes must not leak into any score.
+        answers.AddRange(responses.Select(r => new AggregationAnswer(r.ResponseId, thirdQuestionId, Stored("1"), null)));
+
+        var aggregate = SurveyAggregation.Compute(questions, responses, answers, [], null);
+
+        Assert.Equal(2, aggregate.Dimensions.Count);
+
+        var environment = aggregate.Dimensions[0];
+        Assert.Equal("environment", environment.Dimension);
+        Assert.Equal(1, environment.QuestionCount);
+        Assert.Equal(5, environment.AnsweredCount);
+        Assert.Null(environment.AverageScore);
+
+        var leadership = aggregate.Dimensions[1];
+        Assert.Equal("leadership", leadership.Dimension);
+        Assert.Equal(2, leadership.QuestionCount);
+        Assert.Equal(6, leadership.AnsweredCount);
+        // (4 x 5 + 1 x 1) / 6, not (4 + 1) / 2 -- weighted, not a mean of means.
+        Assert.Equal(3.5d, leadership.AverageScore);
+    }
+
+    /// <summary>A question with no category belongs to no dimension -- nothing invents an "uncategorised" one.</summary>
+    [Fact]
+    public void An_uncategorised_question_creates_no_dimension()
+    {
+        var responses = Enumerable.Range(1, 5).Select(n => Response(ResponseId(n))).ToList();
+        var answers = responses
+            .Select(r => new AggregationAnswer(r.ResponseId, QuestionId, Stored("4"), null))
+            .ToList();
+
+        var aggregate = SurveyAggregation.Compute([Scale(QuestionId, 0, category: null)], responses, answers, [], null);
+
+        Assert.Empty(aggregate.Dimensions);
+        Assert.Equal(4d, Assert.Single(aggregate.Questions).Average);
+    }
+
+    /// <summary>
+    /// Dimensions are per-question numbers wearing a category label, so the survey floor
+    /// withholds them exactly as it withholds the questions they summarise.
+    /// </summary>
+    [Fact]
+    public void Below_the_survey_floor_no_dimension_score_is_returned()
+    {
+        var responses = Enumerable
+            .Range(1, SurveyResultsPrivacy.MinimumRespondents - 1)
+            .Select(n => Response(ResponseId(n)))
+            .ToList();
+        var answers = responses
+            .Select(r => new AggregationAnswer(r.ResponseId, QuestionId, Stored("4"), null))
+            .ToList();
+
+        var aggregate = SurveyAggregation.Compute([Scale(QuestionId, 0, "leadership")], responses, answers, [], null);
+
+        Assert.True(aggregate.IsSuppressed);
+        Assert.Empty(aggregate.Dimensions);
+    }
 }

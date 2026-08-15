@@ -68,12 +68,11 @@ public class SearchEndpointsTests : IAsyncLifetime
 
     public SearchEndpointsTests(PostgresContainerFixture postgres)
     {
-        _factory = new AuthWebApplicationFactory(postgres.ConnectionString);
+        _factory = postgres.App;
     }
 
     public async Task InitializeAsync()
     {
-        await _factory.ApplyMigrationsAsync();
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
 
@@ -104,17 +103,19 @@ public class SearchEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Disposes the factory, unlike most classes in this assembly.
+    /// Disposes nothing, because it owns nothing.
     ///
-    /// xUnit constructs the class once per test case, so this one class stands up 42 hosts
-    /// over its run -- several times more than any other. Each undisposed
-    /// <c>WebApplicationFactory</c> keeps a running host, a service provider and its share
-    /// of the Npgsql pool alive for the rest of the process, and the classes that run after
-    /// this one pay for all of it. Leaving them to the GC is survivable at five tests per
-    /// class and is not at forty-two. (Count is per test *case*, so a <c>[Theory]</c>
-    /// contributes one host per <c>[InlineData]</c>, not one per method.)
+    /// <para>
+    /// This class used to dispose its own factory, and the reason is the shape of #279 seen
+    /// from one class: xUnit constructs the class once per test *case*, so 42 test cases here
+    /// meant 42 hosts, several times more than any other class in the assembly, each keeping a
+    /// running host, a service provider and its share of the Npgsql pool alive for whatever ran
+    /// afterwards. Since the host moved onto <see cref="PostgresContainerFixture"/> this class
+    /// stands up none of its own, and disposing the shared one here would tear the collection's
+    /// host down in the middle of the run.
+    /// </para>
     /// </summary>
-    public Task DisposeAsync() => _factory.DisposeAsync().AsTask();
+    public Task DisposeAsync() => Task.CompletedTask;
 
     // ------------------------------------------------------------------
     // Seeding

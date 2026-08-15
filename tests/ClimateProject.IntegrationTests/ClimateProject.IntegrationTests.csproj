@@ -26,4 +26,26 @@
     <ProjectReference Include="..\..\src\ClimateProject.Workers\ClimateProject.Workers.csproj" />
   </ItemGroup>
 
+  <!--
+    The one reference that leaves this solution, and the only one (#153).
+
+    climate-tracking is a separate solution (services/tracking-api/ClimateTracking.slnx) that
+    this repo never builds together with this one; the two services share nothing at runtime
+    but the symmetric TrackingJwtSecret, with ValidateIssuer and ValidateAudience both false.
+    Nothing therefore proved that a token MINTED here is ACCEPTED there. Every test on both
+    sides hand-builds its own ClaimsPrincipal, which is the one thing that cannot fail when
+    the mint and the validation drift apart.
+
+    CrossServiceTokenTests closes that by validating a real minted token against the real
+    ClimateTracking.Application.Auth types. Referencing them beats copying them: a copied
+    TokenValidationParameters would agree with the test forever, no matter what the other
+    service went on to require. ClimateTracking.Application specifically, not .Api, so this
+    pulls in one leaf assembly plus its Domain: no EF Core, no web host, and no second
+    `Program` type for WebApplicationFactory to trip over. Test-only. No assembly under
+    src/ references climate-tracking, and none should.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\services\tracking-api\src\ClimateTracking.Application\ClimateTracking.Application.csproj" />
+  </ItemGroup>
+
 </Project>

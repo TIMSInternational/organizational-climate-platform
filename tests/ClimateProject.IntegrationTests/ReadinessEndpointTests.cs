@@ -81,11 +81,11 @@ public class ReadinessEndpointTests(UnreachableDatabaseHostFixture host)
     public async Task Health_still_returns_200_when_the_database_cannot_be_reached()
     {
         // The companion half of the test above. Together they pin the intended
-        // split: /health is liveness (App Runner polls it, and must not be torn
-        // down by a database blip), /ready is the deploy gate. If someone "fixes"
-        // /health to probe the database, this test fails and forces the
-        // conversation rather than silently changing App Runner's teardown
-        // behaviour in production.
+        // split: /health is liveness ("the process is up"), /ready is readiness and
+        // is what App Runner polls since #221. If someone "fixes" /health to probe
+        // the database, this test fails and forces the conversation -- collapsing
+        // the two would leave nothing answering "is the process up" separately from
+        // "can it reach Postgres", which is how #220 was diagnosed at all.
         var client = host.Factory.CreateClient();
 
         var response = await client.GetAsync("/health");
@@ -121,8 +121,9 @@ public class ReadinessEndpointDatabaseTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task Ready_returns_200_when_the_database_round_trip_succeeds()
     {
-        using var factory = new AuthWebApplicationFactory(postgres.ConnectionString);
-        var client = factory.CreateClient();
+        // The collection's shared host, not one of this class's own: /ready only needs a
+        // reachable database, which is exactly what that host already has. See #279.
+        using var client = postgres.App.CreateClient();
 
         var response = await client.GetAsync("/ready");
 

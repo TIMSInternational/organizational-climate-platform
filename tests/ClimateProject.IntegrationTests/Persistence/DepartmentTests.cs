@@ -2,6 +2,8 @@ using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using ClimateProject.IntegrationTests.Support;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 
 namespace ClimateProject.IntegrationTests.Persistence;
@@ -284,6 +286,163 @@ public class DepartmentTests(PostgresContainerFixture postgres)
         await using (var check = new NpgsqlCommand("SELECT manager_id FROM departments WHERE \"Id\" = @id", conn, tx))
         {
             check.Parameters.AddWithValue("id", orphanId);
+            Assert.IsType<DBNull>(await check.ExecuteScalarAsync());
+        }
+
+        await tx.RollbackAsync();
+    }
+
+    private static Department NewDepartment(Company company, string name, string? legacyExternalId) => new()
+    {
+        Id = Guid.NewGuid(),
+        CompanyId = company.Id,
+        Name = name,
+        LegacyExternalId = legacyExternalId,
+        CreatedAt = DateTimeOffset.UtcNow,
+        UpdatedAt = DateTimeOffset.UtcNow,
+    };
+
+    // #155: legacy_external_id is half of TrackingIdentifiers.ExternalNodoId and had no
+    // uniqueness behind it, so the backfill could give two departments one nodo_id. See
+    // DepartmentConfiguration for what that does downstream.
+    [Fact]
+    public async Task Departments_cannot_share_a_legacy_external_id()
+    {
+        await using var db = CreateContext();
+        await db.Database.MigrateAsync();
+        var company = await SeedCompanyAsync(db);
+
+        var shared = $"legacy-{Guid.NewGuid():N}";
+        db.Departments.Add(NewDepartment(company, "First", shared));
+        await db.SaveChangesAsync();
+
+        db.Departments.Add(NewDepartment(company, "Second", shared));
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+    }
+
+    // The index is global, not (company_id, legacy_external_id), and this is the half of that
+    // choice a same-tenant test cannot see. climate-tracking's nodos_cache has no company column
+    // and its tablero scoping compares the nodo id as a bare string, so two tenants colliding on
+    // one legacy id is the same corruption as two departments in one tenant colliding.
+    [Fact]
+    public async Task Departments_in_different_companies_cannot_share_a_legacy_external_id()
+    {
+        await using var db = CreateContext();
+        await db.Database.MigrateAsync();
+        var first = await SeedCompanyAsync(db);
+        var second = await SeedCompanyAsync(db);
+
+        var shared = $"legacy-{Guid.NewGuid():N}";
+        db.Departments.Add(NewDepartment(first, "Tenant one", shared));
+        await db.SaveChangesAsync();
+
+        db.Departments.Add(NewDepartment(second, "Tenant two", shared));
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+    }
+
+    // Every department has a null legacy id until the ETL (#154) runs, so "no legacy id" is not
+    // an edge case here, it is the entire table -- a unique index that treated nulls as equal
+    // would reject the second department ever created. Postgres gives that for free (NULLS
+    // DISTINCT is the default and the partial filter excludes them anyway), which is exactly why
+    // it is worth pinning: nothing in the DDL spells the requirement out, so it is one
+    // AreNullsDistinct(false) away from being lost.
+    [Fact]
+    public async Task Departments_without_a_legacy_external_id_do_not_collide()
+    {
+        await using var db = CreateContext();
+        await db.Database.MigrateAsync();
+        var company = await SeedCompanyAsync(db);
+
+        db.Departments.AddRange(
+            NewDepartment(company, "No legacy id A", null),
+            NewDepartment(company, "No legacy id B", null));
+
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// The migration's operations, in order, as SQL -- the real ones off the migrations
+    /// assembly, not a copy pasted into this file.
+    ///
+    /// <para>The manager_id cleanup test above re-types its migration's UPDATE verbatim, and
+    /// that is the one thing it cannot check: delete the UPDATE from the migration and the test
+    /// still passes, because the test is running its own copy. Reading
+    /// <c>Migration.UpOperations</c> instead means the assertions below are made against
+    /// whatever the migration actually contains today.</para>
+    ///
+    /// <para>Looked up by name suffix rather than by the full timestamped id so that
+    /// regenerating the migration does not silently skip the test.</para>
+    /// </summary>
+    private static IReadOnlyList<string> UpCommandsForLegacyIdIndexMigration(ClimateProjectDbContext db)
+    {
+        var assembly = db.GetService<IMigrationsAssembly>();
+        var migrationId = assembly.Migrations.Keys.Single(
+            id => id.EndsWith("_AddDepartmentLegacyExternalIdUniqueIndex", StringComparison.Ordinal));
+        var migration = assembly.CreateMigration(assembly.Migrations[migrationId], db.Database.ProviderName!);
+
+        return db.GetService<IMigrationsSqlGenerator>()
+            .Generate(migration.UpOperations, migration.TargetModel)
+            .Select(command => command.CommandText)
+            .ToList();
+    }
+
+    // Same shape as the manager_id cleanup test above, and for the same reason: once the index
+    // exists a duplicate cannot be created, so the pre-migration world has to be rebuilt inside
+    // a rolled-back transaction. Without the cleanup the CREATE UNIQUE INDEX fails with 23505 --
+    // the 3am deploy failure the cleanup exists to prevent, invisible to a suite that starts
+    // from an empty container.
+    //
+    // The assertion is that BOTH duplicates end up null, not that one survives. An ambiguous
+    // legacy id names no department in particular; ExternalNodoId falls back to each
+    // department's own Guid, which is what every department resolves to today anyway.
+    [Fact]
+    public async Task Migration_cleanup_nulls_every_member_of_a_duplicated_legacy_external_id_group()
+    {
+        await using var db = CreateContext();
+        await db.Database.MigrateAsync();
+        var company = await SeedCompanyAsync(db);
+
+        await using var conn = new NpgsqlConnection(postgres.ConnectionString);
+        await conn.OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+
+        async Task ExecuteAsync(string sql, params (string Name, object Value)[] parameters)
+        {
+            await using var cmd = new NpgsqlCommand(sql, conn, tx);
+            foreach (var (name, value) in parameters)
+            {
+                cmd.Parameters.AddWithValue(name, value);
+            }
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        await ExecuteAsync("DROP INDEX \"IX_departments_legacy_external_id\"");
+
+        var shared = $"legacy-{Guid.NewGuid():N}";
+        var firstId = Guid.NewGuid();
+        var secondId = Guid.NewGuid();
+        foreach (var (id, name) in new[] { (firstId, "Dup one"), (secondId, "Dup two") })
+        {
+            await ExecuteAsync(
+                """
+                INSERT INTO departments ("Id", company_id, name, legacy_external_id, created_at, updated_at)
+                VALUES (@id, @companyId, @name, @legacy, now(), now())
+                """,
+                ("id", id), ("companyId", company.Id), ("name", name), ("legacy", shared));
+        }
+
+        // The migration itself, cleanup and CREATE UNIQUE INDEX together, in its own order.
+        foreach (var sql in UpCommandsForLegacyIdIndexMigration(db))
+        {
+            await ExecuteAsync(sql);
+        }
+
+        foreach (var id in new[] { firstId, secondId })
+        {
+            await using var check = new NpgsqlCommand(
+                "SELECT legacy_external_id FROM departments WHERE \"Id\" = @id", conn, tx);
+            check.Parameters.AddWithValue("id", id);
             Assert.IsType<DBNull>(await check.ExecuteScalarAsync());
         }
 

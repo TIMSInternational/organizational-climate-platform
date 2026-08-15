@@ -1,6 +1,17 @@
 # Production data migration — MongoDB → Postgres ETL (#154) — Design
 
-**Status: architecture settled, field-level mapping blocked.** This document fixes the
+> **Verified against `1219dc6` (origin/main, 2026-08-15).** Amended in place: **#191, #192,
+> #193 and #195 were all resolved and closed on 2026-08-06**, after this document and its
+> first addendum were written, and the schema moved under the worked User mapping. The three
+> blocking findings below are marked RESOLVED with their outcomes, the User mapping table is
+> corrected against the current entity classes (not against memory of them), and the
+> [2026-08-15 addendum](#addendum--2026-08-15--resolutions-folded-in-scaffold-landed-census-corrected)
+> records the migration namespace, the tool scaffold, and a census correction. Statements not
+> marked otherwise still read as written on 2026-08-03/04.
+
+**Status: architecture settled; findings 3–5 (#191/#192/#193) and the #195 i18n gap are
+resolved in the schema; field-level mapping remains blocked only where #58/#113 are still
+open.** This document fixes the
 mechanism — identity, ordering, idempotency, reconciliation, and where the tool lives — and
 proposes a decomposition. It does **not** complete the per-collection field mapping, for two
 reasons stated up front rather than buried:
@@ -52,6 +63,14 @@ most consequential design decision in the migration, and it is resolved below by
 
 ### 3. `super_admin` users cannot satisfy the target schema — filed as #191
 
+> **RESOLVED 2026-08-06 —
+> [#191](https://github.com/TIMSInternational/organizational-climate-platform/issues/191)
+> closed.** `User.CompanyId` is now `Guid?`, and NULL means global scope — consistent with
+> the established `CompanyId == null` convention on Benchmark and the four template
+> entities (see the comment on `User.cs`). A sentinel company was explicitly rejected.
+> **ETL consequence:** a legacy super-admin with no `company_id` migrates with
+> `CompanyId = NULL`; nothing needs inventing.
+
 Legacy `User.company_id` is required **only when `role !== 'super_admin'`** (`User.ts:118-124`).
 Target `User.CompanyId` is a **non-nullable `Guid`**.
 
@@ -64,6 +83,15 @@ multi-tenant scoping, and the multi-tenant rule in this repo is that `CompanyId 
 `department_id`, which is nullable in the target and therefore fine.
 
 ### 4. Six notification-preference fields have no target home — filed as #192
+
+> **RESOLVED 2026-08-06 —
+> [#192](https://github.com/TIMSInternational/organizational-climate-platform/issues/192)
+> closed.** `User.Notifications` (`NotificationPreferences`, flat beside `Consent`) now
+> carries all six fields verbatim, with defaults matching legacy
+> `NotificationSettingsSchema` exactly — deliberate, so a field the ETL cannot read stays
+> at the value legacy would have given it rather than re-subscribing an opt-out.
+> `push_notifications` is stored but not exposed on the API until #82 decides the PWA.
+> The worked mapping row below was already updated for this.
 
 Legacy `User.preferences.notification_settings` carries `email_surveys`,
 `email_microclimates`, `email_action_plans`, `email_reminders`, `push_notifications` and
@@ -85,6 +113,18 @@ consent problem given the platform's own consent model. **Worth fixing before #9
 not after**, since #97 will otherwise define the preference surface without them.
 
 ### 5. Demographics-as-JSON conflicts with a client requirement — filed as #193
+
+> **RESOLVED 2026-08-06 —
+> [#193](https://github.com/TIMSInternational/organizational-climate-platform/issues/193)
+> closed, in favour of normalisation.** The opaque `User.Demographics` string column no
+> longer exists. Its replacement is the `UserDemographic` child table
+> (`UserId`, `DemographicFieldId`, `Value`) — one row per answer, keyed by the company's
+> `DemographicField` definition — plus `UserInvitationDemographic` for demographics
+> assigned at invitation time. **ETL consequence:** `User` becomes a fan-out like
+> `Department`'s settings never was: each key of the schemaless legacy `demographics`
+> subdocument must resolve to a configured `DemographicField` for that company; keys and
+> out-of-range values that do not resolve go to the data-quality report, never into a
+> blob. Same for `UserInvitation.demographics`.
 
 Legacy `User.demographics` is `{ _id: false, strict: false }` — arbitrary company-defined
 fields. Target `User.Demographics` is a single `string?`, i.e. a JSON blob.
@@ -238,7 +278,7 @@ All 32 legacy collections. "Fan-out" means Mongo embedded arrays become child ta
 |---|---|---|---|
 | 1 | `Company` | `Company` | mappable |
 | 2 | `Department` | `Department` | mappable; self-ref 2nd pass. **Cleanest mapping of the 32** — even nested settings flatten 1:1 |
-| 3 | `User` | `User` | **3 blocking gaps** — #191, #192, #193 |
+| 3 | `User` | `User` + `UserDemographic` | mappable, fan-out — #191/#192/#193 all resolved 2026-08-06; demographics keys must resolve to `DemographicField`, unresolved → report |
 | 4 | `SystemSettings` | `SystemSettings` | mappable |
 | 5 | `DemographicField` | `DemographicField` | mappable |
 | 6 | `DemographicSnapshot` | + `Entry`, `Change` | mappable, fan-out |
@@ -261,7 +301,7 @@ All 32 legacy collections. "Fan-out" means Mongo embedded arrays become child ta
 | 23 | `Report` | `Report` | mappable |
 | 24 | `Notification` | `Notification` | mappable |
 | 25 | `NotificationTemplate` | + `Variable`, `PersonalizationRule` | mappable; conditions must pass #73's parser |
-| 26 | `UserInvitation` | `UserInvitation` | mappable |
+| 26 | `UserInvitation` | `UserInvitation` + `UserInvitationDemographic` | mappable, fan-out since #193 — same key-resolution rule as `User` |
 | 27 | `AuditLog` | `AuditLog` | mappable |
 | 28 | `LibraryQuestion` | — | **excluded**, dead code (confirm no rows) |
 | 29 | `QuestionPool` | — | **blocked on #113** (decision) |
@@ -289,18 +329,19 @@ into a column whose contents no longer evaluate.
 | `email` | `Email` | lowercased already; unique index → check dupes pre-load |
 | `password_hash` | `PasswordHash` | `select: false` in Mongoose — **must be explicitly requested or it silently arrives null**, locking every user out |
 | `role` | `Role` | enum → string; verify the target's expected role vocabulary matches |
-| `company_id` (String, optional for super_admin) | `CompanyId` (**Guid, non-null**) | ⚠️ **#191** |
+| `company_id` (String, optional for super_admin) | `CompanyId` (`Guid?`) | **#191 resolved 2026-08-06** — null means global scope; a super-admin with no legacy company migrates as NULL |
 | `department_id` (String) | `DepartmentId` (`Guid?`) | resolve; dangling → report |
 | `manager_id` (String) | `ManagerId` (`Guid?`) | second pass; #150 notes the FK is missing |
 | `preferences.{language,timezone,dashboard_layout,theme}` | `Preferences.*` | direct |
 | `preferences.notification_settings.*` (6 fields) | `Notifications` (6 fields) | direct, 1:1 — **#192** resolved. Flattened one level: legacy nests these under `preferences`, the target hangs them off `User` beside `Consent`. All six carry over, including `push_notifications`, which is stored but not yet exposed by the API (#82). Leave every field the ETL cannot read at its DDL default — the four `email_*` are opt-outs real users have set, and writing a value the legacy doc did not contain re-subscribes them |
-| `demographics` (schemaless) | `Demographics` (`string?`) | ⚠️ **#193** |
+| `demographics` (schemaless) | `UserDemographic` rows (`DemographicFieldId`, `Value`) | **#193 resolved 2026-08-06** — fan-out to a child table; the `Demographics` string column no longer exists. Each key must resolve to the company's `DemographicField`; unresolved keys/values → data-quality report |
 | `consent_preferences` (6 fields) | `Consent` (6 fields) | direct, 1:1 |
 | `consent_updated_at` | `ConsentUpdatedAt` | direct |
 | `is_active` | `IsActive` | direct |
 | `last_login` | `LastLoginAt` | `Date` → `DateTimeOffset`; Mongo dates are UTC, assert no local-time drift |
 | `created_at` / `updated_at` | `CreatedAt` / `UpdatedAt` | direct |
-| — | `NodoId` | new; tracking integration, not in legacy |
+| — | ~~`NodoId`~~ | **correction 2026-08-15: this column does not exist.** #151 dropped it as confirmed-dead; a user's nodo is *derived* from `DepartmentId` by `TrackingIdentifiers`, never stored. The ETL writes nothing |
+| — | `SecurityStamp` | new (#284); session-revocation stamp, initialised per row by the entity itself — the ETL must leave it alone, not copy or blank it |
 
 The `password_hash` row is the kind of thing this exercise exists to find: Mongoose's
 `select: false` means a naive `find()` returns documents **without** the field, and the ETL
@@ -321,10 +362,10 @@ One collection, four issues. That is the ratio to expect across the remaining 25
   touched it. Note also that this credential was readable by the malware during the exposure
   window and #70's rotation has not happened, so it should be rotated before or alongside any
   use. Preference: restore a dump into a local scratch Postgres/Mongo and work there.
-- **Decisions on #191, #192 and #193.** Each is a schema question, not an ETL question:
-  nullable `CompanyId` (or an explicit super-admin representation); where notification
-  preferences live; and whether demographics are normalised or `jsonb`. #192 and #193 are
-  **time-sensitive** — #97 and #87 would otherwise define those surfaces first.
+- ~~**Decisions on #191, #192 and #193.**~~ **Done 2026-08-06** — all three closed with the
+  schema landed: `CompanyId` nullable (null = global scope), `NotificationPreferences`
+  carried verbatim, demographics normalised into `UserDemographic` /
+  `UserInvitationDemographic`. See the RESOLVED notes on findings 3–5 above.
 - **Row counts per collection**, even approximate, if a dump is not forthcoming soon. They
   determine whether `Response` needs batched streaming or fits in memory, which changes the
   tool's shape.
@@ -354,10 +395,11 @@ agree with whatever the ETL did.
 
 ## Acceptance criteria status
 
-- [ ] **Design doc committed and approved** — this document; needs review, and #191/#192/#193
-      need decisions before it can be called approved
-- [ ] **Every collection mapped or explicitly excluded** — 26 mappable, 1 excluded, **5 blocked**;
-      cannot be met until #58 and #113
+- [ ] **Design doc committed and approved** — this document; committed and amended, review
+      still outstanding. The #191/#192/#193 decisions it was waiting on are made (2026-08-06)
+- [ ] **Every collection mapped or explicitly excluded** — 26 mappable, 1 excluded, **5 blocked**
+      (plus the three QuestionPool.ts sub-collections, see the 2026-08-15 addendum);
+      cannot be met until #58 and #113, both still open as of 2026-08-15
 - [x] **Legacy identifiers preserved** — mechanism settled: v5 derivation plus raw `_id` into
       `PersonaExternalId`/`LegacyExternalId` per #155
 - [x] **Idempotent and resumable** — by construction via deterministic IDs; the interrupted-run
@@ -372,17 +414,17 @@ on decisions and upstream design that are not #154's to make.
 
 ## Tracked follow-ups
 
-Three of the five blocking findings are now their own issues, because each is a schema decision
-with consequences outside the ETL:
+Three of the five blocking findings became their own issues, because each was a schema decision
+with consequences outside the ETL. **All three are now closed (2026-08-06):**
 
-| Issue | Finding | Time pressure |
+| Issue | Finding | Outcome |
 |---|---|---|
-| **#191** | `User.CompanyId` non-nullable vs super-admins with no company | blocks #154 sub-issue B |
-| **#192** | six notification preferences with no target column | **before #97** defines the self-service preference surface |
-| **#193** | demographics as opaque `string` vs the filterability requirement | **before #87** ships the snapshot endpoints |
+| **#191** | `User.CompanyId` non-nullable vs super-admins with no company | **resolved** — `CompanyId` is `Guid?`, null = global scope |
+| **#192** | six notification preferences with no target column | **resolved** — `NotificationPreferences` on `User.Notifications`, six fields verbatim, legacy defaults |
+| **#193** | demographics as opaque `string` vs the filterability requirement | **resolved** — normalised into `UserDemographic` / `UserInvitationDemographic`, keyed by `DemographicField` |
 
-The other two are upstream: **#58** (question-repository schema, `needs-design`) and **#113**
-(`QuestionPool` decision).
+The other two are upstream and **still open as of 2026-08-15**: **#58** (question-repository
+schema, `needs-design`) and **#113** (`QuestionPool` decision).
 
 **Recommended re-sequencing:** #154 currently sits in `batch:7-migration`, which implies it can
 be picked up late. It cannot — 4 of 32 collections depend on #58, a `needs-design` epic in the
@@ -393,6 +435,19 @@ instead of parking the whole thing behind an epic.
 ---
 
 # Addendum — 2026-08-04 — content i18n (#195) changes the collection count
+
+> **RESOLVED 2026-08-06 —
+> [#195](https://github.com/TIMSInternational/organizational-climate-platform/issues/195)
+> closed; the schema described below is implemented, not just designed.** Verified in the
+> entities: paired `_en`/`_es` columns on `Survey`/`Question` (and per-language
+> `CommentPrompt` defaults), `QuestionOption` as a child table carrying a stable
+> locale-independent `Value` that is what `question_responses.response_value` stores, and
+> `Response.Language` recording the served locale. `QuestionResponse` did NOT gain its own
+> `Language` column — the response-level one is the record. The *attribution* rules below
+> (which column a monolingual legacy string lands in, reported per company) are unchanged
+> and still the ETL's to implement; section 3's sequencing warning is now moot because the
+> options schema exists — what remains is B/C-ordering: load `QuestionOption` rows and map
+> answers to stable values in the same slice that loads responses.
 
 A **sixth** blocking finding was filed as **#195** after this document was written, and is now
 designed in
@@ -474,3 +529,65 @@ changes #154's shape rather than just its per-field mapping, and it is easy to m
 The 32 total and the set of schema-blocked collections are unchanged; what changes is that five
 collections previously counted as clean carry an undecided attribution that must be settled — and
 reported — rather than defaulted silently inside the loader.
+
+---
+
+# Addendum — 2026-08-15 — resolutions folded in, scaffold landed, census corrected
+
+Written against origin/main `1219dc6`. Three things happened since the 2026-08-04 addendum,
+and each is folded into the body above *in place* (marked RESOLVED / correction) rather than
+only appended here — a stale table with a correct appendix is how the last reader got burned.
+
+## 1. #191, #192, #193 and #195 all closed on 2026-08-06
+
+The outcomes are recorded inline on findings 3–5 and on the 2026-08-04 addendum header. The
+worked `User` mapping table is corrected against the current entity classes; two of its rows
+had gone factually wrong (`CompanyId` is now nullable; the `Demographics` column no longer
+exists — it is the `UserDemographic` child table), and its `NodoId` row was wrong all along
+(#151 dropped that column; the nodo is derived, never stored).
+
+## 2. The census is 35 registered models, not 32
+
+The body's "all 32 legacy collections" counted model *files*. `QuestionPool.ts` registers
+**three further models** beyond `QuestionPool` itself, all storage for the adaptive-question
+engine: `QuestionEffectiveness`, `QuestionCombination`, `QuestionGeneration` (default
+collection names `questioneffectivenesses`, `questioncombinations`, `questiongenerations`).
+Whether production holds any such documents is a dump question, but the census cannot answer
+it for collections it does not list. All three sit under **#113**'s decision with
+`QuestionPool`. Collection names throughout are Mongoose `pluralize()` defaults — no legacy
+model passes an explicit `collection` option and nothing overrides the pluralizer; each name
+was computed with the legacy repo's own installed pluralizer, not by hand.
+
+## 3. The tool scaffold exists — `tools/ClimateProject.DataMigration`
+
+What the body calls "a new standalone console project" is now scaffolded, with its own
+solution (`tools/ClimateProject.DataMigration.slnx`) so it never joins `ClimateProject.slnx`
+— the production Dockerfile (line 13) and CI both restore that file, and a cutover tool's
+dependencies have no business in the shipped restore graph.
+
+- **The migration namespace is fixed:** `MIGRATION_NAMESPACE = 1ad51692-845e-4f16-ac97-c8f692842472`.
+  Recorded here per this document's own "record the namespace UUID and never change it"
+  rule; `MigrationIds.MigrationNamespace` pins it in code and a test pins the derivation
+  against vectors computed with an independent RFC 4122 v5 implementation (Python's
+  `uuid.uuid5`).
+- The v5 construction is `DeterministicNotificationId.Create` — the implementation #101
+  landed, already proven against the RFC test vector — referenced, not reimplemented.
+- All 35 collections have typed readers (`LegacyCollections.All`): stub documents carrying
+  only `_id` plus a `[BsonExtraElements]` catch-all, so a field the stub does not declare is
+  captured and visible rather than silently dropped. Field-level typing is sub-issue work.
+- A Mongo Testcontainer harness proves the idempotency and resumability *shape* — reading
+  twice derives identical keys; a run killed mid-collection restarted naively lands in the
+  same state as an uninterrupted run — against a dictionary standing in for the Postgres
+  upsert sink. The real loader is still unwritten.
+- **Running the tool throws `NotImplementedException`** pointing at
+  `docs/migration/sub-issues.md`. Deliberate: a migration tool that exits 0 without
+  migrating would be read as "the data moved" during a rehearsal.
+
+## 4. Decomposition superseded
+
+The [Proposed decomposition](#proposed-decomposition) table above (A–G by collection group)
+is superseded by the concern-based split in
+[docs/migration/sub-issues.md](../../migration/sub-issues.md) — readers, mapping, load
+order, idempotency, reconciliation, identity backfill, staging dry-run — drafted as
+issue-ready text. The dependency reasoning above (G alongside B, `Response` after the
+options mapping, F behind #58/#113) survives inside those drafts.

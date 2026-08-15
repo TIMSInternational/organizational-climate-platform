@@ -52,9 +52,9 @@ not "the tracking secret plus the new stack's own signing key" — they are the 
 
 - `src/ClimateProject.Infrastructure/Auth/JwtTokenService.cs:17` reads `TrackingJwtSecret`
   and uses it as the HMAC-SHA256 **signing** key for tokens this API issues.
-- `src/ClimateProject.Api/Program.cs:61` uses the same value as `IssuerSigningKey` for
-  **validation**, with a comment that it must match climate-tracking's `Program.cs` exactly
-  for token compatibility.
+- `src/ClimateProject.Api/Program.cs:206` reads it and `Program.cs:219` uses it as
+  `IssuerSigningKey` for **validation**, with a comment that it must match
+  climate-tracking's `Program.cs` exactly for token compatibility.
 - climate-tracking's API and Workers read the same value.
 
 Consequences to plan for:
@@ -76,8 +76,8 @@ Consequences to plan for:
 | Item | Where | Notes | Rotated? |
 |---|---|---|---|
 | Supabase Postgres password | Secrets Manager (`DatabaseConnectionStringSecretArn`) → env `ConnectionStrings__ClimateProject` | Supabase project `organizational-climate-platform`, `us-east-1` (README). **Two places hold this password, and rotating one is the classic miss.** Runtime currently uses the **transaction pooler, port 6543** (Secrets Manager) — **this is a defect, not the design; see the warning below.** EF migrations use the **session pooler** — *same host*, port **5432**, username `postgres.<project-ref>` — held separately as the `MIGRATION_DATABASE_CONNECTION_STRING` **secret on the `production` GitHub environment**, not in Secrets Manager. Same password, two strings, two systems: update and verify **both** or migrations break later, in a different session, looking unrelated. **Both strings should be on port 5432**; whoever rotates this password is the most likely person to fix the runtime port at the same time, since they are rewriting the value anyway. Do **not** rotate the migration string onto `db.<project-ref>.supabase.co` (the dashboard's "direct connection") — that host is **IPv6-only and unreachable from GitHub Actions**; `deploy-prod.yml` now rejects it outright (#212). | ☐ |
-| Supabase `service_role` key | Supabase dashboard | **Verify whether it is used at all.** No reference found anywhere in this repo — the .NET stack connects over Postgres, not the Supabase REST API. If genuinely unused, mark N/A with that reason rather than rotating it. | ☐ |
-| Supabase `anon` key | Supabase dashboard | Same — no reference in this repo. Likely legacy-only or unused. | ☐ |
+| Supabase `service_role` key | Supabase dashboard | **Rotate. Do not mark N/A on "unused" grounds** — see the correction below. | ☐ |
+| Supabase `anon` key | Supabase dashboard | **Rotate. Do not mark N/A on "unused" grounds** — see the correction below. | ☐ |
 | MongoDB Atlas credentials / connection string | Legacy Vercel env (`MONGODB_URI`) | **Legacy-only.** The new stack is Postgres; no Mongo driver or connection string exists in this repo. Still must be rotated — the legacy build could read it — but it does not touch the new stack. Consider whether the Atlas cluster should simply be decommissioned instead, which is strictly better than rotating a credential for a database nothing should use again. | ☐ |
 
 > **The runtime port is wrong today (#220).** Earlier revisions of this file recorded
@@ -111,6 +111,28 @@ Consequences to plan for:
 > this secret. The ordered sequence, and why the order matters, is in `infra/aws/README.md`
 > under "Arming the guard".
 
+> **The two Supabase API-key rows say "rotate", not "likely N/A" — corrected 2026-08-14.**
+> Earlier revisions reasoned "no reference in this repo, so probably unused". That reasoning is
+> unsound: an `anon` key's power does not come from this repository referencing it, it comes
+> from **PostgREST**, which Supabase exposes on the project regardless of what our code does.
+> Migration `20260804200923_LockDownPostgrestRoles` records the measured state — Supabase
+> flagged the project **CRITICAL** on 2026-08-03 with RLS on **0 of 52 tables**, **0 policies**,
+> and `anon` plus `authenticated` each holding SELECT/INSERT/UPDATE/DELETE/**TRUNCATE** on all
+> 52, including `users.password_hash`, `users.email` and three `invitation_token` columns.
+> Anyone holding that key could have read or destroyed the database over HTTPS without touching
+> our code.
+>
+> That migration revoked the privileges on 2026-08-04, so the hole is closed going forward, and
+> no data was in fact exposed because every application table was still empty. **Neither fact
+> retires the credential.** If the key was reachable during the incident window it is still live
+> in whoever's hands took it, and rotating it in the dashboard costs minutes.
+>
+> The one genuine open question is a **timeline** question, not a code question: the malware ran
+> in the *legacy* repo's builds until 2026-07-29, so these keys matter only if the Supabase
+> project existed and its keys were reachable from a legacy build or a developer machine before
+> that date. Establish that date, then rotate — or mark N/A **with the timeline as the stated
+> reason**, never with "not referenced in this repo".
+
 ### C. Internal service auth
 
 | Item | Where | Notes | Rotated? |
@@ -133,7 +155,8 @@ Consequences to plan for:
 | Vercel account/team API tokens | Vercel account settings | Rotate any token that existed during the window. | ☐ |
 | AWS access keys (long-lived) | IAM | Only keys that are **not** instance-role based. App Runner uses an instance role, so there may be none — confirm and mark N/A. Note the local dev credentials in use are for account `795965600143`, while production is `747814092517` (`AWS_ACCOUNT_ID` repo variable); check both. | ☐ |
 | GitHub Actions OIDC deploy role | `climate-project-github-deploy-prod` | Not a secret (no static credential — that is the point of OIDC). **N/A for rotation**, but see #68: its trust policy may still reference the pre-rename repo, which is a separate correctness bug. | ☐ N/A |
-| SMTP / email credentials | Brevo (per legacy `ENV_VARIABLES.md`) | Legacy-only unless the new stack has since added mail. No SMTP config key found in this repo — confirm before marking N/A. | ☐ |
+| SMTP / email credentials — **legacy** | Brevo (per legacy `ENV_VARIABLES.md`) | Legacy Vercel env, so in scope and readable in-process during the build. Rotate at Brevo. Independent of the new stack's mail settings in the row below. | ☐ |
+| SMTP / email credentials — **new stack** | `Email:SmtpUsername` / `Email:SmtpPassword` (`EmailOptions.cs:79-81`), bound from the `Email` section | **This row is new: the previous revision said "no SMTP config key found in this repo", and that is no longer true.** The stack grew a real mail path — `SmtpEmailTransport` is registered at `Program.cs:321` and `EmailOptions` carries a username/password pair. **Nothing to rotate today**, and that is a verified statement rather than an assumption: `appsettings.json` sets `Email:Provider` to `"none"`, and the production App Runner template wires exactly three secret ARNs — `TrackingJwtSecretArn`, `DatabaseConnectionStringSecretArn`, `InternalApiKeySecretArn` — with no `Email__*` variable or secret anywhere in it. So no live SMTP credential exists in production to be compromised. **What this row is for:** the moment someone sets `Email:Provider=smtp`, a new production secret enters the system, and it must arrive as a Secrets Manager entry added to `RuntimeEnvironmentSecrets` — not as a plaintext `RuntimeEnvironmentVariables` value — and be added to this inventory. | ☐ N/A — not configured in production |
 
 ## History scan — completed 2026-08-03
 
@@ -206,6 +229,35 @@ Suggested order once someone has them:
 4. **Revoke old values, do not merely replace them** — an unrevoked old credential is still
    a live credential.
 5. Fill in this file's checkboxes with dates, and close #70.
+
+## Re-verification — 2026-08-14, against `093212c`
+
+The inventory was written on 2026-08-10 and is derived from code, so it goes stale as the code
+moves. Between those dates #143 (audit logging), #144 (GDPR endpoints), #146 (rate limiting)
+and #284 (token revocation) merged. Every code-derived claim above was re-checked against
+`093212c`. **The rotation itself is still unstarted — nothing below changes that.**
+
+Still correct, re-confirmed by reading the cited lines:
+
+- `JwtTokenService.cs:17` still reads `TrackingJwtSecret`; `:12` still sets the 24h lifetime,
+  so section A's grace-window arithmetic stands.
+- `GoogleTokenVerifier.cs:13` still reads **only** `GoogleClientId` and no client secret, so
+  row D's "legacy-only" verdict stands.
+- No MongoDB driver or connection string exists in this repo.
+- The three production secret ARNs are unchanged.
+
+Corrected:
+
+1. **`Program.cs:61` had drifted.** That file is now 515 lines; the signing key is read at
+   `:206` and applied as `IssuerSigningKey` at `:219`. Citation updated.
+2. **The two Supabase API-key rows flipped from "likely N/A" to "rotate"** — the "not
+   referenced in this repo" reasoning was unsound. Full argument in the callout under section B.
+3. **A second SMTP row was added.** The claim "no SMTP config key found in this repo" is no
+   longer true. Mail exists in code but is switched off and unwired in production, so there is
+   nothing to rotate — recorded so the next reader checks rather than re-derives it.
+
+Unchanged and still blocking: everything here needs Atlas, Vercel, Supabase, AWS
+(`747814092517`) and Google Cloud consoles.
 
 ## Related
 
