@@ -121,8 +121,9 @@ public class ReadinessEndpointDatabaseTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task Ready_returns_200_when_the_database_round_trip_succeeds()
     {
-        using var factory = new AuthWebApplicationFactory(postgres.ConnectionString);
-        var client = factory.CreateClient();
+        // The collection's shared host, not one of this class's own: /ready only needs a
+        // reachable database, which is exactly what that host already has. See #279.
+        using var client = postgres.App.CreateClient();
 
         var response = await client.GetAsync("/ready");
 

@@ -26,6 +26,14 @@ using Xunit;
 // This does NOT replace the "AppHost" collection, which stays as defence in depth: if anyone
 // re-enables parallelization here, those three classes must still not overlap each other.
 //
+// #279 CHANGED THE NUMBERS BUT NOT THE ARGUMENT. The Postgres collection no longer boots a
+// host per test case -- it shares one, hung off PostgresContainerFixture, and only two classes
+// in it still build their own (AuditPoolPressureTests, for a constrained pool, and the three
+// customised-host tests in NotificationEndpointsTests). Five host boots where there were
+// hundreds. Every one of those five is still a capture handshake that must not overlap
+// another, so this attribute is exactly as load-bearing as it was; what changed is that there
+// are now few enough of them that the handshake is not racing under its own weight.
+//
 // It is also NOT the whole fix. Serialising boots removes the *concurrency* trigger; a second,
 // independent trigger lives in the host-capture handshake itself and is addressed in
 // StartupValidationTests.CaptureStartupException. Both were measured -- see that method.

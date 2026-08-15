@@ -36,13 +36,12 @@ public class SurveyVersionHistoryTests : IAsyncLifetime
 
     public SurveyVersionHistoryTests(PostgresContainerFixture postgres)
     {
-        _factory = new AuthWebApplicationFactory(postgres.ConnectionString);
+        _factory = postgres.App;
         _harness = new SurveyTestHarness(_factory, $"vers-{Guid.NewGuid():N}.test");
     }
 
     public async Task InitializeAsync()
     {
-        await _factory.ApplyMigrationsAsync();
         _companyId = await _harness.SeedCompanyAsync("Versioning Co");
         _otherCompanyId = await _harness.SeedCompanyAsync("Other Co");
     }

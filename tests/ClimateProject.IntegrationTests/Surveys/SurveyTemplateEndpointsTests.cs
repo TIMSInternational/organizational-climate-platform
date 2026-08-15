@@ -28,13 +28,12 @@ public class SurveyTemplateEndpointsTests : IAsyncLifetime
 
     public SurveyTemplateEndpointsTests(PostgresContainerFixture postgres)
     {
-        _factory = new AuthWebApplicationFactory(postgres.ConnectionString);
+        _factory = postgres.App;
         _harness = new SurveyTestHarness(_factory, $"tmpl-{Guid.NewGuid():N}.test");
     }
 
     public async Task InitializeAsync()
     {
-        await _factory.ApplyMigrationsAsync();
         _companyId = await _harness.SeedCompanyAsync("Template Co");
         _otherCompanyId = await _harness.SeedCompanyAsync("Other Co");
         _departmentId = await _harness.SeedDepartmentAsync(_companyId, "Engineering");

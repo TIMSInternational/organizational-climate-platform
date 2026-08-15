@@ -22,12 +22,11 @@ public class SignupEndpointTests : IAsyncLifetime
 
     public SignupEndpointTests(PostgresContainerFixture postgres)
     {
-        _factory = new AuthWebApplicationFactory(postgres.ConnectionString);
+        _factory = postgres.App;
     }
 
     public async Task InitializeAsync()
     {
-        await _factory.ApplyMigrationsAsync();
         _company = new Company
         {
             Id = Guid.NewGuid(),

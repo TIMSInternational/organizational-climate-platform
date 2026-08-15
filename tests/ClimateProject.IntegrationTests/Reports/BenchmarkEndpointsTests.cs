@@ -23,12 +23,11 @@ public class BenchmarkEndpointsTests : IAsyncLifetime
 
     public BenchmarkEndpointsTests(PostgresContainerFixture postgres)
     {
-        _factory = new AuthWebApplicationFactory(postgres.ConnectionString);
+        _factory = postgres.App;
     }
 
     public async Task InitializeAsync()
     {
-        await _factory.ApplyMigrationsAsync();
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
         var companyA = new Company { Id = Guid.NewGuid(), Name = "Bench Co A", EmailDomain = _companyADomain, CreatedAt = DateTimeOffset.UtcNow };
