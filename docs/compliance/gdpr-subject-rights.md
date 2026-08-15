@@ -170,17 +170,19 @@ That is the only part of an audit record erasure can take without breaking what 
    searches it anyway (matching both the subject's id and their email) because the column exists
    and an import could fill it. Erasure does not touch it: guessing at the element format of a
    column no code writes would be inventing a contract.
-4. **A session the subject already holds is not ended.** The account is deactivated, so no new
-   token can be minted for it — `/auth/login` filters on `is_active` and every mint in the API
-   goes through `AuthEndpoints.IssueTokenForAsync`, which refuses an inactive account, so
-   `/auth/refresh` refuses too. But an access token issued *before* the erasure is self-contained
-   and nothing reads `is_active` per request: `ActingUserResolver` resolves the token's subject
-   to the account row by id, which erasure does not change, so that token keeps authorising
-   requests until it expires. (A token identifying the account by a legacy `persona_external_id`
-   is the exception — erasure clears that column, so it stops resolving.) Revoking an outstanding
-   token needs a per-user security stamp checked on every request, which is #284's work; this
-   issue does not add a second mechanism alongside it. Do not describe an erasure as ending the
-   subject's session.
+4. **A session the subject already holds is ended here, and not in the tracking service.** The
+   account is deactivated, so no new token can be minted for it — `/auth/login` filters on
+   `is_active` and every mint in the API goes through `AuthEndpoints.IssueTokenForAsync`, which
+   refuses an inactive account, so `/auth/refresh` refuses too. Deactivation alone would leave the
+   token *already* in the subject's hand working, because nothing reads `is_active` per request:
+   `ActingUserResolver` resolves the token's subject to the account row by id, which erasure does
+   not change. So erasure also rotates `users.security_stamp` (#286), which
+   `SecurityStampValidation` compares against every presented token during authentication — the
+   subject's next request on a pre-erasure token is a 401. What that does not reach is
+   `services/tracking-api`: it validates the same shared `TrackingJwtSecret`, has no equivalent
+   per-request hook and no access to this column, so the same token keeps authorising requests
+   there until it expires — at most 24 hours after the erasure. Describe an erasure as ending the
+   subject's session *in this API*, never as ending it everywhere.
 5. **Erasure is scoped to the caller's tenant** in exactly the places the access export is —
    see the access section above. A company administrator's erasure redacts the invitation held by
    their own company and leaves another company's invitation to the same address alone. That row
