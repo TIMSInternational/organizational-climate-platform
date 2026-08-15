@@ -39,9 +39,18 @@ export const buttonVariants = cva(
           'border border-line-default bg-surface-card text-fg-primary',
           'hover:not-disabled:border-line-hover hover:not-disabled:bg-surface-card-hover',
         ),
+        // `bg-accent-blue-fill`, never `bg-accent-blue`: white on the identity
+        // accent measures 3.74:1 in light and 2.49:1 in dark, and this button's
+        // label is `text-base` (0.8125rem = 13px), which WCAG 1.4.3 counts as
+        // normal text at 4.5:1. `tokens.css` says the on-accent ink may sit on
+        // `--admin-accent-blue-fill` and on nothing else; `accentContrast.test.ts`
+        // measures that fill at 5.47:1 with white in both themes and asserts the
+        // identity accent does NOT clear 4.5:1. Hover moves to the paired hover
+        // token rather than to `opacity-90`, which would fade the fill toward the
+        // panel and give back the contrast the fill exists to provide.
         primary: cn(
-          'border border-transparent bg-accent-blue text-fg-on-accent shadow-sm',
-          'hover:not-disabled:opacity-90',
+          'border border-transparent bg-accent-blue-fill text-fg-on-accent shadow-sm',
+          'hover:not-disabled:bg-accent-blue-fill-hover',
         ),
         destructive: cn(
           'border border-transparent bg-accent-red text-fg-on-accent shadow-sm',

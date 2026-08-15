@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { LanguageSwitcher, useTranslation } from '../../../i18n'
 import {
   BarChart,
+  ClimateMap,
   Counter,
   HeatMap,
   KPIDisplay,
+  KpiTile,
+  ProtectedCell,
   LineChart,
   ParticipationTracker,
   PieChart,
@@ -14,6 +17,8 @@ import {
   WordCloud,
   type ChartDatum,
   type ChartSeries,
+  type ClimateMapDimension,
+  type ClimateMapRow,
   type HeatMapCell,
   type Kpi,
   type PieSlice,
@@ -21,6 +26,18 @@ import {
   type WordFrequency,
 } from '../../../components/charts'
 import { SENTIMENT_STUB } from '../../../components/charts/sentimentStub'
+import { PageTopBar } from '../../../components/layout'
+import {
+  Button,
+  Chip,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  type ChipTone,
+} from '../../../components/ui'
 import { readAdminThemeMode, resolveAdminTheme, setAdminThemeMode } from '../../../theme/adminTheme'
 
 /**
@@ -98,6 +115,93 @@ export default function ChartGalleryPage() {
 
       <p className="text-fg-secondary">{t('charts.galleryBlurb')}</p>
 
+      <Section title={t('charts.gallerySectionShell')}>
+        {/* The page layout rule, rendered rather than described: header, then the
+            readings, then the work. Look at the gap under the hairline (16px) and
+            the pad above it (14px) — happy-dom computes neither. The description
+            is the only thing capped; the table below runs the full width.
+
+            `PageTopBar` renders an `<h1>`, and so does this gallery's own header,
+            so this page has two. That is a property of showing a page header
+            inside a catalogue of components, not of the component. */}
+        {/* On a PANEL, not on the bare page. That is not decoration: the header's
+            rule and the neutral chip's hairline are `--admin-border-light`
+            (#eeeeee), and the gallery's own background is `--admin-bg-outer`
+            (#f0f0f0) — two values apart, so in light mode both were invisible in
+            the first render of this section and the geometry could not be
+            checked at all. Every real screen puts this inside the shell's white
+            card, so the panel is what has to be looked at. */}
+        <div className="rounded-xl border border-line-default bg-surface-panel p-panel">
+        <PageTopBar
+          eyebrow={t('charts.galleryTopBarEyebrow')}
+          title={t('charts.galleryTopBarTitle')}
+          description={t('charts.galleryTopBarDescription')}
+          actions={
+            <>
+              <Button size="sm">{t('charts.galleryTopBarExport')}</Button>
+              <Button variant="primary" size="sm">
+                {t('charts.galleryTopBarNewSurvey')}
+              </Button>
+            </>
+          }
+        />
+
+        {/* Everything after the header, spaced by the container. `PageTopBar`
+            brings its own 16px, so it stays outside this — stacking the two would
+            silently double the gap the design specifies. */}
+        <div className="flex flex-col gap-panel">
+        {/* Not a bare `grid-cols-4`: rendered at 420px, four fixed columns clipped
+            "PARTICIPATION" mid-word and broke every tile's sub-line onto three
+            lines. Two-up, then four-up. */}
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <KpiTile label={t('charts.galleryKpiClimateIndex')} value={72} previousValue={68} changeLabel={t('charts.gallerySinceQ1')} />
+          <KpiTile label={t('charts.galleryKpiParticipation')} value={84} format={{ kind: 'percentage' }} sub={<span>{t('charts.galleryParticipationSub')}</span>} />
+          <KpiTile label={t('charts.galleryKpiOpenPlans')} value={7} sub={<span>{t('charts.galleryPlansSub')}</span>} />
+          {/* Up is BAD here -- this tile is the one that would render green in the
+              legacy code, and it is in the gallery so the regression is visible. */}
+          <KpiTile label={t('charts.galleryKpiAttrition')} value={12} previousValue={8} higherIsBetter={false} changeLabel={t('charts.gallerySinceQ1')} />
+        </div>
+
+        {/* All five tones at once, in both themes. Every one carries a word: the
+            hue is a second channel, never the only one (WCAG 1.4.1). */}
+        <p className="text-fg-secondary">{t('charts.galleryChipsBeside')}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Chip tone="good" label={t('charts.galleryChipGood')} />
+          <Chip tone="warning" label={t('charts.galleryChipWarning')} />
+          <Chip tone="critical" label={t('charts.galleryChipCritical')} />
+          <Chip tone="accent" label={t('charts.galleryChipAccent')} />
+          <Chip tone="neutral" label={t('charts.galleryChipNeutral')} />
+        </div>
+
+        {/* The case the 20px height exists for. A chip that is a different height
+            per tone, or taller than the row's line box, is only visible here. */}
+        <p className="text-fg-secondary">{t('charts.galleryChipsInRow')}</p>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t('charts.galleryChipsColumnSurvey')}</TableHead>
+              <TableHead>{t('charts.galleryChipsColumnStatus')}</TableHead>
+              <TableHead>{t('charts.galleryChipsColumnResponses')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {CHIP_ROWS.map((row) => (
+              <TableRow key={row.tone}>
+                <TableCell>{t(row.nameKey)}</TableCell>
+                <TableCell>
+                  <Chip tone={row.tone} label={t(row.labelKey)} />
+                </TableCell>
+                {/* The typographic rule: every reading is mono with tabular
+                    figures, prose stays in the sans face. */}
+                <TableCell className="font-mono tabular-nums">{row.responses}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        </div>
+        </div>
+      </Section>
+
       <Section title={t('charts.gallerySectionKpis')}>
         <KPIDisplay kpis={KPIS} columns={3} />
       </Section>
@@ -141,6 +245,31 @@ export default function ChartGalleryPage() {
             at both ends of the ramp in both themes. */}
         <HeatMap data={HEATMAP} title={t('charts.galleryHeatMap')} />
         <HeatMap data={HEATMAP} showValues={false} title={t('charts.galleryHeatMapValues')} />
+      </Section>
+
+      <Section title={t('charts.gallerySectionUi0')}>
+        {/* Rendered here rather than trusted to a green suite: happy-dom does no
+            layout, which is how HeatMap's `w-auto` defect survived its tests.
+            Switch the theme above with this on screen -- the diverging ink flips
+            with the fill, and the protected hatch has to stay legible in both.
+            The KPI row moved up into the section above, where it demonstrates the
+            page layout rule it belongs to rather than being repeated here. */}
+        <ClimateMap
+          dimensions={CLIMATE_DIMENSIONS}
+          rows={CLIMATE_ROWS}
+          target={70}
+          title={t('charts.galleryClimateMap')}
+        />
+
+        <div className="flex items-center gap-2 text-xs text-fg-secondary">
+          <span>{t('charts.galleryProtectedBeside')}</span>
+          <ProtectedCell responses={12} description="Operations, workload">
+            <span className="font-mono tabular-nums">61</span>
+          </ProtectedCell>
+          <ProtectedCell responses={4} description="Finance, workload" suppressedClassName="h-7 w-12">
+            <span className="font-mono tabular-nums">61</span>
+          </ProtectedCell>
+        </div>
       </Section>
 
       <Section title={t('charts.gallerySectionWords')}>
@@ -232,6 +361,39 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 /* ---------------------------------------------------------------------------
  * Sample data. Hardcoded on purpose: this page must not depend on a backend.
  * ------------------------------------------------------------------------- */
+
+/**
+ * One row per chip tone, so a row of chips can be seen inside a real table.
+ * `tone` is `ChipTone`, not a string, so a typo is a type error rather than an
+ * unstyled chip.
+ */
+const CHIP_ROWS: { tone: ChipTone; nameKey: string; labelKey: string; responses: number }[] = [
+  { tone: 'good', nameKey: 'charts.galleryKpiClimateIndex', labelKey: 'charts.galleryChipGood', responses: 412 },
+  { tone: 'warning', nameKey: 'charts.galleryKpiParticipation', labelKey: 'charts.galleryChipWarning', responses: 96 },
+  { tone: 'critical', nameKey: 'charts.galleryKpiOpenPlans', labelKey: 'charts.galleryChipCritical', responses: 7 },
+  { tone: 'accent', nameKey: 'charts.galleryTopBarTitle', labelKey: 'charts.galleryChipAccent', responses: 1284 },
+  { tone: 'neutral', nameKey: 'charts.galleryKpiAttrition', labelKey: 'charts.galleryChipNeutral', responses: 0 },
+]
+
+const CLIMATE_DIMENSIONS: ClimateMapDimension[] = [
+  { key: 'safety', label: 'Safety', fullLabel: 'Psychological safety' },
+  { key: 'workload', label: 'Workload' },
+  { key: 'trust', label: 'Trust', fullLabel: 'Leadership trust' },
+  { key: 'recognition', label: 'Recogn.', fullLabel: 'Recognition' },
+  { key: 'growth', label: 'Growth' },
+  { key: 'belonging', label: 'Belong.', fullLabel: 'Belonging' },
+]
+
+// Every band is represented on purpose, including a row under the floor: the
+// point of rendering this is to see all five steps and the hatch at once.
+const CLIMATE_ROWS: ClimateMapRow[] = [
+  { id: 'ops', label: 'Operations', responses: 48, scores: [74, 61, 72, 68, 71, 76] },
+  { id: 'support', label: 'Support', responses: 23, scores: [58, 52, 63, 60, 66, 69] },
+  { id: 'sales', label: 'Sales', responses: 31, scores: [77, 70, 74, 74, 72, 78] },
+  { id: 'eng', label: 'Engineering', responses: 57, scores: [81, 66, 79, 73, 84, 80] },
+  { id: 'people', label: 'People', responses: 12, scores: [79, 68, 77, 75, 78, 82] },
+  { id: 'finance', label: 'Finance', responses: 4, scores: [79, 81, 77, 80, 76, 83] },
+]
 
 const QUARTERS: ChartSeries[] = [
   { key: 'q1', name: 'Q1' },

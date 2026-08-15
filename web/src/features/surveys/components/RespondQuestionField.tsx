@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { Textarea } from '../../../components/ui'
+// Not re-exported from `components/ui`, so it is imported by path — the same shape
+// as every other primitive that is not in the barrel yet.
+import { SegmentedScale } from '../../../components/ui/SegmentedScale'
 import {
+  DEFAULT_SCALE_MAX,
+  DEFAULT_SCALE_MIN,
+  NUMERIC_SCALE_TYPES,
   answerShapeOf,
   choicesFor,
   isAnswered,
@@ -38,6 +44,14 @@ export interface RespondQuestionFieldProps {
  * with `accent-color: var(--admin-accent-blue)`, so they are themed in light and dark
  * without a single class here. `MicroclimateRespondPage` set the same precedent.
  *
+ * **One shape is the exception, and it is the design's:** a likert or rating
+ * question with no authored options is a bare 1–5 scale, and it renders as
+ * `SegmentedScale` — a `role="radiogroup"` of full-width segments. The natives were
+ * ~13px targets on the screen most people answer on a phone, and their two anchor
+ * words sat under the first two dots rather than under the ends of the row. See
+ * `isNumericScale` for exactly which questions that is, and `SegmentedScale` for
+ * why it is a radiogroup rather than the prototype's row of toggle buttons.
+ *
  * ## Every control emits the stable option value
  *
  * The radio's `value`, the ranking's entries — all of them are
@@ -68,12 +82,37 @@ export default function RespondQuestionField({
       // attempt finds this required question unanswered, so the respondent lands on
       // the question rather than on a summary they then have to hunt from.
       tabIndex={-1}
-      className="rounded-xl border border-line-panel bg-surface-card p-card"
+      // `focus-within` marks the question the respondent is on. Colour only, and
+      // the browser's own focus ring still draws on the control inside it, so
+      // nothing depends on seeing the tint. `index.css` reduces every transition
+      // to 0.01ms under `prefers-reduced-motion`.
+      // `min-w-0` because this is a grid item of the question column, and a grid
+      // item's automatic minimum size is its MIN-CONTENT width — which for a
+      // ranking question is 300px (measured below), wider than the 262px the
+      // column has at a 320px viewport. Without it the card cannot shrink, so it
+      // widens the column, the column widens the page, and the document scrolls
+      // sideways: 9px at 320px, measured in Chromium. With it the card fits and the
+      // one row that is genuinely too wide scrolls inside its own container.
+      className="min-w-0 rounded-xl border border-line-panel bg-surface-card p-panel transition-colors focus-within:border-accent-blue-ring"
     >
-      <legend id={legendId} className="px-inline text-base font-medium text-fg-primary">
-        <span className="mr-inline text-sm text-fg-secondary">
-          {t('questionPosition', { position, total })}
+      {/* `float-left w-full` is not decoration. A `<legend>` in its default flow
+          is cut out of the fieldset's own border, so the question text straddles
+          the top edge of the card and the card reads as a 1998 form group rather
+          than as a panel — rendered in Chromium at 1440px, that is exactly what it
+          looked like. Floating the legend takes it out of the border cut-out and
+          the card's frame closes; the block below clears the float. */}
+      <legend id={legendId} className="float-left mb-2 w-full text-base font-medium text-fg-primary">
+        {/* The position, as a reading: mono with tabular figures, so a column of
+            them does not shift width from `1/24` to `10/24`. The glyph form is
+            `aria-hidden` and the sentence beside it is the accessible one —
+            "1/24" read aloud is not what "Question 1 of 24" says. */}
+        <span
+          aria-hidden="true"
+          className="mr-inline inline-flex items-center rounded-md bg-surface-icon-box px-2 py-0.5 font-mono text-xs font-semibold tabular-nums text-fg-secondary"
+        >
+          {`${position}/${total}`}
         </span>
+        <span className="sr-only">{t('questionPosition', { position, total })}</span>
         {question.text ?? t('untitledQuestion')}{' '}
         {/* The WORD carries whether an answer is required, not a colour. WCAG 1.4.1
             wants that anyway, and `text-accent-red` measures 4.43:1 on the card
@@ -84,63 +123,73 @@ export default function RespondQuestionField({
         </span>
       </legend>
 
-      {invalid && (
-        // Soft red fill with primary ink, the treatment `alertVariants` already uses,
-        // rather than red text on the card: measured, that pair clears AA in both
-        // palettes (16.6:1 light, 12.7:1 dark) where red-on-card does not in dark.
-        <p
-          id={errorId}
-          role="alert"
-          className="mt-inline rounded-md border border-accent-red-ring bg-accent-red-soft px-inline py-1 text-sm text-fg-primary"
-        >
-          {t('answerRequired')}
-        </p>
-      )}
+      <div className="clear-both">
+        {invalid && (
+          // Soft red fill with primary ink, the treatment `alertVariants` already uses,
+          // rather than red text on the card: measured, that pair clears AA in both
+          // palettes (16.6:1 light, 12.7:1 dark) where red-on-card does not in dark.
+          <p
+            id={errorId}
+            role="alert"
+            className="mt-inline rounded-md border border-accent-red-ring bg-accent-red-soft px-inline py-1 text-sm text-fg-primary"
+          >
+            {t('answerRequired')}
+          </p>
+        )}
 
-      {shape === 'unsupported' ? (
-        <p role="alert" className="mt-row text-sm text-fg-secondary">
-          {t('questionNotAnswerable')}
-        </p>
-      ) : shape === 'text' ? (
-        <TextAnswer
-          question={question}
-          answer={answer}
-          disabled={disabled}
-          invalid={invalid}
-          errorId={errorId}
-          onChange={onChange}
-        />
-      ) : shape === 'ordered' ? (
-        <RankingAnswer
-          question={question}
-          answer={answer}
-          disabled={disabled}
-          invalid={invalid}
-          errorId={errorId}
-          legendId={legendId}
-          onChange={onChange}
-          onAnnounce={onAnnounce}
-        />
-      ) : (
-        <ChoiceAnswer
-          question={question}
-          answer={answer}
-          disabled={disabled}
-          invalid={invalid}
-          errorId={errorId}
-          onChange={onChange}
-        />
-      )}
+        {shape === 'unsupported' ? (
+          <p role="alert" className="text-sm text-fg-secondary">
+            {t('questionNotAnswerable')}
+          </p>
+        ) : shape === 'text' ? (
+          <TextAnswer
+            question={question}
+            answer={answer}
+            disabled={disabled}
+            invalid={invalid}
+            errorId={errorId}
+            onChange={onChange}
+          />
+        ) : shape === 'ordered' ? (
+          <RankingAnswer
+            question={question}
+            answer={answer}
+            disabled={disabled}
+            invalid={invalid}
+            errorId={errorId}
+            legendId={legendId}
+            onChange={onChange}
+            onAnnounce={onAnnounce}
+          />
+        ) : isNumericScale(question) ? (
+          <ScaleAnswer
+            question={question}
+            answer={answer}
+            disabled={disabled}
+            legendId={legendId}
+            onChange={onChange}
+          />
+        ) : (
+          <ChoiceAnswer
+            question={question}
+            answer={answer}
+            disabled={disabled}
+            invalid={invalid}
+            errorId={errorId}
+            onChange={onChange}
+          />
+        )}
 
-      {shape !== 'text' && shape !== 'unsupported' && question.commentPrompt && (
-        <CommentField
-          question={question}
-          answer={answer}
-          answered={answered}
-          disabled={disabled}
-          onChange={onChange}
-        />
-      )}
+        {shape !== 'text' && shape !== 'unsupported' && question.commentPrompt && (
+          <CommentField
+            question={question}
+            answer={answer}
+            answered={answered}
+            disabled={disabled}
+            onChange={onChange}
+          />
+        )}
+      </div>
     </fieldset>
   )
 }
@@ -159,7 +208,7 @@ function TextAnswer({ question, answer, disabled, invalid, errorId, onChange }: 
   const inputId = `${questionFieldId(question.id)}-text`
 
   return (
-    <div className="mt-row">
+    <div>
       {/* The legend names the fieldset, not this control, so the textarea gets its
           own label. Visually hidden rather than omitted: an unlabelled textarea is
           announced as "edit text, blank" with no indication of what it is for. */}
@@ -178,6 +227,67 @@ function TextAnswer({ question, answer, disabled, invalid, errorId, onChange }: 
   )
 }
 
+/**
+ * Whether the question is answered on a bare numeric scale.
+ *
+ * A likert or rating question that configures no option set — exactly the case
+ * `choicesFor` answers by generating the points between `scaleMin` and `scaleMax`.
+ * A likert question that DOES carry authored options is a set of labelled choices
+ * and keeps the radio treatment, because a segment can hold "1" and not "Strongly
+ * disagree with the way this is handled".
+ *
+ * The bounds are checked here rather than left to `SegmentedScale`, which renders
+ * nothing for an empty scale: an inverted `scaleMax < scaleMin` would otherwise
+ * leave the question with no control at all instead of falling through to the
+ * choice branch, which is what it does today.
+ */
+function isNumericScale(question: SurveyRespondQuestion): boolean {
+  if (!NUMERIC_SCALE_TYPES.includes(question.type)) return false
+  if ((question.options?.length ?? 0) > 0) return false
+  return (question.scaleMax ?? DEFAULT_SCALE_MAX) >= (question.scaleMin ?? DEFAULT_SCALE_MIN)
+}
+
+/**
+ * The 1–5 scale as the approved employee design draws it: five full-width segments
+ * with the anchor words under the ENDS of the row.
+ *
+ * It replaces five native radios ~13px across — far under the 24px WCAG 2.2 target
+ * minimum — with the two anchors floating under the first two of them, reading as
+ * two unrelated labels rather than as the ends of a scale. `SegmentedScale` keeps
+ * the radio-group semantics the natives gave for free (one tab stop, arrow keys,
+ * `aria-checked`) and emits the same stable codes `choicesFor` produces, so nothing
+ * about the submitted payload changes.
+ *
+ * `labelledBy` is the question's own `<legend>`: the group is named by the question
+ * it answers, exactly as the `<fieldset>` named the radios.
+ */
+function ScaleAnswer({
+  question,
+  answer,
+  disabled,
+  legendId,
+  onChange,
+}: Pick<AnswerControlProps, 'question' | 'answer' | 'disabled' | 'onChange'> & {
+  legendId: string
+}) {
+  return (
+    <SegmentedScale
+      className="mt-2"
+      min={question.scaleMin ?? DEFAULT_SCALE_MIN}
+      max={question.scaleMax ?? DEFAULT_SCALE_MAX}
+      // The author's own anchor words, which are content rather than copy. A survey
+      // that set neither gets an unannotated row instead of an invented pair.
+      minLabel={question.scaleLabelMin ?? ''}
+      maxLabel={question.scaleLabelMax ?? ''}
+      value={answer?.value ?? null}
+      required={question.required}
+      disabled={disabled}
+      labelledBy={legendId}
+      onChange={(value) => onChange({ ...answer, value })}
+    />
+  )
+}
+
 function ChoiceAnswer({ question, answer, disabled, invalid, errorId, onChange }: AnswerControlProps) {
   const { t } = useTranslation('surveyRespond')
   const choices = choicesFor(question)
@@ -191,10 +301,16 @@ function ChoiceAnswer({ question, answer, disabled, invalid, errorId, onChange }
   }
 
   return (
-    <div className="mt-row">
+    // `w-fit` so the scale-end captions below span exactly the width of the scale
+    // they annotate. Left to fill the card, "Never" and "Always" sat at the far
+    // edges of a 1100px column with the five radios bunched at the left — measured
+    // in Chromium at 1440px, they read as two unrelated labels rather than as the
+    // ends of the row above them. `max-w-full` keeps the wrapping behaviour on a
+    // phone, where fit-content is the full column anyway.
+    <div className="w-fit max-w-full">
       <div
         className={
-          question.type === 'multiple_choice' ? 'grid gap-row' : 'flex flex-wrap gap-x-section gap-y-row'
+          question.type === 'multiple_choice' ? 'grid gap-1' : 'flex flex-wrap gap-x-section gap-y-1'
         }
       >
         {choices.map((choice, index) => {
@@ -314,13 +430,30 @@ function RankingAnswer({
   }
 
   return (
-    <div className="mt-row">
+    <div>
       <p className="text-sm text-fg-secondary">{t('rankingInstructions')}</p>
+      {/* `overflow-x-auto` HERE, on the one row on this page that is genuinely
+          wider than a phone, rather than on the shell's `<main>` where it used to
+          live. A ranking row is a nowrap rank reading plus two 32px buttons plus
+          gaps and padding that none of `flex-wrap` can fold; measured with the
+          `respond.json` fixture in Chromium, this `<ol>`'s fieldset has a
+          min-content width of 300px, which is what pushed the document 9px wide at
+          320px. Every other fieldset on that page measures 103-138px.
+          Scoping the scroll here rather than on `<main>` is what lets the
+          instrument panel be `sticky`: an `overflow` on an ancestor of a sticky box
+          makes that ancestor its scrollport, and `<main>` never scrolls — the
+          document does. `RespondShell` records the measurement.
+          Nothing focusable has its ring clipped by this container: with the list
+          scrolled fully right, the last reorder button's edge measures 9px inside
+          the clip edge (the row's own `px-inline` plus its border), against the
+          4px a 2px focus ring at its 2px offset needs. That was the reason for
+          putting the guard on this `<ol>` rather than on the `<form>`, where the
+          submit buttons sit flush against the edge. */}
       <ol
         aria-labelledby={legendId}
         aria-invalid={invalid || undefined}
         aria-describedby={invalid ? errorId : undefined}
-        className="mt-row grid gap-row"
+        className="mt-2 grid gap-1 overflow-x-auto"
       >
         {order.map((value, index) => {
           const optionIndex = indices.get(value) ?? index
@@ -329,7 +462,12 @@ function RankingAnswer({
               key={value}
               className="flex items-center gap-inline rounded-md border border-line-light bg-surface-input px-inline py-2"
             >
-              <span className="w-icon-box shrink-0 text-sm text-fg-secondary">
+              {/* The rank, as a reading. It used to be `w-icon-box` — 28px, which
+                  is narrower than "1 de 4" and wrapped every row onto two lines in
+                  Spanish. Sized by its content instead, and set in mono with
+                  tabular figures so the column of them does not shuffle sideways
+                  as items move. */}
+              <span className="shrink-0 whitespace-nowrap font-mono text-xs tabular-nums text-fg-secondary">
                 {t('rankingPosition', { position: index + 1, total: order.length })}
               </span>
               <span className="min-w-0 flex-1 text-base text-fg-primary">
@@ -392,7 +530,7 @@ function CommentField({ question, answer, answered, disabled, onChange }: Commen
   const hintId = `${commentId}-hint`
 
   return (
-    <div className="mt-row">
+    <div className="mt-4">
       <label htmlFor={commentId} className="text-sm font-normal text-fg-secondary">
         {question.commentPrompt}
       </label>

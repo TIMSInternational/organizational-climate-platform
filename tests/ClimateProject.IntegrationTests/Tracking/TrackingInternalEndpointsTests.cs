@@ -107,6 +107,27 @@ public class TrackingInternalEndpointsTests : IAsyncLifetime
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
         });
+        // A deactivated member of the same department. /nodos counts
+        // `DepartmentHeadcount.Population` -- active members only -- so this row must not
+        // move `cantidad_colaboradores` off 1; it exists so the assertion in
+        // Returns_nodos_with_snake_case_envelope_shape actually pins that, instead of
+        // passing against a fixture where active-only and everyone are the same number.
+        // /personas still emits this row (with activo: false), which
+        // Personas_nodo_id_resolves_to_a_nodo_id_present_in_the_nodos_response then
+        // exercises for a deactivated persona too.
+        db.Users.Add(new User
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = _companyId,
+            Email = $"former@{companyDomain}",
+            Name = "Former Persona",
+            Role = "employee",
+            DepartmentId = _childDepartmentId,
+            ManagerId = _managerId,
+            IsActive = false,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        });
         await db.SaveChangesAsync();
     }
 
@@ -132,7 +153,22 @@ public class TrackingInternalEndpointsTests : IAsyncLifetime
 
         var child = Assert.Single(envelope.Data.Nodos, n => n.Nombre == "Engineering");
         Assert.Equal(_legacyChildNodoId, child.NodoId);
-        Assert.Equal(3, child.CantidadColaboradores);
+        // ONE, and the fixture makes that 1 rule out two regressions at once:
+        //
+        //   * not the THREE this department's `employee_count` column claims. The fixture
+        //     sets that column to 3 on purpose: nothing in the product has ever written
+        //     `employee_count`, so it is 0 in every real database and any value it holds
+        //     here is fiction. Reading it made this feed publish a headcount to an
+        //     external consumer that no user table agreed with. Asserting the counted
+        //     value against a column that disagrees is what stops the projection quietly
+        //     going back to `d.EmployeeCount`.
+        //   * not the TWO user rows pointing at the department. The fixture seeds one
+        //     active member and one deactivated one, because the count is
+        //     `DepartmentHeadcount.Population` -- the same active-members population the
+        //     Departments page prints and the results screens divide by. 2 here means the
+        //     predicate was re-inlined without `IsActive` and the feed has drifted off the
+        //     product's own screens again.
+        Assert.Equal(1, child.CantidadColaboradores);
         Assert.Equal(parent.NodoId, child.NodoPadreId);
         Assert.Equal(_legacyManagerPersonaId, child.LiderId);
     }

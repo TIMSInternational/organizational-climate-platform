@@ -87,7 +87,12 @@ export default function LiveResponseTrend({ responseCount, title, width }: LiveR
     // chart rather than as "nothing has changed yet".
     return (
       <div className="flex flex-col gap-inline">
-        <h3 className="m-0">{title}</h3>
+        {/* Matches `ChartFrame`'s `<figcaption>` (`text-lg font-medium`), because
+            this heading is standing in for exactly that caption while there is
+            nothing to draw yet — an `h3` at 16px made the placeholder state
+            louder than the chart it becomes. Level `h4`: the only caller renders
+            this inside `RealTimeChartContainer`, whose own heading is an `h3`. */}
+        <h4 className="m-0 text-lg font-medium text-fg-primary">{title}</h4>
         <p className="m-0 text-fg-secondary">{t('microclimates.liveTrendHint')}</p>
       </div>
     )

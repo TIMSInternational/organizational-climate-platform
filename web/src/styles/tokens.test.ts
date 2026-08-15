@@ -5,7 +5,7 @@ import tokensCss from './tokens.css?raw'
 import themeCss from './theme.css?raw'
 import indexCss from '../index.css?raw'
 import adminThemeSource from '../theme/adminTheme.ts?raw'
-import publicSurveySource from '../features/surveys/pages/PublicSurveyRespondPage.tsx?raw'
+import respondShellSource from '../components/layout/RespondShell.tsx?raw'
 
 /**
  * The token layer is a port, not a design. These tests pin the two things a
@@ -154,7 +154,22 @@ describe('control density', () => {
    */
   it('keeps the content cap for the pages that have no rail to drift away from', () => {
     expect(token('--admin-size-content-max')).toBe('1280px')
-    expect(publicSurveySource).toMatch(/max-w-content/)
+    // `RespondShell` is where the cap now lives: it frames all three respond
+    // routes -- `/survey/:id`, `/surveys/:id/respond` and
+    // `/microclimates/:id/respond` -- which were three divergent copies of one
+    // standalone centred layout before, only one of which had ever been given one.
+    expect(respondShellSource).toMatch(/max-w-content/)
+  })
+
+  it('gives the page header a flex basis wide enough to be worth wrapping for', () => {
+    // `layout/PageTopBar.tsx` wears this as `basis-header-text`, and it is what
+    // makes the action cluster drop to its own line instead of squeezing the
+    // title. The value has to be a real width: a zero (or a percentage, which is
+    // what `flex-1`'s `0%` basis is) puts the flex base size back at nothing and
+    // the row silently stops wrapping at every viewport — invisible to happy-dom,
+    // and the defect this token was added to fix.
+    expect(token('--admin-size-header-text-min')).toBe('20rem')
+    expect(themeCss).toMatch(/--container-header-text:\s*var\(--admin-size-header-text-min\)/)
   })
 
   it('reserves a viewport-relative block for a page-level empty state', () => {
@@ -165,15 +180,36 @@ describe('control density', () => {
 })
 
 describe('colour palette', () => {
-  it('is the legacy Twenty-CRM admin palette, unchanged', () => {
-    expect(token('--admin-bg-outer')).toBe('#f0f0f0')
+  it('is the admin palette: blue on the shell, white inside', () => {
+    // No longer byte-for-byte legacy Twenty-CRM. Federico asked for "blue on the
+    // shell, white inside", so `--admin-bg-shell` went navy and the content ground
+    // went white -- and the light neutrals were re-biased from green-grey to
+    // blue-grey, because a green-biased grey under a navy chrome reads as two
+    // unrelated products. Values only; whether any of these pairings is legible is
+    // measured in the contrast suites next door (`shellInkContrast`,
+    // `chipVariantContrast`, `accentContrast`, ...). Two different claims, kept in
+    // two places on purpose: this one catches a value changing AT ALL, those catch a
+    // value changing into something unreadable.
+    expect(token('--admin-bg-outer')).toBe('#ffffff')
     expect(token('--admin-bg-panel')).toBe('#ffffff')
-    expect(token('--admin-border-default')).toBe('#e0e0e0')
-    expect(token('--admin-font-primary')).toBe('#141414')
-    expect(token('--admin-font-secondary')).toBe('#474747')
-    expect(token('--admin-font-tertiary')).toBe('#818181')
-    // The brand accent, and the selected-nav-row fill in the legacy sidebar.
-    expect(token('--admin-accent-blue')).toBe('#2e9098')
+    expect(token('--admin-border-default')).toBe('#dbe3ee')
+    expect(token('--admin-font-primary')).toBe('#0d1626')
+    expect(token('--admin-font-secondary')).toBe('#44536b')
+    expect(token('--admin-font-tertiary')).toBe('#78879c')
+    // The shell frame itself. Pinned because it is the one token the redesign is
+    // ABOUT: it is what "blue on the shell" means, and it is deliberately a separate
+    // token from `--admin-bg-outer`, which is also the ground of the sign-in and
+    // survey-answering screens and must stay white.
+    expect(token('--admin-bg-shell')).toBe('#122c4d')
+    expect(darkToken('--admin-bg-shell')).toBe('#0a1c31')
+    // The brand accent. NOT byte-for-byte legacy any more: UI-0 revalued it from
+    // the legacy `#2e9098` (oklch chroma 0.089, under the 0.1 floor, which is why
+    // the product read grey) to the validated teal, and split off a darker fill
+    // step so white-on-accent can clear AA. `accentContrast.test.ts` is what pins
+    // the relationship between the three; this only pins the values.
+    expect(token('--admin-accent-blue')).toBe('#0d9488')
+    expect(token('--admin-accent-blue-fill')).toBe('#0f766e')
+    expect(token('--admin-accent-blue-fill-hover')).toBe('#115e59')
     expect(token('--admin-font-on-accent')).toBe('#ffffff')
   })
 

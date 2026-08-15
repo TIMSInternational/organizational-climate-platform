@@ -12,6 +12,10 @@ export { default as HeatMap } from './HeatMap'
 export { default as Counter } from './Counter'
 export { default as WordCloud } from './WordCloud'
 export { default as KPIDisplay } from './KPIDisplay'
+export { default as KpiTile } from './KpiTile'
+export { default as ProtectedCell } from './ProtectedCell'
+export { ANONYMITY_FLOOR, isSuppressed } from './suppression'
+export { default as ClimateMap } from './ClimateMap'
 export { default as ParticipationTracker } from './ParticipationTracker'
 export { default as RealTimeChartContainer } from './RealTimeChartContainer'
 export { default as SentimentVisualization } from './SentimentVisualization'
@@ -25,6 +29,9 @@ export { foldExtraSlices, OTHER_SLICE_KEY } from './foldSlices'
 export type { HeatMapCell } from './HeatMap'
 export type { WordFrequency } from './WordCloud'
 export type { Kpi } from './KPIDisplay'
+export type { KpiTileProps } from './KpiTile'
+export type { ProtectedCellProps } from './ProtectedCell'
+export type { ClimateMapProps, ClimateMapRow, ClimateMapDimension } from './ClimateMap'
 export type {
   EffortImpact,
   RecommendationKind,
@@ -37,11 +44,13 @@ export {
   CHART_GRID,
   CHART_SURFACE_GAP,
   DIVERGING_COLORS,
+  DIVERGING_INKS,
   MAX_SERIES,
   SEQUENTIAL_COLORS,
   SEQUENTIAL_INKS,
   SERIES_COLORS,
   divergingColor,
+  divergingPair,
   sequentialColor,
   sequentialInk,
   sequentialPair,

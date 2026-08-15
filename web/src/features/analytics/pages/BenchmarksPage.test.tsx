@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import BenchmarksPage from './BenchmarksPage'
@@ -86,8 +86,9 @@ describe('BenchmarksPage scope handling', () => {
 
     renderPage()
 
-    const globalRow = (await screen.findByText('Industry average')).closest('tr')!
-    const ownRow = screen.getByText('Our 2026 baseline').closest('tr')!
+    const table = await screen.findByRole('table')
+    const globalRow = within(table).getByText('Industry average').closest('tr')!
+    const ownRow = within(table).getByText('Our 2026 baseline').closest('tr')!
     // BenchmarkList renders the shared analytics.scope* labels rather than a
     // benchmarks-only pair: #94's AnalyticsDashboardPage and this page render the
     // same component, so one vocabulary keeps the two surfaces from disagreeing
@@ -140,7 +141,7 @@ describe('BenchmarksPage scope handling', () => {
 
     renderPage()
 
-    await screen.findByText('Our 2026 baseline')
+    await within(await screen.findByRole('table')).findByText('Our 2026 baseline')
     expect(screen.queryByText('Rival baseline')).toBeNull()
   })
 
@@ -185,8 +186,76 @@ describe('BenchmarksPage scope handling', () => {
   })
 })
 
+describe('BenchmarksPage headline counts', () => {
+  /**
+   * The four tiles are counted from the list the page already holds, so they can
+   * be asserted against the rows on screen. Queried through `data-slot` rather
+   * than by label: "This company" and "Platform-wide" are also the scope badges
+   * in every row of the table below.
+   */
+  /**
+   * The strip that used to sit here counted benchmark RECORDS -- how many exist, how many
+   * are platform-wide, how many are selected. Every number was true and none of them was
+   * why anyone opens this screen, so the approved design replaced it with the read-out
+   * below: this company against its cohort. What is asserted is that the three tiles carry
+   * the company's index, the cohort's median and the percentile, in that order.
+   */
+  it('reads this company against its cohort rather than counting benchmark records', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [/\/surveys\/s1\/analytics/, () => ({
+        surveyId: 's1',
+        summary: {},
+        questions: [
+          { questionId: 'q1', order: 0, type: 'likert', text: 'a', category: 'safety', answeredCount: 24, distribution: [], average: 3.75, median: 4 },
+          { questionId: 'q2', order: 1, type: 'likert', text: 'b', category: 'workload', answeredCount: 24, distribution: [], average: 3.0, median: 3 },
+        ],
+        breakdowns: [],
+        isSuppressed: false,
+        minimumGroupSize: 5,
+      })],
+      [/\/surveys(\?|$)/, () => ({ surveys: [{ id: 's1', title: 'Q3 Climate Survey', status: 'closed', endDate: '2026-08-05T00:00:00Z' }] })],
+      [/\/admin\/benchmarks\/g1$/, () => ({
+        ...detail('g1', 'Manufacturing cohort', null),
+        metrics: [
+          { id: 'm1', benchmarkId: 'g1', metricName: 'safety', value: 69, unit: 'index', percentile: null, sampleSize: 42 },
+          { id: 'm2', benchmarkId: 'g1', metricName: 'workload', value: 66, unit: 'index', percentile: null, sampleSize: 42 },
+          { id: 'm3', benchmarkId: 'g1', metricName: 'overall_index', value: 68, unit: 'index', percentile: 68, sampleSize: 42 },
+        ],
+      })],
+      [/\/admin\/benchmarks(\?|$)/, () => [listRow('g1', 'Manufacturing cohort', null)]],
+    ])
+
+    const { container } = renderPage()
+
+    const readout = await waitFor(() => {
+      const found = container.querySelector('[data-slot="cohort-readout"]')
+      expect(found, 'the cohort read-out never rendered').not.toBeNull()
+      return found!
+    })
+
+    const tiles = [...readout.querySelectorAll('[data-slot="kpi-tile"]')].map((t) => t.textContent)
+    // safety 3.75 -> 69, workload 3.0 -> 50, so the index is 60 against a cohort median 68.
+    expect(tiles[0]).toContain('60')
+    expect(tiles[1]).toContain('68')
+    expect(tiles[2]).toContain('68')
+
+    // One bar per dimension the SURVEY scored, each carrying the cohort's median as a tick.
+    const rows = container.querySelectorAll('[data-slot="cohort-dimension-row"]')
+    expect(rows.length).toBe(2)
+    expect(container.querySelectorAll('[data-slot="cohort-median-tick"]').length).toBe(2)
+  })
+})
+
 describe('BenchmarksPage comparison and trend', () => {
-  it('compares two selected benchmarks by metric name', async () => {
+  /**
+   * The comparison is bars-with-a-tick now, not a matrix, so this asserts on the
+   * section rather than on a `<table>` inside it. What it asserts is unchanged:
+   * both benchmarks' values for the shared metric are on screen and attributed —
+   * the subject's reading and the cohort's median — plus the difference the bars
+   * exist to make legible.
+   */
+  it('reads a selected benchmark against the cohort, by metric name', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
       [/\/admin\/benchmarks\/g$/, () => detail('g', 'Industry average', null)],
@@ -204,10 +273,67 @@ describe('BenchmarksPage comparison and trend', () => {
     await userEvent.click(await screen.findByRole('checkbox', { name: /Industry average/ }))
     await userEvent.click(screen.getByRole('checkbox', { name: /Our 2026 baseline/ }))
 
-    const comparison = await screen.findByRole('heading', { name: 'Comparison', level: 2 })
-    const table = comparison.parentElement!.querySelector('table')!
-    expect(table.textContent).toContain('72 %')
-    expect(table.textContent).toContain('65 %')
+    const comparison = (await screen.findByRole('heading', { name: 'Comparison', level: 2 }))
+      .closest('section')!
+    expect(comparison.textContent).toContain('engagement')
+    // The subject is the one ticked first, and it is named over the bars.
+    expect(comparison.textContent).toContain('Industry average')
+    expect(comparison.textContent).toContain('72 %')
+    expect(comparison.textContent).toContain('65 %')
+    expect(comparison.textContent).toContain('+7')
+    expect(comparison.textContent).toContain('above cohort')
+  })
+
+  /**
+   * The tick is the cohort MEDIAN and it has to sit where the median actually is.
+   * happy-dom does no layout, so this reads the inline percentages the component
+   * computes rather than rendered pixels.
+   *
+   * Subject 72 against a cohort of 60, 80 and 200: the median is 80 and the mean is
+   * 113.33, so a mean would put the tick past the subject's bar in the other
+   * direction and print a different sign. The row's scale tops out at its own
+   * largest value, 200 — hence 36% for the bar and 40% for the tick.
+   */
+  it('places the cohort-median tick at the median, on a track scaled to the row', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    function metricsOf(value: number) {
+      return { metrics: [{ id: `m-${value}`, metricName: 'engagement', value, unit: '%', percentile: null, sampleSize: null }] }
+    }
+    routeFetch([
+      [/\/admin\/benchmarks\/subject$/, () => detail('subject', 'Ours', OWN, metricsOf(72))],
+      [/\/admin\/benchmarks\/c1$/, () => detail('c1', 'Cohort one', null, metricsOf(60))],
+      [/\/admin\/benchmarks\/c2$/, () => detail('c2', 'Cohort two', null, metricsOf(80))],
+      [/\/admin\/benchmarks\/c3$/, () => detail('c3', 'Cohort three', null, metricsOf(200))],
+      [
+        /\/admin\/benchmarks(\?|$)/,
+        () => [
+          listRow('subject', 'Ours', OWN),
+          listRow('c1', 'Cohort one', null),
+          listRow('c2', 'Cohort two', null),
+          listRow('c3', 'Cohort three', null),
+        ],
+      ],
+    ])
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Ours/ }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /Cohort one/ }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /Cohort two/ }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /Cohort three/ }))
+
+    const comparison = (await screen.findByRole('heading', { name: 'Comparison', level: 2 }))
+      .closest('section')!
+    await waitFor(() => {
+      const positioned = [...comparison.querySelectorAll('[style]')].map((node) =>
+        node.getAttribute('style'),
+      )
+      expect(positioned).toContain('width: 36%;')
+      expect(positioned).toContain('left: 40%;')
+    })
+    // The same median, printed. The mean would read 113.33 and the change +9.
+    expect(comparison.textContent).toContain('80 %')
+    expect(comparison.textContent).toContain('−8')
+    expect(comparison.textContent).toContain('below cohort')
   })
 
   it('warns when the compared benchmarks record a metric in different units', async () => {
@@ -267,6 +393,56 @@ describe('BenchmarksPage comparison and trend', () => {
     expect(table.textContent).toContain('+4')
   })
 
+  /**
+   * Three rows that cannot produce a change, and three different sentences. The
+   * defect this pins was found by rendering: a row whose *subject* had no value
+   * said "no cohort value", and a row whose units disagreed printed the cohort's
+   * 1200 ms as "1,200 s" with a change of −1,198.8.
+   */
+  it('says which side is missing, and refuses to compare across units', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [
+        /\/admin\/benchmarks\/subject$/,
+        () =>
+          detail('subject', 'Ours', OWN, {
+            metrics: [
+              { id: 's-1', metricName: 'engagement', value: 72, unit: '%', percentile: null, sampleSize: null },
+              { id: 's-2', metricName: 'responseTime', value: 1.2, unit: 's', percentile: null, sampleSize: null },
+            ],
+          }),
+      ],
+      [
+        /\/admin\/benchmarks\/cohort$/,
+        () =>
+          detail('cohort', 'Theirs', null, {
+            metrics: [
+              { id: 'c-2', metricName: 'responseTime', value: 1200, unit: 'ms', percentile: null, sampleSize: null },
+              { id: 'c-3', metricName: 'attrition', value: 12, unit: '%', percentile: null, sampleSize: null },
+            ],
+          }),
+      ],
+      [/\/admin\/benchmarks(\?|$)/, () => [listRow('subject', 'Ours', OWN), listRow('cohort', 'Theirs', null)]],
+    ])
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Ours/ }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /Theirs/ }))
+
+    const comparison = (await screen.findByRole('heading', { name: 'Comparison', level: 2 }))
+      .closest('section')!
+    // engagement: only the subject has it.
+    expect(comparison.textContent).toContain('no cohort value')
+    // attrition: only the cohort has it.
+    expect(comparison.textContent).toContain('not recorded here')
+    // responseTime: both have it, in different units.
+    expect(comparison.textContent).toContain('Units differ')
+    expect(comparison.textContent).toContain('not comparable')
+    // The cohort's magnitude must never appear wearing the subject's unit.
+    expect(comparison.textContent).not.toContain('1,200 s')
+    expect(comparison.textContent).not.toContain('1,198.8')
+  })
+
   it('says so plainly when a benchmark has no prior period', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
@@ -298,5 +474,126 @@ describe('BenchmarksPage empty and error states', () => {
     renderPage()
 
     expect(await screen.findByText('The benchmarks could not be loaded.')).toBeTruthy()
+  })
+})
+
+/**
+ * Ticking ONE row is the likeliest thing anyone does on this page, and it opens
+ * the detail panel and the trend rather than the cohort bars. Both of those used
+ * to render every one of their ~30 numbers in the sans face, directly under a
+ * comparison that sets all of its readings in mono. These pin the rule per
+ * surface, because it was per surface that it was broken.
+ */
+describe('BenchmarksPage single-selection readings', () => {
+  const withMetrics = (id: string, name: string, extra: Partial<Benchmark> = {}) =>
+    detail(id, name, OWN, {
+      qualityScore: 0.9,
+      metrics: [
+        { id: `${id}-a`, metricName: 'engagement', value: 74, unit: 'pts', percentile: 62, sampleSize: 1200 },
+      ],
+      ...extra,
+    })
+
+  it('sets the detail panel readings in mono with tabular figures, and only the readings', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [/\/admin\/benchmarks\/o$/, () => withMetrics('o', 'Our 2026 baseline')],
+      [/\/admin\/benchmarks(\?|$)/, () => [listRow('o', 'Our 2026 baseline', OWN)]],
+    ])
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Our 2026 baseline/ }))
+
+    const panel = (await screen.findByRole('heading', { name: 'Our 2026 baseline', level: 2 }))
+      .closest('section')!
+    const mono = (text: string) =>
+      [...panel.querySelectorAll('.font-mono.tabular-nums')].some(
+        (node) => node.textContent?.trim() === text,
+      )
+
+    // The value, the percentile and the sample size: three readings, three monos.
+    expect(mono('74')).toBe(true)
+    expect(mono('62')).toBe(true)
+    expect(mono('1,200')).toBe(true)
+    // The quality score, at the two decimals it is stored with.
+    expect(mono('0.90')).toBe(true)
+    // The metric NAME and the unit are words, not readings, and stay sans.
+    const sans = (text: string) =>
+      [...panel.querySelectorAll('td')].some(
+        (cell) => cell.textContent?.trim() === text && !cell.className.includes('font-mono'),
+      )
+    expect(sans('engagement')).toBe(true)
+    expect(sans('pts')).toBe(true)
+  })
+
+  /**
+   * `formatMetric`'s default precision is "however many this number needs, capped
+   * at ONE", so the panel printed a stored 0.92 as "0.9" — a digit dropped off the
+   * figure it exists to report — while the list beside it printed the raw JS
+   * number and so never localised at all.
+   */
+  it('prints the quality score at two decimals in both the list and the panel, and localises it', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [/\/admin\/benchmarks\/o$/, () => withMetrics('o', 'Our 2026 baseline', { qualityScore: 0.92 })],
+      [
+        /\/admin\/benchmarks(\?|$)/,
+        () => [
+          { ...listRow('o', 'Our 2026 baseline', OWN), qualityScore: 0.92 },
+          { ...listRow('p', 'Prior baseline', OWN), qualityScore: 0.9 },
+        ],
+      ],
+    ])
+
+    renderPage()
+
+    const table = await screen.findByRole('table')
+    // Same digit count on both rows, which is the only way tabular figures line a
+    // column up. `0.9` next to `0.92` does not.
+    expect(table.textContent).toContain('0.92')
+    expect(table.textContent).toContain('0.90')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Our 2026 baseline/ }))
+    const panel = (await screen.findByRole('heading', { name: 'Our 2026 baseline', level: 2 }))
+      .closest('section')!
+    // Never "0.9": that is the panel disagreeing with the row above it.
+    expect(panel.textContent).toContain('0.92')
+  })
+
+  it('sets the trend readings in mono with tabular figures', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [
+        /\/admin\/benchmarks\/q2$/,
+        () =>
+          detail('q2', 'Q2 2026', OWN, {
+            priorPeriodBenchmarkId: 'q1',
+            metrics: [{ id: 'q2-m', metricName: 'engagement', value: 74, unit: 'pts', percentile: null, sampleSize: null }],
+          }),
+      ],
+      [
+        /\/admin\/benchmarks\/q1$/,
+        () =>
+          detail('q1', 'Q1 2026', OWN, {
+            metrics: [{ id: 'q1-m', metricName: 'engagement', value: 70, unit: 'pts', percentile: null, sampleSize: null }],
+          }),
+      ],
+      [/\/admin\/benchmarks(\?|$)/, () => [listRow('q2', 'Q2 2026', OWN)]],
+    ])
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Q2 2026/ }))
+
+    const trend = (await screen.findByRole('heading', { name: 'Trend over prior periods', level: 2 }))
+      .closest('section')!
+    const mono = [...trend.querySelectorAll('.font-mono.tabular-nums')].map((node) =>
+      node.textContent?.trim(),
+    )
+    expect(mono).toContain('70 pts')
+    expect(mono).toContain('74 pts')
+    // The change is a reading too, and it is the one a reader differences by eye.
+    expect(mono).toContain('+4')
+    // The metric name is a word and must not be dragged into the mono face.
+    expect(mono).not.toContain('engagement')
   })
 })

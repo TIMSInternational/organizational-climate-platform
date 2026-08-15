@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router'
 import { listSurveyTemplates, type SurveyTemplateListItem } from '../api/surveyTemplates'
+import SurveyTemplateCard from '../components/SurveyTemplateCard'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import {
-  Badge,
   Button,
   EmptyState,
   LoadingRegion,
   NetworkError,
   SkeletonText,
-  Table,
 } from '../../../components/ui'
 
 /**
@@ -78,18 +76,21 @@ export default function SurveyTemplatesPage() {
   return (
     <div>
       <PageTopBar
+        eyebrow={t('surveys.templatesEyebrow')}
         title={t('navigation.surveyTemplates')}
         description={t('navigation.surveyTemplatesDesc')}
       />
 
       <form
-        className="mb-panel-gap grid items-end gap-inline md:grid-cols-3"
+        // Flex, not an equal-column grid: a grid column stretches the submit button
+        // to a third of the panel, which rendering the page is what showed.
+        className="mb-panel-gap flex flex-wrap items-end gap-inline"
         onSubmit={(event) => {
           event.preventDefault()
           setApplied({ category: draftCategory, q: draftQuery })
         }}
       >
-        <label>
+        <label className="w-full sm:w-56">
           {t('surveys.templateCategory')}
           <select
             value={draftCategory}
@@ -105,7 +106,7 @@ export default function SurveyTemplatesPage() {
           </select>
         </label>
 
-        <label>
+        <label className="w-full sm:w-80">
           {t('common.search')}
           <input
             type="search"
@@ -116,7 +117,7 @@ export default function SurveyTemplatesPage() {
           />
         </label>
 
-        <Button type="submit" disabled={loading}>
+        <Button type="submit" className="shrink-0" disabled={loading}>
           {t('common.filter')}
         </Button>
       </form>
@@ -138,45 +139,16 @@ export default function SurveyTemplatesPage() {
               description={t('surveys.tryAdjustingFilters')}
             />
           ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <th>{t('surveys.templateName')}</th>
-                  <th>{t('surveys.templateCategory')}</th>
-                  <th>{t('surveys.templateScope')}</th>
-                  <th>{t('surveys.questions')}</th>
-                  <th>{t('surveys.timesUsed')}</th>
-                  <th>{t('common.actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {templates.map((template) => (
-                  <tr key={template.id}>
-                    <td>
-                      <span className="grid gap-1">
-                        <span>{template.name}</span>
-                        <span className="text-sm text-fg-secondary">{template.description}</span>
-                      </span>
-                    </td>
-                    <td>{template.category}</td>
-                    <td>
-                      {/* Only `secondary` and `outline` clear WCAG AA in BOTH themes
-                          against tokens.css -- the measured table lives in
-                          reports/components/ReportList.tsx. The word carries the
-                          meaning, so no hue is load-bearing. */}
-                      <Badge variant={template.isGlobal ? 'secondary' : 'outline'}>
-                        {template.isGlobal ? t('surveys.globalTemplate') : t('surveys.companyTemplate')}
-                      </Badge>
-                    </td>
-                    <td>{template.questionCount}</td>
-                    <td>{template.usageCount}</td>
-                    <td>
-                      <Link to={`/surveys/templates/${template.id}`}>{t('common.viewDetails')}</Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
+            // A card grid rather than a table, because a template is a thing you
+            // choose rather than a row you compare: what a reader needs is what it is
+            // for, how big it is, and a way in. Two breakpoints only -- one column on
+            // a phone, two from `sm`, three from `xl` -- matching the prototype's
+            // `.grid3`, which also collapses straight to a single column.
+            <div className="grid gap-inline sm:grid-cols-2 xl:grid-cols-3">
+              {templates.map((template) => (
+                <SurveyTemplateCard key={template.id} template={template} />
+              ))}
+            </div>
           )}
         </LoadingRegion>
       )}

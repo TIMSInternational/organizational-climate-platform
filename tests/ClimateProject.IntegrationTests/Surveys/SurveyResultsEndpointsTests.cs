@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
+using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.IntegrationTests.Support;
@@ -292,6 +293,97 @@ public class SurveyResultsEndpointsTests : IAsyncLifetime
         // Verbatim free text never leaves this surface.
         Assert.Empty(question.Distribution);
         Assert.All(question.Words, w => Assert.DoesNotContain(' ', w.Word));
+    }
+
+    // ==================================================================
+    // The participation denominator IS the Departments page's headcount
+    // ==================================================================
+
+    /// <summary>
+    /// Puts <paramref name="active"/> active and <paramref name="inactive"/> deactivated
+    /// members in one department. The two counts are deliberately different so that
+    /// "active members" and "everyone whose row points here" cannot give the same answer --
+    /// a fixture where they agree proves nothing about which one the code counted.
+    /// </summary>
+    private Task SeedMembersAsync(Guid departmentId, int active, int inactive)
+        => _harness.WithDbAsync(async db =>
+        {
+            for (var i = 0; i < active + inactive; i++)
+            {
+                db.Users.Add(new User
+                {
+                    Id = Guid.NewGuid(),
+                    CompanyId = _companyAId,
+                    DepartmentId = departmentId,
+                    Email = $"{Guid.NewGuid():N}@members.test",
+                    Name = $"Member {i}",
+                    PasswordHash = "x",
+                    Role = Roles.Employee,
+                    IsActive = i < active,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                });
+            }
+
+            await db.SaveChangesAsync();
+        });
+
+    /// <summary>
+    /// The invariant <c>DepartmentEndpoints</c> asserted in a comment and did not hold.
+    ///
+    /// A department's EMPLOYEES ASSIGNED on the Departments page and the denominator the
+    /// results screen divides that department's respondents by are the same number, and an
+    /// admin reading both screens is entitled to see one headcount for one team. They were
+    /// two hand-written predicates that disagreed about deactivated members:
+    /// <c>/admin/departments</c> filtered on <c>IsActive</c> and the denominator did not,
+    /// so 8 active plus 2 leavers printed 8 on one screen and divided by 10 on the other.
+    /// Nothing failed, because no test had ever put the two side by side.
+    ///
+    /// The fixture makes the two populations give different answers on purpose: 6 of 8
+    /// active members is 75%, 6 of all 10 is 60%. The last assertion is the invariant
+    /// itself and names neither number -- it fails whichever side drifts.
+    /// </summary>
+    [Fact]
+    public async Task A_departments_headcount_is_the_denominator_the_results_screen_divides_by()
+    {
+        await SeedMembersAsync(_salesId, active: 8, inactive: 2);
+
+        // One member of another department, with no responses. A headcount that counted the
+        // company rather than the department would read 9 here, not 8.
+        await SeedMembersAsync(_engineeringId, active: 1, inactive: 0);
+
+        var survey = await SeedBilingualSurveyAsync();
+        var questionId = QuestionIdOf(survey);
+        for (var i = 0; i < 6; i++)
+        {
+            await SeedAnswerAsync(survey.Id, questionId, "remote", "en", departmentId: _salesId);
+        }
+
+        var client = await AdminAAsync();
+
+        var listed = await client.GetFromJsonAsync<DepartmentListResponse>(
+            $"/admin/departments?companyId={_companyAId}");
+        var salesOnTheDepartmentsPage = Assert.Single(listed!.Departments, d => d.Id == _salesId);
+        Assert.Equal(8, salesOnTheDepartmentsPage.EmployeeCount);
+
+        var stats = await client.GetFromJsonAsync<SurveyStatisticsResponse>($"/surveys/{survey.Id}/statistics");
+        var breakdown = stats!.Breakdowns.Single(b => b.Dimension == "department");
+        var salesOnTheResultsScreen = breakdown.Segments.Single(s => s.Key == _salesId.ToString());
+
+        // Asserted explicitly: a suppressed segment reports a null rate, and a null rate
+        // would sail past the comparison below without ever exercising the denominator.
+        Assert.False(salesOnTheResultsScreen.IsSuppressed);
+        Assert.Equal(6, salesOnTheResultsScreen.RespondentCount);
+
+        // 6/8, not 6/10. This is the assertion the old code failed.
+        Assert.Equal(75d, salesOnTheResultsScreen.ParticipationRate);
+
+        // And the property behind that number, stated without either literal: the rate the
+        // results screen prints is the respondents it counted over the headcount the
+        // Departments page printed. Whichever surface changes population, this fails.
+        Assert.Equal(
+            Math.Round(100d * salesOnTheResultsScreen.RespondentCount / salesOnTheDepartmentsPage.EmployeeCount, 2),
+            salesOnTheResultsScreen.ParticipationRate);
     }
 
     // ==================================================================

@@ -1,0 +1,231 @@
+{
+  "GET /admin/companies": {
+    "companies": [
+      {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "name": "Northwind Logistics",
+        "emailDomain": "northwind.example",
+        "industry": "Transportation",
+        "size": "large",
+        "country": "Colombia",
+        "subscriptionTier": "enterprise",
+        "createdAt": "2025-03-14T09:12:00Z"
+      },
+      {
+        "id": "22222222-2222-2222-2222-222222222222",
+        "name": "Helios Manufacturing",
+        "emailDomain": "helios.example",
+        "industry": "Manufacturing",
+        "size": "medium",
+        "country": "Mexico",
+        "subscriptionTier": "professional",
+        "createdAt": "2025-06-02T16:40:00Z"
+      },
+      {
+        "id": "33333333-3333-3333-3333-333333333333",
+        "name": "Vela Health",
+        "emailDomain": "vela.example",
+        "industry": "Healthcare",
+        "size": "small",
+        "country": "Chile",
+        "subscriptionTier": "basic",
+        "createdAt": "2026-01-21T11:05:00Z"
+      }
+    ]
+  },
+  "GET /notifications/mine": {
+    "notifications": [
+      {
+        "id": "aaaaaaaa-0000-0000-0000-000000000001",
+        "userId": "00000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "type": "survey_reminder",
+        "channel": "in_app",
+        "priority": "medium",
+        "status": "delivered",
+        "title": "Quarterly climate survey closes Friday",
+        "message": "412 of 480 invited people have responded.",
+        "data": null,
+        "templateId": null,
+        "scheduledFor": "2026-08-09T08:00:00Z",
+        "sentAt": "2026-08-09T08:00:04Z",
+        "deliveredAt": "2026-08-09T08:00:06Z",
+        "openedAt": null,
+        "failedAt": null,
+        "failureReason": null,
+        "retryCount": 0,
+        "createdAt": "2026-08-09T08:00:00Z"
+      },
+      {
+        "id": "aaaaaaaa-0000-0000-0000-000000000002",
+        "userId": "00000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "type": "ai_insight_alert",
+        "channel": "in_app",
+        "priority": "high",
+        "status": "delivered",
+        "title": "Psychological safety is trending down in Support",
+        "message": "Two consecutive quarters below the company benchmark.",
+        "data": null,
+        "templateId": null,
+        "scheduledFor": "2026-08-10T13:30:00Z",
+        "sentAt": "2026-08-10T13:30:02Z",
+        "deliveredAt": "2026-08-10T13:30:03Z",
+        "openedAt": null,
+        "failedAt": null,
+        "failureReason": null,
+        "retryCount": 0,
+        "createdAt": "2026-08-10T13:30:00Z"
+      }
+    ]
+  },
+  "GET /dashboard/company-admin": {
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "companyName": "Northwind Logistics",
+    "userCount": 208,
+    "activeUserCount": 199,
+    "departmentCount": 7,
+    "surveyCount": 11,
+    "activeSurveyCount": 3,
+    "draftSurveyCount": 3,
+    "responseCount": 311,
+    "completedResponseCount": 262,
+    "openActionPlanCount": 7,
+    "overdueActionPlanCount": 2,
+    "ongoingSurveys": [
+      {
+        "id": "55555555-0000-0000-0000-000000000001",
+        "title": "Q2 climate survey",
+        "status": "active",
+        "startDate": "2026-04-01T00:00:00Z",
+        "endDate": "2026-06-12T00:00:00Z",
+        "responseCount": 175,
+        "targetAudienceCount": 208
+      },
+      {
+        "id": "55555555-0000-0000-0000-000000000002",
+        "title": "Onboarding pulse",
+        "status": "active",
+        "startDate": "2026-07-15T00:00:00Z",
+        "endDate": "2026-09-30T00:00:00Z",
+        "responseCount": 41,
+        "targetAudienceCount": 64
+      },
+      {
+        "id": "55555555-0000-0000-0000-000000000003",
+        "title": "Q3 climate survey",
+        "status": "active",
+        "startDate": "2026-10-01T00:00:00Z",
+        "endDate": "2026-10-31T00:00:00Z",
+        "responseCount": 0,
+        "targetAudienceCount": 208
+      }
+    ],
+    "departments": [
+      {
+        "id": "d0000000-0000-0000-0000-000000000001",
+        "name": "Operations",
+        "memberCount": 48,
+        "completedResponseCount": 61
+      },
+      {
+        "id": "d0000000-0000-0000-0000-000000000002",
+        "name": "Support",
+        "memberCount": 23,
+        "completedResponseCount": 14
+      },
+      {
+        "id": "d0000000-0000-0000-0000-000000000003",
+        "name": "Sales",
+        "memberCount": 31,
+        "completedResponseCount": 40
+      },
+      {
+        "id": "d0000000-0000-0000-0000-000000000004",
+        "name": "Engineering",
+        "memberCount": 57,
+        "completedResponseCount": 79
+      },
+      {
+        "id": "d0000000-0000-0000-0000-000000000005",
+        "name": "People",
+        "memberCount": 12,
+        "completedResponseCount": 14
+      },
+      {
+        "id": "d0000000-0000-0000-0000-000000000006",
+        "name": "Finance",
+        "memberCount": 4,
+        "completedResponseCount": 3
+      },
+      {
+        "id": "d0000000-0000-0000-0000-000000000007",
+        "name": "Facilities",
+        "memberCount": 0,
+        "completedResponseCount": 0
+      }
+    ]
+  },
+  "GET /survey-templates": {
+    "templates": [
+      {
+        "id": "t1",
+        "name": "Annual climate survey",
+        "description": "Six dimensions across the whole organisation, the shape most companies start from.",
+        "category": "climate",
+        "industry": "manufacturing",
+        "companySize": "500-1000",
+        "isPublic": true,
+        "companyId": null,
+        "isGlobal": true,
+        "tags": [
+          "climate",
+          "annual"
+        ],
+        "usageCount": 18,
+        "rating": 4.6,
+        "questionCount": 24,
+        "lastUsed": "2026-06-18T10:00:00Z",
+        "createdAt": "2026-02-02T09:00:00Z"
+      },
+      {
+        "id": "t2",
+        "name": "Onboarding pulse",
+        "description": "Asked at thirty days. Short enough that a new joiner finishes it.",
+        "category": "onboarding",
+        "industry": "manufacturing",
+        "companySize": "500-1000",
+        "isPublic": true,
+        "companyId": null,
+        "isGlobal": true,
+        "tags": [
+          "onboarding"
+        ],
+        "usageCount": 11,
+        "rating": 4.2,
+        "questionCount": 8,
+        "lastUsed": "2026-07-01T10:00:00Z",
+        "createdAt": "2026-02-02T09:00:00Z"
+      },
+      {
+        "id": "t3",
+        "name": "Post-restructure check-in",
+        "description": "Written after the Ops merge, kept for the next one.",
+        "category": "climate",
+        "industry": null,
+        "companySize": null,
+        "isPublic": false,
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "isGlobal": false,
+        "tags": [
+          "internal"
+        ],
+        "usageCount": 3,
+        "rating": 4.0,
+        "questionCount": 12,
+        "lastUsed": null,
+        "createdAt": "2026-02-02T09:00:00Z"
+      }
+    ]
+  }
+}

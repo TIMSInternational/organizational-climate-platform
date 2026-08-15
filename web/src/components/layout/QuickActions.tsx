@@ -33,6 +33,16 @@ export interface QuickAction {
   id: string
   /** Already-translated. This never translates its own copy. */
   label: string
+  /**
+   * Already-translated second line, saying what the destination does — "From a
+   * template or blank", "A five-minute live pulse".
+   *
+   * Optional, and omitted by `CompanyDetailPage`, whose four tiles are short labels
+   * whose destinations need no gloss. Added for the redesigned dashboard, where the
+   * three tiles are the only invitation on the page to start something and a bare
+   * verb is not enough to choose between them.
+   */
+  description?: string
   /** In-app path. */
   href: string
   icon: React.ComponentType<{ className?: string }>
@@ -73,6 +83,9 @@ export function QuickActions({ actions, title, columns = 2 }: QuickActionsProps)
                   320px, and the default leading opens a visible gap between the
                   two lines that makes the tile read as two labels. */}
               <span className="text-sm font-medium leading-tight">{action.label}</span>
+              {action.description && (
+                <span className="text-2xs leading-tight text-fg-tertiary">{action.description}</span>
+              )}
             </Link>
           ))}
         </div>

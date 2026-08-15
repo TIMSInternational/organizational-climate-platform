@@ -22,6 +22,9 @@
 
   /* -- Surfaces ---------------------------------------------------------- */
   --color-surface-outer: var(--admin-bg-outer);
+  /* The application chrome's ground. NOT `--admin-bg-outer`: that one still belongs to
+     the sign-in and survey-answering screens, which are not chrome. */
+  --color-surface-shell: var(--admin-bg-shell);
   --color-surface-panel: var(--admin-bg-panel);
   --color-surface-card: var(--admin-bg-card);
   --color-surface-card-hover: var(--admin-bg-card-hover);
@@ -51,9 +54,28 @@
   --color-accent-green: var(--admin-accent-green);
   --color-accent-red: var(--admin-accent-red);
   --color-accent-blue: var(--admin-accent-blue);
+  /* The identity accent above carries white at 3.74:1 light / 2.49:1 dark, so
+     `text-fg-on-accent` may not sit on `bg-accent-blue`. These two are the
+     surfaces it may sit on: the resting fill is 5.47:1 with white in both
+     themes, and the hover step is 7.58:1 light / 4.51:1 dark — it moves in
+     opposite directions per theme so it also stays off the panel. `tokens.css`
+     states the rule and `accentContrast.test.ts` re-derives every ratio from it.
+     Without these two lines the rule is unfollowable, because the utility to
+     follow it with does not exist. */
+  --color-accent-blue-fill: var(--admin-accent-blue-fill);
+  --color-accent-blue-fill-hover: var(--admin-accent-blue-fill-hover);
   --color-accent-purple: var(--admin-accent-purple);
   --color-accent-amber: var(--admin-accent-amber);
   --color-accent-orange: var(--admin-accent-orange);
+
+  /* The ink that goes with each state hue, so `text-accent-amber-ink` is a real
+     utility and never has to be guessed — the same pairing `-ink` already means
+     for the sequential and diverging ramps below. Use these whenever the hue
+     carries a *word*; the plain accent above is for hairlines, tints and icons.
+     Values and the measurements behind them live in ./tokens.css. */
+  --color-accent-green-ink: var(--admin-accent-green-ink);
+  --color-accent-amber-ink: var(--admin-accent-amber-ink);
+  --color-accent-red-ink: var(--admin-accent-red-ink);
 
   /* -- Data visualisation (#79) ------------------------------------------
      Exposed as utilities so a chart can write `fill-chart-series-1` rather
@@ -90,6 +112,11 @@
   --color-chart-div-mid: var(--admin-chart-div-mid);
   --color-chart-div-pos-1: var(--admin-chart-div-pos-1);
   --color-chart-div-pos-2: var(--admin-chart-div-pos-2);
+  --color-chart-div-neg-2-ink: var(--admin-chart-div-neg-2-ink);
+  --color-chart-div-neg-1-ink: var(--admin-chart-div-neg-1-ink);
+  --color-chart-div-mid-ink: var(--admin-chart-div-mid-ink);
+  --color-chart-div-pos-1-ink: var(--admin-chart-div-pos-1-ink);
+  --color-chart-div-pos-2-ink: var(--admin-chart-div-pos-2-ink);
 
   --color-chart-grid: var(--admin-chart-grid);
   --color-chart-axis: var(--admin-chart-axis);
@@ -113,6 +140,25 @@
   --color-accent-purple-ring: var(--admin-accent-border-purple);
   --color-accent-amber-ring: var(--admin-accent-border-amber);
   --color-accent-orange-ring: var(--admin-accent-border-orange);
+
+  /* Status-chip fill and ink (UI-0). A matched pair per tone, exposed as
+     `bg-chip-*-fill` and `text-chip-*-ink`. The fills are opaque on purpose —
+     a translucent one takes its rendered colour from whatever is behind the
+     chip, and a chip inside a `TableRow` sits on a surface that changes on
+     hover (see the argument in `styles/tokens.css`). The pairing is fixed in
+     `components/ui/chipVariants.ts` and measured, on four surfaces and in both
+     themes, by `styles/chipVariantContrast.test.ts`. Never separate an ink
+     from its fill. */
+  --color-chip-good-fill: var(--admin-chip-bg-good);
+  --color-chip-warning-fill: var(--admin-chip-bg-warning);
+  --color-chip-critical-fill: var(--admin-chip-bg-critical);
+  --color-chip-accent-fill: var(--admin-chip-bg-accent);
+  --color-chip-neutral-fill: var(--admin-chip-bg-neutral);
+  --color-chip-good-ink: var(--admin-chip-ink-good);
+  --color-chip-warning-ink: var(--admin-chip-ink-warning);
+  --color-chip-critical-ink: var(--admin-chip-ink-critical);
+  --color-chip-accent-ink: var(--admin-chip-ink-accent);
+  --color-chip-neutral-ink: var(--admin-chip-ink-neutral);
 
   /* -- Space ------------------------------------------------------------
      Tailwind derives every `p-*`/`m-*`/`gap-*` step from `--spacing`, by
@@ -162,6 +208,18 @@
      control; this is the same ceiling for the primitive, whose label and
      control are siblings and so never matched that rule. */
   --container-field: var(--admin-size-field-max);
+  /* `--container-*` gives `max-w-measure`: the redesign's 70ch prose cap.
+     A NEW NAME RATHER THAN AN OVERRIDE OF `prose`, and that was measured, not
+     assumed: Tailwind v4 emits `max-w-prose` as a STATIC utility with a literal
+     `65ch`, not from a `--container-prose` theme key, so declaring one here
+     changes nothing at all — `max-w-prose` still compiles to `max-width: 65ch`.
+     (Checked by resolving both candidates through the real compiler, the way
+     `styles/utilityExistence.test.ts` does.) */
+  --container-measure: var(--admin-size-measure);
+  /* `--container-*` also gives `basis-header-text`: the flex base size of the
+     page header's text column, which is what makes the action cluster wrap onto
+     its own line instead of squeezing the title (see `layout/PageTopBar.tsx`). */
+  --container-header-text: var(--admin-size-header-text-min);
 
   /* -- Radii ------------------------------------------------------------- */
   --radius-sm: var(--admin-radius-sm);

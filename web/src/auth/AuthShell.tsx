@@ -43,16 +43,28 @@ export interface AuthShellProps {
    * carries the meaning, so nothing depends on it being seen.
    */
   banner?: ReactNode
+  /**
+   * The product lockup, above the card rather than inside it.
+   *
+   * Separate from `banner` on purpose. `banner` is per-state decoration that
+   * belongs to the message — the glyph over "your link expired" — and it sits
+   * inside the card with the title it modifies. The lockup is not about the state
+   * at all: it answers "what IS this, and did I mean to be here", which is a
+   * question about the page and therefore outranks the card. The employee design
+   * draws it centred above.
+   */
+  brand?: ReactNode
   children: ReactNode
   /** Links out of this state: "back to sign in", "create an account". */
   footer?: ReactNode
 }
 
-export function AuthShell({ title, description, banner, children, footer }: AuthShellProps) {
+export function AuthShell({ title, description, banner, brand, children, footer }: AuthShellProps) {
   const { t } = useTranslation()
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-panel-gap bg-surface-outer p-gutter">
+      {brand}
       <Card className="w-full max-w-md">
         <CardHeader>
           {banner}
@@ -75,7 +87,12 @@ export function AuthShell({ title, description, banner, children, footer }: Auth
         role="group"
         aria-label={t('shell.settings')}
       >
-        <LanguageSwitcher />
+        {/* `compact` drops the visible "Select language" span, which at this card's
+            448px was wrapping to two lines beside a control it was not labelling
+            anyway — the `<select>` carries its own `aria-label`, so the span was a
+            duplicate label, not the only one. Same treatment ShellControls already
+            gives these two. */}
+        <LanguageSwitcher compact />
         <ThemeSwitcher />
       </div>
     </div>

@@ -1,0 +1,23 @@
+{
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+
+  "GET /dashboard/employee": {
+    "name": "Ana Ramos",
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "departmentId": null,
+    "departmentName": null,
+    "pendingSurveyCount": 0,
+    "completedSurveyCount": 0,
+    "unreadNotificationCount": 0,
+    "nextDeadline": null,
+    "pendingSurveys": []
+  },
+
+  "GET /dashboard/employee/last-outcome": null,
+
+  "GET /surveys/my": {
+    "surveys": []
+  }
+}

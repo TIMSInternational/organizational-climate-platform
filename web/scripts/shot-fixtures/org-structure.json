@@ -1,0 +1,703 @@
+{
+  "PUT /admin/companies/*/settings": {
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "settings": {
+      "surveyFrequency": "quarterly",
+      "microclimateEnabled": true,
+      "aiInsightsEnabled": true,
+      "anonymousSurveys": true,
+      "dataRetentionDays": 2555,
+      "timezone": "America/Bogota",
+      "language": "es"
+    },
+    "branding": {
+      "logoUrl": null,
+      "primaryColor": "#0d9488",
+      "secondaryColor": "#0f766e",
+      "fontFamily": "Poppins",
+      "customCss": null
+    }
+  },
+  "GET /admin/companies": {
+    "companies": [
+      {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "name": "Northwind Logistics",
+        "emailDomain": "northwind.example",
+        "industry": "Transportation",
+        "size": "large",
+        "country": "Colombia",
+        "subscriptionTier": "enterprise",
+        "createdAt": "2025-03-14T09:12:00Z"
+      },
+      {
+        "id": "22222222-2222-2222-2222-222222222222",
+        "name": "Helios Manufacturing",
+        "emailDomain": "helios.example",
+        "industry": "Manufacturing",
+        "size": "medium",
+        "country": "Mexico",
+        "subscriptionTier": "professional",
+        "createdAt": "2025-06-02T16:40:00Z"
+      },
+      {
+        "id": "33333333-3333-3333-3333-333333333333",
+        "name": "Vela Health",
+        "emailDomain": "vela.example",
+        "industry": "Healthcare",
+        "size": "small",
+        "country": "Chile",
+        "subscriptionTier": "basic",
+        "createdAt": "2026-01-21T11:05:00Z"
+      }
+    ]
+  },
+  "GET /notifications/mine": {
+    "notifications": [
+      {
+        "id": "aaaaaaaa-0000-0000-0000-000000000001",
+        "userId": "00000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "type": "survey_reminder",
+        "channel": "in_app",
+        "priority": "medium",
+        "status": "delivered",
+        "title": "Quarterly climate survey closes Friday",
+        "message": "412 of 480 invited people have responded.",
+        "data": null,
+        "templateId": null,
+        "scheduledFor": "2026-08-09T08:00:00Z",
+        "sentAt": "2026-08-09T08:00:04Z",
+        "deliveredAt": "2026-08-09T08:00:06Z",
+        "openedAt": null,
+        "failedAt": null,
+        "failureReason": null,
+        "retryCount": 0,
+        "createdAt": "2026-08-09T08:00:00Z"
+      },
+      {
+        "id": "aaaaaaaa-0000-0000-0000-000000000002",
+        "userId": "00000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "type": "ai_insight_alert",
+        "channel": "in_app",
+        "priority": "high",
+        "status": "delivered",
+        "title": "Psychological safety is trending down in Support",
+        "message": "Two consecutive quarters below the company benchmark.",
+        "data": null,
+        "templateId": null,
+        "scheduledFor": "2026-08-10T13:30:00Z",
+        "sentAt": "2026-08-10T13:30:02Z",
+        "deliveredAt": "2026-08-10T13:30:03Z",
+        "openedAt": null,
+        "failedAt": null,
+        "failureReason": null,
+        "retryCount": 0,
+        "createdAt": "2026-08-10T13:30:00Z"
+      }
+    ]
+  },
+  "GET /admin/departments": {
+    "departments": [
+      {
+        "id": "dddddddd-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Operations",
+        "description": "Warehousing, dispatch and fleet",
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 48
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000002",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Engineering",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 57
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000003",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Platform",
+        "description": null,
+        "parentDepartmentId": "dddddddd-0000-0000-0000-000000000002",
+        "isActive": true,
+        "employeeCount": 21
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000004",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Quality assurance",
+        "description": null,
+        "parentDepartmentId": "dddddddd-0000-0000-0000-000000000002",
+        "isActive": true,
+        "employeeCount": 9
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000005",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Sales",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 31
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000006",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Support",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 23
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000007",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "People",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 12
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000008",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Finance",
+        "description": "Payroll, treasury and reporting",
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 4
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000009",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Legacy warehouse",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": false,
+        "employeeCount": 6
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000010",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Marketing",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 27
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000011",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Logistics",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 35
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000012",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Security",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 14
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000013",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Procurement",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 43
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000014",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Research",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 18
+      }
+    ]
+  },
+  "GET /dashboard/company-admin": {
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "companyName": "Northwind Logistics",
+    "userCount": 211,
+    "activeUserCount": 68,
+    "departmentCount": 14,
+    "surveyCount": 12,
+    "activeSurveyCount": 2,
+    "draftSurveyCount": 1,
+    "responseCount": 168,
+    "completedResponseCount": 153,
+    "openActionPlanCount": 7,
+    "overdueActionPlanCount": 2,
+    "ongoingSurveys": [],
+    "departments": [
+      {
+        "id": "dddddddd-0000-0000-0000-000000000002",
+        "name": "Engineering",
+        "memberCount": 57,
+        "completedResponseCount": 149
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000008",
+        "name": "Finance",
+        "memberCount": 4,
+        "completedResponseCount": 11
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000009",
+        "name": "Legacy warehouse",
+        "memberCount": 6,
+        "completedResponseCount": 16
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000011",
+        "name": "Logistics",
+        "memberCount": 35,
+        "completedResponseCount": 92
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000010",
+        "name": "Marketing",
+        "memberCount": 27,
+        "completedResponseCount": 71
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000001",
+        "name": "Operations",
+        "memberCount": 48,
+        "completedResponseCount": 126
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000007",
+        "name": "People",
+        "memberCount": 12,
+        "completedResponseCount": 3
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000003",
+        "name": "Platform",
+        "memberCount": 21,
+        "completedResponseCount": 55
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000013",
+        "name": "Procurement",
+        "memberCount": 43,
+        "completedResponseCount": 113
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000004",
+        "name": "Quality assurance",
+        "memberCount": 9,
+        "completedResponseCount": 24
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000014",
+        "name": "Research",
+        "memberCount": 18,
+        "completedResponseCount": 47
+      },
+      {
+        "id": "dddddddd-0000-0000-0000-000000000005",
+        "name": "Sales",
+        "memberCount": 31,
+        "completedResponseCount": 81
+      }
+    ]
+  },
+  "GET /admin/demographic-fields": {
+    "fields": [
+      {
+        "id": "ffffffff-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "field": "tenure",
+        "label": "Tenure",
+        "type": "select",
+        "options": [
+          {
+            "order": 0,
+            "value": "under_1_year",
+            "label": "Under 1 year"
+          },
+          {
+            "order": 1,
+            "value": "1-3_years",
+            "label": "1-3 years"
+          },
+          {
+            "order": 2,
+            "value": "3-7_years",
+            "label": "3-7 years"
+          },
+          {
+            "order": 3,
+            "value": "over_7_years",
+            "label": "Over 7 years"
+          }
+        ],
+        "required": true,
+        "order": 1,
+        "isActive": true,
+        "resolvedLocale": "en",
+        "fallbackFields": []
+      },
+      {
+        "id": "ffffffff-0000-0000-0000-000000000002",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "field": "location",
+        "label": "Location",
+        "type": "select",
+        "options": [
+          {
+            "order": 0,
+            "value": "bogota",
+            "label": "Bogota"
+          },
+          {
+            "order": 1,
+            "value": "medellin",
+            "label": "Medellin"
+          },
+          {
+            "order": 2,
+            "value": "cali",
+            "label": "Cali"
+          },
+          {
+            "order": 3,
+            "value": "barranquilla",
+            "label": "Barranquilla"
+          },
+          {
+            "order": 4,
+            "value": "remote",
+            "label": "Remote"
+          },
+          {
+            "order": 5,
+            "value": "other",
+            "label": "Other"
+          }
+        ],
+        "required": true,
+        "order": 2,
+        "isActive": true,
+        "resolvedLocale": "en",
+        "fallbackFields": []
+      },
+      {
+        "id": "ffffffff-0000-0000-0000-000000000003",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "field": "employment_type",
+        "label": "Employment type",
+        "type": "select",
+        "options": [
+          {
+            "order": 0,
+            "value": "permanent",
+            "label": "Permanent"
+          },
+          {
+            "order": 1,
+            "value": "fixed_term",
+            "label": "Fixed term"
+          },
+          {
+            "order": 2,
+            "value": "contractor",
+            "label": "Contractor"
+          }
+        ],
+        "required": true,
+        "order": 3,
+        "isActive": true,
+        "resolvedLocale": "en",
+        "fallbackFields": []
+      },
+      {
+        "id": "ffffffff-0000-0000-0000-000000000004",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "field": "team",
+        "label": "Team",
+        "type": "select",
+        "options": [
+          {
+            "order": 0,
+            "value": "team_a",
+            "label": "Team A"
+          },
+          {
+            "order": 1,
+            "value": "team_b",
+            "label": "Team B"
+          },
+          {
+            "order": 2,
+            "value": "team_c",
+            "label": "Team C"
+          },
+          {
+            "order": 3,
+            "value": "team_d",
+            "label": "Team D"
+          },
+          {
+            "order": 4,
+            "value": "team_e",
+            "label": "Team E"
+          },
+          {
+            "order": 5,
+            "value": "team_f",
+            "label": "Team F"
+          },
+          {
+            "order": 6,
+            "value": "team_g",
+            "label": "Team G"
+          },
+          {
+            "order": 7,
+            "value": "team_h",
+            "label": "Team H"
+          },
+          {
+            "order": 8,
+            "value": "team_i",
+            "label": "Team I"
+          },
+          {
+            "order": 9,
+            "value": "team_j",
+            "label": "Team J"
+          },
+          {
+            "order": 10,
+            "value": "team_k",
+            "label": "Team K"
+          },
+          {
+            "order": 11,
+            "value": "team_l",
+            "label": "Team L"
+          },
+          {
+            "order": 12,
+            "value": "team_m",
+            "label": "Team M"
+          },
+          {
+            "order": 13,
+            "value": "team_n",
+            "label": "Team N"
+          }
+        ],
+        "required": false,
+        "order": 4,
+        "isActive": true,
+        "resolvedLocale": "en",
+        "fallbackFields": []
+      },
+      {
+        "id": "ffffffff-0000-0000-0000-000000000005",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "field": "shift",
+        "label": "Shift",
+        "type": "select",
+        "options": [
+          {
+            "order": 0,
+            "value": "morning",
+            "label": "Morning"
+          },
+          {
+            "order": 1,
+            "value": "afternoon",
+            "label": "Afternoon"
+          },
+          {
+            "order": 2,
+            "value": "night",
+            "label": "Night"
+          }
+        ],
+        "required": true,
+        "order": 5,
+        "isActive": true,
+        "resolvedLocale": "en",
+        "fallbackFields": []
+      },
+      {
+        "id": "ffffffff-0000-0000-0000-000000000006",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "field": "start_date",
+        "label": "Start date",
+        "type": "date",
+        "options": null,
+        "required": false,
+        "order": 6,
+        "isActive": true,
+        "resolvedLocale": "en",
+        "fallbackFields": []
+      },
+      {
+        "id": "ffffffff-0000-0000-0000-000000000007",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "field": "notes",
+        "label": "Manager notes",
+        "type": "text",
+        "options": null,
+        "required": false,
+        "order": 7,
+        "isActive": false,
+        "resolvedLocale": "en",
+        "fallbackFields": []
+      },
+      {
+        "id": "ffffffff-0000-0000-0000-000000000008",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "field": "cost_centre",
+        "label": "Cost centre",
+        "type": "select",
+        "options": [
+          {
+            "order": 0,
+            "value": "cc_north",
+            "label": "North"
+          },
+          {
+            "order": 1,
+            "value": "cc_south",
+            "label": "South"
+          },
+          {
+            "order": 2,
+            "value": "cc_central",
+            "label": "Central"
+          }
+        ],
+        "required": false,
+        "order": 8,
+        "isActive": false,
+        "resolvedLocale": "en",
+        "fallbackFields": []
+      }
+    ]
+  },
+  "GET /admin/companies/11111111-1111-1111-1111-111111111111": {
+    "id": "11111111-1111-1111-1111-111111111111",
+    "name": "Northwind Logistics",
+    "emailDomain": "northwind.example",
+    "industry": "Transportation",
+    "size": "large",
+    "country": "Colombia",
+    "subscriptionTier": "enterprise",
+    "isActive": true,
+    "createdAt": "2025-03-14T09:12:00Z",
+    "userCount": 208
+  },
+  "GET /admin/users": {
+    "users": [
+      {
+        "id": "4eb9300f-7f3f-40ff-946a-51af3f708454",
+        "email": "ana.admin@northwind.example",
+        "name": "Ana Admin",
+        "role": "company_admin",
+        "departmentId": null,
+        "isActive": true,
+        "lastLoginAt": "2026-08-12T14:41:49Z",
+        "createdAt": "2025-03-14T09:12:00Z"
+      },
+      {
+        "id": "07bd0f2a-a8fa-43d0-8234-eab56803cbc2",
+        "email": "m.herrera@northwind.example",
+        "name": "María Herrera",
+        "role": "leader",
+        "departmentId": "dddddddd-0000-0000-0000-000000000002",
+        "isActive": true,
+        "lastLoginAt": "2026-08-11T08:20:00Z",
+        "createdAt": "2025-04-02T11:00:00Z"
+      },
+      {
+        "id": "1a2b3c4d-0000-0000-0000-000000000003",
+        "email": "a.ruiz@northwind.example",
+        "name": "Alejandro Ruiz",
+        "role": "supervisor",
+        "departmentId": "dddddddd-0000-0000-0000-000000000001",
+        "isActive": true,
+        "lastLoginAt": "2026-08-10T16:05:00Z",
+        "createdAt": "2025-05-19T09:30:00Z"
+      },
+      {
+        "id": "1a2b3c4d-0000-0000-0000-000000000004",
+        "email": "p.lindqvist@northwind.example",
+        "name": "Pia Lindqvist",
+        "role": "employee",
+        "departmentId": "dddddddd-0000-0000-0000-000000000003",
+        "isActive": true,
+        "lastLoginAt": "2026-08-09T07:45:00Z",
+        "createdAt": "2025-06-01T12:00:00Z"
+      },
+      {
+        "id": "1a2b3c4d-0000-0000-0000-000000000005",
+        "email": "k.osei@northwind.example",
+        "name": "Kwame Osei",
+        "role": "employee",
+        "departmentId": "dddddddd-0000-0000-0000-000000000002",
+        "isActive": true,
+        "lastLoginAt": null,
+        "createdAt": "2026-08-01T10:15:00Z"
+      },
+      {
+        "id": "1a2b3c4d-0000-0000-0000-000000000006",
+        "email": "j.adeyemi@northwind.example",
+        "name": "Jide Adeyemi",
+        "role": "employee",
+        "departmentId": "dddddddd-0000-0000-0000-000000000004",
+        "isActive": false,
+        "lastLoginAt": "2026-02-14T09:00:00Z",
+        "createdAt": "2025-01-20T08:00:00Z"
+      }
+    ]
+  },
+  "GET /admin/invitations": {
+    "invitations": [
+      {
+        "id": "5c000000-0000-0000-0000-000000000001",
+        "email": "n.okafor@northwind.example",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "departmentId": "dddddddd-0000-0000-0000-000000000002",
+        "invitationType": "email",
+        "role": "employee",
+        "status": "pending",
+        "token": "fixture-token-not-a-credential-1",
+        "expiresAt": "2026-08-26T00:00:00Z",
+        "sentAt": "2026-08-11T09:00:00Z"
+      },
+      {
+        "id": "5c000000-0000-0000-0000-000000000002",
+        "email": null,
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "departmentId": null,
+        "invitationType": "link",
+        "role": "employee",
+        "status": "pending",
+        "token": "fixture-token-not-a-credential-2",
+        "expiresAt": "2026-09-01T00:00:00Z",
+        "sentAt": null
+      }
+    ]
+  }
+}

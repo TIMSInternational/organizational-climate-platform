@@ -1,0 +1,41 @@
+{
+  "GET /notifications/mine": { "notifications": [] },
+  "GET /microclimates/*": {
+    "id": "44444444-4444-4444-4444-444444444444",
+    "title": "Ops all-hands · open link",
+    "description": "A five-minute pulse on how the week went.",
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "createdBy": "00000000-0000-0000-0000-000000000001",
+    "status": "active",
+    "responseCount": 31,
+    "targetParticipantCount": 0,
+    "startTime": "2026-08-11T09:00:00Z",
+    "endTime": "2026-08-11T09:20:00Z",
+    "anonymousResponses": true,
+    "showLiveResults": true,
+    "questions": [
+      { "id": "q1", "text": "How supported did you feel this week?", "type": "likert", "options": null, "required": true, "order": 1 },
+      { "id": "q2", "text": "Was the workload manageable?", "type": "likert", "options": null, "required": true, "order": 2 },
+      { "id": "q3", "text": "Anything you want to say in your own words?", "type": "open_ended", "options": null, "required": false, "order": 3 }
+    ],
+    "language": "en",
+    "resolvedLocale": "en",
+    "fallbackFields": []
+  },
+  "GET /microclimates/*/live-results": {
+    "sentimentScore": 0,
+    "engagementLevel": "high",
+    "wordCloud": [
+      { "text": "workload", "value": 9, "language": "en" },
+      { "text": "support", "value": 7, "language": "en" },
+      { "text": "deadlines", "value": 6, "language": "en" },
+      { "text": "clarity", "value": 5, "language": "en" },
+      { "text": "handover", "value": 4, "language": "en" },
+      { "text": "staffing", "value": 3, "language": "en" },
+      { "text": "tooling", "value": 2, "language": "en" },
+      { "text": "visa", "value": 1, "language": "en" }
+    ],
+    "responseCount": 31,
+    "targetParticipantCount": 0
+  }
+}

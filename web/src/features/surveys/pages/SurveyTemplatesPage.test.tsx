@@ -117,12 +117,35 @@ describe('SurveyTemplatesPage', () => {
     await waitFor(() => expect(lastUrl(fetchMock)).toContain('q=pulse'))
   })
 
-  it('links each row to the template detail route, not to a survey', async () => {
+  it('links Preview to the template detail route, not to a survey', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(row())))
     renderPage()
 
-    const link = await screen.findByRole('link', { name: 'View Details' })
+    const link = await screen.findByRole('link', { name: 'Preview Quarterly climate' })
     expect(link.getAttribute('href')).toBe('/surveys/templates/t1')
+  })
+
+  it('sends Use into the wizard with the template chosen, rather than instantiating from the card', async () => {
+    // `/use` requires a companyId for a super admin and also takes the title, dates and
+    // audience the wizard collects (#267). A card that called it would silently accept
+    // the defaults for all of them.
+    const fetchMock = vi.fn().mockResolvedValue(ok(row()))
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+
+    const link = await screen.findByRole('link', { name: 'Use Quarterly climate' })
+    expect(link.getAttribute('href')).toBe('/surveys/new?template=t1')
+    expect(fetchMock.mock.calls.every((call) => !String(call[0]).includes('/use'))).toBe(true)
+  })
+
+  it('states each template’s size on its card, in the mono face', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(row({ questionCount: 34, usageCount: 12 }))))
+    renderPage()
+
+    expect(await screen.findByText('34 questions')).toBeTruthy()
+    const used = screen.getByText('12')
+    expect(used.className).toContain('font-mono')
+    expect(used.className).toContain('tabular-nums')
   })
 
   it('renders an empty state when the catalogue has nothing to show', async () => {
@@ -130,5 +153,20 @@ describe('SurveyTemplatesPage', () => {
     renderPage()
 
     expect(await screen.findByText('No Templates Found')).toBeTruthy()
+  })
+})
+
+describe('the curated page eyebrow', () => {
+  /**
+   * The approved design gives this screen the eyebrow "Library". Left to itself
+   * `PageTopBar` derives the NAV SECTION instead, which can only ever be one of three
+   * words ("Administration", "Workspace", "Communication") — so the design's curated
+   * label is a prop the page has to pass, and deleting that prop is completely silent:
+   * every other test in this file still passed with it removed. Hence this one.
+   */
+  it('names the design’s section, not the nav section', () => {
+    renderPage()
+    const eyebrow = document.querySelector('[data-slot="page-eyebrow"]')
+    expect(eyebrow?.textContent).toBe('Library')
   })
 })

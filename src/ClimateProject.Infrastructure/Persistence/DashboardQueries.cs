@@ -73,7 +73,55 @@ public sealed record DashboardDepartmentSurveyRow(
     DateTimeOffset EndDate,
     int ResponseCount);
 
+/// <summary>
+/// The company's most recently closed survey, before its title is resolved for a locale.
+/// </summary>
+public sealed record DashboardClosedSurveyRow(
+    Guid Id,
+    string? TitleEn,
+    string? TitleEs,
+    string Language,
+    DateTimeOffset EndDate);
+
+/// <summary>
+/// One response row of a closed survey, reduced to what
+/// <c>SurveyAggregation.Compute</c> reads off it.
+/// </summary>
+/// <remarks>
+/// Deliberately not <c>AggregationResponse</c> itself: that record carries the demographics
+/// dictionary, which is not a column and cannot be projected in SQL. The endpoint lifts
+/// these rows into the aggregation's own input record in memory.
+/// </remarks>
+public sealed record DashboardSurveyResponseRow(
+    Guid ResponseId,
+    string Language,
+    Guid? DepartmentId,
+    bool IsComplete,
+    DateTimeOffset StartTime,
+    DateTimeOffset? CompletionTime,
+    int? TotalTimeSeconds);
+
+/// <summary>
+/// One action plan opened since a survey closed, with the name of the department it
+/// belongs to -- or nulls for a company-wide plan, which has no department and therefore
+/// no name.
+/// </summary>
+/// <remarks>
+/// The id travels alongside the name because the caller has to decide whether the name may
+/// be published at all, and that decision is made against the *suppressed* department ids
+/// the aggregation produced. Resolving the name in SQL and then discarding it in memory is
+/// the cheap half of a rule whose expensive half -- knowing which departments were
+/// protected -- cannot be expressed here.
+/// </remarks>
+public sealed record DashboardPlanOpenedRow(Guid? DepartmentId, string? DepartmentName, DateTimeOffset CreatedAt);
+
 /// <summary>One pending survey for a respondent, before its title is resolved for a locale.</summary>
+/// <param name="Anonymous">
+/// <c>Survey.Settings.Anonymous</c> -- the owned <c>settings_anonymous</c> column, which is
+/// the same field the respond endpoint reads. Selected here rather than recomputed anywhere
+/// downstream so that the chip a respondent sees on their home page and the promise the
+/// respond page makes them have exactly one source.
+/// </param>
 public sealed record DashboardPendingSurveyRow(
     Guid Id,
     string? TitleEn,
@@ -82,7 +130,8 @@ public sealed record DashboardPendingSurveyRow(
     string Type,
     DateTimeOffset StartDate,
     DateTimeOffset EndDate,
-    int QuestionCount);
+    int QuestionCount,
+    bool Anonymous);
 
 /// <summary>
 /// The aggregate LINQ behind the four role dashboards (#132), composed over
@@ -187,7 +236,9 @@ public static class DashboardQueries
                 c.CreatedAt));
 
     /// <summary>
-    /// One company's departments with their headcount and participation, as one statement.
+    /// One company's departments, each with its members and its completed responses --
+    /// the rows the company dashboard reads as a completed-responses-per-person rate --
+    /// as one statement.
     /// </summary>
     /// <remarks>
     /// The company predicate is applied here rather than left to the caller because it is
@@ -195,6 +246,24 @@ public static class DashboardQueries
     /// The response subquery is additionally constrained by company id and not by
     /// department alone -- department ids are globally unique, but relying on that to
     /// enforce a tenant boundary makes the boundary an accident of the id scheme.
+    ///
+    /// <para>
+    /// <b>The member count counts members active or not, and is deliberately NOT
+    /// <see cref="DepartmentHeadcount.Population"/>.</b> It is a rate denominator all the
+    /// same -- the client divides the response count by it -- but of a different rate than
+    /// the one <c>Population</c> serves. A denominator counts the population its numerator
+    /// draws from. The numerator here spans every survey the tenant has ever run and keeps
+    /// the responses of members deactivated since (a response row owns its department id
+    /// forever), and the organisation-level rate these rows are read against divides the
+    /// same all-time numerator by <see cref="UserCounts"/>' total -- every user row, active
+    /// or not. So the matching population is everyone whose row points at the department:
+    /// its whole history, like the numerator's. <c>Population</c> is the opposite case --
+    /// one survey's respondents can only ever be active members, so its denominator is the
+    /// department's present. Counting active only HERE would inflate every department's
+    /// reading without bound as staff turn over, and would measure each department by a
+    /// stricter rule than the company target printed beside it. Pinned by
+    /// <c>The_dashboard_member_count_counts_members_active_or_not</c>.
+    /// </para>
     /// </remarks>
     public static IQueryable<DashboardDepartmentRow> DepartmentSummaries(
         IQueryable<Department> departments,
@@ -297,6 +366,139 @@ public static class DashboardQueries
                     && r.IsComplete)));
 
     /// <summary>
+    /// The company's most recent closed survey -- the one "what came of the last one" is
+    /// about.
+    /// </summary>
+    /// <remarks>
+    /// <b><see cref="SurveyQueries.AssignedTo"/> cannot serve this.</b> It hard-filters
+    /// <c>Status == Active</c>, because its question is "what do I still owe", and the
+    /// question here is the opposite one. So this is its own company-scoped lookup rather
+    /// than a parameter added to that one, which would give a single method two contrary
+    /// meanings depending on an argument.
+    ///
+    /// <para>
+    /// <c>closed</c> only, not <c>archived</c>. Archiving is the act of filing a survey
+    /// away, and a panel whose whole job is "the last thing that happened" should stop
+    /// talking about a survey the moment the company says it is done with it.
+    /// </para>
+    ///
+    /// <para>
+    /// Ordered by <c>EndDate</c> -- when the survey actually closed -- with the id as a
+    /// tiebreak so two surveys that closed the same instant do not swap places between
+    /// requests.
+    /// </para>
+    /// </remarks>
+    public static IQueryable<DashboardClosedSurveyRow> LatestClosedSurvey(
+        IQueryable<Survey> surveys,
+        Guid companyId)
+        => surveys
+            .Where(s => s.CompanyId == companyId && s.Status == SurveyStatuses.Closed)
+            .OrderByDescending(s => s.EndDate)
+            .ThenByDescending(s => s.Id)
+            .Select(s => new DashboardClosedSurveyRow(s.Id, s.TitleEn, s.TitleEs, s.Language, s.EndDate));
+
+    /// <summary>
+    /// One survey's response rows, as the shared aggregation wants them.
+    /// </summary>
+    /// <remarks>
+    /// Scoped by company as well as by survey. Survey ids are globally unique and the
+    /// caller has already scoped the survey, so the second predicate is redundant today --
+    /// and it is here for the reason <see cref="DepartmentSummaries"/> gives for the same
+    /// belt: a tenant boundary that holds only because of how ids happen to be generated is
+    /// not a tenant boundary.
+    /// </remarks>
+    public static IQueryable<DashboardSurveyResponseRow> SurveyResponses(
+        IQueryable<Response> responses,
+        Guid surveyId,
+        Guid companyId)
+        => responses
+            .Where(r => r.SurveyId == surveyId && r.CompanyId == companyId)
+            .Select(r => new DashboardSurveyResponseRow(
+                r.Id,
+                r.Language,
+                r.DepartmentId,
+                r.IsComplete,
+                r.StartTime,
+                r.CompletionTime,
+                r.TotalTimeSeconds));
+
+    /// <summary>
+    /// One company's departments in the shape <c>SurveyAggregation.Compute</c> takes them,
+    /// headcounts included, as one statement.
+    /// </summary>
+    /// <remarks>
+    /// The headcount is fed in even by callers that never render a participation rate. The
+    /// aggregation is shared, its suppression decisions are the reason it is shared, and
+    /// handing it a deliberately hollowed-out input so that a particular caller's output
+    /// happens to be unaffected is how "one aggregation" quietly becomes two.
+    ///
+    /// It counts <see cref="DepartmentHeadcount.Population"/>, which is the same population
+    /// the Departments page prints as EMPLOYEES ASSIGNED. That is not tidiness: this number
+    /// is a participation denominator, and it was a hand-written predicate here that let it
+    /// drift from the page claiming to show it.
+    /// </remarks>
+    public static IQueryable<AggregationDepartment> AggregationDepartments(
+        IQueryable<Department> departments,
+        IQueryable<User> users,
+        Guid companyId)
+    {
+        var population = DepartmentHeadcount.Population(users, companyId);
+        return departments
+            .Where(d => d.CompanyId == companyId)
+            .Select(d => new AggregationDepartment(
+                d.Id,
+                d.Name,
+                population.Count(u => u.DepartmentId == d.Id)));
+    }
+
+    /// <summary>
+    /// Outstanding action plans opened at or after <paramref name="since"/> -- what the
+    /// company did once the survey closed.
+    /// </summary>
+    /// <remarks>
+    /// "Open" is <see cref="ActionPlanCounts"/>'s definition and the same two constants:
+    /// anything that is not completed and not cancelled is still work. Returned as a
+    /// sequence rather than as a count so the tally and the rows below it can never be two
+    /// different populations.
+    /// </remarks>
+    public static IQueryable<ActionPlan> OpenPlansOpenedSince(
+        IQueryable<ActionPlan> actionPlans,
+        Guid companyId,
+        DateTimeOffset since)
+        => actionPlans
+            .Where(p => p.CompanyId == companyId
+                        && p.Status != CompletedStatus
+                        && p.Status != CancelledStatus
+                        && p.CreatedAt >= since);
+
+    /// <summary>
+    /// A page of those plans, oldest first, each with its department's name attached as a
+    /// correlated subquery -- one statement for the page.
+    /// </summary>
+    /// <remarks>
+    /// Oldest first because this list is read as a sequence of events after a date the
+    /// reader was just told ("closed on 5 August"), not as a queue of what needs attention
+    /// -- which is why it is ordered the opposite way to
+    /// <see cref="SurveySummaries"/>. The department lookup carries the company predicate
+    /// for the same reason every other one here does.
+    /// </remarks>
+    public static IQueryable<DashboardPlanOpenedRow> PlansOpened(
+        IQueryable<ActionPlan> openPlans,
+        IQueryable<Department> departments,
+        int limit)
+        => openPlans
+            .OrderBy(p => p.CreatedAt)
+            .ThenBy(p => p.Id)
+            .Take(limit)
+            .Select(p => new DashboardPlanOpenedRow(
+                p.DepartmentId,
+                departments
+                    .Where(d => d.Id == p.DepartmentId && d.CompanyId == p.CompanyId)
+                    .Select(d => d.Name)
+                    .FirstOrDefault(),
+                p.CreatedAt));
+
+    /// <summary>
     /// The respondent's queue. Feed it <see cref="SurveyQueries.AssignedTo"/> so that
     /// "what I still owe" here and on <c>/surveys/my</c> can never be two different answers.
     /// </summary>
@@ -316,5 +518,10 @@ public static class DashboardQueries
                 s.Type,
                 s.StartDate,
                 s.EndDate,
-                questions.Count(q => q.SurveyId == s.Id)));
+                questions.Count(q => q.SurveyId == s.Id),
+                // The survey's own setting, off the same owned column the respond endpoint
+                // reads. Not a new column and not a derived guess: anonymity is per-survey,
+                // and the card that claims it must be claiming what the questionnaire behind
+                // it will actually do.
+                s.Settings.Anonymous));
 }

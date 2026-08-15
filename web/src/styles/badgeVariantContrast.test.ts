@@ -13,7 +13,7 @@ import { join } from 'node:path'
  *
  * | variant | light | dark |
  * |---|---|---|
- * | `default` — accent-blue on blue-soft | 3.45:1 | 4.25:1 |
+ * | `default` — accent-blue on blue-soft | 3.41:1 | 6.23:1 |
  * | `success` — accent-green on green-soft | 3.49:1 | 6.14:1 |
  * | `warning` — accent-amber on amber-soft | 2.99:1 | 7.05:1 |
  * | `destructive` — font-on-accent on accent-red | 4.83:1 | 3.76:1 |
@@ -22,7 +22,13 @@ import { join } from 'node:path'
  *
  * That is the project's documented recurring blind spot in both directions at once: the
  * three soft variants fail in *light* while passing in dark, and `destructive` fails in
- * *dark* while passing in light. `charts/RecommendationCard.tsx` already maps priority
+ * *dark* while passing in light.
+ *
+ * UI-0 moved the `default` row and nothing else: revaluing `--admin-accent-blue` off the
+ * legacy `#2e9098` took light from 3.45 to 3.41 (still failing — the soft-fill problem is
+ * about the 8% tint, not the hue) and dark from 4.25 to 6.23, which now clears AA. The other
+ * five rows are untouched because they do not reference the accent. The two variants this
+ * file actually asserts are still `secondary` and `outline`, for the reason below. `charts/RecommendationCard.tsx` already maps priority
  * onto `warning`/`destructive`, so the defect is pre-existing and system-wide; repainting
  * six variants is its own change to a shared primitive, not this issue's.
  *

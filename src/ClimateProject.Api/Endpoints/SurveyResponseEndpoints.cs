@@ -614,9 +614,16 @@ public static class SurveyResponseEndpoints
         var departmentHeadcount = 0;
         if (respondent.IsAnonymous && respondent.DepartmentId is Guid departmentId)
         {
-            departmentHeadcount = await db.Users.CountAsync(
-                u => u.CompanyId == survey.CompanyId && u.DepartmentId == departmentId && u.IsActive,
-                cancellationToken);
+            // `DepartmentHeadcount.Population`, not a predicate written out here. This is
+            // the most consequential copy of the department headcount in the system -- the
+            // anonymity floor decides against it whether a response may carry a department
+            // at all -- and it used to be a byte-identical hand-written copy of the shared
+            // predicate, which is the state that let the read-side copies drift before
+            // #310. The floor and the participation denominator it protects now count one
+            // population by construction.
+            departmentHeadcount = await DepartmentHeadcount
+                .Population(db.Users, survey.CompanyId)
+                .CountAsync(u => u.DepartmentId == departmentId, cancellationToken);
         }
 
         var department = SurveyResponsePrivacy.DepartmentFor(

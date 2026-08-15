@@ -1,0 +1,175 @@
+{
+  "GET /surveys/*/respond": {
+    "id": "s1",
+    "title": "Encuesta de clima laboral · Q3 2026",
+    "description": "Doce preguntas, unos cinco minutos. Sus respuestas nos dicen dónde apoyar mejor a su equipo el próximo trimestre.",
+    "type": "general_climate",
+    "language": "both",
+    "resolvedLocale": "es",
+    "fallbackFields": [],
+    "startDate": "2026-08-01T00:00:00Z",
+    "endDate": "2026-09-12T00:00:00Z",
+    "anonymous": true,
+    "allowPartialResponses": true,
+    "randomizeQuestions": false,
+    "showProgress": true,
+    "timeLimitMinutes": 10,
+    "questions": [
+      {
+        "id": "11111111-0000-0000-0000-000000000001",
+        "text": "En mi equipo puedo plantear un problema sin que se me tome a mal.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Nunca",
+        "scaleLabelMax": "Siempre",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": "¿Quiere contarnos algo más? (opcional)",
+        "order": 0,
+        "category": "psychological_safety"
+      },
+      {
+        "id": "11111111-0000-0000-0000-000000000002",
+        "text": "¿Cómo describiría su carga de trabajo de las últimas cuatro semanas?",
+        "type": "multiple_choice",
+        "options": [
+          {
+            "order": 0,
+            "value": "too_low",
+            "label": "Por debajo de lo que puedo asumir"
+          },
+          {
+            "order": 1,
+            "value": "manageable",
+            "label": "Manejable"
+          },
+          {
+            "order": 2,
+            "value": "heavy",
+            "label": "Alta, pero sostenible"
+          },
+          {
+            "order": 3,
+            "value": "unsustainable",
+            "label": "Insostenible"
+          }
+        ],
+        "scaleMin": null,
+        "scaleMax": null,
+        "scaleLabelMin": null,
+        "scaleLabelMax": null,
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 1,
+        "category": "workload"
+      },
+      {
+        "id": "11111111-0000-0000-0000-000000000003",
+        "text": "¿Recomendaría este lugar de trabajo a alguien de confianza?",
+        "type": "yes_no",
+        "options": null,
+        "scaleMin": null,
+        "scaleMax": null,
+        "scaleLabelMin": null,
+        "scaleLabelMax": null,
+        "required": false,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 2,
+        "category": "enps"
+      },
+      {
+        "id": "11111111-0000-0000-0000-000000000004",
+        "text": "Ordene estos temas según lo que más le ayudaría este trimestre.",
+        "type": "ranking",
+        "options": [
+          {
+            "order": 0,
+            "value": "pay",
+            "label": "Compensación"
+          },
+          {
+            "order": 1,
+            "value": "growth",
+            "label": "Desarrollo profesional"
+          },
+          {
+            "order": 2,
+            "value": "tools",
+            "label": "Mejores herramientas"
+          },
+          {
+            "order": 3,
+            "value": "flexibility",
+            "label": "Flexibilidad horaria"
+          }
+        ],
+        "scaleMin": null,
+        "scaleMax": null,
+        "scaleLabelMin": null,
+        "scaleLabelMax": null,
+        "required": false,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 3,
+        "category": "priorities"
+      },
+      {
+        "id": "11111111-0000-0000-0000-000000000005",
+        "text": "¿Qué cambiaría primero si estuviera en su mano?",
+        "type": "open_ended",
+        "options": null,
+        "scaleMin": null,
+        "scaleMax": null,
+        "scaleLabelMin": null,
+        "scaleLabelMax": null,
+        "required": false,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 4,
+        "category": "open"
+      }
+    ],
+    "inProgress": null
+  },
+  "GET /microclimates/*": {
+    "id": "m1",
+    "title": "Pulso semanal · Operaciones",
+    "status": "active",
+    "language": "both",
+    "resolvedLocale": "es",
+    "fallbackFields": [],
+    "questions": [
+      {
+        "id": "22222222-0000-0000-0000-000000000001",
+        "text": "¿Qué tan apoyado se sintió esta semana?",
+        "type": "likert",
+        "required": true,
+        "order": 0,
+        "options": null
+      },
+      {
+        "id": "22222222-0000-0000-0000-000000000002",
+        "text": "¿La carga de trabajo fue manejable?",
+        "type": "yes_no",
+        "required": true,
+        "order": 1,
+        "options": null
+      },
+      {
+        "id": "22222222-0000-0000-0000-000000000003",
+        "text": "¿Qué cambiaría la próxima semana?",
+        "type": "open_ended",
+        "required": false,
+        "order": 2,
+        "options": null
+      }
+    ]
+  },
+  "GET /notifications/mine": {
+    "notifications": []
+  }
+}

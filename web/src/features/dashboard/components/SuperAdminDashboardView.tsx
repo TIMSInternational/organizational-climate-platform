@@ -1,12 +1,13 @@
 import { useCallback } from 'react'
-import { Building2, ClipboardList, MessageSquare, Users } from 'lucide-react'
 import { getSuperAdminDashboard } from '../api/dashboard'
 import { useDashboardData } from '../useDashboardData'
+import { calendarDay } from '../../../lib/calendarDay'
 import DashboardState from './DashboardState'
+import { KpiRow, MonoReadings, SectionHeading } from './dashboardGrammar'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
-import { KPIDisplay, type Kpi } from '../../../components/charts'
-import { EmptyState, H2, Table } from '../../../components/ui'
+import { KpiTile } from '../../../components/charts'
+import { EmptyState, Table } from '../../../components/ui'
 
 /**
  * The platform overview — every tenant, and the only dashboard that crosses tenant lines.
@@ -17,6 +18,19 @@ import { EmptyState, H2, Table } from '../../../components/ui'
  *
  * `GET /dashboard/super-admin` refuses every other role outright, so this component can
  * never be rendered with somebody else's data in it; there is nothing to hide client-side.
+ *
+ * ## The header, and the five counts that became four
+ *
+ * "Platform" is the eyebrow and "Dashboard" the title, which is the shape every other screen
+ * uses: the page is titled after what it is, and the scope it covers sits above. This view
+ * previously titled itself "Super Admin Dashboard", naming the reader's role rather than the
+ * subject — the only screen in the product that did.
+ *
+ * The old `KPIDisplay` grid at `columns={3}` wrapped five cards into a ragged 3-then-2 second
+ * row. Three of those five were pairs measuring the same thing (users and *active* users;
+ * surveys and *active* surveys), so each pair folds into one tile with the total as its
+ * sub-line, and responses do the same. Four readings, four across, and each one now states
+ * what its denominator is instead of leaving the reader to pair up two boxes.
  */
 export default function SuperAdminDashboardView() {
   const { t, locale } = useTranslation()
@@ -26,85 +40,106 @@ export default function SuperAdminDashboardView() {
   const load = useCallback(() => getSuperAdminDashboard(baseUrl), [baseUrl])
   const { data, loading, failed, error, reload } = useDashboardData(load)
 
-  const kpis: Kpi[] = [
-    {
-      id: 'companies',
-      label: t('dashboard.totalCompanies'),
-      value: data?.companyCount ?? 0,
-      icon: Building2,
-      action: { label: t('navigation.companies'), href: '/admin/companies' },
-    },
-    {
-      id: 'users',
-      label: t('dashboard.totalUsers'),
-      value: data?.userCount ?? 0,
-      icon: Users,
-    },
-    {
-      id: 'activeUsers',
-      label: t('dashboard.activeUsers'),
-      value: data?.activeUserCount ?? 0,
-      icon: Users,
-    },
-    {
-      id: 'activeSurveys',
-      label: t('dashboard.activeSurveys'),
-      value: data?.activeSurveyCount ?? 0,
-      icon: ClipboardList,
-      action: { label: t('navigation.surveys'), href: '/surveys' },
-    },
-    {
-      id: 'completedResponses',
-      label: t('dashboard.completedResponses'),
-      value: data?.completedResponseCount ?? 0,
-      icon: MessageSquare,
-    },
-  ]
 
   return (
     <div>
       <PageTopBar
-        title={t('dashboard.superAdminTitle')}
+        eyebrow={t('dashboard.platform')}
+        title={t('dashboard.title')}
         description={t('dashboard.superAdminDescription')}
       />
 
       <DashboardState loading={loading} failed={failed} error={error} onRetry={reload}>
-        <KPIDisplay
-          kpis={kpis}
-          title={t('dashboard.overview')}
-          columns={3}
-          locale={locale}
-        />
+        {data && (
+          <div className="flex flex-col gap-section">
+            <KpiRow>
+              <KpiTile
+                label={t('dashboard.totalCompanies')}
+                value={data.companyCount}
+                locale={locale}
+              />
+              <KpiTile
+                label={t('dashboard.totalUsers')}
+                value={data.userCount}
+                locale={locale}
+                sub={
+                  <MonoReadings
+                    locale={locale}
+                    t={t}
+                    messageKey="dashboard.activeOfMembers"
+                    params={{ active: data.activeUserCount }}
+                  />
+                }
+              />
+              <KpiTile
+                label={t('dashboard.activeSurveys')}
+                value={data.activeSurveyCount}
+                locale={locale}
+                sub={
+                  <MonoReadings
+                    locale={locale}
+                    t={t}
+                    messageKey="dashboard.ofTotalSurveys"
+                    params={{ total: data.surveyCount }}
+                  />
+                }
+              />
+              <KpiTile
+                label={t('dashboard.completedResponses')}
+                value={data.completedResponseCount}
+                locale={locale}
+                sub={
+                  <MonoReadings
+                    locale={locale}
+                    t={t}
+                    messageKey="dashboard.ofTotalResponses"
+                    params={{ total: data.responseCount }}
+                  />
+                }
+              />
+            </KpiRow>
 
-        <H2>{t('dashboard.companyPerformance')}</H2>
-        {data && data.companies.length > 0 ? (
-          <Table>
-            <thead>
-              <tr>
-                <th>{t('dashboard.companyName')}</th>
-                <th>{t('navigation.users')}</th>
-                <th>{t('dashboard.activeSurveys')}</th>
-                <th>{t('dashboard.completedResponses')}</th>
-                <th>{t('dashboard.added')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.companies.map((company) => (
-                <tr key={company.id}>
-                  <td>{company.name}</td>
-                  <td>{company.userCount}</td>
-                  <td>{company.activeSurveyCount}</td>
-                  <td>{company.completedResponseCount}</td>
-                  <td>{new Date(company.createdAt).toLocaleDateString(locale)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        ) : (
-          <EmptyState
-            title={t('dashboard.noCompaniesYet')}
-            description={t('dashboard.startByAddingFirstCompany')}
-          />
+            <section>
+              <SectionHeading>{t('dashboard.companyPerformance')}</SectionHeading>
+              {data.companies.length > 0 ? (
+                <Table>
+                  {/* The redesign's micro-label, `text-fg-secondary` for contrast — see
+                      `DashboardSurveyTable` for the measurement. */}
+                  <thead className="text-2xs uppercase tracking-label text-fg-secondary">
+                    <tr>
+                      <th>{t('dashboard.companyName')}</th>
+                      <th>{t('navigation.users')}</th>
+                      <th>{t('dashboard.activeSurveys')}</th>
+                      <th>{t('dashboard.completedResponses')}</th>
+                      <th>{t('dashboard.added')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.companies.map((company) => (
+                      <tr key={company.id}>
+                        <td>{company.name}</td>
+                        <td className="font-mono tabular-nums">{company.userCount}</td>
+                        <td className="font-mono tabular-nums">{company.activeSurveyCount}</td>
+                        <td className="font-mono tabular-nums">
+                          {company.completedResponseCount}
+                        </td>
+                        {/* UTC, not the browser's zone: a calendar day, and a reader west of
+                            UTC was shown the day before. See `calendarDay`. */}
+                        <td className="whitespace-nowrap font-mono tabular-nums">
+                          {calendarDay(Date.parse(company.createdAt), locale)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              ) : (
+                <EmptyState
+                  title={t('dashboard.noCompaniesYet')}
+                  description={t('dashboard.startByAddingFirstCompany')}
+                />
+              )}
+            </section>
+          </div>
         )}
       </DashboardState>
     </div>

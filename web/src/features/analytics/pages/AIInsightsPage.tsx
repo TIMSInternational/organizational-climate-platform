@@ -8,11 +8,13 @@ import {
 } from '../api/insights'
 import InsightList from '../components/InsightList'
 import InsightDetailPanel from '../components/InsightDetailPanel'
+import { CRITICAL_PRIORITY } from '../insightVocabulary'
 import { getUser } from '../../org-structure/api/users'
 import { useCompanyScope } from '../../../company-context'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { Button, EmptyState, ErrorState } from '../../../components/ui'
+import { KpiTile } from '../../../components/charts'
 
 /**
  * List and acknowledge AI insights.
@@ -42,7 +44,19 @@ import { Button, EmptyState, ErrorState } from '../../../components/ui'
  * — the AI provider decision, and whether predictive attrition survives at all —
  * is undecided, so anything of that shape here would be a button wired to a
  * decision nobody has made. Acknowledgement is the one verb #86 commits to, and
- * it is the only one this page offers.
+ * it is the only one this page offers. The redesign's page header shows *Filters*
+ * and *Regenerate* beside the title; neither is here, for the same reason — one
+ * would filter a list of nine, the other is #92.
+ *
+ * ## The three headline counts are counted, not fetched
+ *
+ * Open, critical and acknowledged are all derived from `insights`, the list this
+ * page already holds. There is no summary endpoint and none is wanted: a headline
+ * that disagrees with the cards under it is worse than no headline, and counting
+ * what is on screen makes that impossible. "Became plans" — the redesign's fourth
+ * tile — is deliberately absent: nothing on `AIInsightListItem` or on
+ * `AIInsightDetail` links an insight to an action plan, so the number could only
+ * be invented.
  */
 export default function AIInsightsPage() {
   const { t } = useTranslation()
@@ -148,9 +162,16 @@ export default function AIInsightsPage() {
     return <p role="alert">{t('common.noCompanyAssociated')}</p>
   }
 
+  const openCount = insights.filter((insight) => !insight.isAcknowledged).length
+  const criticalCount = insights.filter((insight) => insight.priority === CRITICAL_PRIORITY).length
+
   return (
     <div>
-      <PageTopBar title={t('navigation.aiInsights')} description={t('insights.description')} />
+      <PageTopBar
+        eyebrow={t('navigation.analytics')}
+        title={t('navigation.aiInsights')}
+        description={t('insights.description')}
+      />
 
       {loading ? (
         <p>{t('common.loading')}</p>
@@ -171,18 +192,45 @@ export default function AIInsightsPage() {
         />
       ) : (
         <>
-          <InsightList insights={insights} selectedId={selected?.id ?? null} onSelect={(id) => void open(id)} />
-          {detailError && <p role="alert">{detailError}</p>}
-          {selected ? (
-            <InsightDetailPanel
-              insight={selected}
-              acknowledgedByName={acknowledgerName}
-              acknowledging={acknowledging}
-              onAcknowledge={() => void acknowledge()}
+          {/* Counted from the loaded list, never fetched: a headline that
+              disagrees with the cards under it is worse than no headline. */}
+          <div className="grid grid-cols-1 gap-inline sm:grid-cols-3">
+            <KpiTile label={t('insights.open')} value={openCount} />
+            <KpiTile label={t('actionPlans.critical')} value={criticalCount} />
+            <KpiTile
+              label={t('insights.acknowledged')}
+              value={insights.length - openCount}
             />
-          ) : (
-            <p>{t('insights.selectAnInsight')}</p>
-          )}
+          </div>
+
+          {/* Findings left, the open one right. `items-start` so the panel keeps
+              its own height instead of stretching to a long list of cards. */}
+          <div className="mt-section grid items-start gap-panel-gap lg:grid-cols-2">
+            <InsightList
+              insights={insights}
+              selectedId={selected?.id ?? null}
+              onSelect={(id) => void open(id)}
+            />
+            <div>
+              {detailError && (
+                <p role="alert" className="mb-inline">
+                  {detailError}
+                </p>
+              )}
+              {selected ? (
+                <InsightDetailPanel
+                  insight={selected}
+                  acknowledgedByName={acknowledgerName}
+                  acknowledging={acknowledging}
+                  onAcknowledge={() => void acknowledge()}
+                />
+              ) : (
+                <p className="mb-0 rounded-lg border border-line-light bg-surface-icon-box p-panel text-sm text-fg-tertiary">
+                  {t('insights.selectAnInsight')}
+                </p>
+              )}
+            </div>
+          </div>
         </>
       )}
     </div>

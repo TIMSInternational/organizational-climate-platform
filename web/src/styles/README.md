@@ -214,9 +214,31 @@ strengths:
 | `--admin-accent-bg-<hue>-subtle` | `bg-accent-<hue>-subtle` | Barely-there row tint (green/blue/purple/orange only) |
 | `--admin-accent-border-<hue>` | `border-accent-<hue>-ring` | Hairline around a soft fill |
 
-`blue` is the brand accent (`#2E9098`), the selected-nav fill and the focus-ring
-colour. `green` = success, `red` = destructive/error, `amber`/`orange` =
-warning.
+`blue` is the brand accent (`#0d9488` in light, `#14b8a6` in dark — revalued in
+UI-0 off the legacy `#2E9098`, which measured below the chroma floor and read
+grey), the selected-nav fill and the focus-ring colour. `green` = success,
+`red` = destructive/error, `amber`/`orange` = warning.
+
+### Status-chip fill and ink
+
+A status chip uses neither half of the accent palette. An accent **ink** is
+chosen to clear 3:1 against the panel, which is right for a border or an icon
+and not enough for 11px text sitting on a tint of itself. And an
+`--admin-accent-bg-*` **fill** is translucent, so what it renders as depends on
+what is behind it — and a chip has no fixed ground: `ui/table.tsx` puts
+`hover:bg-state-hover` on every `TableRow`, so hovering a row repaints the
+surface under every chip in it and drags a translucent fill down with it.
+
+| Pattern | Utility | Use |
+| --- | --- | --- |
+| `--admin-chip-bg-<tone>` | `bg-chip-<tone>-fill` | The opaque surface of a `ui/Chip` |
+| `--admin-chip-ink-<tone>` | `text-chip-<tone>-ink` | The word inside it, measured against that fill |
+
+Five tones — `good`, `warning`, `critical`, `accent`, `neutral` — selected per
+theme, worst measured pairing 5.59:1 against WCAG AA's 4.5. Never separate an ink
+from the fill it was measured against; `chipVariantContrast.test.ts` re-derives
+every pairing from `ui/chipVariants.ts`, on the panel, a hovered row, the icon
+box and a hovered icon box, and fails a fill that is not opaque.
 
 ## Type
 
@@ -285,9 +307,10 @@ when the thing you are spacing has a name:
 | `--admin-size-control-lg` | 32px | `h-control-lg`, … | Button, input, select |
 | `--admin-size-icon` | 16px | `size-icon` | Inline icon |
 | `--admin-size-icon-box` | 28px | `size-icon-box` | Icon tile |
-| `--admin-size-sidebar` | 240px | `w-sidebar` | Sidebar |
+| `--admin-size-sidebar` | 220px | `w-sidebar` | Sidebar |
 | `--admin-size-sidebar-collapsed` | 52px | `w-sidebar-collapsed` | Collapsed sidebar |
-| `--admin-size-content-max` | 1280px | `max-w-content`, `w-content` | Content column cap — applied by `AdminLayout` |
+| `--admin-size-content-max` | 1280px | `max-w-content`, `w-content` | Content column cap. **Not** applied by `AdminLayout` any more — the shell panel fills; its remaining callers are `PublicSurveyRespondPage` and the dev chart gallery |
+| `--admin-size-measure` | 70ch | `max-w-measure` | The prose measure. Only prose is capped; tables and charts fill the width. Not `max-w-prose`, which Tailwind emits as a static 65ch |
 
 These are registered in Tailwind's `--spacing-*` namespace rather than
 `--size-*`. That is deliberate and worth not "tidying up": `--size-*` only

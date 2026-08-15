@@ -1,6 +1,6 @@
 import { useTranslation } from '../../../i18n'
 import { Button } from '../../../components/ui'
-import { SURVEY_STATUSES, statusLabel, typeLabel } from '../surveyVocabulary'
+import { typeLabel } from '../surveyVocabulary'
 import type { SurveyFiltersValue } from '../surveyFilterState'
 
 interface SurveyFiltersProps {
@@ -19,12 +19,23 @@ interface SurveyFiltersProps {
 }
 
 /**
- * Status / type / search, applied **server-side**.
+ * Type / search, applied **server-side**.
  *
- * `GET /surveys` already filters on all three, so filtering the fetched array in the
+ * `GET /surveys` already filters on both, so filtering the fetched array in the
  * browser would be a second, divergent implementation of a rule the server owns —
  * and would silently disagree the moment the listing is paginated. `onApply`
  * refetches; the parent owns the request.
+ *
+ * ## Status is deliberately not here
+ *
+ * It moved to `SurveyStatusChips`, and with it to the client, for one reason the
+ * server cannot supply: the chips carry a **count per status**, including the
+ * statuses not being shown, and a status-filtered response contains none of the
+ * rows those counts would be drawn from. `surveyListView.ts` records the full
+ * argument and the two facts that make it safe (the listing is unpaginated, and a
+ * chip can only emit a member of the closed `SurveyStatuses.All` set).
+ * `SurveyFiltersValue.status` survives as the chips' state, so the wire shape and
+ * the empty-string-means-no-filter rule are unchanged.
  *
  * ## Native `<select>`, not the `SelectField` primitive
  *
@@ -48,29 +59,18 @@ export default function SurveyFilters({
 
   return (
     <form
-      className="mb-panel-gap grid items-end gap-inline md:grid-cols-4"
+      // A wrapping flex row rather than an equal-column grid. Rendering it showed
+      // why: a grid column stretches its child, so the submit button spanned a whole
+      // third of the panel while the controls it belongs to stopped at the 32rem field
+      // cap. Here each control asks for the width it needs and the button is sized by
+      // its label.
+      className="mb-panel-gap flex flex-wrap items-end gap-inline"
       onSubmit={(event) => {
         event.preventDefault()
         onApply()
       }}
     >
-      <label>
-        {t('common.status')}
-        <select
-          value={value.status}
-          disabled={disabled}
-          onChange={(event) => onChange({ ...value, status: event.target.value })}
-        >
-          <option value="">{t('surveys.allStatus')}</option>
-          {SURVEY_STATUSES.map((status) => (
-            <option key={status} value={status}>
-              {statusLabel(t, status)}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label>
+      <label className="w-full sm:w-56">
         {t('surveys.surveyType')}
         <select
           value={value.type}
@@ -86,7 +86,7 @@ export default function SurveyFilters({
         </select>
       </label>
 
-      <label>
+      <label className="w-full sm:w-80">
         {t('common.search')}
         <input
           type="search"
@@ -97,7 +97,7 @@ export default function SurveyFilters({
         />
       </label>
 
-      <Button type="submit" disabled={disabled}>
+      <Button type="submit" className="shrink-0" disabled={disabled}>
         {t('common.filter')}
       </Button>
     </form>

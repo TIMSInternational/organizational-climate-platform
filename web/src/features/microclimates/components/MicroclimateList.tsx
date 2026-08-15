@@ -2,8 +2,10 @@ import { Link } from 'react-router'
 import type { Microclimate } from '../api/microclimates'
 import { useTranslation } from '../../../i18n'
 import { Badge, EmptyState, Table } from '../../../components/ui'
+import { ProtectedCell } from '../../../components/charts'
 import { statusBadgeVariant, statusLabel } from '../microclimateVocabulary'
-import { participationPercent } from '../microclimatePrivacy'
+import { MINIMUM_RESPONDENTS, participationPercent } from '../microclimatePrivacy'
+import { calendarDay } from '../../../lib/calendarDay'
 
 /**
  * The microclimate listing.
@@ -20,6 +22,37 @@ import { participationPercent } from '../microclimatePrivacy'
  * zeroed, when a session records no target: a rate over an invented denominator
  * reads as "0% participation" when the truth is "nobody said how many people were
  * expected".
+ *
+ * ## The Results column shows the floor being enforced
+ *
+ * A session below `MINIMUM_RESPONDENTS` renders `<ProtectedCell>` — hatched,
+ * locked, and named *protected* by its accessible label — in place of the link.
+ * That is the redesign's first principle: **protected is shown, never hidden**. An
+ * empty cell would read as missing data, i.e. as the product having failed to
+ * collect something, when the truth is the opposite.
+ *
+ * It is also not decoration. `MicroclimateResultsPage` renders its wording through
+ * `MicroclimateWordPanel`, which runs `microclimatePrivacy.suppressWordCloud` and
+ * withholds every word when the session is under `MINIMUM_RESPONDENTS` — the same
+ * 5. So the link would lead to a page that can only say "withheld"; the listing
+ * says it here instead of sending someone down a corridor.
+ *
+ * **The count behind a locked cell is never announced by it.** `ProtectedCell`
+ * takes `responses` and renders none of it. The Responses column beside it does
+ * show the count, and that is deliberate rather than an oversight:
+ * `microclimatePrivacy.ts` argues it at length — participation counts identify
+ * nobody and are the number that tells an admin whether to keep chasing. The floor
+ * is about *what people said*.
+ *
+ * A `draft` session is not locked, because there is nothing to lock: it has never
+ * been opened. It says so.
+ *
+ * ## Readings are mono, prose is not
+ *
+ * Every figure — the response counts, the participation rate, the date — carries
+ * `font-mono tabular-nums`; the title and the status word do not. That is the one
+ * typographic rule the redesign repeats everywhere, and it is what makes a column
+ * of rates scan as a measurement rather than as text.
  */
 export default function MicroclimateList({ microclimates }: { microclimates: Microclimate[] }) {
   const { t, locale } = useTranslation()
@@ -42,6 +75,7 @@ export default function MicroclimateList({ microclimates }: { microclimates: Mic
           <th>{t('common.status')}</th>
           <th>{t('dashboard.responses')}</th>
           <th>{t('microclimates.columnParticipation')}</th>
+          <th>{t('microclimates.columnResults')}</th>
           <th>{t('microclimates.createdDate')}</th>
         </tr>
       </thead>
@@ -51,12 +85,13 @@ export default function MicroclimateList({ microclimates }: { microclimates: Mic
             microclimate.responseCount,
             microclimate.targetParticipantCount,
           )
+          const name = microclimate.title ?? t('microclimates.untitled')
 
           return (
             <tr key={microclimate.id}>
               <td>
-                <Link to={`/microclimates/${microclimate.id}`}>
-                  {microclimate.title ?? t('microclimates.untitled')}
+                <Link to={`/microclimates/${microclimate.id}`} className="font-semibold">
+                  {name}
                 </Link>
               </td>
               <td>
@@ -64,14 +99,47 @@ export default function MicroclimateList({ microclimates }: { microclimates: Mic
                   {statusLabel(t, microclimate.status)}
                 </Badge>
               </td>
-              <td>
-                {t('surveys.responseProgress', {
-                  count: microclimate.responseCount,
-                  target: microclimate.targetParticipantCount,
-                })}
+              <td className="font-mono tabular-nums text-fg-secondary">
+                {/* "31 of 0" is not a reading. `targetParticipantCount` is
+                    nullable in practice — a session opened without a roster
+                    records zero — and the Participation cell beside this one
+                    already renders an em dash rather than dividing by it (see
+                    `participationPercent`). The count on its own is the honest
+                    statement, and it is the same one the live card above makes
+                    with `microclimates.liveNoTarget`. */}
+                {microclimate.targetParticipantCount > 0
+                  ? t('surveys.responseProgress', {
+                      count: microclimate.responseCount,
+                      target: microclimate.targetParticipantCount,
+                    })
+                  : t('microclimates.responsesNoTarget', { count: microclimate.responseCount })}
               </td>
-              <td>{rate === null ? '—' : `${Math.round(rate)}%`}</td>
-              <td>{new Date(microclimate.createdAt).toLocaleDateString(locale)}</td>
+              <td className="font-mono font-semibold tabular-nums">
+                {rate === null ? '—' : `${Math.round(rate)}%`}
+              </td>
+              <td>
+                {microclimate.status === 'draft' ? (
+                  <span className="text-fg-tertiary">{t('microclimates.resultsPending')}</span>
+                ) : (
+                  <ProtectedCell
+                    responses={microclimate.responseCount}
+                    threshold={MINIMUM_RESPONDENTS}
+                    description={name}
+                    // The lock is an inline glyph in a table cell, so it needs a
+                    // box of its own — `ProtectedCell` sizes to its content, and
+                    // its content when suppressed is one 12px padlock. The word
+                    // beside it is the cell's own now, and is not sized by this.
+                    suppressedClassName="h-5 w-7"
+                  >
+                    <Link to={`/microclimates/${microclimate.id}/results`}>
+                      {t('microclimates.openResults')}
+                    </Link>
+                  </ProtectedCell>
+                )}
+              </td>
+              <td className="font-mono tabular-nums text-fg-secondary">
+                {calendarDay(Date.parse(microclimate.createdAt), locale)}
+              </td>
             </tr>
           )
         })}

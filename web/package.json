@@ -12,6 +12,7 @@
     "typecheck": "tsc -b",
     "lint": "oxlint --max-warnings 10",
     "check:contrast": "node scripts/check-seq-contrast.mjs",
+    "shot": "node scripts/shot.mjs",
     "preview": "vite preview",
     "test": "vitest run"
   },
@@ -58,6 +59,7 @@
     "@vitejs/plugin-react": "^6.0.4",
     "happy-dom": "^20.11.1",
     "oxlint": "^1.75.0",
+    "playwright-core": "1.62.1",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.2.0",

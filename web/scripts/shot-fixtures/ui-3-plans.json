@@ -1,0 +1,186 @@
+{
+  "GET /notifications/mine": { "notifications": [] },
+  "GET /admin/companies": {
+    "companies": [
+      {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "name": "Acme Manufacturing",
+        "emailDomain": "acme.example",
+        "industry": "Manufacturing",
+        "size": "large",
+        "country": "Colombia",
+        "subscriptionTier": "enterprise",
+        "createdAt": "2025-03-14T09:12:00Z"
+      }
+    ]
+  },
+  "GET /admin/departments": {
+    "departments": [
+      {
+        "id": "d0000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Support",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 23
+      },
+      {
+        "id": "d0000000-0000-0000-0000-000000000002",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Operations",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 48
+      },
+      {
+        "id": "d0000000-0000-0000-0000-000000000003",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Engineering",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 57
+      },
+      {
+        "id": "d0000000-0000-0000-0000-000000000004",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Sales",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 31
+      }
+    ]
+  },
+  "GET /action-plan-templates": { "templates": [] },
+  "GET /action-plans": {
+    "actionPlans": [
+      {
+        "id": "a0000000-0000-0000-0000-000000000001",
+        "title": "Rebalance Support queue ownership",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "departmentId": "d0000000-0000-0000-0000-000000000001",
+        "dueDate": "2026-09-30T00:00:00.000Z",
+        "status": "in_progress",
+        "priority": "critical",
+        "createdAt": "2026-05-02T09:00:00Z"
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000002",
+        "title": "Manager 1:1 cadence — Operations",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "departmentId": "d0000000-0000-0000-0000-000000000002",
+        "dueDate": "2026-10-15T00:00:00.000Z",
+        "status": "in_progress",
+        "priority": "high",
+        "createdAt": "2026-05-11T09:00:00Z"
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000003",
+        "title": "Recognition programme rollout",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "departmentId": "d0000000-0000-0000-0000-000000000004",
+        "dueDate": "2026-07-31T00:00:00.000Z",
+        "status": "completed",
+        "priority": "medium",
+        "createdAt": "2026-02-09T09:00:00Z"
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000004",
+        "title": "Career pathways documentation",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "departmentId": "d0000000-0000-0000-0000-000000000003",
+        "dueDate": "2026-11-30T00:00:00.000Z",
+        "status": "in_progress",
+        "priority": "medium",
+        "createdAt": "2026-06-01T09:00:00Z"
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000005",
+        "title": "Onboarding buddy scheme",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "departmentId": null,
+        "dueDate": "2026-08-01T00:00:00.000Z",
+        "status": "not_started",
+        "priority": "low",
+        "createdAt": "2026-07-20T09:00:00Z"
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000006",
+        "title": "Workload review — Support",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "departmentId": "d0000000-0000-0000-0000-000000000001",
+        "dueDate": "2026-08-28T00:00:00.000Z",
+        "status": "overdue",
+        "priority": "high",
+        "createdAt": "2026-04-18T09:00:00Z"
+      }
+    ]
+  },
+  "GET /microclimates": {
+    "microclimates": [
+      {
+        "id": "b0000000-0000-0000-0000-000000000001",
+        "title": "Ops all-hands · September",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "status": "active",
+        "language": "en",
+        "responseCount": 31,
+        "targetParticipantCount": 48,
+        "createdAt": "2026-08-11T09:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000006",
+        "title": "Finance stand-up",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "status": "active",
+        "language": "en",
+        "responseCount": 3,
+        "targetParticipantCount": 9,
+        "createdAt": "2026-08-10T09:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000002",
+        "title": "Engineering retro",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "status": "closed",
+        "language": "en",
+        "responseCount": 51,
+        "targetParticipantCount": 57,
+        "createdAt": "2026-09-02T09:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000003",
+        "title": "Support stand-down",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "status": "closed",
+        "language": "en",
+        "responseCount": 19,
+        "targetParticipantCount": 23,
+        "createdAt": "2026-08-28T09:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000004",
+        "title": "Finance check-in",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "status": "closed",
+        "language": "en",
+        "responseCount": 4,
+        "targetParticipantCount": 4,
+        "createdAt": "2026-08-21T09:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000005",
+        "title": "People team pulse",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "status": "draft",
+        "language": "en",
+        "responseCount": 0,
+        "targetParticipantCount": 12,
+        "createdAt": "2026-08-09T09:00:00Z"
+      }
+    ]
+  }
+}

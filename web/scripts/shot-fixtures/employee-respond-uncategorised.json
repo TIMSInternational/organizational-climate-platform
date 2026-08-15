@@ -1,0 +1,107 @@
+{
+  "GET /notifications/mine": { "notifications": [] },
+
+  "GET /surveys/*/respond": {
+    "id": "44444444-4444-4444-4444-444444440006",
+    "title": "Post-restructure check-in",
+    "description": "Four questions about the April reorganisation. Written after the Ops merge and reused since.",
+    "type": "custom",
+    "language": "en",
+    "resolvedLocale": "en",
+    "fallbackFields": [],
+    "startDate": "2026-08-10T08:00:00Z",
+    "endDate": "2026-09-30T17:00:00Z",
+    "anonymous": true,
+    "allowPartialResponses": true,
+    "randomizeQuestions": false,
+    "showProgress": true,
+    "timeLimitMinutes": null,
+    "questions": [
+      {
+        "id": "44444444-0006-0000-0000-000000000001",
+        "text": "In my team I can raise a problem without it being held against me.",
+        "type": "likert",
+        "options": [
+          { "order": 0, "value": "1", "label": "1" },
+          { "order": 1, "value": "2", "label": "2" },
+          { "order": 2, "value": "3", "label": "3" },
+          { "order": 3, "value": "4", "label": "4" },
+          { "order": 4, "value": "5", "label": "5" }
+        ],
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Never",
+        "scaleLabelMax": "Always",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 0,
+        "category": "psychological_safety"
+      },
+      {
+        "id": "44444444-0006-0000-0000-000000000002",
+        "text": "Good work in my team is noticed by the people who decide things.",
+        "type": "likert",
+        "options": [
+          { "order": 0, "value": "1", "label": "1" },
+          { "order": 1, "value": "2", "label": "2" },
+          { "order": 2, "value": "3", "label": "3" },
+          { "order": 3, "value": "4", "label": "4" },
+          { "order": 4, "value": "5", "label": "5" }
+        ],
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Never",
+        "scaleLabelMax": "Always",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 1,
+        "category": "recognition"
+      },
+      {
+        "id": "44444444-0006-0000-0000-000000000003",
+        "text": "Since April, do you know who to go to when a shift has to be covered?",
+        "type": "yes_no",
+        "options": null,
+        "scaleMin": null,
+        "scaleMax": null,
+        "scaleLabelMin": null,
+        "scaleLabelMax": null,
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 2,
+        "category": null
+      },
+      {
+        "id": "44444444-0006-0000-0000-000000000004",
+        "text": "What would you change first, if it were up to you?",
+        "type": "open_ended",
+        "options": null,
+        "scaleMin": null,
+        "scaleMax": null,
+        "scaleLabelMin": null,
+        "scaleLabelMax": null,
+        "required": false,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 3,
+        "category": ""
+      }
+    ],
+    "inProgress": null
+  },
+
+  "POST /surveys/*/responses": {
+    "responseId": "66666666-6666-6666-6666-666666660002",
+    "sessionId": "77777777-7777-7777-7777-777777770002",
+    "isComplete": true,
+    "isAnonymous": true,
+    "alreadySubmitted": false,
+    "language": "en",
+    "answeredQuestionCount": 4,
+    "questionCount": 4,
+    "suppressedDemographics": []
+  }
+}

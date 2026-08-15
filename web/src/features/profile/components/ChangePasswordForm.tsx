@@ -48,6 +48,24 @@ export interface ChangePasswordFormProps {
  * `profile.passwordOtherSessionsNote` said the opposite and was removed from both locales in
  * #284, and `profile.passwordSignsOutOtherDevices` replaced it in the same place.
  *
+ * ## Resolved here, in the merge, which is the only place it was ever wrong
+ *
+ * This was a genuine cross-branch defect and both sides had predicted it. `#284` landed on
+ * `main`; the redesign of this card happened on the UI integration branch, where the old
+ * 24-hour behaviour was still the code and the old sentence was still true. **Neither side
+ * was wrong on its own and no test failed on either.**
+ *
+ * The merge is where it bites, and in two ways at once. The sentence becomes a lie — telling
+ * a possibly-compromised person their other devices are still signed in, when #284 has just
+ * signed them out, is the worst direction for this particular error to point. And the key the
+ * redesigned JSX rendered, `profile.passwordOtherSessionsNote`, was DELETED from both
+ * catalogues by #284, so keeping the redesign's markup would have rendered a missing key.
+ *
+ * Resolution: `main`'s key and `main`'s fact, in the redesign's recessed surface — minus the
+ * amber left rule, which the redesign chose while this was a caveat. It is reassurance now,
+ * and a warning tone would argue with the sentence it frames.
+
+ *
  * The server's own rejection text (wrong current password, policy failures) is rendered
  * verbatim rather than replaced with a generic message: "Password must be at least 12
  * characters long, contain a number" is actionable and a translated "Invalid password" is
@@ -141,8 +159,18 @@ export default function ChangePasswordForm({ onSubmit }: ChangePasswordFormProps
           />
 
           {/* Unconditional, and above the button rather than in the success alert: it is
-              something to know before choosing to submit, not afterwards. */}
-          <p className="text-sm text-fg-tertiary">
+              something to know before choosing to submit, not afterwards.
+
+              The redesign gives it the recessed surface so it reads as a standing property
+              of this action rather than as a caption — but it is not an `Alert`, because
+              nothing has gone wrong and an alert that is always on screen is one nobody
+              reads.
+
+              The amber left rule the redesign paired with this is deliberately NOT here.
+              That accent was chosen while the sentence was a caveat ("your other devices
+              stay signed in"). #284 reversed the fact, so the sentence is now reassurance,
+              and a warning tone would argue with the words inside it. */}
+          <p className="mb-0 rounded-lg border border-line-light bg-surface-icon-box p-3 text-sm text-fg-secondary">
             {t('profile.passwordSignsOutOtherDevices')}
           </p>
 

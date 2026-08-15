@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCompanyName } from '../../../company-context/useCompanyName'
 import { listSurveys, type SurveyListItem } from '../api/surveys'
 import SurveyList from '../components/SurveyList'
 import SurveyFilters from '../components/SurveyFilters'
+import SurveyStatusChips from '../components/SurveyStatusChips'
 import { EMPTY_SURVEY_FILTERS, type SurveyFiltersValue } from '../surveyFilterState'
+import { filterSurveysByStatus, surveyStatusFacets } from '../surveyListView'
 import { useTranslation } from '../../../i18n'
 import { Link } from 'react-router'
 import { PageTopBar } from '../../../components/layout'
@@ -31,15 +34,22 @@ import { Button, LoadingRegion, NetworkError, SkeletonText } from '../../../comp
  * company-context selector (#57) to conflict with — it would add a filter here, not
  * replace a scoping mechanism.
  *
- * ## Filtering is the server's job
+ * ## Type and search are the server's job; status is the chip row's
  *
- * Status, type and search all go on the query string. The alternative — fetching
- * everything and filtering the array — is a second implementation of a rule the
- * server owns, and `SurveyStatuses.IsValid` rejecting an unknown status with a 400
- * is a check the client would then be silently skipping.
+ * Type and search go on the query string. The alternative — fetching everything and
+ * filtering the array — is a second implementation of a rule the server owns.
+ *
+ * `status` is the one exception, and it is not a relaxation of that rule. The
+ * redesign's chip row states a **count per status**, and the counts for the statuses
+ * you are *not* looking at cannot be derived from a status-filtered response: the
+ * rows are not in it. Asking the server would mean one request per status. So the
+ * request stays status-free and the chips narrow the returned set, which is safe
+ * because `ListAsync` is unpaginated and a chip can only ever emit a member of the
+ * closed `SurveyStatuses.All` set. `surveyListView.ts` carries the argument in full.
  */
 export default function SurveysListPage() {
   const { t } = useTranslation()
+  const companyName = useCompanyName()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [surveys, setSurveys] = useState<SurveyListItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -49,6 +59,9 @@ export default function SurveysListPage() {
   // character typed into the search box.
   const [draftFilters, setDraftFilters] = useState<SurveyFiltersValue>(EMPTY_SURVEY_FILTERS)
   const [appliedFilters, setAppliedFilters] = useState<SurveyFiltersValue>(EMPTY_SURVEY_FILTERS)
+  // The chip row's selection. Separate from `appliedFilters` because it changes no
+  // request — it narrows what came back.
+  const [status, setStatus] = useState('')
 
   // `useCallback` rather than a plain function plus a deps-array lie: the web lint
   // budget is `--max-warnings 10` and it is exactly full, so one new
@@ -57,6 +70,7 @@ export default function SurveysListPage() {
     setLoading(true)
     setError(null)
     try {
+      // No `status` is sent, deliberately — see the block above.
       setSurveys(await listSurveys(baseUrl, appliedFilters))
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.generic'))
@@ -82,9 +96,16 @@ export default function SurveysListPage() {
     [surveys],
   )
 
+  // Counted over everything the server returned, not over the visible rows: a chip
+  // reading its own selection's count would say the same number on every chip.
+  const facets = useMemo(() => surveyStatusFacets(surveys), [surveys])
+  const visible = useMemo(() => filterSurveysByStatus(surveys, status), [surveys, status])
+
   return (
     <div>
       <PageTopBar
+        // The design's eyebrow here is the company, not the nav section.
+        eyebrow={companyName}
         title={t('navigation.surveys')}
         description={t('surveys.surveyManagementDesc')}
         actions={
@@ -117,7 +138,21 @@ export default function SurveysListPage() {
         // region, so the visible placeholder is a skeleton rather than a second copy
         // of the same word.
         <LoadingRegion loading={loading} label={t('common.loading')}>
-          {loading ? <SkeletonText lines={4} /> : <SurveyList surveys={surveys} />}
+          {loading ? (
+            <SkeletonText lines={4} />
+          ) : (
+            <>
+              {/* Below the filters and above the table, because the chips read the
+                  result of the filters rather than feeding them. */}
+              <SurveyStatusChips
+                value={status}
+                facets={facets}
+                total={surveys.length}
+                onChange={setStatus}
+              />
+              <SurveyList surveys={visible} />
+            </>
+          )}
         </LoadingRegion>
       )}
     </div>

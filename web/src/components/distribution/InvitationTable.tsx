@@ -1,4 +1,5 @@
 import { useTranslation } from '../../i18n'
+import { calendarDay } from '../../lib/calendarDay'
 import {
   Badge,
   Button,
@@ -53,7 +54,7 @@ export interface InvitationTableProps {
 function formatMoment(value: string | null, locale: string): string {
   if (value === null) return '—'
   const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleDateString(locale)
+  return Number.isNaN(parsed.getTime()) ? '—' : calendarDay(parsed, locale)
 }
 
 export default function InvitationTable({

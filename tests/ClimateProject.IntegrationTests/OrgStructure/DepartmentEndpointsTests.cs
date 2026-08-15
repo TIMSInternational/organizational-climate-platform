@@ -191,4 +191,74 @@ public class DepartmentEndpointsTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Employee_count_is_counted_from_users_and_ignores_the_stored_column()
+    {
+        // The defect: `departments.employee_count` is denormalised and NOTHING in this
+        // codebase writes it -- not user create, invitation accept, bulk import, department
+        // move or deactivation. It is 0 in every real database, so this endpoint answered
+        // "0 employees" for a department with nine people in it, and the Departments screen
+        // printed that.
+        //
+        // The fixture below is built so that reading the column and counting the users give
+        // DIFFERENT answers: the column is hand-set to 99, three active users are placed in
+        // the department, and one inactive user is placed there too. Only a real count of
+        // ACTIVE members returns 3.
+        var client = _factory.CreateClient();
+        var superAdminToken = await SignUpAndGetTokenAsync(client, Roles.SuperAdmin, _companyADomain);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", superAdminToken);
+
+        var departmentId = Guid.NewGuid();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            db.Departments.Add(new Department
+            {
+                Id = departmentId,
+                CompanyId = _companyAId,
+                Name = "Counted Department",
+                EmployeeCount = 99,
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+            for (var i = 0; i < 4; i++)
+            {
+                db.Users.Add(new User
+                {
+                    Id = Guid.NewGuid(),
+                    CompanyId = _companyAId,
+                    DepartmentId = departmentId,
+                    Email = $"counted{i}@{_companyADomain}",
+                    Name = $"Counted {i}",
+                    PasswordHash = "x",
+                    Role = Roles.Employee,
+                    // The fourth is deactivated. Participation denominators on the results
+                    // screen count active members only, and a Departments page that counted
+                    // leavers would disagree with the very screen it feeds. That agreement
+                    // is a claim about two files, so it is proved across both rather than
+                    // asserted here: see
+                    // SurveyResultsEndpointsTests.A_departments_headcount_is_the_denominator_the_results_screen_divides_by.
+                    // This test pins only this endpoint's half of it.
+                    IsActive = i < 3,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var response = await client.GetAsync($"/admin/departments?companyId={_companyAId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var listed = await response.Content.ReadFromJsonAsync<DepartmentListResponse>();
+        var counted = Assert.Single(listed!.Departments, d => d.Id == departmentId);
+        Assert.Equal(3, counted.EmployeeCount);
+
+        // And the detail route agrees with the list route, which it did not have to:
+        // they were two separate reads of the same dead column.
+        var detailResponse = await client.GetAsync($"/admin/departments/{departmentId}");
+        var detail = await detailResponse.Content.ReadFromJsonAsync<DepartmentDetail>();
+        Assert.Equal(3, detail!.EmployeeCount);
+    }
 }

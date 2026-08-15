@@ -361,6 +361,24 @@ export function wizardStepErrors(
   }
 }
 
+/**
+ * How many questions the survey being built will actually have.
+ *
+ * Two sources, and which one applies is decided by `startsFromTemplate`, not by which
+ * of the two happens to be non-empty: in template mode the wizard's own `questions`
+ * array stays empty and the count is the template's, and a template that has not
+ * arrived yet counts as zero rather than as the form's own length. Reading
+ * `values.questions.length` directly at a call site gets template mode wrong and
+ * silently reports 0, which is the number this exists to stop being shown.
+ */
+export function surveyQuestionCount(
+  values: SurveyWizardValues,
+  templateQuestionCount: number | null,
+): number {
+  if (startsFromTemplate(values)) return templateQuestionCount ?? 0
+  return values.questions.length
+}
+
 /** Whole days the survey is open for, or null when either end is missing or invalid. */
 export function scheduledDays(values: SurveyWizardValues): number | null {
   if (isBlank(values.startDate) || isBlank(values.endDate)) return null

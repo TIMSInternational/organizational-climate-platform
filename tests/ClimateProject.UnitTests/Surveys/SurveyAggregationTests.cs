@@ -423,6 +423,38 @@ public class SurveyAggregationTests
     }
 
     /// <summary>
+    /// The >100% edge, pinned. The headcount is the department's ACTIVE members
+    /// (<c>DepartmentHeadcount.Population</c>), while a respondent deactivated after
+    /// answering keeps their response -- six answers against a team that shrank to four is
+    /// a true 150, not an error, and no layer clamps it: this aggregation reports it raw,
+    /// and every screen formats the value as-is (the dashboards' responses-per-100-people
+    /// reading exceeds 100 by design). A clamp to 100 would repaint "the team shrank
+    /// mid-window" as "everyone answered", which are different facts.
+    ///
+    /// Mutation-proved: clamping the computation with <c>Math.Min(100d, ...)</c> fails
+    /// this test with expected 150 actual 100.
+    /// </summary>
+    [Fact]
+    public void Participation_above_100_is_reported_raw_not_clamped()
+    {
+        // Six completed responses -- above both the survey floor and the segment floor of
+        // five, so nothing here is suppressed -- against a headcount of four.
+        var responses = Enumerable.Range(1, 6)
+            .Select(n => Response(ResponseId(n), departmentId: Sales))
+            .ToList();
+        var departments = new List<AggregationDepartment> { new(Sales, "Sales", 4) };
+
+        var aggregate = SurveyAggregation.Compute([], responses, [], departments, null);
+        var sales = aggregate.Breakdowns
+            .Single(b => b.Dimension == "department")
+            .Segments.Single(s => s.Key == Sales.ToString());
+
+        Assert.False(sales.IsSuppressed);
+        Assert.Equal(6, sales.RespondentCount);
+        Assert.Equal(150d, sales.ParticipationRate);
+    }
+
+    /// <summary>
     /// Withheld counts exist so totals still reconcile. Kept + withheld + unsegmented must
     /// equal the completed count, or a reader silently loses people and cannot tell.
     /// </summary>
