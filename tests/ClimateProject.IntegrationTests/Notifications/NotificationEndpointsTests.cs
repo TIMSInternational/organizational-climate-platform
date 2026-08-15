@@ -24,29 +24,28 @@ public class NotificationEndpointsTests : IAsyncLifetime
     private readonly PostgresContainerFixture _postgres;
     private readonly string _companyDomain = $"notif-{Guid.NewGuid():N}.test";
     private readonly string _otherCompanyDomain = $"notif-other-{Guid.NewGuid():N}.test";
-    private AuthWebApplicationFactory? _defaultFactory;
     private Guid _companyId;
     private Guid _otherCompanyId;
 
     public NotificationEndpointsTests(PostgresContainerFixture postgres) => _postgres = postgres;
 
     /// <summary>
-    /// **Exactly one application host per test, never more.**
+    /// **At most one application host per test, and for most tests none at all.**
     ///
-    /// Two tests here need a customised host (a failing sender; a command-counting
-    /// interceptor). The obvious shape -- a shared default factory plus a second one inside
-    /// those tests -- boots two or three hosts per test, and concurrent
+    /// Three tests here need a customised host (a failing sender; a bouncing sender; a
+    /// command-counting interceptor) and still build one, with <c>using var</c>, because the
+    /// customisation is the point of those tests. Every other test now reaches the collection's
+    /// shared host through this property and builds nothing.
+    ///
+    /// The reason to keep counting hosts here has not changed: numerous
     /// <c>WebApplicationFactory&lt;Program&gt;</c> boots are the identified cause of the
     /// spurious <c>ObjectDisposedException</c> in <c>StartupValidationTests</c> (see
-    /// <c>AppHostCollection</c>, which serialises the AppHost classes against each other but
-    /// *not* against this Postgres collection). Tripling this class's host boots reproduced
-    /// exactly that failure on CI.
-    ///
-    /// So the default factory is lazy and the two customised tests never touch it, while
-    /// migrations and seeding go through a bare DbContext -- the way the Persistence tests
-    /// already do -- rather than through a host of their own.
+    /// <c>AppHostCollection</c>) and of the #279 capture timeout, and tripling this class's
+    /// host boots once reproduced exactly that failure on CI. Migrations and seeding still go
+    /// through a bare DbContext -- the way the Persistence tests already do -- rather than
+    /// through a host of their own.
     /// </summary>
-    private AuthWebApplicationFactory Factory => _defaultFactory ??= new AuthWebApplicationFactory(_postgres.ConnectionString);
+    private AuthWebApplicationFactory Factory => _postgres.App;
 
     private ClimateProjectDbContext CreateContext() => new(
         new DbContextOptionsBuilder<ClimateProjectDbContext>().UseNpgsql(_postgres.ConnectionString).Options);
@@ -64,11 +63,9 @@ public class NotificationEndpointsTests : IAsyncLifetime
         await db.SaveChangesAsync();
     }
 
-    public Task DisposeAsync()
-    {
-        _defaultFactory?.Dispose();
-        return Task.CompletedTask;
-    }
+    // Nothing to dispose: the customised hosts are `using var` inside their own tests, and the
+    // default one belongs to the collection fixture (#279).
+    public Task DisposeAsync() => Task.CompletedTask;
 
     private async Task<(string Token, Guid UserId)> SignUpAndGetTokenAsync(HttpClient client, string role, string? domain = null)
     {

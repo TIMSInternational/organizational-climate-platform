@@ -24,13 +24,12 @@ public class SurveyContentI18nTests : IAsyncLifetime
 
     public SurveyContentI18nTests(PostgresContainerFixture postgres)
     {
-        _factory = new AuthWebApplicationFactory(postgres.ConnectionString);
+        _factory = postgres.App;
         _harness = new SurveyTestHarness(_factory, $"si18n-{Guid.NewGuid():N}.test");
     }
 
     public async Task InitializeAsync()
     {
-        await _factory.ApplyMigrationsAsync();
         // The company language is the default every survey inherits, which is what makes
         // 'both' an opt-in rather than something every survey opts out of.
         _spanishCompanyId = await _harness.SeedCompanyAsync("Empresa ES", language: ContentLanguages.Spanish);

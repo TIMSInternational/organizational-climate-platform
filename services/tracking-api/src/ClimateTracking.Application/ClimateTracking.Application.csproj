@@ -6,6 +6,15 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authorization" Version="10.0.0" />
+    <!--
+      For TrackingTokenValidation. Microsoft.IdentityModel.Tokens rather than the
+      Microsoft.AspNetCore.Authentication.JwtBearer package that owns the handler: JwtBearer
+      carries a FrameworkReference on Microsoft.AspNetCore.App, and this assembly is also
+      referenced by ClimateTracking.Workers, a Sdk.Worker console app that today needs only
+      the base runtime. 8.0.1 is the version JwtBearer 10.0.0 already resolves in the Api, so
+      the running dependency graph is unchanged.
+    -->
+    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.0.1" />
   </ItemGroup>
 
   <PropertyGroup>

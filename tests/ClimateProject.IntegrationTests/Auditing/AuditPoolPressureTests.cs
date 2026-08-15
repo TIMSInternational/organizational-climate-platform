@@ -75,6 +75,13 @@ public class AuditPoolPressureTests : IAsyncLifetime
         Timeout = 15,
     }.ConnectionString;
 
+    /// <summary>
+    /// The one class in the "Postgres" collection that still builds a host of its own, and the
+    /// reason is <see cref="ConstrainedConnectionString"/>: the shared host on
+    /// <see cref="PostgresContainerFixture"/> runs on the ordinary connection string, and a
+    /// pool this class cannot grow out of IS the experiment. Lazy and disposed, so the cost is
+    /// one host per test case in this class and nothing beyond it (#279).
+    /// </summary>
     private AuthWebApplicationFactory Factory => _factory ??= new AuthWebApplicationFactory(ConstrainedConnectionString);
 
     private ClimateProjectDbContext CreateContext() => new(

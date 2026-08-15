@@ -33,12 +33,11 @@ public class CompanyLessSuperAdminTests : IAsyncLifetime
 
     public CompanyLessSuperAdminTests(PostgresContainerFixture postgres)
     {
-        _factory = new AuthWebApplicationFactory(postgres.ConnectionString);
+        _factory = postgres.App;
     }
 
     public async Task InitializeAsync()
     {
-        await _factory.ApplyMigrationsAsync();
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
         var companyA = new Company { Id = Guid.NewGuid(), Name = "Global Co A", EmailDomain = _companyADomain, CreatedAt = DateTimeOffset.UtcNow };

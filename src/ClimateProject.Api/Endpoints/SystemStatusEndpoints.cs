@@ -20,12 +20,13 @@ namespace ClimateProject.Api.Endpoints;
 /// endpoints already answer three different questions and none of them is replaced here:
 /// </para>
 /// <list type="bullet">
-/// <item><c>/health</c> — liveness. A static literal that touches nothing, because App Runner
-/// polls it and tying it to Postgres would let a database blip convince App Runner to tear
-/// down a perfectly healthy process. It stays a literal.</item>
+/// <item><c>/health</c> — liveness. A static literal that touches nothing: it answers "is the
+/// process up" and nothing else. It stays a literal.</item>
 /// <item><c>/ready</c> — readiness. One real <c>SELECT 1</c>, 503 on failure, unauthenticated
 /// and therefore deliberately almost mute: service name, a status word, and nothing else.
-/// It is what found #220. It stays exactly as it is.</item>
+/// It is what found #220, and since #221 it is also what App Runner polls — an instance that
+/// fails it is replaced, which is exactly what a literal could never trigger. It stays
+/// exactly as it is.</item>
 /// <item><c>/version</c> — provenance. Commit SHA and build timestamp, without which a deploy
 /// that silently no-op'd and one that worked were indistinguishable (#69).</item>
 /// </list>

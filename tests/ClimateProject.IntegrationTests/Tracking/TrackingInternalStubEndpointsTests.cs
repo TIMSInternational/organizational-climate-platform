@@ -14,7 +14,7 @@ public class TrackingInternalStubEndpointsTests
 
     public TrackingInternalStubEndpointsTests(PostgresContainerFixture postgres)
     {
-        _factory = new AuthWebApplicationFactory(postgres.ConnectionString);
+        _factory = postgres.App;
     }
 
     private readonly AuthWebApplicationFactory _factory;

@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Text;
 using ClimateTracking.Api.Endpoints;
 using ClimateTracking.Application.Auth;
 using ClimateTracking.Infrastructure.ExternalApi;
@@ -7,7 +6,6 @@ using ClimateTracking.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,8 +17,20 @@ builder.Services.AddDbContext<ClimateTrackingDbContext>(options =>
 
 var trackingJwtSecret = builder.Configuration["TrackingJwtSecret"]
     ?? throw new InvalidOperationException("Missing TrackingJwtSecret configuration.");
-var procomerCompanyId = builder.Configuration["ProcomerCompanyId"]
-    ?? throw new InvalidOperationException("Missing ProcomerCompanyId configuration.");
+
+// IsNullOrWhiteSpace, not `?? throw` (#153). appsettings.json ships `"ProcomerCompanyId": ""`,
+// so a deployment that forgets to override it has a present-but-blank value: the null check
+// this replaced never fired, the host started, and MatchingTenantRequirement was built with
+// "" as the tenant everyone is compared against. climate-project-api mints
+// `companyId: user.CompanyId?.ToString() ?? string.Empty`, so its company-less super_admins
+// carry a blank companyId claim -- which that blank expectation matched, handing every one of
+// them this tenant's whole API. Refusing to start is the only safe reading of "no tenant
+// configured"; MatchingTenantHandler holds the same line at authorization time.
+var procomerCompanyId = builder.Configuration["ProcomerCompanyId"];
+if (string.IsNullOrWhiteSpace(procomerCompanyId))
+{
+    throw new InvalidOperationException("Missing ProcomerCompanyId configuration.");
+}
 
 builder.Services.AddClimateProjectClient(new ClimateProjectClientOptions
 {
@@ -35,18 +45,12 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        // Without this, the handler remaps well-known claim names ("sub" -> NameIdentifier
-        // URI, "role" -> Role URI, etc.) before CurrentUser reads them by their raw names.
-        options.MapInboundClaims = false;
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(trackingJwtSecret)),
-            ValidateIssuer = false,
-            ValidateAudience = false,
-            ValidateLifetime = true,
-            NameClaimType = "sub",
-        };
+        // Both values come from TrackingTokenValidation and nothing else is set here, so the
+        // contract this service accepts tokens under is one referenceable thing rather than a
+        // handful of literals in a startup file (#153). ClimateProject.IntegrationTests
+        // compiles against that same type to prove a token minted over there is accepted here.
+        options.MapInboundClaims = TrackingTokenValidation.MapInboundClaims;
+        options.TokenValidationParameters = TrackingTokenValidation.CreateParameters(trackingJwtSecret);
     });
 
 builder.Services.AddOpenApi();
@@ -69,8 +73,25 @@ builder.Services.AddAuthorization(options =>
     // A token that fails signature/expiry checks is a 401 (JwtBearer handles that before
     // this runs); a validly-signed token for the wrong tenant is a 403 (authorization),
     // so the company check lives here, not in JwtBearerEvents.OnTokenValidated.
+    //
+    // The isActive assertion is the same shape and here for the same reason: it is a
+    // statement about a validly-authenticated caller, so 403. It brings this service level
+    // with climate-project-api, whose default policy has refused a token whose own isActive
+    // claim says "false" since #280 while this one accepted it -- the two services validate
+    // the same tokens off the same shared secret, and an asymmetry in what they will do with
+    // one is exactly the class of gap #153 exists to find. HasDeactivatedAccountClaim (not
+    // !GetCurrentUser().IsActive) so that an issuer which never wrote the claim is not locked
+    // out; its remarks carry the rest.
+    //
+    // What this does NOT do is end a session that was live when the account was deactivated:
+    // the claim is minted from the account's state at mint time and never changes afterwards.
+    // That revocation exists only in climate-project-api, as a SecurityStamp this service
+    // cannot see, and the window it leaves open here is stated in
+    // docs/decisions/cross-service-session-revocation.md rather than papered over by this
+    // check.
     options.DefaultPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
+        .RequireAssertion(context => !context.User.HasDeactivatedAccountClaim())
         .AddRequirements(new MatchingTenantRequirement(procomerCompanyId))
         .Build();
 });

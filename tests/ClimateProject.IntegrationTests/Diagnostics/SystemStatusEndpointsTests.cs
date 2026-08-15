@@ -26,15 +26,14 @@ public class SystemStatusEndpointsTests : IAsyncLifetime
 {
     private readonly PostgresContainerFixture _postgres;
     private readonly string _companyDomain = $"sysstatus-{Guid.NewGuid():N}.test";
-    private AuthWebApplicationFactory? _factory;
     private Guid _companyId;
 
     public SystemStatusEndpointsTests(PostgresContainerFixture postgres) => _postgres = postgres;
 
-    // Exactly one application host for the whole class -- concurrent/numerous
-    // WebApplicationFactory<Program> boots are the identified hazard behind the #68 flake, so
-    // migrations and seeding go through a bare DbContext rather than through a host.
-    private AuthWebApplicationFactory Factory => _factory ??= new AuthWebApplicationFactory(_postgres.ConnectionString);
+    // Exactly one application host for the whole collection, not just this class -- numerous
+    // WebApplicationFactory<Program> boots are the identified hazard behind the #68 flake and
+    // the #279 capture timeout. Migrations and seeding still go through a bare DbContext.
+    private AuthWebApplicationFactory Factory => _postgres.App;
 
     private ClimateProjectDbContext CreateContext() => new(
         new DbContextOptionsBuilder<ClimateProjectDbContext>().UseNpgsql(_postgres.ConnectionString).Options);
@@ -56,11 +55,8 @@ public class SystemStatusEndpointsTests : IAsyncLifetime
         await db.SaveChangesAsync();
     }
 
-    public Task DisposeAsync()
-    {
-        _factory?.Dispose();
-        return Task.CompletedTask;
-    }
+    // Nothing to dispose: the host belongs to the collection fixture (#279).
+    public Task DisposeAsync() => Task.CompletedTask;
 
     private async Task<(string Token, Guid UserId)> SignUpAndGetTokenAsync(HttpClient client, string role)
     {

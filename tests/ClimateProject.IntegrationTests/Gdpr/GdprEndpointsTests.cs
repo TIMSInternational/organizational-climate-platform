@@ -41,12 +41,11 @@ public class GdprEndpointsTests : IAsyncLifetime
     public GdprEndpointsTests(PostgresContainerFixture postgres)
     {
         _postgres = postgres;
-        _factory = new AuthWebApplicationFactory(postgres.ConnectionString);
+        _factory = postgres.App;
     }
 
     public async Task InitializeAsync()
     {
-        await _factory.ApplyMigrationsAsync();
         await using var db = NewContext();
         var company = new Company
         {

@@ -18,8 +18,12 @@ Parameters:
     Description: IAM role ARN that App Runner uses to pull the private ECR image.
   HealthCheckPath:
     Type: String
-    Default: /health
-    Description: App Runner HTTP health check path.
+    Default: /ready
+    Description: >-
+      App Runner HTTP health check path. /ready, NOT /health (#221): /health is a static
+      literal that opens no database connection, so an instance that has lost Postgres
+      passes it forever and is never replaced. See HealthCheckConfiguration below for the
+      thresholds this path's latency profile requires.
   Cpu:
     Type: String
     Default: 0.25 vCPU
@@ -50,6 +54,25 @@ Parameters:
   CorsAllowedWildcardOrigin:
     Type: String
     Description: Wildcard-pattern frontend origin allowed by CORS (Vercel preview deployments).
+  CorsAdditionalAllowedOrigin:
+    Type: String
+    Default: ""
+    Description: >-
+      Optional SECOND exact frontend origin (#160). The application binds
+      Cors:AllowedOrigins as a string array and has always accepted any number of entries;
+      until now this template wired index 0 only, so adding the customer-facing domain meant
+      DISPLACING the vercel.app origin rather than joining it. Leave empty to wire index 0
+      alone -- an empty string here removes the index-1 variable entirely rather than
+      binding "" as an origin (see the Conditions below for why that matters).
+  CorsAdditionalAllowedWildcardOrigin:
+    Type: String
+    Default: ""
+    Description: >-
+      Optional SECOND wildcard-pattern frontend origin (#160), e.g. a staging preview
+      domain alongside the Vercel one. Same empty-means-absent rule as
+      CorsAdditionalAllowedOrigin, and here it is load-bearing: CorsOriginMatcher throws on a
+      wildcard pattern containing no '*', and that throw happens while the CORS middleware is
+      built during host start -- so binding "" at index 1 would stop production booting.
   TrackingJwtSecretArn:
     Type: String
     Description: Secrets Manager ARN holding the TrackingJwtSecret value (JWT signing key shared with climate-tracking).
@@ -65,6 +88,16 @@ Parameters:
       not boot at all, fails its App Runner health check, and the deploy fails outright.
       It no longer degrades to per-request 500s on /api/internal/* the way it did before
       #189 -- the failure is now earlier and total.
+
+Conditions:
+  # An optional list element cannot be expressed by passing an empty value: the app binds
+  # Cors:AllowedOrigins / Cors:AllowedWildcardOrigins straight from the numbered environment
+  # variables, so Cors__AllowedOrigins__1="" binds a literal empty-string origin, and
+  # Cors__AllowedWildcardOrigins__1="" fails the host at startup outright. These conditions
+  # drive an Fn::If that resolves to AWS::NoValue, which drops the whole list ENTRY -- the
+  # only way to make an index genuinely absent rather than present-and-empty.
+  HasAdditionalAllowedOrigin: !Not [!Equals [!Ref CorsAdditionalAllowedOrigin, ""]]
+  HasAdditionalAllowedWildcardOrigin: !Not [!Equals [!Ref CorsAdditionalAllowedWildcardOrigin, ""]]
 
 Resources:
   AppRunnerInstanceRole:
@@ -115,29 +148,40 @@ Resources:
                 Value: http://+:8080
               - Name: Cors__AllowedOrigins__0
                 Value: !Ref CorsAllowedOrigin
+              - !If
+                - HasAdditionalAllowedOrigin
+                - Name: Cors__AllowedOrigins__1
+                  Value: !Ref CorsAdditionalAllowedOrigin
+                - !Ref AWS::NoValue
               - Name: Cors__AllowedWildcardOrigins__0
                 Value: !Ref CorsAllowedWildcardOrigin
-              # THE #220 RATCHET. Leave at "false" until the runtime secret below is on the
-              # session pooler AND that deploy has been verified. Flipping the secret and
-              # setting this to "true" are NOT one change and must not be attempted as one:
-              # they are steps 1 and 3 of the ordered sequence at the bottom of this comment.
-              #
-              # "true" makes the API refuse to start when its connection string points at
-              # Supabase's transaction pooler (port 6543), which is the configuration that
-              # caused #220: Supavisor transaction mode hands a different backend to each
-              # statement, and Npgsql holds pooled connections open across statements, so
-              # roughly half of all /ready probes hung for 30 seconds.
-              #
-              # It is "false" today because the secret is still on 6543. Setting it to "true"
-              # before flipping the secret would make the next deploy fail its health check
-              # and roll back -- the deploy cannot change a Secrets Manager value.
+              - !If
+                - HasAdditionalAllowedWildcardOrigin
+                - Name: Cors__AllowedWildcardOrigins__1
+                  Value: !Ref CorsAdditionalAllowedWildcardOrigin
+                - !Ref AWS::NoValue
+              # THE #220 RATCHET. "true" makes the API refuse to start when its connection
+              # string points at Supabase's transaction pooler (port 6543), which is the
+              # configuration that caused #220: Supavisor transaction mode hands a different
+              # backend to each statement, and Npgsql holds pooled connections open across
+              # statements, so roughly half of all /ready probes hung for 30 seconds.
               #
               # Ordered sequence (also in infra/aws/README.md, "Arming the guard"):
-              #   1. Flip climate-project-api/prod/database-connection-string 6543 -> 5432.
-              #   2. Redeploy; confirm 20+ consecutive /ready probes return 200 and the
-              #      "TRANSACTION pooler" warning is gone from the App Runner logs.
-              #   3. Only then change this to "true" and redeploy again.
-              # Step 3 is what stops the port regressing silently later.
+              #   1. DONE 2026-08-10 -- climate-project-api/prod/database-connection-string
+              #      moved 6543 -> 5432 (secret version f22f6c08, AWSCURRENT).
+              #   2. DONE 2026-08-10 -- redeployed; 20 of 20 consecutive /ready probes
+              #      returned 200 and the "TRANSACTION pooler" warning is gone from the App
+              #      Runner logs. #220 closed 2026-08-11 on that evidence.
+              #   3. OUTSTANDING -- change this to "true" and redeploy. That is what stops
+              #      the port regressing silently later, and it is now unblocked.
+              #
+              # Left at "false" in THIS change on purpose. Steps 1 and 3 were never one change
+              # -- a CloudFormation deploy cannot write a Secrets Manager value -- and step 3
+              # is a deploy that can fail closed, so it wants its own commit and its own
+              # rollout to look at, not a ride along a health-check change. Note also that the
+              # LIVE stack does not carry this variable at all: it was last updated
+              # 2026-08-05, before #298 added it, and the app defaults it to false when absent.
+              # The deploy that flips it is therefore also the first deploy that introduces it.
               - Name: Database__RequireSessionPooler
                 Value: "false"
               # RATE LIMITING BEHIND THE APP RUNNER PROXY (#146).
@@ -179,12 +223,41 @@ Resources:
         Cpu: !Ref Cpu
         Memory: !Ref Memory
         InstanceRoleArn: !GetAtt AppRunnerInstanceRole.Arn
+      # Tuned for a probe that ROUND-TRIPS POSTGRES, which /health never did (#221). Every
+      # number below is a consequence of that one change; App Runner allows 1-20 for all four.
+      #
+      # The thing to hold on to when changing any of them: replacing an instance does not fix
+      # a database outage. A fresh instance fails the same probe, so thresholds tight enough
+      # to react to a blip convert a slow database into a replacement loop -- which is exactly
+      # the objection that kept this pointed at /health, and the reason the window below is
+      # deliberately long rather than merely non-zero.
+      #
+      # Timeout 5 -- the healthy path measured a 0.37s median on the live service (#220, after
+      #   the session-pooler fix), so 5s is ~13x the real latency and cannot fire in steady
+      #   state. The failure it must catch is unbounded, not slow: #220's signature was a
+      #   30-second read hang on a socket the pooler had rebalanced away, so a tighter timeout
+      #   strictly improves detection and a looser one only delays it. The one expected miss
+      #   is the first probe against a cold instance, measured at 9.4s post-deploy while the
+      #   EF model builds and the first pooled connection opens; UnhealthyThreshold absorbs it
+      #   four times over, and at Interval 20 the second probe lands long after warm-up.
+      # Interval 20 (the maximum) -- each probe is now a real `SELECT 1` from every instance.
+      #   At the default autoscaling MaxSize of 25 that is 1.25 queries/second of pure
+      #   health-check traffic against the connection budget documented in infra/aws/README.md;
+      #   10 would double it. It also doubles the outage window below, which is the larger win.
+      # UnhealthyThreshold 5 -- with Interval 20 an instance survives ~100s of CONTINUOUS
+      #   failure before replacement. Long enough that a Supavisor failover does not start a
+      #   churn, short enough that a genuinely broken instance is replaced within two minutes.
+      # HealthyThreshold 3 (was 1) -- #220's defect was ~50% intermittent, and at 1 a coin-flip
+      #   instance is declared healthy on its first lucky 200. That is the same "one green
+      #   probe proves nothing" error the deploy canary had (#300). It cannot be 20 like the
+      #   canary, because HealthyThreshold x Interval is added to EVERY rollout: 3 costs 60s,
+      #   20 would cost 400s.
       HealthCheckConfiguration:
         Protocol: HTTP
         Path: !Ref HealthCheckPath
-        Interval: 10
+        Interval: 20
         Timeout: 5
-        HealthyThreshold: 1
+        HealthyThreshold: 3
         UnhealthyThreshold: 5
       NetworkConfiguration:
         IngressConfiguration:

@@ -37,12 +37,11 @@ public class AuditLoggingTests : IAsyncLifetime
     // `companies.email_domain` carries a filtered unique index.
     private readonly string _companyDomain = $"audit-{Guid.NewGuid():N}.test";
 
-    private AuthWebApplicationFactory? _factory;
     private Guid _companyId;
 
     public AuditLoggingTests(PostgresContainerFixture postgres) => _postgres = postgres;
 
-    private AuthWebApplicationFactory Factory => _factory ??= new AuthWebApplicationFactory(_postgres.ConnectionString);
+    private AuthWebApplicationFactory Factory => _postgres.App;
 
     /// <summary>
     /// A context built straight from the connection string, with none of the application's
@@ -71,11 +70,8 @@ public class AuditLoggingTests : IAsyncLifetime
         await db.SaveChangesAsync();
     }
 
-    public Task DisposeAsync()
-    {
-        _factory?.Dispose();
-        return Task.CompletedTask;
-    }
+    // Nothing to dispose: the host belongs to the collection fixture (#279).
+    public Task DisposeAsync() => Task.CompletedTask;
 
     private const string SignupPassword = "Sign4upPassword";
 

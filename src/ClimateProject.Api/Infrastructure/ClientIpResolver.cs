@@ -29,9 +29,11 @@ namespace ClimateProject.Api.Infrastructure;
 /// </para>
 /// <para>
 /// <b>Failure modes, deliberately asymmetric.</b> With
-/// <see cref="TrustedProxyHopCount"/> at 0 (the default, and what local development and the
-/// test suite run) the socket peer is used and no header is trusted. With a positive hop
-/// count, an absent or unparseable <c>X-Forwarded-For</c> falls back to the socket peer, so
+/// <see cref="TrustedProxyHopCount"/> at 0 -- the default, and what an unconfigured host runs,
+/// but NOT what the integration suite has run since #279; see
+/// <see cref="RateLimitingOptions.TrustedProxyHopCount"/> -- the socket peer is used and no
+/// header is trusted. With a positive hop count, an absent or unparseable
+/// <c>X-Forwarded-For</c> falls back to the socket peer, so
 /// misconfiguring this on a directly-exposed host degrades to today's behaviour rather than
 /// to an open door. The residual risk is the other direction: on a host a client can reach
 /// without passing through the trusted proxy, a forged header buys a fresh partition per

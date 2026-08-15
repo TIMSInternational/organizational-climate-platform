@@ -1334,6 +1334,10 @@ namespace ClimateProject.Infrastructure.Migrations
 
                     b.HasIndex("CompanyId");
 
+                    b.HasIndex("LegacyExternalId")
+                        .IsUnique()
+                        .HasFilter("legacy_external_id IS NOT NULL");
+
                     b.HasIndex("ManagerId");
 
                     b.HasIndex("ParentDepartmentId");

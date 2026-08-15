@@ -443,11 +443,12 @@ app.MapOpenApi();
 
 app.MapGet("/", () => Results.Redirect("/health"));
 
-// Liveness. Deliberately a static literal with no dependency probe: this is what
-// App Runner's own health check polls (HealthCheckPath in the service template), and
-// tying that to the database would let a transient Postgres blip convince App Runner
-// the container is dead and tear down a service whose process is perfectly healthy.
-// Use /ready for "can this instance actually serve traffic".
+// Liveness. Deliberately a static literal with no dependency probe: it answers "is the
+// process up", and nothing else. It is NOT what App Runner polls -- that is /ready, as
+// of #221, because a literal cannot notice a database an instance has lost, so an
+// instance broken that way passed this probe forever and was never replaced. The blip
+// risk that argued for polling this instead is handled by the health-check thresholds
+// in the service template rather than by the choice of path.
 app.MapGet("/health", () => Results.Ok(new
 {
     service = "climate-project-api",
