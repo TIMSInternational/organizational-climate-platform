@@ -31,14 +31,13 @@ public class ProfileEndpointsTests : IAsyncLifetime
     // `companies.email_domain` carries a filtered unique index.
     private readonly string _companyDomain = $"profile-{Guid.NewGuid():N}.test";
 
-    private AuthWebApplicationFactory? _factory;
     private Guid _companyId;
     private Guid _departmentId;
 
     public ProfileEndpointsTests(PostgresContainerFixture postgres) => _postgres = postgres;
 
-    /// <summary>One application host for the whole class -- see NotificationEndpointsTests.</summary>
-    private AuthWebApplicationFactory Factory => _factory ??= new AuthWebApplicationFactory(_postgres.ConnectionString);
+    /// <summary>The collection's one application host -- see PostgresContainerFixture and #279.</summary>
+    private AuthWebApplicationFactory Factory => _postgres.App;
 
     private ClimateProjectDbContext CreateContext() => new(
         new DbContextOptionsBuilder<ClimateProjectDbContext>().UseNpgsql(_postgres.ConnectionString).Options);
@@ -72,11 +71,8 @@ public class ProfileEndpointsTests : IAsyncLifetime
         await db.SaveChangesAsync();
     }
 
-    public Task DisposeAsync()
-    {
-        _factory?.Dispose();
-        return Task.CompletedTask;
-    }
+    // Nothing to dispose: the host belongs to the collection fixture (#279).
+    public Task DisposeAsync() => Task.CompletedTask;
 
     /// <summary>
     /// Satisfies the shipped <c>PasswordPolicy</c> defaults (min 8, upper, lower, digit), so

@@ -27,13 +27,12 @@ public class SurveyDuplicationEndpointTests : IAsyncLifetime
 
     public SurveyDuplicationEndpointTests(PostgresContainerFixture postgres)
     {
-        _factory = new AuthWebApplicationFactory(postgres.ConnectionString);
+        _factory = postgres.App;
         _harness = new SurveyTestHarness(_factory, $"dup-{Guid.NewGuid():N}.test");
     }
 
     public async Task InitializeAsync()
     {
-        await _factory.ApplyMigrationsAsync();
         _companyId = await _harness.SeedCompanyAsync("Duplication Co");
         _departmentId = await _harness.SeedDepartmentAsync(_companyId, "Engineering");
     }

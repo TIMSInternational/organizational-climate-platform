@@ -57,6 +57,16 @@ namespace ClimateProject.IntegrationTests.Support;
 /// Keep this collection even though (1) now also holds at assembly level: it is the thing
 /// that keeps these three serial if anyone ever re-enables parallelization.
 /// </para>
+/// <para>
+/// <b>2026-08-14 -- the third trigger, and the one that was costing whole runs.</b> Neither of
+/// the two above is about how MANY hosts a run boots, and that turned out to be the dominant
+/// term: because xUnit constructs a test class once per <c>[Fact]</c>, the "Postgres"
+/// collection was booting a host per test case and disposing almost none of them, which is
+/// #279. That is fixed on <see cref="PostgresContainerFixture"/>, not here -- the collection
+/// now shares one host -- but it is recorded next to these two because all three are the same
+/// hazard seen from different angles, and a reader who only finds the first two will conclude
+/// the boot count does not matter.
+/// </para>
 /// </summary>
 [CollectionDefinition("AppHost")]
 public class AppHostCollection;

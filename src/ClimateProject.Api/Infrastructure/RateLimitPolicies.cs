@@ -21,9 +21,24 @@ public sealed class RateLimitingOptions
 {
     /// <summary>
     /// Passed to <see cref="ClientIpResolver.TrustedProxyHopCount"/>. Default 0 -- no header
-    /// is trusted -- so local development, CI and the integration suite behave exactly as
-    /// they did before #146. Deployments that sit behind a proxy set it; see the App Runner
-    /// service template.
+    /// is trusted -- so an unconfigured host, local development included, behaves exactly as
+    /// it did before #146. Deployments that sit behind a proxy set it; see the App Runner
+    /// service template, which sets 1.
+    ///
+    /// <para>
+    /// Two places in the tests set 1, and the second is new. <c>RateLimitingTests</c> has always
+    /// built a host with it, because it is the only way to prove from a test that a limiter
+    /// buckets by caller at all. And since #279 the integration suite's shared host
+    /// (<c>AuthWebApplicationFactory</c>) sets it for EVERY test in the "Postgres" collection:
+    /// those tests share one application host, and under <c>TestServer</c> there is no socket
+    /// peer to tell callers apart, so on the default every test in the process would compete
+    /// for one rate-limit partition. What stood here before said that CI and the integration
+    /// suite behave exactly as they did before #146; that stopped being true at #279, which is
+    /// why it says this instead. The default is still exercised where it is named rather than
+    /// assumed: <c>RateLimitingTests</c> drives a limit to exhaustion on an unconfigured host
+    /// and asserts the shipped value IS 0, and <c>ClientIpResolverTests</c> asserts the
+    /// no-trust rule directly.
+    /// </para>
     /// </summary>
     public int TrustedProxyHopCount { get; set; }
 

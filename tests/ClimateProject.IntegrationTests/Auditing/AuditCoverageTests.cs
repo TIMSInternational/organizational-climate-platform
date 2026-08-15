@@ -39,25 +39,23 @@ namespace ClimateProject.IntegrationTests.Auditing;
 public class AuditCoverageTests : IAsyncLifetime
 {
     private readonly PostgresContainerFixture _postgres;
-    private AuthWebApplicationFactory? _factory;
 
     public AuditCoverageTests(PostgresContainerFixture postgres) => _postgres = postgres;
 
-    private AuthWebApplicationFactory Factory => _factory ??= new AuthWebApplicationFactory(_postgres.ConnectionString);
+    private AuthWebApplicationFactory Factory => _postgres.App;
 
     public Task InitializeAsync()
     {
-        // Forces the host to build so the endpoint data source is populated. No request is
-        // sent and nothing here touches the database.
-        Factory.CreateClient();
+        // The endpoint data source this class reads is populated when the host is built, which
+        // the collection fixture has already done. Touching Services rather than creating a
+        // client keeps that dependency stated; no request is sent and nothing here touches the
+        // database.
+        _ = Factory.Services;
         return Task.CompletedTask;
     }
 
-    public Task DisposeAsync()
-    {
-        _factory?.Dispose();
-        return Task.CompletedTask;
-    }
+    // Nothing to dispose: the host belongs to the collection fixture (#279).
+    public Task DisposeAsync() => Task.CompletedTask;
 
     /// <summary>
     /// The mutating routes allowed to write no audit row.
