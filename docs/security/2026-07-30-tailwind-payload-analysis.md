@@ -139,6 +139,19 @@ branch tip, but `git checkout 40fc19a` — or any tool that walks history — re
 file that detonates on the next build. Before that repo is archived or handed to
 anyone, either purge the blob or make the risk explicit in its README.
 
+> **Correction, 2026-08-15 (from the #71 evidence pull).** Two claims above aged badly.
+> `40fc19a` **is reachable from `main`** — the vendor squashed the May–July history into
+> that single baseline commit, so it is the root of the repo's entire history
+> (authored 2026-07-29T02:26Z), not a dangling blob; the TIMS-side repo window is
+> ~25.5 hours (`40fc19a` → `81363af`, 2026-07-30T03:17Z), while the detonation window on
+> the VENDOR's side still spans every build they ran May–July. And the hosting was never
+> Vercel: the legacy repo's `deploy.sh` targets **Coolify**, and a to-exhaustion pull of
+> this account's Vercel history (882 deployments, 8,700 activity events) contains no
+> legacy deployment — so "the Vercel build environment could read every env var" should
+> read "the **vendor's Coolify build environment** could." The purge-before-archive
+> instruction stands, and is now *more* urgent: a live sample at the root of `main`'s
+> history detonates on any naive checkout-and-build.
+
 ### Note on the new stack's Tailwind
 
 `organizational-climate-platform` adopted Tailwind in #74. This is **not** a
