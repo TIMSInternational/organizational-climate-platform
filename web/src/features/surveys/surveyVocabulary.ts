@@ -80,6 +80,45 @@ export function needsOptions(type: string): boolean {
   return type === 'multiple_choice' || type === 'ranking'
 }
 
+/**
+ * The two types answered on a numeric scale, whose ends can carry words —
+ * `ScaleLabelMin`/`Max` on the wire. The server stores the labels for any type
+ * without complaint; offering the fields on a type whose renderer never shows a
+ * scale would collect words nobody ever reads.
+ */
+export function needsScaleLabels(type: string): boolean {
+  return type === 'likert' || type === 'rating'
+}
+
+/**
+ * The dimension keys the product ships — the members of the
+ * `surveyRespond.dimensions` i18n table, which is the vocabulary the respond page
+ * headings and the results pages can put a display name to.
+ *
+ * These seed the wizard's dimension picker. The honest source for suggestions
+ * would be the categories this company's earlier surveys already used, but no
+ * endpoint exposes those (`GET /surveys` list items carry no categories, and
+ * fetching every survey detail to harvest them is N+1 against a list that can be
+ * years long), so the shipped vocabulary stands in: it is what every seeded survey
+ * uses and what both catalogues can translate. Free text remains the escape
+ * hatch — `Question.Category` is a free string — so the list narrows nothing.
+ *
+ * Kept in step with the catalogue by `surveyVocabulary.test.ts`, which resolves
+ * each key through `surveyRespond.dimensions` and fails on drift in either
+ * direction.
+ */
+export const SUGGESTED_DIMENSION_KEYS = [
+  'psychological_safety',
+  'workload',
+  'trust',
+  'recognition',
+  'growth',
+  'belonging',
+  'enps',
+  'priorities',
+  'open',
+] as const
+
 const TYPE_KEYS: Record<string, string> = {
   periodic: 'surveys.periodic',
   onboarding: 'surveys.onboarding',

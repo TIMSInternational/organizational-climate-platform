@@ -2,11 +2,13 @@ import { describe, it, expect } from 'vitest'
 import {
   SURVEY_WIZARD_STEPS,
   buildCreateInput,
+  chosenDimensions,
   derivedOptionValue,
   emptyOption,
   emptyQuestion,
   emptyWizardValues,
   localizedFor,
+  positionsWithoutDimension,
   scheduledDays,
   surveyQuestionCount,
   wizardStepErrors,
@@ -218,6 +220,118 @@ describe('buildCreateInput', () => {
       COMPANY,
     )
     expect(input.title).toEqual({ en: 'Q3', es: 'T3' })
+  })
+
+  /**
+   * The picker's law: `Question.Category` is what the respond page and the results
+   * pages group on, RAW. The value must cross the wire exactly as stored — a display
+   * name, a trim-plus-reslug, any transformation at all would split this survey's
+   * dimension away from every survey that stored the key.
+   */
+  it('sends the category exactly as stored, and omits it when blank', () => {
+    const input = buildCreateInput(
+      complete({
+        questions: [
+          { ...emptyQuestion('q1'), textEn: 'Safe?', category: 'psychological_safety' },
+          // The author's own vocabulary, spaces and case intact.
+          { ...emptyQuestion('q2'), textEn: 'Supported?', category: 'Team Support' },
+          { ...emptyQuestion('q3'), textEn: 'Anything else?', type: 'open_ended' },
+        ],
+      }),
+      COMPANY,
+    )
+    expect(input.questions?.[0].category).toBe('psychological_safety')
+    expect(input.questions?.[1].category).toBe('Team Support')
+    // Omitted, never sent as '': the server's null is the honest value for
+    // "uncategorised", and an empty string is a different (and wrong) category key.
+    expect(input.questions?.[2]).not.toHaveProperty('category')
+  })
+
+  it('sends the scale-end labels for scale questions and never for the rest', () => {
+    const input = buildCreateInput(
+      complete({
+        questions: [
+          {
+            ...emptyQuestion('q1'),
+            textEn: 'Safe?',
+            scaleLabelMinEn: 'Strongly disagree',
+            scaleLabelMaxEn: 'Strongly agree',
+          },
+          {
+            // Typed while the card was a likert, then the type was changed: the words
+            // survive in the state but must not be sent for a type with no scale.
+            ...emptyQuestion('q2'),
+            textEn: 'Anything else?',
+            type: 'open_ended',
+            scaleLabelMinEn: 'Strongly disagree',
+            scaleLabelMaxEn: 'Strongly agree',
+          },
+        ],
+      }),
+      COMPANY,
+    )
+    // A single-language survey sends the bare-string form, like every other localized field.
+    expect(input.questions?.[0].scaleLabelMin).toBe('Strongly disagree')
+    expect(input.questions?.[0].scaleLabelMax).toBe('Strongly agree')
+    expect(input.questions?.[1]).not.toHaveProperty('scaleLabelMin')
+    expect(input.questions?.[1]).not.toHaveProperty('scaleLabelMax')
+  })
+
+  it('omits untouched scale labels, and sends only the filled half of a bilingual pair', () => {
+    const input = buildCreateInput(
+      complete({
+        language: 'both',
+        titleEn: 'Q3',
+        titleEs: 'T3',
+        questions: [
+          {
+            ...emptyQuestion('q1'),
+            textEn: 'Safe?',
+            textEs: '¿Seguro?',
+            scaleLabelMinEn: 'Strongly disagree',
+          },
+        ],
+      }),
+      COMPANY,
+    )
+    // Not `{ en: 'Strongly disagree', es: '' }`: an empty string filed into the
+    // Spanish column is not "not yet written", it is a written empty label.
+    expect(input.questions?.[0].scaleLabelMin).toEqual({ en: 'Strongly disagree' })
+    expect(input.questions?.[0]).not.toHaveProperty('scaleLabelMax')
+  })
+})
+
+/**
+ * The two dimension readings — the rail's "Dimensions so far" and the review's
+ * coverage line both derive from these, so what counts as "a dimension" is decided
+ * here once.
+ */
+describe('dimension coverage', () => {
+  it('counts each dimension once, in first-use order, ignoring blanks', () => {
+    const values = complete({
+      questions: [
+        { ...emptyQuestion('q1'), textEn: 'A', category: 'trust' },
+        { ...emptyQuestion('q2'), textEn: 'B', category: 'workload' },
+        // The same key again — one dimension, not two.
+        { ...emptyQuestion('q3'), textEn: 'C', category: 'trust' },
+        // Whitespace-only is blank, not a dimension named " ".
+        { ...emptyQuestion('q4'), textEn: 'D', category: '  ' },
+      ],
+    })
+    expect(chosenDimensions(values)).toEqual(['trust', 'workload'])
+    expect(positionsWithoutDimension(values)).toEqual([4])
+  })
+
+  it('treats a padded key as the key it will aggregate as', () => {
+    // `dimensionKeyOf` on the results side trims before grouping, so 'trust' and
+    // 'trust ' are ONE dimension there and must be one here.
+    const values = complete({
+      questions: [
+        { ...emptyQuestion('q1'), textEn: 'A', category: 'trust' },
+        { ...emptyQuestion('q2'), textEn: 'B', category: ' trust ' },
+      ],
+    })
+    expect(chosenDimensions(values)).toEqual(['trust'])
   })
 })
 

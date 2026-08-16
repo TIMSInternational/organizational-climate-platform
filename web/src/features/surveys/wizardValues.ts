@@ -5,7 +5,7 @@ import type {
   LocalizedInput,
 } from './api/surveyCreate'
 import type { InstantiateSurveyTemplateInput } from './api/surveyTemplates'
-import { DEFAULT_SURVEY_QUESTION_TYPE, needsOptions } from './surveyVocabulary'
+import { DEFAULT_SURVEY_QUESTION_TYPE, needsOptions, needsScaleLabels } from './surveyVocabulary'
 
 /**
  * The survey creation wizard's state, and the rules that decide when a step is done.
@@ -102,6 +102,33 @@ export interface SurveyQuestionValues {
   type: string
   required: boolean
   options: SurveyOptionValues[]
+  /**
+   * The climate dimension this question's answers feed — `Question.Category`, the
+   * RAW stored key the respond page and the results pages group on.
+   *
+   * Raw means raw: the picker offers the shipped vocabulary (`psychological_safety`,
+   * `workload`…) rendered through `dimensionLabel`, but what is stored and sent is
+   * the key itself, never the display name. Storing "Psychological safety" would
+   * mint a second dimension beside every survey that stored the key — the exact
+   * cross-survey comparison failure the picker exists to prevent. Free text is the
+   * escape hatch (`Category` is a free string server-side) and is stored as typed.
+   *
+   * `''` is a legal state, not an error: an uncategorised question lands on the
+   * results page as the Uncategorised row. The builder names that consequence
+   * (questions step, review step) and never gates on it.
+   */
+  category: string
+  /**
+   * The words at the two ends of a likert/rating scale, per language — the same
+   * paired-column shape as `textEn`/`textEs`, collected only for the survey's
+   * content language(s). `CreateSurveyQuestionInput.ScaleLabelMin/Max` have accepted
+   * these since the DTO existed; the wizard simply never asked, so respondents saw a
+   * bare 1–5 and the results axes had no words.
+   */
+  scaleLabelMinEn: string
+  scaleLabelMinEs: string
+  scaleLabelMaxEn: string
+  scaleLabelMaxEs: string
 }
 
 export interface SurveyWizardValues {
@@ -157,6 +184,11 @@ export function emptyQuestion(key: string): SurveyQuestionValues {
     type: DEFAULT_SURVEY_QUESTION_TYPE,
     required: true,
     options: [],
+    category: '',
+    scaleLabelMinEn: '',
+    scaleLabelMinEs: '',
+    scaleLabelMaxEn: '',
+    scaleLabelMaxEs: '',
   }
 }
 
@@ -379,6 +411,63 @@ export function surveyQuestionCount(
   return values.questions.length
 }
 
+/**
+ * The distinct dimensions chosen so far, raw keys, in order of first use.
+ *
+ * Trimmed before comparing so `'trust'` and `'trust '` do not read as two
+ * dimensions here while aggregating as one there — `dimensionKeyOf` on the results
+ * side trims the same way.
+ */
+export function chosenDimensions(values: SurveyWizardValues): string[] {
+  const seen = new Set<string>()
+  const chosen: string[] = []
+  for (const question of values.questions) {
+    const category = question.category.trim()
+    if (category === '' || seen.has(category)) continue
+    seen.add(category)
+    chosen.push(category)
+  }
+  return chosen
+}
+
+/**
+ * The 1-based positions of questions still without a dimension.
+ *
+ * Positions, not a bare count, because the warning names the question — "Question 2
+ * has no dimension" is actionable where "a question" is a hunt.
+ */
+export function positionsWithoutDimension(values: SurveyWizardValues): number[] {
+  return values.questions
+    .map((question, index) => ({ blank: question.category.trim() === '', position: index + 1 }))
+    .filter((entry) => entry.blank)
+    .map((entry) => entry.position)
+}
+
+/**
+ * A `LocalizedInput` for an *optional* pair of language columns, or `undefined`
+ * when nothing was typed.
+ *
+ * Not `localizedFor`, deliberately: that one serves required fields and returns
+ * `{ en: '', es: '' }` for an untouched bilingual pair, which is right for a title
+ * (validation has already refused the blank) and wrong here — it would file empty
+ * strings into both scale-label columns of every bilingual likert question. This
+ * sends only the members that hold text, and nothing when neither does.
+ */
+export function optionalLocalizedFor(
+  language: ContentLanguage,
+  en: string,
+  es: string,
+): LocalizedInput | undefined {
+  if (language !== 'both') return localizedFor(language, en, es)
+  const trimmedEn = en.trim()
+  const trimmedEs = es.trim()
+  if (trimmedEn === '' && trimmedEs === '') return undefined
+  const pair: Partial<Record<'en' | 'es', string>> = {}
+  if (trimmedEn !== '') pair.en = trimmedEn
+  if (trimmedEs !== '') pair.es = trimmedEs
+  return pair
+}
+
 /** Whole days the survey is open for, or null when either end is missing or invalid. */
 export function scheduledDays(values: SurveyWizardValues): number | null {
   if (isBlank(values.startDate) || isBlank(values.endDate)) return null
@@ -414,6 +503,27 @@ export function buildCreateInput(
       type: question.type,
       required: question.required,
       order: index,
+    }
+    // The raw key, exactly as the picker stored it — this string is what the respond
+    // page and the results pages group on, so any transformation here (a display
+    // name, a re-slug) would split this survey's dimension away from every other
+    // survey's. Omitted when blank: an uncategorised question is legal and the
+    // server's own null is the honest value for it.
+    const category = question.category.trim()
+    if (category !== '') built.category = category
+    if (needsScaleLabels(question.type)) {
+      const scaleLabelMin = optionalLocalizedFor(
+        values.language,
+        question.scaleLabelMinEn,
+        question.scaleLabelMinEs,
+      )
+      const scaleLabelMax = optionalLocalizedFor(
+        values.language,
+        question.scaleLabelMaxEn,
+        question.scaleLabelMaxEs,
+      )
+      if (scaleLabelMin !== undefined) built.scaleLabelMin = scaleLabelMin
+      if (scaleLabelMax !== undefined) built.scaleLabelMax = scaleLabelMax
     }
     if (needsOptions(question.type)) {
       built.options = question.options
