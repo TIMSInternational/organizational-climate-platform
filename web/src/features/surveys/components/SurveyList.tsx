@@ -194,13 +194,30 @@ export default function SurveyList({ surveys }: SurveyListProps) {
                   {calendarDay(Date.parse(survey.endDate), locale)}
                 </td>
                 <td className="text-right">
-                  {/* Named for the row it opens: five links all reading "Open" are
-                      indistinguishable to anyone listing the page's links. */}
-                  <Button asChild size="sm" variant="outline">
-                    <Link to={`/surveys/${survey.id}`} aria-label={t('surveys.openNamed', { title })}>
-                      {t('surveys.open')}
-                    </Link>
-                  </Button>
+                  <span className="inline-flex flex-wrap justify-end gap-inline">
+                    {/* The way into the payoff screen (decision 07 of the admin
+                        round): until this link the results page was reachable only
+                        by typing its URL. Active and closed rows only — a draft or
+                        scheduled survey has no responses to show, and a link to an
+                        empty results page teaches the reader the link is noise. */}
+                    {(survey.status === 'active' || survey.status === 'closed') && (
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          to={`/surveys/${survey.id}/results`}
+                          aria-label={t('surveyResults.resultsForNamed', { title })}
+                        >
+                          {t('surveys.results')}
+                        </Link>
+                      </Button>
+                    )}
+                    {/* Named for the row it opens: five links all reading "Open" are
+                        indistinguishable to anyone listing the page's links. */}
+                    <Button asChild size="sm" variant="outline">
+                      <Link to={`/surveys/${survey.id}`} aria-label={t('surveys.openNamed', { title })}>
+                        {t('surveys.open')}
+                      </Link>
+                    </Button>
+                  </span>
                 </td>
               </tr>
             )

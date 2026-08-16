@@ -331,6 +331,31 @@ describe('SurveysListPage', () => {
     expect(link.getAttribute('href')).toBe('/surveys/s1')
   })
 
+  it('offers a Results link on active and closed rows, and never on a draft', async () => {
+    // Decision 07 of the admin round: before this link the best screen in the
+    // product was reachable only by typing its URL. A draft has no responses to
+    // show, and a link to an empty results page teaches the reader it is noise.
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(
+        String(input).includes('/profile')
+          ? profileResponse()
+          : ok(
+              row({ status: 'closed' }),
+              row({ id: 's2', title: 'Pulse check', status: 'active' }),
+              row({ id: 's3', title: 'Next quarter', status: 'draft' }),
+            ),
+      ),
+    ))
+    renderPage()
+
+    const closed = await screen.findByRole('link', { name: 'Results for Q3 climate survey' })
+    expect(closed.getAttribute('href')).toBe('/surveys/s1/results')
+    expect(
+      screen.getByRole('link', { name: 'Results for Pulse check' }).getAttribute('href'),
+    ).toBe('/surveys/s2/results')
+    expect(screen.queryByRole('link', { name: 'Results for Next quarter' })).toBeNull()
+  })
+
   it('falls back to a label when a survey has no title in any language', async () => {
     // The resolver returns null rather than an empty string or a key path (#195).
     vi.stubGlobal('fetch', vi.fn().mockImplementation((input: RequestInfo | URL) =>
