@@ -528,11 +528,16 @@ describe('SurveyCreatePage autosave', () => {
     // count has two possible sources (see `surveyQuestionCount`) of which only one is
     // right in template mode.
     const review = reviewPanel()
-    // One question written here, seven days between the two dates, no department chosen.
+    // One question written here — without a dimension, which is what the tile's
+    // sub-line now reads out (the coverage replaced the mode word; the mode is
+    // already the page badge and the facts list's first row). Seven days between
+    // the two dates. No department chosen and no catalogue loaded, so the
+    // Departments tile reads an em dash rather than a "0" asserting "all" — the
+    // count of departments reached is genuinely unknown here.
     expect(reading(review, 'Questions')).toBe('1')
-    expect(review.textContent).toContain('Written in this wizard')
+    expect(review.textContent).toContain('1 without a dimension')
     expect(reading(review, 'Days open')).toBe('7')
-    expect(reading(review, 'Departments')).toBe('0')
+    expect(reading(review, 'Departments')).toBe('—')
     expect(review.textContent).toContain('Every department')
 
     // The dates themselves, localised, rather than the machine format the inputs hold.
@@ -860,12 +865,19 @@ describe('SurveyCreatePage template mode', () => {
 
     expect(await screen.findByText('Which area needs work?')).toBeTruthy()
     // `SurveyQuestionList` renders each option as `label (value)`. The value is the point.
-    expect(screen.getByText(/leadership/)).toBeTruthy()
+    expect(screen.getByText('Leadership (leadership)')).toBeTruthy()
+    // The previewed question shows its dimension chip — the thing the template is
+    // actually contributing. `leadership` is not a shipped catalogue key, so the chip
+    // carries the author's own text.
+    expect(screen.getByText('leadership')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Add Question' })).toBeNull()
     // "Add at least one" is an instruction with nothing to act on here. Rendering the
     // page caught it still being given.
     expect(screen.queryByText(/Add at least one/)).toBeNull()
-    expect(screen.getByText('What the template asks. Copied as it is.')).toBeTruthy()
+    // The drawn preview copy: what the server copies, and why editing here would
+    // silently flatten it.
+    expect(screen.getByText('The template supplies these. They are a preview here, not an editor.')).toBeTruthy()
+    expect(screen.getByText(/read-only here/)).toBeTruthy()
   })
 
   it('instantiates server-side and posts no questions of its own', async () => {
@@ -884,8 +896,12 @@ describe('SurveyCreatePage template mode', () => {
     const review = reviewPanel()
     // The template has one question; `values.questions` is empty and always will be in
     // this mode, so a count taken from it reads 0 here and looks entirely plausible.
+    // The sub-line is the dimension coverage, computed from the TEMPLATE's questions
+    // for the same reason the count is — the wizard's own array would report every
+    // template as uncategorised.
     expect(reading(review, 'Questions')).toBe('1')
-    expect(review.textContent).toContain('From the template')
+    expect(review.textContent).toContain('Across 1 dimension')
+    expect(review.textContent).not.toContain('without a dimension')
     expect(review.textContent).not.toContain('Written in this wizard')
 
     await userEvent.click(await screen.findByRole('button', { name: 'Create Survey' }))
@@ -967,5 +983,300 @@ describe('SurveyCreatePage template mode', () => {
     // Not silent, unlike the catalogue fetch: a chosen template that failed to load
     // leaves the wizard unable to say what it is about to create.
     expect(await screen.findByText('Template not found')).toBeTruthy()
+  })
+})
+
+/**
+ * The dimension picker (design decision 02, the round's law-sized change).
+ *
+ * `Question.Category` is the dimension vocabulary: the respond page and the results
+ * pages group on the RAW stored value, so the one behaviour worth mutation-proving is
+ * that a chip displaying "Psychological safety" makes the wire carry
+ * `psychological_safety`. A picker that stored the display name would pass every
+ * rendering assertion in this file and still split the company's dimensions in two.
+ *
+ * Fake timers and `fireEvent`, like the autosave block: the chips are plain buttons,
+ * so nothing here needs the Radix real-timer dance.
+ */
+describe('SurveyCreatePage dimension picker', () => {
+  async function toQuestionsStep() {
+    renderPage()
+    await settle()
+    await typeInto(/Title/, 'Q4 Climate Survey')
+    await press('Next')
+    await typeInto(/Start Date/, '2026-10-01T09:00')
+    await typeInto(/End Date/, '2026-10-15T18:00')
+    await press('Next')
+    await press('Next')
+    await press('Add Question')
+    await typeInto(/Question Text/, 'I feel safe raising concerns without fear of blame.')
+  }
+
+  async function createdBody(): Promise<Record<string, unknown>> {
+    await press('Next')
+    await press('Create Survey')
+    await tick()
+    const create = calls.find(
+      (call) => call.method === 'POST' && /\/surveys(\?|$)/.test(call.url),
+    )!
+    return create.body as Record<string, unknown>
+  }
+
+  it('stores the raw key behind the chip, and says what a missing one costs', async () => {
+    await toQuestionsStep()
+
+    // Before a choice the card says so in words, twice: the header chip and the
+    // named consequence under the picker. A consequence, never a gate.
+    expect(screen.getByText('No dimension yet')).toBeTruthy()
+    expect(screen.getByText(/reports as Uncategorised/)).toBeTruthy()
+
+    await press('Psychological safety')
+
+    // The header chip now names the dimension and the warning is gone.
+    expect(screen.queryByText('No dimension yet')).toBeNull()
+    expect(screen.queryByText(/reports as Uncategorised/)).toBeNull()
+    // Twice: the pressed chip and the card-header chip.
+    expect(screen.getAllByText('Psychological safety').length).toBeGreaterThan(1)
+
+    // The rail's reading moves live, while the questions step is still open.
+    const rail = screen.getByRole('navigation', { name: 'Survey creation steps' })
+    expect(rail.textContent).toContain('Dimensions so far')
+    expect(rail.textContent).not.toContain('without')
+
+    const body = await createdBody()
+    const questions = body.questions as { category?: string }[]
+    // THE assertion this control exists for: the raw key, not the display name.
+    expect(questions[0].category).toBe('psychological_safety')
+  })
+
+  it('takes a new dimension as free text and sends it exactly as typed', async () => {
+    await toQuestionsStep()
+
+    await press('+ New dimension…')
+    await typeInto(/New dimension/, 'Team Support')
+
+    // The header chip carries the author's own text.
+    expect(screen.queryByText('No dimension yet')).toBeNull()
+
+    const body = await createdBody()
+    const questions = body.questions as { category?: string }[]
+    // Verbatim — the vocabulary is the author's, and results will group on exactly
+    // this string. No slugging, no case-folding.
+    expect(questions[0].category).toBe('Team Support')
+  })
+
+  it('offers a dimension typed on one card as a chip on the next', async () => {
+    await toQuestionsStep()
+    await press('+ New dimension…')
+    await typeInto(/New dimension/, 'Team Support')
+
+    await press('Add Question')
+    const texts = screen.getAllByLabelText(/Question Text/)
+    await act(async () => {
+      fireEvent.change(texts[1], { target: { value: 'My manager backs me up.' } })
+    })
+
+    // Reuse is one click: the second card suggests what the first card coined.
+    await press('Team Support')
+
+    // Two questions, ONE dimension — the rail reading collapses them, which is
+    // exactly what the results climate map will do.
+    const rail = screen.getByRole('navigation', { name: 'Survey creation steps' })
+    expect(rail.textContent).toContain('Dimensions so far')
+
+    const body = await createdBody()
+    const questions = body.questions as { category?: string }[]
+    expect(questions.map((question) => question.category)).toEqual([
+      'Team Support',
+      'Team Support',
+    ])
+  })
+})
+
+/**
+ * The scale-ends fields (design decision 04). `ScaleLabelMin`/`Max` have been on the
+ * DTO since it existed and nothing collected them, so respondents saw bare 1–5 and
+ * the results axes had no words. One pair of boxes fixes both ends of the pipe.
+ */
+describe('SurveyCreatePage scale ends', () => {
+  it('collects the two ends on a likert card and sends them', async () => {
+    renderPage()
+    await settle()
+    await typeInto(/Title/, 'Q4 Climate Survey')
+    await press('Next')
+    await typeInto(/Start Date/, '2026-10-01T09:00')
+    await typeInto(/End Date/, '2026-10-15T18:00')
+    await press('Next')
+    await press('Next')
+    await press('Add Question')
+    await typeInto(/Question Text/, 'I feel safe raising concerns.')
+
+    // A fresh question is a likert, so the pair is there, with the copy saying
+    // where the words will appear.
+    expect(screen.getByText('Scale ends')).toBeTruthy()
+    expect(screen.getByText(/Printed under the scale for respondents/)).toBeTruthy()
+    await typeInto(/Low end/, 'Strongly disagree')
+    await typeInto(/High end/, 'Strongly agree')
+
+    await press('Next')
+    await press('Create Survey')
+    await tick()
+
+    const create = calls.find(
+      (call) => call.method === 'POST' && /\/surveys(\?|$)/.test(call.url),
+    )!
+    const body = create.body as { questions: { scaleLabelMin?: string; scaleLabelMax?: string }[] }
+    // The bare-string form, like every localized field of a single-language survey.
+    expect(body.questions[0].scaleLabelMin).toBe('Strongly disagree')
+    expect(body.questions[0].scaleLabelMax).toBe('Strongly agree')
+  })
+
+  it('offers no scale ends on a question type with no scale', async () => {
+    // A restored draft lands on the questions step in one hop, with its stored
+    // open-ended question — the cheap way to see a non-scale card without driving
+    // the Radix type select.
+    routeFetch({ latest: draftResponse({ currentStep: 4, content: storedContent() }) })
+    renderPage()
+    await settle()
+    await press('Restore it')
+    await settle()
+
+    expect(screen.getByDisplayValue('What went well?')).toBeTruthy()
+    expect(screen.queryByText('Scale ends')).toBeNull()
+  })
+})
+
+/**
+ * The audience step's redesign (decision-free, approved as drawn): headcounts on the
+ * department checkboxes, the empty-selection reach in words, and the anonymity floor
+ * stated on the step where the conditions for suppression are set.
+ */
+describe('SurveyCreatePage audience step', () => {
+  const catalogue = [
+    department('dept-1', 'Operations'),
+    department('dept-2', 'Support'),
+    department('dept-3', 'Engineering'),
+  ]
+
+  async function toAudienceStep() {
+    routeFetch({ departments: catalogue })
+    renderPage()
+    await settle()
+    await typeInto(/Title/, 'Q4 Climate Survey')
+    await press('Next')
+    await typeInto(/Start Date/, '2026-10-01T09:00')
+    await typeInto(/End Date/, '2026-10-15T18:00')
+    await press('Next')
+  }
+
+  it('names each department with its headcount, and the empty selection in words', async () => {
+    await toAudienceStep()
+
+    // The fixture gives every department 12 people.
+    expect(screen.getByLabelText('Operations · 12 people')).toBeTruthy()
+    // "None selected" is a state, and it is stated — with the whole-company reach,
+    // 3 × 12 = 36, which only the loaded catalogue can honestly supply.
+    expect(screen.getByText(/None selected, so it reaches every department/)).toBeTruthy()
+    expect(screen.getByText('36')).toBeTruthy()
+
+    // The sentence stops being true the moment a department is chosen, so it goes.
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Operations · 12 people'))
+    })
+    expect(screen.queryByText(/None selected, so it reaches every department/)).toBeNull()
+  })
+
+  it('states the anonymity floor about responses, not headcount, with the shared constant', async () => {
+    await toAudienceStep()
+
+    expect(
+      screen.getByText('The anonymity floor applies to what comes back, not to who is asked.'),
+    ).toBeTruthy()
+    // The direction that matters: suppression is decided by what comes back.
+    expect(screen.getByText(/withheld the same as one of 600/)).toBeTruthy()
+    expect(screen.getByText(/raised, never lowered/)).toBeTruthy()
+
+    // The number is ANONYMITY_FLOOR — the same constant ProtectedCell enforces —
+    // rendered as a reading. A hand-written 5 here would be a promise nothing keeps.
+    const alert = screen
+      .getByText('The anonymity floor applies to what comes back, not to who is asked.')
+      .closest('[data-slot="alert"]') as HTMLElement
+    const floor = within(alert).getByText('5')
+    expect(floor.className).toContain('font-mono')
+  })
+})
+
+/**
+ * The review step's dimension coverage: the tile's sub-line, the warning Alert, and
+ * the facts row. The Alert is the behaviour worth pinning hardest — it must warn and
+ * it must NOT gate, because an uncategorised survey is legal, just less than it
+ * could be.
+ */
+describe('SurveyCreatePage review dimension coverage', () => {
+  async function restoreOnReview(
+    content: Record<string, unknown>,
+    options: RouteOptions = {},
+  ) {
+    routeFetch({
+      ...options,
+      latest: draftResponse({ currentStep: 5, content }),
+    })
+    renderPage()
+    await settle()
+    await press('Restore it')
+    await settle()
+    return reviewPanel()
+  }
+
+  it('warns about a question without a dimension, and does not gate on it', async () => {
+    // `storedContent()` holds one question with no category.
+    const review = await restoreOnReview(storedContent())
+
+    expect(within(review).getByText('Question 1 has no dimension.')).toBeTruthy()
+    expect(within(review).getByText(/You can still create the survey/)).toBeTruthy()
+    // The warning must never become a gate.
+    expect(
+      (screen.getByRole('button', { name: 'Create Survey' }) as HTMLButtonElement).disabled,
+    ).toBe(false)
+    // And the facts list carries the remainder rather than dropping it.
+    expect(review.textContent).toContain('+ 1 uncategorised')
+  })
+
+  it('reads the coverage and names the dimensions once every question has one', async () => {
+    const question = {
+      textEn: 'q',
+      textEs: '',
+      type: 'likert',
+      required: true,
+      options: [],
+    }
+    const review = await restoreOnReview(
+      storedContent({
+        questions: [
+          { ...question, textEn: 'Safe?', category: 'psychological_safety' },
+          { ...question, textEn: 'Loaded?', category: 'workload' },
+        ],
+      }),
+    )
+
+    expect(review.textContent).toContain('Across 2 dimensions')
+    expect(screen.queryByText(/has no dimension/)).toBeNull()
+    // Display names in the facts row — raw keys are for the wire, not the reader.
+    expect(review.textContent).toContain('Psychological safety, Workload')
+  })
+
+  it('counts every department reached when none is selected, with the headcount', async () => {
+    const review = await restoreOnReview(storedContent(), {
+      departments: [
+        department('dept-1', 'Operations'),
+        department('dept-2', 'Support'),
+        department('dept-3', 'Engineering'),
+      ],
+    })
+
+    // The tile reads the count actually reached — not a "0" asserting "all".
+    expect(reading(review, 'Departments')).toBe('3')
+    expect(review.textContent).toContain('Every department')
+    expect(review.textContent).toContain('36')
   })
 })

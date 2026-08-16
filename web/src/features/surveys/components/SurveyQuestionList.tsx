@@ -1,7 +1,8 @@
 import type { SurveyQuestion } from '../api/surveys'
 import { useTranslation } from '../../../i18n'
-import { Badge, EmptyState, Table } from '../../../components/ui'
+import { Badge, Chip, EmptyState, Table } from '../../../components/ui'
 import { questionTypeLabel } from '../surveyVocabulary'
+import { dimensionLabel } from '../dimensionLabel'
 
 interface SurveyQuestionListProps {
   questions: readonly SurveyQuestion[]
@@ -22,6 +23,16 @@ interface SurveyQuestionListProps {
  * fell back to the other language look like a different option entirely.
  *
  * The respondent-facing form (#106) shows labels only; there, the value is machinery.
+ *
+ * ## The Dimension column (admin design round)
+ *
+ * `category` is what a template actually contributes beyond the words — questions
+ * sharing one aggregate together on the results climate map — and this table is
+ * where the wizard's template mode previews what `/use` will copy. A chip when the
+ * question has one (named through `dimensionLabel`, the same lookup the respond
+ * page uses, so a shipped key reads "Psychological safety" and an authored one
+ * reads as authored), an em dash when it does not: absence is a fact worth a mark,
+ * not a blank that could mean "not loaded".
  */
 export default function SurveyQuestionList({ questions }: SurveyQuestionListProps) {
   const { t } = useTranslation()
@@ -41,6 +52,7 @@ export default function SurveyQuestionList({ questions }: SurveyQuestionListProp
         <tr>
           <th>{t('common.order')}</th>
           <th>{t('surveys.questionText')}</th>
+          <th>{t('surveyCreate.dimension')}</th>
           <th>{t('surveys.questionType')}</th>
           <th>{t('surveys.answerOptions')}</th>
           <th>{t('surveys.required')}</th>
@@ -54,6 +66,13 @@ export default function SurveyQuestionList({ questions }: SurveyQuestionListProp
                 them aligned once the list passes question 9. */}
             <td className="font-mono tabular-nums">{question.order + 1}</td>
             <td>{question.text ?? t('surveys.untranslatedQuestion')}</td>
+            <td>
+              {question.category !== null && question.category.trim() !== '' ? (
+                <Chip tone="accent" label={dimensionLabel(question.category.trim(), t)} />
+              ) : (
+                '—'
+              )}
+            </td>
             <td>{questionTypeLabel(t, question.type)}</td>
             <td>
               {question.options && question.options.length > 0 ? (

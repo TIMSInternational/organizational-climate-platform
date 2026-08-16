@@ -52,6 +52,19 @@ interface DraftQuestion {
   type: string
   required: boolean
   options: DraftOption[]
+  /**
+   * These five joined the wire shape with the dimension picker and the scale-ends
+   * fields, WITHOUT a `version` bump, deliberately: they are additive, and the
+   * parser below is forgiving about absent fields ("losing one field is
+   * recoverable by retyping it"). An old draft restores with blanks — exactly what
+   * its author had — while a bump would make every existing draft in the retention
+   * window unrecoverable for the sake of fields it never held.
+   */
+  category: string
+  scaleLabelMinEn: string
+  scaleLabelMinEs: string
+  scaleLabelMaxEn: string
+  scaleLabelMaxEs: string
 }
 
 /** The wire shape. Changing a member here changes what is already in the database. */
@@ -102,6 +115,11 @@ export function toDraftContent(values: SurveyWizardValues): SurveyDraftContent {
         labelEn: option.labelEn,
         labelEs: option.labelEs,
       })),
+      category: question.category,
+      scaleLabelMinEn: question.scaleLabelMinEn,
+      scaleLabelMinEs: question.scaleLabelMinEs,
+      scaleLabelMaxEn: question.scaleLabelMaxEn,
+      scaleLabelMaxEs: question.scaleLabelMaxEs,
     })),
   }
 }
@@ -154,6 +172,13 @@ function questionsFrom(source: Record<string, unknown>, keyPrefix: string): Surv
         labelEn: str(option, 'labelEn'),
         labelEs: str(option, 'labelEs'),
       })),
+      // Absent in drafts written before the dimension picker and the scale-ends
+      // fields existed; blank is what their author had.
+      category: str(question, 'category'),
+      scaleLabelMinEn: str(question, 'scaleLabelMinEn'),
+      scaleLabelMinEs: str(question, 'scaleLabelMinEs'),
+      scaleLabelMaxEn: str(question, 'scaleLabelMaxEn'),
+      scaleLabelMaxEs: str(question, 'scaleLabelMaxEs'),
     }
   })
 }

@@ -35,6 +35,14 @@ function filled(): SurveyWizardValues {
           { key: 'k-1', labelEn: 'Good', labelEs: 'Bueno' },
           { key: 'k-2', labelEn: 'Bad', labelEs: 'Malo' },
         ],
+        // The dimension and the scale ends ride the same round trip as the text —
+        // a recovered draft that had lost its categories would restore every
+        // question as uncategorised, silently.
+        category: 'psychological_safety',
+        scaleLabelMinEn: 'Strongly disagree',
+        scaleLabelMinEs: 'Muy en desacuerdo',
+        scaleLabelMaxEn: 'Strongly agree',
+        scaleLabelMaxEs: 'Muy de acuerdo',
       },
     ],
   }
@@ -71,6 +79,32 @@ describe('toDraftContent / draftValuesFrom', () => {
     for (const key of keys) {
       expect(key).not.toMatch(/^p-\d+$/)
     }
+  })
+
+  it('restores a draft from before the dimension picker with blanks, not by refusing it', () => {
+    // Drafts live for the whole retention window, so the parser will meet the
+    // pre-picker question shape. The five new fields are additive and deliberately
+    // did NOT bump `SURVEY_DRAFT_CONTENT_VERSION` — a bump would make every stored
+    // draft unrecoverable for the sake of fields it never held.
+    const legacy = toDraftContent(filled()) as unknown as Record<string, unknown>
+    legacy.questions = (legacy.questions as Record<string, unknown>[]).map((question) => {
+      const {
+        category: _category,
+        scaleLabelMinEn: _minEn,
+        scaleLabelMinEs: _minEs,
+        scaleLabelMaxEn: _maxEn,
+        scaleLabelMaxEs: _maxEs,
+        ...rest
+      } = question
+      return rest
+    })
+
+    const restored = draftValuesFrom(legacy, 'p', 'en')!
+
+    expect(restored.questions[0].textEn).toBe('Rate the quarter')
+    expect(restored.questions[0].category).toBe('')
+    expect(restored.questions[0].scaleLabelMinEn).toBe('')
+    expect(restored.questions[0].scaleLabelMaxEs).toBe('')
   })
 
   it('gives an option a key distinct from every question key', () => {

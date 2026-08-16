@@ -46,8 +46,23 @@ export interface CreateSurveyQuestionInput {
   options?: CreateSurveyQuestionOptionInput[]
   scaleMin?: number
   scaleMax?: number
+  /**
+   * The words at the ends of a likert/rating scale. Respondents read them under
+   * the scale and the results page prints them under each distribution — the
+   * server has accepted both since the DTO existed (`SurveyDtos.cs`), and until
+   * the wizard collected them nothing in the product ever sent one.
+   */
+  scaleLabelMin?: LocalizedInput
+  scaleLabelMax?: LocalizedInput
   required?: boolean
   order?: number
+  /**
+   * `Question.Category` — the dimension vocabulary. A free string the server
+   * neither trims nor validates, and THE key the climate map, the standings
+   * table and the respond page's sections group on. Send the raw key
+   * (`psychological_safety`), never a display name.
+   */
+  category?: string
 }
 
 /**
