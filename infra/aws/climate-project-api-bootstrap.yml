@@ -1,11 +1,67 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Bootstrap resources for the climate-project-api deployment.
+Description: >-
+  Bootstrap resources for a climate-project-api deployment environment: ECR
+  repository, the App Runner ECR access role, and the GitHub OIDC deploy role.
+  ONE template for every environment (#156). The defaults are production's
+  values, so deploying with defaults renders exactly the live
+  climate-project-api-bootstrap stack; a staging bootstrap stack deploys from
+  this same file with the staging parameter set
+  (docs/runbooks/staging-provisioning.md). The deploy role's trust policy and
+  resource scoping are per-environment on purpose: the staging role can touch
+  only the staging stack, service and instance role, so a staging deploy that
+  goes wrong cannot reach production.
 
 Parameters:
   RepositoryName:
     Type: String
     Default: climate-project-api
-    Description: ECR repository name for climate-project-api images.
+    Description: >-
+      ECR repository name for climate-project-api images. Each environment's
+      bootstrap stack owns its own repository: in a separate AWS account the
+      default name is free, but a staging stack in the SAME account as
+      production must pass a distinct name (climate-project-api-staging) or
+      the stack fails on the name collision.
+  EnvironmentName:
+    Type: String
+    Default: production
+    AllowedValues:
+      - production
+      - staging
+    Description: >-
+      The GitHub *environment* name whose OIDC tokens may assume the deploy
+      role (it appears verbatim in the `sub` claim as `environment:<name>`),
+      and the Environment tag value. Pairs with ResourceNameSuffix
+      (production/prod, staging/staging); two parameters rather than one only
+      because the live prod role names say "prod" while the GitHub environment
+      says "production", and renaming live IAM roles orphans the deployed
+      stacks.
+  ResourceNameSuffix:
+    Type: String
+    Default: prod
+    AllowedValues:
+      - prod
+      - staging
+    Description: >-
+      Short suffix in every named resource this stack creates or scopes to:
+      climate-project-github-deploy-<suffix>,
+      climate-project-apprunner-ecr-access-<suffix>, and the service-stack and
+      instance-role ARNs the deploy policy is limited to
+      (climate-project-api-<suffix>, climate-project-api-<suffix>-instance).
+      Must agree with the service stack's ServiceName or the deploy role
+      cannot manage the stack it deploys.
+  ImageTagPrefix:
+    Type: String
+    Default: prod-
+    AllowedValues:
+      - prod-
+      - staging-
+    Description: >-
+      Image tag prefix the ECR lifecycle policy retains (most recent 40).
+      Must match what the environment's deploy workflow tags: deploy-prod.yml
+      pushes prod-<sha>/prod-latest, deploy-staging.yml pushes
+      staging-<sha>/staging-latest. A mismatch does not fail anything loudly
+      -- it silently exempts every deployed image from the 40-image cap, so
+      the repository grows without bound.
   GitHubRepository:
     Type: String
     Default: TIMSInternational/organizational-climate-platform
@@ -49,7 +105,11 @@ Resources:
       EncryptionConfiguration:
         EncryptionType: AES256
       LifecyclePolicy:
-        LifecyclePolicyText: |
+        # !Sub renders ${ImageTagPrefix} into the JSON. The one rendered
+        # difference from the pre-#156 literal is rule 2's description string
+        # ("prod images" -> "prod-* images") -- cosmetic, kept honest so a
+        # staging repository's rule does not claim to be about prod images.
+        LifecyclePolicyText: !Sub |
           {
             "rules": [
               {
@@ -67,10 +127,10 @@ Resources:
               },
               {
                 "rulePriority": 2,
-                "description": "Keep the most recent 40 prod images",
+                "description": "Keep the most recent 40 ${ImageTagPrefix}* images",
                 "selection": {
                   "tagStatus": "tagged",
-                  "tagPrefixList": ["prod-"],
+                  "tagPrefixList": ["${ImageTagPrefix}"],
                   "countType": "imageCountMoreThan",
                   "countNumber": 40
                 },
@@ -84,12 +144,12 @@ Resources:
         - Key: Project
           Value: climate-project-api
         - Key: Environment
-          Value: production
+          Value: !Ref EnvironmentName
 
   AppRunnerEcrAccessRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: climate-project-apprunner-ecr-access-prod
+      RoleName: !Sub climate-project-apprunner-ecr-access-${ResourceNameSuffix}
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -103,12 +163,12 @@ Resources:
         - Key: Project
           Value: climate-project-api
         - Key: Environment
-          Value: production
+          Value: !Ref EnvironmentName
 
   GitHubDeployRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: climate-project-github-deploy-prod
+      RoleName: !Sub climate-project-github-deploy-${ResourceNameSuffix}
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -150,17 +210,24 @@ Resources:
                 #
                 # `scripts/verify-oidc-trust-subs.py` (CI job `deploy-path-lint`)
                 # fails if any of the four goes missing.
+                #
+                # The environment half is `environment:${EnvironmentName}`
+                # (#156): a staging bootstrap stack renders
+                # `environment:staging` here, so the staging deploy role
+                # trusts staging jobs and nothing production. Rendered with
+                # the defaults, these are byte-for-byte the four subs the live
+                # prod role trusts, which is what the guard script asserts.
                 token.actions.githubusercontent.com:sub:
                   - !Sub
                     - repo:${Owner}@${GitHubOwnerId}/${Repo}@${GitHubRepositoryId}:ref:refs/heads/${GitHubBranch}
                     - Owner: !Select [0, !Split ["/", !Ref GitHubRepository]]
                       Repo: !Select [1, !Split ["/", !Ref GitHubRepository]]
                   - !Sub
-                    - repo:${Owner}@${GitHubOwnerId}/${Repo}@${GitHubRepositoryId}:environment:production
+                    - repo:${Owner}@${GitHubOwnerId}/${Repo}@${GitHubRepositoryId}:environment:${EnvironmentName}
                     - Owner: !Select [0, !Split ["/", !Ref GitHubRepository]]
                       Repo: !Select [1, !Split ["/", !Ref GitHubRepository]]
                   - !Sub repo:${GitHubRepository}:ref:refs/heads/${GitHubBranch}
-                  - !Sub repo:${GitHubRepository}:environment:production
+                  - !Sub repo:${GitHubRepository}:environment:${EnvironmentName}
       Policies:
         - PolicyName: climate-project-api-deploy
           PolicyDocument:
@@ -173,7 +240,11 @@ Resources:
                   - cloudformation:DescribeStackEvents
                   - cloudformation:GetTemplate
                 Resource:
-                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/climate-project-api-bootstrap/*
+                  # ${AWS::StackName}: the deploy role reads THIS stack's
+                  # outputs, whatever this stack is named -- for the live prod
+                  # stack that renders the same climate-project-api-bootstrap
+                  # ARN as the previous literal did.
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*
               - Sid: ManageServiceStack
                 Effect: Allow
                 Action:
@@ -189,7 +260,7 @@ Resources:
                   - cloudformation:UpdateStack
                   - cloudformation:ValidateTemplate
                 Resource:
-                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/climate-project-api-prod/*
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/climate-project-api-${ResourceNameSuffix}/*
               - Sid: PushApiImages
                 Effect: Allow
                 Action:
@@ -235,19 +306,24 @@ Resources:
                   - iam:UntagRole
                   - iam:UpdateAssumeRolePolicy
                 Resource:
-                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/climate-project-api-prod-instance
+                  # climate-project-api-<suffix>-instance is what the service
+                  # template names its AppRunnerInstanceRole
+                  # (!Sub ${ServiceName}-instance), so this scoping holds only
+                  # while ResourceNameSuffix agrees with the service stack's
+                  # ServiceName -- see the parameter description.
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/climate-project-api-${ResourceNameSuffix}-instance
               - Sid: PassAppRunnerRoles
                 Effect: Allow
                 Action:
                   - iam:PassRole
                 Resource:
                   - !GetAtt AppRunnerEcrAccessRole.Arn
-                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/climate-project-api-prod-instance
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/climate-project-api-${ResourceNameSuffix}-instance
       Tags:
         - Key: Project
           Value: climate-project-api
         - Key: Environment
-          Value: production
+          Value: !Ref EnvironmentName
 
 Outputs:
   EcrRepositoryName:

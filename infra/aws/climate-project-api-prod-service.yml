@@ -1,8 +1,13 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  App Runner service for climate-project-api, deployed dark: it serves the
-  health/version walking skeleton only. No real traffic or domain logic
-  depends on it yet — this proves the deploy pipeline before #48-56 land.
+  App Runner service for climate-project-api. ONE template for every
+  environment (#156): everything environment-specific -- service name, tags,
+  ASPNETCORE_ENVIRONMENT, CORS origins, secret ARNs, image -- is a parameter,
+  and the defaults are production's values, so deploying with defaults renders
+  exactly the stack that was live before the parameterisation. The "prod" in
+  this FILE's name is kept for continuity with the runbooks and workflows that
+  cite it; the staging stack deploys from this same file with staging values
+  (.github/workflows/deploy-staging.yml, docs/runbooks/staging-provisioning.md).
 
 Parameters:
   ServiceName:
@@ -10,6 +15,33 @@ Parameters:
     Default: climate-project-api-prod
     AllowedPattern: "[A-Za-z0-9][A-Za-z0-9-_]{3,39}"
     Description: App Runner service name.
+  EnvironmentName:
+    Type: String
+    Default: production
+    AllowedValues:
+      - production
+      - staging
+    Description: >-
+      Lowercase environment name, used for the Environment resource tags. This
+      and AspNetCoreEnvironment travel together (production/Production,
+      staging/Staging); they are two parameters rather than one because
+      CloudFormation cannot change a string's case without a Mappings lookup,
+      and scripts/verify-prod-deploy-invariants.py resolves plain !Ref only.
+      Both deploy workflows pass both explicitly.
+  AspNetCoreEnvironment:
+    Type: String
+    Default: Production
+    AllowedValues:
+      - Production
+      - Staging
+    Description: >-
+      Value for ASPNETCORE_ENVIRONMENT. Pascal case where EnvironmentName is
+      lowercase, because that is ASP.NET Core's convention for the value while
+      the resource tags have always been lowercase. The app keys no behaviour
+      on it -- there is no appsettings.Staging.json and no IsProduction()
+      branch (checked 2026-08-15) -- but /version and the system-status
+      endpoint report it, so an honest value is what makes a staging instance
+      identify itself as staging rather than masquerade as production.
   ImageIdentifier:
     Type: String
     Description: Full ECR image identifier, including tag.
@@ -126,7 +158,7 @@ Resources:
         - Key: Project
           Value: climate-project-api
         - Key: Environment
-          Value: production
+          Value: !Ref EnvironmentName
 
   AppRunnerService:
     Type: AWS::AppRunner::Service
@@ -143,7 +175,7 @@ Resources:
             Port: "8080"
             RuntimeEnvironmentVariables:
               - Name: ASPNETCORE_ENVIRONMENT
-                Value: Production
+                Value: !Ref AspNetCoreEnvironment
               - Name: ASPNETCORE_URLS
                 Value: http://+:8080
               - Name: Cors__AllowedOrigins__0
@@ -269,7 +301,7 @@ Resources:
         - Key: Project
           Value: climate-project-api
         - Key: Environment
-          Value: production
+          Value: !Ref EnvironmentName
 
 Outputs:
   ServiceArn:
