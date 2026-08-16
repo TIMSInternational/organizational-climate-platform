@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Guard four production-safety properties of the prod service template and deploy
-workflow that are invisible to a linter (Refs #221, #300, #160).
+"""Guard five deploy-safety properties of the service template and the deploy
+workflows that are invisible to a linter (Refs #221, #300, #160, #156).
 
 Why this exists
 ---------------
@@ -28,6 +28,14 @@ history:
    origin fails the host at startup outright, because CorsOriginMatcher throws on a
    pattern containing no '*'. The Fn::If/AWS::NoValue pair is what makes the index
    genuinely absent, and deleting it looks like a simplification.
+
+5. **The staging deploy must rehearse the prod deploy (#156).** deploy-staging.yml's
+   "Readiness canary" and "Verify deployed commit matches this run" steps are defined
+   as VERBATIM copies of deploy-prod.yml's (env and run, byte for byte), and its
+   HEALTH_CHECK_PATH must equal prod's. Every executed check in this file runs the
+   PROD copy only, so a staging copy that quietly drifts -- a lower canary bar, a
+   neutered assertion -- would be invisible to everything else here while making
+   staging rehearse a different deploy than the one production performs.
 
 What it asserts
 ---------------
@@ -69,6 +77,12 @@ except ImportError:  # pragma: no cover - environment problem, not a template pr
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = REPO_ROOT / "infra" / "aws" / "climate-project-api-prod-service.yml"
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "deploy-prod.yml"
+STAGING_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "deploy-staging.yml"
+
+# Steps deploy-staging.yml must carry as verbatim copies of deploy-prod.yml's.
+# Comparison is on the parsed step's `env` and `run` values, so YAML comments are
+# free to differ; the executable content is not.
+MIRRORED_STEP_NAMES = ("Readiness canary", "Verify deployed commit matches this run")
 
 # App Runner's documented range for every HealthCheckConfiguration integer.
 APP_RUNNER_MIN = 1
@@ -170,6 +184,13 @@ def canary_step(workflow: dict) -> dict:
         if step.get("name") == "Readiness canary":
             return step
     raise ValueError("deploy-prod.yml has no 'Readiness canary' step")
+
+
+def named_step(workflow: dict, workflow_label: str, name: str) -> dict:
+    for step in workflow["jobs"]["deploy"]["steps"]:
+        if step.get("name") == name:
+            return step
+    raise ValueError(f"{workflow_label} has no {name!r} step")
 
 
 # --------------------------------------------------------------------------------
@@ -373,6 +394,41 @@ def check_optional_cors_origins(template: dict) -> list[str]:
     return problems
 
 
+def check_staging_mirrors_prod(prod: dict, staging: dict) -> list[str]:
+    problems = []
+
+    prod_path = prod["env"].get("HEALTH_CHECK_PATH")
+    staging_path = staging["env"].get("HEALTH_CHECK_PATH")
+    if staging_path != prod_path:
+        problems.append(
+            f"deploy-staging.yml sets HEALTH_CHECK_PATH={staging_path!r} but "
+            f"deploy-prod.yml sets {prod_path!r}. Staging exists to rehearse the "
+            "production deploy path; probing a different path rehearses a different "
+            "one (#221)."
+        )
+
+    for name in MIRRORED_STEP_NAMES:
+        try:
+            staging_step = named_step(staging, "deploy-staging.yml", name)
+        except ValueError as exc:
+            problems.append(str(exc))
+            continue
+        prod_step = named_step(prod, "deploy-prod.yml", name)
+        if (
+            staging_step.get("env", {}) != prod_step.get("env", {})
+            or staging_step.get("run") != prod_step.get("run")
+        ):
+            problems.append(
+                f"deploy-staging.yml step {name!r} is not a verbatim copy of "
+                "deploy-prod.yml's: env and run must match byte for byte. The "
+                "executed canary checks in this script run the PROD copy only, so a "
+                "drifted staging copy is otherwise unguarded. Keep them identical -- "
+                "or extract the shared shell into scripts/ and point both at it in "
+                "the same change as updating this check."
+            )
+    return problems
+
+
 # --------------------------------------------------------------------------------
 # Detection: each check, run against a copy broken in the specific way it guards.
 # --------------------------------------------------------------------------------
@@ -407,6 +463,32 @@ def break_readiness_canary_reset(template: dict, workflow: dict):
     step = canary_step(workflow)
     step["run"] = re.sub(r"\n(\s+)consecutive=0\b", r"\n\1:", step["run"], count=1)
     return template, workflow
+
+
+def break_staging_canary_bar(staging: dict) -> dict:
+    """Lower the staging canary's bar while leaving prod's alone -- the drift the
+    mirror check exists to catch, invisible to every executed check because those
+    run the prod copy."""
+    staging = copy.deepcopy(staging)
+    canary_step(staging)["env"]["REQUIRED_CONSECUTIVE"] = 1
+    return staging
+
+
+def break_staging_verify_commit(staging: dict) -> dict:
+    """Neuter the staging deployed-commit assertion: same failure family as #158,
+    reintroduced on one workflow only."""
+    staging = copy.deepcopy(staging)
+    step = named_step(
+        staging, "deploy-staging.yml", "Verify deployed commit matches this run"
+    )
+    step["run"] = step["run"].replace("exit 1", "true")
+    return staging
+
+
+STAGING_DETECTIONS = [
+    ("staging canary bar lowered", break_staging_canary_bar),
+    ("staging commit assertion neutered", break_staging_verify_commit),
+]
 
 
 def break_optional_cors_origins(template: dict, workflow: dict):
@@ -444,6 +526,7 @@ DETECTIONS = [
 def main() -> int:
     template = yaml.load(TEMPLATE.read_text(), Loader=CfnLoader)
     workflow = yaml.safe_load(WORKFLOW.read_text())
+    staging_workflow = yaml.safe_load(STAGING_WORKFLOW.read_text())
 
     failed = False
 
@@ -456,6 +539,19 @@ def main() -> int:
                 f"\nThe check accepted '{label}'. It is not verifying anything, so a\n"
                 "passing run means nothing. Most likely the property it reads moved and\n"
                 "the lookup now returns a default.\n"
+            )
+            failed = True
+        else:
+            print("ok (the regression is detected)")
+
+    for label, breaker in STAGING_DETECTIONS:
+        print(f"detection: {label:34s} ... ", end="", flush=True)
+        if not check_staging_mirrors_prod(workflow, breaker(staging_workflow)):
+            print("FAIL")
+            sys.stderr.write(
+                f"\nThe mirror check accepted '{label}'. It is not comparing anything,\n"
+                "so a passing run means nothing. Most likely a step was renamed and the\n"
+                "lookup no longer finds it.\n"
             )
             failed = True
         else:
@@ -476,6 +572,17 @@ def main() -> int:
             failed = True
         else:
             print("ok")
+
+    print(f"{'staging mirrors the prod deploy steps':44s} ... ", end="", flush=True)
+    problems = check_staging_mirrors_prod(workflow, staging_workflow)
+    if problems:
+        print("FAIL")
+        sys.stderr.write("\n")
+        for problem in problems:
+            sys.stderr.write(f"  {problem}\n")
+        failed = True
+    else:
+        print("ok")
 
     if failed:
         sys.stderr.write(

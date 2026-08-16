@@ -6,6 +6,8 @@ This directory holds the CloudFormation templates that stand up `climate-project
 
 Deployment is split into two CloudFormation stacks. `climate-project-api-bootstrap.yml` provisions the long-lived, rarely-changed foundation: an ECR repository for API images, the `AppRunnerEcrAccessRole` App Runner uses to pull those images, and the `GitHubDeployRole` that GitHub Actions assumes via OIDC to run deploys. `climate-project-api-prod-service.yml` provisions the App Runner service itself and is deployed on every release, taking the image URI and the ECR access role ARN (both read from the bootstrap stack's outputs) as parameters. In steady state: bootstrap stack once (or whenever the deploy role's permissions change), service stack on every deploy.
 
+As of #156 both templates are **environment-parameterised**: the same two files also provision staging (`.github/workflows/deploy-staging.yml`, and the console side in [`docs/runbooks/staging-provisioning.md`](../../docs/runbooks/staging-provisioning.md)). Every default is production's value, so deploying either template with defaults renders exactly the stacks that were live before the parameterisation — the "prod" in the service template's *filename* is historical and kept because runbooks and the live stack reference it. Everything below this line describes **production**; staging differs only in the parameter values the staging workflow and runbook pass.
+
 ## Automated path (preferred)
 
 ```
@@ -424,10 +426,15 @@ Used as a workaround while GitHub Actions is billing-blocked. Requires local AWS
 
 ## Stack and resource name reference
 
-| Resource | Name |
-|---|---|
-| Bootstrap stack | `climate-project-api-bootstrap` |
-| Service stack | `climate-project-api-prod` |
-| App Runner ECR access role | `climate-project-apprunner-ecr-access-prod` |
-| GitHub OIDC deploy role | `climate-project-github-deploy-prod` |
-| Live production URL | https://bhgrdkd4gt.us-east-1.awsapprunner.com |
+| Resource | Production | Staging (#156, once provisioned) |
+|---|---|---|
+| Bootstrap stack | `climate-project-api-bootstrap` | `climate-project-api-staging-bootstrap` |
+| Service stack | `climate-project-api-prod` | `climate-project-api-staging` |
+| ECR repository | `climate-project-api` | `climate-project-api-staging` |
+| App Runner ECR access role | `climate-project-apprunner-ecr-access-prod` | `climate-project-apprunner-ecr-access-staging` |
+| GitHub OIDC deploy role | `climate-project-github-deploy-prod` | `climate-project-github-deploy-staging` |
+| Live URL | https://bhgrdkd4gt.us-east-1.awsapprunner.com | — (created by the first staging deploy) |
+
+The staging names are what `deploy-staging.yml` hardcodes and what the bootstrap
+template renders from its staging parameter set; which AWS *account* they land in is a
+decision recorded in `docs/runbooks/staging-provisioning.md`, not here.
