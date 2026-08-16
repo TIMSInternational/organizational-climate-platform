@@ -1,16 +1,17 @@
 # syntax=docker/dockerfile:1
 #
-# The scheduler image. Deliberately separate from `Dockerfile`, which publishes the API only,
-# because the two are different processes with different entrypoints -- not because they are
-# different codebases. They share the solution, the DbContext, the notification sender and the
-# dispatch rules; only the host differs.
+# The standalone scheduler image. NOT NEEDED under the deployment #275 chose: the API host
+# calls `AddClimateProjectScheduling` (see src/ClimateProject.Api/Program.cs), so the API image
+# `Dockerfile` builds IS the scheduler, and nothing builds or deploys this file. It is kept,
+# unbuilt, as the documented opt-out: if the jobs ever need a dedicated instance -- CPU
+# isolation, a different scaling profile -- deploy this image and set Scheduling__Enabled=false
+# on the API service. The advisory lease in `PostgresAdvisoryJobLease` makes either topology
+# correct; the choice is operational cost, not correctness.
 #
-# Nothing builds this yet. Where the scheduler runs at cutover is #164's decision, and there
-# are two supported answers: deploy this image as its own App Runner service, or call
-# `AddClimateProjectScheduling` from the API host and deploy nothing new. Both are correct --
-# the advisory lease in `PostgresAdvisoryJobLease` makes the instance count irrelevant, so the
-# choice is about operational cost rather than correctness. See
-# `SchedulingServiceCollectionExtensions`.
+# One caveat if this host is ever deployed: it selects the real notification sender from the
+# same Email options as the API, but its IScheduledReportRunner stays the logging stub -- the
+# real runner (#91) lives in the API host with the report generator. Scheduled reports are
+# generated and delivered by the co-hosted API, not by this process.
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src

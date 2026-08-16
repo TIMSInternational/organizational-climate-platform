@@ -6,12 +6,17 @@ namespace ClimateProject.Infrastructure.Scheduling;
 /// <summary>
 /// The stub behind <see cref="IScheduledReportRunner"/>: it generates nothing and delivers
 /// nothing, so the scheduling half of recurring reports -- due detection, catch-up, the
-/// idempotent advance of <c>NextGeneration</c> -- can be exercised end to end before report
-/// generation exists.
+/// idempotent advance of <c>NextGeneration</c> -- runs end to end without claiming anything
+/// about a report.
 ///
-/// Mirrors <c>LoggingNotificationSender</c>, which is the established shape in this repository
-/// for a seam that is not yet filled in. Replacing this is part of #91; nothing upstream of it
-/// changes.
+/// Mirrors <c>LoggingNotificationSender</c>, including in what it became once the seam was
+/// filled (#91): the real runner exists (<c>DeliveringScheduledReportRunner</c>, in the API
+/// host), but this stub stays selected wherever no mail provider is configured -- local
+/// development, CI, the integration suite, the standalone worker host. Deliberately: with no
+/// way to send the "your report is ready" mail, generating the document and letting the stub
+/// notification sender mark the notice "sent" would record a delivery that never happened.
+/// The schedule still advances, announced loudly here and by the startup email WARNING, and
+/// nothing anywhere says "delivered".
 /// </summary>
 public sealed class LoggingScheduledReportRunner(ILogger<LoggingScheduledReportRunner> logger)
     : IScheduledReportRunner

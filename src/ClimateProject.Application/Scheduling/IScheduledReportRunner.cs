@@ -12,11 +12,11 @@ namespace ClimateProject.Application.Scheduling;
 /// -- rendering PDF/CSV, storage, share links, mailing the file to people who will never log
 /// in -- is #91's.</para>
 ///
-/// <para>This is the same shape as <c>INotificationSender</c>, which is stubbed until #100
-/// wires a real provider in, and for the same reason: it lets the half that exists be built
-/// and tested end to end without the half that does not. Report generation in this repository
-/// is currently a literal stub (<c>ReportEndpoints.CreateAsync</c> writes "Report generation is
-/// stubbed"), so a scheduler that tried to call it would only be scheduling a placeholder.</para>
+/// <para>This is the same shape as <c>INotificationSender</c>, and since #91 it is filled the
+/// same way: the API host selects <c>DeliveringScheduledReportRunner</c> -- generation through
+/// the same path as <c>POST /admin/reports</c>, delivery through the notification path --
+/// whenever a mail provider is configured, and keeps <c>LoggingScheduledReportRunner</c>
+/// otherwise, so an occurrence is never marked delivered by a host that cannot deliver it.</para>
 /// </summary>
 public interface IScheduledReportRunner
 {

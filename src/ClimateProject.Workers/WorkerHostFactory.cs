@@ -32,6 +32,16 @@ public static class WorkerHostFactory
     {
         var builder = Host.CreateApplicationBuilder(args);
 
+        // This project deliberately ships NO appsettings.json. Since #275 the API references
+        // this project to co-host the jobs, and a content file named appsettings.json would be
+        // copied transitively into the API's build and publish output, racing the API's own
+        // appsettings.json for the same path -- the exact nondeterminism the integration test
+        // project already documents on WorkerStartupValidationTests. Everything the deleted
+        // file set was the code default anyway, except this log filter, which now lives here:
+        // EF logs every SQL command at Information, and a scheduler that executes queries on a
+        // timer would otherwise fill its log with them.
+        builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
+
         // Same connection string, same policy as the API (#220): the pool bound, and the Supavisor
         // transaction-pooler port reported. A worker is if anything more exposed to the unbounded-pool
         // problem than a request handler, because each tick holds a connection for the whole of a

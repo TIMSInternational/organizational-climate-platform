@@ -31,13 +31,13 @@ namespace ClimateProject.Workers;
 /// word that produces the incident.</para>
 ///
 /// <para>The same registration also works inside the API host, which is why the jobs are
-/// wired up by an extension method rather than inline in <c>Program.cs</c>. Co-hosting is a
-/// legitimate deployment choice precisely because the lease makes instance count irrelevant --
-/// but it is a deployment decision, not this file's, and it is left to #275 -- which is
-/// where it belongs, because as of 2026-08-09 NO worker host is deployed at all.</para>
+/// wired up by an extension method rather than inline in <c>Program.cs</c>. #275 took that
+/// choice: the API host calls <c>AddClimateProjectScheduling</c>, so every deployed API
+/// instance runs these jobs, and the lease is what makes the instance count irrelevant.</para>
 /// </summary>
 public abstract class ScheduledJobWorker : BackgroundService
 {
+    private readonly bool _enabled;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly WorkerHeartbeats _heartbeats;
     private readonly ILogger _logger;
@@ -46,6 +46,7 @@ public abstract class ScheduledJobWorker : BackgroundService
     protected ScheduledJobWorker(
         string jobName,
         TimeSpan interval,
+        bool enabled,
         IServiceScopeFactory scopeFactory,
         WorkerHeartbeats heartbeats,
         ILogger logger)
@@ -55,6 +56,7 @@ public abstract class ScheduledJobWorker : BackgroundService
 
         JobName = jobName;
         Interval = interval;
+        _enabled = enabled;
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _heartbeats = heartbeats ?? throw new ArgumentNullException(nameof(heartbeats));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -69,6 +71,18 @@ public abstract class ScheduledJobWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!_enabled)
+        {
+            // Registered but switched off (Scheduling:Enabled=false): no heartbeat is declared
+            // and no timer starts, so a disabled host neither dials the database nor reports
+            // its idle jobs as stale. The integration suite runs every API host this way; the
+            // one log line is what makes "off on purpose" distinguishable from "dead".
+            _logger.LogInformation(
+                "Scheduled job {JobName} is registered but Scheduling:Enabled is false; it will not tick in this host.",
+                JobName);
+            return;
+        }
+
         _heartbeats.Register(JobName, Interval, NotificationDelivery.UtcNow());
 
         _logger.LogInformation(

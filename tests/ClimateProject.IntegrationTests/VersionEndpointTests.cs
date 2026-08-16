@@ -43,6 +43,9 @@ public class VersionEndpointTests : IClassFixture<WebApplicationFactory<Program>
                     ["ConnectionStrings:ClimateProject"] = "Host=localhost;Database=unused;Username=unused;Password=unused",
                     ["InternalApiKey"] = AuthWebApplicationFactory.TestInternalApiKey,
                     ["GoogleClientId"] = "test-google-client-id",
+                    // The API co-hosts the scheduled jobs (#275); test hosts run them idle so
+                    // nothing ticks against the unused connection string above.
+                    ["Scheduling:Enabled"] = "false",
                 });
             });
         });

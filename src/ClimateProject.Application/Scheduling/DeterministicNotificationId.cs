@@ -49,6 +49,9 @@ public static class DeterministicNotificationId
     /// <summary>Namespace for microclimate reminder notifications. See <see cref="DigestNamespace"/>.</summary>
     public static readonly Guid MicroclimateReminderNamespace = new("9d3b7c68-1e05-5f42-a7c8-53b6e2049f1d");
 
+    /// <summary>Namespace for scheduled report delivery notifications (#91). See <see cref="DigestNamespace"/>.</summary>
+    public static readonly Guid ScheduledReportNamespace = new("4e8a2c17-6b93-5d40-8f5a-b1c09e37d264");
+
     /// <summary>The id of the digest for <paramref name="userId"/> covering <paramref name="periodKey"/>.</summary>
     public static Guid ForDigest(Guid userId, string periodKey)
         => Create(DigestNamespace, string.Create(null, $"{userId:D}:{periodKey}"));
@@ -72,6 +75,18 @@ public static class DeterministicNotificationId
     /// </summary>
     public static Guid ForMicroclimateReminder(Guid invitationId, int reminderNumber)
         => Create(MicroclimateReminderNamespace, string.Create(null, $"{invitationId:D}:{reminderNumber}"));
+
+    /// <summary>
+    /// The id of the delivery notification for one occurrence of a recurring report (#91).
+    ///
+    /// Keyed on the occurrence instant, which is <c>NextGeneration</c> as it stood before the
+    /// schedule advanced -- a stored value every instance and every retry computes identically
+    /// (see <c>ScheduledReportOccurrence.OccurrenceUtc</c>) -- never on the wall clock when a
+    /// worker happened to notice. <c>UtcTicks</c> rather than a formatted string so the key
+    /// cannot vary with culture or with how many fractional digits a format chose to print.
+    /// </summary>
+    public static Guid ForScheduledReport(Guid reportId, DateTimeOffset occurrenceUtc)
+        => Create(ScheduledReportNamespace, string.Create(null, $"{reportId:D}:{occurrenceUtc.UtcTicks}"));
 
     /// <summary>
     /// The RFC 4122 v5 UUID of <paramref name="name"/> within <paramref name="namespaceId"/>.

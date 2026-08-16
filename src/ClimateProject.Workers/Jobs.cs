@@ -33,6 +33,7 @@ public sealed class NotificationDispatchWorker(
     : ScheduledJobWorker(
         WorkerJobs.NotificationDispatch,
         options.Value.NotificationDispatchInterval,
+        options.Value.Enabled,
         scopeFactory,
         heartbeats,
         logger)
@@ -76,6 +77,7 @@ public sealed class InvitationReminderWorker(
     : ScheduledJobWorker(
         WorkerJobs.InvitationReminders,
         options.Value.InvitationReminderInterval,
+        options.Value.Enabled,
         scopeFactory,
         heartbeats,
         logger)
@@ -114,6 +116,7 @@ public sealed class DigestWorker(
     : ScheduledJobWorker(
         WorkerJobs.Digests,
         options.Value.DigestInterval,
+        options.Value.Enabled,
         scopeFactory,
         heartbeats,
         logger)
@@ -153,6 +156,7 @@ public sealed class ScheduledReportWorker(
     : ScheduledJobWorker(
         WorkerJobs.ScheduledReports,
         options.Value.ScheduledReportInterval,
+        options.Value.Enabled,
         scopeFactory,
         heartbeats,
         logger)
@@ -189,13 +193,10 @@ public sealed class ScheduledReportWorker(
 /// the scheduled sweep and the manual one cannot come to disagree about which rows are
 /// expired. The route stays for manual use.</para>
 ///
-/// <para><b>Scheduled is not the same as running.</b> This host is built by no workflow and
-/// deployed as no service -- <c>deploy-prod.yml</c> builds only the API image, and nothing
-/// builds <c>Dockerfile.workers</c> -- so none of the workers in this file executes in
-/// production, this one included. #272 makes the sweep something a scheduler *can* run and
-/// proves it does the right thing when ticked; #275 is what makes it actually tick. Deploying
-/// the workers host, or co-hosting these jobs in the API, is #275's call and deliberately not
-/// made here.</para>
+/// <para><b>Running since #275.</b> These jobs are co-hosted in the API --
+/// <c>Program.cs</c> calls <c>AddClimateProjectScheduling</c> -- so the API image
+/// <c>deploy-prod.yml</c> already builds is the scheduler, and this sweep ticks in
+/// production. #272 made the sweep something a scheduler can run; #275 made it tick.</para>
 ///
 /// <para>Cross-tenant, like every other job here, which the HTTP route reserves for super
 /// admins. Not an escalation: the restriction exists because one company's admin should not
@@ -211,6 +212,7 @@ public sealed class SurveyDraftRetentionWorker(
     : ScheduledJobWorker(
         WorkerJobs.SurveyDraftRetention,
         options.Value.SurveyDraftRetentionInterval,
+        options.Value.Enabled,
         scopeFactory,
         heartbeats,
         logger)
@@ -260,10 +262,9 @@ public sealed class SurveyDraftRetentionWorker(
 /// <c>DELETE /surveys/drafts/expired</c> uses: a human asking for the sweep by hand is asking
 /// it to finish.</para>
 ///
-/// <para><b>Scheduled is not the same as running.</b> This host is built by no workflow and
-/// deployed as no service, exactly as <see cref="SurveyDraftRetentionWorker"/> records, so
-/// nothing ticks this in production until #275. Until then the only thing that sweeps is a
-/// super admin calling the route.</para>
+/// <para><b>Running since #275</b>, co-hosted in the API exactly as
+/// <see cref="SurveyDraftRetentionWorker"/> records. Before that, the only thing that swept
+/// was a super admin calling the route.</para>
 ///
 /// <para><b>Daily.</b> Every window here is measured in days or months -- a year of
 /// notifications, ninety days past an invitation's expiry -- so nothing observable depends on
@@ -278,6 +279,7 @@ public sealed class RetentionCleanupWorker(
     : ScheduledJobWorker(
         WorkerJobs.RetentionCleanup,
         options.Value.RetentionCleanupInterval,
+        options.Value.Enabled,
         scopeFactory,
         heartbeats,
         logger)

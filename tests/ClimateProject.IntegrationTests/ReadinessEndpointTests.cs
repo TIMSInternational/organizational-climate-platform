@@ -50,6 +50,9 @@ public sealed class UnreachableDatabaseHostFixture : IDisposable
                     ["TrackingJwtSecret"] = AuthWebApplicationFactory.TestJwtSecret,
                     ["GoogleClientId"] = "test-google-client-id",
                     ["InternalApiKey"] = AuthWebApplicationFactory.TestInternalApiKey,
+                    // The API co-hosts the scheduled jobs (#275); idle here so no job timer
+                    // dials the deliberately unreachable database alongside the probe under test.
+                    ["Scheduling:Enabled"] = "false",
                 });
             });
         });

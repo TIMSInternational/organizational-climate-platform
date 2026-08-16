@@ -3,6 +3,15 @@
   <ItemGroup>
     <ProjectReference Include="..\ClimateProject.Application\ClimateProject.Application.csproj" />
     <ProjectReference Include="..\ClimateProject.Infrastructure\ClimateProject.Infrastructure.csproj" />
+    <!--
+      Co-hosting (#275): the API process is the scheduler. Program.cs calls
+      AddClimateProjectScheduling, so the six jobs and the heartbeat monitor deploy with the
+      API image `deploy-prod.yml` already builds; Dockerfile.workers stays only as the
+      opt-out path if the jobs ever need a dedicated instance again. ClimateProject.Workers
+      deliberately ships no appsettings.json (see WorkerHostFactory) so this reference cannot
+      race the API's own configuration files into the publish output.
+    -->
+    <ProjectReference Include="..\ClimateProject.Workers\ClimateProject.Workers.csproj" />
   </ItemGroup>
 
   <!--

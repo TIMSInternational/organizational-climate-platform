@@ -81,6 +81,9 @@ public class RateLimitingTests : IClassFixture<WebApplicationFactory<Program>>
                     ["TrackingJwtSecret"] = AuthWebApplicationFactory.TestJwtSecret,
                     ["ConnectionStrings:ClimateProject"] = "Host=localhost;Database=unused;Username=unused;Password=unused;Timeout=2",
                     ["InternalApiKey"] = AuthWebApplicationFactory.TestInternalApiKey,
+                    // The API co-hosts the scheduled jobs (#275); test hosts run them idle so
+                    // nothing ticks against the unused connection string above.
+                    ["Scheduling:Enabled"] = "false",
                 };
 
                 foreach (var (key, value) in overrides)

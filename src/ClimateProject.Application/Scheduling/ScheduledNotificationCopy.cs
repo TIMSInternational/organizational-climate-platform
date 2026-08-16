@@ -54,6 +54,18 @@ public static class ScheduledNotificationCopy
         "You have a pending response. It closes on {0}.",
         "Tienes una respuesta pendiente. Cierra el {0}.");
 
+    private static readonly Phrase ReportReadyTitle = new(
+        "Your scheduled report is ready",
+        "Tu informe programado esta listo");
+
+    private static readonly Phrase ReportReadyBodyNamed = new(
+        "Your scheduled report \"{0}\" for {1} has been generated and is ready to download.",
+        "Tu informe programado \"{0}\" del {1} se ha generado y esta listo para descargar.");
+
+    private static readonly Phrase ReportReadyBodyUnnamed = new(
+        "Your scheduled report for {0} has been generated and is ready to download.",
+        "Tu informe programado del {0} se ha generado y esta listo para descargar.");
+
     private static readonly Phrase DigestTitle = new(
         "Your activity summary",
         "Tu resumen de actividad");
@@ -85,6 +97,31 @@ public static class ScheduledNotificationCopy
         return string.IsNullOrWhiteSpace(contentTitle)
             ? string.Format(CultureInfo.InvariantCulture, ReminderBodyUnnamed.For(locale), closes)
             : string.Format(CultureInfo.InvariantCulture, ReminderBodyNamed.For(locale), contentTitle, closes);
+    }
+
+    /// <summary>Subject line for a scheduled report's "ready" notice (#91).</summary>
+    public static string ReportReadyTitleFor(string? locale) => ReportReadyTitle.For(locale);
+
+    /// <summary>
+    /// Body for a scheduled report's "ready" notice.
+    ///
+    /// <para>Deliberately carries the report's title and its occurrence date and <b>nothing
+    /// from inside the report</b>. This text is frozen into a <c>notifications</c> row and
+    /// mailed; the numbers live behind the authorised download, where the aggregation's own
+    /// suppression decisions (#320's shared path) apply. A count in this string would be a
+    /// second, ungoverned copy of data the report itself may have withheld.</para>
+    ///
+    /// <para><paramref name="reportTitle"/> is nullable-in-practice for the same reason the
+    /// reminder body's survey title is: interpolating a blank would print an empty pair of
+    /// quotes, so a blank title gets the unnamed phrasing instead.</para>
+    /// </summary>
+    public static string ReportReadyBodyFor(string? locale, string? reportTitle, DateTimeOffset occurrenceUtc)
+    {
+        var occurrence = occurrenceUtc.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        return string.IsNullOrWhiteSpace(reportTitle)
+            ? string.Format(CultureInfo.InvariantCulture, ReportReadyBodyUnnamed.For(locale), occurrence)
+            : string.Format(CultureInfo.InvariantCulture, ReportReadyBodyNamed.For(locale), reportTitle, occurrence);
     }
 
     /// <summary>Subject line for a digest.</summary>
