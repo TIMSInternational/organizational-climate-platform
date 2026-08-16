@@ -87,6 +87,10 @@ public class StartupValidationTests
             ["TrackingJwtSecret"] = ValidTrackingJwtSecret,
             ["InternalApiKey"] = ValidInternalApiKey,
             ["GoogleClientId"] = ValidGoogleClientId,
+            // The API co-hosts the scheduled jobs (#275). The hosts in this class that DO
+            // start must not tick them against the unused connection string; a test that
+            // wants the jobs on says so through an override, like every other setting here.
+            ["Scheduling:Enabled"] = "false",
         };
 
         foreach (var (key, value) in overrides)

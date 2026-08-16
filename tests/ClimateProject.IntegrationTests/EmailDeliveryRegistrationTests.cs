@@ -1,5 +1,7 @@
+using ClimateProject.Api.Scheduling;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.OrgStructure;
+using ClimateProject.Application.Scheduling;
 using ClimateProject.Infrastructure.Email;
 using ClimateProject.Infrastructure.Notifications;
 using ClimateProject.Infrastructure.OrgStructure;
@@ -38,6 +40,11 @@ public sealed class ConfiguredEmailHostFixture : IDisposable
                 ["Email:SmtpHost"] = "smtp.example.invalid",
                 ["Email:FromAddress"] = "no-reply@example.com",
                 ["Email:AppBaseUrl"] = "https://app.example.com",
+
+                // The API co-hosts the scheduled jobs (#275); this host starts and stays up
+                // for the whole class, so they must run idle rather than tick against the
+                // unused connection string above.
+                ["Scheduling:Enabled"] = "false",
             })));
 
     public void Dispose() => Factory.Dispose();
@@ -76,6 +83,21 @@ public class EmailDeliveryRegistrationTests(ConfiguredEmailHostFixture fixture)
         using var scope = fixture.Factory.Services.CreateScope();
 
         Assert.IsType<EmailInvitationEmailSender>(scope.ServiceProvider.GetRequiredService<IInvitationEmailSender>());
+    }
+
+    /// <summary>
+    /// The #91 selection rule's configured arm: with a provider present, scheduled reports
+    /// must be generated and delivered by the real runner, not logged away by the stub. The
+    /// unconfigured arm -- stub stays, nothing claims delivery -- is asserted in
+    /// <c>ApiSchedulingCoHostTests</c> against its unconfigured host.
+    /// </summary>
+    [Fact]
+    public void A_configured_provider_selects_the_real_scheduled_report_runner()
+    {
+        using var scope = fixture.Factory.Services.CreateScope();
+
+        Assert.IsType<DeliveringScheduledReportRunner>(
+            scope.ServiceProvider.GetRequiredService<IScheduledReportRunner>());
     }
 
     [Fact]

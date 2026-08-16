@@ -27,6 +27,9 @@ public class CorsPolicyTests : IClassFixture<WebApplicationFactory<Program>>
                     ["ConnectionStrings:ClimateProject"] = "Host=localhost;Database=unused;Username=unused;Password=unused",
                     ["InternalApiKey"] = AuthWebApplicationFactory.TestInternalApiKey,
                     ["Cors:AllowedOrigins:0"] = "https://allowed.example.com",
+                    // The API co-hosts the scheduled jobs (#275); test hosts run them idle so
+                    // nothing ticks against the unused connection string above.
+                    ["Scheduling:Enabled"] = "false",
                 });
             });
         });

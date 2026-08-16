@@ -69,6 +69,30 @@ public class DeterministicNotificationIdTests
     }
 
     [Fact]
+    public void Scheduled_report_ids_are_keyed_on_the_occurrence_instant()
+    {
+        // The occurrence is NextGeneration as it stood before the advance -- a stored value
+        // every instance and every retry computes identically -- which is what makes a
+        // replayed occurrence (#91) a primary-key violation instead of a second email.
+        var reportId = new Guid("b7e2d4a1-9c3f-4562-8d10-5f6a7b8c9d0e");
+        var occurrence = new DateTimeOffset(2026, 8, 16, 9, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal(
+            DeterministicNotificationId.ForScheduledReport(reportId, occurrence),
+            DeterministicNotificationId.ForScheduledReport(reportId, occurrence));
+
+        Assert.NotEqual(
+            DeterministicNotificationId.ForScheduledReport(reportId, occurrence),
+            DeterministicNotificationId.ForScheduledReport(reportId, occurrence.AddDays(1)));
+
+        // The same instant written with a different offset is the same occurrence: the key is
+        // UtcTicks, so +00:00 and the same moment expressed as -05:00 must not double-send.
+        Assert.Equal(
+            DeterministicNotificationId.ForScheduledReport(reportId, occurrence),
+            DeterministicNotificationId.ForScheduledReport(reportId, occurrence.ToOffset(TimeSpan.FromHours(-5))));
+    }
+
+    [Fact]
     public void Namespaces_are_distinct_from_one_another()
     {
         Guid[] namespaces =
@@ -76,6 +100,7 @@ public class DeterministicNotificationIdTests
             DeterministicNotificationId.DigestNamespace,
             DeterministicNotificationId.SurveyReminderNamespace,
             DeterministicNotificationId.MicroclimateReminderNamespace,
+            DeterministicNotificationId.ScheduledReportNamespace,
         ];
 
         Assert.Equal(namespaces.Length, namespaces.Distinct().Count());

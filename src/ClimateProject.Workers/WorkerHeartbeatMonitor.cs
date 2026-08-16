@@ -33,11 +33,20 @@ public sealed class WorkerHeartbeatMonitor(
     IOptions<WorkerSchedulingOptions> options,
     ILogger<WorkerHeartbeatMonitor> logger) : BackgroundService
 {
+    private readonly bool _enabled = options.Value.Enabled;
     private readonly TimeSpan _interval = options.Value.HeartbeatMonitorInterval;
     private readonly double _tolerance = options.Value.HeartbeatStaleTolerance;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!_enabled)
+        {
+            // Scheduling:Enabled=false: the jobs register no heartbeats (see
+            // ScheduledJobWorker), so there is nothing to monitor and every job would
+            // otherwise be absent rather than stale. Idle alongside them.
+            return;
+        }
+
         try
         {
             using var timer = new PeriodicTimer(_interval);

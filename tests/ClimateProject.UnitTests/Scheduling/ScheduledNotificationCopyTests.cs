@@ -83,6 +83,33 @@ public class ScheduledNotificationCopyTests
     }
 
     [Fact]
+    public void Report_copy_is_bilingual_and_carries_the_title_and_the_occurrence_date()
+    {
+        var english = ScheduledNotificationCopy.ReportReadyBodyFor("en", "Monthly climate report", Closes);
+        var spanish = ScheduledNotificationCopy.ReportReadyBodyFor("es", "Informe mensual de clima", Closes);
+
+        Assert.Equal("Your scheduled report is ready", ScheduledNotificationCopy.ReportReadyTitleFor("en"));
+        Assert.Equal("Tu informe programado esta listo", ScheduledNotificationCopy.ReportReadyTitleFor("es"));
+        Assert.Contains("Monthly climate report", english);
+        Assert.Contains("2026-08-20", english);
+        Assert.Contains("Informe mensual de clima", spanish);
+        Assert.Contains("se ha generado", spanish);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void A_blank_report_title_uses_the_phrasing_that_does_not_name_it(string? title)
+    {
+        // Same rule as the reminder: interpolating a blank renders an empty pair of quotes.
+        var body = ScheduledNotificationCopy.ReportReadyBodyFor("en", title, Closes);
+
+        Assert.DoesNotContain("\"\"", body);
+        Assert.Contains("Your scheduled report for 2026-08-20", body);
+    }
+
+    [Fact]
     public void Every_generated_string_fits_the_notifications_title_column()
     {
         // notifications.title is varchar(500). A title that overflowed would fail the whole
@@ -94,6 +121,8 @@ public class ScheduledNotificationCopyTests
                 ScheduledNotificationCopy.ReminderTitleFor("es"),
                 ScheduledNotificationCopy.DigestTitleFor("en"),
                 ScheduledNotificationCopy.DigestTitleFor("es"),
+                ScheduledNotificationCopy.ReportReadyTitleFor("en"),
+                ScheduledNotificationCopy.ReportReadyTitleFor("es"),
             },
             title => Assert.InRange(title.Length, 1, 500));
     }

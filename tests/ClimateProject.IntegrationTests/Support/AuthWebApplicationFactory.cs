@@ -245,6 +245,18 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
                 // before #279. It is the production App Runner value, and what it costs is
                 // written down on ConfigureClient rather than left for a reader to discover.
                 ["RateLimiting:TrustedProxyHopCount"] = "1",
+
+                // Scheduling stays OFF in every host this factory builds (#275). The API
+                // co-hosts the six scheduled jobs, and their Enabled switch defaults to true
+                // because production must tick with no extra configuration -- but a test host
+                // that ticks is a second writer racing every test in this collection: the
+                // dispatch worker marking notifications "sent" mid-assertion, retention
+                // sweeps deleting rows a test just seeded. Same switch, same value, same
+                // reason as WorkerStartupValidationTests' hosts. This override only works
+                // because the workers read Enabled lazily, at host start -- see
+                // SchedulingServiceCollectionExtensions for why that is load-bearing --
+                // and ApiSchedulingCoHostTests proves both directions.
+                ["Scheduling:Enabled"] = "false",
             });
         });
 

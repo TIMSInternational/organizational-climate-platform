@@ -2,16 +2,20 @@ using ClimateProject.Api;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Api.Infrastructure;
 using ClimateProject.Api.Infrastructure.Auditing;
+using ClimateProject.Api.Scheduling;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Cors;
 using ClimateProject.Application.Email;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.OrgStructure;
+using ClimateProject.Application.Scheduling;
 using ClimateProject.Infrastructure.Auth;
 using ClimateProject.Infrastructure.Email;
 using ClimateProject.Infrastructure.Notifications;
 using ClimateProject.Infrastructure.OrgStructure;
 using ClimateProject.Infrastructure.Persistence;
+using ClimateProject.Infrastructure.Scheduling;
+using ClimateProject.Workers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors.Infrastructure;
@@ -374,6 +378,30 @@ builder.Services.AddScoped<IInvitationEmailSender>(sp => sp.GetRequiredService<E
 builder.Services.AddScoped<INotificationSender>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
     ? ActivatorUtilities.CreateInstance<EmailNotificationSender>(sp)
     : ActivatorUtilities.CreateInstance<LoggingNotificationSender>(sp));
+
+// Co-hosted scheduling (#275). This one call registers the six scheduled jobs and the
+// heartbeat monitor, so the scheduler deploys with the API image -- no second service, no
+// Dockerfile.workers build. Safe at any instance count: every job runs under a Postgres
+// advisory lease (single-flight), keys its notifications deterministically, and persists its
+// send state, so twenty-five API instances are exactly one scheduler. Scheduling:Enabled
+// (default true) is read lazily, at host start, which is what lets the integration suite --
+// whose config overrides only land at builder.Build() -- run every test host with the jobs
+// idle. See SchedulingServiceCollectionExtensions for why that laziness is load-bearing.
+builder.Services.AddClimateProjectScheduling(builder.Configuration);
+
+// The #91 seam, filled: scheduled reports generate through ReportGeneration -- the SAME code
+// POST /admin/reports runs, suppression decisions included -- and deliver as a notification
+// row the dispatch worker drains through IEmailTransport. Same selection rule and same shape
+// as the two senders above, and AFTER AddClimateProjectScheduling on purpose: the extension
+// registers the logging stub as its default, and the last registration wins. Unconfigured
+// mail keeps the stub, which generates nothing and claims nothing -- the schedule still
+// advances, but no report row and no notification ever says "delivered" (the startup WARNING
+// announces the state, exactly as it does for the senders). A runner that generated and then
+// let a stub sender mark the notice "sent" would be the deploy that reports success and
+// delivers nothing -- the failure mode EmailOptions exists to prevent.
+builder.Services.AddScoped<IScheduledReportRunner>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
+    ? ActivatorUtilities.CreateInstance<DeliveringScheduledReportRunner>(sp)
+    : ActivatorUtilities.CreateInstance<LoggingScheduledReportRunner>(sp));
 
 builder.Services.AddOpenApi();
 

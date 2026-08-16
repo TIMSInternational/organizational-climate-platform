@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Api.Infrastructure;
+using ClimateProject.Application.Scheduling;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ClimateProject.IntegrationTests.Support;
 
@@ -120,6 +122,25 @@ public class SharedHostTests(PostgresContainerFixture postgres)
 
             Assert.Same(_hostSeenByAnEarlierTest, postgres.App);
         }
+    }
+
+    /// <summary>
+    /// The OTHER hazard a shared host acquired with #275: the API co-hosts six scheduled
+    /// jobs, and if the factory's <c>Scheduling:Enabled=false</c> ever stopped taking effect,
+    /// this host would tick them against the shared database for the whole run -- the
+    /// dispatch worker marking notifications "sent" mid-assertion, retention sweeps deleting
+    /// rows tests just seeded. Deterministic, not racy: both the disabled early-return and
+    /// the enabled path's heartbeat registration run synchronously inside host start (see
+    /// <c>ApiSchedulingCoHostTests</c>), so an enabled host reads as non-empty here from its
+    /// first instant. Mutation-proved by deleting the factory's override: this fails with
+    /// all six jobs registered, and nothing else in a quick filtered run notices.
+    /// </summary>
+    [Fact]
+    public void The_shared_host_runs_with_scheduling_off_so_no_job_ticks_behind_the_tests()
+    {
+        var heartbeats = postgres.App.Services.GetRequiredService<WorkerHeartbeats>();
+
+        Assert.Empty(heartbeats.Snapshot());
     }
 
     /// <summary>
