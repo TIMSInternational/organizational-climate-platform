@@ -50,6 +50,10 @@ function payload(overrides: Partial<SurveyAnalyticsResponse> = {}): SurveyAnalyt
         ],
         average: 3.7,
         median: 4,
+        scaleMin: 1,
+        scaleMax: 5,
+        scaleLabelMin: 'Strongly disagree',
+        scaleLabelMax: 'Strongly agree',
         words: [],
         suppressedWordCount: 0,
       },
@@ -63,6 +67,10 @@ function payload(overrides: Partial<SurveyAnalyticsResponse> = {}): SurveyAnalyt
         distribution: [],
         average: null,
         median: null,
+        scaleMin: null,
+        scaleMax: null,
+        scaleLabelMin: null,
+        scaleLabelMax: null,
         words: [
           { language: 'en', word: 'workload', count: 5, responseCount: 5 },
           { language: 'es', word: 'horario', count: 3, responseCount: 3 },
@@ -80,6 +88,7 @@ function payload(overrides: Partial<SurveyAnalyticsResponse> = {}): SurveyAnalyt
             label: 'Support',
             respondentCount: 9,
             participationRate: 75,
+            headcount: 12,
             isSuppressed: false,
             questions: [{ questionId: 'q1', answeredCount: 9, average: 3.1 }],
           },
@@ -89,6 +98,7 @@ function payload(overrides: Partial<SurveyAnalyticsResponse> = {}): SurveyAnalyt
             label: 'Legal',
             respondentCount: 0,
             participationRate: null,
+            headcount: null,
             isSuppressed: true,
             questions: [],
           },
@@ -106,6 +116,7 @@ function payload(overrides: Partial<SurveyAnalyticsResponse> = {}): SurveyAnalyt
             label: null,
             respondentCount: 10,
             participationRate: null,
+            headcount: null,
             isSuppressed: false,
             questions: [{ questionId: 'q1', answeredCount: 10, average: 4.4 }],
           },
@@ -182,9 +193,9 @@ describe('SurveyResultsPage', () => {
     expect((await screen.findAllByText(/I feel safe raising concerns/)).length).toBeGreaterThan(0)
     expect(screen.getByText('Per-question results')).toBeTruthy()
     expect(screen.getByText('Breakdowns')).toBeTruthy()
-    // Three rows name it: the breakdown table's, the per-question heat map's row
-    // header, and the climate map's row header.
-    expect(screen.getAllByRole('row', { name: /Support/ }).length).toBe(3)
+    // Two rows name it: the breakdown table's and the climate map's row header.
+    // Exactly two — a third would be the dropped sequential heat strip coming back.
+    expect(screen.getAllByRole('row', { name: /Support/ }).length).toBe(2)
   })
 
   /** The breakdown table, which is the only surface that lists every group. */
@@ -195,17 +206,32 @@ describe('SurveyResultsPage', () => {
   }
 
   describe('suppressed segments', () => {
-    it('renders a withheld group as withheld, with an explanation', async () => {
+    it('renders a withheld group in the protected grammar: hatched box, the word, the sentence', async () => {
       renderPage()
       await screen.findAllByRole('row', { name: /Legal/ })
       // Scoped to the breakdown table: the group also keeps a row in the climate
       // map above, which is the subject of its own test below.
       const row = within(breakdownTable()).getByRole('row', { name: /Legal/ })
 
-      expect(within(row).getByText('Withheld')).toBeTruthy()
+      // The same ProtectedCell mark the climate map hatches this group's row
+      // with — "protected" is learned once and read twice.
+      expect(within(row).getByRole('img', { name: /Legal: protected/i })).toBeTruthy()
+      expect(within(row).getByText('Protected')).toBeTruthy()
       expect(
         within(row).getByText(/fewer than 5 respondents/i),
       ).toBeTruthy()
+    })
+
+    it("withholds a withheld group's participation with it — no rate, no denominator", async () => {
+      // The footnote's reason: a percentage over a known headcount publishes the
+      // count. So the row must carry neither the rate nor the "of N people" half
+      // it would be divided by.
+      renderPage()
+      await screen.findAllByRole('row', { name: /Legal/ })
+      const row = within(breakdownTable()).getByRole('row', { name: /Legal/ })
+
+      expect(row.textContent).not.toContain('%')
+      expect(row.textContent).not.toMatch(/of \d+ people/i)
     })
 
     it('never prints the withheld group as a zero', async () => {
@@ -249,15 +275,85 @@ describe('SurveyResultsPage', () => {
       expect(text).not.toMatch(/\b\d+ of 24 completed/i)
     })
 
-    it('keeps the withheld group out of the heat map entirely', async () => {
+    it('renders no sequential heat strip beside the diverging climate map', async () => {
+      // The admin round DROPPED the "Average score by department and question"
+      // grid: the climate map already answers group × dimension, and one page
+      // must not carry two encodings of one comparison. `HeatMap` writes
+      // `"<row>, <column>: <value>"` into every cell's accessible name, so its
+      // absence is checkable by the naming pattern it would reintroduce.
       renderPage()
       await screen.findAllByRole('row', { name: /Legal/ })
 
-      // `HeatMap` writes `"<row>, <column>: <value>"` into every cell's
-      // accessible name. Support has a cell; Legal must have none, rather than a
-      // bottom-of-ramp cell claiming it scored zero.
-      const cells = screen.getAllByLabelText(/Q1: /)
-      expect(cells.map((cell) => cell.getAttribute('aria-label'))).toEqual(['Support, Q1: 3.1'])
+      expect(screen.queryAllByLabelText(/, Q\d+: /)).toEqual([])
+    })
+
+    it('never gives a protected group a distribution row', async () => {
+      // The per-question strips are whole-survey aggregates. A strip labelled
+      // with a group's name — any group's, but a withheld one above all — would
+      // be a per-group distribution, which is exactly the surface the segment
+      // floor exists to deny. Mutation-proved: rendering a strip per breakdown
+      // segment turns this red on both names.
+      renderPage()
+      const section = await screen.findByRole('region', { name: 'Per-question results' })
+
+      expect(within(section).queryByText(/Legal/)).toBeNull()
+      expect(within(section).queryByText(/Support/)).toBeNull()
+    })
+  })
+
+  describe('the participation strip', () => {
+    it('states the anonymity floor as a reading, groups withheld never omitted', async () => {
+      renderPage()
+
+      expect(await screen.findByText('Anonymity floor')).toBeTruthy()
+      expect(screen.getByText('Groups under it are withheld, never omitted')).toBeTruthy()
+      // The reading is the server's own minimumGroupSize, not a client constant.
+      const tile = screen.getByText('Anonymity floor').closest('[data-slot="kpi-tile"]')!
+      expect(within(tile as HTMLElement).getByText('5')).toBeTruthy()
+    })
+  })
+
+  describe('the distribution strips', () => {
+    it('renders a scale question as one strip row: dimension chip, n, mean, standing, scale ends', async () => {
+      renderPage()
+      const section = await screen.findByRole('region', { name: 'Per-question results' })
+
+      // The dimension chip is the category, raw — the author's own vocabulary.
+      // `getAllByText` because the category filter's <option> shares the word;
+      // the chip is the pill-shaped one.
+      const chips = within(section).getAllByText('safety')
+      expect(chips.some((chip) => chip.className.includes('rounded-full'))).toBe(true)
+      // n and the mean, at the page's one-decimal precision.
+      expect(within(section).getByText('24')).toBeTruthy()
+      expect(within(section).getByText('3.7')).toBeTruthy()
+      // The scale ends in the author's words, with the bound beside them.
+      expect(within(section).getByText('1 · Strongly disagree')).toBeTruthy()
+      expect(within(section).getByText('5 · Strongly agree')).toBeTruthy()
+    })
+
+    it('colours the strip on the climate map ramp, by scale position', async () => {
+      renderPage()
+      const section = await screen.findByRole('region', { name: 'Per-question results' })
+
+      // Bucket "1" (2 answers) sits at the red end, bucket "4" (22) on the
+      // near-blue step — position decides, not render order. (The thin-segment
+      // tooltip rule is DistributionStrip's own test.)
+      const disagree = within(section).getByRole('img', { name: 'Strongly disagree: 2 of 24' })
+      const agree = within(section).getByRole('img', { name: 'Agree: 22 of 24' })
+      expect(disagree.style.backgroundColor).toBe('var(--admin-chart-div-neg-2)')
+      expect(agree.style.backgroundColor).toBe('var(--admin-chart-div-pos-1)')
+      expect(agree.textContent).toBe('22')
+      expect(disagree.getAttribute('title')).toBe('Strongly disagree: 2 of 24')
+    })
+
+    it('keeps the full card for an open-ended question, which has no scale to paint', async () => {
+      renderPage()
+      const section = await screen.findByRole('region', { name: 'Per-question results' })
+
+      // The word cloud card, not a strip: red-to-blue over words would claim an
+      // order nobody authored.
+      expect(within(section).getAllByText(/What would you change\?/).length).toBeGreaterThan(0)
+      expect(within(section).queryByRole('img', { name: /workload: \d+ of/ })).toBeNull()
     })
   })
 
@@ -355,6 +451,56 @@ describe('SurveyResultsPage', () => {
         await screen.findAllByText(/4 words are withheld because they appear in too few answers/i),
       ).toHaveLength(2)
     })
+
+    it('renders no themes section for a survey with no open-text question', async () => {
+      // A section that would always be empty for this survey is not drawn as if
+      // it had content (the prototype's note 08).
+      const base = payload()
+      vi.mocked(fetch).mockResolvedValue(
+        jsonResponse(payload({ questions: [base.questions[0]] })),
+      )
+      renderPage()
+      await screen.findByText('Per-question results')
+
+      expect(screen.queryByText('Themes in open text')).toBeNull()
+    })
+
+    it('keeps the section when every word fell under the word floor, and says so', async () => {
+      // Withheld is not absent: the survey HAS open-text questions, so the
+      // section stays and the withheld count is the content.
+      const base = payload()
+      vi.mocked(fetch).mockResolvedValue(
+        jsonResponse(
+          payload({
+            questions: [
+              base.questions[0],
+              { ...base.questions[1], words: [], suppressedWordCount: 9 },
+            ],
+          }),
+        ),
+      )
+      renderPage()
+
+      expect(await screen.findByText('Themes in open text')).toBeTruthy()
+      expect(
+        screen.getAllByText(/9 words are withheld because they appear in too few answers/i)
+          .length,
+      ).toBeGreaterThan(0)
+    })
+  })
+
+  describe('the breakdown table', () => {
+    it("prints a disclosed group's participation with its denominator", async () => {
+      renderPage()
+      await screen.findAllByRole('row', { name: /Support/ })
+      const row = within(breakdownTable()).getByRole('row', { name: /Support/ })
+
+      // "75% of 12 people" — the rate and the headcount it is a rate of. The
+      // denominator comes only from the server's `headcount` field, which is
+      // nulled for withheld groups; see the suppressed-segments tests.
+      expect(within(row).getByText('75%')).toBeTruthy()
+      expect(within(row).getByText(/of 12 people/)).toBeTruthy()
+    })
   })
 
   /**
@@ -383,6 +529,10 @@ describe('SurveyResultsPage', () => {
             distribution: [],
             average: 2.8,
             median: 3,
+            scaleMin: 1,
+            scaleMax: 5,
+            scaleLabelMin: null,
+            scaleLabelMax: null,
             words: [],
             suppressedWordCount: 0,
           },
@@ -397,6 +547,10 @@ describe('SurveyResultsPage', () => {
             distribution: [],
             average: null,
             median: null,
+            scaleMin: null,
+            scaleMax: null,
+            scaleLabelMin: null,
+            scaleLabelMax: null,
             words: [{ language: 'en', word: 'workload', count: 4, responseCount: 4 }],
             suppressedWordCount: 0,
           },
@@ -411,6 +565,7 @@ describe('SurveyResultsPage', () => {
                 label: 'Operations',
                 respondentCount: 20,
                 participationRate: 80,
+                headcount: 25,
                 isSuppressed: false,
                 questions: [
                   { questionId: 'q1', answeredCount: 20, average: 4.3 },
@@ -634,9 +789,6 @@ describe('SurveyResultsPage', () => {
 
       // A segment key is only meaningful inside its own dimension.
       expect(screen.queryByText('Support compared with the whole survey')).toBeNull()
-      // Two rows name the segment: the breakdown table's, and the heat map's row
-      // header -- the heat map is a real <table> (#79), which is what gives it row and
-      // column semantics for free.
       expect(screen.getAllByRole('row', { name: /3_to_5_years/ }).length).toBeGreaterThan(0)
     })
 
