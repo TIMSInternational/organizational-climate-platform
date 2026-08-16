@@ -25,7 +25,7 @@ public class SurveyAggregationTests
         Guid id = default,
         string type = QuestionTypes.MultipleChoice,
         params AggregationOption[] options)
-        => new(id == default ? QuestionId : id, 0, type, "Where do you work?", "environment", null, null, options);
+        => new(id == default ? QuestionId : id, 0, type, "Where do you work?", "environment", null, null, null, null, options);
 
     private static AggregationResponse Response(
         Guid id,
@@ -412,11 +412,18 @@ public class SurveyAggregationTests
         Assert.True(engineering.IsSuppressed);
         Assert.Equal(0, engineering.RespondentCount);
         Assert.Empty(engineering.Questions);
+        // Participation of a withheld group is withheld WITH it, and the denominator is
+        // half of that division: a suppressed segment must not carry its headcount, or a
+        // client can print the pair the floor exists to keep apart.
+        Assert.Null(engineering.Headcount);
 
         var sales = breakdown.Segments.Single(s => s.Key == Sales.ToString());
         Assert.False(sales.IsSuppressed);
         Assert.Equal(5, sales.RespondentCount);
         Assert.Equal(50d, sales.ParticipationRate);
+        // The disclosed rate travels with the denominator that explains it -- the
+        // results page prints "50% of 10 people" from these two fields.
+        Assert.Equal(10, sales.Headcount);
 
         Assert.Equal(1, breakdown.SuppressedSegmentCount);
         Assert.Equal(2, breakdown.SuppressedRespondentCount);
@@ -684,6 +691,34 @@ public class SurveyAggregationTests
     }
 
     /// <summary>
+    /// The scale's bounds and anchor words pass through the aggregation untouched.
+    /// They cannot be recovered downstream -- a scale point nobody chose produces no
+    /// bucket, so a results axis derived from the buckets would shrink with the
+    /// answers, and the anchor words exist nowhere else in the payload.
+    /// </summary>
+    [Fact]
+    public void A_scale_questions_bounds_and_anchor_words_reach_the_result()
+    {
+        var question = new AggregationQuestion(
+            QuestionId, 0, QuestionTypes.Likert, "How supported do you feel?", "leadership",
+            1, 5, "Not at all", "Completely",
+            [new AggregationOption(0, "4", "Four")]);
+
+        var responses = Enumerable.Range(1, 5).Select(n => Response(ResponseId(n))).ToList();
+        var answers = responses
+            .Select(r => new AggregationAnswer(r.ResponseId, QuestionId, Stored("4"), null))
+            .ToList();
+
+        var aggregate = SurveyAggregation.Compute([question], responses, answers, [], null);
+        var result = Assert.Single(aggregate.Questions);
+
+        Assert.Equal(1, result.ScaleMin);
+        Assert.Equal(5, result.ScaleMax);
+        Assert.Equal("Not at all", result.ScaleLabelMin);
+        Assert.Equal("Completely", result.ScaleLabelMax);
+    }
+
+    /// <summary>
     /// A multiple_choice question whose stable values happen to be "1".."4" is a set of
     /// CODES. Averaging codes produces a number with no meaning that a chart will
     /// nonetheless plot on an axis.
@@ -745,7 +780,7 @@ public class SurveyAggregationTests
     {
         var first = Choice(id: QuestionId, options: [new AggregationOption(0, "remote", "Remote")]);
         var second = new AggregationQuestion(
-            SecondQuestionId, 1, QuestionTypes.MultipleChoice, "Second", null, null, null,
+            SecondQuestionId, 1, QuestionTypes.MultipleChoice, "Second", null, null, null, null, null,
             [new AggregationOption(0, "yes", "Yes")]);
 
         var responses = Enumerable.Range(1, 5).Select(n => Response(ResponseId(n))).ToList();
@@ -769,6 +804,7 @@ public class SurveyAggregationTests
 
     private static AggregationQuestion Scale(Guid id, int order, string? category)
         => new(id, order, QuestionTypes.Likert, "How supported do you feel?", category, 1, 5,
+        "Not at all", "Completely",
         [
             new AggregationOption(0, "1", "One"),
             new AggregationOption(1, "2", "Two"),
@@ -790,7 +826,7 @@ public class SurveyAggregationTests
         {
             Scale(QuestionId, 0, "leadership"),
             Scale(SecondQuestionId, 1, "leadership"),
-            new(thirdQuestionId, 2, QuestionTypes.MultipleChoice, "Where do you work?", "environment", null, null,
+            new(thirdQuestionId, 2, QuestionTypes.MultipleChoice, "Where do you work?", "environment", null, null, null, null,
                 [new AggregationOption(0, "1", "Remote"), new AggregationOption(1, "4", "Office")]),
         };
 

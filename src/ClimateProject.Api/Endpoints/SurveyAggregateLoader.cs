@@ -58,6 +58,11 @@ internal static class SurveyAggregateLoader
                 question.Category,
                 question.ScaleMin,
                 question.ScaleMax,
+                // Same resolver and same field paths the authoring surface reports, so a
+                // missing translation shows up in fallbackFields under the name the
+                // editor uses for it.
+                SurveyContent.Resolve(question.ScaleLabelMinEn, question.ScaleLabelMinEs, locale, survey.Language, $"{path}.scaleLabelMin", fallbackFields),
+                SurveyContent.Resolve(question.ScaleLabelMaxEn, question.ScaleLabelMaxEs, locale, survey.Language, $"{path}.scaleLabelMax", fallbackFields),
                 ToAggregationOptions(options, locale, survey.Language, path, fallbackFields));
         }).ToList();
 

@@ -33,6 +33,8 @@ namespace ClimateProject.Application.Surveys;
 public sealed record AggregationOption(int Order, string Value, string? Label);
 
 /// <summary>One question of the survey, reduced to what aggregating it needs.</summary>
+/// <param name="ScaleLabelMin">The author's anchor word for the low end of the scale, already resolved for the request locale. Null when none was set.</param>
+/// <param name="ScaleLabelMax">The high-end anchor, same contract.</param>
 public sealed record AggregationQuestion(
     Guid QuestionId,
     int Order,
@@ -41,6 +43,8 @@ public sealed record AggregationQuestion(
     string? Category,
     int? ScaleMin,
     int? ScaleMax,
+    string? ScaleLabelMin,
+    string? ScaleLabelMax,
     IReadOnlyList<AggregationOption> Options);
 
 /// <summary>
@@ -132,6 +136,10 @@ public sealed record SurveyWordFrequency(string Language, string Word, int Count
 
 /// <param name="Distribution">Empty for an open-ended question, which has no option set.</param>
 /// <param name="Average">Mean of the numeric answers, for scale questions whose values all parse as numbers. Null otherwise.</param>
+/// <param name="ScaleMin">The question's configured scale floor. Passed through because the distribution alone cannot recover it: a scale point nobody chose produces no bucket, so a results page axis derived from the buckets would shrink with the answers.</param>
+/// <param name="ScaleMax">The configured ceiling, same reason.</param>
+/// <param name="ScaleLabelMin">The author's anchor word for <paramref name="ScaleMin"/>, resolved for the request locale. Null when none was set — a page falls back to the bare number rather than inventing a word.</param>
+/// <param name="ScaleLabelMax">The anchor for <paramref name="ScaleMax"/>, same contract.</param>
 /// <param name="Words">Word frequencies bucketed by <c>Response.Language</c>, for open-ended questions only. Verbatim text is never returned.</param>
 /// <param name="SuppressedWordCount">Distinct words withheld for appearing in fewer than <see cref="SurveyResultsPrivacy.MinimumWordRespondents"/> responses.</param>
 public sealed record SurveyQuestionResult(
@@ -144,6 +152,10 @@ public sealed record SurveyQuestionResult(
     IReadOnlyList<SurveyDistributionBucket> Distribution,
     double? Average,
     double? Median,
+    int? ScaleMin,
+    int? ScaleMax,
+    string? ScaleLabelMin,
+    string? ScaleLabelMax,
     IReadOnlyList<SurveyWordFrequency> Words,
     int SuppressedWordCount);
 
@@ -183,6 +195,14 @@ public sealed record SurveySegmentQuestionResult(Guid QuestionId, int AnsweredCo
 /// </summary>
 /// <param name="Dimension">"department", or the demographic field key.</param>
 /// <param name="Key">The department id, or the stable demographic value. Locale-independent, like every other group key here.</param>
+/// <param name="Headcount">
+/// The denominator behind <paramref name="ParticipationRate"/> -- department segments
+/// only, null for demographics (no denominator exists) and **null when the segment is
+/// suppressed**. The headcount itself is org data a reader can see on the Departments
+/// page, but a withheld group's participation is withheld with it, and shipping the
+/// denominator beside a withheld rate invites a client to print the pair the floor
+/// exists to keep apart.
+/// </param>
 /// <param name="IsSuppressed">True when the segment is below <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/>. <see cref="Questions"/> is then empty and <see cref="RespondentCount"/> is 0 -- the withheld headcount is reported once, on the breakdown, not per segment.</param>
 public sealed record SurveySegmentResult(
     string Dimension,
@@ -190,6 +210,7 @@ public sealed record SurveySegmentResult(
     string? Label,
     int RespondentCount,
     double? ParticipationRate,
+    int? Headcount,
     bool IsSuppressed,
     IReadOnlyList<SurveySegmentQuestionResult> Questions);
 

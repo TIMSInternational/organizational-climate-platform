@@ -24,6 +24,7 @@ public class ReportSurveySectionsTests
 
     private static AggregationQuestion ScaleQuestion(string category = "leadership")
         => new(QuestionId, 0, QuestionTypes.Likert, "How supported do you feel?", category, 1, 5,
+        null, null,
         [
             new AggregationOption(0, "2", "Two"),
             new AggregationOption(1, "4", "Four"),
