@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useId, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { Plus, Trash2 } from 'lucide-react'
-import { useTranslation } from '../../../i18n'
+import { AlertTriangle, Check, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { WizardStepper, type WizardStep } from '../../../components/wizard'
-import { KpiTile } from '../../../components/charts'
+import { ANONYMITY_FLOOR, KpiTile } from '../../../components/charts'
 import {
   Alert,
   AlertDescription,
+  AlertTitle,
   Button,
   Card,
   CardContent,
   CheckboxField,
+  Chip,
   SelectField,
   Separator,
   TextField,
@@ -19,8 +21,10 @@ import {
 } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
 import { useCompanyScope } from '../../../company-context'
+import { MonoReadings } from '../../dashboard/components/dashboardGrammar'
 import { listDepartments, type Department } from '../../org-structure/api/departments'
 import { createSurvey } from '../api/surveyCreate'
+import { dimensionLabel } from '../dimensionLabel'
 import {
   getSurveyTemplate,
   instantiateSurveyTemplate,
@@ -40,22 +44,27 @@ import {
   SURVEY_WIZARD_STEPS,
   buildCreateInput,
   buildInstantiateInput,
+  chosenDimensions,
   emptyOption,
   emptyQuestion,
   emptyWizardValues,
   needsBothLanguages,
+  positionsWithoutDimension,
   scheduledDays,
   startsFromTemplate,
   surveyQuestionCount,
   wizardStepErrors,
   type ContentLanguage,
+  type SurveyQuestionValues,
   type SurveyWizardValues,
 } from '../wizardValues'
 import {
+  SUGGESTED_DIMENSION_KEYS,
   SURVEY_QUESTION_TYPES,
   SURVEY_TYPES,
   languageLabel,
   needsOptions,
+  needsScaleLabels,
   questionTypeLabel,
   typeLabel,
 } from '../surveyVocabulary'
@@ -198,6 +207,12 @@ export default function SurveyCreatePage() {
   // Monotonic, so a key is never reused after a removal — React would otherwise
   // reconcile a new question onto the removed one's DOM and carry its focus over.
   const [nextKey, setNextKey] = useState(0)
+  // The question cards whose "+ New dimension…" free-text box is open. UI state, not
+  // survey state: which box is open is not part of what the survey will be, so it
+  // lives beside the wizard values rather than inside them (and is deliberately not
+  // draftable). Stale keys after a question is removed are harmless — nothing renders
+  // for a key no card has.
+  const [newDimensionOpen, setNewDimensionOpen] = useState<ReadonlySet<string>>(new Set())
 
   useEffect(() => {
     if (!companyId) return
@@ -380,6 +395,28 @@ export default function SurveyCreatePage() {
   const namedDepartments = departments.filter((d) => values.departmentIds.includes(d.id))
   // Only then is "n of {total}" a true statement about the same set of things.
   const departmentsAllNamed = namedDepartments.length === values.departmentIds.length
+  // The whole company, counted from the department catalogue. Only spoken when the
+  // catalogue actually loaded — with it empty or failed there is no honest number, and
+  // the copy that depends on it stays unsaid rather than reading "all 0 people".
+  const totalHeadcount = departments.reduce((sum, d) => sum + d.employeeCount, 0)
+
+  // Dimension coverage, from whichever source holds the questions in this mode. In
+  // template mode the wizard's own `questions` array is empty by design, so reading it
+  // would report every template as uncategorised — same trap `surveyQuestionCount`
+  // documents for the count.
+  const dimensions = fromTemplate
+    ? template === null
+      ? null
+      : distinctTemplateCategories(template.questions)
+    : chosenDimensions(values)
+  const withoutDimension = fromTemplate
+    ? template === null
+      ? 0
+      : template.questions.filter((q) => (q.category ?? '').trim() === '').length
+    : positionsWithoutDimension(values).length
+  // Blank mode only: the review Alert says "go back to Questions to fix it", which is
+  // only true where the questions step is an editor.
+  const missingDimensionPositions = fromTemplate ? [] : positionsWithoutDimension(values)
 
   return (
     <div>
@@ -441,6 +478,8 @@ export default function SurveyCreatePage() {
             // would make a loading template look like a blank survey.
             templateName={fromTemplate ? (template?.name ?? undefined) : null}
             languageName={languageLabel(t, values.language)}
+            dimensionCount={dimensions === null ? null : dimensions.length}
+            withoutDimensionCount={withoutDimension}
           />
         }
       >
@@ -617,7 +656,14 @@ export default function SurveyCreatePage() {
                   {departments.map((department) => (
                     <CheckboxField
                       key={department.id}
-                      label={department.name}
+                      // The headcount beside the name — five bare names gave the choice
+                      // no scale. A headcount is org-chart data the admin already sees on
+                      // the departments page, never response data, so naming it here
+                      // publishes nothing the floor protects.
+                      label={t('surveyCreate.departmentPeople', {
+                        name: department.name,
+                        count: department.employeeCount,
+                      })}
                       checked={values.departmentIds.includes(department.id)}
                       onChange={(checked) =>
                         patch({
@@ -630,7 +676,38 @@ export default function SurveyCreatePage() {
                   ))}
                 </div>
               )}
+              {/* The empty-selection state in words. An empty checkbox row silently
+                  meaning "everyone" is the kind of default an admin discovers after
+                  sending — this says it while it is still true, with the reach. */}
+              {departments.length > 0 && values.departmentIds.length === 0 && (
+                <p className="m-0 text-sm text-fg-secondary">
+                  <MonoReadings
+                    t={t}
+                    locale={locale}
+                    messageKey="surveyCreate.reachesEveryone"
+                    params={{ count: totalHeadcount }}
+                  />
+                </p>
+              )}
             </fieldset>
+
+            {/* The anonymity floor, stated on the step where the conditions for
+                suppression are set — and stated in the right direction: it applies to
+                the RESPONSES that come back, not to the headcount being asked, so no
+                department is pre-flagged "too small" here. That would be a claim the
+                data cannot make at authoring time. */}
+            <Alert>
+              <ShieldCheck aria-hidden="true" />
+              <AlertTitle>{t('surveyCreate.floorTitle')}</AlertTitle>
+              <AlertDescription>
+                <MonoReadings
+                  t={t}
+                  locale={locale}
+                  messageKey="surveyCreate.floorBody"
+                  params={{ floor: ANONYMITY_FLOOR }}
+                />
+              </AlertDescription>
+            </Alert>
 
             <TextField
               type="number"
@@ -683,8 +760,13 @@ export default function SurveyCreatePage() {
             {values.questions.map((question, index) => (
               <Card key={question.key}>
                 <CardContent className="grid gap-panel-gap">
-                  <div className="flex items-center justify-between gap-inline">
-                    <div className="flex min-w-0 items-center gap-inline">
+                  {/* Both rows wrap: the dimension chip is `shrink-0 whitespace-nowrap`
+                      by Chip's contract, and beside the equally nowrap Remove button it
+                      pushed this card to 476px of min-content — measured at 390 as the
+                      whole wizard panel scrolling sideways. Wrapped, the widest single
+                      item is the Remove button and the card fits a phone again. */}
+                  <div className="flex flex-wrap items-center justify-between gap-inline">
+                    <div className="flex min-w-0 flex-wrap items-center gap-inline">
                       {/* The same mono ordinal the step rail uses, for the same reason:
                           a position is a reading. `aria-hidden` because the heading
                           beside it already says "Question 3" in words. */}
@@ -697,6 +779,18 @@ export default function SurveyCreatePage() {
                       <h3 className="m-0 min-w-0 truncate">
                         {t('surveys.questionPosition', { position: index + 1 })}
                       </h3>
+                      {/* The card's dimension, restated where it can be read without
+                          scrolling into the card — or the fact that there is none yet,
+                          as a warning with a word, never a colour alone. */}
+                      {question.category.trim() === '' ? (
+                        <Chip tone="warning" label={t('surveyCreate.noDimensionYet')} />
+                      ) : (
+                        <Chip
+                          tone="accent"
+                          icon={<Check className="size-3" />}
+                          label={dimensionLabel(question.category.trim(), t)}
+                        />
+                      )}
                     </div>
                     <Button
                       variant="outline"
@@ -739,15 +833,124 @@ export default function SurveyCreatePage() {
                     />
                   )}
 
-                  <SelectField
-                    label={t('surveys.questionType')}
-                    value={question.type}
-                    onChange={(next) => patchQuestion(question.key, { type: next })}
-                    options={SURVEY_QUESTION_TYPES.map((code) => ({
-                      value: code,
-                      label: questionTypeLabel(t, code),
-                    }))}
-                  />
+                  {/* The type and the dimension side by side: they are the two
+                      statements about what this question feeds — a renderer and a row
+                      on the climate map — and the prototype pairs them. */}
+                  <div className="grid gap-panel-gap md:grid-cols-2">
+                    <SelectField
+                      label={t('surveys.questionType')}
+                      value={question.type}
+                      onChange={(next) => patchQuestion(question.key, { type: next })}
+                      options={SURVEY_QUESTION_TYPES.map((code) => ({
+                        value: code,
+                        label: questionTypeLabel(t, code),
+                      }))}
+                    />
+
+                    <DimensionPicker
+                      t={t}
+                      question={question}
+                      others={values.questions.filter((q) => q.key !== question.key)}
+                      freeTextOpen={newDimensionOpen.has(question.key)}
+                      onPick={(key) => {
+                        patchQuestion(question.key, { category: key })
+                        setNewDimensionOpen((open) => {
+                          if (!open.has(question.key)) return open
+                          const next = new Set(open)
+                          next.delete(question.key)
+                          return next
+                        })
+                      }}
+                      onOpenFreeText={() => {
+                        // "+ New dimension…" means "none of these": the box opens
+                        // empty and the card honestly reads "No dimension yet" until
+                        // something is typed.
+                        patchQuestion(question.key, { category: '' })
+                        setNewDimensionOpen((open) => new Set(open).add(question.key))
+                      }}
+                      onType={(text) => patchQuestion(question.key, { category: text })}
+                    />
+                  </div>
+
+                  {needsScaleLabels(question.type) && (
+                    <fieldset className="m-0 grid gap-inline border-0 p-0">
+                      <legend className="mb-inline font-medium">
+                        {t('surveyCreate.scaleEnds')}
+                      </legend>
+                      <div className="grid gap-inline md:grid-cols-2">
+                        {both ? (
+                          <>
+                            <TextField
+                              label={t('surveyCreate.scaleMinEn')}
+                              value={question.scaleLabelMinEn}
+                              onChange={(next) =>
+                                patchQuestion(question.key, { scaleLabelMinEn: next })
+                              }
+                            />
+                            <TextField
+                              label={t('surveyCreate.scaleMaxEn')}
+                              value={question.scaleLabelMaxEn}
+                              onChange={(next) =>
+                                patchQuestion(question.key, { scaleLabelMaxEn: next })
+                              }
+                            />
+                            <TextField
+                              label={t('surveyCreate.scaleMinEs')}
+                              value={question.scaleLabelMinEs}
+                              onChange={(next) =>
+                                patchQuestion(question.key, { scaleLabelMinEs: next })
+                              }
+                            />
+                            <TextField
+                              label={t('surveyCreate.scaleMaxEs')}
+                              value={question.scaleLabelMaxEs}
+                              onChange={(next) =>
+                                patchQuestion(question.key, { scaleLabelMaxEs: next })
+                              }
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <TextField
+                              label={t('surveyCreate.scaleMin')}
+                              value={
+                                values.language === 'es'
+                                  ? question.scaleLabelMinEs
+                                  : question.scaleLabelMinEn
+                              }
+                              onChange={(next) =>
+                                patchQuestion(
+                                  question.key,
+                                  values.language === 'es'
+                                    ? { scaleLabelMinEs: next }
+                                    : { scaleLabelMinEn: next },
+                                )
+                              }
+                            />
+                            <TextField
+                              label={t('surveyCreate.scaleMax')}
+                              value={
+                                values.language === 'es'
+                                  ? question.scaleLabelMaxEs
+                                  : question.scaleLabelMaxEn
+                              }
+                              onChange={(next) =>
+                                patchQuestion(
+                                  question.key,
+                                  values.language === 'es'
+                                    ? { scaleLabelMaxEs: next }
+                                    : { scaleLabelMaxEn: next },
+                                )
+                              }
+                            />
+                          </>
+                        )}
+                      </div>
+                      <p className="m-0 text-sm text-fg-secondary">
+                        {t('surveyCreate.scaleEndsHelp')}
+                      </p>
+                    </fieldset>
+                  )}
 
                   <CheckboxField
                     label={t('surveys.required')}
@@ -845,8 +1048,18 @@ export default function SurveyCreatePage() {
               <KpiTile
                 label={t('surveys.questions')}
                 value={questionCount}
+                // The sub-line is the dimension coverage — whether these questions
+                // will aggregate is the one thing about them review can still change.
+                // Falls back to the mode word only while a template is in flight and
+                // the coverage is genuinely unknown.
                 sub={
-                  fromTemplate ? t('surveys.readingFromTemplate') : t('surveys.readingWrittenHere')
+                  dimensions === null
+                    ? t('surveys.readingFromTemplate')
+                    : withoutDimension > 0
+                      ? t('surveyCreate.readingWithoutDimension', { count: withoutDimension })
+                      : dimensions.length === 1
+                        ? t('surveyCreate.readingOneDimension')
+                        : t('surveyCreate.readingAcrossDimensions', { count: dimensions.length })
                 }
                 locale={locale}
               />
@@ -865,13 +1078,34 @@ export default function SurveyCreatePage() {
                   selection. It did not check, so a restored draft naming five
                   departments read "5" over "of 3" above a row naming three, and a
                   catalogue whose fetch had failed read "2" over "of 0" -- a reading no
-                  instrument should ever be able to show. */}
+                  instrument should ever be able to show.
+
+                  With nothing selected the value used to be a "0" asserting "all" --
+                  a reading of zero above the word "every". It is now the count
+                  actually reached: every department the catalogue names, with the
+                  headcount beside it, and an em dash (null) when the catalogue failed
+                  and the true count is unknowable. */}
               <KpiTile
                 label={t('surveys.departmentsLabel')}
-                value={values.departmentIds.length}
+                value={
+                  values.departmentIds.length === 0
+                    ? departments.length > 0
+                      ? departments.length
+                      : null
+                    : values.departmentIds.length
+                }
                 sub={
                   values.departmentIds.length === 0
-                    ? t('surveys.departmentsAll')
+                    ? departments.length > 0
+                      ? (
+                          <MonoReadings
+                            t={t}
+                            locale={locale}
+                            messageKey="surveyCreate.everyDepartmentPeople"
+                            params={{ count: totalHeadcount }}
+                          />
+                        )
+                      : t('surveys.departmentsAll')
                     : departmentsAllNamed
                       ? t('surveys.readingOfDepartments', { total: departments.length })
                       : namedDepartments.length === 0
@@ -881,6 +1115,30 @@ export default function SurveyCreatePage() {
                 locale={locale}
               />
             </div>
+
+            {/* A warning and never a gate: an uncategorised survey is legal, just less
+                than it could be, so Create stays enabled and the Alert names both the
+                exact consequence and the way back. Blank mode only — in template mode
+                the questions are not this wizard's to fix. */}
+            {missingDimensionPositions.length > 0 && (
+              <Alert variant="warning">
+                <AlertTriangle aria-hidden="true" />
+                <AlertTitle>
+                  {missingDimensionPositions.length === 1
+                    ? t('surveyCreate.reviewNoDimensionTitle', {
+                        position: missingDimensionPositions[0],
+                      })
+                    : t('surveyCreate.reviewNoDimensionTitlePlural', {
+                        count: missingDimensionPositions.length,
+                      })}
+                </AlertTitle>
+                <AlertDescription>
+                  {missingDimensionPositions.length === 1
+                    ? t('surveyCreate.reviewNoDimensionBody')
+                    : t('surveyCreate.reviewNoDimensionBodyPlural')}
+                </AlertDescription>
+              </Alert>
+            )}
 
             <dl className="m-0 grid gap-inline">
               <Review
@@ -908,6 +1166,19 @@ export default function SurveyCreatePage() {
                     : namedDepartments.length === 0
                       ? t('surveys.readingDepartmentsUnlisted')
                       : namedDepartments.map((d) => d.name).join(', ')
+                }
+              />
+              {/* Which dimensions this survey will report on — the review's link to
+                  the payoff screen. Display names for the shipped keys, the author's
+                  own text otherwise, and the uncategorised remainder carried as a
+                  warning suffix rather than dropped. */}
+              <Review
+                label={t('surveyCreate.dimensions')}
+                value={(dimensions ?? []).map((key) => dimensionLabel(key, t)).join(', ')}
+                warnSuffix={
+                  withoutDimension > 0
+                    ? t('surveyCreate.reviewUncategorised', { count: withoutDimension })
+                    : undefined
                 }
               />
             </dl>
@@ -959,6 +1230,25 @@ function reviewDate(value: string, locale: string): string {
   return when.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
+/**
+ * The distinct categories a template's questions carry, raw keys, in first-use order —
+ * the template-mode source for every dimension reading on this page, mirroring what
+ * `chosenDimensions` derives from the wizard's own questions in blank mode.
+ */
+function distinctTemplateCategories(
+  questions: readonly { category: string | null }[],
+): string[] {
+  const seen = new Set<string>()
+  const found: string[] = []
+  for (const question of questions) {
+    const category = (question.category ?? '').trim()
+    if (category === '' || seen.has(category)) continue
+    seen.add(category)
+    found.push(category)
+  }
+  return found
+}
+
 /** The title as the review step should show it, whichever language columns are in use. */
 function reviewTitle(values: SurveyWizardValues): string {
   if (values.language === 'both') {
@@ -974,14 +1264,148 @@ function reviewTitle(values: SurveyWizardValues): string {
  * identifier — and readings are set in the mono face with tabular figures throughout
  * this product, while prose stays in the sans face. A survey's title and its type are
  * prose; its start and end are not.
+ *
+ * `warnSuffix` is the row's caveat — "+ 1 uncategorised" on the Dimensions row — set
+ * in the amber ink beside the value rather than replacing it, because the named
+ * dimensions stay true whether or not a question is missing one.
  */
-function Review({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+function Review({
+  label,
+  value,
+  mono = false,
+  warnSuffix,
+}: {
+  label: string
+  value: string
+  mono?: boolean
+  warnSuffix?: string
+}) {
   return (
     <div className="flex flex-wrap gap-inline">
       <dt className="min-w-40 font-medium text-fg-secondary">{label}</dt>
       <dd className={cn('m-0 min-w-0 break-words', mono && 'font-mono tabular-nums')}>
         {value.length > 0 ? value : '—'}
+        {warnSuffix !== undefined && (
+          <span className="ml-1.5 font-semibold text-accent-amber-ink">{warnSuffix}</span>
+        )}
       </dd>
     </div>
+  )
+}
+
+/**
+ * The dimension picker (design decision 02) — chips first, free text as the escape
+ * hatch.
+ *
+ * ## What a chip stores, which is the law this control exists to keep
+ *
+ * `Question.Category` is the dimension vocabulary: the respond page and the results
+ * pages group on the RAW stored value. So a suggestion chip *displays* its catalogue
+ * name through `dimensionLabel` ("Psychological safety") and *stores* the raw key
+ * (`psychological_safety`) — storing the display name would mint a new dimension
+ * beside every survey that stored the key, exactly the cross-survey split the picker
+ * exists to prevent. The free-text box stores what was typed, verbatim, because the
+ * vocabulary is the author's and the server treats `Category` as a free string.
+ *
+ * ## Where the suggestions come from
+ *
+ * The shipped dimension vocabulary (`SUGGESTED_DIMENSION_KEYS` — the nine keys both
+ * catalogues can name), plus every dimension the *other* questions in this wizard
+ * already carry, so a dimension typed once is one click on the next card. No endpoint
+ * exposes the company's historical categories; the constant's docstring records that
+ * decision.
+ *
+ * ## A missing dimension is a named consequence, never a gate
+ *
+ * The amber line under the chips states exactly what happens — Uncategorised on the
+ * climate map, not comparable across surveys — and nothing here blocks Continue.
+ *
+ * The chips are the house toggle-chip pattern (`SurveyStatusChips`): real buttons
+ * with `aria-pressed`, selection carried by the tinted fill *and* the pressed state,
+ * never by hue alone.
+ */
+function DimensionPicker({
+  t,
+  question,
+  others,
+  freeTextOpen,
+  onPick,
+  onOpenFreeText,
+  onType,
+}: {
+  t: TranslateFn
+  question: SurveyQuestionValues
+  others: readonly SurveyQuestionValues[]
+  freeTextOpen: boolean
+  onPick: (key: string) => void
+  onOpenFreeText: () => void
+  onType: (text: string) => void
+}) {
+  const current = question.category.trim()
+  const shipped = new Set<string>(SUGGESTED_DIMENSION_KEYS)
+
+  const chips: string[] = [...SUGGESTED_DIMENSION_KEYS]
+  for (const other of others) {
+    const category = other.category.trim()
+    if (category !== '' && !shipped.has(category) && !chips.includes(category)) {
+      chips.push(category)
+    }
+  }
+  // An authored dimension this card already holds (a restored draft, or the box since
+  // closed) appears as its own pressed chip rather than vanishing into a control that
+  // is not on screen. While the box is open it IS on screen, holding the same text.
+  if (current !== '' && !freeTextOpen && !chips.includes(current)) {
+    chips.push(current)
+  }
+
+  return (
+    <fieldset className="m-0 grid max-w-field content-start gap-inline border-0 p-0">
+      <legend className="mb-inline text-sm font-medium">{t('surveyCreate.dimension')}</legend>
+      <div className="flex flex-wrap gap-1.5">
+        {chips.map((key) => {
+          const selected = key === current
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onPick(key)}
+              className={cn(
+                'inline-flex h-5 items-center rounded-lg border px-2 text-xs font-semibold transition-colors ease-out',
+                selected
+                  ? 'border-accent-blue-ring bg-accent-blue-soft text-fg-primary'
+                  : 'border-line-light bg-surface-icon-box text-fg-secondary hover:border-line-hover hover:text-fg-primary',
+              )}
+            >
+              {dimensionLabel(key, t)}
+            </button>
+          )
+        })}
+        <button
+          type="button"
+          onClick={onOpenFreeText}
+          className={cn(
+            'inline-flex h-5 items-center rounded-lg border border-dashed border-line-light bg-surface-icon-box px-2',
+            'text-xs font-semibold text-fg-secondary transition-colors ease-out hover:border-line-hover hover:text-fg-primary',
+          )}
+        >
+          {t('surveyCreate.newDimension')}
+        </button>
+      </div>
+      {freeTextOpen && (
+        <TextField
+          label={t('surveyCreate.newDimensionLabel')}
+          description={t('surveyCreate.newDimensionHelp')}
+          value={question.category}
+          onChange={onType}
+        />
+      )}
+      <p className="m-0 text-sm text-fg-secondary">{t('surveyCreate.dimensionHelp')}</p>
+      {current === '' && (
+        <p className="m-0 text-sm font-medium text-accent-amber-ink">
+          {t('surveyCreate.dimensionMissing')}
+        </p>
+      )}
+    </fieldset>
   )
 }
