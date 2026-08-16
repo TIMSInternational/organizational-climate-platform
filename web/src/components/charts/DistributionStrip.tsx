@@ -117,9 +117,12 @@ export default function DistributionStrip({
               aria-label={segment.label}
               title={segment.label}
               // `flexGrow` carries the distribution; the 3px floor keeps a lone
-              // dissenting answer visible rather than rounding it to nothing.
-              style={{ flexGrow: segment.count, backgroundColor: fill, color: ink }}
-              className="flex min-w-[3px] items-center justify-center overflow-hidden font-mono text-2xs font-semibold tabular-nums"
+              // dissenting answer visible rather than rounding it to nothing. It
+              // rides in `style` beside the other per-segment values because the
+              // charts/ token discipline forbids arbitrary Tailwind values — and
+              // rightly: this is a visibility floor, not a design token.
+              style={{ flexGrow: segment.count, minWidth: 3, backgroundColor: fill, color: ink }}
+              className="flex items-center justify-center overflow-hidden font-mono text-2xs font-semibold tabular-nums"
             >
               {share >= LABEL_MIN_SHARE && formatMetric(segment.count, { kind: 'number' }, locale)}
             </span>
