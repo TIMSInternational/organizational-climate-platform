@@ -240,6 +240,10 @@ public static class SurveyAggregation
                 [],
                 Average: null,
                 Median: null,
+                question.ScaleMin,
+                question.ScaleMax,
+                question.ScaleLabelMin,
+                question.ScaleLabelMax,
                 words,
                 suppressedWords);
         }
@@ -284,6 +288,10 @@ public static class SurveyAggregation
             buckets,
             average,
             median,
+            question.ScaleMin,
+            question.ScaleMax,
+            question.ScaleLabelMin,
+            question.ScaleLabelMax,
             [],
             0);
     }
@@ -340,6 +348,10 @@ public static class SurveyAggregation
             OrderBuckets(question, rows, ranked),
             Average: null,
             Median: null,
+            question.ScaleMin,
+            question.ScaleMax,
+            question.ScaleLabelMin,
+            question.ScaleLabelMax,
             [],
             0);
     }
@@ -531,8 +543,12 @@ public static class SurveyAggregation
             {
                 suppressedSegments++;
                 suppressedRespondents += members.Count;
+                // Headcount is nulled with the rate, not because the headcount is a
+                // secret (the Departments page prints it) but because the pair is what
+                // a reader divides: participation of a withheld group is withheld with
+                // it, and this record must not carry half of the division.
                 segments.Add(new SurveySegmentResult(
-                    "department", group.Key.ToString(), name, 0, null, IsSuppressed: true, []));
+                    "department", group.Key.ToString(), name, 0, null, null, IsSuppressed: true, []));
                 continue;
             }
 
@@ -554,6 +570,11 @@ public static class SurveyAggregation
                 name,
                 members.Count,
                 participation,
+                // The denominator travels with the rate it explains, under the same
+                // predicate: a rate without its denominator reads as a claim about
+                // nothing in particular, and the results page prints "of N people"
+                // beside the percentage.
+                department is { Headcount: > 0 } ? department.Headcount : null,
                 IsSuppressed: false,
                 SegmentQuestions(questions, members, answers)));
         }
@@ -595,7 +616,7 @@ public static class SurveyAggregation
                 {
                     suppressedSegments++;
                     suppressedRespondents += members.Count;
-                    segments.Add(new SurveySegmentResult(field, group.Key, null, 0, null, IsSuppressed: true, []));
+                    segments.Add(new SurveySegmentResult(field, group.Key, null, 0, null, null, IsSuppressed: true, []));
                     continue;
                 }
 
@@ -603,7 +624,7 @@ public static class SurveyAggregation
                 // the company have tenure = 3-5 years and were invited to this survey"
                 // that this aggregation can see. A fabricated one is worse than none.
                 segments.Add(new SurveySegmentResult(
-                    field, group.Key, null, members.Count, null, IsSuppressed: false,
+                    field, group.Key, null, members.Count, null, null, IsSuppressed: false,
                     SegmentQuestions(questions, members, answers)));
             }
 

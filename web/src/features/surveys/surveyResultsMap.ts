@@ -229,6 +229,46 @@ export function surveyDimensionStandings(
   return { rows, overall, extremeAt, deadBandAt: extremeAt / DEAD_BAND_FRACTION }
 }
 
+export interface QuestionStandings {
+  /** Mean of the scale questions' own means. What each question is measured against. */
+  overall: number
+  deadBandAt: number
+  extremeAt: number
+  /** Score per questionId. A question absent here has no computable mean. */
+  scores: Map<string, number>
+}
+
+/**
+ * Every scale question against the mean of the scale questions — the baseline the
+ * per-question standing chips read.
+ *
+ * Its own baseline for the same reason `surveyDimensionStandings` has one: the
+ * climate map's target is a mean over group × dimension **cells** and the
+ * dimension table's over dimension scores, so a question can sit above one and
+ * below the other with all three figures correct. Each panel states its baseline
+ * and uses only its own. Scores are the server's per-question means passed
+ * through `round1`, so the chip and the printed average can never disagree about
+ * the same question.
+ */
+export function surveyQuestionStandings(
+  questions: readonly SurveyQuestionResult[],
+): QuestionStandings | null {
+  const scores = new Map<string, number>()
+  for (const question of questions) {
+    if (question.average === null) continue
+    scores.set(question.questionId, round1(question.average))
+  }
+  if (scores.size === 0) return null
+
+  const values = [...scores.values()]
+  const overall = round1(values.reduce((sum, score) => sum + score, 0) / values.length)
+  const extremeAt = Math.max(
+    ...values.map((score) => Math.abs(score - overall)),
+    MIN_EXTREME,
+  )
+  return { overall, extremeAt, deadBandAt: extremeAt / DEAD_BAND_FRACTION, scores }
+}
+
 export interface ClimateMapModel {
   /** The columns actually drawn. */
   dimensions: ClimateDimension[]

@@ -74,6 +74,10 @@
         ],
         "average": 3.9,
         "median": 4,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
         "words": [],
         "suppressedWordCount": 0
       },
@@ -123,6 +127,10 @@
         ],
         "average": 3.6,
         "median": 4,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
         "words": [],
         "suppressedWordCount": 0
       },
@@ -172,6 +180,10 @@
         ],
         "average": 2.9,
         "median": 3,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
         "words": [],
         "suppressedWordCount": 0
       },
@@ -221,6 +233,10 @@
         ],
         "average": 3.2,
         "median": 3,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
         "words": [],
         "suppressedWordCount": 0
       },
@@ -270,6 +286,10 @@
         ],
         "average": 3.5,
         "median": 4,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
         "words": [],
         "suppressedWordCount": 0
       },
@@ -283,6 +303,10 @@
         "distribution": [],
         "average": null,
         "median": null,
+        "scaleMin": null,
+        "scaleMax": null,
+        "scaleLabelMin": null,
+        "scaleLabelMax": null,
         "words": [
           {
             "language": "en",
@@ -387,6 +411,10 @@
         "distribution": [],
         "average": null,
         "median": null,
+        "scaleMin": null,
+        "scaleMax": null,
+        "scaleLabelMin": null,
+        "scaleLabelMax": null,
         "words": [
           {
             "language": "en",
@@ -432,6 +460,7 @@
             "label": "Operations",
             "respondentCount": 48,
             "participationRate": 82.8,
+            "headcount": 58,
             "isSuppressed": false,
             "questions": [
               {
@@ -467,6 +496,7 @@
             "label": "Engineering",
             "respondentCount": 57,
             "participationRate": 79.2,
+            "headcount": 72,
             "isSuppressed": false,
             "questions": [
               {
@@ -502,6 +532,7 @@
             "label": "Sales",
             "respondentCount": 31,
             "participationRate": 68.9,
+            "headcount": 45,
             "isSuppressed": false,
             "questions": [
               {
@@ -537,6 +568,7 @@
             "label": "Support",
             "respondentCount": 23,
             "participationRate": 57.5,
+            "headcount": 40,
             "isSuppressed": false,
             "questions": [
               {
@@ -572,6 +604,7 @@
             "label": "People",
             "respondentCount": 12,
             "participationRate": 92.3,
+            "headcount": 13,
             "isSuppressed": false,
             "questions": [
               {
@@ -607,6 +640,7 @@
             "label": "Finance",
             "respondentCount": 0,
             "participationRate": null,
+            "headcount": null,
             "isSuppressed": true,
             "questions": []
           }
@@ -624,6 +658,7 @@
             "label": "Under 1 year",
             "respondentCount": 41,
             "participationRate": null,
+            "headcount": null,
             "isSuppressed": false,
             "questions": [
               {
@@ -659,6 +694,7 @@
             "label": "1 to 3 years",
             "respondentCount": 63,
             "participationRate": null,
+            "headcount": null,
             "isSuppressed": false,
             "questions": [
               {
@@ -694,6 +730,7 @@
             "label": "Over 5 years",
             "respondentCount": 52,
             "participationRate": null,
+            "headcount": null,
             "isSuppressed": false,
             "questions": [
               {
@@ -729,6 +766,7 @@
             "label": "3 to 5 years",
             "respondentCount": 0,
             "participationRate": null,
+            "headcount": null,
             "isSuppressed": true,
             "questions": []
           }

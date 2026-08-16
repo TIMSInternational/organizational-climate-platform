@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import {
   duplicateSurvey,
   getSurvey,
@@ -153,9 +153,23 @@ export default function SurveyDetailPage() {
           { label: title },
         ]}
         actions={
-          <Button type="button" variant="outline" disabled={duplicating} onClick={handleDuplicate}>
-            {t('surveys.duplicate')}
-          </Button>
+          <>
+            {/* The primary way into the results (decision 07 of the admin round).
+                Gated on responses existing rather than on status: a closed survey
+                with 24 responses and an active one mid-run both have something to
+                show, while "content is frozen — duplicate it" must not be the
+                only forward motion a finished survey offers. A survey nobody has
+                answered gets no link; the results page would only explain that
+                there is nothing yet, and the reader was told the count here. */}
+            {survey.responseCount > 0 && (
+              <Button asChild variant="primary">
+                <Link to={`/surveys/${id}/results`}>{t('surveyResults.viewResults')}</Link>
+              </Button>
+            )}
+            <Button type="button" variant="outline" disabled={duplicating} onClick={handleDuplicate}>
+              {t('surveys.duplicate')}
+            </Button>
+          </>
         }
       />
 

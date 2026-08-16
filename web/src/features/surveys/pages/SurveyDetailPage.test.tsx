@@ -103,6 +103,32 @@ describe('SurveyDetailPage', () => {
     expect(screen.queryByRole('button', { name: 'Move to Closed' })).toBeNull()
   })
 
+  it('offers View results as soon as the survey has responses, whatever its status', async () => {
+    // Decision 07 of the admin round: a closed survey's only forward motion used
+    // to be "content is frozen — duplicate it", with 24 responses sitting on a
+    // page reachable only by URL. Gated on responses, not status: an active
+    // survey mid-run has something to show too.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ok(detail({ status: 'closed', responseCount: 24 }))),
+    )
+    renderPage()
+
+    const link = await screen.findByRole('link', { name: 'View results' })
+    expect(link.getAttribute('href')).toBe('/surveys/s1/results')
+  })
+
+  it('offers no results link while nobody has responded', async () => {
+    // The results page could only explain that there is nothing yet, and the
+    // response count on this page already said so.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(detail({ responseCount: 0 }))))
+    renderPage()
+
+    // findAll: the title renders in the heading and again in the breadcrumb.
+    await screen.findAllByText('Q3 climate survey')
+    expect(screen.queryByRole('link', { name: 'View results' })).toBeNull()
+  })
+
   it('renders no transition buttons for a terminal status, rather than inventing one', async () => {
     // `archived` has no outgoing edges. A client-side matrix is exactly the thing
     // that would offer "reopen" here.

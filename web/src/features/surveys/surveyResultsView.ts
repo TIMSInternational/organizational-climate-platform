@@ -1,4 +1,4 @@
-import type { ChartDatum, HeatMapCell, WordFrequency } from '../../components/charts'
+import type { ChartDatum, WordFrequency } from '../../components/charts'
 import type {
   SurveyBreakdown,
   SurveyDistributionBucket,
@@ -101,6 +101,74 @@ export function wordCloudData(question: SurveyQuestionResult): WordFrequency[] {
   }))
 }
 
+/** One segment of a question's distribution strip, scale-positioned. */
+export interface DistributionStripBucket {
+  /** The stable option value — the React key downstream. */
+  key: string
+  /** Where the bucket sits on the question's scale. Decides its colour. */
+  position: number
+  count: number
+  /** The bucket's display text, `bucketLabel`'s fallback rule included. */
+  label: string
+}
+
+export interface DistributionStripModel {
+  /** In the server's bucket order, which is the question's own option order. */
+  buckets: DistributionStripBucket[]
+  /** The scale's ends: configured when the question carries them, otherwise the answered extremes. */
+  min: number
+  max: number
+  total: number
+}
+
+/**
+ * A question's distribution, shaped for `DistributionStrip` — or `null` when the
+ * strip would be dishonest and the caller should fall back to the full card.
+ *
+ * ## `average !== null` is the gate, and it is the server's gate
+ *
+ * `SurveyAggregation.NumericStats` computes an average for `QuestionTypes.NumericScale`
+ * only, and only when *every* answered value parses — so a non-null average is the
+ * server's own statement that these bucket values are readings on one numeric scale.
+ * A multiple-choice question whose option codes happen to be "1".."4" arrives with
+ * `average: null` and must not be painted on a diverging ramp: its buckets are
+ * categories, and red-to-blue over categories claims an order nobody authored.
+ *
+ * ## Why the bounds prefer the question's configured scale
+ *
+ * The buckets cannot recover the axis — a scale point nobody chose produces no
+ * bucket — so `scaleMin`/`scaleMax` are the axis when the author set them. The
+ * answered extremes are only the fallback, and a degenerate axis (`max <= min`,
+ * one answered point) returns `null` rather than a strip whose midpoint is its
+ * only point.
+ */
+export function distributionStripModel(
+  question: SurveyQuestionResult,
+): DistributionStripModel | null {
+  if (question.average === null || question.distribution.length === 0) return null
+
+  const buckets: DistributionStripBucket[] = []
+  for (const bucket of question.distribution) {
+    const position = Number.parseFloat(bucket.value)
+    // NumericStats makes this unreachable for a question with an average, but a
+    // guard beats a NaN painted mid-ramp if that invariant ever moves.
+    if (!Number.isFinite(position)) return null
+    buckets.push({ key: bucket.value, position, count: bucket.count, label: bucketLabel(bucket) })
+  }
+
+  const positions = buckets.map((bucket) => bucket.position)
+  const min = question.scaleMin ?? Math.min(...positions)
+  const max = question.scaleMax ?? Math.max(...positions)
+  if (!(max > min)) return null
+
+  return {
+    buckets,
+    min,
+    max,
+    total: buckets.reduce((sum, bucket) => sum + bucket.count, 0),
+  }
+}
+
 /** Segments the server disclosed. */
 export function disclosedSegments(breakdown: SurveyBreakdown): SurveySegmentResult[] {
   return breakdown.segments.filter((segment) => !segment.isSuppressed)
@@ -116,41 +184,6 @@ export function disclosedSegments(breakdown: SurveyBreakdown): SurveySegmentResu
  */
 export function withheldSegments(breakdown: SurveyBreakdown): SurveySegmentResult[] {
   return breakdown.segments.filter((segment) => segment.isSuppressed)
-}
-
-/**
- * The segment × question grid, for the heat map.
- *
- * **Withheld segments are excluded, and that is the whole point of this function.**
- * A suppressed segment arrives with `respondentCount: 0` and `questions: []`; feeding
- * it to a heat map would either colour a row at the bottom of the ramp — a cell
- * claiming that group scored zero — or, because a row with no cells has no label,
- * drop it from the axis without a trace. Both are wrong in the same way. The heat map
- * therefore covers only what was disclosed, and the table beside it is the surface
- * that accounts for every segment including the withheld ones.
- *
- * A segment that has a row but no average for a particular question yields no cell for
- * it, which `HeatMap` renders as a genuine gap rather than as a zero.
- */
-export function segmentHeatMapCells(
-  breakdown: SurveyBreakdown,
-  questions: readonly SurveyQuestionResult[],
-  questionLabel: (question: SurveyQuestionResult) => string,
-  segmentLabel: (segment: SurveySegmentResult) => string,
-): HeatMapCell[] {
-  const scored = questions.filter((question) => question.average !== null)
-  const cells: HeatMapCell[] = []
-
-  for (const segment of disclosedSegments(breakdown)) {
-    const byQuestion = new Map(segment.questions.map((entry) => [entry.questionId, entry]))
-    for (const question of scored) {
-      const entry = byQuestion.get(question.questionId)
-      if (entry?.average == null) continue
-      cells.push({ x: questionLabel(question), y: segmentLabel(segment), value: entry.average })
-    }
-  }
-
-  return cells
 }
 
 /**

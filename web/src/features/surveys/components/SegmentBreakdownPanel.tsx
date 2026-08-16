@@ -1,13 +1,13 @@
 import { useTranslation } from '../../../i18n'
-import { BarChart, HeatMap, formatMetric } from '../../../components/charts'
-import { Badge, Body, Button, EmptyState, H3, Table } from '../../../components/ui'
+import { BarChart, ProtectedCell, formatMetric } from '../../../components/charts'
+import { Body, Button, EmptyState, H3, Table } from '../../../components/ui'
+import { cn } from '../../../lib/cn'
 import type { SurveyBreakdown, SurveyQuestionResult, SurveySegmentResult } from '../api/surveyResults'
 import {
   OVERALL_SERIES_KEY,
   SEGMENT_SERIES_KEY,
   disclosedSegments,
   segmentComparisonData,
-  segmentHeatMapCells,
 } from '../surveyResultsView'
 
 interface SegmentBreakdownPanelProps {
@@ -23,8 +23,7 @@ interface SegmentBreakdownPanelProps {
 }
 
 /**
- * One dimension's breakdown: the table of every group, the heat map of the disclosed
- * ones, and the drill-down.
+ * One dimension's breakdown: the table of every group, and the drill-down.
  *
  * ## The privacy obligation, and where it is discharged
  *
@@ -33,18 +32,17 @@ interface SegmentBreakdownPanelProps {
  * things follow, and all three are the reason this component exists rather than a plain
  * table:
  *
- * 1. **The row is still rendered**, marked withheld. Dropping it would make a partial
- *    breakdown read as a complete one, which is a stronger claim than the data supports
- *    and the specific failure #123 calls out.
+ * 1. **The row is still rendered**, in the `ProtectedCell` grammar. Dropping it would
+ *    make a partial breakdown read as a complete one, which is a stronger claim than
+ *    the data supports and the specific failure #123 calls out.
  * 2. **The zero is never printed.** `respondentCount: 0` on a suppressed segment is the
  *    absence of a measurement, not a measurement of zero; printing it says nobody in
  *    that group responded, which is false and is also exactly the number a reader would
  *    use to reconstruct the group by subtracting from the total.
- * 3. **The heat map covers only the disclosed segments**, and the table says how many
- *    were left out. A suppressed row has no averages, so it could only enter the grid as
- *    a bottom-of-ramp cell (a colour claiming a real, terrible score) or as an absent
- *    row (silently dropped). `segmentHeatMapCells` excludes them and the footer accounts
- *    for them.
+ * 3. **A withheld group's participation is withheld with it.** The rate arrives null
+ *    and the `headcount` denominator arrives null with it, and this panel prints
+ *    neither — a percentage over a known headcount is one division away from the count
+ *    the floor protects, and the footer says so in words.
  *
  * The footer reports how many groups were withheld and what the floor is. It does
  * **not** report how many people are behind them, and nothing on this panel is
@@ -54,13 +52,10 @@ interface SegmentBreakdownPanelProps {
  * separately, because it is a different fact: one group was measured and hidden,
  * the other was never in a group at all.
  *
- * ## Why the heat map and not a stacked bar
- *
- * The question is "which group is unhappier", across many groups and many questions. That
- * is magnitude over two categorical dimensions, which is what a heat map is for, and the
- * one #208 ships pairs an ink token to every ramp step so the numbers stay legible in
- * both themes. The server deliberately returns averages rather than per-segment
- * distributions for the same reason: departments × questions × options is unbounded.
+ * The sequential heat strip this panel used to render under the table is gone — the
+ * admin round dropped it, because the climate map above already answers "group ×
+ * dimension" on the diverging ramp and one page must not carry two encodings of one
+ * comparison. The inline comment at its old position holds the pointer.
  */
 export default function SegmentBreakdownPanel({
   breakdown,
@@ -76,7 +71,6 @@ export default function SegmentBreakdownPanel({
     breakdown.dimension === 'department' ? t('surveyResults.dimensionDepartment') : breakdown.dimension
 
   const nameOf = (segment: SurveySegmentResult) => segment.label ?? segment.key
-  const cells = segmentHeatMapCells(breakdown, questions, questionLabel, nameOf)
   const selected = disclosedSegments(breakdown).find((segment) => segment.key === selectedKey) ?? null
 
   if (breakdown.segments.length === 0 && breakdown.unsegmentedRespondentCount === 0) {
@@ -106,15 +100,36 @@ export default function SegmentBreakdownPanel({
         </thead>
         <tbody>
           {breakdown.segments.map((segment) => (
-            <tr key={segment.key}>
+            <tr
+              key={segment.key}
+              // The findings column's drill-down lands here: the selected group's
+              // row is tinted so the eye finds it after the scroll, the same
+              // `hi` treatment the prototype draws. The tint marks the row; the
+              // open detail below is what it means.
+              className={cn(selectedKey === segment.key && 'bg-accent-blue-soft')}
+            >
               <th scope="row">{nameOf(segment)}</th>
               {segment.isSuppressed ? (
-                // ONE cell spanning the measurements, holding the word rather than the
-                // number. Two cells each saying "withheld" would read as two withheld
-                // measurements; this reads as one withheld group, which is what it is.
+                // ONE cell spanning the measurements, holding the suppression
+                // grammar rather than the number. Two cells each saying "withheld"
+                // would read as two withheld measurements; this reads as one
+                // withheld group, which is what it is. The grammar is
+                // `ProtectedCell`'s — hatched box, padlock, the word — the same
+                // mark the climate map two sections above hatches this group's
+                // row with, so "protected" is learned once and read twice.
                 <td colSpan={2}>
                   <span className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary">{t('surveyResults.withheld')}</Badge>
+                    <ProtectedCell
+                      // 0, not the respondent count: the server already zeroed it,
+                      // and the withheld figure has no business travelling further
+                      // down than it must.
+                      responses={0}
+                      threshold={minimumGroupSize}
+                      description={nameOf(segment)}
+                      suppressedClassName="h-[18px] w-7"
+                    >
+                      {null}
+                    </ProtectedCell>
                     <span className="text-fg-secondary">
                       {t('surveyResults.withheldSegmentExplanation', { minimum: minimumGroupSize })}
                     </span>
@@ -122,15 +137,31 @@ export default function SegmentBreakdownPanel({
                 </td>
               ) : (
                 <>
-                  <td>{segment.respondentCount}</td>
+                  <td className="font-mono tabular-nums">{segment.respondentCount}</td>
                   <td>
                     {/* Through `Intl`, not `${n}%`: Spanish renders `78 %` with a space
                         and English `78%`, and neither is spelled out here. See
                         charts/formatMetric.ts for the three bugs the legacy
                         concatenation shipped. */}
-                    {segment.participationRate === null
-                      ? t('surveyResults.notApplicable')
-                      : formatMetric(segment.participationRate, { kind: 'percentage' }, locale)}
+                    {segment.participationRate === null ? (
+                      t('surveyResults.notApplicable')
+                    ) : (
+                      <>
+                        <span className="font-mono tabular-nums">
+                          {formatMetric(segment.participationRate, { kind: 'percentage' }, locale)}
+                        </span>
+                        {/* The denominator, beside the rate it explains. Only from
+                            `headcount` — the server nulls it for a withheld group,
+                            so this branch cannot print half of the division the
+                            floor keeps apart. */}
+                        {segment.headcount !== null && (
+                          <span className="text-fg-secondary">
+                            {' '}
+                            {t('surveyResults.ofPeople', { count: segment.headcount })}
+                          </span>
+                        )}
+                      </>
+                    )}
                   </td>
                 </>
               )}
@@ -175,9 +206,11 @@ export default function SegmentBreakdownPanel({
           : t('surveyResults.nothingWithheld')}
       </Body>
 
-      {cells.length > 0 && (
-        <HeatMap data={cells} title={t('surveyResults.heatMapTitle', { dimension: dimensionName })} />
-      )}
+      {/* No heat strip here, deliberately (the admin round dropped it): the
+          climate map two sections up already answers "group × dimension" on the
+          diverging ramp, and a sequential teal grid of near-identical data
+          directly below it put two encodings of one comparison on one page.
+          The drill-down below is the panel's own detail view. */}
 
       {selected && (
         <section>

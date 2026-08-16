@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
@@ -6,7 +6,6 @@ import {
   ClimateMap,
   KpiTile,
   WordCloud,
-  divergingPair,
   formatMetric,
   type MetricFormat,
 } from '../../../components/charts'
@@ -22,13 +21,17 @@ import {
 import { cn } from '../../../lib/cn'
 import { downloadTextFile } from '../../../lib/downloadTextFile'
 import { getSurveyAnalytics, type SurveyAnalyticsResponse } from '../api/surveyResults'
+import QuestionDistributionRow from '../components/QuestionDistributionRow'
 import QuestionResultCard from '../components/QuestionResultCard'
 import ResultsContentLanguageNotice from '../components/ResultsContentLanguageNotice'
 import ResultsSuppressionNotice from '../components/ResultsSuppressionNotice'
 import SegmentBreakdownPanel from '../components/SegmentBreakdownPanel'
+import StandingChip from '../components/StandingChip'
 import {
   EMPTY_QUESTION_FILTER,
+  distributionStripModel,
   filterQuestions,
+  isOpenEnded,
   questionCategories,
   questionTypes,
   type QuestionFilter,
@@ -37,8 +40,10 @@ import {
   UNCATEGORISED_DIMENSION,
   buildClimateMap,
   climateFindings,
+  dimensionKeyOf,
   openTextThemes,
   surveyDimensionStandings,
+  surveyQuestionStandings,
   withheldWordCount,
 } from '../surveyResultsMap'
 import {
@@ -67,11 +72,12 @@ const SCORE_FORMAT: MetricFormat = { kind: 'number', decimals: SCORE_DECIMALS }
  * The reader's question is "what is going on, and what do I do about it", and both
  * halves are answered before anything has to be scrolled:
  *
- * 1. **Participation.** A strip of three to five flat tiles — the count depends on
- *    whether the survey carries an invitation list — with every reading in mono and
- *    tabular figures. They are the context for everything below, not the subject,
- *    which is why they are `KpiTile` and not the `KPIDisplay` card grid; see
- *    `KpiTile` on the distinction between the two.
+ * 1. **Participation.** A strip of four to six flat tiles — the count depends on
+ *    whether the survey carries an invitation list, and the anonymity floor is
+ *    always the last reading — with every reading in mono and tabular figures.
+ *    They are the context for everything below, not the subject, which is why
+ *    they are `KpiTile` and not the `KPIDisplay` card grid; see `KpiTile` on the
+ *    distinction between the two.
  * 2. **The climate map**, beside the findings it produces. Score by group and by
  *    dimension against the survey's own average, diverging, with withheld groups
  *    hatched in place. The findings column names the worst cells in words and
@@ -213,9 +219,23 @@ export default function SurveyResultsPage() {
   )
   const findings = useMemo(() => (climate ? climateFindings(climate) : []), [climate])
   const standings = useMemo(() => surveyDimensionStandings(questions), [questions])
+  const questionStandings = useMemo(() => surveyQuestionStandings(questions), [questions])
   const themes = useMemo(() => openTextThemes(questions), [questions])
   const withheldWords = useMemo(() => withheldWordCount(questions), [questions])
+  const hasOpenText = useMemo(() => questions.some(isOpenEnded), [questions])
   const tiles = payload ? participationTiles(payload, t) : []
+
+  // Where a findings click lands the reader. The finding drills into the group's
+  // breakdown row — highlight and detail both key off `selectedSegment` — and the
+  // scroll is what makes the drill-down visible when the breakdown sits a screen
+  // below the findings column.
+  const breakdownRef = useRef<HTMLElement | null>(null)
+  const openFinding = useCallback((rowId: string) => {
+    setSelectedSegment(rowId)
+    // Guarded: happy-dom implements scrollIntoView as a no-op, and an older
+    // engine without it should degrade to "state changed, no scroll".
+    breakdownRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  }, [])
 
   const csvLabels: CsvLabels = {
     questionOrder: t('surveyResults.csvQuestionOrder'),
@@ -334,10 +354,11 @@ export default function SurveyResultsPage() {
                 {/* Four across on a wide screen, two on a tablet, one on a phone.
                     The tiles hold a single mono reading each, so they stay
                     readable at any of the three. */}
-                {/* The tile count is three, four or five depending on what the
-                    survey carries, and a five-tile row under `xl:grid-cols-4`
-                    leaves one tile alone on a second line. Chosen from the
-                    count rather than left to wrap.
+                {/* The tile count is four, five or six depending on what the
+                    survey carries — the anonymity-floor tile is always last —
+                    and a row under the wrong column count leaves one tile
+                    stranded on a second line. Chosen from the count rather
+                    than left to wrap.
 
                     `ParticipationTracker` is deliberately not here. It prints
                     the completed count under the word "Responses", which on
@@ -348,7 +369,11 @@ export default function SurveyResultsPage() {
                 <div
                   className={cn(
                     'grid gap-panel-gap sm:grid-cols-2',
-                    tiles.length === 5 ? 'xl:grid-cols-5' : 'xl:grid-cols-4',
+                    tiles.length === 6
+                      ? 'xl:grid-cols-3'
+                      : tiles.length === 5
+                        ? 'xl:grid-cols-5'
+                        : 'xl:grid-cols-4',
                   )}
                 >
                   {tiles.map((tile) => (
@@ -471,7 +496,7 @@ export default function SurveyResultsPage() {
                                   <button
                                     type="button"
                                     className="flex h-auto w-full flex-col items-start justify-start gap-0.5 rounded-lg border border-line-light bg-surface-icon-box p-3 text-left hover:border-line-hover"
-                                    onClick={() => setSelectedSegment(finding.rowId)}
+                                    onClick={() => openFinding(finding.rowId)}
                                   >
                                     <span className="text-sm font-semibold text-fg-primary">
                                       {t('surveyResults.findingHeadline', {
@@ -536,7 +561,7 @@ export default function SurveyResultsPage() {
                                 {formatMetric(row.score, SCORE_FORMAT, locale)}
                               </td>
                               <td>
-                                <StandingCell
+                                <StandingChip
                                   score={row.score}
                                   target={standings.overall}
                                   deadBandAt={standings.deadBandAt}
@@ -557,17 +582,27 @@ export default function SurveyResultsPage() {
                     </section>
                   )}
 
-                  {themes.length > 0 && (
+                  {/* Gated on the survey HAVING open-text questions, not on the
+                      themes being non-empty (the prototype's note 08 read both
+                      ways): a survey with no open-text question gets no section —
+                      drawing one that would always be empty is designing fiction —
+                      while a survey whose every word fell under the word floor
+                      keeps its section, saying the words are withheld. Dropping
+                      it there would be the familiar mistake: withheld rendered as
+                      absent. */}
+                  {hasOpenText && (
                     <section aria-labelledby="results-themes" className="flex flex-col gap-panel-gap">
                       <H2 id="results-themes">{t('surveyResults.themesTitle')}</H2>
                       <p className="m-0 max-w-prose text-sm text-fg-secondary">
                         {t('surveyResults.themesIntro')}
                       </p>
-                      <WordCloud
-                        data={themes}
-                        colorBy="category"
-                        title={t('surveyResults.themesChartTitle')}
-                      />
+                      {themes.length > 0 && (
+                        <WordCloud
+                          data={themes}
+                          colorBy="category"
+                          title={t('surveyResults.themesChartTitle')}
+                        />
+                      )}
                       {withheldWords > 0 && (
                         <p className="m-0 max-w-prose text-sm text-fg-secondary">
                           {t('surveyResults.wordsWithheld', { count: withheldWords })}
@@ -576,7 +611,11 @@ export default function SurveyResultsPage() {
                     </section>
                   )}
 
-                  <section aria-labelledby="results-breakdowns" className="flex flex-col gap-panel-gap">
+                  <section
+                    ref={breakdownRef}
+                    aria-labelledby="results-breakdowns"
+                    className="flex flex-col gap-panel-gap"
+                  >
                     <H2 id="results-breakdowns">{t('surveyResults.breakdowns')}</H2>
                     {activeBreakdown === null ? (
                       <EmptyState
@@ -623,6 +662,13 @@ export default function SurveyResultsPage() {
 
                   <section aria-labelledby="results-questions" className="flex flex-col gap-panel-gap">
                     <H2 id="results-questions">{t('surveyResults.questions')}</H2>
+                    {/* What the colour is, before the reader meets it: the strips
+                        below read the climate map's own diverging ramp, and one
+                        sentence is what makes that one encoding rather than a
+                        coincidence of hues. */}
+                    <p className="m-0 max-w-prose text-sm text-fg-secondary">
+                      {t('surveyResults.questionsIntro')}
+                    </p>
                     <div className="flex flex-wrap items-end gap-inline">
                       <label>
                         {t('surveyResults.filterCategory')}
@@ -663,13 +709,35 @@ export default function SurveyResultsPage() {
                       />
                     ) : (
                       <div className="grid gap-panel-gap">
-                        {visibleQuestions.map((question) => (
-                          <QuestionResultCard
-                            key={question.questionId}
-                            question={question}
-                            shortLabel={questionLabel(question)}
-                          />
-                        ))}
+                        {/* One row per scale question, the drawn DistributionStrip
+                            form (decision 06) — six full BarCharts measured
+                            4,652px for six Likert questions, colour meaning
+                            nothing. Everything the strip cannot say honestly —
+                            open text, rankings, choice sets whose codes are not
+                            readings — keeps the full card: `distributionStripModel`
+                            returns null exactly where the server refused a mean,
+                            and painting those buckets red-to-blue would claim an
+                            order nobody authored. */}
+                        {visibleQuestions.map((question) => {
+                          const strip = distributionStripModel(question)
+                          return strip ? (
+                            <QuestionDistributionRow
+                              key={question.questionId}
+                              question={question}
+                              strip={strip}
+                              standings={questionStandings}
+                              shortLabel={questionLabel(question)}
+                              dimensionName={dimensionName(dimensionKeyOf(question))}
+                              uncategorised={dimensionKeyOf(question) === UNCATEGORISED_DIMENSION}
+                            />
+                          ) : (
+                            <QuestionResultCard
+                              key={question.questionId}
+                              question={question}
+                              shortLabel={questionLabel(question)}
+                            />
+                          )
+                        })}
                       </div>
                     )}
                   </section>
@@ -680,43 +748,6 @@ export default function SurveyResultsPage() {
         </LoadingRegion>
       )}
     </div>
-  )
-}
-
-/**
- * A dimension's standing against the survey average: a diverging swatch **and the
- * word beside it**, never the colour alone.
- *
- * The fill comes from `divergingPair` on the same -1..1 polarity `ClimateMap`
- * computes, from the same dead band. `divergingStep` calls a value neutral when
- * `-deadBand <= value <= deadBand`, and the word below is chosen by the
- * complementary pair of comparisons on the unscaled score, so the swatch and the
- * word are one decision rather than two that can drift.
- */
-function StandingCell({
-  score,
-  target,
-  deadBandAt,
-  extremeAt,
-  label,
-}: {
-  score: number
-  target: number
-  deadBandAt: number
-  extremeAt: number
-  label: string
-}) {
-  const { fill, ink } = divergingPair(
-    (score - target) / (2 * extremeAt),
-    deadBandAt / (2 * extremeAt),
-  )
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-xs font-semibold"
-      style={{ backgroundColor: fill, color: ink }}
-    >
-      {label}
-    </span>
   )
 }
 
@@ -789,6 +820,20 @@ function participationTiles(
       format: { kind: 'percentage' },
     })
   }
+
+  // The anonymity floor as a reading, stated once, on the page where it bites
+  // (decision 04 of the admin round). It sits in the participation strip because
+  // it is participation's counterpart: the counts above say who answered, this
+  // says what happens to a group where too few did. The value is the server's
+  // `minimumGroupSize` — the same number every ProtectedCell on this page
+  // enforces — never a client-side constant that could disagree with a company
+  // that raised its floor.
+  tiles.push({
+    id: 'anonymityFloor',
+    label: t('surveyResults.kpiFloor'),
+    value: payload.minimumGroupSize,
+    sub: t('surveyResults.kpiFloorSub'),
+  })
 
   return tiles
 }

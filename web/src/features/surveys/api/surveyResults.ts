@@ -90,6 +90,20 @@ export interface SurveyQuestionResult {
   /** Scale questions only. `null` for everything else, and for a partly unparseable set. */
   average: number | null
   median: number | null
+  /**
+   * The question's configured scale bounds. Carried on the wire because the
+   * distribution cannot recover them: a scale point nobody chose produces no
+   * bucket, so an axis derived from the buckets would shrink with the answers.
+   */
+  scaleMin: number | null
+  scaleMax: number | null
+  /**
+   * The author's anchor words for the two ends, resolved for the request locale.
+   * `null` when none was set — the page falls back to the bare number rather than
+   * inventing a word.
+   */
+  scaleLabelMin: string | null
+  scaleLabelMax: string | null
   /** Open-ended questions only, bucketed by the language the response was written in. */
   words: SurveyWordFrequency[]
   /** Distinct words withheld for appearing in too few responses. */
@@ -118,6 +132,13 @@ export interface SurveySegmentResult {
   label: string | null
   respondentCount: number
   participationRate: number | null
+  /**
+   * The denominator behind `participationRate` — department segments only, `null`
+   * for demographics, and **`null` when the segment is suppressed**: a withheld
+   * group's participation is withheld with it, and this field is half of that
+   * division. The server nulls it; nothing client-side may reconstruct it.
+   */
+  headcount: number | null
   isSuppressed: boolean
   questions: SurveySegmentQuestionResult[]
 }

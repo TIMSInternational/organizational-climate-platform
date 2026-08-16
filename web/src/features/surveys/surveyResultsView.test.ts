@@ -13,12 +13,12 @@ import {
   bucketLabel,
   disclosedSegments,
   distributionChartData,
+  distributionStripModel,
   filterQuestions,
   isOpenEnded,
   questionCategories,
   questionTypes,
   segmentComparisonData,
-  segmentHeatMapCells,
   withheldSegments,
   wordCloudData,
 } from './surveyResultsView'
@@ -34,6 +34,10 @@ function question(overrides: Partial<SurveyQuestionResult> = {}): SurveyQuestion
     distribution: [],
     average: null,
     median: null,
+    scaleMin: null,
+    scaleMax: null,
+    scaleLabelMin: null,
+    scaleLabelMax: null,
     words: [],
     suppressedWordCount: 0,
     ...overrides,
@@ -47,6 +51,7 @@ function segment(overrides: Partial<SurveySegmentResult> = {}): SurveySegmentRes
     label: 'Support',
     respondentCount: 8,
     participationRate: 80,
+    headcount: 10,
     isSuppressed: false,
     questions: [],
     ...overrides,
@@ -65,7 +70,6 @@ function breakdown(overrides: Partial<SurveyBreakdown> = {}): SurveyBreakdown {
 }
 
 const shortLabel = (q: SurveyQuestionResult) => `Q${q.order}`
-const nameOf = (s: SurveySegmentResult) => s.label ?? s.key
 
 describe('bucketLabel', () => {
   it('prefers the resolved label', () => {
@@ -157,67 +161,6 @@ describe('segment disclosure', () => {
   })
 })
 
-describe('segmentHeatMapCells', () => {
-  const scored = question({ questionId: 'q1', order: 1, average: 4.2 })
-
-  it('never emits a cell for a withheld segment', () => {
-    // This is the privacy property. A suppressed segment arrives with
-    // respondentCount 0 and no questions; a cell for it would either colour a row at
-    // the bottom of the ramp -- a claim that the group scored zero -- or vanish
-    // without trace, and both are wrong in the same way.
-    const cells = segmentHeatMapCells(
-      breakdown({
-        segments: [
-          segment({ key: 'd1', label: 'Support', questions: [{ questionId: 'q1', answeredCount: 8, average: 3.1 }] }),
-          segment({
-            key: 'd2',
-            label: 'Legal',
-            respondentCount: 0,
-            isSuppressed: true,
-            // Defensive: even if a future server regression left numbers on a
-            // suppressed segment, they must not reach the grid.
-            questions: [{ questionId: 'q1', answeredCount: 2, average: 1.0 }],
-          }),
-        ],
-        suppressedSegmentCount: 1,
-        suppressedRespondentCount: 2,
-      }),
-      [scored],
-      shortLabel,
-      nameOf,
-    )
-
-    expect(cells).toEqual([{ x: 'Q1', y: 'Support', value: 3.1 }])
-    expect(cells.some((cell) => cell.y === 'Legal')).toBe(false)
-  })
-
-  it('omits a cell rather than emitting a zero when a segment has no average for a question', () => {
-    const cells = segmentHeatMapCells(
-      breakdown({
-        segments: [segment({ questions: [{ questionId: 'q1', answeredCount: 0, average: null }] })],
-      }),
-      [scored],
-      shortLabel,
-      nameOf,
-    )
-
-    expect(cells).toEqual([])
-  })
-
-  it('skips questions that have no survey-wide average, such as free text', () => {
-    const cells = segmentHeatMapCells(
-      breakdown({
-        segments: [segment({ questions: [{ questionId: 'q9', answeredCount: 8, average: 2 }] })],
-      }),
-      [question({ questionId: 'q9', order: 9, type: 'open_ended', average: null })],
-      shortLabel,
-      nameOf,
-    )
-
-    expect(cells).toEqual([])
-  })
-})
-
 describe('segmentComparisonData', () => {
   it('puts the segment beside the whole survey, and leaves a gap where there is no number', () => {
     const rows = segmentComparisonData(
@@ -267,6 +210,75 @@ describe('question filters', () => {
 
   it('intersects category and type', () => {
     expect(filterQuestions(questions, { category: 'safety', type: 'likert' }).map((q) => q.questionId)).toEqual(['q1'])
+  })
+})
+
+describe('distributionStripModel', () => {
+  const bucket = (value: string, count: number, label: string | null = null) => ({
+    value,
+    label,
+    count,
+    percentage: 0,
+    averageRank: null,
+  })
+
+  it('positions each bucket at its own scale point, in the server order', () => {
+    const model = distributionStripModel(
+      question({
+        average: 3.5,
+        scaleMin: 1,
+        scaleMax: 5,
+        distribution: [bucket('1', 2, 'Strongly disagree'), bucket('4', 22, 'Agree')],
+      }),
+    )!
+
+    expect(model.buckets.map((entry) => entry.position)).toEqual([1, 4])
+    expect(model.buckets.map((entry) => entry.label)).toEqual(['Strongly disagree', 'Agree'])
+    expect(model.min).toBe(1)
+    expect(model.max).toBe(5)
+    expect(model.total).toBe(24)
+  })
+
+  it('refuses a question the server refused a mean for — codes are not readings', () => {
+    // `average: null` is `NumericStats`' own statement that these values are
+    // codes, and a diverging ramp over codes claims an order nobody authored.
+    expect(
+      distributionStripModel(
+        question({
+          type: 'multiple_choice',
+          average: null,
+          distribution: [bucket('1', 4, 'Remote'), bucket('4', 6, 'Office')],
+        }),
+      ),
+    ).toBeNull()
+  })
+
+  it('falls back to the answered extremes when the question carries no configured scale', () => {
+    const model = distributionStripModel(
+      question({
+        average: 2.5,
+        scaleMin: null,
+        scaleMax: null,
+        distribution: [bucket('2', 5), bucket('3', 5)],
+      }),
+    )!
+    expect(model.min).toBe(2)
+    expect(model.max).toBe(3)
+  })
+
+  it('refuses a degenerate axis where the scale has no width', () => {
+    expect(
+      distributionStripModel(
+        question({ average: 3, scaleMin: null, scaleMax: null, distribution: [bucket('3', 9)] }),
+      ),
+    ).toBeNull()
+  })
+
+  it('falls back to the stable value when a bucket has no label', () => {
+    const model = distributionStripModel(
+      question({ average: 3, scaleMin: 1, scaleMax: 5, distribution: [bucket('3', 9, null)] }),
+    )!
+    expect(model.buckets[0].label).toBe('3')
   })
 })
 

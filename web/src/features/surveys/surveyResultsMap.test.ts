@@ -15,6 +15,7 @@ import {
   segmentDimensionScore,
   surveyDimensionScore,
   surveyDimensionStandings,
+  surveyQuestionStandings,
   withheldWordCount,
 } from './surveyResultsMap'
 
@@ -28,6 +29,10 @@ function question(overrides: Partial<SurveyQuestionResult> & { questionId: strin
     distribution: [],
     average: null,
     median: null,
+    scaleMin: null,
+    scaleMax: null,
+    scaleLabelMin: null,
+    scaleLabelMax: null,
     words: [],
     suppressedWordCount: 0,
     ...overrides,
@@ -42,6 +47,7 @@ function segment(
     label: null,
     respondentCount: 10,
     participationRate: null,
+    headcount: null,
     isSuppressed: false,
     questions: [],
     ...overrides,
@@ -378,6 +384,29 @@ describe('surveyDimensionStandings', () => {
 
   it('is null when the survey has no scale question', () => {
     expect(surveyDimensionStandings([question({ questionId: 'q4', type: 'open_ended' })])).toBeNull()
+  })
+})
+
+describe('surveyQuestionStandings', () => {
+  it('measures each question against the mean of the question means', () => {
+    const standings = surveyQuestionStandings([
+      question({ questionId: 'q1', average: 3.7 }),
+      question({ questionId: 'q2', average: 2.9 }),
+      question({ questionId: 'q3', average: null, type: 'open_ended' }),
+    ])!
+
+    // (3.7 + 2.9) / 2, at the page's one-decimal precision — the open-ended
+    // question contributes nothing, exactly as it has no mean.
+    expect(standings.overall).toBe(3.3)
+    expect(standings.scores.get('q1')).toBe(3.7)
+    expect(standings.scores.has('q3')).toBe(false)
+    // The band edges are derived from the spread, same rule as the other panels.
+    expect(standings.extremeAt).toBeCloseTo(0.4)
+    expect(standings.deadBandAt).toBeCloseTo(0.08)
+  })
+
+  it('is null when no question has a computable mean', () => {
+    expect(surveyQuestionStandings([question({ questionId: 'q1', average: null })])).toBeNull()
   })
 })
 

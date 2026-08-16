@@ -16,6 +16,7 @@ export { default as KpiTile } from './KpiTile'
 export { default as ProtectedCell } from './ProtectedCell'
 export { ANONYMITY_FLOOR, isSuppressed } from './suppression'
 export { default as ClimateMap } from './ClimateMap'
+export { default as DistributionStrip } from './DistributionStrip'
 export { default as ParticipationTracker } from './ParticipationTracker'
 export { default as RealTimeChartContainer } from './RealTimeChartContainer'
 export { default as SentimentVisualization } from './SentimentVisualization'
@@ -32,6 +33,7 @@ export type { Kpi } from './KPIDisplay'
 export type { KpiTileProps } from './KpiTile'
 export type { ProtectedCellProps } from './ProtectedCell'
 export type { ClimateMapProps, ClimateMapRow, ClimateMapDimension } from './ClimateMap'
+export type { DistributionStripProps, DistributionStripSegment } from './DistributionStrip'
 export type {
   EffortImpact,
   RecommendationKind,
