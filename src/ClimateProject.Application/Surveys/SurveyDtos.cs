@@ -72,6 +72,14 @@ public sealed record SurveyListItem(
 
 public sealed record SurveyListResponse(IReadOnlyList<SurveyListItem> Surveys);
 
+/// <summary>
+/// The distinct question categories a company's surveys have actually used -- the
+/// wizard's dimension picker offers these alongside the fixed catalogue, so an admin
+/// re-uses last quarter's spelling instead of minting a near-duplicate key. Raw
+/// authored values, trimmed only; the server neither controls nor translates them.
+/// </summary>
+public sealed record SurveyDimensionsResponse(IReadOnlyList<string> Dimensions);
+
 public sealed record SurveyDetail(
     Guid Id,
     string? Title,

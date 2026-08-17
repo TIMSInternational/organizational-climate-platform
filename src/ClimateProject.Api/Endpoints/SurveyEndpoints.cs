@@ -26,6 +26,7 @@ public static class SurveyEndpoints
         group.MapGet("", ListAsync);
         group.MapGet("/scoped", ListAsync);
         group.MapGet("/my", ListMineAsync);
+        group.MapGet("/dimensions", ListDimensionsAsync);
 
         group.MapPost("", CreateAsync);
         group.MapPost("/bulk", BulkAsync);
@@ -213,6 +214,66 @@ public static class SurveyEndpoints
             .ToList();
 
         return Results.Ok(new MySurveyListResponse(surveys));
+    }
+
+    /// <summary>
+    /// The distinct categories this company's survey questions have used, for the
+    /// wizard's dimension picker. Same tenant scoping as <see cref="ListAsync"/>: a
+    /// super_admin may name a company, everyone else is pinned to their own -- the
+    /// categories a tenant authored are that tenant's vocabulary, and offering them
+    /// elsewhere would leak how another company runs its surveys.
+    /// </summary>
+    private static async Task<IResult> ListDimensionsAsync(
+        Guid? companyId,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        if (!Roles.Admin.Contains(currentUser.Role))
+        {
+            return Results.Forbid();
+        }
+
+        Guid? scopeCompanyId;
+        if (currentUser.Role == Roles.SuperAdmin)
+        {
+            scopeCompanyId = companyId;
+        }
+        else
+        {
+            var ownCompanyId = CompanyScope.OwnCompanyId(currentUser);
+            if (ownCompanyId is null)
+            {
+                return Results.Forbid();
+            }
+
+            if (companyId.HasValue && companyId.Value != ownCompanyId.Value)
+            {
+                return Results.Forbid();
+            }
+
+            scopeCompanyId = ownCompanyId;
+        }
+
+        var questions = db.Questions.AsQueryable();
+        if (scopeCompanyId is Guid scoped)
+        {
+            questions = questions.Where(
+                q => db.Surveys.Any(s => s.Id == q.SurveyId && s.CompanyId == scoped));
+        }
+
+        // Trimmed in the projection: nothing server-side controls this value, so
+        // 'trust' and 'trust ' are distinct rows here while every consumer trims --
+        // untrimmed distinct would offer visually identical chips.
+        var dimensions = await questions
+            .Where(q => q.Category != null && q.Category.Trim() != "")
+            .Select(q => q.Category!.Trim())
+            .Distinct()
+            .OrderBy(c => c)
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(new SurveyDimensionsResponse(dimensions));
     }
 
     // ------------------------------------------------------------------
