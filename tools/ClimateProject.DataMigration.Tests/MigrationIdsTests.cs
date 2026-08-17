@@ -50,6 +50,28 @@ public class MigrationIdsTests
     }
 
     [Fact]
+    public void The_child_derivation_agrees_with_an_independent_rfc_4122_v5_implementation()
+    {
+        // uuid.uuid5 over "collection:parentHex:scope:childKey" - the embedded-question
+        // scheme. Pinned as a literal because a determinism test that compares the tool
+        // to itself cannot catch a formula edit: both sides drift together. A legacy
+        // Response re-derives this id from (survey_id, question_id), so the vector is
+        // also the contract that slice depends on.
+        Assert.Equal(
+            new Guid("c9e3d5ab-8926-5500-8883-bb1b1e6400d8"),
+            MigrationIds.ForChild("surveys", LegacyId, "questions", "sq-1"));
+        Assert.Equal(
+            new Guid("7f7f5d4c-139f-59db-84a4-88a8b66941b6"),
+            MigrationIds.ForChild("surveys", LegacyId, "questions", "sq-2"));
+    }
+
+    [Fact]
+    public void An_empty_child_key_is_refused_not_keyed()
+    {
+        Assert.Throws<ArgumentException>(() => MigrationIds.ForChild("surveys", LegacyId, "questions", ""));
+    }
+
+    [Fact]
     public void The_namespace_is_pinned_and_may_never_change()
     {
         // Recorded in the design doc's 2026-08-15 addendum. Changing it re-keys the entire

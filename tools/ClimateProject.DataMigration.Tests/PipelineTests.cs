@@ -1,4 +1,5 @@
 using ClimateProject.DataMigration.Loading;
+using ClimateProject.DataMigration.Mapping;
 using ClimateProject.DataMigration.Reporting;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -34,6 +35,12 @@ public sealed class EtlContainersFixture : IAsyncLifetime
         await using var db = CreateDb();
         await db.Database.ExecuteSqlRawAsync(
             """
+            DELETE FROM question_options;
+            DELETE FROM question_emoji_options;
+            DELETE FROM question_conditional_logic;
+            DELETE FROM questions;
+            DELETE FROM survey_department_targets;
+            DELETE FROM surveys;
             DELETE FROM user_demographics;
             DELETE FROM demographic_field_options;
             DELETE FROM users;
@@ -72,6 +79,7 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
     private static readonly ObjectId GraceOid = ObjectId.Parse("64b000000000000000000022");
     private static readonly ObjectId RootOid = ObjectId.Parse("64b000000000000000000023");
     private static readonly ObjectId TenureOid = ObjectId.Parse("64b000000000000000000031");
+    private static readonly ObjectId SurveyOid = ObjectId.Parse("64b000000000000000000051");
 
     /// <summary>The fixture corpus: every FK edge, both second passes, one of each misfit.</summary>
     private static async Task SeedLegacyAsync(IMongoDatabase legacy)
@@ -152,6 +160,62 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
                 ["maintenance_message"] = "Back soon.",
             },
         ]);
+
+        await legacy.GetCollection<BsonDocument>("surveys").InsertManyAsync(
+        [
+            new BsonDocument
+            {
+                ["_id"] = SurveyOid,
+                ["title"] = "Q3 Climate Pulse",
+                ["description"] = "How the quarter felt.",
+                ["type"] = "general_climate",
+                ["company_id"] = AcmeOid.ToString(),
+                ["created_by"] = AdaOid.ToString(),
+                // One resolvable target, one dangling - the degraded path.
+                ["department_ids"] = new BsonArray { EngOid.ToString(), ObjectId.GenerateNewId().ToString() },
+                ["questions"] = new BsonArray
+                {
+                    new BsonDocument
+                    {
+                        ["id"] = "sq-1",
+                        ["text"] = "I feel safe speaking up.",
+                        ["type"] = "likert",
+                        ["scale_min"] = 1, ["scale_max"] = 5,
+                        ["scale_labels"] = new BsonDocument { ["min"] = "Disagree", ["max"] = "Agree" },
+                        // The Mongoose-baked default: must scrub, not become a comment box.
+                        ["comment_prompt"] = "Please explain your answer:",
+                        ["required"] = true,
+                        ["order"] = 0,
+                        ["category"] = "safety",
+                    },
+                    new BsonDocument
+                    {
+                        ["id"] = "sq-2",
+                        ["text"] = "Which describes your week?",
+                        ["type"] = "multiple_choice",
+                        ["options"] = new BsonArray { "Calm", "Busy", "Overloaded" },
+                        ["order"] = 1,
+                        ["conditional_logic"] = new BsonDocument
+                        {
+                            ["condition_question_id"] = "sq-1",
+                            ["condition_operator"] = "greater_than",
+                            ["condition_value"] = 3,
+                            ["action"] = "show",
+                        },
+                    },
+                },
+                ["settings"] = new BsonDocument
+                {
+                    ["anonymous"] = true,
+                    ["invitation_settings"] = new BsonDocument { ["custom_message"] = "Your voice matters." },
+                },
+                ["start_date"] = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+                ["end_date"] = new DateTime(2026, 7, 15, 0, 0, 0, DateTimeKind.Utc),
+                ["status"] = "completed",
+                ["response_count"] = 12,
+                ["version"] = 2,
+            },
+        ]);
     }
 
     private async Task<(MigrationResult Result, DataQualityReport Report)> RunAsync(
@@ -206,8 +270,49 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
         // The recomputed hierarchy agrees with the legacy derived values: no findings.
         Assert.DoesNotContain(report.Entries, e => e.Rule == MigrationRules.DepartmentHierarchyMismatch);
 
-        // Attribution: en company label, plus the platform maintenance message.
-        Assert.Equal(2, report.Entries.Count(e => e.Kind == ReportEntryKind.Attribution));
+        // The survey fan-out: deterministic ids all the way down.
+        var survey = await db.Surveys.SingleAsync();
+        Assert.Equal(MigrationIds.For("surveys", SurveyOid), survey.Id);
+        Assert.Equal(ada.Id, survey.CreatedBy);
+        Assert.Equal("en", survey.Language);
+        Assert.Equal("Q3 Climate Pulse", survey.TitleEn);
+        Assert.Null(survey.TitleEs);
+        Assert.Equal("closed", survey.Status); // legacy 'completed', remapped by name
+        Assert.Equal(12, survey.ResponseCount);
+        Assert.True(survey.Settings.Anonymous);
+        Assert.Equal("Your voice matters.", survey.Settings.InvitationCustomMessageEn);
+        Assert.Contains(report.Entries, e => e.Rule == MigrationRules.SurveyStatusCompletedRemapped);
+
+        var sq1Id = MigrationIds.ForChild("surveys", SurveyOid, SurveyMapper.QuestionScope, "sq-1");
+        var sq2Id = MigrationIds.ForChild("surveys", SurveyOid, SurveyMapper.QuestionScope, "sq-2");
+        var sq1 = await db.Questions.SingleAsync(q => q.Id == sq1Id);
+        Assert.Equal(survey.Id, sq1.SurveyId);
+        Assert.Equal("I feel safe speaking up.", sq1.TextEn);
+        Assert.Equal("Agree", sq1.ScaleLabelMaxEn);
+        Assert.Equal("safety", sq1.Category);
+        // The Mongoose-baked default prompt was scrubbed, not turned into a comment box.
+        Assert.Null(sq1.CommentPromptEn);
+        Assert.Contains(report.Entries, e => e.Rule == MigrationRules.CommentPromptDefaultScrubbed);
+
+        var options = await db.QuestionOptions
+            .Where(o => o.QuestionId == sq2Id).OrderBy(o => o.Order).ToListAsync();
+        Assert.Equal(["Calm", "Busy", "Overloaded"], options.Select(o => o.Value));
+
+        var logic = await db.QuestionConditionalLogics.SingleAsync(l => l.QuestionId == sq2Id);
+        Assert.Equal(sq1Id, logic.ConditionQuestionId);
+        Assert.Equal("3", logic.ConditionValue);
+
+        // One resolvable department target landed; the dangling one degraded by name.
+        var target = Assert.Single(await db.SurveyDepartmentTargets.ToListAsync());
+        Assert.Equal(eng.Id, target.DepartmentId);
+        Assert.Contains(report.Entries,
+            e => e.Kind == ReportEntryKind.Degraded && e.Field == "department_ids");
+
+        // Attribution: en company label + the platform maintenance message, then the
+        // survey's title, description, invitation message and two question texts.
+        Assert.Equal(5, report.Entries.Count(
+            e => e.Kind == ReportEntryKind.Attribution && e.Collection == "surveys"));
+        Assert.Equal(7, report.Entries.Count(e => e.Kind == ReportEntryKind.Attribution));
     }
 
     [Fact]
@@ -237,6 +342,14 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
             // Sub-issue D's sharpest AC: a re-run must not end anyone's session.
             Assert.Equal(stampAfterFirstRun,
                 (await db.Users.SingleAsync(u => u.Email == "ada@acme.com")).SecurityStamp);
+
+            // The whole survey fan-out converges too - upserted questions, wholesale-
+            // replaced options and targets, in-place conditional logic.
+            Assert.Equal(1, await db.Surveys.CountAsync());
+            Assert.Equal(2, await db.Questions.CountAsync());
+            Assert.Equal(3, await db.QuestionOptions.CountAsync());
+            Assert.Equal(1, await db.QuestionConditionalLogics.CountAsync());
+            Assert.Equal(1, await db.SurveyDepartmentTargets.CountAsync());
         }
     }
 
@@ -282,6 +395,8 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
             Assert.Equal(1, await verify.Companies.CountAsync());
             Assert.Equal(2, await verify.Departments.CountAsync());
             Assert.Equal(3, await verify.Users.CountAsync());
+            Assert.Equal(1, await verify.Surveys.CountAsync());
+            Assert.Equal(2, await verify.Questions.CountAsync());
             var api = await verify.Departments.SingleAsync(d => d.Name == "Backend API");
             Assert.NotNull(api.ParentDepartmentId);
             var eng = await verify.Departments.SingleAsync(d => d.Name == "Engineering");
@@ -306,6 +421,8 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
         await using var verify = _fx.CreateDb();
         Assert.Equal(0, await verify.Companies.CountAsync());
         Assert.Equal(0, await verify.Users.CountAsync());
+        Assert.Equal(0, await verify.Surveys.CountAsync());
+        Assert.Equal(0, await verify.Questions.CountAsync());
     }
 
     [Fact]

@@ -5,7 +5,7 @@ namespace ClimateProject.DataMigration.Legacy;
 
 // One stub per registered Mongoose model in climate-project/src/models/. The five
 // foundational collections (Company, Department, User, SystemSettings, DemographicField)
-// are typed field-by-field from the legacy Mongoose schemas per sub-issue B
+// plus Survey are typed field-by-field from the legacy Mongoose schemas per sub-issue B
 // (docs/migration/sub-issues.md); the rest stay deliberately field-less until their
 // slice lands - a stub that guesses fields is worse than one that declares none, and
 // everything undeclared lands in Extra, visibly.
@@ -228,8 +228,136 @@ public sealed class LegacyDemographicField : LegacyDocument
 /// <summary>6. Mongoose model 'DemographicSnapshot' (DemographicSnapshot.ts).</summary>
 public sealed class LegacyDemographicSnapshot : LegacyDocument;
 
-/// <summary>7. Mongoose model 'Survey' (Survey.ts).</summary>
-public sealed class LegacySurvey : LegacyDocument;
+/// <summary>7. Mongoose model 'Survey' (Survey.ts). Typed 2026-08-17 from the legacy schema.</summary>
+public sealed class LegacySurvey : LegacyDocument
+{
+    [BsonElement("title")] public string? Title { get; set; }
+    [BsonElement("description")] public string? Description { get; set; }
+    [BsonElement("type")] public string? Type { get; set; }
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("created_by")] public string? CreatedBy { get; set; }
+    [BsonElement("department_ids")] public List<string>? DepartmentIds { get; set; }
+    [BsonElement("questions")] public List<LegacySurveyQuestion>? Questions { get; set; }
+
+    // Per-survey demographics died in the redesign (#193 moved demographics onto the
+    // user); both fields are read raw so their presence can be REPORTED as a named
+    // drop rather than surfacing as an anonymous unmapped-field line.
+    [BsonElement("demographic_field_ids")] public List<string>? DemographicFieldIds { get; set; }
+    [BsonElement("demographics")] public List<BsonDocument>? Demographics { get; set; }
+
+    [BsonElement("settings")] public LegacySurveySettings? Settings { get; set; }
+    [BsonElement("start_date")] public DateTime? StartDate { get; set; }
+    [BsonElement("end_date")] public DateTime? EndDate { get; set; }
+    [BsonElement("status")] public string? Status { get; set; }
+    [BsonElement("response_count")] public int? ResponseCount { get; set; }
+    [BsonElement("target_audience_count")] public int? TargetAudienceCount { get; set; }
+    [BsonElement("template_id")] public string? TemplateId { get; set; }
+    [BsonElement("version")] public int? Version { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+
+    // Survey is the one collection with BOTH a domain 'version' field and Mongoose's
+    // internal '__v' key, so the latter gets Mongoose's own name for it here.
+    [BsonElement("__v")] public int? VersionKey { get; set; }
+}
+
+/// <summary>
+/// A survey's embedded question subdocument (QuestionSchema, <c>_id: false</c>). Its
+/// <c>id</c> is an application-minted STRING, not a Mongo <c>_id</c> - answers in the
+/// Response collection reference it, which is why identity derives from
+/// (survey <c>_id</c>, this string) via <see cref="MigrationIds.ForChild"/>.
+/// The interface's <c>config</c> field is deliberately not typed: QuestionSchema never
+/// declared it, so Mongoose strict mode stripped it at write time; if a document
+/// carries one anyway it lands in Extra and is reported.
+/// </summary>
+public sealed class LegacySurveyQuestion
+{
+    [BsonElement("id")] public string? Id { get; set; }
+    [BsonElement("text")] public string? Text { get; set; }
+    [BsonElement("type")] public string? Type { get; set; }
+    [BsonElement("options")] public List<string>? Options { get; set; }
+    [BsonElement("scale_min")] public int? ScaleMin { get; set; }
+    [BsonElement("scale_max")] public int? ScaleMax { get; set; }
+    [BsonElement("scale_labels")] public LegacyScaleLabels? ScaleLabels { get; set; }
+    [BsonElement("emoji_options")] public List<LegacyEmojiOption>? EmojiOptions { get; set; }
+    [BsonElement("comment_required")] public bool? CommentRequired { get; set; }
+    [BsonElement("comment_prompt")] public string? CommentPrompt { get; set; }
+    [BsonElement("binary_comment_config")] public LegacyBinaryCommentConfig? BinaryCommentConfig { get; set; }
+    [BsonElement("required")] public bool? Required { get; set; }
+    [BsonElement("conditional_logic")] public LegacyConditionalLogic? ConditionalLogic { get; set; }
+    [BsonElement("order")] public int? Order { get; set; }
+    [BsonElement("category")] public string? Category { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyScaleLabels
+{
+    [BsonElement("min")] public string? Min { get; set; }
+    [BsonElement("max")] public string? Max { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyEmojiOption
+{
+    [BsonElement("emoji")] public string? Emoji { get; set; }
+    [BsonElement("label")] public string? Label { get; set; }
+    [BsonElement("value")] public int? Value { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyBinaryCommentConfig
+{
+    [BsonElement("enabled")] public bool? Enabled { get; set; }
+    [BsonElement("label")] public string? Label { get; set; }
+    [BsonElement("placeholder")] public string? Placeholder { get; set; }
+    [BsonElement("max_length")] public int? MaxLength { get; set; }
+    [BsonElement("required")] public bool? Required { get; set; }
+    [BsonElement("min_length")] public int? MinLength { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>condition_value is Mixed (string | number) in the legacy schema.</summary>
+public sealed class LegacyConditionalLogic
+{
+    [BsonElement("condition_question_id")] public string? ConditionQuestionId { get; set; }
+    [BsonElement("condition_operator")] public string? ConditionOperator { get; set; }
+    [BsonElement("condition_value")] public BsonValue? ConditionValue { get; set; }
+    [BsonElement("action")] public string? Action { get; set; }
+    [BsonElement("target_question_id")] public string? TargetQuestionId { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacySurveySettings
+{
+    [BsonElement("anonymous")] public bool? Anonymous { get; set; }
+    [BsonElement("allow_partial_responses")] public bool? AllowPartialResponses { get; set; }
+    [BsonElement("randomize_questions")] public bool? RandomizeQuestions { get; set; }
+    [BsonElement("show_progress")] public bool? ShowProgress { get; set; }
+    [BsonElement("auto_save")] public bool? AutoSave { get; set; }
+    [BsonElement("time_limit_minutes")] public int? TimeLimitMinutes { get; set; }
+    [BsonElement("response_limit")] public int? ResponseLimit { get; set; }
+    [BsonElement("notification_settings")] public LegacySurveyNotificationSettings? NotificationSettings { get; set; }
+    [BsonElement("invitation_settings")] public LegacySurveyInvitationSettings? InvitationSettings { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacySurveyNotificationSettings
+{
+    [BsonElement("send_invitations")] public bool? SendInvitations { get; set; }
+    [BsonElement("send_reminders")] public bool? SendReminders { get; set; }
+    [BsonElement("reminder_frequency_days")] public int? ReminderFrequencyDays { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacySurveyInvitationSettings
+{
+    [BsonElement("custom_message")] public string? CustomMessage { get; set; }
+    [BsonElement("include_credentials")] public bool? IncludeCredentials { get; set; }
+    [BsonElement("send_immediately")] public bool? SendImmediately { get; set; }
+    [BsonElement("custom_subject")] public string? CustomSubject { get; set; }
+    [BsonElement("branding_enabled")] public bool? BrandingEnabled { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
 
 /// <summary>8. Mongoose model 'SurveyVersion' (SurveyVersion.ts).</summary>
 public sealed class LegacySurveyVersion : LegacyDocument;
