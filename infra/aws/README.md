@@ -220,7 +220,7 @@ silences the warning, so it is a ratchet rather than a mute button —
 test pins that.
 
 Do these in order. Steps 1–2 need someone with write access to the secret; only step 3 is a
-change to this repository. **Steps 1 and 2 are done; step 3 is the one still open.**
+change to this repository. **All three are done — the guard is armed.**
 
 1. ✅ **Flip the secret** — done 2026-08-10. `climate-project-api/prod/database-connection-string`
    moved from port 6543 to **5432**; host, username and password unchanged.
@@ -228,9 +228,10 @@ change to this repository. **Steps 1 and 2 are done; step 3 is the one still ope
    returned 200, and the `TRANSACTION pooler` warning is **gone** from the App Runner logs. The
    defect alternates, so one green probe would have proved nothing; the absent warning is the
    stronger of the two signals, because it is the app reporting what value it actually read.
-3. ☐ **Arm the guard.** Set `Database__RequireSessionPooler` to `"true"` in
-   `infra/aws/climate-project-api-prod-service.yml` and redeploy. From then on a connection
-   string on 6543 fails startup instead of logging, so the port cannot regress silently.
+3. ✅ **Arm the guard** — done 2026-08-17, in its own commit and its own rollout as step 2's
+   change specified. `Database__RequireSessionPooler` is `"true"` in
+   `infra/aws/climate-project-api-prod-service.yml`: a connection string on 6543 now fails
+   startup instead of logging, so the port cannot regress silently.
 
 Two notes for whoever takes step 3, neither of which changes the order above:
 

@@ -82,6 +82,9 @@ a production snapshot completes on staging.
 
 ### A7 — database secret on the session pooler, guard armed (#220)
 
+**Done in full as of 2026-08-17** — secret flipped and verified 2026-08-10, and
+`Database__RequireSessionPooler` armed `"true"` in the template. Kept for the record:
+
 Do this **before cutover week**, not during. While the runtime secret points at port
 6543, `/ready` alternates 200/timeout on the live service (measured in
 `infra/aws/README.md`, "Connection pooling"), which turns every canary in Phase C and D
