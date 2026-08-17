@@ -109,18 +109,16 @@ Consequences to plan for:
 > `climate-project-api/prod/database-connection-string` and can only be changed by someone
 > with write access to that secret. It is **not** fixed by anything in this repository. What
 > the repository does do, as of #220: `DatabaseConnectionStringPolicy` bounds the Npgsql pool
-> and logs a startup **warning** naming this issue whenever it sees port 6543. That guard is
-> deliberately a warning and not a hard startup failure, because the live secret still says
-> 6543 and a hard failure would stop production booting on the next deploy.
+> and logs a startup **warning** naming this issue whenever it sees port 6543.
 >
-> Whoever rotates this password is the most likely person to also fix the port, since they are
-> rewriting the value anyway. **If you do, finish the job**: set
-> `Database__RequireSessionPooler` to `"true"` in
-> `infra/aws/climate-project-api-prod-service.yml` once a deploy on port 5432 has come up
-> green. That flag turns the warning into a startup failure, and it is the only thing in the
-> system that would catch the port regressing later — nothing in `deploy-prod.yml` inspects
-> this secret. The ordered sequence, and why the order matters, is in `infra/aws/README.md`
-> under "Arming the guard".
+> **The job is finished as of 2026-08-17**: the secret moved to 5432 on 2026-08-10, and
+> `Database__RequireSessionPooler` is `"true"` in
+> `infra/aws/climate-project-api-prod-service.yml`, which turns the warning into a startup
+> failure. That flag is the only thing in the system that catches the port regressing later —
+> nothing in `deploy-prod.yml` inspects this secret. Whoever rotates this password must keep
+> the port on **5432**: a rotated value that regresses to 6543 now fails the next deploy at
+> startup validation (the rollout is rejected; the previous version keeps serving). The
+> ordered sequence is in `infra/aws/README.md` under "Arming the guard".
 
 > **The two Supabase API-key rows say "rotate", not "likely N/A" — corrected 2026-08-14.**
 > Earlier revisions reasoned "no reference in this repo, so probably unused". That reasoning is
