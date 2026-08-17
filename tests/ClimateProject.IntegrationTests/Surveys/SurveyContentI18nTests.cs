@@ -167,18 +167,18 @@ public class SurveyContentI18nTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_question_omitting_its_comment_prompt_keeps_the_per_language_database_default()
+    public async Task A_question_omitting_its_comment_prompt_stays_promptless_and_the_API_emits_null()
     {
         var client = await AdminAsync();
         var created = await SurveyTestHarness.CreateSurveyAsync(client, SurveyTestHarness.MinimalRequest(_spanishCompanyId));
 
         var question = await _harness.WithDbAsync(db => db.Questions.FirstAsync(q => q.SurveyId == created.Id));
 
-        // The single shared column this replaced carried an English string as its DDL
-        // default, so a Spanish-only survey got an English prompt out of the schema itself.
-        Assert.Equal("Please explain your answer:", question.CommentPromptEn);
-        Assert.Equal("Por favor explica tu respuesta:", question.CommentPromptEs);
-        Assert.Equal("Por favor explica tu respuesta:", Assert.Single(created.Questions).CommentPrompt);
+        // The comment box is opt-in: this null is the contract the respond UI keys on.
+        // The per-language DDL defaults this replaces put a box on every question.
+        Assert.Null(question.CommentPromptEn);
+        Assert.Null(question.CommentPromptEs);
+        Assert.Null(Assert.Single(created.Questions).CommentPrompt);
     }
 
     // ------------------------------------------------------------------

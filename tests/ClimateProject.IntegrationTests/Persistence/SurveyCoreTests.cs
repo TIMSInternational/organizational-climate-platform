@@ -160,7 +160,7 @@ public class SurveyCoreTests(PostgresContainerFixture postgres)
 
         var loadedQuestion = await readDb.Questions.SingleAsync(q => q.Id == minimalQuestionId);
         Assert.True(loadedQuestion.CommentRequired);
-        Assert.Equal("Please explain your answer:", loadedQuestion.CommentPromptEn);
+        Assert.Null(loadedQuestion.CommentPromptEn);
         Assert.False(loadedQuestion.Required);
     }
 }
