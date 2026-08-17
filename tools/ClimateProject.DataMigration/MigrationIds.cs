@@ -68,4 +68,28 @@ public static class MigrationIds
 
         return For(collection, legacyId);
     }
+
+    /// <summary>
+    /// The target id for a subdocument embedded in <paramref name="parentId"/>'s document -
+    /// legacy survey questions are the first case: they live inside the survey document
+    /// with a string <c>id</c> of their own and no collection, so the design formula gets
+    /// a scoped extension: <c>collection + ":" + parent.hex + ":" + scope + ":" + key</c>.
+    ///
+    /// The child key is NOT required to be ObjectId hex (the legacy product minted question
+    /// ids via <c>new ObjectId().toString()</c>, but Mongo never validated them) - any
+    /// non-empty string is a legal key, because uniqueness is scoped by the parent. What
+    /// matters is that the derivation is reachable from a referencing document: a legacy
+    /// Response carries <c>survey_id</c> plus each answer's <c>question_id</c>, which is
+    /// exactly (parent, key), so the Response slice re-derives these ids without a lookup
+    /// table - the same property <see cref="For(string, ObjectId)"/> gives collections.
+    /// </summary>
+    public static Guid ForChild(string collection, ObjectId parentId, string childScope, string childKey)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(collection);
+        ArgumentException.ThrowIfNullOrEmpty(childScope);
+        ArgumentException.ThrowIfNullOrEmpty(childKey);
+
+        return DeterministicNotificationId.Create(
+            MigrationNamespace, collection + ":" + parentId.ToString() + ":" + childScope + ":" + childKey);
+    }
 }

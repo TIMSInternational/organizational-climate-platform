@@ -23,6 +23,9 @@ public sealed class MappingContext
 
     public IReadOnlySet<Guid> Departments { get; init; } = new HashSet<Guid>();
 
+    /// <summary>Users already migrated - surveys reference their creator by legacy id.</summary>
+    public IReadOnlySet<Guid> Users { get; init; } = new HashSet<Guid>();
+
     /// <summary>The company's demographic vocabulary: (company, field key) -> field id.</summary>
     public IReadOnlyDictionary<(Guid CompanyId, string Field), Guid> DemographicFields { get; init; } =
         new Dictionary<(Guid, string), Guid>();
@@ -74,4 +77,26 @@ internal static class MapperHelpers
 
     public static string? Trimmed(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>
+    /// Trim, and cut to the target column's length as a NAMED rule when the source
+    /// exceeds it. The survey-content columns need this where the foundational ones did
+    /// not: several legacy fields (option text, scale labels, comment prompts, category)
+    /// carried no Mongoose maxlength at all, and an overlong value would otherwise turn
+    /// into a batch-aborting insert failure - the design says reported degradation,
+    /// never an abort.
+    /// </summary>
+    public static string? Truncated(
+        string? value, int max, string collection, string legacyId, string field, DataQualityReport report)
+    {
+        var trimmed = Trimmed(value);
+        if (trimmed is null || trimmed.Length <= max)
+        {
+            return trimmed;
+        }
+
+        report.Normalisation(MigrationRules.ContentOverlongTruncated, collection, legacyId, field,
+            $"value is {trimmed.Length} chars; the column holds {max}; truncated");
+        return trimmed[..max];
+    }
 }

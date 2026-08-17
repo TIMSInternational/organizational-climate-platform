@@ -122,4 +122,30 @@ public static class MigrationRules
     public const string RoleDepartmentAdminRemapped = "user.role-department-admin-remapped";
     public const string CompanyInactiveDropped = "company.inactive-flag-dropped";
     public const string TimestampFromObjectId = "timestamp.from-object-id";
+    public const string ContentOverlongTruncated = "content.overlong-truncated";
+
+    // Survey (#154 slice 2). Status remaps because the target vocabulary is
+    // draft/scheduled/active/closed/archived (SurveyStatuses) while legacy was
+    // draft/active/paused/completed/archived; both retired statuses land on 'closed'
+    // because it is the one state that, like them, refuses new responses.
+    public const string SurveyStatusCompletedRemapped = "survey.status-completed-remapped";
+    public const string SurveyStatusPausedRemapped = "survey.status-paused-remapped";
+    public const string SurveyStatusUnknown = "survey.status-unknown";
+    public const string SurveyTemplateLinkDropped = "survey.template-link-dropped";
+    public const string SurveyDemographicsConfigDropped = "survey.demographics-config-dropped";
+    public const string SurveyQuestionMissingId = "survey.question-missing-id";
+    public const string SurveyQuestionDuplicateId = "survey.question-duplicate-id";
+
+    // Question fan-out. Type remaps: yes_no_comment folds into yes_no (the comment
+    // shape lives in the comment columns now), emoji_scale is a pure rename to
+    // emoji_rating. Comment-prompt/binary-config scrubs mirror #332's migration: a
+    // value equal to the legacy DDL default is the default, not authored content.
+    public const string QuestionTypeUnknown = "question.type-unknown";
+    public const string QuestionTypeYesNoCommentRemapped = "question.type-yes-no-comment-remapped";
+    public const string QuestionTypeEmojiScaleRemapped = "question.type-emoji-scale-remapped";
+    public const string CommentPromptDefaultScrubbed = "question.comment-prompt-default-scrubbed";
+    public const string BinaryCommentConfigDefaultScrubbed = "question.binary-comment-config-default-scrubbed";
+    public const string QuestionOptionDuplicateValue = "question.option-duplicate-value";
+    public const string QuestionEmojiOptionInvalid = "question.emoji-option-invalid";
+    public const string QuestionConditionValueNotScalar = "question.condition-value-not-scalar";
 }

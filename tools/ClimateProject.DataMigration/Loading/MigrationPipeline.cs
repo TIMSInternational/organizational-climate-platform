@@ -32,12 +32,13 @@ public sealed record MigrationResult(IReadOnlyList<CollectionResult> Collections
 }
 
 /// <summary>
-/// The foundational load: Company -> DemographicField -> Department -> User ->
-/// SystemSettings, in FK order, then the second pass for the three self- and
-/// cross-referential columns (department parent, department manager, user manager)
-/// that cannot be satisfied on first insert. Reference targets are the ids present in
-/// the TARGET database plus this run's own writes, so a filtered or resumed run
-/// resolves against what earlier runs already loaded.
+/// The mapped load: Company -> DemographicField -> Department -> User ->
+/// SystemSettings -> Survey (with its Question/option/logic/target fan-out), in FK
+/// order, then the second pass for the three self- and cross-referential columns
+/// (department parent, department manager, user manager) that cannot be satisfied on
+/// first insert. Reference targets are the ids present in the TARGET database plus
+/// this run's own writes, so a filtered or resumed run resolves against what earlier
+/// runs already loaded.
 ///
 /// Writes are fetch-then-update upserts on the deterministic id: last run wins for
 /// every mapped column, and columns the app initialises itself (User.SecurityStamp)
@@ -50,7 +51,7 @@ public sealed class MigrationPipeline(
     bool dryRun)
 {
     public static readonly IReadOnlyList<string> MappedCollections =
-        ["companies", "demographicfields", "departments", "users", "systemsettings"];
+        ["companies", "demographicfields", "departments", "users", "systemsettings", "surveys"];
 
     private readonly List<CollectionResult> _results = [];
     private readonly List<MappedDepartment> _departmentsThisRun = [];
@@ -102,6 +103,12 @@ public sealed class MigrationPipeline(
             await LoadSystemSettingsAsync(context, ct);
         }
 
+        if (wanted.Contains("surveys"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadSurveysAsync(context, ct);
+        }
+
         await SecondPassAsync(context, ct);
         AssertDepartmentHierarchy();
 
@@ -123,6 +130,10 @@ public sealed class MigrationPipeline(
         departments.UnionWith(db.Departments.Local.Select(d => d.Id));
         departments.UnionWith(_departmentsThisRun.Select(d => d.Department.Id));
 
+        var users = (await db.Users.Select(u => u.Id).ToListAsync(ct)).ToHashSet();
+        users.UnionWith(db.Users.Local.Select(u => u.Id));
+        users.UnionWith(_usersThisRun.Select(u => u.User.Id));
+
         var fields = new Dictionary<(Guid, string), Guid>();
         foreach (var field in await db.DemographicFields.Select(f => new { f.Id, f.CompanyId, f.Field }).ToListAsync(ct))
         {
@@ -140,6 +151,7 @@ public sealed class MigrationPipeline(
             Companies = companies.Keys.ToHashSet(),
             CompanyLanguages = companies,
             Departments = departments,
+            Users = users,
             DemographicFields = fields,
         };
     }
@@ -376,6 +388,132 @@ public sealed class MigrationPipeline(
 
         await SaveAsync(ct);
         _results.Add(new CollectionResult("systemsettings", source, written, report.SkipCount("systemsettings")));
+    }
+
+    private async Task LoadSurveysAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        await foreach (var document in Read<LegacySurvey>("surveys", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (SurveyMapper.Map(document, context) is not { } mapped)
+            {
+                continue;
+            }
+
+            var existing = await db.Surveys.FindAsync([mapped.Survey.Id], ct);
+            if (existing is null)
+            {
+                db.Surveys.Add(mapped.Survey);
+            }
+            else
+            {
+                existing.CompanyId = mapped.Survey.CompanyId;
+                existing.CreatedBy = mapped.Survey.CreatedBy;
+                existing.TitleEn = mapped.Survey.TitleEn;
+                existing.TitleEs = mapped.Survey.TitleEs;
+                existing.DescriptionEn = mapped.Survey.DescriptionEn;
+                existing.DescriptionEs = mapped.Survey.DescriptionEs;
+                existing.Language = mapped.Survey.Language;
+                existing.Type = mapped.Survey.Type;
+                existing.StartDate = mapped.Survey.StartDate;
+                existing.EndDate = mapped.Survey.EndDate;
+                existing.Status = mapped.Survey.Status;
+                existing.ResponseCount = mapped.Survey.ResponseCount;
+                existing.TargetAudienceCount = mapped.Survey.TargetAudienceCount;
+                existing.Version = mapped.Survey.Version;
+                existing.Settings = mapped.Survey.Settings;
+                existing.CreatedAt = mapped.Survey.CreatedAt;
+                existing.UpdatedAt = mapped.Survey.UpdatedAt;
+            }
+
+            // Questions upsert on their deterministic PK; a row whose id vanished from
+            // the source array is deleted so re-runs converge (its option/emoji/logic
+            // children go with it via the FK cascade). NOTE for the Response slice:
+            // once question_responses exist, that delete will trip their FK - stale
+            // then has to become a reported refusal instead, decided in that slice.
+            var keptIds = mapped.Questions.Select(q => q.Id).ToHashSet();
+            var existingQuestions = await db.Questions
+                .Where(q => q.SurveyId == mapped.Survey.Id).ToListAsync(ct);
+            db.Questions.RemoveRange(existingQuestions.Where(q => !keptIds.Contains(q.Id)));
+            var questionsById = existingQuestions.ToDictionary(q => q.Id);
+            foreach (var question in mapped.Questions)
+            {
+                if (questionsById.TryGetValue(question.Id, out var current))
+                {
+                    current.TextEn = question.TextEn;
+                    current.TextEs = question.TextEs;
+                    current.Type = question.Type;
+                    current.ScaleMin = question.ScaleMin;
+                    current.ScaleMax = question.ScaleMax;
+                    current.ScaleLabelMinEn = question.ScaleLabelMinEn;
+                    current.ScaleLabelMinEs = question.ScaleLabelMinEs;
+                    current.ScaleLabelMaxEn = question.ScaleLabelMaxEn;
+                    current.ScaleLabelMaxEs = question.ScaleLabelMaxEs;
+                    current.CommentRequired = question.CommentRequired;
+                    current.CommentPromptEn = question.CommentPromptEn;
+                    current.CommentPromptEs = question.CommentPromptEs;
+                    current.BinaryCommentConfigEn = question.BinaryCommentConfigEn;
+                    current.BinaryCommentConfigEs = question.BinaryCommentConfigEs;
+                    current.Required = question.Required;
+                    current.Order = question.Order;
+                    current.Category = question.Category;
+                }
+                else
+                {
+                    db.Questions.Add(question);
+                }
+            }
+
+            // Option rows are replaced wholesale: identity is (question, order/value)
+            // and the set converges to the source on every run - the
+            // DemographicFieldOption precedent.
+            var staleOptions = await db.QuestionOptions
+                .Where(o => keptIds.Contains(o.QuestionId)).ToListAsync(ct);
+            db.QuestionOptions.RemoveRange(staleOptions);
+            db.QuestionOptions.AddRange(mapped.Options);
+
+            var staleEmoji = await db.QuestionEmojiOptions
+                .Where(o => keptIds.Contains(o.QuestionId)).ToListAsync(ct);
+            db.QuestionEmojiOptions.RemoveRange(staleEmoji);
+            db.QuestionEmojiOptions.AddRange(mapped.EmojiOptions);
+
+            // Conditional logic is 1:1 on the question id, so it upserts in place -
+            // a delete-and-re-add would put a delete and an insert of the same PK in
+            // one SaveChanges for no benefit.
+            var existingLogic = await db.QuestionConditionalLogics
+                .Where(l => keptIds.Contains(l.QuestionId)).ToListAsync(ct);
+            var mappedLogicIds = mapped.ConditionalLogic.Select(l => l.QuestionId).ToHashSet();
+            db.QuestionConditionalLogics.RemoveRange(existingLogic.Where(l => !mappedLogicIds.Contains(l.QuestionId)));
+            var logicById = existingLogic.ToDictionary(l => l.QuestionId);
+            foreach (var logic in mapped.ConditionalLogic)
+            {
+                if (logicById.TryGetValue(logic.QuestionId, out var current))
+                {
+                    current.ConditionQuestionId = logic.ConditionQuestionId;
+                    current.ConditionOperator = logic.ConditionOperator;
+                    current.ConditionValue = logic.ConditionValue;
+                    current.Action = logic.Action;
+                    current.TargetQuestionId = logic.TargetQuestionId;
+                }
+                else
+                {
+                    db.QuestionConditionalLogics.Add(logic);
+                }
+            }
+
+            var staleTargets = await db.SurveyDepartmentTargets
+                .Where(t => t.SurveyId == mapped.Survey.Id).ToListAsync(ct);
+            db.SurveyDepartmentTargets.RemoveRange(staleTargets);
+            db.SurveyDepartmentTargets.AddRange(mapped.DepartmentTargets);
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("surveys", source, written, report.SkipCount("surveys")));
     }
 
     /// <summary>
