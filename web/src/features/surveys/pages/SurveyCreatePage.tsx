@@ -24,6 +24,7 @@ import { useCompanyScope } from '../../../company-context'
 import { MonoReadings } from '../../dashboard/components/dashboardGrammar'
 import { listDepartments, type Department } from '../../org-structure/api/departments'
 import { createSurvey } from '../api/surveyCreate'
+import { listSurveyDimensions } from '../api/surveys'
 import { dimensionLabel } from '../dimensionLabel'
 import {
   getSurveyTemplate,
@@ -213,6 +214,9 @@ export default function SurveyCreatePage() {
   // draftable). Stale keys after a question is removed are harmless — nothing renders
   // for a key no card has.
   const [newDimensionOpen, setNewDimensionOpen] = useState<ReadonlySet<string>>(new Set())
+  // The company's own dimension history, fetched once per company. Empty until it
+  // arrives (or forever, on failure) -- the picker treats it as extra chips only.
+  const [historyDimensions, setHistoryDimensions] = useState<string[]>([])
 
   useEffect(() => {
     if (!companyId) return
@@ -223,6 +227,21 @@ export default function SurveyCreatePage() {
       })
       // A failed department list is not a reason to block the flow: the audience step
       // is optional, and an empty picker still means "every department".
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [baseUrl, companyId])
+
+  useEffect(() => {
+    if (!companyId) return
+    let cancelled = false
+    // Silent on failure, like the departments fetch: history is an accelerator, and
+    // the dimension picker still offers the shipped nine keys without it.
+    listSurveyDimensions(baseUrl, companyId)
+      .then((result) => {
+        if (!cancelled) setHistoryDimensions(Array.isArray(result) ? result : [])
+      })
       .catch(() => undefined)
     return () => {
       cancelled = true
@@ -850,6 +869,7 @@ export default function SurveyCreatePage() {
                     <DimensionPicker
                       t={t}
                       question={question}
+                      history={historyDimensions}
                       others={values.questions.filter((q) => q.key !== question.key)}
                       freeTextOpen={newDimensionOpen.has(question.key)}
                       onPick={(key) => {
@@ -1309,11 +1329,12 @@ function Review({
  *
  * ## Where the suggestions come from
  *
- * The shipped dimension vocabulary (`SUGGESTED_DIMENSION_KEYS` — the nine keys both
- * catalogues can name), plus every dimension the *other* questions in this wizard
- * already carry, so a dimension typed once is one click on the next card. No endpoint
- * exposes the company's historical categories; the constant's docstring records that
- * decision.
+ * Three sources, in rank order: the shipped dimension vocabulary
+ * (`SUGGESTED_DIMENSION_KEYS` — the nine keys both catalogues can name), the
+ * company's own history (`GET /surveys/dimensions` — distinct categories its earlier
+ * surveys actually used, so last quarter's spelling is one click), and every
+ * dimension the *other* questions in this wizard already carry. History arriving
+ * late or never costs only its chips.
  *
  * ## A missing dimension is a named consequence, never a gate
  *
@@ -1327,6 +1348,7 @@ function Review({
 function DimensionPicker({
   t,
   question,
+  history,
   others,
   freeTextOpen,
   onPick,
@@ -1335,6 +1357,7 @@ function DimensionPicker({
 }: {
   t: TranslateFn
   question: SurveyQuestionValues
+  history: readonly string[]
   others: readonly SurveyQuestionValues[]
   freeTextOpen: boolean
   onPick: (key: string) => void
@@ -1345,6 +1368,12 @@ function DimensionPicker({
   const shipped = new Set<string>(SUGGESTED_DIMENSION_KEYS)
 
   const chips: string[] = [...SUGGESTED_DIMENSION_KEYS]
+  for (const used of history) {
+    const category = used.trim()
+    if (category !== '' && !shipped.has(category) && !chips.includes(category)) {
+      chips.push(category)
+    }
+  }
   for (const other of others) {
     const category = other.category.trim()
     if (category !== '' && !shipped.has(category) && !chips.includes(category)) {

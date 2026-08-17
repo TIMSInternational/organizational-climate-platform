@@ -112,10 +112,33 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 /** Routes each request by URL, so ordering changes cannot silently break a test. */
-function stubApi(overrides: { survey?: Record<string, unknown>; distribution?: Record<string, unknown> } = {}) {
-  const fetchMock = vi.fn().mockImplementation((url: string) => {
-    if (url.includes('/distribution')) return Promise.resolve(jsonResponse(distributionRead(overrides.distribution)))
-    if (url.includes('/invitations')) return Promise.resolve(jsonResponse(invitationsRead()))
+function stubApi(
+  overrides: {
+    survey?: Record<string, unknown>
+    distribution?: Record<string, unknown>
+    /** Status for the distribution GET only; the PUT still succeeds, mirroring the real API. */
+    distributionStatus?: number
+    invitationsStatus?: number
+  } = {},
+) {
+  const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+    if (url.includes('/distribution')) {
+      if (overrides.distributionStatus !== undefined && init?.method !== 'PUT') {
+        return Promise.resolve(
+          jsonResponse(
+            { message: 'This survey has no distribution configured yet.' },
+            overrides.distributionStatus,
+          ),
+        )
+      }
+      return Promise.resolve(jsonResponse(distributionRead(overrides.distribution)))
+    }
+    if (url.includes('/invitations')) {
+      if (overrides.invitationsStatus !== undefined) {
+        return Promise.resolve(jsonResponse({ message: 'Nope' }, overrides.invitationsStatus))
+      }
+      return Promise.resolve(jsonResponse(invitationsRead()))
+    }
     if (url.includes('/admin/departments')) {
       return Promise.resolve(
         jsonResponse({
@@ -191,6 +214,52 @@ describe('SurveyDistributionPage', () => {
     expect(stats.getByText('Invited').parentElement?.querySelector('dd')?.textContent).toBe('2')
     expect(stats.getByText('Responded').parentElement?.querySelector('dd')?.textContent).toBe('1')
     expect(stats.getByText('Outstanding').parentElement?.querySelector('dd')?.textContent).toBe('1')
+  })
+
+  /**
+   * A survey nobody has distributed answers the GET with 404 -- the normal state of
+   * every survey ever created. That is an empty state with a way out, not an error,
+   * and above all not the permanent fake "Loading..." it used to be.
+   */
+  it('treats a missing distribution as an empty state whose action creates one', async () => {
+    const fetchMock = stubApi({ distributionStatus: 404 })
+    renderPage()
+
+    await screen.findByText('This survey has not been distributed yet.')
+    expect(screen.queryByText('Loading...')).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Set up distribution' }))
+
+    // The PUT is what creates the row; its response is the distribution the page mounts.
+    await screen.findByText('Participation')
+    const put = fetchMock.mock.calls.find(([, init]) => (init as RequestInit)?.method === 'PUT')
+    expect(put).toBeDefined()
+    expect(JSON.parse((put![1] as RequestInit).body as string)).toEqual({ accessType: 'tokenized' })
+  })
+
+  it('offers no create action on the empty state of another tenant\'s survey', async () => {
+    stubApi({ survey: { companyId: 'other-company' }, distributionStatus: 404 })
+    renderPage()
+
+    await screen.findByText('This survey has not been distributed yet.')
+    expect(screen.queryByRole('button', { name: 'Set up distribution' })).toBeNull()
+  })
+
+  it('renders a retry on a real load failure instead of loading forever', async () => {
+    const fetchMock = stubApi({ invitationsStatus: 500 })
+    renderPage()
+
+    await screen.findByText('The distribution details could not be loaded.')
+    expect(screen.queryByText('Loading...')).toBeNull()
+
+    const callsBefore = fetchMock.mock.calls.length
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    // Still failing, so the retry lands back on the same screen -- but it must have
+    // actually refetched rather than being a dead button.
+    await screen.findByText('The distribution details could not be loaded.')
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore))
   })
 
   /**

@@ -1,0 +1,49 @@
+{
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+
+  "GET /surveys/s1": {
+    "id": "s1",
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "language": "both",
+    "status": "active",
+    "title": "Q4 Climate Survey",
+    "resolvedLocale": "en",
+    "fallbackFields": [],
+    "departmentIds": [],
+    "responseCount": 0,
+    "settings": {
+      "invitationCustomSubject": "Your invitation",
+      "invitationCustomMessage": "Please answer."
+    }
+  },
+
+  "GET /surveys/s1/invitations": {
+    "invitations": [],
+    "summary": {
+      "total": 0,
+      "pending": 0,
+      "sent": 0,
+      "opened": 0,
+      "started": 0,
+      "completed": 0,
+      "revoked": 0,
+      "expired": 0
+    },
+    "anonymity": {
+      "anonymous": false,
+      "highestRecordableState": "completed",
+      "suppressedStates": [],
+      "guarantee": "Tracking runs to completion."
+    }
+  },
+
+  "GET /admin/departments": {
+    "departments": []
+  },
+
+  "GET /admin/users": {
+    "users": []
+  }
+}

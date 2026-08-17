@@ -59,14 +59,16 @@ public class SurveyTemplateLanguageTests
     }
 
     [Fact]
-    public void The_comment_prompt_defaults_do_not_make_every_template_bilingual()
+    public void Comment_prompts_carry_no_defaults_that_could_skew_language_inference()
     {
-        // Both comment_prompt columns are NOT NULL with per-language DB defaults (#195),
-        // so every row on earth has both. Inferring from them would report every template
-        // as 'both' and silently disable the Spanish fallback for English-only content.
+        // These columns used to be NOT NULL with per-language DB defaults, so every row
+        // on earth had both halves; inferring language from them would have reported
+        // every template as 'both'. They are opt-in now, but Infer must still ignore
+        // them -- an authored bilingual prompt on English-only content would recreate
+        // the same false 'both'.
         var englishOnly = Question("How are you?", null);
-        Assert.Equal("Please explain your answer:", englishOnly.CommentPromptEn);
-        Assert.Equal("Por favor explica tu respuesta:", englishOnly.CommentPromptEs);
+        Assert.Null(englishOnly.CommentPromptEn);
+        Assert.Null(englishOnly.CommentPromptEs);
 
         Assert.Equal(ContentLanguages.English, SurveyTemplateLanguage.Infer([englishOnly]));
     }

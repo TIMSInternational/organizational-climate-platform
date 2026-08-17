@@ -197,11 +197,10 @@ public class SurveyTemplateQuestionsTests
     }
 
     [Fact]
-    public void An_unsupplied_comment_prompt_keeps_BOTH_per_language_defaults()
+    public void An_unsupplied_comment_prompt_leaves_the_question_promptless()
     {
-        // #195 added the Spanish default precisely because the single shared column served
-        // an English prompt to Spanish-only content. Writing null here would put a null in
-        // a NOT NULL column and discard that fix.
+        // The comment box is opt-in: a prompt exists only when the caller wrote one, and
+        // the respond UI renders a box only for a present prompt.
         Assert.True(Prepare(
             [new CreateSurveyTemplateQuestionInput(LocalizedInput.FromBare("¿Cómo estás?"), QuestionTypes.OpenEnded)],
             ContentLanguages.Spanish,
@@ -209,8 +208,8 @@ public class SurveyTemplateQuestionsTests
             out _));
 
         var question = Assert.Single(prepared).Question;
-        Assert.Equal("Please explain your answer:", question.CommentPromptEn);
-        Assert.Equal("Por favor explica tu respuesta:", question.CommentPromptEs);
+        Assert.Null(question.CommentPromptEn);
+        Assert.Null(question.CommentPromptEs);
     }
 
     [Fact]

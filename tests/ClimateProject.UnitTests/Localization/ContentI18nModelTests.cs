@@ -28,20 +28,20 @@ public class ContentI18nModelTests
     [Theory]
     [InlineData(typeof(Question))]
     [InlineData(typeof(TemplateQuestion))]
-    public void BothCommentPromptHalvesCarryADefaultInTheirOwnLanguage(Type entity)
+    public void CommentPromptHalvesAreNullableWithNoDefaultInEitherLanguage(Type entity)
     {
         var model = Model();
 
         var en = Property(model, entity, "CommentPromptEn");
         var es = Property(model, entity, "CommentPromptEs");
 
-        // The single column these replace shipped an English string as a DATABASE
-        // default, so a Spanish-only survey got an English prompt out of the DDL
-        // itself -- #195's one live defect rather than a gap.
-        Assert.Equal("Please explain your answer:", en.GetDefaultValue());
-        Assert.Equal("Por favor explica tu respuesta:", es.GetDefaultValue());
-        Assert.False(en.IsNullable);
-        Assert.False(es.IsNullable);
+        // The comment box is opt-in: a prompt exists only when an author wrote one.
+        // The per-language DDL defaults these columns used to carry put a comment box
+        // on every question ever authored, inverting that contract.
+        Assert.Null(en.GetDefaultValue());
+        Assert.Null(es.GetDefaultValue());
+        Assert.True(en.IsNullable);
+        Assert.True(es.IsNullable);
     }
 
     [Fact]

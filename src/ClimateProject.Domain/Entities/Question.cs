@@ -15,12 +15,11 @@ public class Question
     public string? ScaleLabelMaxEs { get; set; }
     public bool CommentRequired { get; set; } = true;
 
-    // Was one column with an English string as its DATABASE default, so a
-    // Spanish-only survey got an English prompt out of the DDL itself (#195's one
-    // live defect rather than a gap). Now one column per language, each with a
-    // default in its own language.
-    public string CommentPromptEn { get; set; } = "Please explain your answer:";
-    public string CommentPromptEs { get; set; } = "Por favor explica tu respuesta:";
+    // Null means the author asked for no comment box; the respond UI only renders
+    // one when a prompt is present. The old per-language DDL defaults made the box
+    // universal on every question ever authored, which inverted the opt-in contract.
+    public string? CommentPromptEn { get; set; }
+    public string? CommentPromptEs { get; set; }
 
     public string? BinaryCommentConfigEn { get; set; }
     public string? BinaryCommentConfigEs { get; set; }

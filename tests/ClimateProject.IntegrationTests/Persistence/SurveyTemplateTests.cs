@@ -121,7 +121,7 @@ public class SurveyTemplateTests(PostgresContainerFixture postgres)
 
         var loadedQuestion = await readDb.TemplateQuestions.SingleAsync(q => q.Id == minimalQuestionId);
         Assert.True(loadedQuestion.CommentRequired);
-        Assert.Equal("Please explain your answer:", loadedQuestion.CommentPromptEn);
+        Assert.Null(loadedQuestion.CommentPromptEn);
         Assert.False(loadedQuestion.Required);
     }
 }

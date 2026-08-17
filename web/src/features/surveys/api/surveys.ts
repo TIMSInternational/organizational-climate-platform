@@ -218,6 +218,19 @@ export async function listSurveys(
 }
 
 /**
+ * The distinct categories this company's survey questions have used -- the wizard's
+ * dimension picker offers them beside the shipped vocabulary, so an admin re-uses
+ * last quarter's spelling instead of minting a near-duplicate key. A company admin
+ * is pinned to their own company by the server; `companyId` matters only for a
+ * super admin authoring on a chosen company's behalf.
+ */
+export async function listSurveyDimensions(baseUrl: string, companyId?: string): Promise<string[]> {
+  const response = await authFetch(withQuery(baseUrl, '/surveys/dimensions', { companyId }))
+  const body = (await response.json()) as { dimensions: string[] }
+  return body.dimensions
+}
+
+/**
  * The surveys the caller is expected to answer.
  *
  * Role-agnostic by design: the endpoint resolves the caller's own user row and

@@ -95,13 +95,12 @@ export function needsScaleLabels(type: string): boolean {
  * `surveyRespond.dimensions` i18n table, which is the vocabulary the respond page
  * headings and the results pages can put a display name to.
  *
- * These seed the wizard's dimension picker. The honest source for suggestions
- * would be the categories this company's earlier surveys already used, but no
- * endpoint exposes those (`GET /surveys` list items carry no categories, and
- * fetching every survey detail to harvest them is N+1 against a list that can be
- * years long), so the shipped vocabulary stands in: it is what every seeded survey
- * uses and what both catalogues can translate. Free text remains the escape
- * hatch — `Question.Category` is a free string — so the list narrows nothing.
+ * These seed the wizard's dimension picker as its floor. The company's own history
+ * now arrives beside them at runtime (`GET /surveys/dimensions`, one distinct-scan
+ * — the N+1 that once ruled a history source out is gone), but the shipped keys
+ * stay the guaranteed minimum: they render when the fetch fails and they are what
+ * both catalogues can translate. Free text remains the escape hatch —
+ * `Question.Category` is a free string — so the list narrows nothing.
  *
  * Kept in step with the catalogue by `surveyVocabulary.test.ts`, which resolves
  * each key through `surveyRespond.dimensions` and fails on drift in either

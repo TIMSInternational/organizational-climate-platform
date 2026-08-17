@@ -128,6 +128,10 @@ interface RouteOptions {
    * reason to block the flow") and carries on with an empty catalogue.
    */
   departmentsStatus?: number
+  /** The company's dimension history (`GET /surveys/dimensions`). Empty unless a test says otherwise. */
+  dimensions?: string[]
+  /** Status for the history fetch. The page catches a failure and keeps the shipped keys. */
+  dimensionsStatus?: number
 }
 
 /** A row of `GET /admin/departments`, in the shape `Department` declares. */
@@ -246,6 +250,15 @@ function routeFetch(options: RouteOptions = {}) {
       return Promise.resolve(
         new Response(JSON.stringify({ templates: options.templates ?? [] }), { status: 200 }),
       )
+    }
+    // Before the bare `/surveys` POST check: `/surveys/dimensions` contains it as a prefix.
+    if (url.includes('/surveys/dimensions')) {
+      const status = options.dimensionsStatus ?? 200
+      const body =
+        status === 200
+          ? { dimensions: options.dimensions ?? [] }
+          : { message: 'History unavailable' }
+      return Promise.resolve(new Response(JSON.stringify(body), { status }))
     }
     if (url.includes('/surveys') && method === 'POST') {
       return Promise.resolve(new Response(JSON.stringify({ id: 'survey-new' }), { status: 201 }))
@@ -1090,6 +1103,35 @@ describe('SurveyCreatePage dimension picker', () => {
       'Team Support',
       'Team Support',
     ])
+  })
+
+  it('offers the company history as chips and stores the historical key raw', async () => {
+    // What GET /surveys/dimensions returns: a key last quarter's survey authored.
+    // Not in the shipped nine, so the only way this chip exists is the fetch.
+    routeFetch({ dimensions: ['engagement_2025'] })
+    await toQuestionsStep()
+
+    // Displayed through dimensionLabel's authored-text fallback (underscores read
+    // as spaces)...
+    await press('engagement 2025')
+
+    const body = await createdBody()
+    const questions = body.questions as { category?: string }[]
+    // ...but stored raw, exactly as history spelled it. Reuse is the point: the next
+    // survey groups with the last one on the results pages.
+    expect(questions[0].category).toBe('engagement_2025')
+  })
+
+  it('still offers the shipped nine when the history fetch fails', async () => {
+    routeFetch({ dimensionsStatus: 500 })
+    await toQuestionsStep()
+
+    // The accelerator failing costs only its chips; the floor is intact.
+    await press('Psychological safety')
+
+    const body = await createdBody()
+    const questions = body.questions as { category?: string }[]
+    expect(questions[0].category).toBe('psychological_safety')
   })
 })
 

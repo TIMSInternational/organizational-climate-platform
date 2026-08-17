@@ -16,8 +16,8 @@ public class TemplateQuestion
     public string? ScaleLabelMaxEn { get; set; }
     public string? ScaleLabelMaxEs { get; set; }
     public bool CommentRequired { get; set; } = true;
-    public string CommentPromptEn { get; set; } = "Please explain your answer:";
-    public string CommentPromptEs { get; set; } = "Por favor explica tu respuesta:";
+    public string? CommentPromptEn { get; set; }
+    public string? CommentPromptEs { get; set; }
     public string? BinaryCommentConfigEn { get; set; }
     public string? BinaryCommentConfigEs { get; set; }
     public bool Required { get; set; }

@@ -191,10 +191,10 @@ public static class SurveyTemplateQuestions
             Category = input.Category,
         };
 
-        // Left at the entity's own per-language default when the caller said nothing.
-        // Assigning null here would push a null into a NOT NULL column and, worse, discard
-        // the Spanish default #195 added precisely because the single shared column used
-        // to serve an English prompt to Spanish-only content.
+        // A prompt exists only when the caller wrote one; omitting it leaves the
+        // question promptless and the respond UI renders no comment box. Null still
+        // means "said nothing" rather than "clear it", so an update omitting the
+        // field cannot erase an authored prompt.
         if (commentPromptEn is not null) question.CommentPromptEn = commentPromptEn;
         if (commentPromptEs is not null) question.CommentPromptEs = commentPromptEs;
 

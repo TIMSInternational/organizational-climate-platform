@@ -46,7 +46,7 @@ public class ContentI18nDefaultsTests(PostgresContainerFixture postgres)
     }
 
     [Fact]
-    public async Task Comment_prompt_defaults_to_its_own_language_in_each_column()
+    public async Task Comment_prompt_is_null_when_the_insert_supplies_none()
     {
         await using var db = CreateContext();
         await db.Database.MigrateAsync();
@@ -70,11 +70,12 @@ public class ContentI18nDefaultsTests(PostgresContainerFixture postgres)
         await using var readDb = CreateContext();
         var loaded = await readDb.Questions.SingleAsync(q => q.Id == questionId);
 
-        // The single comment_prompt column this replaces shipped the English string as
-        // its DDL default, so a Spanish-only survey was served an English prompt out of
-        // the schema itself. Each half now defaults in its own language.
-        Assert.Equal("Please explain your answer:", loaded.CommentPromptEn);
-        Assert.Equal("Por favor explica tu respuesta:", loaded.CommentPromptEs);
+        // Raw SQL insert on purpose: an EF insert would mask a stray DDL default. The
+        // columns must carry none in either language -- a row inserted outside EF (the
+        // #154 loader, a repair script) stays promptless, so the respond UI renders no
+        // comment box for it.
+        Assert.Null(loaded.CommentPromptEn);
+        Assert.Null(loaded.CommentPromptEs);
     }
 
     [Fact]
