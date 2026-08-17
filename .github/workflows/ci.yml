@@ -32,6 +32,29 @@ jobs:
       - name: Test
         run: dotnet test ClimateProject.slnx --no-build --configuration Release --verbosity normal
 
+  # The ETL tool lives in its own solution ON PURPOSE (the production Dockerfile
+  # restores ClimateProject.slnx and must never pull migration tooling into the
+  # image), which also meant its tests ran nowhere until this job. Its suite spins
+  # Mongo AND Postgres Testcontainers - same docker requirements as the API's
+  # integration tests, which already run on this runner.
+  etl-build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore tools/ClimateProject.DataMigration.slnx
+
+      - name: Build
+        run: dotnet build tools/ClimateProject.DataMigration.slnx --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test tools/ClimateProject.DataMigration.slnx --no-build --configuration Release --verbosity normal
+
   web-build-and-test:
     runs-on: ubuntu-latest
     strategy:
