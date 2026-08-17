@@ -211,12 +211,18 @@ export type SurveyAudienceSelection =
   | { departmentIds: string[] }
   | { userIds: string[] }
 
+/**
+ * Null on 404, because a survey with no distribution row is the normal state of every
+ * survey ever created -- nothing creates one until the first PUT. Throwing turned that
+ * everyday emptiness into a load failure.
+ */
 export function getSurveyDistribution(
   baseUrl: string,
   surveyId: string,
-): Promise<SurveyDistributionDetail> {
-  return authFetch(`${baseUrl}/surveys/${surveyId}/distribution`).then(
-    (response) => response.json() as Promise<SurveyDistributionDetail>,
+): Promise<SurveyDistributionDetail | null> {
+  return authFetch(`${baseUrl}/surveys/${surveyId}/distribution`, {}, { allowStatus: [404] }).then(
+    (response) =>
+      response.status === 404 ? null : (response.json() as Promise<SurveyDistributionDetail>),
   )
 }
 

@@ -2,7 +2,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import { useTranslation, type Locale } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
-import { Button, Card, CardContent, ConfirmationDialog, SectionLabel } from '../../../components/ui'
+import {
+  Button,
+  Card,
+  CardContent,
+  ConfirmationDialog,
+  EmptyState,
+  NetworkError,
+  SectionLabel,
+} from '../../../components/ui'
 import { useCompanyScope } from '../../../company-context'
 import {
   AudienceSelector,
@@ -73,6 +81,11 @@ export default function SurveyDistributionPage() {
   const [departments, setDepartments] = useState<Department[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
+  // Load failures and action failures render differently: losing the page is a
+  // NetworkError with a retry, while a failed reminder leaves the page up with an
+  // alert. One shared string made the first kind fall through to a permanent
+  // "Loading..." below the alert.
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -86,7 +99,7 @@ export default function SurveyDistributionPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    setError(null)
+    setLoadError(null)
     try {
       // The survey first and on its own: its `companyId` is what decides whether the
       // audience lists may be requested at all, so requesting them alongside it would be
@@ -116,7 +129,7 @@ export default function SurveyDistributionPage() {
         setUsers([])
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('surveys.distribution.loadFailed'))
+      setLoadError(err instanceof Error ? err.message : t('surveys.distribution.loadFailed'))
     } finally {
       setLoading(false)
     }
@@ -223,8 +236,44 @@ export default function SurveyDistributionPage() {
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
 
-      {loading || context === null || distribution === null || invitations === null ? (
+      {loadError !== null ? (
+        <NetworkError
+          title={t('surveys.distribution.loadFailed')}
+          description={loadError}
+          onRetry={() => void load()}
+          retryText={t('common.retry')}
+        />
+      ) : loading || context === null || invitations === null ? (
         <p>{t('common.loading')}</p>
+      ) : distribution === null ? (
+        // The normal state of a survey nobody has distributed: a 200-shaped emptiness,
+        // not a failure. The create action lives HERE because the panels that could
+        // otherwise create one only mount once a distribution exists -- without this
+        // button the page could describe the emptiness but never end it. `tokenized`
+        // is the DDL default: per-invitee tokens only, no open link minted until an
+        // admin asks for one.
+        <EmptyState
+          title={t('surveys.distribution.noDistributionYet')}
+          description={t('surveys.distribution.noDistributionYetDescription')}
+          action={
+            scopedToSurvey ? (
+              <Button
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    setDistribution(
+                      await updateSurveyDistribution(baseUrl, surveyId, {
+                        accessType: 'tokenized',
+                      }),
+                    )
+                  })
+                }
+              >
+                {t('surveys.distribution.setUpDistribution')}
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <>
           <DistributionProgress
