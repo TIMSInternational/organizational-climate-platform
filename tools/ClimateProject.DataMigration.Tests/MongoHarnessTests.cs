@@ -59,17 +59,20 @@ public class MongoHarnessTests : IClassFixture<MongoContainerFixture>
             ["email"] = "ana@example.com",
             // The design doc's nastiest finding: Mongoose's select:false hid this field
             // from naive reads. The readers here go through the driver, not Mongoose, so
-            // it must arrive - and because the stub declares no fields, it must arrive in
-            // Extra rather than being silently discarded by the deserializer.
+            // it must arrive - since sub-issue B typed the User stub, it arrives as a
+            // PROPERTY rather than in Extra, which is the stronger claim.
             ["password_hash"] = "$2b$10$abcdefghijklmnopqrstuv",
+            // And the honesty mechanism still works for what the stub does NOT declare.
+            ["legacy_flag_nobody_typed"] = true,
         });
 
         var documents = await CollectAsync(Reader("users"), database);
 
-        var user = Assert.Single(documents);
+        var user = Assert.IsType<Legacy.LegacyUser>(Assert.Single(documents));
+        Assert.Equal("$2b$10$abcdefghijklmnopqrstuv", user.PasswordHash);
+        Assert.Equal("Ana", user.Name);
         Assert.NotNull(user.Extra);
-        Assert.Equal("$2b$10$abcdefghijklmnopqrstuv", user.Extra["password_hash"].AsString);
-        Assert.Equal("Ana", user.Extra["name"].AsString);
+        Assert.True(user.Extra["legacy_flag_nobody_typed"].AsBoolean);
     }
 
     [Fact]

@@ -1,21 +1,61 @@
+using ClimateProject.DataMigration.Loading;
+using ClimateProject.DataMigration.Reporting;
+using ClimateProject.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using MongoDB.Driver;
+
 namespace ClimateProject.DataMigration;
 
 /// <summary>
-/// Where the extract-transform-load pipeline will live. Today it is a scaffold: the typed
-/// readers, the deterministic id scheme and the test harness exist; no pipeline does.
+/// The real runner for the collections a mapping exists for - the five foundational
+/// ones today (see MigrationPipeline.MappedCollections). The scaffold's original
+/// fail-rather-than-pretend property survives as a NARROWER refusal: asking for a
+/// collection without a mapping throws with the sub-issue that tracks it, and a
+/// default run loads exactly the mapped set, never silently "everything".
+///
+/// Run shape:
+///   LEGACY_MONGO_URI=... LEGACY_MONGO_DB=... TARGET_POSTGRES_CONNECTION=... \
+///     dotnet run --project tools/ClimateProject.DataMigration -- \
+///     [--dry-run] [--collections=companies,users] [--resume] [--report-path=report.json]
 /// </summary>
 public static class MigrationRunner
 {
-    /// <summary>
-    /// Fails loudly, by design. A migration tool that silently no-ops is the worst version
-    /// of itself: someone runs it during a cutover rehearsal, sees exit code 0, and
-    /// concludes the data moved. Until sub-issues B-G land, running this tool is an error
-    /// and it says so.
-    /// </summary>
-    public static Task RunAsync(string[] args)
-        => throw new NotImplementedException(
-            "ClimateProject.DataMigration is a scaffold, not an ETL: the 35 typed collection readers, " +
-            "the deterministic-id scheme (MigrationIds) and the Testcontainer harness exist, but no " +
-            "extract/load pipeline does. Implementation is tracked as sub-issues A-G in " +
-            "docs/migration/sub-issues.md (under #154). This tool fails rather than pretending to migrate.");
+    public static async Task RunAsync(string[] args)
+    {
+        var environment = new Dictionary<string, string?>();
+        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        {
+            if (entry.Key.ToString() is { } key)
+            {
+                environment[key] = entry.Value?.ToString();
+            }
+        }
+
+        var options = MigrationOptions.Parse(args, environment);
+        options.AssertPostgresIsNotTransactionPooler();
+
+        var report = new DataQualityReport();
+        var mongo = new MongoClient(options.MongoUri).GetDatabase(options.MongoDatabase);
+
+        var dbOptions = new DbContextOptionsBuilder<ClimateProjectDbContext>()
+            .UseNpgsql(DatabaseConnectionStringPolicy.Apply(options.PostgresConnectionString).ConnectionString)
+            .Options;
+        await using var db = new ClimateProjectDbContext(dbOptions);
+
+        var pipeline = new MigrationPipeline(mongo, db, report, options.DryRun);
+        var result = await pipeline.RunAsync(options.Collections, CancellationToken.None);
+
+        await report.WriteAsync(options.ReportPath, CancellationToken.None);
+        result.AssertReconciled();
+
+        foreach (var collection in result.Collections)
+        {
+            Console.WriteLine(
+                $"{collection.Collection}: {collection.SourceCount} source, "
+                + $"{collection.Written} written, {collection.Skipped} skipped"
+                + (options.DryRun ? " (dry run - nothing persisted)" : string.Empty));
+        }
+
+        Console.WriteLine($"Data-quality report: {options.ReportPath} ({report.Entries.Count} entries)");
+    }
 }

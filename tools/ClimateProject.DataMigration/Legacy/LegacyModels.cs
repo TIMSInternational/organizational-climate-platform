@@ -1,32 +1,229 @@
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+
 namespace ClimateProject.DataMigration.Legacy;
 
-// One stub per registered Mongoose model in climate-project/src/models/. Deliberately
-// field-less: each declares only what LegacyDocument gives it (_id + the Extra catch-all),
-// because the per-collection field mapping is sub-issue B's work
-// (docs/migration/sub-issues.md) and a stub that guesses fields is worse than one that
-// declares none - everything undeclared lands in Extra, visibly. What the stubs DO fix at
-// compile time is the census: one CLR type per collection, bound to its collection name in
-// LegacyCollections, so "which collections exist" stops being a string convention.
+// One stub per registered Mongoose model in climate-project/src/models/. The five
+// foundational collections (Company, Department, User, SystemSettings, DemographicField)
+// are typed field-by-field from the legacy Mongoose schemas per sub-issue B
+// (docs/migration/sub-issues.md); the rest stay deliberately field-less until their
+// slice lands - a stub that guesses fields is worse than one that declares none, and
+// everything undeclared lands in Extra, visibly.
+//
+// Typing rules for the typed stubs: every property is nullable, because at this layer
+// "absent in the document" and "present with the default" are different facts and the
+// mapper decides what each means; nested subdocuments carry their own [BsonExtraElements]
+// so an unmapped field two levels down is as reportable as one at the top.
 //
 // Ordering and numbering follow the design doc's collection table
 // (docs/superpowers/specs/2026-08-03-mongo-to-postgres-etl-design.md). 33-35 are the three
 // models that table missed: QuestionPool.ts registers them alongside QuestionPool itself
 // (see the doc's 2026-08-15 addendum).
 
-/// <summary>1. Mongoose model 'Company' (Company.ts).</summary>
-public sealed class LegacyCompany : LegacyDocument;
+/// <summary>1. Mongoose model 'Company' (Company.ts). Typed 2026-08-17 from the legacy schema.</summary>
+public sealed class LegacyCompany : LegacyDocument
+{
+    [BsonElement("name")] public string? Name { get; set; }
+    [BsonElement("domain")] public string? Domain { get; set; }
+    [BsonElement("industry")] public string? Industry { get; set; }
+    [BsonElement("size")] public string? Size { get; set; }
+    [BsonElement("country")] public string? Country { get; set; }
+    [BsonElement("branding")] public LegacyCompanyBranding? Branding { get; set; }
+    [BsonElement("settings")] public LegacyCompanySettings? Settings { get; set; }
+    [BsonElement("is_active")] public bool? IsActive { get; set; }
+    [BsonElement("subscription_tier")] public string? SubscriptionTier { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
 
-/// <summary>2. Mongoose model 'Department' (Department.ts).</summary>
-public sealed class LegacyDepartment : LegacyDocument;
+public sealed class LegacyCompanyBranding
+{
+    [BsonElement("logo_url")] public string? LogoUrl { get; set; }
+    [BsonElement("primary_color")] public string? PrimaryColor { get; set; }
+    [BsonElement("secondary_color")] public string? SecondaryColor { get; set; }
+    [BsonElement("font_family")] public string? FontFamily { get; set; }
+    [BsonElement("custom_css")] public string? CustomCss { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
 
-/// <summary>3. Mongoose model 'User' (User.ts).</summary>
-public sealed class LegacyUser : LegacyDocument;
+public sealed class LegacyCompanySettings
+{
+    [BsonElement("survey_frequency")] public string? SurveyFrequency { get; set; }
+    [BsonElement("microclimate_enabled")] public bool? MicroclimateEnabled { get; set; }
+    [BsonElement("ai_insights_enabled")] public bool? AiInsightsEnabled { get; set; }
+    [BsonElement("anonymous_surveys")] public bool? AnonymousSurveys { get; set; }
+    [BsonElement("data_retention_days")] public int? DataRetentionDays { get; set; }
+    [BsonElement("timezone")] public string? Timezone { get; set; }
+    [BsonElement("language")] public string? Language { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
 
-/// <summary>4. Mongoose model 'SystemSettings' (SystemSettings.ts).</summary>
-public sealed class LegacySystemSettings : LegacyDocument;
+/// <summary>2. Mongoose model 'Department' (Department.ts). Typed 2026-08-17 from the legacy schema.</summary>
+public sealed class LegacyDepartment : LegacyDocument
+{
+    [BsonElement("name")] public string? Name { get; set; }
+    [BsonElement("description")] public string? Description { get; set; }
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("hierarchy")] public LegacyDepartmentHierarchy? Hierarchy { get; set; }
+    [BsonElement("manager_id")] public string? ManagerId { get; set; }
+    [BsonElement("settings")] public LegacyDepartmentSettings? Settings { get; set; }
+    [BsonElement("employee_count")] public int? EmployeeCount { get; set; }
+    [BsonElement("is_active")] public bool? IsActive { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
 
-/// <summary>5. Mongoose model 'DemographicField' (DemographicField.ts).</summary>
-public sealed class LegacyDemographicField : LegacyDocument;
+/// <summary>
+/// level and path are DERIVED values in the legacy product (recomputed by a pre-save
+/// hook from the parent chain). They have no target column: the ETL recomputes both
+/// from ParentDepartmentId after the second pass and asserts against these as an
+/// integrity check, per the design doc.
+/// </summary>
+public sealed class LegacyDepartmentHierarchy
+{
+    [BsonElement("parent_department_id")] public string? ParentDepartmentId { get; set; }
+    [BsonElement("level")] public int? Level { get; set; }
+    [BsonElement("path")] public string? Path { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyDepartmentSettings
+{
+    [BsonElement("survey_participation_required")] public bool? SurveyParticipationRequired { get; set; }
+    [BsonElement("microclimate_frequency")] public string? MicroclimateFrequency { get; set; }
+    [BsonElement("auto_action_plans")] public bool? AutoActionPlans { get; set; }
+    [BsonElement("notification_preferences")] public LegacyDepartmentNotificationPreferences? NotificationPreferences { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyDepartmentNotificationPreferences
+{
+    [BsonElement("email_enabled")] public bool? EmailEnabled { get; set; }
+    [BsonElement("slack_enabled")] public bool? SlackEnabled { get; set; }
+    [BsonElement("teams_enabled")] public bool? TeamsEnabled { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>3. Mongoose model 'User' (User.ts). Typed 2026-08-17 from the legacy schema.</summary>
+public sealed class LegacyUser : LegacyDocument
+{
+    [BsonElement("name")] public string? Name { get; set; }
+    [BsonElement("email")] public string? Email { get; set; }
+
+    // select:false in Mongoose hid this from application queries; the raw BSON reader
+    // sees it. The census (sub-issue A) asserts a sane non-null rate anyway.
+    [BsonElement("password_hash")] public string? PasswordHash { get; set; }
+    [BsonElement("role")] public string? Role { get; set; }
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("department_id")] public string? DepartmentId { get; set; }
+    [BsonElement("manager_id")] public string? ManagerId { get; set; }
+    [BsonElement("preferences")] public LegacyUserPreferences? Preferences { get; set; }
+
+    // Schemaless by design (strict:false): company-specific keys resolved against
+    // DemographicField at mapping time; unresolved keys/values go to the report (#193).
+    [BsonElement("demographics")] public BsonDocument? Demographics { get; set; }
+    [BsonElement("consent_preferences")] public LegacyUserConsent? ConsentPreferences { get; set; }
+    [BsonElement("consent_updated_at")] public DateTime? ConsentUpdatedAt { get; set; }
+    [BsonElement("is_active")] public bool? IsActive { get; set; }
+    [BsonElement("last_login")] public DateTime? LastLogin { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
+
+public sealed class LegacyUserPreferences
+{
+    [BsonElement("language")] public string? Language { get; set; }
+    [BsonElement("timezone")] public string? Timezone { get; set; }
+    [BsonElement("notification_settings")] public LegacyUserNotificationSettings? NotificationSettings { get; set; }
+    [BsonElement("dashboard_layout")] public string? DashboardLayout { get; set; }
+    [BsonElement("theme")] public string? Theme { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>
+/// The six preferences #192 carries over verbatim. Null means "the document never held
+/// this field": the mapper leaves the target at its DDL default rather than writing a
+/// value the legacy doc did not contain - the email_* fields are opt-outs real users
+/// set, and fabricating one re-subscribes them.
+/// </summary>
+public sealed class LegacyUserNotificationSettings
+{
+    [BsonElement("email_surveys")] public bool? EmailSurveys { get; set; }
+    [BsonElement("email_microclimates")] public bool? EmailMicroclimates { get; set; }
+    [BsonElement("email_action_plans")] public bool? EmailActionPlans { get; set; }
+    [BsonElement("email_reminders")] public bool? EmailReminders { get; set; }
+    [BsonElement("push_notifications")] public bool? PushNotifications { get; set; }
+    [BsonElement("digest_frequency")] public string? DigestFrequency { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyUserConsent
+{
+    [BsonElement("essential")] public bool? Essential { get; set; }
+    [BsonElement("analytics")] public bool? Analytics { get; set; }
+    [BsonElement("marketing")] public bool? Marketing { get; set; }
+    [BsonElement("personalization")] public bool? Personalization { get; set; }
+    [BsonElement("thirdParty")] public bool? ThirdParty { get; set; }
+    [BsonElement("demographics")] public bool? Demographics { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>4. Mongoose model 'SystemSettings' (SystemSettings.ts). Typed 2026-08-17 from the legacy schema.</summary>
+public sealed class LegacySystemSettings : LegacyDocument
+{
+    [BsonElement("login_enabled")] public bool? LoginEnabled { get; set; }
+    [BsonElement("maintenance_mode")] public bool? MaintenanceMode { get; set; }
+    [BsonElement("maintenance_message")] public string? MaintenanceMessage { get; set; }
+    [BsonElement("max_login_attempts")] public int? MaxLoginAttempts { get; set; }
+    [BsonElement("session_timeout")] public int? SessionTimeoutMinutes { get; set; }
+    [BsonElement("password_policy")] public LegacyPasswordPolicy? PasswordPolicy { get; set; }
+    [BsonElement("email_settings")] public LegacySystemEmailSettings? EmailSettings { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
+
+public sealed class LegacyPasswordPolicy
+{
+    [BsonElement("min_length")] public int? MinLength { get; set; }
+    [BsonElement("require_uppercase")] public bool? RequireUppercase { get; set; }
+    [BsonElement("require_lowercase")] public bool? RequireLowercase { get; set; }
+    [BsonElement("require_numbers")] public bool? RequireNumbers { get; set; }
+    [BsonElement("require_special_chars")] public bool? RequireSpecialChars { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacySystemEmailSettings
+{
+    [BsonElement("smtp_enabled")] public bool? SmtpEnabled { get; set; }
+    [BsonElement("from_email")] public string? FromEmail { get; set; }
+    [BsonElement("smtp_host")] public string? SmtpHost { get; set; }
+    [BsonElement("smtp_port")] public int? SmtpPort { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>5. Mongoose model 'DemographicField' (DemographicField.ts). Typed 2026-08-17 from the legacy schema.</summary>
+public sealed class LegacyDemographicField : LegacyDocument
+{
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("field")] public string? Field { get; set; }
+
+    // One monolingual label: attributed to label_en or label_es by Company.language,
+    // like every other #195 content field. options fan out to DemographicFieldOption
+    // rows whose stable Value is the option text verbatim.
+    [BsonElement("label")] public string? Label { get; set; }
+    [BsonElement("type")] public string? Type { get; set; }
+    [BsonElement("options")] public List<string>? Options { get; set; }
+    [BsonElement("required")] public bool? Required { get; set; }
+    [BsonElement("order")] public int? Order { get; set; }
+    [BsonElement("is_active")] public bool? IsActive { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
 
 /// <summary>6. Mongoose model 'DemographicSnapshot' (DemographicSnapshot.ts).</summary>
 public sealed class LegacyDemographicSnapshot : LegacyDocument;

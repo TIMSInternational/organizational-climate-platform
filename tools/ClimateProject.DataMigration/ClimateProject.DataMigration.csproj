@@ -28,6 +28,13 @@
       exactly how deterministic schemes silently stop being deterministic.
     -->
     <ProjectReference Include="..\..\src\ClimateProject.Application\ClimateProject.Application.csproj" />
+    <!--
+      For ClimateProjectDbContext (the loader writes through the same entity
+      configurations the app reads through - re-implementing column maps in raw SQL is
+      how an ETL drifts from the schema) and for DatabaseConnectionStringPolicy, whose
+      transaction-pooler detection backs this tool's own refuse-6543 guard.
+    -->
+    <ProjectReference Include="..\..\src\ClimateProject.Infrastructure\ClimateProject.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
