@@ -231,4 +231,11 @@ public static class MigrationRules
     public const string AiInsightConfidenceClamped = "aiinsight.confidence-clamped";
     public const string AnalyticsVocabularyUnknown = "analyticsinsight.vocabulary-unknown";
     public const string AnalyticsPointIncomplete = "analyticsinsight.point-incomplete";
+
+    // Benchmark + Report (#154 slice 11).
+    public const string BenchmarkTypeUnknown = "benchmark.type-unknown";
+    public const string BenchmarkValidationStatusUnknown = "benchmark.validation-status-unknown";
+    public const string BenchmarkMetricIncomplete = "benchmark.metric-incomplete";
+    public const string ReportFormatUnknown = "report.format-unknown";
+    public const string ReportStatusUnknown = "report.status-unknown";
 }

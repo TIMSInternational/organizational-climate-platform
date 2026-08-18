@@ -888,11 +888,93 @@ public sealed class LegacyTimeSeriesPoint
     [BsonExtraElements] public BsonDocument? Extra { get; set; }
 }
 
-/// <summary>22. Mongoose model 'Benchmark' (Benchmark.ts).</summary>
-public sealed class LegacyBenchmark : LegacyDocument;
+/// <summary>22. Mongoose model 'Benchmark' (Benchmark.ts). Typed 2026-08-18.</summary>
+public sealed class LegacyBenchmark : LegacyDocument
+{
+    [BsonElement("name")] public string? Name { get; set; }
+    [BsonElement("description")] public string? Description { get; set; }
+    [BsonElement("type")] public string? Type { get; set; }
+    [BsonElement("category")] public string? Category { get; set; }
+    [BsonElement("metrics")] public List<LegacyBenchmarkMetric>? Metrics { get; set; }
+    [BsonElement("source")] public string? Source { get; set; }
+    [BsonElement("industry")] public string? Industry { get; set; }
+    [BsonElement("company_size")] public string? CompanySize { get; set; }
+    [BsonElement("region")] public string? Region { get; set; }
+    [BsonElement("created_by")] public string? CreatedBy { get; set; }
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("is_active")] public bool? IsActive { get; set; }
+    [BsonElement("validation_status")] public string? ValidationStatus { get; set; }
+    [BsonElement("quality_score")] public double? QualityScore { get; set; }
+    [BsonElement("metadata")] public BsonValue? Metadata { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
 
-/// <summary>23. Mongoose model 'Report' (Report.ts).</summary>
-public sealed class LegacyReport : LegacyDocument;
+public sealed class LegacyBenchmarkMetric
+{
+    [BsonElement("metric_name")] public string? MetricName { get; set; }
+    [BsonElement("value")] public double? Value { get; set; }
+    [BsonElement("unit")] public string? Unit { get; set; }
+    [BsonElement("percentile")] public double? Percentile { get; set; }
+    [BsonElement("sample_size")] public int? SampleSize { get; set; }
+    [BsonElement("confidence_interval")] public LegacyConfidenceInterval? ConfidenceInterval { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyConfidenceInterval
+{
+    [BsonElement("lower")] public double? Lower { get; set; }
+    [BsonElement("upper")] public double? Upper { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>
+/// 23. Mongoose model 'Report' (Report.ts). Typed 2026-08-18. The top level maps
+/// almost 1:1; the six generated-content blobs (sections, metadata, metrics,
+/// demographics, insights, recommendations) have ONE target home - the report_output
+/// jsonb - and fold into it under their own keys, the SurveyDraft precedent.
+/// </summary>
+public sealed class LegacyReport : LegacyDocument
+{
+    [BsonElement("title")] public string? Title { get; set; }
+    [BsonElement("description")] public string? Description { get; set; }
+    [BsonElement("type")] public string? Type { get; set; }
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("created_by")] public string? CreatedBy { get; set; }
+
+    // A plain string on BOTH sides - not a foreign key - so it carries verbatim.
+    [BsonElement("template_id")] public string? TemplateId { get; set; }
+
+    [BsonElement("filters")] public BsonValue? Filters { get; set; }
+    [BsonElement("config")] public BsonValue? Config { get; set; }
+    [BsonElement("status")] public string? Status { get; set; }
+    [BsonElement("format")] public string? Format { get; set; }
+    [BsonElement("file_path")] public string? FilePath { get; set; }
+    [BsonElement("file_size")] public long? FileSize { get; set; }
+    [BsonElement("generation_started_at")] public DateTime? GenerationStartedAt { get; set; }
+    [BsonElement("generation_completed_at")] public DateTime? GenerationCompletedAt { get; set; }
+    [BsonElement("generation_error")] public string? GenerationError { get; set; }
+    [BsonElement("scheduled_for")] public DateTime? ScheduledFor { get; set; }
+    [BsonElement("is_recurring")] public bool? IsRecurring { get; set; }
+    [BsonElement("recurrence_pattern")] public string? RecurrencePattern { get; set; }
+    [BsonElement("next_generation")] public DateTime? NextGeneration { get; set; }
+    [BsonElement("shared_with")] public List<string>? SharedWith { get; set; }
+    [BsonElement("download_count")] public int? DownloadCount { get; set; }
+    [BsonElement("expires_at")] public DateTime? ExpiresAt { get; set; }
+
+    // The six generated-content blobs.
+    [BsonElement("sections")] public BsonValue? Sections { get; set; }
+    [BsonElement("metadata")] public BsonValue? Metadata { get; set; }
+    [BsonElement("metrics")] public BsonValue? Metrics { get; set; }
+    [BsonElement("demographics")] public BsonValue? Demographics { get; set; }
+    [BsonElement("insights")] public BsonValue? Insights { get; set; }
+    [BsonElement("recommendations")] public BsonValue? Recommendations { get; set; }
+
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
 
 /// <summary>24. Mongoose model 'Notification' (Notification.ts). Typed 2026-08-18.</summary>
 public sealed class LegacyNotification : LegacyDocument
