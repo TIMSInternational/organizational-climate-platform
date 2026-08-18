@@ -5,7 +5,7 @@ namespace ClimateProject.DataMigration.Legacy;
 
 // One stub per registered Mongoose model in climate-project/src/models/. The five
 // foundational collections (Company, Department, User, SystemSettings, DemographicField)
-// plus Survey and Response are typed field-by-field from the legacy Mongoose schemas per sub-issue B
+// plus Survey, Response and SurveyTemplate are typed field-by-field from the legacy Mongoose schemas per sub-issue B
 // (docs/migration/sub-issues.md); the rest stay deliberately field-less until their
 // slice lands - a stub that guesses fields is worse than one that declares none, and
 // everything undeclared lands in Extra, visibly.
@@ -365,8 +365,36 @@ public sealed class LegacySurveyVersion : LegacyDocument;
 /// <summary>9. Mongoose model 'SurveyDraft' (SurveyDraft.ts).</summary>
 public sealed class LegacySurveyDraft : LegacyDocument;
 
-/// <summary>10. Mongoose model 'SurveyTemplate' (SurveyTemplate.ts).</summary>
-public sealed class LegacySurveyTemplate : LegacyDocument;
+/// <summary>
+/// 10. Mongoose model 'SurveyTemplate' (SurveyTemplate.ts). Typed 2026-08-18 from the
+/// legacy schema. Its questions array is declared <c>[Schema.Types.Mixed]</c> with the
+/// comment "Reuse Question schema from Survey" - the wire shape IS the survey question
+/// subdocument, so the same <see cref="LegacySurveyQuestion"/> stub deserializes it
+/// (and Mixed means Mongoose validated NOTHING here, so expect more drift than in
+/// surveys). demographics and default_settings are read raw: both are named drops.
+/// </summary>
+public sealed class LegacySurveyTemplate : LegacyDocument
+{
+    [BsonElement("name")] public string? Name { get; set; }
+    [BsonElement("description")] public string? Description { get; set; }
+    [BsonElement("category")] public string? Category { get; set; }
+    [BsonElement("industry")] public string? Industry { get; set; }
+    [BsonElement("company_size")] public string? CompanySize { get; set; }
+    [BsonElement("questions")] public List<LegacySurveyQuestion>? Questions { get; set; }
+    [BsonElement("demographics")] public List<BsonDocument>? Demographics { get; set; }
+    [BsonElement("default_settings")] public BsonDocument? DefaultSettings { get; set; }
+    [BsonElement("is_public")] public bool? IsPublic { get; set; }
+    [BsonElement("created_by")] public string? CreatedBy { get; set; }
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("usage_count")] public int? UsageCount { get; set; }
+    [BsonElement("rating")] public double? Rating { get; set; }
+    [BsonElement("tags")] public List<string>? Tags { get; set; }
+    [BsonElement("source_survey_id")] public string? SourceSurveyId { get; set; }
+    [BsonElement("last_used")] public DateTime? LastUsed { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
 
 /// <summary>11. Mongoose model 'SurveyDistribution' (SurveyDistribution.ts).</summary>
 public sealed class LegacySurveyDistribution : LegacyDocument;
