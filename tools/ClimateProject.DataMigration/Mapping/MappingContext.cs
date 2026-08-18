@@ -26,6 +26,17 @@ public sealed class MappingContext
     /// <summary>Users already migrated - surveys reference their creator by legacy id.</summary>
     public IReadOnlySet<Guid> Users { get; init; } = new HashSet<Guid>();
 
+    /// <summary>Surveys already migrated - a response's survey FK is non-nullable.</summary>
+    public IReadOnlySet<Guid> Surveys { get; init; } = new HashSet<Guid>();
+
+    /// <summary>
+    /// Questions already migrated. An answer re-derives its question id from
+    /// (survey _id, question id string); membership here is what separates a real
+    /// question from one the survey mapper dropped - question_responses.question_id
+    /// is a Restrict FK, so a miss must be reported, never written.
+    /// </summary>
+    public IReadOnlySet<Guid> Questions { get; init; } = new HashSet<Guid>();
+
     /// <summary>The company's demographic vocabulary: (company, field key) -> field id.</summary>
     public IReadOnlyDictionary<(Guid CompanyId, string Field), Guid> DemographicFields { get; init; } =
         new Dictionary<(Guid, string), Guid>();

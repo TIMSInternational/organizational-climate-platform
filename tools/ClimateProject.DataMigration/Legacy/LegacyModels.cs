@@ -5,7 +5,7 @@ namespace ClimateProject.DataMigration.Legacy;
 
 // One stub per registered Mongoose model in climate-project/src/models/. The five
 // foundational collections (Company, Department, User, SystemSettings, DemographicField)
-// plus Survey are typed field-by-field from the legacy Mongoose schemas per sub-issue B
+// plus Survey and Response are typed field-by-field from the legacy Mongoose schemas per sub-issue B
 // (docs/migration/sub-issues.md); the rest stay deliberately field-less until their
 // slice lands - a stub that guesses fields is worse than one that declares none, and
 // everything undeclared lands in Extra, visibly.
@@ -377,8 +377,52 @@ public sealed class LegacySurveyInvitation : LegacyDocument;
 /// <summary>13. Mongoose model 'SurveyAuditLog' (SurveyAuditLog.ts).</summary>
 public sealed class LegacySurveyAuditLog : LegacyDocument;
 
-/// <summary>14. Mongoose model 'Response' (Response.ts) - the volume driver.</summary>
-public sealed class LegacyResponse : LegacyDocument;
+/// <summary>14. Mongoose model 'Response' (Response.ts) - the volume driver. Typed 2026-08-18 from the legacy schema.</summary>
+public sealed class LegacyResponse : LegacyDocument
+{
+    [BsonElement("survey_id")] public string? SurveyId { get; set; }
+
+    // Optional by design: an anonymous response stores no user id, ever - the
+    // anonymity constraint the product is built around.
+    [BsonElement("user_id")] public string? UserId { get; set; }
+    [BsonElement("session_id")] public string? SessionId { get; set; }
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("department_id")] public string? DepartmentId { get; set; }
+    [BsonElement("responses")] public List<LegacyQuestionResponseItem>? Responses { get; set; }
+    [BsonElement("demographics")] public List<LegacyDemographicResponseItem>? Demographics { get; set; }
+    [BsonElement("is_complete")] public bool? IsComplete { get; set; }
+    [BsonElement("is_anonymous")] public bool? IsAnonymous { get; set; }
+    [BsonElement("start_time")] public DateTime? StartTime { get; set; }
+    [BsonElement("completion_time")] public DateTime? CompletionTime { get; set; }
+    [BsonElement("total_time_seconds")] public int? TotalTimeSeconds { get; set; }
+    [BsonElement("ip_address")] public string? IpAddress { get; set; }
+    [BsonElement("user_agent")] public string? UserAgent { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
+
+/// <summary>
+/// An answer subdocument (QuestionResponseSchema, <c>_id: false</c>). question_id is
+/// the survey-scoped question id string; response_value is Mixed
+/// (string | number | string[] | boolean per the legacy union).
+/// </summary>
+public sealed class LegacyQuestionResponseItem
+{
+    [BsonElement("question_id")] public string? QuestionId { get; set; }
+    [BsonElement("response_value")] public BsonValue? ResponseValue { get; set; }
+    [BsonElement("response_text")] public string? ResponseText { get; set; }
+    [BsonElement("time_spent_seconds")] public int? TimeSpentSeconds { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>A demographic answer subdocument; value is Mixed (string | number).</summary>
+public sealed class LegacyDemographicResponseItem
+{
+    [BsonElement("field")] public string? Field { get; set; }
+    [BsonElement("value")] public BsonValue? Value { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
 
 /// <summary>15. Mongoose model 'Microclimate' (Microclimate.ts).</summary>
 public sealed class LegacyMicroclimate : LegacyDocument;
