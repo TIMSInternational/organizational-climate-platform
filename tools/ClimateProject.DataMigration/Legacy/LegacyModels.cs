@@ -844,11 +844,149 @@ public sealed class LegacyMicroclimateInvitation : LegacyDocument
     [BsonElement("__v")] public int? Version { get; set; }
 }
 
-/// <summary>18. Mongoose model 'ActionPlan' (ActionPlan.ts).</summary>
-public sealed class LegacyActionPlan : LegacyDocument;
+/// <summary>
+/// 18. Mongoose model 'ActionPlan' (ActionPlan.ts). Typed 2026-08-18, the last legacy
+/// shape the migration had never read.
+///
+/// Two things make this stub unlike the others. First, its embedded children DO carry
+/// ids of their own - <c>kpis[].id</c>, <c>qualitative_objectives[].id</c> and
+/// <c>progress_updates[].id</c> are all <c>required: true</c> - so their target ids key
+/// off the legacy string rather than a position, and a progress update can name the KPI
+/// it moved. Second, <c>assigned_to</c> has NO target column and no join table: the
+/// legacy product assigned a plan to a list of people and the target schema records only
+/// its creator, so the field is reported per plan rather than silently dropped.
+/// </summary>
+public sealed class LegacyActionPlan : LegacyDocument
+{
+    [BsonElement("title")] public string? Title { get; set; }
+    [BsonElement("description")] public string? Description { get; set; }
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("department_id")] public string? DepartmentId { get; set; }
+    [BsonElement("created_by")] public string? CreatedBy { get; set; }
+    [BsonElement("assigned_to")] public List<string>? AssignedTo { get; set; }
+    [BsonElement("due_date")] public DateTime? DueDate { get; set; }
+    [BsonElement("status")] public string? Status { get; set; }
+    [BsonElement("priority")] public string? Priority { get; set; }
+    [BsonElement("kpis")] public List<LegacyActionPlanKpi>? Kpis { get; set; }
+    [BsonElement("qualitative_objectives")] public List<LegacyActionPlanObjective>? QualitativeObjectives { get; set; }
+    [BsonElement("progress_updates")] public List<LegacyActionPlanProgressUpdate>? ProgressUpdates { get; set; }
+    [BsonElement("ai_recommendations")] public List<string>? AiRecommendations { get; set; }
+    [BsonElement("tags")] public List<string>? Tags { get; set; }
+    [BsonElement("template_id")] public string? TemplateId { get; set; }
+    [BsonElement("source_survey_id")] public string? SourceSurveyId { get; set; }
+    [BsonElement("source_insight_id")] public string? SourceInsightId { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
 
-/// <summary>19. Mongoose model 'ActionPlanTemplate' (ActionPlanTemplate.ts).</summary>
-public sealed class LegacyActionPlanTemplate : LegacyDocument;
+/// <summary>
+/// A measurable objective. <c>target_value</c> and <c>current_value</c> are JS Numbers,
+/// which the Node driver writes as Int32, Int64 or Double depending on the value - the
+/// C# driver's numeric serializers widen all three into <c>double</c>, and the mapper
+/// narrows to the <c>numeric</c> column's decimal, which is where a value JS can hold
+/// and .NET cannot has to be caught.
+/// </summary>
+public sealed class LegacyActionPlanKpi
+{
+    [BsonElement("id")] public string? Id { get; set; }
+    [BsonElement("name")] public string? Name { get; set; }
+    [BsonElement("target_value")] public double? TargetValue { get; set; }
+    [BsonElement("current_value")] public double? CurrentValue { get; set; }
+    [BsonElement("unit")] public string? Unit { get; set; }
+    [BsonElement("measurement_frequency")] public string? MeasurementFrequency { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyActionPlanObjective
+{
+    [BsonElement("id")] public string? Id { get; set; }
+    [BsonElement("description")] public string? Description { get; set; }
+    [BsonElement("success_criteria")] public string? SuccessCriteria { get; set; }
+    [BsonElement("current_status")] public string? CurrentStatus { get; set; }
+    [BsonElement("completion_percentage")] public double? CompletionPercentage { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>
+/// One dated progress report. Its two nested arrays are the only place in this
+/// collection where a child carries no id of its own, so those rows key positionally
+/// within their update - but each one NAMES the KPI or objective it moved, and that
+/// name is a foreign key the target enforces.
+/// </summary>
+public sealed class LegacyActionPlanProgressUpdate
+{
+    [BsonElement("id")] public string? Id { get; set; }
+    [BsonElement("update_date")] public DateTime? UpdateDate { get; set; }
+    [BsonElement("kpi_updates")] public List<LegacyActionPlanKpiUpdate>? KpiUpdates { get; set; }
+    [BsonElement("qualitative_updates")] public List<LegacyActionPlanObjectiveUpdate>? QualitativeUpdates { get; set; }
+    [BsonElement("overall_notes")] public string? OverallNotes { get; set; }
+    [BsonElement("updated_by")] public string? UpdatedBy { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyActionPlanKpiUpdate
+{
+    [BsonElement("kpi_id")] public string? KpiId { get; set; }
+    [BsonElement("new_value")] public double? NewValue { get; set; }
+    [BsonElement("notes")] public string? Notes { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyActionPlanObjectiveUpdate
+{
+    [BsonElement("objective_id")] public string? ObjectiveId { get; set; }
+    [BsonElement("status_update")] public string? StatusUpdate { get; set; }
+    [BsonElement("completion_percentage")] public double? CompletionPercentage { get; set; }
+    [BsonElement("notes")] public string? Notes { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>
+/// 19. Mongoose model 'ActionPlanTemplate' (ActionPlanTemplate.ts). <c>company_id</c> is
+/// optional and the model's own comment says "null for global templates", so this
+/// collection gets THE TENANT-LEAK SKIP: absent is legitimately global, unresolvable is
+/// a skip, because a NULL company on a template publishes one company's playbook - its
+/// KPIs, targets and recommendations - to every tenant.
+///
+/// Its two child arrays are the KPI and objective shapes with the per-instance fields
+/// omitted (no id, no current_value, no completion_percentage), so template children key
+/// positionally.
+/// </summary>
+public sealed class LegacyActionPlanTemplate : LegacyDocument
+{
+    [BsonElement("name")] public string? Name { get; set; }
+    [BsonElement("description")] public string? Description { get; set; }
+    [BsonElement("category")] public string? Category { get; set; }
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("created_by")] public string? CreatedBy { get; set; }
+    [BsonElement("kpi_templates")] public List<LegacyActionPlanTemplateKpi>? KpiTemplates { get; set; }
+    [BsonElement("qualitative_objective_templates")]
+    public List<LegacyActionPlanTemplateObjective>? QualitativeObjectiveTemplates { get; set; }
+    [BsonElement("ai_recommendation_templates")] public List<string>? AiRecommendationTemplates { get; set; }
+    [BsonElement("tags")] public List<string>? Tags { get; set; }
+    [BsonElement("usage_count")] public int? UsageCount { get; set; }
+    [BsonElement("is_active")] public bool? IsActive { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
+
+public sealed class LegacyActionPlanTemplateKpi
+{
+    [BsonElement("name")] public string? Name { get; set; }
+    [BsonElement("target_value")] public double? TargetValue { get; set; }
+    [BsonElement("unit")] public string? Unit { get; set; }
+    [BsonElement("measurement_frequency")] public string? MeasurementFrequency { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyActionPlanTemplateObjective
+{
+    [BsonElement("description")] public string? Description { get; set; }
+    [BsonElement("success_criteria")] public string? SuccessCriteria { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
 
 /// <summary>
 /// 20. Mongoose model 'AIInsight'. Registered by BOTH AIInsight.ts and Analytics.ts under

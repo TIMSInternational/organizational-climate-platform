@@ -55,6 +55,20 @@ public sealed class MappingContext
     /// </summary>
     public IReadOnlySet<Guid> Questions { get; init; } = new HashSet<Guid>();
 
+    /// <summary>
+    /// Action-plan templates already migrated. A plan's template_id is a SetNull FK, so a
+    /// plan whose template was skipped by the tenant-leak rule still loads - with the link
+    /// dropped rather than pointing at a template that is not there.
+    /// </summary>
+    public IReadOnlySet<Guid> ActionPlanTemplates { get; init; } = new HashSet<Guid>();
+
+    /// <summary>
+    /// AI insights already migrated. An action plan can cite the insight that prompted it;
+    /// the column is not a foreign key, which is exactly why the reference is classified
+    /// here instead - nothing else would catch a pointer to an insight that never landed.
+    /// </summary>
+    public IReadOnlySet<Guid> AiInsights { get; init; } = new HashSet<Guid>();
+
     /// <summary>The company's demographic vocabulary: (company, field key) -> field id.</summary>
     public IReadOnlyDictionary<(Guid CompanyId, string Field), Guid> DemographicFields { get; init; } =
         new Dictionary<(Guid, string), Guid>();

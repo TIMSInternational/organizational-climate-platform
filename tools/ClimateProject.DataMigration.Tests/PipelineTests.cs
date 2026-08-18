@@ -36,6 +36,15 @@ public sealed class EtlContainersFixture : IAsyncLifetime
         await using var db = CreateDb();
         await db.Database.ExecuteSqlRawAsync(
             """
+            DELETE FROM action_plan_kpi_updates;
+            DELETE FROM action_plan_objective_updates;
+            DELETE FROM action_plan_progress_updates;
+            DELETE FROM action_plan_kpis;
+            DELETE FROM action_plan_objectives;
+            DELETE FROM action_plans;
+            DELETE FROM action_plan_template_kpis;
+            DELETE FROM action_plan_template_objectives;
+            DELETE FROM action_plan_templates;
             DELETE FROM question_responses;
             DELETE FROM response_demographics;
             DELETE FROM responses;
@@ -109,6 +118,8 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
     private static readonly ObjectId AuditDeletedOid = ObjectId.Parse("64b000000000000000000092");
     private static readonly ObjectId DraftOid = ObjectId.Parse("64b0000000000000000000a1");
     private static readonly ObjectId DistOid = ObjectId.Parse("64b0000000000000000000b1");
+    private static readonly ObjectId PlanTemplateOid = ObjectId.Parse("64b0000000000000000000c1");
+    private static readonly ObjectId PlanOid = ObjectId.Parse("64b0000000000000000000c2");
     private static readonly ObjectId InviteOid = ObjectId.Parse("64b0000000000000000000c1");
     private static readonly ObjectId McTemplateOid = ObjectId.Parse("64b0000000000000000000d1");
     private static readonly ObjectId McOid = ObjectId.Parse("64b0000000000000000000e1");
@@ -487,6 +498,95 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
                 ["start_time"] = new DateTime(2026, 7, 3, 14, 0, 0, DateTimeKind.Utc),
             },
         ]);
+
+        await legacy.GetCollection<BsonDocument>("actionplantemplates").InsertManyAsync(
+        [
+            new BsonDocument
+            {
+                ["_id"] = PlanTemplateOid,
+                ["name"] = "Safety playbook",
+                ["description"] = "Standard remedy.",
+                ["category"] = "engagement",
+                ["company_id"] = AcmeOid.ToString(),
+                ["created_by"] = AdaOid.ToString(),
+                ["kpi_templates"] = new BsonArray
+                {
+                    new BsonDocument
+                    {
+                        ["name"] = "Safety score", ["target_value"] = 4.2, ["unit"] = "score",
+                        ["measurement_frequency"] = "monthly",
+                    },
+                },
+                ["qualitative_objective_templates"] = new BsonArray
+                {
+                    new BsonDocument { ["description"] = "Weekly 1:1s", ["success_criteria"] = "All leads" },
+                },
+                ["usage_count"] = 3,
+                ["created_at"] = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            },
+        ]);
+
+        await legacy.GetCollection<BsonDocument>("actionplans").InsertManyAsync(
+        [
+            new BsonDocument
+            {
+                ["_id"] = PlanOid,
+                ["title"] = "Lift safety in Backend API",
+                ["description"] = "Follow-up on the July survey.",
+                ["company_id"] = AcmeOid.ToString(),
+                ["department_id"] = ApiOid.ToString(),
+                ["created_by"] = AdaOid.ToString(),
+                // No target column and no join table: the reported schema gap.
+                ["assigned_to"] = new BsonArray { GraceOid.ToString() },
+                ["due_date"] = new DateTime(2026, 12, 1, 0, 0, 0, DateTimeKind.Utc),
+                ["status"] = "in_progress",
+                ["priority"] = "high",
+                ["template_id"] = PlanTemplateOid.ToString(),
+                ["source_survey_id"] = SurveyOid.ToString(),
+                ["kpis"] = new BsonArray
+                {
+                    new BsonDocument
+                    {
+                        ["id"] = "kpi-safety", ["name"] = "Safety score",
+                        ["target_value"] = 4, ["current_value"] = 3.2, ["unit"] = "score",
+                        ["measurement_frequency"] = "monthly",
+                    },
+                },
+                ["qualitative_objectives"] = new BsonArray
+                {
+                    new BsonDocument
+                    {
+                        ["id"] = "obj-1on1", ["description"] = "Weekly 1:1s",
+                        ["success_criteria"] = "All leads", ["completion_percentage"] = 40,
+                    },
+                },
+                ["progress_updates"] = new BsonArray
+                {
+                    new BsonDocument
+                    {
+                        ["id"] = "upd-aug",
+                        ["update_date"] = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+                        ["overall_notes"] = "Sessions booked.",
+                        ["updated_by"] = AdaOid.ToString(),
+                        ["kpi_updates"] = new BsonArray
+                        {
+                            new BsonDocument { ["kpi_id"] = "kpi-safety", ["new_value"] = 3.6 },
+                            // Names a KPI this plan does not have: the reported path.
+                            new BsonDocument { ["kpi_id"] = "kpi-404", ["new_value"] = 9.9 },
+                        },
+                        ["qualitative_updates"] = new BsonArray
+                        {
+                            new BsonDocument
+                            {
+                                ["objective_id"] = "obj-1on1", ["status_update"] = "Most leads booked",
+                                ["completion_percentage"] = 70,
+                            },
+                        },
+                    },
+                },
+                ["created_at"] = new DateTime(2026, 7, 15, 0, 0, 0, DateTimeKind.Utc),
+            },
+        ]);
     }
 
     private async Task<(MigrationResult Result, DataQualityReport Report)> RunAsync(
@@ -856,15 +956,74 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
     }
 
     [Fact]
+    public async Task Action_plan_loads_its_six_tables_and_survives_a_re_run()
+    {
+        await _fx.ResetTargetAsync();
+        var legacy = _fx.Mongo.GetDatabase("action_plans");
+        await SeedLegacyAsync(legacy);
+
+        var (result, report) = await RunAsync(legacy);
+        result.AssertReconciled();
+
+        await using var db = _fx.CreateDb();
+        var plan = await db.ActionPlans.SingleAsync();
+        var template = await db.ActionPlanTemplates.SingleAsync();
+
+        Assert.Equal(template.Id, plan.TemplateId);
+        Assert.Equal("in_progress", plan.Status);
+        Assert.Equal(new DateTimeOffset(2026, 12, 1, 0, 0, 0, TimeSpan.Zero), plan.DueDate);
+
+        var kpi = await db.ActionPlanKpis.SingleAsync();
+        Assert.Equal(4m, kpi.TargetValue);
+        Assert.Equal(3.2m, kpi.CurrentValue);
+
+        var objective = await db.ActionPlanObjectives.SingleAsync();
+        var update = await db.ActionPlanProgressUpdates.SingleAsync();
+        Assert.Equal(plan.Id, update.ActionPlanId);
+
+        // Two KPI updates in the source, one of which names a KPI the plan never had.
+        var kpiUpdate = await db.ActionPlanKpiUpdates.SingleAsync();
+        Assert.Equal(kpi.Id, kpiUpdate.KpiId);
+        Assert.Equal(3.6m, kpiUpdate.NewValue);
+        Assert.Contains(report.Entries, e => e.Rule == MigrationRules.ActionPlanProgressItemUnresolved);
+
+        var objectiveUpdate = await db.ActionPlanObjectiveUpdates.SingleAsync();
+        Assert.Equal(objective.Id, objectiveUpdate.ObjectiveId);
+        Assert.Equal(70, objectiveUpdate.CompletionPercentage);
+
+        Assert.Single(await db.ActionPlanTemplateKpis.ToListAsync());
+        Assert.Single(await db.ActionPlanTemplateObjectives.ToListAsync());
+
+        // The schema gap is on the record.
+        Assert.Contains(report.Entries, e => e.Rule == MigrationRules.ActionPlanAssignmentsUnrepresentable);
+
+        // Run twice: deterministic ids make every write an upsert, and replacing the
+        // children must not duplicate them or trip the two update tables' foreign keys.
+        var (second, _) = await RunAsync(legacy);
+        second.AssertReconciled();
+
+        await using var verify = _fx.CreateDb();
+        Assert.Equal(1, await verify.ActionPlans.CountAsync());
+        Assert.Equal(1, await verify.ActionPlanKpis.CountAsync());
+        Assert.Equal(1, await verify.ActionPlanObjectives.CountAsync());
+        Assert.Equal(1, await verify.ActionPlanProgressUpdates.CountAsync());
+        Assert.Equal(1, await verify.ActionPlanKpiUpdates.CountAsync());
+        Assert.Equal(1, await verify.ActionPlanObjectiveUpdates.CountAsync());
+        Assert.Equal(1, await verify.ActionPlanTemplates.CountAsync());
+    }
+
+    [Fact]
     public async Task Unmapped_collection_is_refused_by_name_not_ignored()
     {
         var legacy = _fx.Mongo.GetDatabase("refusal");
         await using var db = _fx.CreateDb();
         var pipeline = new MigrationPipeline(legacy, db, new DataQualityReport(), dryRun: true);
 
+        // Named collection: 'questionbanks' is blocked by #58 and will never be mapped,
+        // so this guard cannot be retired by a later slice the way 'actionplans' was.
         var exception = await Assert.ThrowsAsync<NotSupportedException>(
-            () => pipeline.RunAsync(["companies", "actionplans"], CancellationToken.None));
-        Assert.Contains("actionplans", exception.Message);
+            () => pipeline.RunAsync(["companies", "questionbanks"], CancellationToken.None));
+        Assert.Contains("questionbanks", exception.Message);
     }
 
     [Fact]

@@ -242,4 +242,33 @@ public static class MigrationRules
     // DemographicSnapshot (#154 slice 12).
     public const string SnapshotEntryIncomplete = "demographicsnapshot.entry-incomplete";
     public const string SnapshotChangeIncomplete = "demographicsnapshot.change-incomplete";
+
+    // ActionPlan + ActionPlanTemplate (#154 slice 13), the last legacy shape.
+    //
+    // The sharp one is ActionPlanAssignmentsUnrepresentable: legacy assigned a plan to a
+    // list of people (assigned_to) and the target schema has no such column and no join
+    // table, only created_by. Every plan that named assignees reports how many were lost,
+    // because "who owns this" is not a detail a migration may drop in silence.
+    //
+    // An unreadable measurement_frequency drops its KPI rather than defaulting: the four
+    // members (daily/weekly/monthly/quarterly) are equally assertive, so unlike a report
+    // status there is no value that "asserts least", and writing one would invent the
+    // cadence at which somebody is supposed to measure the number.
+    public const string ActionPlanAssignmentsUnrepresentable = "actionplan.assignments-unrepresentable";
+    public const string ActionPlanStatusUnknown = "actionplan.status-unknown";
+    public const string ActionPlanPriorityUnknown = "actionplan.priority-unknown";
+    public const string ActionPlanChildIdFromPosition = "actionplan.child-id-from-position";
+    public const string ActionPlanChildDuplicateId = "actionplan.child-duplicate-id";
+    public const string ActionPlanKpiIncomplete = "actionplan.kpi-incomplete";
+    public const string ActionPlanKpiFrequencyUnknown = "actionplan.kpi-frequency-unknown";
+    public const string ActionPlanObjectiveIncomplete = "actionplan.objective-incomplete";
+    public const string ActionPlanCompletionClamped = "actionplan.completion-percentage-clamped";
+    public const string ActionPlanNumericUnrepresentable = "actionplan.numeric-unrepresentable";
+    public const string ActionPlanProgressDateDerived = "actionplan.progress-update-date-derived";
+    public const string ActionPlanProgressActorUnresolved = "actionplan.progress-update-actor-unresolved";
+    public const string ActionPlanProgressItemIncomplete = "actionplan.progress-item-incomplete";
+    public const string ActionPlanProgressItemUnresolved = "actionplan.progress-item-unresolved";
+    public const string ActionPlanTemplateKpiIncomplete = "actionplantemplate.kpi-incomplete";
+    public const string ActionPlanTemplateKpiFrequencyUnknown = "actionplantemplate.kpi-frequency-unknown";
+    public const string ActionPlanTemplateObjectiveIncomplete = "actionplantemplate.objective-incomplete";
 }
