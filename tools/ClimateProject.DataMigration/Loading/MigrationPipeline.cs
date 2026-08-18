@@ -34,7 +34,8 @@ public sealed record MigrationResult(IReadOnlyList<CollectionResult> Collections
 /// <summary>
 /// The mapped load: Company -> DemographicField -> Department -> User ->
 /// SystemSettings -> Survey (with its Question/option/logic/target fan-out) ->
-/// Response (answers + demographics, the volume driver), in FK order, then the
+/// SurveyTemplate (question/option fan-out) -> Response (answers + demographics, the
+/// volume driver), in FK order, then the
 /// second pass for the three self- and cross-referential columns
 /// (department parent, department manager, user manager) that cannot be satisfied on
 /// first insert. Reference targets are the ids present in the TARGET database plus
@@ -52,7 +53,7 @@ public sealed class MigrationPipeline(
     bool dryRun)
 {
     public static readonly IReadOnlyList<string> MappedCollections =
-        ["companies", "demographicfields", "departments", "users", "systemsettings", "surveys", "responses"];
+        ["companies", "demographicfields", "departments", "users", "systemsettings", "surveys", "surveytemplates", "responses"];
 
     private readonly List<CollectionResult> _results = [];
     private readonly List<MappedDepartment> _departmentsThisRun = [];
@@ -108,6 +109,12 @@ public sealed class MigrationPipeline(
         {
             context = await BuildContextAsync(ct);
             await LoadSurveysAsync(context, ct);
+        }
+
+        if (wanted.Contains("surveytemplates"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadSurveyTemplatesAsync(context, ct);
         }
 
         if (wanted.Contains("responses"))
@@ -529,6 +536,91 @@ public sealed class MigrationPipeline(
 
         await SaveAsync(ct);
         _results.Add(new CollectionResult("surveys", source, written, report.SkipCount("surveys")));
+    }
+
+    private async Task LoadSurveyTemplatesAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        await foreach (var document in Read<LegacySurveyTemplate>("surveytemplates", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (SurveyTemplateMapper.Map(document, context) is not { } mapped)
+            {
+                continue;
+            }
+
+            var existing = await db.SurveyTemplates.FindAsync([mapped.Template.Id], ct);
+            if (existing is null)
+            {
+                db.SurveyTemplates.Add(mapped.Template);
+            }
+            else
+            {
+                existing.Name = mapped.Template.Name;
+                existing.Description = mapped.Template.Description;
+                existing.Category = mapped.Template.Category;
+                existing.Industry = mapped.Template.Industry;
+                existing.CompanySize = mapped.Template.CompanySize;
+                existing.IsPublic = mapped.Template.IsPublic;
+                existing.CreatedBy = mapped.Template.CreatedBy;
+                existing.CompanyId = mapped.Template.CompanyId;
+                existing.UsageCount = mapped.Template.UsageCount;
+                existing.Rating = mapped.Template.Rating;
+                existing.Tags = mapped.Template.Tags;
+                existing.SourceSurveyId = mapped.Template.SourceSurveyId;
+                existing.LastUsed = mapped.Template.LastUsed;
+                existing.CreatedAt = mapped.Template.CreatedAt;
+                existing.UpdatedAt = mapped.Template.UpdatedAt;
+            }
+
+            // Question upsert-plus-stale-sweep, the surveys-stage shape - simpler here
+            // because nothing else holds an FK to a template question (instantiation
+            // copies values, it never links back), so the sweep stays safe forever.
+            var keptIds = mapped.Questions.Select(q => q.Id).ToHashSet();
+            var existingQuestions = await db.TemplateQuestions
+                .Where(q => q.TemplateId == mapped.Template.Id).ToListAsync(ct);
+            db.TemplateQuestions.RemoveRange(existingQuestions.Where(q => !keptIds.Contains(q.Id)));
+            var questionsById = existingQuestions.ToDictionary(q => q.Id);
+            foreach (var question in mapped.Questions)
+            {
+                if (questionsById.TryGetValue(question.Id, out var current))
+                {
+                    current.TextEn = question.TextEn;
+                    current.TextEs = question.TextEs;
+                    current.Type = question.Type;
+                    current.ScaleMin = question.ScaleMin;
+                    current.ScaleMax = question.ScaleMax;
+                    current.ScaleLabelMinEn = question.ScaleLabelMinEn;
+                    current.ScaleLabelMinEs = question.ScaleLabelMinEs;
+                    current.ScaleLabelMaxEn = question.ScaleLabelMaxEn;
+                    current.ScaleLabelMaxEs = question.ScaleLabelMaxEs;
+                    current.CommentRequired = question.CommentRequired;
+                    current.CommentPromptEn = question.CommentPromptEn;
+                    current.CommentPromptEs = question.CommentPromptEs;
+                    current.BinaryCommentConfigEn = question.BinaryCommentConfigEn;
+                    current.BinaryCommentConfigEs = question.BinaryCommentConfigEs;
+                    current.Required = question.Required;
+                    current.Order = question.Order;
+                    current.Category = question.Category;
+                }
+                else
+                {
+                    db.TemplateQuestions.Add(question);
+                }
+            }
+
+            var staleOptions = await db.TemplateQuestionOptions
+                .Where(o => keptIds.Contains(o.TemplateQuestionId)).ToListAsync(ct);
+            db.TemplateQuestionOptions.RemoveRange(staleOptions);
+            db.TemplateQuestionOptions.AddRange(mapped.Options);
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("surveytemplates", source, written, report.SkipCount("surveytemplates")));
     }
 
     /// <summary>

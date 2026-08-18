@@ -158,4 +158,16 @@ public static class MigrationRules
     public const string ResponseAnswerBooleanCoded = "response.answer-boolean-coded";
     public const string ResponseDemographicInvalid = "response.demographic-invalid";
     public const string ResponseDemographicDuplicateField = "response.demographic-duplicate-field";
+
+    // SurveyTemplate (#154 slice 4). The tenant-leak rule is the sharp one: a template
+    // whose company reference cannot resolve is SKIPPED, never NULLed, because
+    // CompanyId NULL means globally visible (#191's convention) and the degrade would
+    // publish a private template to every tenant. Emoji questions are unrepresentable
+    // (no template emoji table, and SurveyTemplateQuestions refuses the type), so the
+    // question drops by name rather than loading a row that can never render.
+    public const string SurveyTemplateDefaultSettingsDropped = "surveytemplate.default-settings-dropped";
+    public const string SurveyTemplateDemographicsConfigDropped = "surveytemplate.demographics-config-dropped";
+    public const string SurveyTemplateQuestionIdFromPosition = "surveytemplate.question-id-from-position";
+    public const string SurveyTemplateQuestionEmojiUnrepresentable = "surveytemplate.question-emoji-unrepresentable";
+    public const string SurveyTemplateQuestionConditionalLogicDropped = "surveytemplate.question-conditional-logic-dropped";
 }
