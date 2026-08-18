@@ -55,7 +55,8 @@ public sealed class MigrationPipeline(
     public static readonly IReadOnlyList<string> MappedCollections =
     [
         "companies", "demographicfields", "departments", "users", "systemsettings",
-        "surveys", "surveytemplates", "surveyversions", "surveyauditlogs", "responses",
+        "surveys", "surveytemplates", "surveyversions", "surveyauditlogs",
+        "surveydrafts", "surveydistributions", "surveyinvitations", "responses",
     ];
 
     private readonly List<CollectionResult> _results = [];
@@ -130,6 +131,24 @@ public sealed class MigrationPipeline(
         {
             context = await BuildContextAsync(ct);
             await LoadSurveyAuditLogsAsync(context, ct);
+        }
+
+        if (wanted.Contains("surveydrafts"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadSurveyDraftsAsync(context, ct);
+        }
+
+        if (wanted.Contains("surveydistributions"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadSurveyDistributionsAsync(context, ct);
+        }
+
+        if (wanted.Contains("surveyinvitations"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadSurveyInvitationsAsync(context, ct);
         }
 
         if (wanted.Contains("responses"))
@@ -643,6 +662,170 @@ public sealed class MigrationPipeline(
 
         await SaveAsync(ct);
         _results.Add(new CollectionResult("surveytemplates", source, written, report.SkipCount("surveytemplates")));
+    }
+
+    private async Task LoadSurveyDraftsAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        await foreach (var document in Read<LegacySurveyDraft>("surveydrafts", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (SurveyDraftMapper.Map(document, context) is not { } draft)
+            {
+                continue;
+            }
+
+            var existing = await db.SurveyDrafts.FindAsync([draft.Id], ct);
+            if (existing is null)
+            {
+                db.SurveyDrafts.Add(draft);
+            }
+            else
+            {
+                existing.UserId = draft.UserId;
+                existing.CompanyId = draft.CompanyId;
+                existing.SessionId = draft.SessionId;
+                existing.CurrentStep = draft.CurrentStep;
+                existing.LastEditedField = draft.LastEditedField;
+                existing.AutoSaveCount = draft.AutoSaveCount;
+                existing.Version = draft.Version;
+                existing.LastAutosaveAt = draft.LastAutosaveAt;
+                existing.ExpiresAt = draft.ExpiresAt;
+                existing.IsRecovered = draft.IsRecovered;
+                existing.DraftData = draft.DraftData;
+                existing.CreatedAt = draft.CreatedAt;
+                existing.UpdatedAt = draft.UpdatedAt;
+            }
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("surveydrafts", source, written, report.SkipCount("surveydrafts")));
+    }
+
+    /// <summary>
+    /// survey_id is uniquely indexed on both sides - one distribution per survey - so a
+    /// second document for the same survey is refused by name rather than by a
+    /// constraint violation that would abort the batch.
+    /// </summary>
+    private async Task LoadSurveyDistributionsAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        var seenSurveys = new HashSet<Guid>();
+        await foreach (var document in Read<LegacySurveyDistribution>("surveydistributions", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (SurveyDistributionMapper.Map(document, context) is not { } distribution)
+            {
+                continue;
+            }
+
+            if (!seenSurveys.Add(distribution.SurveyId))
+            {
+                report.Skip(MigrationRules.DistributionDuplicateSurvey, "surveydistributions",
+                    document.Id.ToString(),
+                    "another distribution already covers this survey; the unique index would refuse it",
+                    "survey_id");
+                continue;
+            }
+
+            var existing = await db.SurveyDistributions.FindAsync([distribution.Id], ct);
+            if (existing is null)
+            {
+                db.SurveyDistributions.Add(distribution);
+            }
+            else
+            {
+                existing.SurveyId = distribution.SurveyId;
+                existing.AccessType = distribution.AccessType;
+                existing.PublicUrl = distribution.PublicUrl;
+                existing.QrCodeUrl = distribution.QrCodeUrl;
+                existing.QrCodeSvgUrl = distribution.QrCodeSvgUrl;
+                existing.QrCodePngUrl = distribution.QrCodePngUrl;
+                existing.QrCodePdfUrl = distribution.QrCodePdfUrl;
+                existing.TokenizedLinksGenerated = distribution.TokenizedLinksGenerated;
+                existing.AccessRules = distribution.AccessRules;
+                existing.QrCustomization = distribution.QrCustomization;
+                existing.CreatedAt = distribution.CreatedAt;
+                existing.UpdatedAt = distribution.UpdatedAt;
+            }
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("surveydistributions", source, written, report.SkipCount("surveydistributions")));
+    }
+
+    private async Task LoadSurveyInvitationsAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        var sinceSave = 0;
+        var seenTokens = new HashSet<string>(StringComparer.Ordinal);
+        await foreach (var document in Read<LegacySurveyInvitation>("surveyinvitations", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (SurveyInvitationMapper.Map(document, context) is not { } invitation)
+            {
+                continue;
+            }
+
+            // invitation_token is uniquely indexed; ascending-_id order makes "first"
+            // deterministic across runs, the same rule users.email gets.
+            if (!seenTokens.Add(invitation.InvitationToken))
+            {
+                report.Skip(MigrationRules.InvitationDuplicateToken, "surveyinvitations",
+                    document.Id.ToString(),
+                    "another invitation already carries this token; the unique index would refuse it",
+                    "invitation_token");
+                continue;
+            }
+
+            var existing = await db.SurveyInvitations.FindAsync([invitation.Id], ct);
+            if (existing is null)
+            {
+                db.SurveyInvitations.Add(invitation);
+            }
+            else
+            {
+                existing.SurveyId = invitation.SurveyId;
+                existing.UserId = invitation.UserId;
+                existing.CompanyId = invitation.CompanyId;
+                existing.Email = invitation.Email;
+                existing.InvitationToken = invitation.InvitationToken;
+                existing.Status = invitation.Status;
+                existing.SentAt = invitation.SentAt;
+                existing.OpenedAt = invitation.OpenedAt;
+                existing.StartedAt = invitation.StartedAt;
+                existing.CompletedAt = invitation.CompletedAt;
+                existing.ReminderCount = invitation.ReminderCount;
+                existing.LastReminderSent = invitation.LastReminderSent;
+                existing.ExpiresAt = invitation.ExpiresAt;
+                existing.Metadata = invitation.Metadata;
+                existing.CreatedAt = invitation.CreatedAt;
+                existing.UpdatedAt = invitation.UpdatedAt;
+            }
+
+            written++;
+
+            // One row per invitee per survey: the second-largest table after responses.
+            if (++sinceSave >= 500)
+            {
+                await SaveAsync(ct);
+                db.ChangeTracker.Clear();
+                sinceSave = 0;
+            }
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("surveyinvitations", source, written, report.SkipCount("surveyinvitations")));
     }
 
     /// <summary>

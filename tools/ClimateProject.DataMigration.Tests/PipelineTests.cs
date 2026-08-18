@@ -40,6 +40,9 @@ public sealed class EtlContainersFixture : IAsyncLifetime
             DELETE FROM response_demographics;
             DELETE FROM responses;
             DELETE FROM survey_audit_logs;
+            DELETE FROM survey_invitations;
+            DELETE FROM survey_distributions;
+            DELETE FROM survey_drafts;
             DELETE FROM survey_versions;
             DELETE FROM template_question_options;
             DELETE FROM template_questions;
@@ -95,6 +98,9 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
     private static readonly ObjectId VersionOid = ObjectId.Parse("64b000000000000000000081");
     private static readonly ObjectId AuditOid = ObjectId.Parse("64b000000000000000000091");
     private static readonly ObjectId AuditDeletedOid = ObjectId.Parse("64b000000000000000000092");
+    private static readonly ObjectId DraftOid = ObjectId.Parse("64b0000000000000000000a1");
+    private static readonly ObjectId DistOid = ObjectId.Parse("64b0000000000000000000b1");
+    private static readonly ObjectId InviteOid = ObjectId.Parse("64b0000000000000000000c1");
 
     /// <summary>The fixture corpus: every FK edge, both second passes, one of each misfit.</summary>
     private static async Task SeedLegacyAsync(IMongoDatabase legacy)
@@ -320,6 +326,54 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
             },
         ]);
 
+        await legacy.GetCollection<BsonDocument>("surveydrafts").InsertManyAsync(
+        [
+            new BsonDocument
+            {
+                ["_id"] = DraftOid,
+                ["user_id"] = AdaOid,
+                ["company_id"] = AcmeOid,
+                ["session_id"] = "sess-draft-1",
+                ["step1_data"] = new BsonDocument { ["survey_type"] = "climate", ["title"] = "Next quarter" },
+                ["current_step"] = 1,
+                ["expires_at"] = new DateTime(2026, 7, 25, 0, 0, 0, DateTimeKind.Utc),
+                ["created_at"] = new DateTime(2026, 7, 18, 0, 0, 0, DateTimeKind.Utc),
+            },
+        ]);
+
+        await legacy.GetCollection<BsonDocument>("surveydistributions").InsertManyAsync(
+        [
+            new BsonDocument
+            {
+                ["_id"] = DistOid,
+                ["survey_id"] = SurveyOid,
+                ["access_type"] = "tokenized",
+                ["qr_code_url"] = "https://cdn.example.com/qr/q3.png",
+                // A legacy share link: dropped, because its token is refused by shape.
+                ["public_url"] = "https://legacy.example.com/survey/9f8e7d6c-1234-4abc-9def-0123456789ab",
+                ["tokenized_links_generated"] = 12,
+                ["qr_customization"] = new BsonDocument { ["color"] = "#112233", ["error_correction"] = "H" },
+            },
+        ]);
+
+        await legacy.GetCollection<BsonDocument>("surveyinvitations").InsertManyAsync(
+        [
+            new BsonDocument
+            {
+                ["_id"] = InviteOid,
+                ["survey_id"] = SurveyOid.ToString(),
+                ["user_id"] = AdaOid.ToString(),
+                ["company_id"] = AcmeOid.ToString(),
+                ["email"] = "ada@acme.com",
+                ["invitation_token"] = "9f8e7d6c-1234-4abc-9def-0123456789ab",
+                // A status the target lacks: reconstructed from the timestamps.
+                ["status"] = "bounced",
+                ["sent_at"] = new DateTime(2026, 7, 1, 9, 0, 0, DateTimeKind.Utc),
+                ["expires_at"] = new DateTime(2026, 7, 31, 0, 0, 0, DateTimeKind.Utc),
+                ["created_at"] = new DateTime(2026, 7, 1, 8, 0, 0, DateTimeKind.Utc),
+            },
+        ]);
+
         await legacy.GetCollection<BsonDocument>("responses").InsertManyAsync(
         [
             new BsonDocument
@@ -532,6 +586,29 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
         Assert.Contains("published", auditEntry.Metadata);
         Assert.Contains(report.Entries, e => e.Rule == MigrationRules.AuditActionUnrepresentable);
 
+        // The delivery trio.
+        var draft = await db.SurveyDrafts.SingleAsync();
+        Assert.Equal(ada.Id, draft.UserId);
+        Assert.Contains("Next quarter", draft.DraftData);
+
+        var distribution = await db.SurveyDistributions.SingleAsync();
+        Assert.Equal(survey.Id, distribution.SurveyId);
+        Assert.Equal(12, distribution.TokenizedLinksGenerated);
+        Assert.Equal("#112233", distribution.QrCustomization.ForegroundColor);
+        // The legacy share link is dropped: its token cannot pass HasExpectedShape.
+        Assert.Null(distribution.PublicUrl);
+        Assert.Contains(report.Entries, e => e.Rule == MigrationRules.DistributionPublicLinkDropped);
+
+        var invitation = await db.SurveyInvitations.SingleAsync();
+        Assert.Equal(survey.Id, invitation.SurveyId);
+        Assert.Equal("ada@acme.com", invitation.Email);
+        // 'bounced' has no target member; sent_at is the furthest evidence.
+        Assert.Equal("sent", invitation.Status);
+        Assert.Contains("bounced", invitation.Metadata);
+        Assert.Contains(report.Entries, e => e.Rule == MigrationRules.InvitationStatusReconstructed);
+        Assert.Contains(report.Entries, e => e.Rule == MigrationRules.InvitationTokenInert);
+        Assert.False(SurveyAccessTokens.HasExpectedShape(invitation.InvitationToken));
+
         // Attribution: en company label + the platform maintenance message, then the
         // survey's title, description, invitation message and two question texts,
         // the template's two question texts, the version's title and description,
@@ -588,6 +665,9 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
             Assert.Equal(3, await db.QuestionResponses.CountAsync());
             Assert.Equal(1, await db.ResponseDemographics.CountAsync());
 
+            Assert.Equal(1, await db.SurveyDrafts.CountAsync());
+            Assert.Equal(1, await db.SurveyDistributions.CountAsync());
+            Assert.Equal(1, await db.SurveyInvitations.CountAsync());
             Assert.Equal(1, await db.SurveyVersions.CountAsync());
             Assert.Equal(1, await db.SurveyAuditLogs.CountAsync());
             Assert.Equal(1, await db.SurveyTemplates.CountAsync());
@@ -645,6 +725,7 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
             Assert.Equal(1, await verify.SurveyTemplates.CountAsync());
             Assert.Equal(1, await verify.SurveyVersions.CountAsync());
             Assert.Equal(1, await verify.SurveyAuditLogs.CountAsync());
+            Assert.Equal(1, await verify.SurveyInvitations.CountAsync());
             var api = await verify.Departments.SingleAsync(d => d.Name == "Backend API");
             Assert.NotNull(api.ParentDepartmentId);
             var eng = await verify.Departments.SingleAsync(d => d.Name == "Engineering");
@@ -675,6 +756,7 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
         Assert.Equal(0, await verify.SurveyTemplates.CountAsync());
         Assert.Equal(0, await verify.SurveyVersions.CountAsync());
         Assert.Equal(0, await verify.SurveyAuditLogs.CountAsync());
+        Assert.Equal(0, await verify.SurveyInvitations.CountAsync());
     }
 
     [Fact]

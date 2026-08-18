@@ -5,7 +5,9 @@ namespace ClimateProject.DataMigration.Legacy;
 
 // One stub per registered Mongoose model in climate-project/src/models/. The five
 // foundational collections (Company, Department, User, SystemSettings, DemographicField)
-// plus Survey, Response and SurveyTemplate are typed field-by-field from the legacy Mongoose schemas per sub-issue B
+// plus the survey domain (Survey, SurveyTemplate, SurveyVersion, SurveyAuditLog, SurveyDraft,
+// SurveyDistribution, SurveyInvitation) and Response are typed field-by-field from the legacy
+// Mongoose schemas per sub-issue B
 // (docs/migration/sub-issues.md); the rest stay deliberately field-less until their
 // slice lands - a stub that guesses fields is worse than one that declares none, and
 // everything undeclared lands in Extra, visibly.
@@ -380,8 +382,37 @@ public sealed class LegacySurveyVersion : LegacyDocument
     [BsonElement("__v")] public int? Version { get; set; }
 }
 
-/// <summary>9. Mongoose model 'SurveyDraft' (SurveyDraft.ts).</summary>
-public sealed class LegacySurveyDraft : LegacyDocument;
+/// <summary>
+/// 9. Mongoose model 'SurveyDraft' (SurveyDraft.ts). Typed 2026-08-18. Like
+/// SurveyAuditLog and SurveyDistribution, its references are real ObjectIds.
+///
+/// The four step_data subdocuments are the wizard's in-progress state and land whole in
+/// the target's single draft_data jsonb column. Deliberately NOT re-mapped field by
+/// field: a draft is unfinished input, not content the product reads through the
+/// question rules, and step2_data's questions are ALREADY bilingual
+/// (<c>text: {en, es}</c>) - the one place legacy stored both languages - so #195
+/// attribution must not touch them.
+/// </summary>
+public sealed class LegacySurveyDraft : LegacyDocument
+{
+    [BsonElement("user_id")] public BsonValue? UserId { get; set; }
+    [BsonElement("company_id")] public BsonValue? CompanyId { get; set; }
+    [BsonElement("session_id")] public string? SessionId { get; set; }
+    [BsonElement("step1_data")] public BsonValue? Step1Data { get; set; }
+    [BsonElement("step2_data")] public BsonValue? Step2Data { get; set; }
+    [BsonElement("step3_data")] public BsonValue? Step3Data { get; set; }
+    [BsonElement("step4_data")] public BsonValue? Step4Data { get; set; }
+    [BsonElement("current_step")] public int? CurrentStep { get; set; }
+    [BsonElement("last_edited_field")] public string? LastEditedField { get; set; }
+    [BsonElement("auto_save_count")] public int? AutoSaveCount { get; set; }
+    [BsonElement("version")] public int? Version { get; set; }
+    [BsonElement("last_autosave_at")] public DateTime? LastAutosaveAt { get; set; }
+    [BsonElement("expires_at")] public DateTime? ExpiresAt { get; set; }
+    [BsonElement("is_recovered")] public bool? IsRecovered { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? VersionKey { get; set; }
+}
 
 /// <summary>
 /// 10. Mongoose model 'SurveyTemplate' (SurveyTemplate.ts). Typed 2026-08-18 from the
@@ -414,11 +445,100 @@ public sealed class LegacySurveyTemplate : LegacyDocument
     [BsonElement("__v")] public int? Version { get; set; }
 }
 
-/// <summary>11. Mongoose model 'SurveyDistribution' (SurveyDistribution.ts).</summary>
-public sealed class LegacySurveyDistribution : LegacyDocument;
+/// <summary>
+/// 11. Mongoose model 'SurveyDistribution' (SurveyDistribution.ts). Typed 2026-08-18.
+/// survey_id is an ObjectId AND uniquely indexed - one distribution per survey, both
+/// sides.
+/// </summary>
+public sealed class LegacySurveyDistribution : LegacyDocument
+{
+    [BsonElement("survey_id")] public BsonValue? SurveyId { get; set; }
+    [BsonElement("access_type")] public string? AccessType { get; set; }
+    [BsonElement("public_url")] public string? PublicUrl { get; set; }
+    [BsonElement("tokenized_links_generated")] public int? TokenizedLinksGenerated { get; set; }
 
-/// <summary>12. Mongoose model 'SurveyInvitation' (SurveyInvitation.ts).</summary>
-public sealed class LegacySurveyInvitation : LegacyDocument;
+    // These four may hold a URL, raw SVG markup, or a data: URI - the schema says only
+    // "String". The target's columns are varchar(500) URLs, so the mapper keeps what
+    // fits a URL column and drops the rest by name rather than truncating markup into
+    // a link that looks real and resolves nowhere.
+    [BsonElement("qr_code_url")] public string? QrCodeUrl { get; set; }
+    [BsonElement("qr_code_svg")] public string? QrCodeSvg { get; set; }
+    [BsonElement("qr_code_png")] public string? QrCodePng { get; set; }
+    [BsonElement("qr_code_pdf_url")] public string? QrCodePdfUrl { get; set; }
+
+    [BsonElement("access_rules")] public LegacyAccessRules? AccessRules { get; set; }
+    [BsonElement("qr_customization")] public LegacyQrCustomization? QrCustomization { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
+
+public sealed class LegacyAccessRules
+{
+    [BsonElement("require_login")] public bool? RequireLogin { get; set; }
+    [BsonElement("allow_anonymous")] public bool? AllowAnonymous { get; set; }
+    [BsonElement("single_response")] public bool? SingleResponse { get; set; }
+    [BsonElement("active_outside_schedule")] public bool? ActiveOutsideSchedule { get; set; }
+    [BsonElement("allowed_domains")] public List<string>? AllowedDomains { get; set; }
+    [BsonElement("blocked_ips")] public List<string>? BlockedIps { get; set; }
+    [BsonElement("max_responses")] public int? MaxResponses { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyQrCustomization
+{
+    [BsonElement("size")] public int? Size { get; set; }
+
+    // 'color' is the target's foreground_color: a rename, not a drop.
+    [BsonElement("color")] public string? Color { get; set; }
+    [BsonElement("background_color")] public string? BackgroundColor { get; set; }
+    [BsonElement("logo_url")] public string? LogoUrl { get; set; }
+
+    // L/M/Q/H. No target column: QR images are regenerated by the new system, which
+    // picks its own error correction, so this is a named drop.
+    [BsonElement("error_correction")] public string? ErrorCorrection { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>
+/// 12. Mongoose model 'SurveyInvitation' (SurveyInvitation.ts). Typed 2026-08-18.
+/// References are plain strings here (unlike its two neighbours in this slice).
+///
+/// invitation_token is a bearer credential, and the legacy database was readable during
+/// the #70 exposure window - so whether it carries forward matters. It does, and it is
+/// inert: legacy minted these as <c>uuidv4()</c> (invitation-service.ts:110), 36
+/// characters, while the target's SurveyAccessTokens.HasExpectedShape admits only 43
+/// base64url characters and rejects anything else BEFORE the database is queried. A
+/// migrated token therefore cannot authenticate anyone; it is a historical record.
+/// </summary>
+public sealed class LegacySurveyInvitation : LegacyDocument
+{
+    [BsonElement("survey_id")] public string? SurveyId { get; set; }
+    [BsonElement("user_id")] public string? UserId { get; set; }
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("email")] public string? Email { get; set; }
+    [BsonElement("invitation_token")] public string? InvitationToken { get; set; }
+    [BsonElement("status")] public string? Status { get; set; }
+    [BsonElement("sent_at")] public DateTime? SentAt { get; set; }
+    [BsonElement("opened_at")] public DateTime? OpenedAt { get; set; }
+    [BsonElement("started_at")] public DateTime? StartedAt { get; set; }
+    [BsonElement("completed_at")] public DateTime? CompletedAt { get; set; }
+    [BsonElement("reminder_count")] public int? ReminderCount { get; set; }
+    [BsonElement("last_reminder_sent")] public DateTime? LastReminderSent { get; set; }
+    [BsonElement("expires_at")] public DateTime? ExpiresAt { get; set; }
+    [BsonElement("metadata")] public LegacyInvitationMetadata? Metadata { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
+
+public sealed class LegacyInvitationMetadata
+{
+    [BsonElement("user_agent")] public string? UserAgent { get; set; }
+    [BsonElement("ip_address")] public string? IpAddress { get; set; }
+    [BsonElement("email_client")] public string? EmailClient { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
 
 /// <summary>
 /// 13. Mongoose model 'SurveyAuditLog' (SurveyAuditLog.ts). Typed 2026-08-18.

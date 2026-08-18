@@ -184,4 +184,22 @@ public static class MigrationRules
     public const string AuditEntityTypeRemapped = "surveyauditlog.entity-type-remapped";
     public const string AuditActorFieldFabricated = "surveyauditlog.actor-field-fabricated";
     public const string AuditReferenceNotAnIdentifier = "surveyauditlog.reference-not-an-identifier";
+
+    // SurveyDraft / SurveyDistribution / SurveyInvitation (#154 slice 6).
+    public const string DraftExpiryDerived = "surveydraft.expiry-derived";
+
+    // A legacy share link carries a legacy token the target refuses by shape, so
+    // keeping it would render a dead link as a live one.
+    public const string DistributionPublicLinkDropped = "surveydistribution.public-link-dropped";
+    public const string DistributionAccessTypeUnknown = "surveydistribution.access-type-unknown";
+    public const string DistributionErrorCorrectionDropped = "surveydistribution.error-correction-dropped";
+    public const string DistributionQrPayloadDropped = "surveydistribution.qr-payload-dropped";
+
+    // The legacy invitation token is preserved as a record but cannot authenticate
+    // (uuidv4 shape vs the target's 43-char base64url); those people need re-inviting.
+    public const string InvitationTokenInert = "surveyinvitation.token-inert";
+    public const string InvitationStatusReconstructed = "surveyinvitation.status-reconstructed";
+    public const string InvitationExpiryDerived = "surveyinvitation.expiry-derived";
+    public const string InvitationDuplicateToken = "surveyinvitation.duplicate-token";
+    public const string DistributionDuplicateSurvey = "surveydistribution.duplicate-survey";
 }
