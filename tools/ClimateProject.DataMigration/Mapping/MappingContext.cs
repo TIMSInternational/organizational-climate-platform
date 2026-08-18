@@ -29,6 +29,12 @@ public sealed class MappingContext
     /// <summary>Surveys already migrated - a response's survey FK is non-nullable.</summary>
     public IReadOnlySet<Guid> Surveys { get; init; } = new HashSet<Guid>();
 
+    /// <summary>Microclimate templates already migrated (a microclimate may cite one).</summary>
+    public IReadOnlySet<Guid> MicroclimateTemplates { get; init; } = new HashSet<Guid>();
+
+    /// <summary>Microclimates already migrated - an invitation's FK is non-nullable.</summary>
+    public IReadOnlySet<Guid> Microclimates { get; init; } = new HashSet<Guid>();
+
     /// <summary>
     /// Each migrated survey's content language. A version snapshot must attribute
     /// exactly as the survey it snapshots did - reading Company.language again could

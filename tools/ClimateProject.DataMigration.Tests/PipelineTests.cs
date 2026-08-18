@@ -39,6 +39,15 @@ public sealed class EtlContainersFixture : IAsyncLifetime
             DELETE FROM question_responses;
             DELETE FROM response_demographics;
             DELETE FROM responses;
+            DELETE FROM microclimate_invitations;
+            DELETE FROM microclimate_ai_insights;
+            DELETE FROM microclimate_department_targets;
+            DELETE FROM microclimate_question_options;
+            DELETE FROM microclimate_questions;
+            DELETE FROM microclimates;
+            DELETE FROM microclimate_template_question_options;
+            DELETE FROM microclimate_template_questions;
+            DELETE FROM microclimate_templates;
             DELETE FROM survey_audit_logs;
             DELETE FROM survey_invitations;
             DELETE FROM survey_distributions;
@@ -101,6 +110,8 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
     private static readonly ObjectId DraftOid = ObjectId.Parse("64b0000000000000000000a1");
     private static readonly ObjectId DistOid = ObjectId.Parse("64b0000000000000000000b1");
     private static readonly ObjectId InviteOid = ObjectId.Parse("64b0000000000000000000c1");
+    private static readonly ObjectId McTemplateOid = ObjectId.Parse("64b0000000000000000000d1");
+    private static readonly ObjectId McOid = ObjectId.Parse("64b0000000000000000000e1");
 
     /// <summary>The fixture corpus: every FK edge, both second passes, one of each misfit.</summary>
     private static async Task SeedLegacyAsync(IMongoDatabase legacy)
@@ -374,6 +385,61 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
             },
         ]);
 
+        await legacy.GetCollection<BsonDocument>("microclimatetemplates").InsertManyAsync(
+        [
+            new BsonDocument
+            {
+                ["_id"] = McTemplateOid,
+                ["name"] = "Weekly pulse",
+                ["description"] = "Three quick questions.",
+                ["category"] = "pulse_check",
+                ["company_id"] = AcmeOid.ToString(),
+                ["questions"] = new BsonArray
+                {
+                    new BsonDocument
+                    {
+                        ["id"] = "mtq-1", ["text"] = "Mood?", ["type"] = "multiple_choice",
+                        ["options"] = new BsonArray { "Good", "Bad" }, ["order"] = 0,
+                    },
+                },
+                ["settings"] = new BsonDocument { ["default_duration_minutes"] = 15 },
+            },
+        ]);
+
+        await legacy.GetCollection<BsonDocument>("microclimates").InsertManyAsync(
+        [
+            new BsonDocument
+            {
+                ["_id"] = McOid,
+                ["title"] = "Monday pulse",
+                ["company_id"] = AcmeOid.ToString(),
+                ["created_by"] = AdaOid.ToString(),
+                ["template_id"] = McTemplateOid.ToString(),
+                ["targeting"] = new BsonDocument
+                {
+                    ["department_ids"] = new BsonArray { EngOid.ToString() },
+                    ["include_managers"] = false,
+                },
+                ["scheduling"] = new BsonDocument
+                {
+                    ["start_time"] = new DateTime(2026, 7, 6, 9, 0, 0, DateTimeKind.Utc),
+                    ["duration_minutes"] = 45,
+                },
+                ["questions"] = new BsonArray
+                {
+                    new BsonDocument { ["id"] = "mq-1", ["text"] = "How is your week?", ["type"] = "likert", ["order"] = 0 },
+                    // Unrepresentable: no emoji table on a microclimate question.
+                    new BsonDocument { ["id"] = "mq-2", ["text"] = "Mood?", ["type"] = "emoji_rating", ["order"] = 1 },
+                },
+                ["ai_insights"] = new BsonArray
+                {
+                    new BsonDocument { ["type"] = "pattern", ["message"] = "Workload rising.", ["confidence"] = 0.8 },
+                },
+                ["status"] = "completed",
+                ["created_at"] = new DateTime(2026, 7, 5, 0, 0, 0, DateTimeKind.Utc),
+            },
+        ]);
+
         await legacy.GetCollection<BsonDocument>("responses").InsertManyAsync(
         [
             new BsonDocument
@@ -609,6 +675,28 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
         Assert.Contains(report.Entries, e => e.Rule == MigrationRules.InvitationTokenInert);
         Assert.False(SurveyAccessTokens.HasExpectedShape(invitation.InvitationToken));
 
+        // The Microclimate domain: derived window, positional insight ids, the emoji
+        // question refused, and the template link resolved.
+        var microTemplate = await db.MicroclimateTemplates.SingleAsync();
+        Assert.Equal(15, microTemplate.Settings.DefaultDurationMinutes);
+        Assert.Equal(2, await db.MicroclimateTemplateQuestionOptions.CountAsync());
+
+        var micro = await db.Microclimates.SingleAsync();
+        Assert.Equal(MigrationIds.For("microclimates", McOid), micro.Id);
+        Assert.Equal(microTemplate.Id, micro.TemplateId);
+        Assert.Equal(ada.Id, micro.CreatedBy);
+        Assert.Equal("closed", micro.Status); // legacy 'completed'
+        Assert.Equal(new DateTimeOffset(2026, 7, 6, 9, 45, 0, TimeSpan.Zero), micro.Scheduling.EndTime);
+        Assert.False(micro.Targeting.IncludeManagers);
+
+        // Only the likert question survives; the emoji one has nowhere to land.
+        Assert.Equal(1, await db.MicroclimateQuestions.CountAsync());
+        Assert.Contains(report.Entries, e => e.Rule == MigrationRules.MicroclimateQuestionEmojiUnrepresentable);
+        Assert.Equal(eng.Id, (await db.MicroclimateDepartmentTargets.SingleAsync()).DepartmentId);
+        var insight = await db.MicroclimateAiInsights.SingleAsync();
+        Assert.Equal(
+            MigrationIds.ForChild("microclimates", McOid, MicroclimateMapper.InsightScope, "#0"), insight.Id);
+
         // Attribution: en company label + the platform maintenance message, then the
         // survey's title, description, invitation message and two question texts,
         // the template's two question texts, the version's title and description,
@@ -621,7 +709,9 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
             e => e.Kind == ReportEntryKind.Attribution && e.Collection == "responses"));
         Assert.Equal(2, report.Entries.Count(
             e => e.Kind == ReportEntryKind.Attribution && e.Collection == "surveyversions"));
-        Assert.Equal(13, report.Entries.Count(e => e.Kind == ReportEntryKind.Attribution));
+        // + the microclimate's title and its one surviving question text, + the
+        // template's question text.
+        Assert.Equal(16, report.Entries.Count(e => e.Kind == ReportEntryKind.Attribution));
     }
 
     [Fact]
@@ -665,6 +755,10 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
             Assert.Equal(3, await db.QuestionResponses.CountAsync());
             Assert.Equal(1, await db.ResponseDemographics.CountAsync());
 
+            Assert.Equal(1, await db.Microclimates.CountAsync());
+            Assert.Equal(1, await db.MicroclimateQuestions.CountAsync());
+            Assert.Equal(1, await db.MicroclimateAiInsights.CountAsync());
+            Assert.Equal(1, await db.MicroclimateTemplates.CountAsync());
             Assert.Equal(1, await db.SurveyDrafts.CountAsync());
             Assert.Equal(1, await db.SurveyDistributions.CountAsync());
             Assert.Equal(1, await db.SurveyInvitations.CountAsync());
@@ -726,6 +820,7 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
             Assert.Equal(1, await verify.SurveyVersions.CountAsync());
             Assert.Equal(1, await verify.SurveyAuditLogs.CountAsync());
             Assert.Equal(1, await verify.SurveyInvitations.CountAsync());
+            Assert.Equal(1, await verify.Microclimates.CountAsync());
             var api = await verify.Departments.SingleAsync(d => d.Name == "Backend API");
             Assert.NotNull(api.ParentDepartmentId);
             var eng = await verify.Departments.SingleAsync(d => d.Name == "Engineering");
@@ -757,6 +852,7 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
         Assert.Equal(0, await verify.SurveyVersions.CountAsync());
         Assert.Equal(0, await verify.SurveyAuditLogs.CountAsync());
         Assert.Equal(0, await verify.SurveyInvitations.CountAsync());
+        Assert.Equal(0, await verify.Microclimates.CountAsync());
     }
 
     [Fact]
@@ -767,8 +863,8 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
         var pipeline = new MigrationPipeline(legacy, db, new DataQualityReport(), dryRun: true);
 
         var exception = await Assert.ThrowsAsync<NotSupportedException>(
-            () => pipeline.RunAsync(["companies", "microclimates"], CancellationToken.None));
-        Assert.Contains("microclimates", exception.Message);
+            () => pipeline.RunAsync(["companies", "actionplans"], CancellationToken.None));
+        Assert.Contains("actionplans", exception.Message);
     }
 
     [Fact]
