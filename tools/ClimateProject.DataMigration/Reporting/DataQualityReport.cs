@@ -221,4 +221,14 @@ public static class MigrationRules
     public const string NotificationVocabularyUnknown = "notification.vocabulary-unknown";
     public const string NotificationVariableInvalid = "notificationtemplate.variable-invalid";
     public const string NotificationConditionUnparseable = "notificationtemplate.condition-unparseable";
+
+    // Insights (#154 slice 10). The shape rules exist because #152's two models share
+    // one collection: a reviewer needs the per-document distribution, since the census
+    // sees only one collection name.
+    public const string AiInsightShapeRecorded = "aiinsight.shape-recorded";
+    public const string AiInsightShapeAmbiguous = "aiinsight.shape-ambiguous";
+    public const string AiInsightTypeUnknown = "aiinsight.type-unknown";
+    public const string AiInsightConfidenceClamped = "aiinsight.confidence-clamped";
+    public const string AnalyticsVocabularyUnknown = "analyticsinsight.vocabulary-unknown";
+    public const string AnalyticsPointIncomplete = "analyticsinsight.point-incomplete";
 }
