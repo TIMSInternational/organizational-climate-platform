@@ -1666,7 +1666,17 @@
         "revoked": "Revoked",
         "expired": "Expired"
       },
-      "remindersSent": "Reminders sent"
+      "remindersSent": "Reminders sent",
+      "distributionForNamed": "Distribution for {title}",
+      "invitationsQueuedWithSkips": "{count} invitations were queued for delivery; {skipped} were skipped (already invited, or no longer active).",
+      "expiresAt": "Expires",
+      "filterByStatus": "Filter invitations by status",
+      "accessTypePublic": "Open link live",
+      "accessTypeTokenized": "Invitation only",
+      "shareLinkNeverReplaced": "This link has never been replaced.",
+      "shareLinkLastReplaced": "Last replaced {date}.",
+      "linkOpens": "Link opens",
+      "linkVisitors": "Unique visitors"
     },
     "statusDraft": "Draft",
     "statusScheduled": "Scheduled",

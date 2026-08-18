@@ -66,7 +66,7 @@ export default function InvitationTable({
 }: InvitationTableProps) {
   const { t, locale } = useTranslation()
   const tracksProgress = !anonymity.suppressedStates.includes('started')
-  const columnCount = tracksProgress ? 7 : 5
+  const columnCount = tracksProgress ? 8 : 6
 
   return (
     // The `<Table>` primitive, never a bare `<table>`: it owns `w-full` and the
@@ -79,6 +79,9 @@ export default function InvitationTable({
           <TableHead>{t('surveys.distribution.sentAt')}</TableHead>
           {tracksProgress && <TableHead>{t('surveys.distribution.startedAt')}</TableHead>}
           {tracksProgress && <TableHead>{t('surveys.distribution.completedAt')}</TableHead>}
+          {/* The derived "Expired" badge says THAT an invitation lapsed and never
+              when, which is the fact an admin needs to decide whether to re-invite. */}
+          <TableHead>{t('surveys.distribution.expiresAt')}</TableHead>
           <TableHead>{t('surveys.distribution.reminders')}</TableHead>
           <TableHead>{t('common.actions')}</TableHead>
         </TableRow>
@@ -117,6 +120,7 @@ export default function InvitationTable({
                 {tracksProgress && (
                   <TableCell>{formatMoment(invitation.completedAt, locale)}</TableCell>
                 )}
+                <TableCell>{formatMoment(invitation.expiresAt, locale)}</TableCell>
                 <TableCell>{invitation.reminderCount}</TableCell>
                 <TableCell>
                   <span className="flex flex-wrap gap-inline">

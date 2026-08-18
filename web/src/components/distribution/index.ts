@@ -13,3 +13,4 @@ export { default as DistributionProgress, type DistributionProgressProps } from 
 export { default as InvitationCopyEditor, type InvitationCopyEditorProps } from './InvitationCopyEditor'
 export { default as InvitationTable, type InvitationTableProps } from './InvitationTable'
 export { default as ShareLinkPanel, type ShareLinkPanelProps } from './ShareLinkPanel'
+export { default as InvitationStatusChips } from './InvitationStatusChips'

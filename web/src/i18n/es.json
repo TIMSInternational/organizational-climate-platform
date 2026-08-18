@@ -1666,7 +1666,17 @@
         "revoked": "Revocada",
         "expired": "Caducada"
       },
-      "remindersSent": "Recordatorios enviados"
+      "remindersSent": "Recordatorios enviados",
+      "distributionForNamed": "Distribución de {title}",
+      "invitationsQueuedWithSkips": "Se pusieron en cola {count} invitaciones; se omitieron {skipped} (ya invitadas o ya no activas).",
+      "expiresAt": "Vence",
+      "filterByStatus": "Filtrar invitaciones por estado",
+      "accessTypePublic": "Enlace abierto activo",
+      "accessTypeTokenized": "Solo por invitación",
+      "shareLinkNeverReplaced": "Este enlace nunca se ha reemplazado.",
+      "shareLinkLastReplaced": "Reemplazado por última vez el {date}.",
+      "linkOpens": "Aperturas del enlace",
+      "linkVisitors": "Visitantes únicos"
     },
     "statusDraft": "Borrador",
     "statusScheduled": "Programada",

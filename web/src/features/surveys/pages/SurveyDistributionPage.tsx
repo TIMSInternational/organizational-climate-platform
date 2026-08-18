@@ -15,6 +15,7 @@ import { statusLabel } from '../surveyVocabulary'
 import {
   AudienceSelector,
   DistributionProgress,
+  InvitationStatusChips,
   InvitationCopyEditor,
   InvitationTable,
   ShareLinkPanel,
@@ -34,6 +35,7 @@ import {
   updateSurveyDistribution,
   type SurveyDistributionDetail,
   type SurveyInvitationList,
+  type SurveyInvitationStatus,
 } from '../api/surveyDistribution'
 import {
   getSurveyInvitationCopy,
@@ -98,11 +100,16 @@ export default function SurveyDistributionPage() {
   const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<string[]>([])
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
   const [confirming, setConfirming] = useState(false)
+  // The invitation table's status filter. Held here rather than in the table because it
+  // is a server round-trip, not a client-side narrowing of rows already fetched.
+  const [statusFilter, setStatusFilter] = useState('')
   const [draftCopy, setDraftCopy] = useState<InvitationCopyByLocale | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
+    // `load` fetches the list unfiltered, so the chip row has to agree with it.
+    setStatusFilter('')
     try {
       // The survey first and on its own: its `companyId` is what decides whether the
       // audience lists may be requested at all, so requesting them alongside it would be
@@ -176,8 +183,23 @@ export default function SurveyDistributionPage() {
       // "Queued", never "sent": this call writes `notifications` rows and nothing more.
       // Delivery is the notification sweep's job, and a page that reports mail as
       // delivered because a POST returned 200 is a page that will be believed.
-      setNotice(t('surveys.distribution.invitationsQueued', { count: result.created }))
-      setInvitations(await listSurveyInvitations(baseUrl, surveyId))
+      //
+      // The skip count is reported rather than discarded. The server answers `requested`
+      // and `created` separately precisely because they differ -- somebody already
+      // invited, or deactivated since the audience was chosen -- and a notice reading
+      // "40 invitations were queued" after asking for 45 leaves the admin to discover
+      // the gap by counting rows. Only shown when it happened: "and 0 skipped" is noise
+      // on the run where nothing was.
+      const skipped = result.requested - result.created
+      setNotice(
+        skipped > 0
+          ? t('surveys.distribution.invitationsQueuedWithSkips', {
+              count: result.created,
+              skipped,
+            })
+          : t('surveys.distribution.invitationsQueued', { count: result.created }),
+      )
+      setInvitations(await refreshInvitations())
       setDistribution(await getSurveyDistribution(baseUrl, surveyId))
     })
   }
@@ -191,7 +213,7 @@ export default function SurveyDistributionPage() {
           skipped: result.skippedTooSoon,
         }),
       )
-      setInvitations(await listSurveyInvitations(baseUrl, surveyId))
+      setInvitations(await refreshInvitations())
     })
   }
 
@@ -203,7 +225,7 @@ export default function SurveyDistributionPage() {
     try {
       await run(async () => {
         await act(invitationId)
-        setInvitations(await listSurveyInvitations(baseUrl, surveyId))
+        setInvitations(await refreshInvitations())
       })
     } finally {
       setBusyInvitationId(null)
@@ -218,6 +240,34 @@ export default function SurveyDistributionPage() {
       const refreshed = await getSurveyInvitationCopy(baseUrl, surveyId, locale as Locale)
       setContext(refreshed)
       setDraftCopy(refreshed.copy)
+    })
+  }
+
+  /**
+   * Re-read the invitation list THROUGH the active filter.
+   *
+   * The three action handlers refetched unfiltered, which after a resend or a reminder
+   * swapped the table back to every invitation while the chip above it still read
+   * "Opened" -- the control and the rows disagreeing about what was on screen.
+   */
+  function refreshInvitations(): Promise<SurveyInvitationList> {
+    return listSurveyInvitations(
+      baseUrl,
+      surveyId,
+      statusFilter === '' ? {} : { status: statusFilter as SurveyInvitationStatus },
+    )
+  }
+
+  async function handleStatusFilter(status: string): Promise<void> {
+    setStatusFilter(status)
+    await run(async () => {
+      setInvitations(
+        await listSurveyInvitations(
+          baseUrl,
+          surveyId,
+          status === '' ? {} : { status: status as SurveyInvitationStatus },
+        ),
+      )
     })
   }
 
@@ -382,6 +432,16 @@ export default function SurveyDistributionPage() {
 
             <section aria-labelledby="distribution-invitations" className="flex flex-col gap-panel-gap">
               <H2 id="distribution-invitations">{t('surveys.distribution.invitationsTitle')}</H2>
+              {/* Counts from the distribution detail's summary, which is never
+                  filtered: driving them off the filtered response would zero every
+                  other chip the moment one was chosen. */}
+              <InvitationStatusChips
+                value={statusFilter}
+                summary={distribution.invitations}
+                anonymity={invitations.anonymity}
+                onChange={(status) => void handleStatusFilter(status)}
+                disabled={busy}
+              />
               <div className="rounded-lg border border-line-light bg-surface-panel p-panel">
                 <InvitationTable
                   invitations={invitations.invitations}
@@ -406,6 +466,10 @@ export default function SurveyDistributionPage() {
               <div className="rounded-lg border border-line-light bg-surface-panel p-panel">
                 <ShareLinkPanel
                   publicLink={distribution.publicLink}
+                  accessType={distribution.accessType}
+                  totalAccesses={distribution.totalAccesses}
+                  uniqueVisitors={distribution.uniqueVisitors}
+                  lastRegeneratedAt={distribution.lastRegeneratedAt}
                   busy={busy}
                   onCreate={() =>
                     void run(async () => {

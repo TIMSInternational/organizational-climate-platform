@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from '../../i18n'
+import { calendarDay } from '../../lib/calendarDay'
 import { Alert, AlertDescription, Badge, Button } from '../ui'
 
 /**
@@ -34,6 +35,17 @@ import { Alert, AlertDescription, Badge, Button } from '../ui'
 export interface ShareLinkPanelProps {
   /** The share link, or `null` when the survey is `tokenized` and none is minted. */
   publicLink: string | null
+  /**
+   * How the survey is reachable: `tokenized` (personal invitations only) or `public`
+   * (this link is live). Rendered as a chip because it is the single fact that decides
+   * whether the warning below is hypothetical or current.
+   */
+  accessType?: string
+  /** Times the link has been opened, and by how many distinct visitors. */
+  totalAccesses?: number
+  uniqueVisitors?: number
+  /** When the link was last replaced. The fact the replace-warning is actually about. */
+  lastRegeneratedAt?: string | null
   onCreate: () => void
   onRegenerate: () => void
   onRevoke: () => void
@@ -47,14 +59,23 @@ export interface ShareLinkPanelProps {
  */
 const MASK = '••••••••••••••••••••'
 
+function formatDay(value: string, locale: string): string {
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? value : calendarDay(parsed, locale)
+}
+
 export default function ShareLinkPanel({
+  accessType,
+  totalAccesses,
+  uniqueVisitors,
+  lastRegeneratedAt,
   publicLink,
   onCreate,
   onRegenerate,
   onRevoke,
   busy = false,
 }: ShareLinkPanelProps) {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   // The link that was revealed, not a boolean. Revealing one link is consent to see *that*
   // link — carrying a `true` across a regeneration would put a freshly-minted credential
   // on screen unasked, at the exact moment an admin is most likely to be screen-sharing.
@@ -77,9 +98,33 @@ export default function ShareLinkPanel({
 
   return (
     <div className="flex flex-col gap-panel-gap">
+      {accessType !== undefined && (
+        <div>
+          <Badge variant={accessType === 'public' ? 'secondary' : 'outline'}>
+            {accessType === 'public'
+              ? t('surveys.distribution.accessTypePublic')
+              : t('surveys.distribution.accessTypeTokenized')}
+          </Badge>
+        </div>
+      )}
+
       <Alert variant="default">
         <AlertDescription>{t('surveys.distribution.shareLinkWarning')}</AlertDescription>
       </Alert>
+
+      {/* The warning above says to replace the link if it leaks. This is the fact that
+          warning is about: whether it ever has been, and when. Rendered next to it
+          rather than in a details panel, because a warning with no state beside it is
+          advice, and advice with the date attached is a record. */}
+      {lastRegeneratedAt !== undefined && (
+        <p className="text-sm text-fg-secondary">
+          {lastRegeneratedAt === null
+            ? t('surveys.distribution.shareLinkNeverReplaced')
+            : t('surveys.distribution.shareLinkLastReplaced', {
+                date: formatDay(lastRegeneratedAt, locale),
+              })}
+        </p>
+      )}
 
       <p className="flex flex-wrap items-center gap-inline">
         <Badge variant="outline">
@@ -95,6 +140,26 @@ export default function ShareLinkPanel({
           {revealed ? t('surveys.distribution.shareLinkHide') : t('surveys.distribution.shareLinkReveal')}
         </Button>
       </p>
+
+      {/* Readings, so mono with tabular figures -- the redesign's one typographic law.
+          Shown only when the payload carried them: a hard 0 would assert the link has
+          never been opened, which is a different statement from not knowing. */}
+      {(totalAccesses !== undefined || uniqueVisitors !== undefined) && (
+        <dl className="flex flex-wrap gap-panel-gap text-sm">
+          {totalAccesses !== undefined && (
+            <div className="flex items-center gap-inline">
+              <dt className="text-fg-secondary">{t('surveys.distribution.linkOpens')}</dt>
+              <dd className="font-mono tabular-nums">{totalAccesses.toLocaleString(locale)}</dd>
+            </div>
+          )}
+          {uniqueVisitors !== undefined && (
+            <div className="flex items-center gap-inline">
+              <dt className="text-fg-secondary">{t('surveys.distribution.linkVisitors')}</dt>
+              <dd className="font-mono tabular-nums">{uniqueVisitors.toLocaleString(locale)}</dd>
+            </div>
+          )}
+        </dl>
+      )}
 
       <div className="flex flex-wrap gap-inline">
         <Button variant="outline" onClick={onRegenerate} disabled={busy}>
