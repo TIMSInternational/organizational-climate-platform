@@ -637,14 +637,159 @@ public sealed class LegacyDemographicResponseItem
     [BsonExtraElements] public BsonDocument? Extra { get; set; }
 }
 
-/// <summary>15. Mongoose model 'Microclimate' (Microclimate.ts).</summary>
-public sealed class LegacyMicroclimate : LegacyDocument;
+/// <summary>
+/// 15. Mongoose model 'Microclimate' (Microclimate.ts). Typed 2026-08-18.
+/// Three embedded arrays fan out: questions, targeting.department_ids, and ai_insights.
+/// </summary>
+public sealed class LegacyMicroclimate : LegacyDocument
+{
+    [BsonElement("title")] public string? Title { get; set; }
+    [BsonElement("description")] public string? Description { get; set; }
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("created_by")] public string? CreatedBy { get; set; }
+    [BsonElement("targeting")] public LegacyMicroclimateTargeting? Targeting { get; set; }
+    [BsonElement("scheduling")] public LegacyMicroclimateScheduling? Scheduling { get; set; }
+    [BsonElement("real_time_settings")] public LegacyRealTimeSettings? RealTimeSettings { get; set; }
+    [BsonElement("template_id")] public string? TemplateId { get; set; }
+    [BsonElement("questions")] public List<LegacyMicroclimateQuestion>? Questions { get; set; }
+    [BsonElement("status")] public string? Status { get; set; }
+    [BsonElement("response_count")] public int? ResponseCount { get; set; }
+    [BsonElement("target_participant_count")] public int? TargetParticipantCount { get; set; }
+    [BsonElement("participation_rate")] public double? ParticipationRate { get; set; }
+    [BsonElement("live_results")] public LegacyLiveResults? LiveResults { get; set; }
+    [BsonElement("ai_insights")] public List<LegacyMicroclimateAiInsight>? AiInsights { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
 
-/// <summary>16. Mongoose model 'MicroclimateTemplate' (MicroclimateTemplate.ts).</summary>
-public sealed class LegacyMicroclimateTemplate : LegacyDocument;
+public sealed class LegacyMicroclimateTargeting
+{
+    [BsonElement("department_ids")] public List<string>? DepartmentIds { get; set; }
+    [BsonElement("role_filters")] public List<string>? RoleFilters { get; set; }
+    [BsonElement("tenure_filters")] public List<string>? TenureFilters { get; set; }
+    [BsonElement("custom_filters")] public BsonValue? CustomFilters { get; set; }
+    [BsonElement("include_managers")] public bool? IncludeManagers { get; set; }
+    [BsonElement("max_participants")] public int? MaxParticipants { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
 
-/// <summary>17. Mongoose model 'MicroclimateInvitation' (MicroclimateInvitation.ts).</summary>
-public sealed class LegacyMicroclimateInvitation : LegacyDocument;
+/// <summary>
+/// The target stores an explicit end_time; legacy stored a duration. The mapper derives
+/// end = start + duration_minutes, which is what the legacy product itself computed at
+/// read time. auto_close has no target column on a microclimate (only on a template's
+/// settings) and is a named drop.
+/// </summary>
+public sealed class LegacyMicroclimateScheduling
+{
+    [BsonElement("start_time")] public DateTime? StartTime { get; set; }
+    [BsonElement("duration_minutes")] public int? DurationMinutes { get; set; }
+    [BsonElement("timezone")] public string? Timezone { get; set; }
+    [BsonElement("auto_close")] public bool? AutoClose { get; set; }
+    [BsonElement("reminder_settings")] public BsonValue? ReminderSettings { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyRealTimeSettings
+{
+    [BsonElement("show_live_results")] public bool? ShowLiveResults { get; set; }
+    [BsonElement("anonymous_responses")] public bool? AnonymousResponses { get; set; }
+    [BsonElement("allow_comments")] public bool? AllowComments { get; set; }
+    [BsonElement("word_cloud_enabled")] public bool? WordCloudEnabled { get; set; }
+    [BsonElement("sentiment_analysis_enabled")] public bool? SentimentAnalysisEnabled { get; set; }
+    [BsonElement("participation_threshold")] public int? ParticipationThreshold { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyLiveResults
+{
+    [BsonElement("sentiment_score")] public double? SentimentScore { get; set; }
+    [BsonElement("engagement_level")] public string? EngagementLevel { get; set; }
+    [BsonElement("top_themes")] public List<string>? TopThemes { get; set; }
+    [BsonElement("word_cloud_data")] public BsonValue? WordCloudData { get; set; }
+    [BsonElement("response_distribution")] public BsonValue? ResponseDistribution { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>Embedded question. Simpler than a survey's: no scale, no comment config.</summary>
+public sealed class LegacyMicroclimateQuestion
+{
+    [BsonElement("id")] public string? Id { get; set; }
+    [BsonElement("text")] public string? Text { get; set; }
+    [BsonElement("type")] public string? Type { get; set; }
+    [BsonElement("options")] public List<string>? Options { get; set; }
+    [BsonElement("required")] public bool? Required { get; set; }
+    [BsonElement("order")] public int? Order { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>An embedded insight. Carries NO id, so identity is positional.</summary>
+public sealed class LegacyMicroclimateAiInsight
+{
+    [BsonElement("type")] public string? Type { get; set; }
+    [BsonElement("message")] public string? Message { get; set; }
+    [BsonElement("confidence")] public double? Confidence { get; set; }
+    [BsonElement("timestamp")] public DateTime? Timestamp { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>16. Mongoose model 'MicroclimateTemplate' (MicroclimateTemplate.ts). Typed 2026-08-18.</summary>
+public sealed class LegacyMicroclimateTemplate : LegacyDocument
+{
+    [BsonElement("name")] public string? Name { get; set; }
+    [BsonElement("description")] public string? Description { get; set; }
+    [BsonElement("category")] public string? Category { get; set; }
+    [BsonElement("questions")] public List<LegacyMicroclimateQuestion>? Questions { get; set; }
+    [BsonElement("settings")] public LegacyMicroclimateTemplateSettings? Settings { get; set; }
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("created_by")] public string? CreatedBy { get; set; }
+    [BsonElement("is_system_template")] public bool? IsSystemTemplate { get; set; }
+    [BsonElement("usage_count")] public int? UsageCount { get; set; }
+    [BsonElement("is_active")] public bool? IsActive { get; set; }
+    [BsonElement("tags")] public List<string>? Tags { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
+
+public sealed class LegacyMicroclimateTemplateSettings
+{
+    [BsonElement("default_duration_minutes")] public int? DefaultDurationMinutes { get; set; }
+    [BsonElement("suggested_frequency")] public string? SuggestedFrequency { get; set; }
+    [BsonElement("max_participants")] public int? MaxParticipants { get; set; }
+    [BsonElement("anonymous_by_default")] public bool? AnonymousByDefault { get; set; }
+    [BsonElement("auto_close")] public bool? AutoClose { get; set; }
+    [BsonElement("show_live_results")] public bool? ShowLiveResults { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>
+/// 17. Mongoose model 'MicroclimateInvitation' (MicroclimateInvitation.ts). Typed
+/// 2026-08-18. Structurally the survey invitation's twin, and its token is inert for
+/// the same reason with a different shape: microclimate-invitation-service.ts:108 mints
+/// <c>crypto.randomBytes(32).toString('hex')</c> - 64 hex characters - where the target
+/// admits only 43 base64url ones.
+/// </summary>
+public sealed class LegacyMicroclimateInvitation : LegacyDocument
+{
+    [BsonElement("microclimate_id")] public BsonValue? MicroclimateId { get; set; }
+    [BsonElement("user_id")] public BsonValue? UserId { get; set; }
+    [BsonElement("company_id")] public BsonValue? CompanyId { get; set; }
+    [BsonElement("email")] public string? Email { get; set; }
+    [BsonElement("invitation_token")] public string? InvitationToken { get; set; }
+    [BsonElement("status")] public string? Status { get; set; }
+    [BsonElement("sent_at")] public DateTime? SentAt { get; set; }
+    [BsonElement("opened_at")] public DateTime? OpenedAt { get; set; }
+    [BsonElement("started_at")] public DateTime? StartedAt { get; set; }
+    [BsonElement("completed_at")] public DateTime? CompletedAt { get; set; }
+    [BsonElement("reminder_count")] public int? ReminderCount { get; set; }
+    [BsonElement("last_reminder_sent")] public DateTime? LastReminderSent { get; set; }
+    [BsonElement("expires_at")] public DateTime? ExpiresAt { get; set; }
+    [BsonElement("metadata")] public LegacyInvitationMetadata? Metadata { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
 
 /// <summary>18. Mongoose model 'ActionPlan' (ActionPlan.ts).</summary>
 public sealed class LegacyActionPlan : LegacyDocument;

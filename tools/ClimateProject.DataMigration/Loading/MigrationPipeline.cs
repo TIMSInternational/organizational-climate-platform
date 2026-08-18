@@ -57,6 +57,7 @@ public sealed class MigrationPipeline(
         "companies", "demographicfields", "departments", "users", "systemsettings",
         "surveys", "surveytemplates", "surveyversions", "surveyauditlogs",
         "surveydrafts", "surveydistributions", "surveyinvitations", "responses",
+        "microclimatetemplates", "microclimates", "microclimateinvitations",
     ];
 
     private readonly List<CollectionResult> _results = [];
@@ -157,6 +158,24 @@ public sealed class MigrationPipeline(
             await LoadResponsesAsync(context, ct);
         }
 
+        if (wanted.Contains("microclimatetemplates"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadMicroclimateTemplatesAsync(context, ct);
+        }
+
+        if (wanted.Contains("microclimates"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadMicroclimatesAsync(context, ct);
+        }
+
+        if (wanted.Contains("microclimateinvitations"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadMicroclimateInvitationsAsync(context, ct);
+        }
+
         await SecondPassAsync(context, ct);
         AssertDepartmentHierarchy();
 
@@ -194,6 +213,12 @@ public sealed class MigrationPipeline(
         var questions = (await db.Questions.Select(q => q.Id).ToListAsync(ct)).ToHashSet();
         questions.UnionWith(db.Questions.Local.Select(q => q.Id));
 
+        var microclimateTemplates = (await db.MicroclimateTemplates.Select(t => t.Id).ToListAsync(ct)).ToHashSet();
+        microclimateTemplates.UnionWith(db.MicroclimateTemplates.Local.Select(t => t.Id));
+
+        var microclimates = (await db.Microclimates.Select(m => m.Id).ToListAsync(ct)).ToHashSet();
+        microclimates.UnionWith(db.Microclimates.Local.Select(m => m.Id));
+
         var fields = new Dictionary<(Guid, string), Guid>();
         foreach (var field in await db.DemographicFields.Select(f => new { f.Id, f.CompanyId, f.Field }).ToListAsync(ct))
         {
@@ -215,6 +240,8 @@ public sealed class MigrationPipeline(
             Surveys = surveys,
             SurveyLanguages = surveyLanguages,
             Questions = questions,
+            MicroclimateTemplates = microclimateTemplates,
+            Microclimates = microclimates,
             DemographicFields = fields,
         };
     }
@@ -662,6 +689,219 @@ public sealed class MigrationPipeline(
 
         await SaveAsync(ct);
         _results.Add(new CollectionResult("surveytemplates", source, written, report.SkipCount("surveytemplates")));
+    }
+
+    private async Task LoadMicroclimateTemplatesAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        await foreach (var document in Read<LegacyMicroclimateTemplate>("microclimatetemplates", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (MicroclimateTemplateMapper.Map(document, context) is not { } mapped)
+            {
+                continue;
+            }
+
+            var existing = await db.MicroclimateTemplates.FindAsync([mapped.Template.Id], ct);
+            if (existing is null)
+            {
+                db.MicroclimateTemplates.Add(mapped.Template);
+            }
+            else
+            {
+                existing.Name = mapped.Template.Name;
+                existing.Description = mapped.Template.Description;
+                existing.Category = mapped.Template.Category;
+                existing.CompanyId = mapped.Template.CompanyId;
+                existing.CreatedBy = mapped.Template.CreatedBy;
+                existing.IsSystemTemplate = mapped.Template.IsSystemTemplate;
+                existing.UsageCount = mapped.Template.UsageCount;
+                existing.IsActive = mapped.Template.IsActive;
+                existing.Tags = mapped.Template.Tags;
+                existing.Settings = mapped.Template.Settings;
+                existing.CreatedAt = mapped.Template.CreatedAt;
+                existing.UpdatedAt = mapped.Template.UpdatedAt;
+            }
+
+            var keptIds = mapped.Questions.Select(q => q.Id).ToHashSet();
+            var stale = await db.MicroclimateTemplateQuestions
+                .Where(q => q.TemplateId == mapped.Template.Id).ToListAsync(ct);
+            db.MicroclimateTemplateQuestions.RemoveRange(stale.Where(q => !keptIds.Contains(q.Id)));
+            var byId = stale.ToDictionary(q => q.Id);
+            foreach (var question in mapped.Questions)
+            {
+                if (byId.TryGetValue(question.Id, out var current))
+                {
+                    current.TextEn = question.TextEn;
+                    current.TextEs = question.TextEs;
+                    current.Type = question.Type;
+                    current.Required = question.Required;
+                    current.Order = question.Order;
+                    current.Category = question.Category;
+                }
+                else
+                {
+                    db.MicroclimateTemplateQuestions.Add(question);
+                }
+            }
+
+            var staleOptions = await db.MicroclimateTemplateQuestionOptions
+                .Where(o => keptIds.Contains(o.MicroclimateTemplateQuestionId)).ToListAsync(ct);
+            db.MicroclimateTemplateQuestionOptions.RemoveRange(staleOptions);
+            db.MicroclimateTemplateQuestionOptions.AddRange(mapped.Options);
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("microclimatetemplates", source, written, report.SkipCount("microclimatetemplates")));
+    }
+
+    private async Task LoadMicroclimatesAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        await foreach (var document in Read<LegacyMicroclimate>("microclimates", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (MicroclimateMapper.Map(document, context) is not { } mapped)
+            {
+                continue;
+            }
+
+            var existing = await db.Microclimates.FindAsync([mapped.Microclimate.Id], ct);
+            if (existing is null)
+            {
+                db.Microclimates.Add(mapped.Microclimate);
+            }
+            else
+            {
+                existing.TitleEn = mapped.Microclimate.TitleEn;
+                existing.TitleEs = mapped.Microclimate.TitleEs;
+                existing.DescriptionEn = mapped.Microclimate.DescriptionEn;
+                existing.DescriptionEs = mapped.Microclimate.DescriptionEs;
+                existing.Language = mapped.Microclimate.Language;
+                existing.CompanyId = mapped.Microclimate.CompanyId;
+                existing.CreatedBy = mapped.Microclimate.CreatedBy;
+                existing.TemplateId = mapped.Microclimate.TemplateId;
+                existing.Status = mapped.Microclimate.Status;
+                existing.ResponseCount = mapped.Microclimate.ResponseCount;
+                existing.TargetParticipantCount = mapped.Microclimate.TargetParticipantCount;
+                existing.ParticipationRate = mapped.Microclimate.ParticipationRate;
+                existing.Targeting = mapped.Microclimate.Targeting;
+                existing.Scheduling = mapped.Microclimate.Scheduling;
+                existing.RealtimeSettings = mapped.Microclimate.RealtimeSettings;
+                existing.LiveResults = mapped.Microclimate.LiveResults;
+                existing.CreatedAt = mapped.Microclimate.CreatedAt;
+                existing.UpdatedAt = mapped.Microclimate.UpdatedAt;
+            }
+
+            var keptIds = mapped.Questions.Select(q => q.Id).ToHashSet();
+            var staleQuestions = await db.MicroclimateQuestions
+                .Where(q => q.MicroclimateId == mapped.Microclimate.Id).ToListAsync(ct);
+            db.MicroclimateQuestions.RemoveRange(staleQuestions.Where(q => !keptIds.Contains(q.Id)));
+            var byId = staleQuestions.ToDictionary(q => q.Id);
+            foreach (var question in mapped.Questions)
+            {
+                if (byId.TryGetValue(question.Id, out var current))
+                {
+                    current.TextEn = question.TextEn;
+                    current.TextEs = question.TextEs;
+                    current.Type = question.Type;
+                    current.Required = question.Required;
+                    current.Order = question.Order;
+                }
+                else
+                {
+                    db.MicroclimateQuestions.Add(question);
+                }
+            }
+
+            var staleOptions = await db.MicroclimateQuestionOptions
+                .Where(o => keptIds.Contains(o.MicroclimateQuestionId)).ToListAsync(ct);
+            db.MicroclimateQuestionOptions.RemoveRange(staleOptions);
+            db.MicroclimateQuestionOptions.AddRange(mapped.Options);
+
+            var staleTargets = await db.MicroclimateDepartmentTargets
+                .Where(t => t.MicroclimateId == mapped.Microclimate.Id).ToListAsync(ct);
+            db.MicroclimateDepartmentTargets.RemoveRange(staleTargets);
+            db.MicroclimateDepartmentTargets.AddRange(mapped.DepartmentTargets);
+
+            var staleInsights = await db.MicroclimateAiInsights
+                .Where(i => i.MicroclimateId == mapped.Microclimate.Id).ToListAsync(ct);
+            db.MicroclimateAiInsights.RemoveRange(staleInsights);
+            db.MicroclimateAiInsights.AddRange(mapped.Insights);
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("microclimates", source, written, report.SkipCount("microclimates")));
+    }
+
+    private async Task LoadMicroclimateInvitationsAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        var sinceSave = 0;
+        var seenTokens = new HashSet<string>(StringComparer.Ordinal);
+        await foreach (var document in Read<LegacyMicroclimateInvitation>("microclimateinvitations", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (MicroclimateInvitationMapper.Map(document, context) is not { } invitation)
+            {
+                continue;
+            }
+
+            if (!seenTokens.Add(invitation.InvitationToken))
+            {
+                report.Skip(MigrationRules.InvitationDuplicateToken, "microclimateinvitations",
+                    document.Id.ToString(),
+                    "another invitation already carries this token; the unique index would refuse it",
+                    "invitation_token");
+                continue;
+            }
+
+            var existing = await db.MicroclimateInvitations.FindAsync([invitation.Id], ct);
+            if (existing is null)
+            {
+                db.MicroclimateInvitations.Add(invitation);
+            }
+            else
+            {
+                existing.MicroclimateId = invitation.MicroclimateId;
+                existing.UserId = invitation.UserId;
+                existing.CompanyId = invitation.CompanyId;
+                existing.Email = invitation.Email;
+                existing.InvitationToken = invitation.InvitationToken;
+                existing.Status = invitation.Status;
+                existing.SentAt = invitation.SentAt;
+                existing.OpenedAt = invitation.OpenedAt;
+                existing.StartedAt = invitation.StartedAt;
+                existing.CompletedAt = invitation.CompletedAt;
+                existing.ReminderCount = invitation.ReminderCount;
+                existing.LastReminderSent = invitation.LastReminderSent;
+                existing.ExpiresAt = invitation.ExpiresAt;
+                existing.Metadata = invitation.Metadata;
+                existing.CreatedAt = invitation.CreatedAt;
+                existing.UpdatedAt = invitation.UpdatedAt;
+            }
+
+            written++;
+            if (++sinceSave >= 500)
+            {
+                await SaveAsync(ct);
+                db.ChangeTracker.Clear();
+                sinceSave = 0;
+            }
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("microclimateinvitations", source, written, report.SkipCount("microclimateinvitations")));
     }
 
     private async Task LoadSurveyDraftsAsync(MappingContext context, CancellationToken ct)

@@ -202,4 +202,13 @@ public static class MigrationRules
     public const string InvitationExpiryDerived = "surveyinvitation.expiry-derived";
     public const string InvitationDuplicateToken = "surveyinvitation.duplicate-token";
     public const string DistributionDuplicateSurvey = "surveydistribution.duplicate-survey";
+
+    // Microclimate domain (#154 slice 7).
+    public const string MicroclimateStatusRemapped = "microclimate.status-remapped";
+    public const string MicroclimateDurationDefaulted = "microclimate.duration-defaulted";
+    public const string MicroclimateAutoCloseDropped = "microclimate.auto-close-dropped";
+    public const string MicroclimateEngagementUnknown = "microclimate.engagement-level-unknown";
+    public const string MicroclimateQuestionIdFromPosition = "microclimate.question-id-from-position";
+    public const string MicroclimateQuestionEmojiUnrepresentable = "microclimate.question-emoji-unrepresentable";
+    public const string MicroclimateInsightIncomplete = "microclimate.insight-incomplete";
 }
