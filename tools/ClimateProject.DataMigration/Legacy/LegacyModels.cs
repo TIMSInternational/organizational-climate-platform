@@ -813,11 +813,83 @@ public sealed class LegacyBenchmark : LegacyDocument;
 /// <summary>23. Mongoose model 'Report' (Report.ts).</summary>
 public sealed class LegacyReport : LegacyDocument;
 
-/// <summary>24. Mongoose model 'Notification' (Notification.ts).</summary>
-public sealed class LegacyNotification : LegacyDocument;
+/// <summary>24. Mongoose model 'Notification' (Notification.ts). Typed 2026-08-18.</summary>
+public sealed class LegacyNotification : LegacyDocument
+{
+    [BsonElement("user_id")] public BsonValue? UserId { get; set; }
+    [BsonElement("company_id")] public BsonValue? CompanyId { get; set; }
+    [BsonElement("type")] public string? Type { get; set; }
+    [BsonElement("channel")] public string? Channel { get; set; }
+    [BsonElement("priority")] public string? Priority { get; set; }
+    [BsonElement("status")] public string? Status { get; set; }
+    [BsonElement("title")] public string? Title { get; set; }
+    [BsonElement("message")] public string? Message { get; set; }
+    [BsonElement("data")] public BsonValue? Data { get; set; }
+    [BsonElement("template_id")] public BsonValue? TemplateId { get; set; }
+    [BsonElement("scheduled_for")] public DateTime? ScheduledFor { get; set; }
+    [BsonElement("sent_at")] public DateTime? SentAt { get; set; }
+    [BsonElement("delivered_at")] public DateTime? DeliveredAt { get; set; }
+    [BsonElement("opened_at")] public DateTime? OpenedAt { get; set; }
+    [BsonElement("failed_at")] public DateTime? FailedAt { get; set; }
+    [BsonElement("failure_reason")] public string? FailureReason { get; set; }
+    [BsonElement("retry_count")] public int? RetryCount { get; set; }
+    [BsonElement("max_retries")] public int? MaxRetries { get; set; }
+    [BsonElement("metadata")] public LegacyNotificationMetadata? Metadata { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
 
-/// <summary>25. Mongoose model 'NotificationTemplate' (NotificationTemplate.ts).</summary>
-public sealed class LegacyNotificationTemplate : LegacyDocument;
+public sealed class LegacyNotificationMetadata
+{
+    [BsonElement("user_agent")] public string? UserAgent { get; set; }
+    [BsonElement("ip_address")] public string? IpAddress { get; set; }
+    [BsonElement("email_client")] public string? EmailClient { get; set; }
+    [BsonElement("device_type")] public string? DeviceType { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>
+/// 25. Mongoose model 'NotificationTemplate' (NotificationTemplate.ts). Typed
+/// 2026-08-18. Two embedded arrays fan out: variables and personalization_rules,
+/// whose conditions must pass #73's NotificationConditionParser or be reported.
+/// </summary>
+public sealed class LegacyNotificationTemplate : LegacyDocument
+{
+    [BsonElement("name")] public string? Name { get; set; }
+    [BsonElement("type")] public string? Type { get; set; }
+    [BsonElement("channel")] public string? Channel { get; set; }
+    [BsonElement("subject")] public string? Subject { get; set; }
+    [BsonElement("title")] public string? Title { get; set; }
+    [BsonElement("content")] public string? Content { get; set; }
+    [BsonElement("html_content")] public string? HtmlContent { get; set; }
+    [BsonElement("variables")] public List<LegacyTemplateVariable>? Variables { get; set; }
+    [BsonElement("company_id")] public BsonValue? CompanyId { get; set; }
+    [BsonElement("is_active")] public bool? IsActive { get; set; }
+    [BsonElement("is_default")] public bool? IsDefault { get; set; }
+    [BsonElement("personalization_rules")] public List<LegacyPersonalizationRule>? PersonalizationRules { get; set; }
+    [BsonElement("created_by")] public BsonValue? CreatedBy { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
+
+public sealed class LegacyTemplateVariable
+{
+    [BsonElement("name")] public string? Name { get; set; }
+    [BsonElement("type")] public string? Type { get; set; }
+    [BsonElement("required")] public bool? Required { get; set; }
+    [BsonElement("description")] public string? Description { get; set; }
+    [BsonElement("default_value")] public BsonValue? DefaultValue { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyPersonalizationRule
+{
+    [BsonElement("condition")] public string? Condition { get; set; }
+    [BsonElement("modifications")] public BsonValue? Modifications { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
 
 /// <summary>
 /// 26. Mongoose model 'UserInvitation' (UserInvitation.ts). Typed 2026-08-18.

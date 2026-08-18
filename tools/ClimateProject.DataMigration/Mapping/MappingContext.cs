@@ -32,6 +32,9 @@ public sealed class MappingContext
     /// <summary>Microclimate templates already migrated (a microclimate may cite one).</summary>
     public IReadOnlySet<Guid> MicroclimateTemplates { get; init; } = new HashSet<Guid>();
 
+    /// <summary>Notification templates already migrated (a notification may cite one).</summary>
+    public IReadOnlySet<Guid> NotificationTemplates { get; init; } = new HashSet<Guid>();
+
     /// <summary>Microclimates already migrated - an invitation's FK is non-nullable.</summary>
     public IReadOnlySet<Guid> Microclimates { get; init; } = new HashSet<Guid>();
 
