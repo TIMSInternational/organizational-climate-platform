@@ -59,7 +59,7 @@ public sealed class MigrationPipeline(
         "surveydrafts", "surveydistributions", "surveyinvitations", "responses",
         "microclimatetemplates", "microclimates", "microclimateinvitations",
         "userinvitations", "auditlogs", "notificationtemplates", "notifications",
-        "aiinsights", "analyticsinsights", "benchmarks", "reports",
+        "aiinsights", "analyticsinsights", "benchmarks", "reports", "demographicsnapshots",
     ];
 
     private readonly List<CollectionResult> _results = [];
@@ -206,6 +206,12 @@ public sealed class MigrationPipeline(
         {
             context = await BuildContextAsync(ct);
             await LoadAnalyticsInsightsAsync(context, ct);
+        }
+
+        if (wanted.Contains("demographicsnapshots"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadDemographicSnapshotsAsync(context, ct);
         }
 
         if (wanted.Contains("benchmarks"))
@@ -743,6 +749,55 @@ public sealed class MigrationPipeline(
 
         await SaveAsync(ct);
         _results.Add(new CollectionResult("surveytemplates", source, written, report.SkipCount("surveytemplates")));
+    }
+
+    private async Task LoadDemographicSnapshotsAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        await foreach (var document in Read<LegacyDemographicSnapshot>("demographicsnapshots", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (DemographicSnapshotMapper.Map(document, context) is not { } mapped)
+            {
+                continue;
+            }
+
+            var existing = await db.DemographicSnapshots.FindAsync([mapped.Snapshot.Id], ct);
+            if (existing is null)
+            {
+                db.DemographicSnapshots.Add(mapped.Snapshot);
+            }
+            else
+            {
+                existing.SurveyId = mapped.Snapshot.SurveyId;
+                existing.CompanyId = mapped.Snapshot.CompanyId;
+                existing.Version = mapped.Snapshot.Version;
+                existing.Timestamp = mapped.Snapshot.Timestamp;
+                existing.CreatedBy = mapped.Snapshot.CreatedBy;
+                existing.Reason = mapped.Snapshot.Reason;
+                existing.IsActive = mapped.Snapshot.IsActive;
+                existing.Metadata = mapped.Snapshot.Metadata;
+                existing.CreatedAt = mapped.Snapshot.CreatedAt;
+                existing.UpdatedAt = mapped.Snapshot.UpdatedAt;
+            }
+
+            var staleEntries = await db.DemographicSnapshotEntries
+                .Where(e => e.SnapshotId == mapped.Snapshot.Id).ToListAsync(ct);
+            db.DemographicSnapshotEntries.RemoveRange(staleEntries);
+            db.DemographicSnapshotEntries.AddRange(mapped.Entries);
+
+            var staleChanges = await db.DemographicSnapshotChanges
+                .Where(c => c.SnapshotId == mapped.Snapshot.Id).ToListAsync(ct);
+            db.DemographicSnapshotChanges.RemoveRange(staleChanges);
+            db.DemographicSnapshotChanges.AddRange(mapped.Changes);
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("demographicsnapshots", source, written, report.SkipCount("demographicsnapshots")));
     }
 
     private async Task LoadBenchmarksAsync(MappingContext context, CancellationToken ct)
