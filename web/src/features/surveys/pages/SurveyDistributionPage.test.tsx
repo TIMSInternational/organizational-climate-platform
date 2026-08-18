@@ -208,12 +208,25 @@ describe('SurveyDistributionPage', () => {
     const { container } = renderPage()
 
     await screen.findByText('Participation')
-    // Scoped to the stats list: "Invited" is also a column header in the table below,
-    // and an unscoped query would pass on either one.
-    const stats = within(container.querySelector('dl') as HTMLElement)
-    expect(stats.getByText('Invited').parentElement?.querySelector('dd')?.textContent).toBe('2')
-    expect(stats.getByText('Responded').parentElement?.querySelector('dd')?.textContent).toBe('1')
-    expect(stats.getByText('Outstanding').parentElement?.querySelector('dd')?.textContent).toBe('1')
+
+    // Scoped to the KPI strip, and that scoping is the point of the test rather than an
+    // implementation detail: "Invited" is ALSO a column header in the invitation table
+    // below, so an unscoped query passes on whichever it reaches first. The readings
+    // moved from a `<dl>` to `KpiTile`s in the redesign; the label-to-value walk goes
+    // through `data-slot` now, but the hazard it guards against is unchanged.
+    function tile(label: string): string {
+      const strip = container.querySelectorAll('[data-slot="kpi-tile"]')
+      for (const candidate of strip) {
+        if (candidate.children[0]?.textContent?.trim() === label) {
+          return candidate.children[1]?.textContent ?? ''
+        }
+      }
+      throw new Error(`no KPI tile labelled ${label}`)
+    }
+
+    expect(tile('Invited')).toBe('2')
+    expect(tile('Responded')).toBe('1')
+    expect(tile('Outstanding')).toBe('1')
   })
 
   /**

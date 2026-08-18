@@ -1419,7 +1419,7 @@
     "statusFailed": "Failed",
     "noReports": "No reports yet",
     "noReportsDescription": "Create a report and it will be listed here.",
-    "generationStubbed": "Report rendering is not built yet. Creating a report records it and marks it complete, and downloading records the request \u2014 no file is produced.",
+    "generationStubbed": "Report rendering is not built yet. Creating a report records it and marks it complete, and downloading records the request — no file is produced.",
     "downloadRecorded": "Download recorded for {title}. Downloaded {count} times in total."
   },
   "settings": {
@@ -1615,7 +1615,7 @@
       "responded": "Responded",
       "responsesReceived": "Responses received",
       "outstanding": "Outstanding",
-      "anonymousAggregateNote": "This survey is anonymous, so responses are counted in total only and are never linked to an individual. Invitation tracking stops at \u201copened\u201d.",
+      "anonymousAggregateNote": "This survey is anonymous, so responses are counted in total only and are never linked to an individual. Invitation tracking stops at “opened”.",
       "audienceTitle": "Audience",
       "audienceWholeCompany": "Everyone in the company",
       "audienceSurveyTargets": "The departments this survey targets",
@@ -1665,7 +1665,8 @@
         "completed": "Completed",
         "revoked": "Revoked",
         "expired": "Expired"
-      }
+      },
+      "remindersSent": "Reminders sent"
     },
     "statusDraft": "Draft",
     "statusScheduled": "Scheduled",
@@ -2040,7 +2041,7 @@
     "noCohortValue": "no cohort value"
   },
   "insights": {
-    "description": "Generated from this company\u2019s own responses. Every insight names the evidence it came from and can be dismissed with a reason.",
+    "description": "Generated from this company’s own responses. Every insight names the evidence it came from and can be dismissed with a reason.",
     "insightTitle": "Title",
     "priority": "Priority",
     "typeTrend": "Trend",

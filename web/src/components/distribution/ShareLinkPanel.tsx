@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from '../../i18n'
-import { Alert, AlertDescription, Badge, Button, SectionLabel } from '../ui'
+import { Alert, AlertDescription, Badge, Button } from '../ui'
 
 /**
  * The open share link for a survey: mint it, reveal it, replace it, kill it.
@@ -23,6 +23,13 @@ import { Alert, AlertDescription, Badge, Button, SectionLabel } from '../ui'
  * The link is never auto-copied and never written anywhere on mount. `Regenerate` is
  * offered as the remedy when one does leak, next to the statement that regenerating
  * breaks the old link — because an admin who does not know that will not use it.
+ *
+ * ## Why this panel does not print its own title
+ *
+ * The distribution page wraps it in a `<section aria-labelledby>` whose `<h2>` carries
+ * "Open share link", so a `SectionLabel` here rendered the same words a second time,
+ * directly under the heading. The heading is the landmark and the accessible name; a
+ * panel inside it names nothing.
  */
 export interface ShareLinkPanelProps {
   /** The share link, or `null` when the survey is `tokenized` and none is minted. */
@@ -58,7 +65,6 @@ export default function ShareLinkPanel({
   if (publicLink === null) {
     return (
       <div className="flex flex-col gap-panel-gap">
-        <SectionLabel>{t('surveys.distribution.shareLinkTitle')}</SectionLabel>
         <p className="text-fg-secondary">{t('surveys.distribution.shareLinkNone')}</p>
         <div>
           <Button onClick={onCreate} disabled={busy}>
@@ -71,8 +77,6 @@ export default function ShareLinkPanel({
 
   return (
     <div className="flex flex-col gap-panel-gap">
-      <SectionLabel>{t('surveys.distribution.shareLinkTitle')}</SectionLabel>
-
       <Alert variant="default">
         <AlertDescription>{t('surveys.distribution.shareLinkWarning')}</AlertDescription>
       </Alert>

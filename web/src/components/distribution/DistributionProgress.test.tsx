@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { render, screen, cleanup, within } from '@testing-library/react'
+import { render, screen, cleanup } from '@testing-library/react'
 import { TranslationProvider } from '../../i18n'
 import DistributionProgress from './DistributionProgress'
 import type {
@@ -34,19 +34,33 @@ const ANONYMOUS: SurveyAnonymityGuarantee = {
   guarantee: 'Tracking stops at opened.',
 }
 
-function renderProgress(anonymity: SurveyAnonymityGuarantee, responseCount: number) {
+function renderProgress(
+  anonymity: SurveyAnonymityGuarantee,
+  responseCount: number,
+  remindersSent: number | null = 0,
+) {
   return render(
     <TranslationProvider>
-      <DistributionProgress summary={SUMMARY} anonymity={anonymity} responseCount={responseCount} />
+      <DistributionProgress
+        summary={SUMMARY}
+        anonymity={anonymity}
+        responseCount={responseCount}
+        remindersSent={remindersSent}
+      />
     </TranslationProvider>,
   )
 }
 
-/** Reads the number sitting under a given `<dt>`. */
+/**
+ * Reads the value out of the `KpiTile` carrying a given label.
+ *
+ * The readings moved from a `<dl>` to the redesign's KPI strip, so this walks to the
+ * tile by its `data-slot` — the same handle the other strip tests use — and takes the
+ * value element rather than matching on a class that is free to change.
+ */
 function statFor(label: string): string {
-  const term = screen.getByText(label)
-  const value = term.parentElement?.querySelector('dd')
-  return value?.textContent ?? ''
+  const tile = screen.getByText(label).closest('[data-slot="kpi-tile"]')
+  return tile?.children[1]?.textContent ?? ''
 }
 
 describe('DistributionProgress', () => {
@@ -105,6 +119,7 @@ describe('DistributionProgress', () => {
           summary={{ ...SUMMARY, total: 0, completed: 0 }}
           anonymity={NAMED}
           responseCount={0}
+          remindersSent={0}
         />
       </TranslationProvider>,
     )
@@ -114,7 +129,29 @@ describe('DistributionProgress', () => {
 
   it('labels every number, so no figure stands alone', () => {
     const { container } = renderProgress(NAMED, 3)
-    const list = container.querySelector('dl')
-    expect(within(list as HTMLElement).getAllByRole('term')).toHaveLength(3)
+    const tiles = container.querySelectorAll('[data-slot="kpi-tile"]')
+    expect(tiles).toHaveLength(4)
+    for (const tile of tiles) {
+      expect(tile.children[0]?.textContent?.trim()).toBeTruthy()
+    }
+  })
+
+  /**
+   * A reminder count of `null` means the invitation list has not arrived. Printing `0`
+   * there would assert that none were sent, which is a different statement from "not
+   * known yet" — the em dash is `KpiTile`'s way of saying the second.
+   */
+  it('shows an em dash, not a zero, when the reminder count is unknown', () => {
+    renderProgress(NAMED, 3, null)
+    expect(statFor('Reminders sent')).toBe('\u2014')
+  })
+
+  /**
+   * The server authors one sentence describing how far tracking goes for this survey.
+   * It was never rendered in this client; the participation section is where it belongs.
+   */
+  it('renders the guarantee sentence the server wrote', () => {
+    renderProgress(NAMED, 3)
+    expect(screen.getByText('Tracking runs to completion.')).toBeTruthy()
   })
 })
