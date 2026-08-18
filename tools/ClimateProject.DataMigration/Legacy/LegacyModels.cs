@@ -801,11 +801,92 @@ public sealed class LegacyActionPlanTemplate : LegacyDocument;
 /// 20. Mongoose model 'AIInsight'. Registered by BOTH AIInsight.ts and Analytics.ts under
 /// the same name (first registration wins via the <c>mongoose.models.AIInsight ||</c>
 /// guard) - one collection, two competing shapes, which is #152's report-service bug.
+///
+/// Typed 2026-08-18 as the UNION of both, because the collection genuinely contains
+/// both and a stub that declared either alone would silently route half the documents
+/// into Extra. The shapes are distinguishable by naming convention and do not collide:
+/// AIInsight.ts writes camelCase (<c>companyId</c>, <c>confidenceScore</c>,
+/// <c>createdAt</c> - it uses Mongoose's <c>timestamps: true</c> default names),
+/// Analytics.ts writes snake_case (<c>company_id</c>, <c>confidence_score</c>) plus
+/// four fields the camelCase shape never had (supporting_data, is_acknowledged,
+/// acknowledged_by/at, expires_at, department_id).
+///
+/// The target entity is already the union of both, so the ETL is where the split
+/// finally reconciles - but WHICH shape each document is remains a real finding, and
+/// the mapper reports it per document.
 /// </summary>
-public sealed class LegacyAiInsight : LegacyDocument;
+public sealed class LegacyAiInsight : LegacyDocument
+{
+    // --- the snake_case shape (Analytics.ts) ---
+    [BsonElement("survey_id")] public string? SurveyIdSnake { get; set; }
+    [BsonElement("company_id")] public string? CompanyIdSnake { get; set; }
+    [BsonElement("department_id")] public string? DepartmentId { get; set; }
+    [BsonElement("confidence_score")] public double? ConfidenceScoreSnake { get; set; }
+    [BsonElement("affected_segments")] public List<string>? AffectedSegmentsSnake { get; set; }
+    [BsonElement("recommended_actions")] public List<string>? RecommendedActionsSnake { get; set; }
+    [BsonElement("supporting_data")] public BsonValue? SupportingData { get; set; }
+    [BsonElement("is_acknowledged")] public bool? IsAcknowledged { get; set; }
+    [BsonElement("acknowledged_by")] public string? AcknowledgedBy { get; set; }
+    [BsonElement("acknowledged_at")] public DateTime? AcknowledgedAt { get; set; }
+    [BsonElement("expires_at")] public DateTime? ExpiresAt { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAtSnake { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAtSnake { get; set; }
 
-/// <summary>21. Mongoose model 'AnalyticsInsight' (Analytics.ts).</summary>
-public sealed class LegacyAnalyticsInsight : LegacyDocument;
+    // --- the camelCase shape (AIInsight.ts) ---
+    [BsonElement("surveyId")] public string? SurveyIdCamel { get; set; }
+    [BsonElement("companyId")] public string? CompanyIdCamel { get; set; }
+    [BsonElement("confidenceScore")] public double? ConfidenceScoreCamel { get; set; }
+    [BsonElement("affectedSegments")] public List<string>? AffectedSegmentsCamel { get; set; }
+    [BsonElement("recommendedActions")] public List<string>? RecommendedActionsCamel { get; set; }
+    [BsonElement("createdAt")] public DateTime? CreatedAtCamel { get; set; }
+    [BsonElement("updatedAt")] public DateTime? UpdatedAtCamel { get; set; }
+
+    // --- shared by both, identically spelled ---
+    [BsonElement("type")] public string? Type { get; set; }
+    [BsonElement("category")] public string? Category { get; set; }
+    [BsonElement("title")] public string? Title { get; set; }
+    [BsonElement("description")] public string? Description { get; set; }
+    [BsonElement("priority")] public string? Priority { get; set; }
+    [BsonElement("metadata")] public BsonValue? Metadata { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
+
+/// <summary>21. Mongoose model 'AnalyticsInsight' (Analytics.ts). Typed 2026-08-18.</summary>
+public sealed class LegacyAnalyticsInsight : LegacyDocument
+{
+    [BsonElement("survey_id")] public string? SurveyId { get; set; }
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("department_id")] public string? DepartmentId { get; set; }
+    [BsonElement("aggregation_type")] public string? AggregationType { get; set; }
+    [BsonElement("metric_type")] public string? MetricType { get; set; }
+    [BsonElement("metric_name")] public string? MetricName { get; set; }
+    [BsonElement("metric_description")] public string? MetricDescription { get; set; }
+    [BsonElement("data")] public List<LegacyMetricData>? Data { get; set; }
+    [BsonElement("time_series")] public List<LegacyTimeSeriesPoint>? TimeSeries { get; set; }
+    [BsonElement("total_responses")] public int? TotalResponses { get; set; }
+    [BsonElement("calculation_date")] public DateTime? CalculationDate { get; set; }
+    [BsonElement("is_current")] public bool? IsCurrent { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
+
+public sealed class LegacyMetricData
+{
+    [BsonElement("label")] public string? Label { get; set; }
+    [BsonElement("value")] public double? Value { get; set; }
+    [BsonElement("count")] public int? Count { get; set; }
+    [BsonElement("percentage")] public double? Percentage { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyTimeSeriesPoint
+{
+    [BsonElement("date")] public DateTime? Date { get; set; }
+    [BsonElement("value")] public double? Value { get; set; }
+    [BsonElement("count")] public int? Count { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
 
 /// <summary>22. Mongoose model 'Benchmark' (Benchmark.ts).</summary>
 public sealed class LegacyBenchmark : LegacyDocument;

@@ -59,6 +59,7 @@ public sealed class MigrationPipeline(
         "surveydrafts", "surveydistributions", "surveyinvitations", "responses",
         "microclimatetemplates", "microclimates", "microclimateinvitations",
         "userinvitations", "auditlogs", "notificationtemplates", "notifications",
+        "aiinsights", "analyticsinsights",
     ];
 
     private readonly List<CollectionResult> _results = [];
@@ -193,6 +194,18 @@ public sealed class MigrationPipeline(
         {
             context = await BuildContextAsync(ct);
             await LoadNotificationsAsync(context, ct);
+        }
+
+        if (wanted.Contains("aiinsights"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadAiInsightsAsync(context, ct);
+        }
+
+        if (wanted.Contains("analyticsinsights"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadAnalyticsInsightsAsync(context, ct);
         }
 
         if (wanted.Contains("auditlogs"))
@@ -718,6 +731,104 @@ public sealed class MigrationPipeline(
 
         await SaveAsync(ct);
         _results.Add(new CollectionResult("surveytemplates", source, written, report.SkipCount("surveytemplates")));
+    }
+
+    private async Task LoadAiInsightsAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        await foreach (var document in Read<LegacyAiInsight>("aiinsights", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (AiInsightMapper.Map(document, context) is not { } insight)
+            {
+                continue;
+            }
+
+            var existing = await db.AIInsights.FindAsync([insight.Id], ct);
+            if (existing is null)
+            {
+                db.AIInsights.Add(insight);
+            }
+            else
+            {
+                existing.SurveyId = insight.SurveyId;
+                existing.CompanyId = insight.CompanyId;
+                existing.DepartmentId = insight.DepartmentId;
+                existing.Type = insight.Type;
+                existing.Category = insight.Category;
+                existing.Title = insight.Title;
+                existing.Description = insight.Description;
+                existing.ConfidenceScore = insight.ConfidenceScore;
+                existing.Priority = insight.Priority;
+                existing.AffectedSegments = insight.AffectedSegments;
+                existing.RecommendedActions = insight.RecommendedActions;
+                existing.SupportingData = insight.SupportingData;
+                existing.IsAcknowledged = insight.IsAcknowledged;
+                existing.AcknowledgedBy = insight.AcknowledgedBy;
+                existing.AcknowledgedAt = insight.AcknowledgedAt;
+                existing.ExpiresAt = insight.ExpiresAt;
+                existing.CreatedAt = insight.CreatedAt;
+                existing.UpdatedAt = insight.UpdatedAt;
+            }
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("aiinsights", source, written, report.SkipCount("aiinsights")));
+    }
+
+    private async Task LoadAnalyticsInsightsAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        await foreach (var document in Read<LegacyAnalyticsInsight>("analyticsinsights", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (AnalyticsInsightMapper.Map(document, context) is not { } mapped)
+            {
+                continue;
+            }
+
+            var existing = await db.AnalyticsInsights.FindAsync([mapped.Insight.Id], ct);
+            if (existing is null)
+            {
+                db.AnalyticsInsights.Add(mapped.Insight);
+            }
+            else
+            {
+                existing.SurveyId = mapped.Insight.SurveyId;
+                existing.CompanyId = mapped.Insight.CompanyId;
+                existing.DepartmentId = mapped.Insight.DepartmentId;
+                existing.AggregationType = mapped.Insight.AggregationType;
+                existing.MetricType = mapped.Insight.MetricType;
+                existing.MetricName = mapped.Insight.MetricName;
+                existing.MetricDescription = mapped.Insight.MetricDescription;
+                existing.TotalResponses = mapped.Insight.TotalResponses;
+                existing.CalculationDate = mapped.Insight.CalculationDate;
+                existing.IsCurrent = mapped.Insight.IsCurrent;
+                existing.CreatedAt = mapped.Insight.CreatedAt;
+                existing.UpdatedAt = mapped.Insight.UpdatedAt;
+            }
+
+            var staleData = await db.AnalyticsMetricData
+                .Where(d => d.InsightId == mapped.Insight.Id).ToListAsync(ct);
+            db.AnalyticsMetricData.RemoveRange(staleData);
+            db.AnalyticsMetricData.AddRange(mapped.Data);
+
+            var staleSeries = await db.AnalyticsTimeSeries
+                .Where(t => t.InsightId == mapped.Insight.Id).ToListAsync(ct);
+            db.AnalyticsTimeSeries.RemoveRange(staleSeries);
+            db.AnalyticsTimeSeries.AddRange(mapped.TimeSeries);
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("analyticsinsights", source, written, report.SkipCount("analyticsinsights")));
     }
 
     private async Task LoadNotificationTemplatesAsync(MappingContext context, CancellationToken ct)
