@@ -211,4 +211,7 @@ public static class MigrationRules
     public const string MicroclimateQuestionIdFromPosition = "microclimate.question-id-from-position";
     public const string MicroclimateQuestionEmojiUnrepresentable = "microclimate.question-emoji-unrepresentable";
     public const string MicroclimateInsightIncomplete = "microclimate.insight-incomplete";
+
+    // UserInvitation + AuditLog (#154 slice 8).
+    public const string InvitationTypeUnknown = "userinvitation.type-unknown";
 }

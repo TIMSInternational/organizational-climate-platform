@@ -819,11 +819,57 @@ public sealed class LegacyNotification : LegacyDocument;
 /// <summary>25. Mongoose model 'NotificationTemplate' (NotificationTemplate.ts).</summary>
 public sealed class LegacyNotificationTemplate : LegacyDocument;
 
-/// <summary>26. Mongoose model 'UserInvitation' (UserInvitation.ts).</summary>
-public sealed class LegacyUserInvitation : LegacyDocument;
+/// <summary>
+/// 26. Mongoose model 'UserInvitation' (UserInvitation.ts). Typed 2026-08-18.
+/// demographics fans out to UserInvitationDemographic under the SAME #193 rule as
+/// User: every key must name a DemographicField of the inviting company.
+/// </summary>
+public sealed class LegacyUserInvitation : LegacyDocument
+{
+    [BsonElement("email")] public string? Email { get; set; }
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("department_id")] public string? DepartmentId { get; set; }
+    [BsonElement("invited_by")] public string? InvitedBy { get; set; }
+    [BsonElement("invitation_token")] public string? InvitationToken { get; set; }
+    [BsonElement("invitation_type")] public string? InvitationType { get; set; }
+    [BsonElement("role")] public string? Role { get; set; }
+    [BsonElement("status")] public string? Status { get; set; }
+    [BsonElement("expires_at")] public DateTime? ExpiresAt { get; set; }
+    [BsonElement("sent_at")] public DateTime? SentAt { get; set; }
+    [BsonElement("opened_at")] public DateTime? OpenedAt { get; set; }
+    [BsonElement("accepted_at")] public DateTime? AcceptedAt { get; set; }
+    [BsonElement("reminder_count")] public int? ReminderCount { get; set; }
+    [BsonElement("last_reminder_sent")] public DateTime? LastReminderSent { get; set; }
+    [BsonElement("metadata")] public BsonValue? Metadata { get; set; }
+    [BsonElement("invitation_data")] public BsonValue? InvitationData { get; set; }
+    [BsonElement("demographics")] public BsonDocument? Demographics { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
 
-/// <summary>27. Mongoose model 'AuditLog' (AuditLog.ts).</summary>
-public sealed class LegacyAuditLog : LegacyDocument;
+/// <summary>
+/// 27. Mongoose model 'AuditLog' (AuditLog.ts). Typed 2026-08-18. The cross-domain
+/// compliance log, and the one collection that maps almost 1:1 - both sides carry
+/// action/resource/resource_id/details/success/error_message/timestamp with the same
+/// meanings. Its action and resource enums are wide and free-form on the target
+/// (varchar(100), no validated vocabulary class), so values carry verbatim.
+/// </summary>
+public sealed class LegacyAuditLog : LegacyDocument
+{
+    [BsonElement("user_id")] public BsonValue? UserId { get; set; }
+    [BsonElement("company_id")] public BsonValue? CompanyId { get; set; }
+    [BsonElement("action")] public string? Action { get; set; }
+    [BsonElement("resource")] public string? Resource { get; set; }
+    [BsonElement("resource_id")] public string? ResourceId { get; set; }
+    [BsonElement("details")] public BsonValue? Details { get; set; }
+    [BsonElement("ip_address")] public string? IpAddress { get; set; }
+    [BsonElement("user_agent")] public string? UserAgent { get; set; }
+    [BsonElement("success")] public bool? Success { get; set; }
+    [BsonElement("error_message")] public string? ErrorMessage { get; set; }
+    [BsonElement("timestamp")] public DateTime? Timestamp { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
 
 /// <summary>28. Mongoose model 'LibraryQuestion' (LibraryQuestion.ts) - excluded as dead code; reader exists to prove the row count is 0.</summary>
 public sealed class LegacyLibraryQuestion : LegacyDocument;

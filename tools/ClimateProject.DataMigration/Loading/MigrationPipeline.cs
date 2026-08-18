@@ -58,6 +58,7 @@ public sealed class MigrationPipeline(
         "surveys", "surveytemplates", "surveyversions", "surveyauditlogs",
         "surveydrafts", "surveydistributions", "surveyinvitations", "responses",
         "microclimatetemplates", "microclimates", "microclimateinvitations",
+        "userinvitations", "auditlogs",
     ];
 
     private readonly List<CollectionResult> _results = [];
@@ -174,6 +175,18 @@ public sealed class MigrationPipeline(
         {
             context = await BuildContextAsync(ct);
             await LoadMicroclimateInvitationsAsync(context, ct);
+        }
+
+        if (wanted.Contains("userinvitations"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadUserInvitationsAsync(context, ct);
+        }
+
+        if (wanted.Contains("auditlogs"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadAuditLogsAsync(context, ct);
         }
 
         await SecondPassAsync(context, ct);
@@ -689,6 +702,117 @@ public sealed class MigrationPipeline(
 
         await SaveAsync(ct);
         _results.Add(new CollectionResult("surveytemplates", source, written, report.SkipCount("surveytemplates")));
+    }
+
+    private async Task LoadUserInvitationsAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        var seenTokens = new HashSet<string>(StringComparer.Ordinal);
+        await foreach (var document in Read<LegacyUserInvitation>("userinvitations", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (UserInvitationMapper.Map(document, context) is not { } mapped)
+            {
+                continue;
+            }
+
+            if (!seenTokens.Add(mapped.Invitation.InvitationToken))
+            {
+                report.Skip(MigrationRules.InvitationDuplicateToken, "userinvitations",
+                    document.Id.ToString(),
+                    "another invitation already carries this token; the unique index would refuse it",
+                    "invitation_token");
+                continue;
+            }
+
+            var existing = await db.UserInvitations.FindAsync([mapped.Invitation.Id], ct);
+            if (existing is null)
+            {
+                db.UserInvitations.Add(mapped.Invitation);
+            }
+            else
+            {
+                existing.Email = mapped.Invitation.Email;
+                existing.CompanyId = mapped.Invitation.CompanyId;
+                existing.DepartmentId = mapped.Invitation.DepartmentId;
+                existing.InvitedBy = mapped.Invitation.InvitedBy;
+                existing.InvitationToken = mapped.Invitation.InvitationToken;
+                existing.InvitationType = mapped.Invitation.InvitationType;
+                existing.Role = mapped.Invitation.Role;
+                existing.Status = mapped.Invitation.Status;
+                existing.ExpiresAt = mapped.Invitation.ExpiresAt;
+                existing.SentAt = mapped.Invitation.SentAt;
+                existing.OpenedAt = mapped.Invitation.OpenedAt;
+                existing.AcceptedAt = mapped.Invitation.AcceptedAt;
+                existing.ReminderCount = mapped.Invitation.ReminderCount;
+                existing.LastReminderSentAt = mapped.Invitation.LastReminderSentAt;
+                existing.Metadata = mapped.Invitation.Metadata;
+                existing.InvitationData = mapped.Invitation.InvitationData;
+            }
+
+            var stale = await db.UserInvitationDemographics
+                .Where(d => d.InvitationId == mapped.Invitation.Id).ToListAsync(ct);
+            db.UserInvitationDemographics.RemoveRange(stale);
+            db.UserInvitationDemographics.AddRange(mapped.Demographics);
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("userinvitations", source, written, report.SkipCount("userinvitations")));
+    }
+
+    /// <summary>
+    /// The compliance log: append-only in practice and the largest table after
+    /// responses, so it gets the same bounded-memory treatment.
+    /// </summary>
+    private async Task LoadAuditLogsAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        var sinceSave = 0;
+        await foreach (var document in Read<LegacyAuditLog>("auditlogs", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (AuditLogMapper.Map(document, context) is not { } entry)
+            {
+                continue;
+            }
+
+            var existing = await db.AuditLogs.FindAsync([entry.Id], ct);
+            if (existing is null)
+            {
+                db.AuditLogs.Add(entry);
+            }
+            else
+            {
+                existing.UserId = entry.UserId;
+                existing.CompanyId = entry.CompanyId;
+                existing.Action = entry.Action;
+                existing.Resource = entry.Resource;
+                existing.ResourceId = entry.ResourceId;
+                existing.Details = entry.Details;
+                existing.IpAddress = entry.IpAddress;
+                existing.UserAgent = entry.UserAgent;
+                existing.Success = entry.Success;
+                existing.ErrorMessage = entry.ErrorMessage;
+                existing.Timestamp = entry.Timestamp;
+            }
+
+            written++;
+            if (++sinceSave >= 500)
+            {
+                await SaveAsync(ct);
+                db.ChangeTracker.Clear();
+                sinceSave = 0;
+            }
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("auditlogs", source, written, report.SkipCount("auditlogs")));
     }
 
     private async Task LoadMicroclimateTemplatesAsync(MappingContext context, CancellationToken ct)
