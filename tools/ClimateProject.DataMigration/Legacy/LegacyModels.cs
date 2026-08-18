@@ -359,8 +359,26 @@ public sealed class LegacySurveyInvitationSettings
     [BsonExtraElements] public BsonDocument? Extra { get; set; }
 }
 
-/// <summary>8. Mongoose model 'SurveyVersion' (SurveyVersion.ts).</summary>
-public sealed class LegacySurveyVersion : LegacyDocument;
+/// <summary>
+/// 8. Mongoose model 'SurveyVersion' (SurveyVersion.ts). Typed 2026-08-18 from the legacy
+/// schema. The three snapshots are <c>Schema.Types.Mixed</c> - whole-document captures of
+/// the survey as it stood - and land in the target's jsonb snapshot columns as-is.
+/// </summary>
+public sealed class LegacySurveyVersion : LegacyDocument
+{
+    [BsonElement("survey_id")] public string? SurveyId { get; set; }
+    [BsonElement("version_number")] public int? VersionNumber { get; set; }
+    [BsonElement("title")] public string? Title { get; set; }
+    [BsonElement("description")] public string? Description { get; set; }
+    [BsonElement("questions")] public BsonValue? Questions { get; set; }
+    [BsonElement("demographics")] public BsonValue? Demographics { get; set; }
+    [BsonElement("settings")] public BsonValue? Settings { get; set; }
+    [BsonElement("changes")] public List<string>? Changes { get; set; }
+    [BsonElement("reason")] public string? Reason { get; set; }
+    [BsonElement("created_by")] public string? CreatedBy { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
 
 /// <summary>9. Mongoose model 'SurveyDraft' (SurveyDraft.ts).</summary>
 public sealed class LegacySurveyDraft : LegacyDocument;
@@ -402,8 +420,55 @@ public sealed class LegacySurveyDistribution : LegacyDocument;
 /// <summary>12. Mongoose model 'SurveyInvitation' (SurveyInvitation.ts).</summary>
 public sealed class LegacySurveyInvitation : LegacyDocument;
 
-/// <summary>13. Mongoose model 'SurveyAuditLog' (SurveyAuditLog.ts).</summary>
-public sealed class LegacySurveyAuditLog : LegacyDocument;
+/// <summary>
+/// 13. Mongoose model 'SurveyAuditLog' (SurveyAuditLog.ts). Typed 2026-08-18.
+///
+/// THE ONE COLLECTION WHOSE REFERENCES ARE REAL ObjectIds. Every other legacy model
+/// declares cross-collection references as <c>{ type: String }</c> - the design doc says
+/// so loudly and the whole ReferenceResolver contract is built on it - but this schema
+/// uses <c>Schema.Types.ObjectId</c> with <c>ref:</c> for both survey_id and user_id.
+/// They are therefore read as raw <see cref="BsonValue"/> and normalised by
+/// <see cref="LegacyReferences.HexOf"/>: Mongo enforced the declared type only for
+/// documents Mongoose itself wrote, so a hand-written or imported row may still carry a
+/// string, and a reader that assumed either shape would throw on the other.
+/// </summary>
+public sealed class LegacySurveyAuditLog : LegacyDocument
+{
+    [BsonElement("survey_id")] public BsonValue? SurveyId { get; set; }
+    [BsonElement("action")] public string? Action { get; set; }
+    [BsonElement("entity_type")] public string? EntityType { get; set; }
+    [BsonElement("entity_id")] public string? EntityId { get; set; }
+    [BsonElement("changes")] public LegacyAuditChanges? Changes { get; set; }
+    [BsonElement("user_id")] public BsonValue? UserId { get; set; }
+    [BsonElement("user_name")] public string? UserName { get; set; }
+    [BsonElement("user_email")] public string? UserEmail { get; set; }
+    [BsonElement("user_role")] public string? UserRole { get; set; }
+    [BsonElement("timestamp")] public DateTime? Timestamp { get; set; }
+    [BsonElement("ip_address")] public string? IpAddress { get; set; }
+    [BsonElement("user_agent")] public string? UserAgent { get; set; }
+    [BsonElement("session_id")] public string? SessionId { get; set; }
+    [BsonElement("metadata")] public LegacyAuditMetadata? Metadata { get; set; }
+    [BsonElement("__v")] public int? Version { get; set; }
+}
+
+/// <summary>The legacy before/after/diff shape. The target's own changes shape is
+/// <c>SurveyAuditChangeSet</c> (fields/from/to/version_number) - a different vocabulary,
+/// so the mapper translates rather than copies, and keeps this raw under metadata.</summary>
+public sealed class LegacyAuditChanges
+{
+    [BsonElement("before")] public BsonValue? Before { get; set; }
+    [BsonElement("after")] public BsonValue? After { get; set; }
+    [BsonElement("diff")] public BsonValue? Diff { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacyAuditMetadata
+{
+    [BsonElement("reason")] public string? Reason { get; set; }
+    [BsonElement("automated")] public bool? Automated { get; set; }
+    [BsonElement("api_version")] public string? ApiVersion { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
 
 /// <summary>14. Mongoose model 'Response' (Response.ts) - the volume driver. Typed 2026-08-18 from the legacy schema.</summary>
 public sealed class LegacyResponse : LegacyDocument
