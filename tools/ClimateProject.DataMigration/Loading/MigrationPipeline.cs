@@ -58,7 +58,7 @@ public sealed class MigrationPipeline(
         "surveys", "surveytemplates", "surveyversions", "surveyauditlogs",
         "surveydrafts", "surveydistributions", "surveyinvitations", "responses",
         "microclimatetemplates", "microclimates", "microclimateinvitations",
-        "userinvitations", "auditlogs",
+        "userinvitations", "auditlogs", "notificationtemplates", "notifications",
     ];
 
     private readonly List<CollectionResult> _results = [];
@@ -183,6 +183,18 @@ public sealed class MigrationPipeline(
             await LoadUserInvitationsAsync(context, ct);
         }
 
+        if (wanted.Contains("notificationtemplates"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadNotificationTemplatesAsync(context, ct);
+        }
+
+        if (wanted.Contains("notifications"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadNotificationsAsync(context, ct);
+        }
+
         if (wanted.Contains("auditlogs"))
         {
             context = await BuildContextAsync(ct);
@@ -232,6 +244,9 @@ public sealed class MigrationPipeline(
         var microclimates = (await db.Microclimates.Select(m => m.Id).ToListAsync(ct)).ToHashSet();
         microclimates.UnionWith(db.Microclimates.Local.Select(m => m.Id));
 
+        var notificationTemplates = (await db.NotificationTemplates.Select(t => t.Id).ToListAsync(ct)).ToHashSet();
+        notificationTemplates.UnionWith(db.NotificationTemplates.Local.Select(t => t.Id));
+
         var fields = new Dictionary<(Guid, string), Guid>();
         foreach (var field in await db.DemographicFields.Select(f => new { f.Id, f.CompanyId, f.Field }).ToListAsync(ct))
         {
@@ -255,6 +270,7 @@ public sealed class MigrationPipeline(
             Questions = questions,
             MicroclimateTemplates = microclimateTemplates,
             Microclimates = microclimates,
+            NotificationTemplates = notificationTemplates,
             DemographicFields = fields,
         };
     }
@@ -702,6 +718,119 @@ public sealed class MigrationPipeline(
 
         await SaveAsync(ct);
         _results.Add(new CollectionResult("surveytemplates", source, written, report.SkipCount("surveytemplates")));
+    }
+
+    private async Task LoadNotificationTemplatesAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        await foreach (var document in Read<LegacyNotificationTemplate>("notificationtemplates", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (NotificationTemplateMapper.Map(document, context) is not { } mapped)
+            {
+                continue;
+            }
+
+            var existing = await db.NotificationTemplates.FindAsync([mapped.Template.Id], ct);
+            if (existing is null)
+            {
+                db.NotificationTemplates.Add(mapped.Template);
+            }
+            else
+            {
+                existing.Name = mapped.Template.Name;
+                existing.Type = mapped.Template.Type;
+                existing.Channel = mapped.Template.Channel;
+                existing.SubjectEn = mapped.Template.SubjectEn;
+                existing.SubjectEs = mapped.Template.SubjectEs;
+                existing.TitleEn = mapped.Template.TitleEn;
+                existing.TitleEs = mapped.Template.TitleEs;
+                existing.ContentEn = mapped.Template.ContentEn;
+                existing.ContentEs = mapped.Template.ContentEs;
+                existing.HtmlContentEn = mapped.Template.HtmlContentEn;
+                existing.HtmlContentEs = mapped.Template.HtmlContentEs;
+                existing.CompanyId = mapped.Template.CompanyId;
+                existing.IsActive = mapped.Template.IsActive;
+                existing.IsDefault = mapped.Template.IsDefault;
+                existing.CreatedBy = mapped.Template.CreatedBy;
+                existing.CreatedAt = mapped.Template.CreatedAt;
+                existing.UpdatedAt = mapped.Template.UpdatedAt;
+            }
+
+            var staleVariables = await db.NotificationTemplateVariables
+                .Where(v => v.NotificationTemplateId == mapped.Template.Id).ToListAsync(ct);
+            db.NotificationTemplateVariables.RemoveRange(staleVariables);
+            db.NotificationTemplateVariables.AddRange(mapped.Variables);
+
+            var staleRules = await db.NotificationPersonalizationRules
+                .Where(r => r.NotificationTemplateId == mapped.Template.Id).ToListAsync(ct);
+            db.NotificationPersonalizationRules.RemoveRange(staleRules);
+            db.NotificationPersonalizationRules.AddRange(mapped.Rules);
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("notificationtemplates", source, written, report.SkipCount("notificationtemplates")));
+    }
+
+    private async Task LoadNotificationsAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        var sinceSave = 0;
+        await foreach (var document in Read<LegacyNotification>("notifications", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (NotificationMapper.Map(document, context) is not { } notification)
+            {
+                continue;
+            }
+
+            var existing = await db.Notifications.FindAsync([notification.Id], ct);
+            if (existing is null)
+            {
+                db.Notifications.Add(notification);
+            }
+            else
+            {
+                existing.UserId = notification.UserId;
+                existing.CompanyId = notification.CompanyId;
+                existing.Type = notification.Type;
+                existing.Channel = notification.Channel;
+                existing.Priority = notification.Priority;
+                existing.Status = notification.Status;
+                existing.Title = notification.Title;
+                existing.Message = notification.Message;
+                existing.Data = notification.Data;
+                existing.TemplateId = notification.TemplateId;
+                existing.ScheduledFor = notification.ScheduledFor;
+                existing.SentAt = notification.SentAt;
+                existing.DeliveredAt = notification.DeliveredAt;
+                existing.OpenedAt = notification.OpenedAt;
+                existing.FailedAt = notification.FailedAt;
+                existing.FailureReason = notification.FailureReason;
+                existing.RetryCount = notification.RetryCount;
+                existing.MaxRetries = notification.MaxRetries;
+                existing.Metadata = notification.Metadata;
+                existing.CreatedAt = notification.CreatedAt;
+                existing.UpdatedAt = notification.UpdatedAt;
+            }
+
+            written++;
+            if (++sinceSave >= 500)
+            {
+                await SaveAsync(ct);
+                db.ChangeTracker.Clear();
+                sinceSave = 0;
+            }
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("notifications", source, written, report.SkipCount("notifications")));
     }
 
     private async Task LoadUserInvitationsAsync(MappingContext context, CancellationToken ct)

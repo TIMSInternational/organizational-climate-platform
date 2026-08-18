@@ -214,4 +214,11 @@ public static class MigrationRules
 
     // UserInvitation + AuditLog (#154 slice 8).
     public const string InvitationTypeUnknown = "userinvitation.type-unknown";
+
+    // Notification pair (#154 slice 9). The condition gate is #73's: a rule the
+    // runtime's parser cannot read would never fire correctly, so it is refused.
+    public const string NotificationChannelUnknown = "notification.channel-unknown";
+    public const string NotificationVocabularyUnknown = "notification.vocabulary-unknown";
+    public const string NotificationVariableInvalid = "notificationtemplate.variable-invalid";
+    public const string NotificationConditionUnparseable = "notificationtemplate.condition-unparseable";
 }
