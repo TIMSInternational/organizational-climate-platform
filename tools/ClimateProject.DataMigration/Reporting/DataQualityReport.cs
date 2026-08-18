@@ -170,4 +170,18 @@ public static class MigrationRules
     public const string SurveyTemplateQuestionIdFromPosition = "surveytemplate.question-id-from-position";
     public const string SurveyTemplateQuestionEmojiUnrepresentable = "surveytemplate.question-emoji-unrepresentable";
     public const string SurveyTemplateQuestionConditionalLogicDropped = "surveytemplate.question-conditional-logic-dropped";
+
+    // SurveyVersion + SurveyAuditLog (#154 slice 5), the survey-history pair.
+    public const string SurveyVersionDuplicateNumber = "surveyversion.duplicate-version-number";
+
+    // The audit vocabularies are the sharp part: legacy has 14 actions and 9 entity
+    // types, the target 5 and 3 (SurveyAuditActions / SurveyAuditEntityTypes). Every
+    // remap is named, and a row whose action has no target meaning is a reported skip
+    // rather than a string the history endpoint cannot render. The original values and
+    // the raw legacy changes ride along in metadata, so nothing is destroyed.
+    public const string AuditActionRemapped = "surveyauditlog.action-remapped";
+    public const string AuditActionUnrepresentable = "surveyauditlog.action-unrepresentable";
+    public const string AuditEntityTypeRemapped = "surveyauditlog.entity-type-remapped";
+    public const string AuditActorFieldFabricated = "surveyauditlog.actor-field-fabricated";
+    public const string AuditReferenceNotAnIdentifier = "surveyauditlog.reference-not-an-identifier";
 }

@@ -53,7 +53,10 @@ public sealed class MigrationPipeline(
     bool dryRun)
 {
     public static readonly IReadOnlyList<string> MappedCollections =
-        ["companies", "demographicfields", "departments", "users", "systemsettings", "surveys", "surveytemplates", "responses"];
+    [
+        "companies", "demographicfields", "departments", "users", "systemsettings",
+        "surveys", "surveytemplates", "surveyversions", "surveyauditlogs", "responses",
+    ];
 
     private readonly List<CollectionResult> _results = [];
     private readonly List<MappedDepartment> _departmentsThisRun = [];
@@ -117,6 +120,18 @@ public sealed class MigrationPipeline(
             await LoadSurveyTemplatesAsync(context, ct);
         }
 
+        if (wanted.Contains("surveyversions"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadSurveyVersionsAsync(context, ct);
+        }
+
+        if (wanted.Contains("surveyauditlogs"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadSurveyAuditLogsAsync(context, ct);
+        }
+
         if (wanted.Contains("responses"))
         {
             context = await BuildContextAsync(ct);
@@ -148,8 +163,14 @@ public sealed class MigrationPipeline(
         users.UnionWith(db.Users.Local.Select(u => u.Id));
         users.UnionWith(_usersThisRun.Select(u => u.User.Id));
 
-        var surveys = (await db.Surveys.Select(s => s.Id).ToListAsync(ct)).ToHashSet();
-        surveys.UnionWith(db.Surveys.Local.Select(s => s.Id));
+        var surveyLanguages = (await db.Surveys.Select(s => new { s.Id, s.Language }).ToListAsync(ct))
+            .ToDictionary(s => s.Id, s => s.Language);
+        foreach (var entry in db.Surveys.Local)
+        {
+            surveyLanguages[entry.Id] = entry.Language;
+        }
+
+        var surveys = surveyLanguages.Keys.ToHashSet();
 
         var questions = (await db.Questions.Select(q => q.Id).ToListAsync(ct)).ToHashSet();
         questions.UnionWith(db.Questions.Local.Select(q => q.Id));
@@ -173,6 +194,7 @@ public sealed class MigrationPipeline(
             Departments = departments,
             Users = users,
             Surveys = surveys,
+            SurveyLanguages = surveyLanguages,
             Questions = questions,
             DemographicFields = fields,
         };
@@ -621,6 +643,117 @@ public sealed class MigrationPipeline(
 
         await SaveAsync(ct);
         _results.Add(new CollectionResult("surveytemplates", source, written, report.SkipCount("surveytemplates")));
+    }
+
+    /// <summary>
+    /// Versions carry a unique (survey, version_number) index the legacy collection
+    /// also had - so a duplicate is refused here by name rather than by a constraint
+    /// violation that would abort the batch.
+    /// </summary>
+    private async Task LoadSurveyVersionsAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        var seen = new HashSet<(Guid Survey, int Number)>();
+        await foreach (var document in Read<LegacySurveyVersion>("surveyversions", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (SurveyVersionMapper.Map(document, context) is not { } version)
+            {
+                continue;
+            }
+
+            if (!seen.Add((version.SurveyId, version.VersionNumber)))
+            {
+                report.Skip(MigrationRules.SurveyVersionDuplicateNumber, "surveyversions",
+                    document.Id.ToString(),
+                    $"another version of this survey already carries number {version.VersionNumber}; "
+                    + "the unique index would refuse it",
+                    "version_number");
+                continue;
+            }
+
+            var existing = await db.SurveyVersions.FindAsync([version.Id], ct);
+            if (existing is null)
+            {
+                db.SurveyVersions.Add(version);
+            }
+            else
+            {
+                existing.SurveyId = version.SurveyId;
+                existing.VersionNumber = version.VersionNumber;
+                existing.TitleEn = version.TitleEn;
+                existing.TitleEs = version.TitleEs;
+                existing.DescriptionEn = version.DescriptionEn;
+                existing.DescriptionEs = version.DescriptionEs;
+                existing.Changes = version.Changes;
+                existing.Reason = version.Reason;
+                existing.CreatedBy = version.CreatedBy;
+                existing.QuestionsSnapshot = version.QuestionsSnapshot;
+                existing.DemographicsSnapshot = version.DemographicsSnapshot;
+                existing.SettingsSnapshot = version.SettingsSnapshot;
+                existing.CreatedAt = version.CreatedAt;
+            }
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("surveyversions", source, written, report.SkipCount("surveyversions")));
+    }
+
+    private async Task LoadSurveyAuditLogsAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        var sinceSave = 0;
+        await foreach (var document in Read<LegacySurveyAuditLog>("surveyauditlogs", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (SurveyAuditLogMapper.Map(document, context) is not { } entry)
+            {
+                continue;
+            }
+
+            var existing = await db.SurveyAuditLogs.FindAsync([entry.Id], ct);
+            if (existing is null)
+            {
+                db.SurveyAuditLogs.Add(entry);
+            }
+            else
+            {
+                existing.SurveyId = entry.SurveyId;
+                existing.Action = entry.Action;
+                existing.EntityType = entry.EntityType;
+                existing.EntityId = entry.EntityId;
+                existing.Changes = entry.Changes;
+                existing.UserId = entry.UserId;
+                existing.UserName = entry.UserName;
+                existing.UserEmail = entry.UserEmail;
+                existing.UserRole = entry.UserRole;
+                existing.Timestamp = entry.Timestamp;
+                existing.IpAddress = entry.IpAddress;
+                existing.UserAgent = entry.UserAgent;
+                existing.SessionId = entry.SessionId;
+                existing.Metadata = entry.Metadata;
+            }
+
+            written++;
+
+            // An audit feed grows with every edit ever made, so it gets the responses
+            // stage's bounded-memory treatment rather than one giant tracked batch.
+            if (++sinceSave >= 500)
+            {
+                await SaveAsync(ct);
+                db.ChangeTracker.Clear();
+                sinceSave = 0;
+            }
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("surveyauditlogs", source, written, report.SkipCount("surveyauditlogs")));
     }
 
     /// <summary>

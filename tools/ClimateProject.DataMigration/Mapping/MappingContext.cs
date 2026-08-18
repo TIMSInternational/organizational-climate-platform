@@ -30,6 +30,15 @@ public sealed class MappingContext
     public IReadOnlySet<Guid> Surveys { get; init; } = new HashSet<Guid>();
 
     /// <summary>
+    /// Each migrated survey's content language. A version snapshot must attribute
+    /// exactly as the survey it snapshots did - reading Company.language again could
+    /// disagree with what the survey row actually got if that survey was skipped,
+    /// re-run, or (later) corrected by hand.
+    /// </summary>
+    public IReadOnlyDictionary<Guid, string> SurveyLanguages { get; init; } =
+        new Dictionary<Guid, string>();
+
+    /// <summary>
     /// Questions already migrated. An answer re-derives its question id from
     /// (survey _id, question id string); membership here is what separates a real
     /// question from one the survey mapper dropped - question_responses.question_id

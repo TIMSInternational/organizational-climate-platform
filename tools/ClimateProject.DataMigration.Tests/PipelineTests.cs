@@ -1,3 +1,4 @@
+using ClimateProject.Application.Surveys;
 using ClimateProject.DataMigration.Loading;
 using ClimateProject.DataMigration.Mapping;
 using ClimateProject.DataMigration.Reporting;
@@ -38,6 +39,8 @@ public sealed class EtlContainersFixture : IAsyncLifetime
             DELETE FROM question_responses;
             DELETE FROM response_demographics;
             DELETE FROM responses;
+            DELETE FROM survey_audit_logs;
+            DELETE FROM survey_versions;
             DELETE FROM template_question_options;
             DELETE FROM template_questions;
             DELETE FROM survey_templates;
@@ -89,6 +92,9 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
     private static readonly ObjectId ResponseOid = ObjectId.Parse("64b000000000000000000061");
     private static readonly ObjectId AnonResponseOid = ObjectId.Parse("64b000000000000000000062");
     private static readonly ObjectId TemplateOid = ObjectId.Parse("64b000000000000000000071");
+    private static readonly ObjectId VersionOid = ObjectId.Parse("64b000000000000000000081");
+    private static readonly ObjectId AuditOid = ObjectId.Parse("64b000000000000000000091");
+    private static readonly ObjectId AuditDeletedOid = ObjectId.Parse("64b000000000000000000092");
 
     /// <summary>The fixture corpus: every FK edge, both second passes, one of each misfit.</summary>
     private static async Task SeedLegacyAsync(IMongoDatabase legacy)
@@ -260,6 +266,57 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
                 ["usage_count"] = 7,
                 ["rating"] = 4.5,
                 ["tags"] = new BsonArray { "pulse" },
+            },
+        ]);
+
+        await legacy.GetCollection<BsonDocument>("surveyversions").InsertManyAsync(
+        [
+            new BsonDocument
+            {
+                ["_id"] = VersionOid,
+                ["survey_id"] = SurveyOid.ToString(),
+                ["version_number"] = 2,
+                ["title"] = "Q3 Climate Pulse",
+                ["description"] = "How the quarter felt.",
+                ["questions"] = new BsonArray
+                {
+                    new BsonDocument { ["id"] = "sq-1", ["text"] = "I feel safe speaking up.", ["type"] = "likert" },
+                },
+                ["settings"] = new BsonDocument { ["anonymous"] = true },
+                ["changes"] = new BsonArray { "Added the safety item" },
+                ["reason"] = "Added the psychological-safety item",
+                ["created_by"] = AdaOid.ToString(),
+                ["created_at"] = new DateTime(2026, 7, 5, 0, 0, 0, DateTimeKind.Utc),
+            },
+        ]);
+
+        await legacy.GetCollection<BsonDocument>("surveyauditlogs").InsertManyAsync(
+        [
+            new BsonDocument
+            {
+                // Real ObjectId references - the shape unique to this collection.
+                ["_id"] = AuditOid,
+                ["survey_id"] = SurveyOid,
+                ["action"] = "published",
+                ["entity_type"] = "survey",
+                ["user_id"] = AdaOid,
+                ["user_name"] = "Ada Lovelace",
+                ["user_email"] = "ada@acme.com",
+                ["user_role"] = "company_admin",
+                ["timestamp"] = new DateTime(2026, 7, 1, 8, 0, 0, DateTimeKind.Utc),
+            },
+            new BsonDocument
+            {
+                // An action the target vocabulary cannot express: reported, not written.
+                ["_id"] = AuditDeletedOid,
+                ["survey_id"] = SurveyOid,
+                ["action"] = "draft_saved",
+                ["entity_type"] = "draft",
+                ["user_id"] = AdaOid,
+                ["user_name"] = "Ada Lovelace",
+                ["user_email"] = "ada@acme.com",
+                ["user_role"] = "company_admin",
+                ["timestamp"] = new DateTime(2026, 6, 30, 8, 0, 0, DateTimeKind.Utc),
             },
         ]);
 
@@ -449,16 +506,45 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
             .OrderBy(o => o.Order).Select(o => o.Value).ToListAsync();
         Assert.Equal(["Weekly", "Monthly"], templateOptions);
 
+        // The history pair. The version attributes from its SURVEY and keeps its
+        // snapshot as evidence rather than re-mapping it through today's rules.
+        var version = await db.SurveyVersions.SingleAsync();
+        Assert.Equal(MigrationIds.For("surveyversions", VersionOid), version.Id);
+        Assert.Equal(survey.Id, version.SurveyId);
+        Assert.Equal(ada.Id, version.CreatedBy);
+        Assert.Equal(2, version.VersionNumber);
+        Assert.Equal("Q3 Climate Pulse", version.TitleEn);
+        Assert.Equal(["Added the safety item"], version.Changes);
+        Assert.Contains("sq-1", version.QuestionsSnapshot);
+
+        // The audit feed: the lifecycle row folded into status_changed carrying its
+        // destination, and the draft row was refused rather than written unrenderable.
+        var auditEntry = await db.SurveyAuditLogs.SingleAsync();
+        Assert.Equal(MigrationIds.For("surveyauditlogs", AuditOid), auditEntry.Id);
+        Assert.Equal(survey.Id, auditEntry.SurveyId);
+        Assert.Equal(ada.Id, auditEntry.UserId);
+        Assert.Equal("status_changed", auditEntry.Action);
+        Assert.Equal("status", auditEntry.EntityType);
+        // Parsed, not string-matched: Postgres normalises jsonb (it stores
+        // {"to": "active"}, with the space), so a literal compare would test the
+        // database's formatter rather than the mapper's translation.
+        Assert.Equal("active", SurveyAuditChangeSet.FromJson(auditEntry.Changes)!.To);
+        Assert.Contains("published", auditEntry.Metadata);
+        Assert.Contains(report.Entries, e => e.Rule == MigrationRules.AuditActionUnrepresentable);
+
         // Attribution: en company label + the platform maintenance message, then the
         // survey's title, description, invitation message and two question texts,
-        // the template's two question texts, then each response's served language.
+        // the template's two question texts, the version's title and description,
+        // then each response's served language.
         Assert.Equal(5, report.Entries.Count(
             e => e.Kind == ReportEntryKind.Attribution && e.Collection == "surveys"));
         Assert.Equal(2, report.Entries.Count(
             e => e.Kind == ReportEntryKind.Attribution && e.Collection == "surveytemplates"));
         Assert.Equal(2, report.Entries.Count(
             e => e.Kind == ReportEntryKind.Attribution && e.Collection == "responses"));
-        Assert.Equal(11, report.Entries.Count(e => e.Kind == ReportEntryKind.Attribution));
+        Assert.Equal(2, report.Entries.Count(
+            e => e.Kind == ReportEntryKind.Attribution && e.Collection == "surveyversions"));
+        Assert.Equal(13, report.Entries.Count(e => e.Kind == ReportEntryKind.Attribution));
     }
 
     [Fact]
@@ -502,6 +588,8 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
             Assert.Equal(3, await db.QuestionResponses.CountAsync());
             Assert.Equal(1, await db.ResponseDemographics.CountAsync());
 
+            Assert.Equal(1, await db.SurveyVersions.CountAsync());
+            Assert.Equal(1, await db.SurveyAuditLogs.CountAsync());
             Assert.Equal(1, await db.SurveyTemplates.CountAsync());
             Assert.Equal(2, await db.TemplateQuestions.CountAsync());
             Assert.Equal(2, await db.TemplateQuestionOptions.CountAsync());
@@ -555,6 +643,8 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
             Assert.Equal(2, await verify.Responses.CountAsync());
             Assert.Equal(3, await verify.QuestionResponses.CountAsync());
             Assert.Equal(1, await verify.SurveyTemplates.CountAsync());
+            Assert.Equal(1, await verify.SurveyVersions.CountAsync());
+            Assert.Equal(1, await verify.SurveyAuditLogs.CountAsync());
             var api = await verify.Departments.SingleAsync(d => d.Name == "Backend API");
             Assert.NotNull(api.ParentDepartmentId);
             var eng = await verify.Departments.SingleAsync(d => d.Name == "Engineering");
@@ -583,6 +673,8 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
         Assert.Equal(0, await verify.Questions.CountAsync());
         Assert.Equal(0, await verify.Responses.CountAsync());
         Assert.Equal(0, await verify.SurveyTemplates.CountAsync());
+        Assert.Equal(0, await verify.SurveyVersions.CountAsync());
+        Assert.Equal(0, await verify.SurveyAuditLogs.CountAsync());
     }
 
     [Fact]
