@@ -35,6 +35,9 @@ public sealed class EtlContainersFixture : IAsyncLifetime
         await using var db = CreateDb();
         await db.Database.ExecuteSqlRawAsync(
             """
+            DELETE FROM question_responses;
+            DELETE FROM response_demographics;
+            DELETE FROM responses;
             DELETE FROM question_options;
             DELETE FROM question_emoji_options;
             DELETE FROM question_conditional_logic;
@@ -80,6 +83,8 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
     private static readonly ObjectId RootOid = ObjectId.Parse("64b000000000000000000023");
     private static readonly ObjectId TenureOid = ObjectId.Parse("64b000000000000000000031");
     private static readonly ObjectId SurveyOid = ObjectId.Parse("64b000000000000000000051");
+    private static readonly ObjectId ResponseOid = ObjectId.Parse("64b000000000000000000061");
+    private static readonly ObjectId AnonResponseOid = ObjectId.Parse("64b000000000000000000062");
 
     /// <summary>The fixture corpus: every FK edge, both second passes, one of each misfit.</summary>
     private static async Task SeedLegacyAsync(IMongoDatabase legacy)
@@ -216,6 +221,54 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
                 ["version"] = 2,
             },
         ]);
+
+        await legacy.GetCollection<BsonDocument>("responses").InsertManyAsync(
+        [
+            new BsonDocument
+            {
+                ["_id"] = ResponseOid,
+                ["survey_id"] = SurveyOid.ToString(),
+                ["user_id"] = AdaOid.ToString(),
+                ["session_id"] = "sess-ada-1",
+                ["company_id"] = AcmeOid.ToString(),
+                ["department_id"] = ApiOid.ToString(),
+                ["responses"] = new BsonArray
+                {
+                    new BsonDocument { ["question_id"] = "sq-1", ["response_value"] = 4 },
+                    new BsonDocument
+                    {
+                        ["question_id"] = "sq-2",
+                        ["response_value"] = "Calm",
+                        ["response_text"] = "A good week overall.",
+                    },
+                },
+                ["demographics"] = new BsonArray
+                {
+                    new BsonDocument { ["field"] = "tenure", ["value"] = "1-3" },
+                },
+                ["is_complete"] = true,
+                ["start_time"] = new DateTime(2026, 7, 2, 9, 0, 0, DateTimeKind.Utc),
+                ["completion_time"] = new DateTime(2026, 7, 2, 9, 6, 40, DateTimeKind.Utc),
+                ["total_time_seconds"] = 400,
+            },
+            new BsonDocument
+            {
+                ["_id"] = AnonResponseOid,
+                ["survey_id"] = SurveyOid.ToString(),
+                // No user_id: the anonymity constraint, not a defect.
+                ["session_id"] = "sess-anon-1",
+                ["company_id"] = AcmeOid.ToString(),
+                ["responses"] = new BsonArray
+                {
+                    new BsonDocument { ["question_id"] = "sq-1", ["response_value"] = 2 },
+                    // References a question the survey never had: the reported path.
+                    new BsonDocument { ["question_id"] = "sq-404", ["response_value"] = 1 },
+                },
+                ["is_complete"] = true,
+                ["is_anonymous"] = true,
+                ["start_time"] = new DateTime(2026, 7, 3, 14, 0, 0, DateTimeKind.Utc),
+            },
+        ]);
     }
 
     private async Task<(MigrationResult Result, DataQualityReport Report)> RunAsync(
@@ -308,11 +361,43 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
         Assert.Contains(report.Entries,
             e => e.Kind == ReportEntryKind.Degraded && e.Field == "department_ids");
 
+        // The response fan-out: answers re-derive their question ids, values encode
+        // through the app's one jsonb encoding, demographics ride along.
+        var responseId = MigrationIds.For("responses", ResponseOid);
+        var response = await db.Responses.SingleAsync(r => r.Id == responseId);
+        Assert.Equal(ada.Id, response.UserId);
+        Assert.Equal(survey.Id, response.SurveyId);
+        Assert.Equal(api.Id, response.DepartmentId);
+        Assert.Equal("en", response.Language);
+        Assert.Equal(400, response.TotalTimeSeconds);
+
+        var answers = await db.QuestionResponses.Where(a => a.ResponseId == responseId).ToListAsync();
+        Assert.Equal(2, answers.Count);
+        Assert.Equal("\"4\"", answers.Single(a => a.QuestionId == sq1Id).ResponseValue);
+        var optionAnswer = answers.Single(a => a.QuestionId == sq2Id);
+        Assert.Equal("\"Calm\"", optionAnswer.ResponseValue);
+        Assert.Equal("A good week overall.", optionAnswer.ResponseText);
+        var demographicRow = Assert.Single(
+            await db.ResponseDemographics.Where(d => d.ResponseId == responseId).ToListAsync());
+        Assert.Equal("\"1-3\"", demographicRow.Value);
+
+        // The anonymous response: no user id by design, and its answer to a question
+        // the survey never had is a reported miss, not a written FK violation.
+        var anonymous = await db.Responses.SingleAsync(
+            r => r.Id == MigrationIds.For("responses", AnonResponseOid));
+        Assert.Null(anonymous.UserId);
+        Assert.True(anonymous.IsAnonymous);
+        Assert.Equal(1, await db.QuestionResponses.CountAsync(a => a.ResponseId == anonymous.Id));
+        Assert.Contains(report.Entries, e => e.Rule == MigrationRules.ResponseAnswerQuestionUnresolved);
+
         // Attribution: en company label + the platform maintenance message, then the
-        // survey's title, description, invitation message and two question texts.
+        // survey's title, description, invitation message and two question texts,
+        // then each response's served-language attribution.
         Assert.Equal(5, report.Entries.Count(
             e => e.Kind == ReportEntryKind.Attribution && e.Collection == "surveys"));
-        Assert.Equal(7, report.Entries.Count(e => e.Kind == ReportEntryKind.Attribution));
+        Assert.Equal(2, report.Entries.Count(
+            e => e.Kind == ReportEntryKind.Attribution && e.Collection == "responses"));
+        Assert.Equal(9, report.Entries.Count(e => e.Kind == ReportEntryKind.Attribution));
     }
 
     [Fact]
@@ -350,6 +435,11 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
             Assert.Equal(3, await db.QuestionOptions.CountAsync());
             Assert.Equal(1, await db.QuestionConditionalLogics.CountAsync());
             Assert.Equal(1, await db.SurveyDepartmentTargets.CountAsync());
+
+            // And the volume driver: responses, answers and demographics all converge.
+            Assert.Equal(2, await db.Responses.CountAsync());
+            Assert.Equal(3, await db.QuestionResponses.CountAsync());
+            Assert.Equal(1, await db.ResponseDemographics.CountAsync());
         }
     }
 
@@ -397,6 +487,8 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
             Assert.Equal(3, await verify.Users.CountAsync());
             Assert.Equal(1, await verify.Surveys.CountAsync());
             Assert.Equal(2, await verify.Questions.CountAsync());
+            Assert.Equal(2, await verify.Responses.CountAsync());
+            Assert.Equal(3, await verify.QuestionResponses.CountAsync());
             var api = await verify.Departments.SingleAsync(d => d.Name == "Backend API");
             Assert.NotNull(api.ParentDepartmentId);
             var eng = await verify.Departments.SingleAsync(d => d.Name == "Engineering");
@@ -423,6 +515,7 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
         Assert.Equal(0, await verify.Users.CountAsync());
         Assert.Equal(0, await verify.Surveys.CountAsync());
         Assert.Equal(0, await verify.Questions.CountAsync());
+        Assert.Equal(0, await verify.Responses.CountAsync());
     }
 
     [Fact]
@@ -433,8 +526,8 @@ public class PipelineTests : IClassFixture<EtlContainersFixture>
         var pipeline = new MigrationPipeline(legacy, db, new DataQualityReport(), dryRun: true);
 
         var exception = await Assert.ThrowsAsync<NotSupportedException>(
-            () => pipeline.RunAsync(["companies", "responses"], CancellationToken.None));
-        Assert.Contains("responses", exception.Message);
+            () => pipeline.RunAsync(["companies", "microclimates"], CancellationToken.None));
+        Assert.Contains("microclimates", exception.Message);
     }
 
     [Fact]

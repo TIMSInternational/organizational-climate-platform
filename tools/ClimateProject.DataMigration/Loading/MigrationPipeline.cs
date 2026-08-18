@@ -33,8 +33,9 @@ public sealed record MigrationResult(IReadOnlyList<CollectionResult> Collections
 
 /// <summary>
 /// The mapped load: Company -> DemographicField -> Department -> User ->
-/// SystemSettings -> Survey (with its Question/option/logic/target fan-out), in FK
-/// order, then the second pass for the three self- and cross-referential columns
+/// SystemSettings -> Survey (with its Question/option/logic/target fan-out) ->
+/// Response (answers + demographics, the volume driver), in FK order, then the
+/// second pass for the three self- and cross-referential columns
 /// (department parent, department manager, user manager) that cannot be satisfied on
 /// first insert. Reference targets are the ids present in the TARGET database plus
 /// this run's own writes, so a filtered or resumed run resolves against what earlier
@@ -51,7 +52,7 @@ public sealed class MigrationPipeline(
     bool dryRun)
 {
     public static readonly IReadOnlyList<string> MappedCollections =
-        ["companies", "demographicfields", "departments", "users", "systemsettings", "surveys"];
+        ["companies", "demographicfields", "departments", "users", "systemsettings", "surveys", "responses"];
 
     private readonly List<CollectionResult> _results = [];
     private readonly List<MappedDepartment> _departmentsThisRun = [];
@@ -109,6 +110,12 @@ public sealed class MigrationPipeline(
             await LoadSurveysAsync(context, ct);
         }
 
+        if (wanted.Contains("responses"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadResponsesAsync(context, ct);
+        }
+
         await SecondPassAsync(context, ct);
         AssertDepartmentHierarchy();
 
@@ -134,6 +141,12 @@ public sealed class MigrationPipeline(
         users.UnionWith(db.Users.Local.Select(u => u.Id));
         users.UnionWith(_usersThisRun.Select(u => u.User.Id));
 
+        var surveys = (await db.Surveys.Select(s => s.Id).ToListAsync(ct)).ToHashSet();
+        surveys.UnionWith(db.Surveys.Local.Select(s => s.Id));
+
+        var questions = (await db.Questions.Select(q => q.Id).ToListAsync(ct)).ToHashSet();
+        questions.UnionWith(db.Questions.Local.Select(q => q.Id));
+
         var fields = new Dictionary<(Guid, string), Guid>();
         foreach (var field in await db.DemographicFields.Select(f => new { f.Id, f.CompanyId, f.Field }).ToListAsync(ct))
         {
@@ -152,6 +165,8 @@ public sealed class MigrationPipeline(
             CompanyLanguages = companies,
             Departments = departments,
             Users = users,
+            Surveys = surveys,
+            Questions = questions,
             DemographicFields = fields,
         };
     }
@@ -514,6 +529,78 @@ public sealed class MigrationPipeline(
 
         await SaveAsync(ct);
         _results.Add(new CollectionResult("surveys", source, written, report.SkipCount("surveys")));
+    }
+
+    /// <summary>
+    /// The volume driver. Two departures from the other stages, both because row
+    /// counts are unknown until the census (sub-issue A) runs against a dump:
+    /// the tracker is flushed and CLEARED every 500 documents (the readers' own batch
+    /// size) so memory stays bounded, and a kill between batches leaves partial
+    /// collection state - which deterministic upserts converge on re-run exactly as a
+    /// stage-boundary kill does, per sub-issue D's argument. The per-response child
+    /// queries are the simple, correct shape; if the census says millions of rows,
+    /// batching those lookups is the tuning knob.
+    /// </summary>
+    private async Task LoadResponsesAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        var sinceSave = 0;
+        await foreach (var document in Read<LegacyResponse>("responses", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (ResponseMapper.Map(document, context) is not { } mapped)
+            {
+                continue;
+            }
+
+            var existing = await db.Responses.FindAsync([mapped.Response.Id], ct);
+            if (existing is null)
+            {
+                db.Responses.Add(mapped.Response);
+            }
+            else
+            {
+                existing.SurveyId = mapped.Response.SurveyId;
+                existing.UserId = mapped.Response.UserId;
+                existing.SessionId = mapped.Response.SessionId;
+                existing.CompanyId = mapped.Response.CompanyId;
+                existing.DepartmentId = mapped.Response.DepartmentId;
+                existing.Language = mapped.Response.Language;
+                existing.IsComplete = mapped.Response.IsComplete;
+                existing.IsAnonymous = mapped.Response.IsAnonymous;
+                existing.StartTime = mapped.Response.StartTime;
+                existing.CompletionTime = mapped.Response.CompletionTime;
+                existing.TotalTimeSeconds = mapped.Response.TotalTimeSeconds;
+                existing.IpAddress = mapped.Response.IpAddress;
+                existing.UserAgent = mapped.Response.UserAgent;
+                existing.CreatedAt = mapped.Response.CreatedAt;
+                existing.UpdatedAt = mapped.Response.UpdatedAt;
+            }
+
+            // Answer and demographic rows replace wholesale, the child-row precedent.
+            var staleAnswers = await db.QuestionResponses
+                .Where(a => a.ResponseId == mapped.Response.Id).ToListAsync(ct);
+            db.QuestionResponses.RemoveRange(staleAnswers);
+            db.QuestionResponses.AddRange(mapped.Answers);
+
+            var staleDemographics = await db.ResponseDemographics
+                .Where(d => d.ResponseId == mapped.Response.Id).ToListAsync(ct);
+            db.ResponseDemographics.RemoveRange(staleDemographics);
+            db.ResponseDemographics.AddRange(mapped.Demographics);
+
+            written++;
+            if (++sinceSave >= 500)
+            {
+                await SaveAsync(ct);
+                db.ChangeTracker.Clear();
+                sinceSave = 0;
+            }
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("responses", source, written, report.SkipCount("responses")));
     }
 
     /// <summary>

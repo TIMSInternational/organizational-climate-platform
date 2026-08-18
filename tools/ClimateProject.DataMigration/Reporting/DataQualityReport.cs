@@ -148,4 +148,14 @@ public static class MigrationRules
     public const string QuestionOptionDuplicateValue = "question.option-duplicate-value";
     public const string QuestionEmojiOptionInvalid = "question.emoji-option-invalid";
     public const string QuestionConditionValueNotScalar = "question.condition-value-not-scalar";
+
+    // Response (#154 slice 3) - the volume driver. Answer rows are child fan-out, so
+    // their misfits are normalisations (the whole-response skip count stays exact).
+    public const string ResponseSessionIdFabricated = "response.session-id-fabricated";
+    public const string ResponseAnswerQuestionUnresolved = "response.answer-question-unresolved";
+    public const string ResponseAnswerDuplicateQuestion = "response.answer-duplicate-question";
+    public const string ResponseAnswerValueInvalid = "response.answer-value-invalid";
+    public const string ResponseAnswerBooleanCoded = "response.answer-boolean-coded";
+    public const string ResponseDemographicInvalid = "response.demographic-invalid";
+    public const string ResponseDemographicDuplicateField = "response.demographic-duplicate-field";
 }
