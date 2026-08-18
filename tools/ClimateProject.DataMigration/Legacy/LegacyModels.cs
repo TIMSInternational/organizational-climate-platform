@@ -227,8 +227,61 @@ public sealed class LegacyDemographicField : LegacyDocument
     [BsonElement("__v")] public int? Version { get; set; }
 }
 
-/// <summary>6. Mongoose model 'DemographicSnapshot' (DemographicSnapshot.ts).</summary>
-public sealed class LegacyDemographicSnapshot : LegacyDocument;
+/// <summary>
+/// 6. Mongoose model 'DemographicSnapshot' (DemographicSnapshot.ts). Typed 2026-08-18.
+/// A frozen record of who the audience WAS when a survey ran, which is what makes
+/// historical segment results reproducible. Two embedded arrays fan out.
+/// </summary>
+public sealed class LegacyDemographicSnapshot : LegacyDocument
+{
+    [BsonElement("survey_id")] public string? SurveyId { get; set; }
+    [BsonElement("company_id")] public string? CompanyId { get; set; }
+    [BsonElement("version")] public int? Version { get; set; }
+    [BsonElement("timestamp")] public DateTime? Timestamp { get; set; }
+    [BsonElement("demographics")] public List<LegacyDemographicEntry>? Demographics { get; set; }
+    [BsonElement("changes")] public List<LegacyDemographicChange>? Changes { get; set; }
+    [BsonElement("created_by")] public string? CreatedBy { get; set; }
+    [BsonElement("reason")] public string? Reason { get; set; }
+    [BsonElement("is_active")] public bool? IsActive { get; set; }
+    [BsonElement("metadata")] public LegacySnapshotMetadata? Metadata { get; set; }
+    [BsonElement("created_at")] public DateTime? CreatedAt { get; set; }
+    [BsonElement("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [BsonElement("__v")] public int? SchemaVersion { get; set; }
+}
+
+public sealed class LegacyDemographicEntry
+{
+    [BsonElement("user_id")] public string? UserId { get; set; }
+    [BsonElement("department")] public string? Department { get; set; }
+    [BsonElement("role")] public string? Role { get; set; }
+    [BsonElement("tenure")] public string? Tenure { get; set; }
+    [BsonElement("location")] public string? Location { get; set; }
+    [BsonElement("team")] public string? Team { get; set; }
+    [BsonElement("level")] public string? Level { get; set; }
+    [BsonElement("custom_attributes")] public BsonValue? CustomAttributes { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+/// <summary>old_value and new_value are Mixed; the target columns are text.</summary>
+public sealed class LegacyDemographicChange
+{
+    [BsonElement("field")] public string? Field { get; set; }
+    [BsonElement("old_value")] public BsonValue? OldValue { get; set; }
+    [BsonElement("new_value")] public BsonValue? NewValue { get; set; }
+    [BsonElement("changed_by")] public string? ChangedBy { get; set; }
+    [BsonElement("timestamp")] public DateTime? Timestamp { get; set; }
+    [BsonElement("reason")] public string? Reason { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
+
+public sealed class LegacySnapshotMetadata
+{
+    [BsonElement("total_users")] public int? TotalUsers { get; set; }
+    [BsonElement("departments_count")] public int? DepartmentsCount { get; set; }
+    [BsonElement("roles_distribution")] public BsonValue? RolesDistribution { get; set; }
+    [BsonElement("tenure_distribution")] public BsonValue? TenureDistribution { get; set; }
+    [BsonExtraElements] public BsonDocument? Extra { get; set; }
+}
 
 /// <summary>7. Mongoose model 'Survey' (Survey.ts). Typed 2026-08-17 from the legacy schema.</summary>
 public sealed class LegacySurvey : LegacyDocument

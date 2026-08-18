@@ -238,4 +238,8 @@ public static class MigrationRules
     public const string BenchmarkMetricIncomplete = "benchmark.metric-incomplete";
     public const string ReportFormatUnknown = "report.format-unknown";
     public const string ReportStatusUnknown = "report.status-unknown";
+
+    // DemographicSnapshot (#154 slice 12).
+    public const string SnapshotEntryIncomplete = "demographicsnapshot.entry-incomplete";
+    public const string SnapshotChangeIncomplete = "demographicsnapshot.change-incomplete";
 }
