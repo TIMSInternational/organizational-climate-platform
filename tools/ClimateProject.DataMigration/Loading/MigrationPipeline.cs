@@ -35,7 +35,9 @@ public sealed record MigrationResult(IReadOnlyList<CollectionResult> Collections
 /// The mapped load: Company -> DemographicField -> Department -> User ->
 /// SystemSettings -> Survey (with its Question/option/logic/target fan-out) ->
 /// SurveyTemplate (question/option fan-out) -> Response (answers + demographics, the
-/// volume driver), in FK order, then the
+/// volume driver) -> the microclimate, onboarding, notification, insight and output
+/// domains -> ActionPlanTemplate -> ActionPlan (the deepest fan-out: six target tables
+/// from one document), in FK order, then the
 /// second pass for the three self- and cross-referential columns
 /// (department parent, department manager, user manager) that cannot be satisfied on
 /// first insert. Reference targets are the ids present in the TARGET database plus
@@ -60,6 +62,7 @@ public sealed class MigrationPipeline(
         "microclimatetemplates", "microclimates", "microclimateinvitations",
         "userinvitations", "auditlogs", "notificationtemplates", "notifications",
         "aiinsights", "analyticsinsights", "benchmarks", "reports", "demographicsnapshots",
+        "actionplantemplates", "actionplans",
     ];
 
     private readonly List<CollectionResult> _results = [];
@@ -78,8 +81,11 @@ public sealed class MigrationPipeline(
             // Fail rather than pretend: a run that silently ignores collections it
             // cannot load reads as "migrated" to whoever launched it.
             throw new NotSupportedException(
-                $"No mapping exists yet for: {string.Join(", ", unmapped)}. Implemented so far: "
-                + $"{string.Join(", ", MappedCollections)} (sub-issues #335-#339 track the rest).");
+                $"No mapping exists for: {string.Join(", ", unmapped)}. Mapped: "
+                + $"{string.Join(", ", MappedCollections)}. Every collection the legacy database can hold is "
+                + "either in that list or deliberately excluded: libraryquestions is dead code, "
+                + "questionpools and its three sub-models are #113, and questionbanks / questioncategories / "
+                + "questionlibraries are #58.");
         }
 
         if (wanted.Contains("companies"))
@@ -232,6 +238,20 @@ public sealed class MigrationPipeline(
             await LoadAuditLogsAsync(context, ct);
         }
 
+        // Templates before plans: a plan's template_id is a real foreign key, and the
+        // tenant-leak rule can skip a template, which the plan stage must be able to see.
+        if (wanted.Contains("actionplantemplates"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadActionPlanTemplatesAsync(context, ct);
+        }
+
+        if (wanted.Contains("actionplans"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadActionPlansAsync(context, ct);
+        }
+
         await SecondPassAsync(context, ct);
         AssertDepartmentHierarchy();
 
@@ -278,6 +298,12 @@ public sealed class MigrationPipeline(
         var notificationTemplates = (await db.NotificationTemplates.Select(t => t.Id).ToListAsync(ct)).ToHashSet();
         notificationTemplates.UnionWith(db.NotificationTemplates.Local.Select(t => t.Id));
 
+        var actionPlanTemplates = (await db.ActionPlanTemplates.Select(t => t.Id).ToListAsync(ct)).ToHashSet();
+        actionPlanTemplates.UnionWith(db.ActionPlanTemplates.Local.Select(t => t.Id));
+
+        var aiInsights = (await db.AIInsights.Select(i => i.Id).ToListAsync(ct)).ToHashSet();
+        aiInsights.UnionWith(db.AIInsights.Local.Select(i => i.Id));
+
         var fields = new Dictionary<(Guid, string), Guid>();
         foreach (var field in await db.DemographicFields.Select(f => new { f.Id, f.CompanyId, f.Field }).ToListAsync(ct))
         {
@@ -302,6 +328,8 @@ public sealed class MigrationPipeline(
             MicroclimateTemplates = microclimateTemplates,
             Microclimates = microclimates,
             NotificationTemplates = notificationTemplates,
+            ActionPlanTemplates = actionPlanTemplates,
+            AiInsights = aiInsights,
             DemographicFields = fields,
         };
     }
@@ -848,6 +876,136 @@ public sealed class MigrationPipeline(
 
         await SaveAsync(ct);
         _results.Add(new CollectionResult("benchmarks", source, written, report.SkipCount("benchmarks")));
+    }
+
+    private async Task LoadActionPlanTemplatesAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        await foreach (var document in Read<LegacyActionPlanTemplate>("actionplantemplates", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (ActionPlanTemplateMapper.Map(document, context) is not { } mapped)
+            {
+                continue;
+            }
+
+            var existing = await db.ActionPlanTemplates.FindAsync([mapped.Template.Id], ct);
+            if (existing is null)
+            {
+                db.ActionPlanTemplates.Add(mapped.Template);
+            }
+            else
+            {
+                existing.Name = mapped.Template.Name;
+                existing.Description = mapped.Template.Description;
+                existing.Category = mapped.Template.Category;
+                existing.CompanyId = mapped.Template.CompanyId;
+                existing.CreatedBy = mapped.Template.CreatedBy;
+                existing.AiRecommendationTemplates = mapped.Template.AiRecommendationTemplates;
+                existing.Tags = mapped.Template.Tags;
+                existing.UsageCount = mapped.Template.UsageCount;
+                existing.IsActive = mapped.Template.IsActive;
+                existing.CreatedAt = mapped.Template.CreatedAt;
+                existing.UpdatedAt = mapped.Template.UpdatedAt;
+            }
+
+            var staleKpis = await db.ActionPlanTemplateKpis
+                .Where(k => k.TemplateId == mapped.Template.Id).ToListAsync(ct);
+            db.ActionPlanTemplateKpis.RemoveRange(staleKpis);
+            db.ActionPlanTemplateKpis.AddRange(mapped.Kpis);
+
+            var staleObjectives = await db.ActionPlanTemplateObjectives
+                .Where(o => o.TemplateId == mapped.Template.Id).ToListAsync(ct);
+            db.ActionPlanTemplateObjectives.RemoveRange(staleObjectives);
+            db.ActionPlanTemplateObjectives.AddRange(mapped.Objectives);
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult(
+            "actionplantemplates", source, written, report.SkipCount("actionplantemplates")));
+    }
+
+    /// <summary>
+    /// The deepest fan-out in the migration: one legacy document becomes up to six target
+    /// tables. Re-run replacement of the children has to go leaf-first - the two update
+    /// tables reference both their progress update AND the KPI or objective they moved, so
+    /// deleting a KPI before the rows that cite it trips the cascade the wrong way round.
+    /// </summary>
+    private async Task LoadActionPlansAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        await foreach (var document in Read<LegacyActionPlan>("actionplans", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (ActionPlanMapper.Map(document, context) is not { } mapped)
+            {
+                continue;
+            }
+
+            var planId = mapped.Plan.Id;
+            var existing = await db.ActionPlans.FindAsync([planId], ct);
+            if (existing is null)
+            {
+                db.ActionPlans.Add(mapped.Plan);
+            }
+            else
+            {
+                existing.Title = mapped.Plan.Title;
+                existing.Description = mapped.Plan.Description;
+                existing.CompanyId = mapped.Plan.CompanyId;
+                existing.DepartmentId = mapped.Plan.DepartmentId;
+                existing.CreatedBy = mapped.Plan.CreatedBy;
+                existing.DueDate = mapped.Plan.DueDate;
+                existing.Status = mapped.Plan.Status;
+                existing.Priority = mapped.Plan.Priority;
+                existing.AiRecommendations = mapped.Plan.AiRecommendations;
+                existing.Tags = mapped.Plan.Tags;
+                existing.TemplateId = mapped.Plan.TemplateId;
+                existing.SourceSurveyId = mapped.Plan.SourceSurveyId;
+                existing.SourceInsightId = mapped.Plan.SourceInsightId;
+                existing.CreatedAt = mapped.Plan.CreatedAt;
+                existing.UpdatedAt = mapped.Plan.UpdatedAt;
+            }
+
+            var staleUpdateIds = await db.ActionPlanProgressUpdates
+                .Where(p => p.ActionPlanId == planId).Select(p => p.Id).ToListAsync(ct);
+            if (staleUpdateIds.Count > 0)
+            {
+                db.ActionPlanKpiUpdates.RemoveRange(await db.ActionPlanKpiUpdates
+                    .Where(u => staleUpdateIds.Contains(u.ProgressUpdateId)).ToListAsync(ct));
+                db.ActionPlanObjectiveUpdates.RemoveRange(await db.ActionPlanObjectiveUpdates
+                    .Where(u => staleUpdateIds.Contains(u.ProgressUpdateId)).ToListAsync(ct));
+                db.ActionPlanProgressUpdates.RemoveRange(await db.ActionPlanProgressUpdates
+                    .Where(p => p.ActionPlanId == planId).ToListAsync(ct));
+            }
+
+            db.ActionPlanKpis.RemoveRange(
+                await db.ActionPlanKpis.Where(k => k.ActionPlanId == planId).ToListAsync(ct));
+            db.ActionPlanObjectives.RemoveRange(
+                await db.ActionPlanObjectives.Where(o => o.ActionPlanId == planId).ToListAsync(ct));
+
+            // Deletes must reach the database before the inserts that reuse those keys:
+            // within one SaveChanges EF has no reason to order a DELETE before an INSERT
+            // of the same primary key.
+            await SaveAsync(ct);
+
+            db.ActionPlanKpis.AddRange(mapped.Kpis);
+            db.ActionPlanObjectives.AddRange(mapped.Objectives);
+            db.ActionPlanProgressUpdates.AddRange(mapped.ProgressUpdates);
+            db.ActionPlanKpiUpdates.AddRange(mapped.KpiUpdates);
+            db.ActionPlanObjectiveUpdates.AddRange(mapped.ObjectiveUpdates);
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("actionplans", source, written, report.SkipCount("actionplans")));
     }
 
     private async Task LoadReportsAsync(MappingContext context, CancellationToken ct)
