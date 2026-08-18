@@ -59,7 +59,7 @@ public sealed class MigrationPipeline(
         "surveydrafts", "surveydistributions", "surveyinvitations", "responses",
         "microclimatetemplates", "microclimates", "microclimateinvitations",
         "userinvitations", "auditlogs", "notificationtemplates", "notifications",
-        "aiinsights", "analyticsinsights",
+        "aiinsights", "analyticsinsights", "benchmarks", "reports",
     ];
 
     private readonly List<CollectionResult> _results = [];
@@ -206,6 +206,18 @@ public sealed class MigrationPipeline(
         {
             context = await BuildContextAsync(ct);
             await LoadAnalyticsInsightsAsync(context, ct);
+        }
+
+        if (wanted.Contains("benchmarks"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadBenchmarksAsync(context, ct);
+        }
+
+        if (wanted.Contains("reports"))
+        {
+            context = await BuildContextAsync(ct);
+            await LoadReportsAsync(context, ct);
         }
 
         if (wanted.Contains("auditlogs"))
@@ -731,6 +743,110 @@ public sealed class MigrationPipeline(
 
         await SaveAsync(ct);
         _results.Add(new CollectionResult("surveytemplates", source, written, report.SkipCount("surveytemplates")));
+    }
+
+    private async Task LoadBenchmarksAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        await foreach (var document in Read<LegacyBenchmark>("benchmarks", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (BenchmarkMapper.Map(document, context) is not { } mapped)
+            {
+                continue;
+            }
+
+            var existing = await db.Benchmarks.FindAsync([mapped.Benchmark.Id], ct);
+            if (existing is null)
+            {
+                db.Benchmarks.Add(mapped.Benchmark);
+            }
+            else
+            {
+                existing.Name = mapped.Benchmark.Name;
+                existing.Description = mapped.Benchmark.Description;
+                existing.Type = mapped.Benchmark.Type;
+                existing.Category = mapped.Benchmark.Category;
+                existing.Source = mapped.Benchmark.Source;
+                existing.Industry = mapped.Benchmark.Industry;
+                existing.CompanySize = mapped.Benchmark.CompanySize;
+                existing.Region = mapped.Benchmark.Region;
+                existing.CreatedBy = mapped.Benchmark.CreatedBy;
+                existing.CompanyId = mapped.Benchmark.CompanyId;
+                existing.IsActive = mapped.Benchmark.IsActive;
+                existing.ValidationStatus = mapped.Benchmark.ValidationStatus;
+                existing.QualityScore = mapped.Benchmark.QualityScore;
+                existing.Metadata = mapped.Benchmark.Metadata;
+                existing.CreatedAt = mapped.Benchmark.CreatedAt;
+                existing.UpdatedAt = mapped.Benchmark.UpdatedAt;
+            }
+
+            var stale = await db.BenchmarkMetrics
+                .Where(m => m.BenchmarkId == mapped.Benchmark.Id).ToListAsync(ct);
+            db.BenchmarkMetrics.RemoveRange(stale);
+            db.BenchmarkMetrics.AddRange(mapped.Metrics);
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("benchmarks", source, written, report.SkipCount("benchmarks")));
+    }
+
+    private async Task LoadReportsAsync(MappingContext context, CancellationToken ct)
+    {
+        long source = 0;
+        var written = 0;
+        await foreach (var document in Read<LegacyReport>("reports", ct))
+        {
+            source++;
+            ct.ThrowIfCancellationRequested();
+            if (ReportMapper.Map(document, context) is not { } mapped)
+            {
+                continue;
+            }
+
+            var existing = await db.Reports.FindAsync([mapped.Id], ct);
+            if (existing is null)
+            {
+                db.Reports.Add(mapped);
+            }
+            else
+            {
+                existing.Title = mapped.Title;
+                existing.Description = mapped.Description;
+                existing.Type = mapped.Type;
+                existing.CompanyId = mapped.CompanyId;
+                existing.CreatedBy = mapped.CreatedBy;
+                existing.TemplateId = mapped.TemplateId;
+                existing.Filters = mapped.Filters;
+                existing.Config = mapped.Config;
+                existing.Status = mapped.Status;
+                existing.Format = mapped.Format;
+                existing.FilePath = mapped.FilePath;
+                existing.FileSize = mapped.FileSize;
+                existing.GenerationStartedAt = mapped.GenerationStartedAt;
+                existing.GenerationCompletedAt = mapped.GenerationCompletedAt;
+                existing.GenerationError = mapped.GenerationError;
+                existing.ScheduledFor = mapped.ScheduledFor;
+                existing.IsRecurring = mapped.IsRecurring;
+                existing.RecurrencePattern = mapped.RecurrencePattern;
+                existing.NextGeneration = mapped.NextGeneration;
+                existing.SharedWith = mapped.SharedWith;
+                existing.DownloadCount = mapped.DownloadCount;
+                existing.ExpiresAt = mapped.ExpiresAt;
+                existing.ReportOutput = mapped.ReportOutput;
+                existing.CreatedAt = mapped.CreatedAt;
+                existing.UpdatedAt = mapped.UpdatedAt;
+            }
+
+            written++;
+        }
+
+        await SaveAsync(ct);
+        _results.Add(new CollectionResult("reports", source, written, report.SkipCount("reports")));
     }
 
     private async Task LoadAiInsightsAsync(MappingContext context, CancellationToken ct)
