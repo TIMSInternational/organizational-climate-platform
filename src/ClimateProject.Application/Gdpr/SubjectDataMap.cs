@@ -295,6 +295,32 @@ public static class SubjectDataMap
         NotPersonal("QuestionEmojiOption", "question_emoji_options", "Answer options. No person referenced."),
         NotPersonal("QuestionOption", "question_options", "Answer options. No person referenced."),
 
+        // The two question repositories (#58). Authored CONTENT, not subject data: a repository item
+        // is a question somebody may one day ask, and holds nobody's answer. The only personal datum
+        // on any of these seven tables is authorship, which is retained through erasure for the same
+        // reason survey_templates' is -- attribution to a pseudonymised users row.
+        Actor("QuestionBankItem", "question_bank_items", "CreatedBy",
+            "Authorship of a curated question. Its metrics (usage, response rate, insight score) are "
+            + "corpus-level aggregates and reference nobody."),
+        NotPersonal("QuestionBankItemOption", "question_bank_item_options",
+            "Answer options on a bank question. Definitions, not answers."),
+        NotPersonal("QuestionBankItemTag", "question_bank_item_tags",
+            "Free-text tags used to filter the bank. No person referenced."),
+        Actor("QuestionCategory", "question_categories", "CreatedBy",
+            "Authorship of a node in the library's category tree. The tree files questions, not people."),
+        // Two actor columns rather than one: an item records who wrote it AND who last edited it, and
+        // an access export that named only the author would under-report a subject's footprint.
+        new("QuestionLibraryItem", "question_library_items", SubjectLink.Actor, ["CreatedBy", "LastModifiedBy"],
+            ExportTreatment.Reference, ErasureTreatment.Retained,
+            BasisLegitimateInterest,
+            "For as long as the record exists; attribution survives erasure.",
+            "Authorship and last editorship of a reusable question. The question text is content the "
+            + "employer authored, not anything the subject disclosed."),
+        NotPersonal("QuestionLibraryItemOption", "question_library_item_options",
+            "Answer options on a library question. Definitions, not answers."),
+        NotPersonal("QuestionLibraryItemTag", "question_library_item_tags",
+            "Free-text tags used to filter the library. No person referenced."),
+
         new("QuestionResponse", "question_responses", SubjectLink.ThroughParent, ["ResponseId"],
             ExportTreatment.FullRecord, ErasureTreatment.Retained,
             BasisContract,
@@ -385,7 +411,7 @@ public static class SubjectDataMap
             "For as long as the account exists; pseudonymised on erasure and never afterwards restored.",
             "The account itself, together with its owned columns — preferences, notification opt-outs and the "
             + "consent flags. Pseudonymised rather than deleted, and the reason is structural as well as legal: "
-            + "sixteen foreign keys into users are ON DELETE RESTRICT (surveys.created_by, reports.created_by, "
+            + "nineteen foreign keys into users are ON DELETE RESTRICT (surveys.created_by, reports.created_by, "
             + "survey_audit_logs.user_id and the rest), so a DELETE would either fail or, if those restrictions "
             + "were relaxed, take the audit trail and the company's business records with it. Erasure overwrites "
             + "the identifiers — email, name, credential, legacy persona id, last login — and deactivates the "

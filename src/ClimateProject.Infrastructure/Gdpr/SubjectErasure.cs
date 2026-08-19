@@ -10,11 +10,14 @@ namespace ClimateProject.Infrastructure.Gdpr;
 /// Carries out an erasure request (GDPR Art. 17) against this database.
 ///
 /// <para><b>Erasure here is irreversible pseudonymisation, not DELETE, and that is a
-/// position rather than a shortcut.</b> Sixteen foreign keys into <c>users</c> are
+/// position rather than a shortcut.</b> Nineteen foreign keys into <c>users</c> are
 /// <c>ON DELETE RESTRICT</c> — <c>surveys.created_by</c>, <c>reports.created_by</c>,
 /// <c>survey_audit_logs.user_id</c>, <c>demographic_snapshot_entries.user_id</c> and the
 /// rest — so a row delete either fails outright or, with those restrictions relaxed, takes
-/// the company's business records and its audit trail with it. Two obligations pull against
+/// the company's business records and its audit trail with it. (Sixteen until #58 added the
+/// two question repositories, whose authorship columns are Restrict for the same reason
+/// <c>survey_templates.created_by</c> is. The count moving <em>up</em> only strengthens this
+/// argument: there is more authored business content a delete would have to destroy.) Two obligations pull against
 /// Art. 17 and both are recognised by it:</para>
 /// <list type="number">
 /// <item><description><b>Aggregate integrity.</b> Every climate score, benchmark and trend the

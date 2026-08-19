@@ -32,6 +32,11 @@ public class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.Property(q => q.Required).HasColumnName("required").IsRequired().HasDefaultValue(false);
         builder.Property(q => q.Order).HasColumnName("order").IsRequired();
         builder.Property(q => q.Category).HasColumnName("category").HasMaxLength(100);
+        // Provenance for a question copied out of the library (#58). SetNull, not Cascade:
+        // retiring a library item must never delete questions already asked, nor the answers
+        // stored against them -- it only loses the link.
+        builder.Property(q => q.SourceLibraryItemId).HasColumnName("source_library_item_id");
+        builder.HasOne<QuestionLibraryItem>().WithMany().HasForeignKey(q => q.SourceLibraryItemId).OnDelete(DeleteBehavior.SetNull);
 
         builder.HasOne<Survey>().WithMany().HasForeignKey(q => q.SurveyId);
     }
