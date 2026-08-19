@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { AlertTriangle, CheckCircle2, ClipboardList, FileText, Gauge, Lock, Plus, Radio } from 'lucide-react'
 import { getCompanyAdminDashboard, type CompanyAdminDashboard } from '../api/dashboard'
 import { useDashboardData } from '../useDashboardData'
@@ -80,6 +80,7 @@ interface CompanyAdminDashboardViewProps {
  */
 export default function CompanyAdminDashboardView({ companyId }: CompanyAdminDashboardViewProps) {
   const { t, locale } = useTranslation()
+  const navigate = useNavigate()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
 
   const load = useCallback(
@@ -252,6 +253,28 @@ export default function CompanyAdminDashboardView({ companyId }: CompanyAdminDas
                       rows={measurable.map(toClimateRow)}
                       target={target}
                       extremeAt={mapExtreme(measurable, target)}
+                      // Interactive, so the cells are targets as well as readings
+                      // — `ClimateMap`'s own argument for why those are the same
+                      // size decision.
+                      size="large"
+                      // A CELL HERE NAVIGATES; it does not open a panel, and the
+                      // difference is the payload, not a preference. The survey
+                      // results map can open a cell because
+                      // `segments[].questions[]` carries a per-question mean for
+                      // every disclosed group. `GET /dashboard/company-admin`
+                      // carries `DashboardDepartmentSummary(Id, Name, MemberCount,
+                      // CompletedResponseCount)` and nothing else — so a panel
+                      // opened from this grid could show only the two counts the
+                      // KPI sub-line above already prints, and the reader would
+                      // have clicked to be told what they had just read.
+                      //
+                      // `/departments` and not `/departments/{id}`: there is no
+                      // per-department route, and inventing a query parameter that
+                      // nothing reads would be an affordance with no effect. The
+                      // departments screen is where a department's own figures
+                      // live, which makes it the honest destination and the
+                      // shortest path to a better one.
+                      onSelectCell={() => navigate('/departments')}
                     />
                   </div>
                   {/* `min-w-64`, not `min-w-0`: with nothing stopping it the note column

@@ -1,6 +1,7 @@
 import { cleanup, render as rtlRender, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TranslationProvider } from '../../i18n'
 import ClimateMap, { type ClimateMapDimension, type ClimateMapRow } from './ClimateMap'
 
@@ -295,6 +296,146 @@ describe('ClimateMap', () => {
     // dropping that check is a type error rather than a passing build. The
     // compiler is the guard, and a test that cannot go red would only look like
     // one.
+  })
+
+
+  describe('opening a cell', () => {
+    // The whole point of the drill-in, and the whole risk of it. Every test here
+    // is about WHICH cells become controls, because that is the anonymity floor
+    // expressed as an affordance rather than as a colour.
+    const mixed: ClimateMapRow[] = [
+      { id: 'ops', label: 'Operations', responses: 20, scores: [79, 61] },
+      { id: 'fin', label: 'Finance', responses: 4, scores: [] },
+    ]
+
+    it('leaves the grid inert when no handler is given', () => {
+      // The two non-interactive mounts must keep exactly the map they had.
+      const { container } = render(
+        <ClimateMap dimensions={DIMENSIONS} rows={mixed} target={70} />,
+      )
+      expect(container.querySelectorAll('button')).toHaveLength(0)
+    })
+
+    it('makes a disclosed reading a button, and hands back the ids it was given', async () => {
+      const onSelectCell = vi.fn()
+      render(
+        <ClimateMap
+          dimensions={DIMENSIONS}
+          rows={mixed}
+          target={70}
+          onSelectCell={onSelectCell}
+        />,
+      )
+      await userEvent.click(screen.getByRole('button', { name: /Operations, Workload/ }))
+      // The row id and the dimension KEY, not an index and not the label: the
+      // caller looks the selection up rather than depending on the drawn order.
+      expect(onSelectCell).toHaveBeenCalledWith('ops', 'workload')
+    })
+
+    it('gives a withheld row no control of any kind', () => {
+      // The disclosure vector this component exists to close. A focusable,
+      // hoverable, clickable cell answers "is there anything behind this" for a
+      // group whose reading is withheld — and a reader who tabs across a row
+      // learns which groups are small without one number being published.
+      render(
+        <ClimateMap
+          dimensions={DIMENSIONS}
+          rows={mixed}
+          target={70}
+          onSelectCell={vi.fn()}
+          onSelectRow={vi.fn()}
+        />,
+      )
+      // Two disclosed cells plus the one disclosed row label. Finance
+      // contributes nothing: not its two cells, and not its own name.
+      expect(screen.getAllByRole('button')).toHaveLength(DIMENSIONS.length + 1)
+      expect(screen.queryByRole('button', { name: /Finance/ })).toBeNull()
+    })
+
+    it('protects every cell when the floor took the whole grid, handlers or not', () => {
+      // `target === null` suppresses every row, so a handler must not turn any of
+      // them into a control either.
+      const { container } = render(
+        <ClimateMap
+          dimensions={DIMENSIONS}
+          rows={mixed}
+          target={null}
+          onSelectCell={vi.fn()}
+          onSelectRow={vi.fn()}
+        />,
+      )
+      expect(container.querySelectorAll('button')).toHaveLength(0)
+    })
+
+    it('opens a whole group from its row label', async () => {
+      const onSelectRow = vi.fn()
+      render(
+        <ClimateMap dimensions={DIMENSIONS} rows={mixed} target={70} onSelectRow={onSelectRow} />,
+      )
+      await userEvent.click(screen.getByRole('button', { name: 'Operations' }))
+      expect(onSelectRow).toHaveBeenCalledWith('ops')
+    })
+
+    it('announces which cell is open, and only that one', () => {
+      render(
+        <ClimateMap
+          dimensions={DIMENSIONS}
+          rows={mixed}
+          target={70}
+          onSelectCell={vi.fn()}
+          selection={{ rowId: 'ops', dimensionKey: 'workload' }}
+        />,
+      )
+      const open = screen.getByRole('button', { name: /Operations, Workload/ })
+      const shut = screen.getByRole('button', { name: /Operations, Psychological safety/ })
+      expect(open.getAttribute('aria-expanded')).toBe('true')
+      expect(shut.getAttribute('aria-expanded')).toBe('false')
+    })
+
+    it('does not mark a cell open when the selection is the whole row', () => {
+      // A row selection tints the row; it must not claim every cell in it is the
+      // one whose detail is showing.
+      render(
+        <ClimateMap
+          dimensions={DIMENSIONS}
+          rows={mixed}
+          target={70}
+          onSelectCell={vi.fn()}
+          onSelectRow={vi.fn()}
+          selection={{ rowId: 'ops', dimensionKey: null }}
+        />,
+      )
+      expect(
+        screen.getByRole('button', { name: /Operations, Workload/ }).getAttribute('aria-expanded'),
+      ).toBe('false')
+      expect(screen.getByRole('button', { name: 'Operations' }).getAttribute('aria-expanded')).toBe(
+        'true',
+      )
+    })
+
+    it('tells the reader that a protected cell is the one that does not open', () => {
+      // Without this the inert cell reads as a bug and gets clicked again.
+      const inert = render(
+        <ClimateMap dimensions={DIMENSIONS} rows={mixed} target={70} onSelectCell={vi.fn()} />,
+      )
+      expect(inert.container.textContent).toContain('cannot be opened')
+      cleanup()
+      const still = render(<ClimateMap dimensions={DIMENSIONS} rows={mixed} target={70} />)
+      // ...and does not say it where nothing opens at all.
+      expect(still.container.textContent).not.toContain('cannot be opened')
+    })
+
+    it('keeps the cell a table cell, so the axes are still announced', () => {
+      // The button goes INSIDE the `td`, never in place of it. A grid that traded
+      // its table semantics for interactivity would lose the row and column
+      // headers that make a screen reader able to navigate it at all.
+      const { container } = render(
+        <ClimateMap dimensions={DIMENSIONS} rows={mixed} target={70} onSelectCell={vi.fn()} />,
+      )
+      const button = screen.getByRole('button', { name: /Operations, Workload/ })
+      expect(button.closest('td')).toBeTruthy()
+      expect(container.querySelectorAll('th[scope="row"]')).toHaveLength(2)
+    })
   })
 
   it('fills its container rather than shrink-wrapping to the readings', () => {

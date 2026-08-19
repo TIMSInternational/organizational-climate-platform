@@ -8,6 +8,7 @@ import type { ClimateMapModel } from './surveyResultsMap'
 import {
   UNCATEGORISED_DIMENSION,
   buildClimateMap,
+  climateDetail,
   climateDimensions,
   climateFindings,
   dimensionKeyOf,
@@ -458,5 +459,113 @@ describe('withheldWordCount', () => {
         question({ questionId: 'q2', suppressedWordCount: 3 }),
       ]),
     ).toBe(7)
+  })
+})
+
+describe('climateDetail', () => {
+  // The drill-in. Every number it returns must already be on the payload the map
+  // was built from, and it must be unable to say anything at all about a group
+  // the floor withheld.
+  function opened(selection: { rowId: string; dimensionKey: string | null }) {
+    const { questions, breakdown: data } = fixture()
+    const model = buildClimateMap(data, questions, 5, nameOf)!
+    return { detail: climateDetail(model, data, questions, selection), model }
+  }
+
+  it('answers one cell with the questions inside that dimension', () => {
+    const { detail } = opened({ rowId: 'ops', dimensionKey: 'Safety' })
+
+    expect(detail!.rowLabel).toBe('Operations')
+    expect(detail!.dimensions).toHaveLength(1)
+    expect(detail!.dimensions[0].questions).toEqual([
+      // The group's own mean, the survey's mean for the SAME question, and how
+      // many of the group answered it. All three straight off the wire.
+      { questionId: 'q1', score: 4.4, answeredCount: 40, surveyScore: 4 },
+      { questionId: 'q2', score: 3.6, answeredCount: 40, surveyScore: 3 },
+    ])
+  })
+
+  it('prints the same score the cell does', () => {
+    // The panel and the grid must not be able to disagree: both come from
+    // `segmentDimensionScore`, and this pins that they do.
+    const { detail, model } = opened({ rowId: 'ops', dimensionKey: 'Safety' })
+    const cell = model.rows.find((row) => row.id === 'ops')!.scores[0]
+
+    expect(detail!.dimensions[0].score).toBe(cell)
+  })
+
+  it('answers a whole group with every dimension the grid drew', () => {
+    const { detail, model } = opened({ rowId: 'ops', dimensionKey: null })
+
+    expect(detail!.dimensionKey).toBeNull()
+    expect(detail!.dimensions.map((entry) => entry.key)).toEqual(
+      model.dimensions.map((entry) => entry.key),
+    )
+  })
+
+  it('never opens a withheld group', () => {
+    // The disclosure vector. Three layers already stop this — the cell is not a
+    // button, and the server sent `questions: []` — and this is the fourth,
+    // checked against the map's own suppression predicate so the two cannot drift.
+    expect(opened({ rowId: 'legal', dimensionKey: 'Safety' }).detail).toBeNull()
+    expect(opened({ rowId: 'legal', dimensionKey: null }).detail).toBeNull()
+  })
+
+  it('opens nothing when the floor took the whole grid', () => {
+    // `target === null`: every row is protected, so no row has a detail either.
+    const { questions } = fixture()
+    const allWithheld = breakdown([
+      segment({ key: 'ops', label: 'Operations', respondentCount: 0, isSuppressed: true }),
+    ])
+    const model = buildClimateMap(allWithheld, questions, 5, nameOf)!
+
+    expect(model.target).toBeNull()
+    expect(climateDetail(model, allWithheld, questions, { rowId: 'ops', dimensionKey: null }))
+      .toBeNull()
+  })
+
+  it('opens nothing for a row or dimension the grid does not draw', () => {
+    // A stale click across a reload that changed the survey's shape. Nothing to
+    // show is not an error.
+    expect(opened({ rowId: 'nobody', dimensionKey: 'Safety' }).detail).toBeNull()
+    expect(opened({ rowId: 'ops', dimensionKey: 'Culture' }).detail).toBeNull()
+  })
+
+  it('leaves out a question the server computed no mean for', () => {
+    // `q4` is open-ended. It is in a category, but no dimension admits it,
+    // because averaging it would produce a number with no meaning.
+    const { detail } = opened({ rowId: 'ops', dimensionKey: null })
+    const ids = detail!.dimensions.flatMap((entry) =>
+      entry.questions.map((question) => question.questionId),
+    )
+
+    expect(ids).not.toContain('q4')
+  })
+
+  it('reports a question the group did not answer as null, never as zero', () => {
+    // A missing measurement is not a measurement of zero — the same distinction
+    // the map draws between a withheld cell and an empty one, one level in.
+    const { questions } = fixture()
+    const partial = breakdown([
+      segment({
+        key: 'ops',
+        label: 'Operations',
+        respondentCount: 40,
+        // `q2` is absent from the group's answers entirely.
+        questions: [
+          { questionId: 'q1', answeredCount: 40, average: 4.4 },
+          { questionId: 'q3', answeredCount: 40, average: 3 },
+        ],
+      }),
+    ])
+    const model = buildClimateMap(partial, questions, 5, nameOf)!
+    const detail = climateDetail(model, partial, questions, {
+      rowId: 'ops',
+      dimensionKey: 'Safety',
+    })!
+    const missing = detail.dimensions[0].questions.find((entry) => entry.questionId === 'q2')!
+
+    expect(missing.score).toBeNull()
+    expect(missing.answeredCount).toBe(0)
   })
 })
