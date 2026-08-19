@@ -23,8 +23,13 @@
 >    `emoji_rating`; `ForSurvey` (`QuestionTypes.cs:81-89`) excludes it. A library item typed from
 >    `All` could be authored and then be **uninstantiable** into a survey.
 >
-> The lesson, recorded because it recurs: three of the four are the same mistake — asserting what a
-> neighbouring part of the codebase does without opening it.
+> 5. **Microclimates were missing entirely.** The instantiation section covered `Question` only, and
+>    this document mentioned `MicroclimateQuestion` **zero times** — while #115, *"the shared
+>    question-picker component works in both wizards"*, is #58's own second acceptance criterion. Half
+>    the feature had no schema. Corrected in its own section below.
+>
+> The lesson, recorded because it recurs: four of the five are the same mistake — asserting what a
+> neighbouring part of the codebase does without opening it, or not looking for it at all.
 
 **Verified against `d3b1fce` (main, 2026-08-19)** and the legacy checkout at
 `../climate-project`, by reading the Mongoose models and counting their call sites. Nothing
@@ -202,6 +207,35 @@ intermediate points are a **named, reported loss** rather than a silent truncati
 per-point labels are ever wanted, they are additive to both `Question` and this table.
 
 ---
+
+## Instantiation targets: BOTH wizards, not just surveys
+
+Corrected — the original covered surveys and forgot microclimates, which is half of #58's second
+acceptance criterion.
+
+A library question can be picked into either surface, and they are **different tables**:
+
+| Surface | Question row | Option rows |
+|---|---|---|
+| Survey | `Question` (`SurveyId`) | `QuestionOption` |
+| Microclimate | `MicroclimateQuestion` (`MicroclimateId`) | `MicroclimateQuestionOption` |
+
+`MicroclimateQuestion` today is `Id`, `MicroclimateId`, `TextEn`, `TextEs`, `Type`, `Required`,
+`Order` — a deliberately narrower shape than `Question` (no scale bounds, no comment prompt, no
+category). Two consequences the original missed:
+
+1. **Provenance needs a column on both.** `Question.SourceLibraryQuestionId` alone means a question
+   picked into a *microclimate* has no link back to the library, so `UsageCount` cannot be
+   incremented and "where is this question used" answers only half the truth. Add the nullable
+   provenance column to `MicroclimateQuestion` as well, in the same migration.
+2. **A library item is not always fully representable.** `MicroclimateQuestion` has no scale-bound or
+   comment-prompt columns, so a library item carrying them loses that configuration when instantiated
+   into a microclimate. That is acceptable — but it must be **stated in the picker**, not discovered
+   after the fact. The picker should show what will not carry over, the same way this repo reports
+   every other unrepresentable value rather than dropping it silently.
+
+The type vocabulary point below is the other half of this: `ForSurvey` and `ForMicroclimate` differ,
+so an item must be typed from their intersection to be pickable in both.
 
 ## Type vocabulary — the deferral this document exists to resolve
 
