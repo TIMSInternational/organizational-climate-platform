@@ -1,4 +1,5 @@
 import {
+  Activity,
   Shield,
   Building2,
   Settings,
@@ -240,6 +241,21 @@ export function buildNavSections(role: string | undefined, companyId: string | u
           SURVEYS_ITEM,
           SURVEY_TEMPLATES_ITEM,
           DEPARTMENTS_ITEM,
+          // System Health (#275) is appended here rather than filed under System
+          // Administration beside Companies and System settings, where it belongs by
+          // subject. The reason is the one #124 and #142 both hit: everything in the
+          // ADMINISTRATION section lands in the first four leaves, and those four ARE
+          // the mobile tab bar. Adding it there displaces Benchmarks, which
+          // `keeps Benchmarks on a super_admin mobile tab bar` exists to forbid.
+          //
+          // Losing the tab slot would be the wrong trade anyway: this is the page an
+          // operator opens when something is already wrong, not one of the four things
+          // they do most. Appended, it keeps a sidebar row and costs nobody a tab.
+          {
+            labelKey: 'navigation.systemHealth',
+            href: '/admin/system',
+            icon: Activity,
+          },
         ],
       },
       {

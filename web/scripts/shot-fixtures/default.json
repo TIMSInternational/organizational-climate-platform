@@ -227,5 +227,85 @@
         "createdAt": "2026-02-02T09:00:00Z"
       }
     ]
+  },
+  "GET /admin/system/status": {
+    "service": "climate-project-api",
+    "status": "degraded",
+    "checkedAt": "2026-08-19T14:52:00Z",
+    "environment": "Production",
+    "build": {
+      "commit": "d3b1fce6fa8d2bf95a0e0b7d58aa58ea7a7246ef",
+      "builtAt": "2026-08-19T14:40:35Z",
+      "runtime": "10.0.11"
+    },
+    "database": {
+      "status": "ok",
+      "latencyMs": 3,
+      "port": 5432,
+      "usesTransactionPoolerPort": false,
+      "maxPoolSize": 10,
+      "maxPoolSizeDefaulted": true
+    },
+    "notificationQueue": {
+      "status": "backlog",
+      "pending": 42,
+      "due": 18,
+      "deadLettered": 3,
+      "oldestDueAgeSeconds": 1320
+    },
+    "dispatcher": {
+      "status": "ok",
+      "lastDispatchAt": "2026-08-19T14:49:10Z"
+    },
+    "jobs": [
+      {
+        "jobName": "digests",
+        "intervalSeconds": 900,
+        "lastAttemptAt": "2026-08-19T14:43:16Z",
+        "lastSuccessAt": "2026-08-19T14:43:16Z",
+        "consecutiveFailures": 0,
+        "status": "ok"
+      },
+      {
+        "jobName": "invitation-reminders",
+        "intervalSeconds": 900,
+        "lastAttemptAt": "2026-08-19T14:43:09Z",
+        "lastSuccessAt": "2026-08-19T14:43:09Z",
+        "consecutiveFailures": 0,
+        "status": "ok"
+      },
+      {
+        "jobName": "notification-dispatch",
+        "intervalSeconds": 60,
+        "lastAttemptAt": "2026-08-19T14:49:10Z",
+        "lastSuccessAt": "2026-08-19T14:49:10Z",
+        "consecutiveFailures": 0,
+        "status": "ok"
+      },
+      {
+        "jobName": "retention-cleanup",
+        "intervalSeconds": 86400,
+        "lastAttemptAt": "2026-08-19T14:42:50Z",
+        "lastSuccessAt": "2026-08-19T14:42:50Z",
+        "consecutiveFailures": 0,
+        "status": "ok"
+      },
+      {
+        "jobName": "scheduled-reports",
+        "intervalSeconds": 300,
+        "lastAttemptAt": "2026-08-19T14:48:12Z",
+        "lastSuccessAt": "2026-08-19T14:33:12Z",
+        "consecutiveFailures": 3,
+        "status": "failing"
+      },
+      {
+        "jobName": "survey-draft-retention",
+        "intervalSeconds": 3600,
+        "lastAttemptAt": "2026-08-19T09:43:09Z",
+        "lastSuccessAt": "2026-08-19T09:43:09Z",
+        "consecutiveFailures": 0,
+        "status": "stale"
+      }
+    ]
   }
 }

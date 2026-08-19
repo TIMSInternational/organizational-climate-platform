@@ -324,6 +324,9 @@ describe('leafNavItems', () => {
       '/surveys/templates',
       // #142, appended for the same reason as the two above.
       '/departments',
+      // #275's System Health, appended for that same reason -- it belongs beside
+      // Companies by subject, but the ADMINISTRATION section feeds the mobile tab bar.
+      '/admin/system',
       '/notifications',
     ])
   })
