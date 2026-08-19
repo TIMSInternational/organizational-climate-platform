@@ -307,5 +307,1051 @@
         "status": "stale"
       }
     ]
+  },
+  "GET /surveys/*/analytics": {
+    "surveyId": "11111111-1111-1111-1111-111111111111",
+    "title": "Q3 climate survey",
+    "status": "closed",
+    "language": "both",
+    "resolvedLocale": "en",
+    "fallbackFields": [],
+    "summary": {
+      "invitedCount": 121,
+      "responseCount": 101,
+      "completedCount": 94,
+      "partialCount": 7,
+      "participationRate": 77.7,
+      "completionRate": 93.1,
+      "averageCompletionSeconds": 412,
+      "firstResponseAt": "2026-07-02T09:14:00Z",
+      "lastResponseAt": "2026-07-19T16:40:00Z",
+      "byLanguage": [
+        {
+          "language": "en",
+          "count": 58
+        },
+        {
+          "language": "es",
+          "count": 36
+        }
+      ]
+    },
+    "isSuppressed": false,
+    "suppressionReason": null,
+    "minimumGroupSize": 5,
+    "generatedAt": "2026-08-19T18:00:00Z",
+    "questions": [
+      {
+        "questionId": "q1",
+        "order": 1,
+        "type": "likert",
+        "text": "I can raise a concern without fear",
+        "category": "Psychological safety",
+        "answeredCount": 94,
+        "distribution": [
+          {
+            "value": "1",
+            "label": "Strongly disagree",
+            "count": 4,
+            "percentage": 4.3,
+            "averageRank": null
+          },
+          {
+            "value": "2",
+            "label": "Disagree",
+            "count": 11,
+            "percentage": 11.7,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": "Neutral",
+            "count": 24,
+            "percentage": 25.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": "Agree",
+            "count": 37,
+            "percentage": 39.4,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": "Strongly agree",
+            "count": 18,
+            "percentage": 19.1,
+            "averageRank": null
+          }
+        ],
+        "average": 3.9,
+        "median": 4.0,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "q2",
+        "order": 2,
+        "type": "likert",
+        "text": "Mistakes are treated as learning",
+        "category": "Psychological safety",
+        "answeredCount": 94,
+        "distribution": [
+          {
+            "value": "1",
+            "label": "Strongly disagree",
+            "count": 4,
+            "percentage": 4.3,
+            "averageRank": null
+          },
+          {
+            "value": "2",
+            "label": "Disagree",
+            "count": 11,
+            "percentage": 11.7,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": "Neutral",
+            "count": 24,
+            "percentage": 25.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": "Agree",
+            "count": 37,
+            "percentage": 39.4,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": "Strongly agree",
+            "count": 18,
+            "percentage": 19.1,
+            "averageRank": null
+          }
+        ],
+        "average": 3.6,
+        "median": 4.0,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "q3",
+        "order": 3,
+        "type": "likert",
+        "text": "My workload is manageable",
+        "category": "Workload",
+        "answeredCount": 94,
+        "distribution": [
+          {
+            "value": "1",
+            "label": "Strongly disagree",
+            "count": 4,
+            "percentage": 4.3,
+            "averageRank": null
+          },
+          {
+            "value": "2",
+            "label": "Disagree",
+            "count": 11,
+            "percentage": 11.7,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": "Neutral",
+            "count": 24,
+            "percentage": 25.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": "Agree",
+            "count": 37,
+            "percentage": 39.4,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": "Strongly agree",
+            "count": 18,
+            "percentage": 19.1,
+            "averageRank": null
+          }
+        ],
+        "average": 3.1,
+        "median": 4.0,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "q4",
+        "order": 4,
+        "type": "likert",
+        "text": "I can disconnect outside working hours",
+        "category": "Workload",
+        "answeredCount": 94,
+        "distribution": [
+          {
+            "value": "1",
+            "label": "Strongly disagree",
+            "count": 4,
+            "percentage": 4.3,
+            "averageRank": null
+          },
+          {
+            "value": "2",
+            "label": "Disagree",
+            "count": 11,
+            "percentage": 11.7,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": "Neutral",
+            "count": 24,
+            "percentage": 25.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": "Agree",
+            "count": 37,
+            "percentage": 39.4,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": "Strongly agree",
+            "count": 18,
+            "percentage": 19.1,
+            "averageRank": null
+          }
+        ],
+        "average": 2.8,
+        "median": 4.0,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "q5",
+        "order": 5,
+        "type": "likert",
+        "text": "Good work is recognised here",
+        "category": "Recognition",
+        "answeredCount": 94,
+        "distribution": [
+          {
+            "value": "1",
+            "label": "Strongly disagree",
+            "count": 4,
+            "percentage": 4.3,
+            "averageRank": null
+          },
+          {
+            "value": "2",
+            "label": "Disagree",
+            "count": 11,
+            "percentage": 11.7,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": "Neutral",
+            "count": 24,
+            "percentage": 25.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": "Agree",
+            "count": 37,
+            "percentage": 39.4,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": "Strongly agree",
+            "count": 18,
+            "percentage": 19.1,
+            "averageRank": null
+          }
+        ],
+        "average": 3.4,
+        "median": 4.0,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "q6",
+        "order": 6,
+        "type": "likert",
+        "text": "Feedback is specific and useful",
+        "category": "Recognition",
+        "answeredCount": 94,
+        "distribution": [
+          {
+            "value": "1",
+            "label": "Strongly disagree",
+            "count": 4,
+            "percentage": 4.3,
+            "averageRank": null
+          },
+          {
+            "value": "2",
+            "label": "Disagree",
+            "count": 11,
+            "percentage": 11.7,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": "Neutral",
+            "count": 24,
+            "percentage": 25.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": "Agree",
+            "count": 37,
+            "percentage": 39.4,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": "Strongly agree",
+            "count": 18,
+            "percentage": 19.1,
+            "averageRank": null
+          }
+        ],
+        "average": 3.2,
+        "median": 4.0,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "q7",
+        "order": 7,
+        "type": "likert",
+        "text": "My manager is clear about priorities",
+        "category": "Leadership",
+        "answeredCount": 94,
+        "distribution": [
+          {
+            "value": "1",
+            "label": "Strongly disagree",
+            "count": 4,
+            "percentage": 4.3,
+            "averageRank": null
+          },
+          {
+            "value": "2",
+            "label": "Disagree",
+            "count": 11,
+            "percentage": 11.7,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": "Neutral",
+            "count": 24,
+            "percentage": 25.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": "Agree",
+            "count": 37,
+            "percentage": 39.4,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": "Strongly agree",
+            "count": 18,
+            "percentage": 19.1,
+            "averageRank": null
+          }
+        ],
+        "average": 3.8,
+        "median": 4.0,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "q8",
+        "order": 8,
+        "type": "likert",
+        "text": "Decisions are explained",
+        "category": "Leadership",
+        "answeredCount": 94,
+        "distribution": [
+          {
+            "value": "1",
+            "label": "Strongly disagree",
+            "count": 4,
+            "percentage": 4.3,
+            "averageRank": null
+          },
+          {
+            "value": "2",
+            "label": "Disagree",
+            "count": 11,
+            "percentage": 11.7,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": "Neutral",
+            "count": 24,
+            "percentage": 25.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": "Agree",
+            "count": 37,
+            "percentage": 39.4,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": "Strongly agree",
+            "count": 18,
+            "percentage": 19.1,
+            "averageRank": null
+          }
+        ],
+        "average": 3.5,
+        "median": 4.0,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "q9",
+        "order": 9,
+        "type": "likert",
+        "text": "I can grow in this role",
+        "category": "Growth",
+        "answeredCount": 94,
+        "distribution": [
+          {
+            "value": "1",
+            "label": "Strongly disagree",
+            "count": 4,
+            "percentage": 4.3,
+            "averageRank": null
+          },
+          {
+            "value": "2",
+            "label": "Disagree",
+            "count": 11,
+            "percentage": 11.7,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": "Neutral",
+            "count": 24,
+            "percentage": 25.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": "Agree",
+            "count": 37,
+            "percentage": 39.4,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": "Strongly agree",
+            "count": 18,
+            "percentage": 19.1,
+            "averageRank": null
+          }
+        ],
+        "average": 3.3,
+        "median": 4.0,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "q10",
+        "order": 10,
+        "type": "likert",
+        "text": "Training is available when I need it",
+        "category": "Growth",
+        "answeredCount": 94,
+        "distribution": [
+          {
+            "value": "1",
+            "label": "Strongly disagree",
+            "count": 4,
+            "percentage": 4.3,
+            "averageRank": null
+          },
+          {
+            "value": "2",
+            "label": "Disagree",
+            "count": 11,
+            "percentage": 11.7,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": "Neutral",
+            "count": 24,
+            "percentage": 25.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": "Agree",
+            "count": 37,
+            "percentage": 39.4,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": "Strongly agree",
+            "count": 18,
+            "percentage": 19.1,
+            "averageRank": null
+          }
+        ],
+        "average": 3.0,
+        "median": 4.0,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "q11",
+        "order": 11,
+        "type": "likert",
+        "text": "Teams share what they know",
+        "category": "Collaboration",
+        "answeredCount": 94,
+        "distribution": [
+          {
+            "value": "1",
+            "label": "Strongly disagree",
+            "count": 4,
+            "percentage": 4.3,
+            "averageRank": null
+          },
+          {
+            "value": "2",
+            "label": "Disagree",
+            "count": 11,
+            "percentage": 11.7,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": "Neutral",
+            "count": 24,
+            "percentage": 25.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": "Agree",
+            "count": 37,
+            "percentage": 39.4,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": "Strongly agree",
+            "count": 18,
+            "percentage": 19.1,
+            "averageRank": null
+          }
+        ],
+        "average": 3.7,
+        "median": 4.0,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "q12",
+        "order": 12,
+        "type": "likert",
+        "text": "Handovers between teams work",
+        "category": "Collaboration",
+        "answeredCount": 94,
+        "distribution": [
+          {
+            "value": "1",
+            "label": "Strongly disagree",
+            "count": 4,
+            "percentage": 4.3,
+            "averageRank": null
+          },
+          {
+            "value": "2",
+            "label": "Disagree",
+            "count": 11,
+            "percentage": 11.7,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": "Neutral",
+            "count": 24,
+            "percentage": 25.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": "Agree",
+            "count": 37,
+            "percentage": 39.4,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": "Strongly agree",
+            "count": 18,
+            "percentage": 19.1,
+            "averageRank": null
+          }
+        ],
+        "average": 3.4,
+        "median": 4.0,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "words": [],
+        "suppressedWordCount": 0
+      }
+    ],
+    "breakdowns": [
+      {
+        "dimension": "department",
+        "segments": [
+          {
+            "dimension": "department",
+            "key": "dep-eng",
+            "label": "Engineering",
+            "respondentCount": 34,
+            "participationRate": 85.0,
+            "headcount": 40,
+            "isSuppressed": false,
+            "questions": [
+              {
+                "questionId": "q1",
+                "answeredCount": 34,
+                "average": 4.3
+              },
+              {
+                "questionId": "q2",
+                "answeredCount": 34,
+                "average": 4.0
+              },
+              {
+                "questionId": "q3",
+                "answeredCount": 34,
+                "average": 3.4
+              },
+              {
+                "questionId": "q4",
+                "answeredCount": 34,
+                "average": 3.1
+              },
+              {
+                "questionId": "q5",
+                "answeredCount": 34,
+                "average": 3.5
+              },
+              {
+                "questionId": "q6",
+                "answeredCount": 34,
+                "average": 3.3
+              },
+              {
+                "questionId": "q7",
+                "answeredCount": 34,
+                "average": 4.0
+              },
+              {
+                "questionId": "q8",
+                "answeredCount": 34,
+                "average": 3.7
+              },
+              {
+                "questionId": "q9",
+                "answeredCount": 34,
+                "average": 3.8
+              },
+              {
+                "questionId": "q10",
+                "answeredCount": 34,
+                "average": 3.5
+              },
+              {
+                "questionId": "q11",
+                "answeredCount": 34,
+                "average": 4.0
+              },
+              {
+                "questionId": "q12",
+                "answeredCount": 34,
+                "average": 3.7
+              }
+            ]
+          },
+          {
+            "dimension": "department",
+            "key": "dep-sales",
+            "label": "Sales",
+            "respondentCount": 21,
+            "participationRate": 80.8,
+            "headcount": 26,
+            "isSuppressed": false,
+            "questions": [
+              {
+                "questionId": "q1",
+                "answeredCount": 21,
+                "average": 3.6
+              },
+              {
+                "questionId": "q2",
+                "answeredCount": 21,
+                "average": 3.3
+              },
+              {
+                "questionId": "q3",
+                "answeredCount": 21,
+                "average": 2.3
+              },
+              {
+                "questionId": "q4",
+                "answeredCount": 21,
+                "average": 2.0
+              },
+              {
+                "questionId": "q5",
+                "answeredCount": 21,
+                "average": 2.9
+              },
+              {
+                "questionId": "q6",
+                "answeredCount": 21,
+                "average": 2.7
+              },
+              {
+                "questionId": "q7",
+                "answeredCount": 21,
+                "average": 3.7
+              },
+              {
+                "questionId": "q8",
+                "answeredCount": 21,
+                "average": 3.4
+              },
+              {
+                "questionId": "q9",
+                "answeredCount": 21,
+                "average": 3.1
+              },
+              {
+                "questionId": "q10",
+                "answeredCount": 21,
+                "average": 2.8
+              },
+              {
+                "questionId": "q11",
+                "answeredCount": 21,
+                "average": 3.8
+              },
+              {
+                "questionId": "q12",
+                "answeredCount": 21,
+                "average": 3.5
+              }
+            ]
+          },
+          {
+            "dimension": "department",
+            "key": "dep-ops",
+            "label": "Operations",
+            "respondentCount": 18,
+            "participationRate": 81.8,
+            "headcount": 22,
+            "isSuppressed": false,
+            "questions": [
+              {
+                "questionId": "q1",
+                "answeredCount": 18,
+                "average": 4.0
+              },
+              {
+                "questionId": "q2",
+                "answeredCount": 18,
+                "average": 3.7
+              },
+              {
+                "questionId": "q3",
+                "answeredCount": 18,
+                "average": 1.7
+              },
+              {
+                "questionId": "q4",
+                "answeredCount": 18,
+                "average": 1.4
+              },
+              {
+                "questionId": "q5",
+                "answeredCount": 18,
+                "average": 3.1
+              },
+              {
+                "questionId": "q6",
+                "answeredCount": 18,
+                "average": 2.9
+              },
+              {
+                "questionId": "q7",
+                "answeredCount": 18,
+                "average": 4.1
+              },
+              {
+                "questionId": "q8",
+                "answeredCount": 18,
+                "average": 3.8
+              },
+              {
+                "questionId": "q9",
+                "answeredCount": 18,
+                "average": 3.3
+              },
+              {
+                "questionId": "q10",
+                "answeredCount": 18,
+                "average": 3.0
+              },
+              {
+                "questionId": "q11",
+                "answeredCount": 18,
+                "average": 3.5
+              },
+              {
+                "questionId": "q12",
+                "answeredCount": 18,
+                "average": 3.2
+              }
+            ]
+          },
+          {
+            "dimension": "department",
+            "key": "dep-fin",
+            "label": "Finance",
+            "respondentCount": 12,
+            "participationRate": 85.7,
+            "headcount": 14,
+            "isSuppressed": false,
+            "questions": [
+              {
+                "questionId": "q1",
+                "answeredCount": 12,
+                "average": 3.7
+              },
+              {
+                "questionId": "q2",
+                "answeredCount": 12,
+                "average": 3.4
+              },
+              {
+                "questionId": "q3",
+                "answeredCount": 12,
+                "average": 3.6
+              },
+              {
+                "questionId": "q4",
+                "answeredCount": 12,
+                "average": 3.3
+              },
+              {
+                "questionId": "q5",
+                "answeredCount": 12,
+                "average": 3.8
+              },
+              {
+                "questionId": "q6",
+                "answeredCount": 12,
+                "average": 3.6
+              },
+              {
+                "questionId": "q7",
+                "answeredCount": 12,
+                "average": 3.4
+              },
+              {
+                "questionId": "q8",
+                "answeredCount": 12,
+                "average": 3.1
+              },
+              {
+                "questionId": "q9",
+                "answeredCount": 12,
+                "average": 3.5
+              },
+              {
+                "questionId": "q10",
+                "answeredCount": 12,
+                "average": 3.2
+              },
+              {
+                "questionId": "q11",
+                "answeredCount": 12,
+                "average": 4.1
+              },
+              {
+                "questionId": "q12",
+                "answeredCount": 12,
+                "average": 3.8
+              }
+            ]
+          },
+          {
+            "dimension": "department",
+            "key": "dep-hr",
+            "label": "People",
+            "respondentCount": 9,
+            "participationRate": 81.8,
+            "headcount": 11,
+            "isSuppressed": false,
+            "questions": [
+              {
+                "questionId": "q1",
+                "answeredCount": 9,
+                "average": 4.4
+              },
+              {
+                "questionId": "q2",
+                "answeredCount": 9,
+                "average": 4.1
+              },
+              {
+                "questionId": "q3",
+                "answeredCount": 9,
+                "average": 3.3
+              },
+              {
+                "questionId": "q4",
+                "answeredCount": 9,
+                "average": 3.0
+              },
+              {
+                "questionId": "q5",
+                "answeredCount": 9,
+                "average": 4.0
+              },
+              {
+                "questionId": "q6",
+                "answeredCount": 9,
+                "average": 3.8
+              },
+              {
+                "questionId": "q7",
+                "answeredCount": 9,
+                "average": 4.2
+              },
+              {
+                "questionId": "q8",
+                "answeredCount": 9,
+                "average": 3.9
+              },
+              {
+                "questionId": "q9",
+                "answeredCount": 9,
+                "average": 3.0
+              },
+              {
+                "questionId": "q10",
+                "answeredCount": 9,
+                "average": 2.7
+              },
+              {
+                "questionId": "q11",
+                "answeredCount": 9,
+                "average": 3.9
+              },
+              {
+                "questionId": "q12",
+                "answeredCount": 9,
+                "average": 3.6
+              }
+            ]
+          },
+          {
+            "dimension": "department",
+            "key": "dep-support",
+            "label": "Support",
+            "respondentCount": 0,
+            "participationRate": null,
+            "headcount": null,
+            "isSuppressed": true,
+            "questions": []
+          }
+        ],
+        "suppressedSegmentCount": 1,
+        "suppressedRespondentCount": 3,
+        "unsegmentedRespondentCount": 4
+      }
+    ]
   }
 }

@@ -7,6 +7,7 @@ import {
   KpiTile,
   WordCloud,
   formatMetric,
+  type ClimateMapSelection,
   type MetricFormat,
 } from '../../../components/charts'
 import {
@@ -21,6 +22,7 @@ import {
 import { cn } from '../../../lib/cn'
 import { downloadTextFile } from '../../../lib/downloadTextFile'
 import { getSurveyAnalytics, type SurveyAnalyticsResponse } from '../api/surveyResults'
+import ClimateDetailPanel from '../components/ClimateDetailPanel'
 import QuestionDistributionRow from '../components/QuestionDistributionRow'
 import QuestionResultCard from '../components/QuestionResultCard'
 import ResultsContentLanguageNotice from '../components/ResultsContentLanguageNotice'
@@ -39,6 +41,7 @@ import {
 import {
   UNCATEGORISED_DIMENSION,
   buildClimateMap,
+  climateDetail,
   climateFindings,
   dimensionKeyOf,
   openTextThemes,
@@ -156,6 +159,8 @@ export default function SurveyResultsPage() {
   const [filter, setFilter] = useState<QuestionFilter>(EMPTY_QUESTION_FILTER)
   const [dimension, setDimension] = useState<string>('')
   const [selectedSegment, setSelectedSegment] = useState<string | null>(null)
+  /** The cell, or the group, whose questions are open under the map. */
+  const [climateSelection, setClimateSelection] = useState<ClimateMapSelection | null>(null)
 
   const reload = useCallback(async () => {
     if (!id) return
@@ -218,6 +223,39 @@ export default function SurveyResultsPage() {
     [activeBreakdown, questions, payload, segmentName],
   )
   const findings = useMemo(() => (climate ? climateFindings(climate) : []), [climate])
+  // `null` whenever the selection no longer names a disclosed row of the current
+  // map — a reload that changed the survey's shape, or a dimension switch that
+  // slipped past the reset below. `climateDetail` decides that against the map's
+  // own suppression predicate, so the panel and the grid cannot disagree.
+  const detail = useMemo(
+    () =>
+      climate && activeBreakdown && climateSelection
+        ? climateDetail(climate, activeBreakdown, questions, climateSelection)
+        : null,
+    [climate, activeBreakdown, questions, climateSelection],
+  )
+  const questionText = useCallback(
+    (questionId: string) =>
+      questions.find((question) => question.questionId === questionId)?.text ??
+      t('surveyResults.untranslatedQuestion'),
+    [questions, t],
+  )
+  // Clicking the open cell again closes it, which is what `aria-expanded` on the
+  // cell has just told the reader the control does.
+  const openCell = useCallback((rowId: string, dimensionKey: string) => {
+    setClimateSelection((current) =>
+      current && current.rowId === rowId && current.dimensionKey === dimensionKey
+        ? null
+        : { rowId, dimensionKey },
+    )
+  }, [])
+  const openRow = useCallback((rowId: string) => {
+    setClimateSelection((current) =>
+      current && current.rowId === rowId && current.dimensionKey === null
+        ? null
+        : { rowId, dimensionKey: null },
+    )
+  }, [])
   const standings = useMemo(() => surveyDimensionStandings(questions), [questions])
   const questionStandings = useMemo(() => surveyQuestionStandings(questions), [questions])
   const themes = useMemo(() => openTextThemes(questions), [questions])
@@ -399,20 +437,24 @@ export default function SurveyResultsPage() {
                   {climate && (
                     <section aria-labelledby="results-climate" className="flex flex-col gap-panel-gap">
                       <H2 id="results-climate">{t('surveyResults.climateTitle')}</H2>
-                      {/* The map is the wide half and the findings the narrow
-                          one, because the map is the evidence and the findings
-                          are the summary of it. They stack on a narrow screen
-                          with the map first, for the same reason.
-                          `items-start` so the shorter panel keeps its own height
-                          rather than being stretched to the taller one's and
-                          holding a band of empty surface under its legend.
-                          `min-w-0` on the panels because a grid item's automatic
-                          minimum size is its content's min-content width: without
-                          it the map's own widest row pushed the panel to 430px
-                          inside a 390px phone viewport, and `Table`'s scroll
-                          container never got the chance to scroll. Measured in
-                          Chromium at 390, 820, 1024, 1440 and 1920. */}
-                      <div className="grid items-start gap-panel-gap lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                      {/* The map takes the full width and the findings sit under
+                          it. It used to be a 2fr/1fr row, which is the right shape
+                          for a summary standing beside its evidence — but the
+                          evidence is now something you operate rather than only
+                          read, and two thirds of a laptop was not enough of it:
+                          at 1440 a six-dimension grid gave each column about 90px
+                          and each cell a 28px band. Full width buys roughly half
+                          as much again per column, which is what pays for the 44px
+                          cells the drill-in needs. The findings lose nothing by
+                          moving: they are three or four lines, and they now run
+                          the width of the page instead of stacking in a column.
+                          `min-w-0` stays on the panels because a flex item's
+                          automatic minimum size is its content's min-content
+                          width: without it the map's widest row pushed the panel
+                          to 430px inside a 390px phone viewport, and `Table`'s
+                          scroll container never got the chance to scroll.
+                          Measured in Chromium at 390, 820, 1024, 1440 and 1920. */}
+                      <div className="flex flex-col gap-panel-gap">
                         <div className="min-w-0 rounded-lg border border-line-light bg-surface-panel p-panel">
                           <p className="mb-panel-gap max-w-prose text-sm text-fg-secondary">
                             {climate.target === null
@@ -440,7 +482,24 @@ export default function SurveyResultsPage() {
                             // Every score on this page is a one-decimal mean; see
                             // `round1` in `surveyResultsMap.ts`.
                             decimals={SCORE_DECIMALS}
+                            // This map is the subject of its section rather than
+                            // one reading among several, and its cells are targets
+                            // — both of which say `large`.
+                            size="large"
+                            // Withheld when the floor took every group. Nothing on
+                            // that grid can open, and handing it the handlers would
+                            // put "and cannot be opened" in the legend beside cells
+                            // whose neighbours cannot be opened either — implying a
+                            // distinction the grid does not draw.
+                            onSelectCell={climate.target === null ? undefined : openCell}
+                            onSelectRow={climate.target === null ? undefined : openRow}
+                            selection={climateSelection}
                           />
+                          {climate.target !== null && (
+                            <p className="mt-panel-gap max-w-prose text-sm text-fg-secondary">
+                              {t('surveyResults.climateOpenHint')}
+                            </p>
+                          )}
                           {/* What the grid could not show, said rather than left
                               to be noticed. Both counts are about coverage, not
                               about privacy — the withheld groups are in the grid. */}
@@ -457,6 +516,24 @@ export default function SurveyResultsPage() {
                                 groups: climate.omittedSegments.join(', '),
                               })}
                             </p>
+                          )}
+
+                          {/* Inside the map's panel rather than after it: the
+                              recessed surface reads as a drawer belonging to the
+                              grid above, which is the relationship, and it keeps
+                              the cell and its detail on one card. */}
+                          {detail && (
+                            <div className="mt-panel-gap">
+                              <ClimateDetailPanel
+                                detail={detail}
+                                dimensionName={dimensionName}
+                                questionText={questionText}
+                                deadBandAt={climate.deadBandAt}
+                                extremeAt={climate.extremeAt}
+                                format={SCORE_FORMAT}
+                                onClose={() => setClimateSelection(null)}
+                              />
+                            </div>
                           )}
                         </div>
 
@@ -635,6 +712,9 @@ export default function SurveyResultsPage() {
                                 // dimension, so carrying the selection across would drill
                                 // into a group that does not exist here.
                                 setSelectedSegment(null)
+                                // The map's open cell keys off the same segment id and
+                                // is stale for the same reason.
+                                setClimateSelection(null)
                               }}
                             >
                               {breakdowns.map((candidate) => (

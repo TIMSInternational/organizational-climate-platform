@@ -32,7 +32,12 @@ export type { WordFrequency } from './WordCloud'
 export type { Kpi } from './KPIDisplay'
 export type { KpiTileProps } from './KpiTile'
 export type { ProtectedCellProps } from './ProtectedCell'
-export type { ClimateMapProps, ClimateMapRow, ClimateMapDimension } from './ClimateMap'
+export type {
+  ClimateMapProps,
+  ClimateMapRow,
+  ClimateMapDimension,
+  ClimateMapSelection,
+} from './ClimateMap'
 export type { DistributionStripProps, DistributionStripSegment } from './DistributionStrip'
 export type {
   EffortImpact,

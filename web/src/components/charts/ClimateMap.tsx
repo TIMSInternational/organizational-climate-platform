@@ -1,4 +1,5 @@
 import { useTranslation } from '../../i18n'
+import { cn } from '../../lib/cn'
 import { Table } from '../ui'
 import { formatMetric } from './formatMetric'
 import { DIVERGING_COLORS, divergingPair } from './palette'
@@ -59,6 +60,26 @@ import { PROTECTED_HATCH, isSuppressed } from './suppression'
  * `3.8` in the same column, two rows apart. `decimals` and the reader's locale,
  * through `Intl`, fix both: the figures line up and the decimal separator is the
  * one the rest of the page uses.
+ *
+ * ## Opening a cell, and the one cell that never opens
+ *
+ * `onSelectCell` turns each disclosed reading into a `<button>` inside its `<td>`,
+ * which is why the interactive grid is still the table described above: the cell
+ * keeps its row and column headers, and the button carries the same accessible
+ * name the static cell had.
+ *
+ * **A protected cell is never a button, and the legend says so.** This is not a
+ * styling choice, it is the anonymity floor: a control that can be focused,
+ * hovered and clicked answers "is there anything behind this cell" for a group
+ * whose reading is withheld, and a reader who tabs across a row learns which
+ * groups are small without one number being published. `ProtectedCell` withholds
+ * the count; an inert cell withholds the invitation. The caller is not trusted to
+ * check either — this component decides from the same `suppressed` flag that
+ * decides the hatch, so a caller that passes a handler cannot make a withheld
+ * cell clickable by mistake.
+ *
+ * The same rule governs the row header: a withheld row's label is text, not a
+ * button, for exactly the reason its cells are.
  */
 export interface ClimateMapDimension {
   /** Stable key, used as the React key. */
@@ -87,6 +108,28 @@ export interface ClimateMapRow {
   /** Score per dimension, in the same order as `dimensions`. */
   scores: readonly number[]
 }
+
+/** What the grid is currently showing detail for. */
+export interface ClimateMapSelection {
+  rowId: string
+  /** The dimension, or `null` when the whole row is open. */
+  dimensionKey: string | null
+}
+
+/**
+ * The two densities, as whole sets rather than as a height.
+ *
+ * The reading box and the protected box must be the *same* height or the rows
+ * jitter where a withheld group sits between two disclosed ones, so both read
+ * `box` from here rather than each spelling a height out. `large` is `h-11`
+ * (44px), which is WCAG 2.5.5's minimum target size — the density that makes the
+ * grid comfortable to read is the same one that makes a cell safe to aim at, so
+ * an interactive map is a large map.
+ */
+const DENSITY = {
+  default: { box: 'h-7', reading: 'text-xs', header: 'text-2xs', label: 'text-xs' },
+  large: { box: 'h-11', reading: 'text-sm', header: 'text-xs', label: 'text-sm' },
+} as const
 
 export interface ClimateMapProps {
   dimensions: readonly ClimateMapDimension[]
@@ -119,6 +162,24 @@ export interface ClimateMapProps {
   decimals?: number
   /** Already-translated heading for the figure. */
   title?: string
+  /**
+   * How large the cells are drawn. `large` when the map is the screen's subject,
+   * `default` when it is one reading among several.
+   */
+  size?: keyof typeof DENSITY
+  /**
+   * Opens one disclosed cell. Omitted leaves the grid inert, which is what a
+   * mount with nothing to drill into wants.
+   *
+   * Never called for a withheld cell — see the module note. The caller is handed
+   * the row id and dimension key it supplied rather than an index, so it can look
+   * the selection back up without depending on the order the grid drew.
+   */
+  onSelectCell?: (rowId: string, dimensionKey: string) => void
+  /** Opens a whole disclosed group. Same rule about withheld rows. */
+  onSelectRow?: (rowId: string) => void
+  /** What is open now, so the grid can mark it. */
+  selection?: ClimateMapSelection | null
 }
 
 export default function ClimateMap({
@@ -130,8 +191,13 @@ export default function ClimateMap({
   threshold = 5,
   decimals,
   title,
+  size = 'default',
+  onSelectCell,
+  onSelectRow,
+  selection = null,
 }: ClimateMapProps) {
   const { t, locale } = useTranslation()
+  const density = DENSITY[size]
 
   const deadBand = deadBandAt / (2 * extremeAt)
   const reading = (value: number) => formatMetric(value, { kind: 'number', decimals }, locale)
@@ -165,7 +231,10 @@ export default function ClimateMap({
                 // everywhere (9.29 / 8.15 light, 8.55 / 6.85 dark). Same correction
                 // `KpiTile` already took for its label; `resultsContrast.test.ts`
                 // measures the pair and bans the utility by name in this file.
-                className="px-1 pb-1.5 text-left text-2xs font-semibold uppercase tracking-label text-fg-secondary"
+                className={cn(
+                  'px-1 pb-1.5 text-left font-semibold uppercase tracking-label text-fg-secondary',
+                  density.header,
+                )}
               >
                 {dimension.label}
               </th>
@@ -178,13 +247,54 @@ export default function ClimateMap({
             // for the reason the prop documents: with nothing disclosed there is
             // no reading to draw and no target to draw it against.
             const suppressed = target === null || isSuppressed(row.responses, threshold)
+            // Whether the whole group is open, versus one of its cells. They are
+            // marked differently on purpose: a row tint for the group, an inset
+            // edge for the cell, so a reader can see which of the two questions
+            // the panel below is answering.
+            const rowOpen = selection?.rowId === row.id && selection.dimensionKey === null
+            // The row header opens the group — but never for a withheld one, for
+            // the reason the module note gives about its cells.
+            const rowInteractive = onSelectRow !== undefined && !suppressed
             return (
-              <tr key={row.id}>
+              <tr
+                key={row.id}
+                // Only the label column and the 1px cell gutters take this tint —
+                // every reading is painted opaque over it — so it reads as a
+                // highlight on the row rather than as a wash over the readings.
+                className={rowOpen ? 'bg-surface-icon-box' : undefined}
+              >
                 <th
                   scope="row"
-                  className="w-px whitespace-nowrap pr-2 text-left text-xs font-medium text-fg-secondary"
+                  className={cn(
+                    'w-px whitespace-nowrap pr-2 text-left font-medium text-fg-secondary',
+                    density.label,
+                  )}
                 >
-                  {row.label}
+                  {rowInteractive ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectRow(row.id)}
+                      aria-expanded={rowOpen}
+                      // `index.css` styles every bare `button` in `@layer base`
+                      // as the admin control — 32px tall, carded, bordered,
+                      // padded, in its own font and ink. A row label is a label,
+                      // so all seven of those are turned off here. Utilities win
+                      // over that rule whatever its specificity, because
+                      // Tailwind's utilities layer is declared after base.
+                      //
+                      // No focus classes: `index.css` also rings every
+                      // `:focus-visible` globally, and this element sets no
+                      // `outline` of its own to override it with.
+                      className={cn(
+                        'inline h-auto cursor-pointer rounded border-0 bg-transparent p-0 text-left font-medium text-fg-secondary underline-offset-2 hover:bg-transparent hover:underline',
+                        density.label,
+                      )}
+                    >
+                      {row.label}
+                    </button>
+                  ) : (
+                    row.label
+                  )}
                 </th>
                 {dimensions.map((dimension, index) => {
                   const name = dimension.fullLabel ?? dimension.label
@@ -208,7 +318,10 @@ export default function ClimateMap({
                           // and an `h-7` cell has no room for a word anyway — a
                           // dense grid repeating "protected" is noise, not clarity.
                           showWord={false}
-                          suppressedClassName="h-7 w-full"
+                          // The same `box` the disclosed reading uses. A withheld
+                          // row between two disclosed ones must not be a different
+                          // height, or the grid steps where the floor bites.
+                          suppressedClassName={cn(density.box, 'w-full')}
                         >
                           {null}
                         </ProtectedCell>
@@ -223,13 +336,19 @@ export default function ClimateMap({
                   // accessible label says "below target" in words either way.
                   const severelyBelow = score - target <= -extremeAt
 
-                  return (
-                    <td key={dimension.key} className="p-px">
-                      <div
-                        className="flex h-7 items-center justify-center rounded font-mono text-xs tabular-nums"
-                        style={{
-                          backgroundColor: fill,
-                          color: ink,
+                  const cellOpen =
+                    selection?.rowId === row.id && selection.dimensionKey === dimension.key
+
+                  const box = (
+                    <div
+                      className={cn(
+                        'flex w-full items-center justify-center rounded font-mono tabular-nums',
+                        density.box,
+                        density.reading,
+                      )}
+                      style={{
+                        backgroundColor: fill,
+                        color: ink,
                           // `outline` + `outlineOffset`, NOT a two-step box-shadow.
                           // The gap an offset outline leaves is not painted at all,
                           // so whatever surface the chart is standing on shows
@@ -239,27 +358,76 @@ export default function ClimateMap({
                           // stands on `--admin-bg-icon-box`, and the mismatch drew a
                           // white halo in light and a near-black one in dark around
                           // the one cell this ring exists to draw the eye to.
-                          ...(severelyBelow
-                            ? {
-                                outline: `1.5px solid ${DIVERGING_COLORS[0]}`,
-                                outlineOffset: '2px',
-                              }
-                            : {}),
-                        }}
-                      >
-                        <span className="sr-only">{`${description}: `}</span>
-                        {reading(score)}
-                        <span className="sr-only">
-                          {` — ${t(
-                            score - target > deadBandAt
-                              ? 'charts.aboveTarget'
-                              : score - target < -deadBandAt
-                                ? 'charts.belowTarget'
-                                : 'charts.onTarget',
-                            { target: reading(target) },
-                          )}`}
-                        </span>
-                      </div>
+                        ...(severelyBelow
+                          ? {
+                              outline: `1.5px solid ${DIVERGING_COLORS[0]}`,
+                              outlineOffset: '2px',
+                            }
+                          : {}),
+                        // The open cell, marked from the INSIDE. `ink` is the one
+                        // colour guaranteed to read against this exact `fill` —
+                        // `divergingPair` returns the two together for that reason
+                        // — and an inset shadow paints over the cell's own fill, so
+                        // unlike the ring above it needs no gap and therefore no
+                        // opinion about the surface underneath. It also leaves
+                        // `outline` free, which is what the focus ring uses.
+                        //
+                        // TWO stops, not one. A single ink ring flush to the edge
+                        // is invisible on exactly the cells a reader opens most: at
+                        // the bottom of the ramp `ink` is white, and a white ring
+                        // against the white gap the severely-below outline leaves
+                        // reads as part of that gap. The first stop lays 2px of the
+                        // cell's own fill back over the edge so the second floats
+                        // the ink ring inside the colour, where its contrast is the
+                        // guaranteed one. Measured at 1440 on the extreme red cell,
+                        // which is where the single ring failed.
+                        ...(cellOpen
+                          ? { boxShadow: `inset 0 0 0 2px ${fill}, inset 0 0 0 4px ${ink}` }
+                          : {}),
+                      }}
+                    >
+                      <span className="sr-only">{`${description}: `}</span>
+                      {reading(score)}
+                      <span className="sr-only">
+                        {` — ${t(
+                          score - target > deadBandAt
+                            ? 'charts.aboveTarget'
+                            : score - target < -deadBandAt
+                              ? 'charts.belowTarget'
+                              : 'charts.onTarget',
+                          { target: reading(target) },
+                        )}`}
+                      </span>
+                    </div>
+                  )
+
+                  return (
+                    <td key={dimension.key} className="p-px">
+                      {onSelectCell ? (
+                        // The button WRAPS the painted cell rather than being it.
+                        // `severelyBelow` sets `outline` inline, and an inline
+                        // style beats the global `:focus-visible { outline: … }`
+                        // rule in `index.css` — so a button carrying that style
+                        // would be the one cell on the grid that could be focused
+                        // without showing it, which is precisely the cell the ring
+                        // exists to send the reader to. Focus lands on the wrapper,
+                        // whose outline nothing else touches.
+                        <button
+                          type="button"
+                          onClick={() => onSelectCell(row.id, dimension.key)}
+                          aria-expanded={cellOpen}
+                          // Same neutralisation as the row label above: without
+                          // it the base rule's 32px height cropped the 44px cell,
+                          // its 12px padding inset the fill, and its card
+                          // background and border drew a white box around every
+                          // reading on the grid.
+                          className="block h-auto w-full cursor-pointer rounded border-0 bg-transparent p-0 hover:bg-transparent hover:outline-2 hover:outline-offset-2 hover:outline-fg-primary"
+                        >
+                          {box}
+                        </button>
+                      ) : (
+                        box
+                      )}
                     </td>
                   )
                 })}
@@ -296,7 +464,13 @@ export default function ClimateMap({
             aria-hidden="true"
             className={`inline-block h-2 w-5 rounded-xs border border-dashed border-line-default bg-surface-icon-box ${PROTECTED_HATCH}`}
           />
-          {t('charts.protectedLegend', { threshold })}
+          {/* The interactive grid says the extra half of the rule: these cells
+              are not merely uncoloured, they are the ones that do not open. A
+              reader who did not know that would read an inert cell as a bug and
+              click it again. Stated once for the whole matrix, like the hatch. */}
+          {onSelectCell || onSelectRow
+            ? t('charts.protectedLegendInert', { threshold })
+            : t('charts.protectedLegend', { threshold })}
         </span>
       </div>
     </figure>

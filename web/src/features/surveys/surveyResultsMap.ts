@@ -1,4 +1,5 @@
-import type { ClimateMapRow, WordFrequency } from '../../components/charts'
+import { isSuppressed } from '../../components/charts'
+import type { ClimateMapRow, ClimateMapSelection, WordFrequency } from '../../components/charts'
 import type {
   SurveyBreakdown,
   SurveyQuestionResult,
@@ -507,4 +508,125 @@ export function openTextThemes(questions: readonly SurveyQuestionResult[]): Word
 /** Distinct words the server withheld, summed over every question. */
 export function withheldWordCount(questions: readonly SurveyQuestionResult[]): number {
   return questions.reduce((total, question) => total + question.suppressedWordCount, 0)
+}
+
+export interface ClimateDetailQuestion {
+  questionId: string
+  /**
+   * This group's mean for this question, straight off the wire.
+   *
+   * `null` when nobody in the group answered it — never 0, for the reason
+   * `segmentDimensionScore` gives: a missing measurement is not a measurement of
+   * zero, and this is a number the panel prints beside real ones.
+   */
+  score: number | null
+  /** How many of this group answered it. Disclosed rows only — see below. */
+  answeredCount: number
+  /** The whole survey's mean for the same question. What `score` is read against. */
+  surveyScore: number
+}
+
+export interface ClimateDetailDimension {
+  key: string
+  /** The group's score on the dimension — the value in the cell that was opened. */
+  score: number | null
+  /** In the survey author's own question order, like the columns. */
+  questions: ClimateDetailQuestion[]
+}
+
+/** What one opened cell, or one opened row, has to say. */
+export interface ClimateDetail {
+  rowId: string
+  rowLabel: string
+  /** The dimension that was opened, or `null` when the whole group was. */
+  dimensionKey: string | null
+  dimensions: ClimateDetailDimension[]
+}
+
+/**
+ * The questions behind one cell, or behind one whole group.
+ *
+ * ## This is a projection, not a second aggregation
+ *
+ * Every number here is either read straight off `SurveyAnalyticsResponse` or
+ * produced by `segmentDimensionScore`, which is the same function that produced
+ * the cell the reader clicked. Nothing is re-derived. `SurveyAggregation.Compute`
+ * is the single source for all five presentations of a survey, and a drill-in
+ * that averaged the wire figures a second way would eventually disagree with the
+ * grid it opened from — the same boundary the aggregation class states in its own
+ * comment.
+ *
+ * That is also why the dimensions come from {@link ClimateMapModel} rather than
+ * from `climateDimensions(questions)`: the model's list is the **kept** one, with
+ * the incomplete columns already dropped, so an opened row shows exactly the
+ * columns the grid drew and not the ones it declined to.
+ *
+ * ## Why a withheld group returns `null` here and not an empty panel
+ *
+ * The floor is re-checked with `ClimateMap`'s own predicate, against the same
+ * model, so this function and the grid cannot disagree about which rows are
+ * withheld. That is belt and braces on top of two other guards, both of which
+ * already hold:
+ *
+ * 1. `ClimateMap` never calls a select handler for a suppressed row — the cell is
+ *    not a button at all, so there is nothing to click.
+ * 2. The **server** has already emptied `questions` and zeroed `respondentCount`
+ *    for a suppressed segment, so the detail would be empty even if it were asked
+ *    for.
+ *
+ * The floor is therefore enforced where it belongs, on the wire, and this
+ * function cannot manufacture a disclosure the payload does not contain. It
+ * returns `null` rather than an empty shell so the caller renders nothing at all,
+ * because "no questions" for a group whose row is visibly protected is still a
+ * statement about that group.
+ */
+export function climateDetail(
+  model: ClimateMapModel,
+  breakdown: SurveyBreakdown,
+  questions: readonly SurveyQuestionResult[],
+  selection: ClimateMapSelection,
+): ClimateDetail | null {
+  const row = model.rows.find((entry) => entry.id === selection.rowId)
+  if (!row) return null
+  // Exactly `ClimateMap`'s own row test, in the same order.
+  if (model.target === null || isSuppressed(row.responses, model.threshold)) return null
+
+  const segment = breakdown.segments.find((entry) => entry.key === selection.rowId)
+  if (!segment || segment.isSuppressed) return null
+
+  const scope =
+    selection.dimensionKey === null
+      ? model.dimensions
+      : model.dimensions.filter((dimension) => dimension.key === selection.dimensionKey)
+  // A selection naming a dimension the grid does not draw — a stale click across
+  // a reload that changed the survey's shape. Nothing to show is not an error.
+  if (scope.length === 0) return null
+
+  // `climateDimensions` admits a question only when the server computed a mean
+  // for it, so every id reachable below has an entry here.
+  const surveyScores = new Map(
+    questions
+      .filter((question) => question.average !== null)
+      .map((question) => [question.questionId, question.average as number]),
+  )
+  const answered = new Map(segment.questions.map((entry) => [entry.questionId, entry]))
+
+  return {
+    rowId: row.id,
+    rowLabel: row.label,
+    dimensionKey: selection.dimensionKey,
+    dimensions: scope.map((dimension) => ({
+      key: dimension.key,
+      score: segmentDimensionScore(segment, dimension),
+      questions: dimension.questionIds.map((questionId) => {
+        const entry = answered.get(questionId)
+        return {
+          questionId,
+          score: entry?.average ?? null,
+          answeredCount: entry?.answeredCount ?? 0,
+          surveyScore: surveyScores.get(questionId) as number,
+        }
+      }),
+    })),
+  }
 }

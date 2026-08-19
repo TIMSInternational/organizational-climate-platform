@@ -19,6 +19,7 @@ import {
   type ChartSeries,
   type ClimateMapDimension,
   type ClimateMapRow,
+  type ClimateMapSelection,
   type HeatMapCell,
   type Kpi,
   type PieSlice,
@@ -92,6 +93,7 @@ export default function ChartGalleryPage() {
   const { t } = useTranslation()
   const [theme, setTheme] = useState(() => resolveAdminTheme(readAdminThemeMode()))
   const [selectedWord, setSelectedWord] = useState<string | null>(null)
+  const [climateSelection, setClimateSelection] = useState<ClimateMapSelection | null>(null)
   const [accepted, setAccepted] = useState(false)
 
   function toggleTheme() {
@@ -260,6 +262,47 @@ export default function ChartGalleryPage() {
           target={70}
           title={t('charts.galleryClimateMap')}
         />
+
+        {/* The interactive map, beside the inert one, because the difference is
+            the whole of #the drill-in and none of it is visible in a static
+            render. Two things to look at with this on screen:
+
+            1. Tab through it. Focus rings the CELL, including the one the
+               "severely below" outline is drawn around — that outline is an
+               inline style, and an inline style beats the global
+               `:focus-visible` rule, which is why the button wraps the painted
+               cell rather than being it.
+            2. The withheld row takes no focus at all and its name is not a
+               control. That is the anonymity floor as an affordance: a cell you
+               can tab to answers "is there something here" for a group whose
+               reading is withheld. */}
+        <ClimateMap
+          dimensions={CLIMATE_DIMENSIONS}
+          rows={CLIMATE_ROWS}
+          target={70}
+          size="large"
+          title={t('charts.galleryClimateMapOpen')}
+          selection={climateSelection}
+          onSelectCell={(rowId, dimensionKey) =>
+            setClimateSelection((current) =>
+              current && current.rowId === rowId && current.dimensionKey === dimensionKey
+                ? null
+                : { rowId, dimensionKey },
+            )
+          }
+          onSelectRow={(rowId) =>
+            setClimateSelection((current) =>
+              current && current.rowId === rowId && current.dimensionKey === null
+                ? null
+                : { rowId, dimensionKey: null },
+            )
+          }
+        />
+        <p className="m-0 text-xs text-fg-secondary">
+          {climateSelection
+            ? `${climateSelection.rowId} / ${climateSelection.dimensionKey ?? 'whole row'}`
+            : t('charts.galleryClimateMapNoSelection')}
+        </p>
 
         <div className="flex items-center gap-2 text-xs text-fg-secondary">
           <span>{t('charts.galleryProtectedBeside')}</span>
