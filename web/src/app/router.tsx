@@ -14,6 +14,7 @@ import CompaniesListPage from '../features/org-structure/pages/CompaniesListPage
 import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage'
 import UsersListPage from '../features/org-structure/pages/UsersListPage'
 import SystemSettingsPage from '../features/org-structure/pages/SystemSettingsPage'
+import SystemHealthPage from '../features/org-structure/pages/SystemHealthPage'
 import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
 import DepartmentsPage from '../features/org-structure/pages/DepartmentsPage'
 import ActionPlansListPage from '../features/action-plans/pages/ActionPlansListPage'
@@ -157,6 +158,7 @@ export const router = createBrowserRouter([
               { path: '/admin/companies/:companyId/reports', element: <ReportsListPage /> },
               { path: '/admin/companies/:companyId/analytics', element: <AnalyticsDashboardPage /> },
               { path: '/admin/system-settings', element: <SystemSettingsPage /> },
+              { path: '/admin/system', element: <SystemHealthPage /> },
               // Flat, with no company id in the path (#142), like /surveys and
               // /action-plans: the page takes its company from `company-context`,
               // so one route and one nav entry serve both admin roles.
