@@ -26,6 +26,17 @@ public class Question
     public bool Required { get; set; }
     public int Order { get; set; }
     public string? Category { get; set; }
+
+    /// <summary>
+    /// The library item this question was copied from, or null if it was authored directly (#58).
+    ///
+    /// <para>Provenance only. Instantiation is a COPY, never a reference: an answer is stored
+    /// against the question as it was ASKED, so a survey that pointed at a mutable library row
+    /// would silently change the meaning of every stored answer when someone edited it -- with no
+    /// error and with row counts reconciling exactly. This column is what lets usage be counted
+    /// and "where is this question used" be answered without making content depend on it.</para>
+    /// </summary>
+    public Guid? SourceLibraryItemId { get; set; }
 }
 
 /// <summary>

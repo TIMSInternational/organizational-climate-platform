@@ -16,7 +16,12 @@ public class MicroclimateQuestionConfiguration : IEntityTypeConfiguration<Microc
         builder.Property(q => q.Type).HasColumnName("type").HasMaxLength(20).IsRequired();
         builder.Property(q => q.Required).HasColumnName("required").IsRequired().HasDefaultValue(true);
         builder.Property(q => q.Order).HasColumnName("question_order").IsRequired();
+        // Provenance, same contract as questions.source_library_item_id (#58, #115): the picker
+        // serves both wizards, so both instantiation targets carry the link back to the library.
+        builder.Property(q => q.SourceLibraryItemId).HasColumnName("source_library_item_id");
 
         builder.HasOne<Microclimate>().WithMany().HasForeignKey(q => q.MicroclimateId);
+        // SetNull: retiring a library item must never delete questions already asked.
+        builder.HasOne<QuestionLibraryItem>().WithMany().HasForeignKey(q => q.SourceLibraryItemId).OnDelete(DeleteBehavior.SetNull);
     }
 }

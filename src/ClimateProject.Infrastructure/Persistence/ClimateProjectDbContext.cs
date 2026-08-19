@@ -15,6 +15,13 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<UserInvitationDemographic> UserInvitationDemographics => Set<UserInvitationDemographic>();
     public DbSet<Survey> Surveys => Set<Survey>();
     public DbSet<Question> Questions => Set<Question>();
+    public DbSet<QuestionCategory> QuestionCategories => Set<QuestionCategory>();
+    public DbSet<QuestionLibraryItem> QuestionLibraryItems => Set<QuestionLibraryItem>();
+    public DbSet<QuestionLibraryItemOption> QuestionLibraryItemOptions => Set<QuestionLibraryItemOption>();
+    public DbSet<QuestionLibraryItemTag> QuestionLibraryItemTags => Set<QuestionLibraryItemTag>();
+    public DbSet<QuestionBankItem> QuestionBankItems => Set<QuestionBankItem>();
+    public DbSet<QuestionBankItemOption> QuestionBankItemOptions => Set<QuestionBankItemOption>();
+    public DbSet<QuestionBankItemTag> QuestionBankItemTags => Set<QuestionBankItemTag>();
     public DbSet<QuestionOption> QuestionOptions => Set<QuestionOption>();
     public DbSet<QuestionConditionalLogic> QuestionConditionalLogics => Set<QuestionConditionalLogic>();
     public DbSet<QuestionEmojiOption> QuestionEmojiOptions => Set<QuestionEmojiOption>();

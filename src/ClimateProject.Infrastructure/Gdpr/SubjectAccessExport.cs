@@ -176,6 +176,12 @@ public static class SubjectAccessExport
                     .Select(u => new Reference(u.Id, u.OverallNotes)), cancellationToken),
             await ReferencesAsync("Benchmark", "CreatedBy",
                 db.Benchmarks.Where(b => b.CreatedBy == id).Select(b => new Reference(b.Id, b.Name)), cancellationToken),
+            await ReferencesAsync("QuestionCategory", "CreatedBy",
+                db.QuestionCategories.Where(c => c.CreatedBy == id).Select(c => new Reference(c.Id, c.NameEn)), cancellationToken),
+            await ReferencesAsync("QuestionBankItem", "CreatedBy",
+                db.QuestionBankItems.Where(i => i.CreatedBy == id)
+                    .Select(i => new Reference(i.Id, i.TextEn ?? i.Category)), cancellationToken),
+            await QuestionLibraryAuthorshipAsync(db, id, cancellationToken),
             await ReferencesAsync("NotificationTemplate", "CreatedBy",
                 db.NotificationTemplates.Where(t => t.CreatedBy == id).Select(t => new Reference(t.Id, t.Name)), cancellationToken),
             await ReferencesAsync("AIInsight", "AcknowledgedBy",
@@ -326,6 +332,38 @@ public static class SubjectAccessExport
     {
         var rows = await query.ToListAsync(cancellationToken);
         return Section(entity, ExportTreatment.Reference, rows.Select(r => ReferenceRecord(r, linkProperty)).ToList());
+    }
+
+    /// <summary>
+    /// The subject's authorship of library questions — the one exported table reached by TWO actor
+    /// columns.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One section, because the export is one section per TABLE, but each row is labelled with the
+    /// column that actually matched. Someone who last edited a question they did not write appears
+    /// here too: an export that named only authors would under-report where the subject appears,
+    /// which is the opposite of what Art. 15 asks for.
+    /// </para>
+    /// <para>
+    /// A row matched by both columns is labelled <c>CreatedBy</c> — the stronger claim, and the one
+    /// that survives erasure (<c>last_modified_by</c> is SET NULL, <c>created_by</c> is RESTRICT).
+    /// </para>
+    /// </remarks>
+    private static async Task<SubjectAccessSection> QuestionLibraryAuthorshipAsync(
+        ClimateProjectDbContext db,
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var rows = await db.QuestionLibraryItems
+            .Where(i => i.CreatedBy == id || i.LastModifiedBy == id)
+            .Select(i => new { i.Id, i.TextEn, Authored = i.CreatedBy == id })
+            .ToListAsync(cancellationToken);
+
+        return Section(
+            "QuestionLibraryItem",
+            ExportTreatment.Reference,
+            [.. rows.Select(r => ReferenceRecord(new Reference(r.Id, r.TextEn), r.Authored ? "CreatedBy" : "LastModifiedBy"))]);
     }
 
     private static IReadOnlyDictionary<string, object?> ReferenceRecord(Reference reference, string linkProperty)

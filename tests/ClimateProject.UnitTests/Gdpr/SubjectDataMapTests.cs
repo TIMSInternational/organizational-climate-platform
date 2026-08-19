@@ -265,17 +265,27 @@ public class SubjectDataMapTests
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
-        Assert.Equal(27, nonOwnedReferrers.Count);
+        // 30 since #58: QuestionCategory, QuestionLibraryItem and QuestionBankItem each carry an
+        // authorship FK into users. QuestionLibraryItem has two (CreatedBy and LastModifiedBy) but
+        // counts once here -- this is a census of referring TYPES, not of columns.
+        Assert.Equal(30, nonOwnedReferrers.Count);
 
         var restricting = user.GetReferencingForeignKeys()
             .Where(fk => !fk.DeclaringEntityType.IsOwned() && fk.DeleteBehavior == DeleteBehavior.Restrict)
             .ToList();
 
-        // SubjectErasure and SubjectDataMap both say "sixteen foreign keys into users are
-        // ON DELETE RESTRICT" as the structural reason erasure pseudonymises instead of
-        // deleting. If that number moves, the argument has to be re-read, not the comment
-        // re-typed.
-        Assert.Equal(16, restricting.Count);
+        // SubjectErasure and SubjectDataMap both state this count as the structural reason
+        // erasure pseudonymises instead of deleting. If it moves, the argument has to be
+        // re-read, not the comment re-typed -- so, having re-read it for #58:
+        //
+        // The three additions are questions_categories.created_by, question_library_items.created_by
+        // and question_bank_items.created_by. All three are authored business content whose
+        // attribution outlives the author, exactly like survey_templates.created_by, so Restrict is
+        // right for them and the argument is unchanged in kind. It moves UP, which strengthens it:
+        // there is now more of the employer's authored record that a row delete would destroy.
+        // (question_library_items.last_modified_by is SetNull and correctly absent here -- losing
+        // the last editor's identity costs nothing, losing the author's costs provenance.)
+        Assert.Equal(19, restricting.Count);
     }
 
     [Fact]
