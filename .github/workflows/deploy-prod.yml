@@ -3,6 +3,22 @@ name: deploy-prod
 on:
   workflow_dispatch:
 
+# One production deployment at a time.
+#
+# Added after two dispatches ran concurrently on 2026-08-19: nothing broke, because that
+# pair happened to build an identical image (the range changed only `web/`), but the two
+# hazards it exposed are real. App Runner refuses a second StartDeployment while one is in
+# flight, so the loser fails on a conflict rather than for any reason worth reading. And
+# both runs apply EF Core migrations -- harmless with none pending, genuinely dangerous
+# with one, which is exactly the case nobody will be thinking about when it happens.
+#
+# `cancel-in-progress: false` on purpose. Cancelling a half-finished production deployment
+# to start another is strictly worse than making the second wait: App Runner would be left
+# mid-transition with no workflow watching it. Queue, never pre-empt.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
 permissions:
   contents: read
   id-token: write
