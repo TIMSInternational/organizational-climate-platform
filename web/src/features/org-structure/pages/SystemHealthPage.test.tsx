@@ -104,6 +104,29 @@ describe('SystemHealthPage', () => {
     expect(notice.textContent).toMatch(/no scheduler was observed/i)
   })
 
+  /**
+   * An API OLDER than #355 answers without a `jobs` field at all. That is out of
+   * contract — the type declares it required — and it still happened in a local
+   * run: `status.jobs.filter` threw, the router's error boundary took the whole
+   * route, and the one page whose purpose is to say what is broken rendered
+   * nothing. A diagnostics screen that only works against a healthy backend is
+   * not a diagnostics screen.
+   *
+   * The cast is the point of the test: it builds the payload the contract forbids
+   * and this page must survive anyway.
+   */
+  it('survives an API too old to report jobs, and still says no scheduler was observed', async () => {
+    const { jobs: _dropped, ...withoutJobs } = status()
+    serve(withoutJobs as SystemStatusResponse)
+    renderPage()
+
+    // The page renders at all...
+    expect(await screen.findByText('d3b1fce01234')).toBeTruthy()
+    // ...and reports the absence rather than an empty table or a clean bill.
+    const notice = await screen.findByRole('status')
+    expect(notice.textContent).toMatch(/no scheduler was observed/i)
+  })
+
   /** #220: the pooler port is a fact on the page, not a coin flip. */
   it('names the transaction pooler when the runtime is pointed at it', async () => {
     serve(status({ database: { ...status().database, usesTransactionPoolerPort: true, port: 6543 } }))
