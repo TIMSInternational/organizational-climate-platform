@@ -127,9 +127,28 @@ export default function SystemHealthPage() {
     return t('systemHealth.everySeconds', { count: seconds })
   }
 
-  const staleJobCount = status
-    ? status.jobs.filter((job) => job.status === 'stale' || job.status === 'failing').length
-    : 0
+  /**
+   * The job registry, defaulted — because this page must survive the API being
+   * exactly as broken as it exists to report on.
+   *
+   * `jobs` is required on `SystemStatusResponse`, so an API that omits it is out
+   * of contract. It still happens: the field arrived with #355, and any API built
+   * before it answers `/admin/system/status` without one. Reading `.jobs.filter`
+   * straight off that payload threw, the error boundary took the whole route, and
+   * the operator got a blank screen from the one page whose job is to tell them
+   * what is wrong. A diagnostics screen that only renders against a healthy
+   * backend is not a diagnostics screen.
+   *
+   * `[]` rather than a third "not reported" state on purpose: the empty branch
+   * below already reads "no scheduler was observed", which is true of an API that
+   * cannot report one for either reason, and is the reading #275 wants. What must
+   * not happen is the page claiming everything is fine, and it does not — an empty
+   * registry is drawn as a finding, never as a clean bill of health.
+   */
+  const jobs = status?.jobs ?? []
+  const staleJobCount = jobs.filter(
+    (job) => job.status === 'stale' || job.status === 'failing',
+  ).length
 
   return (
     <div>
@@ -189,7 +208,7 @@ export default function SystemHealthPage() {
               value={staleJobCount}
               higherIsBetter={false}
               locale={locale}
-              sub={t('systemHealth.kpiJobsSub', { count: status.jobs.length })}
+              sub={t('systemHealth.kpiJobsSub', { count: jobs.length })}
             />
           </div>
 
@@ -272,7 +291,7 @@ export default function SystemHealthPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {status.jobs.map((job) => (
+                  {jobs.map((job) => (
                     <TableRow key={job.jobName}>
                       <TableCell className="font-mono">{job.jobName}</TableCell>
                       <TableCell>{formatInterval(job.intervalSeconds)}</TableCell>
@@ -287,7 +306,7 @@ export default function SystemHealthPage() {
             </div>
             {/* An empty registry is not "all healthy" -- it means no scheduler was observed,
                 which is the #275 failure itself. Said plainly rather than drawn as a blank. */}
-            {status.jobs.length === 0 && (
+            {jobs.length === 0 && (
               <p className="p-panel text-fg-secondary" role="status">
                 {t('systemHealth.noJobsObserved')}
               </p>
