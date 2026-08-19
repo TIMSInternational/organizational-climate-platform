@@ -8,6 +8,13 @@ the day. Grounded in repository state at `origin/main` commit `1219dc6` (2026-08
 re-verify any cited claim if you are reading this much later, since this repo's docs have
 gone stale before.
 
+> **Amended 2026-08-19.** Two things changed after this document was written: gate **A1**
+> closed (workers co-hosted and verified in production), and the **data migration was
+> dropped entirely** — the legacy Mongo data was mock, so there is nothing to migrate. Gate
+> A2, #157's dry run and C3's index-before-ETL step are all void. Anything below still
+> phrased as though a migration were coming is stale; treat
+> [`docs/decisions/no-data-migration.md`](../decisions/no-data-migration.md) as authoritative.
+
 Companions:
 
 - [`rollback.md`](./rollback.md) — what "roll back" means per layer, and the one moment
@@ -27,8 +34,8 @@ commit `1219dc6`; update it as gates close.
 
 | # | Gate | Tracking | Status at `1219dc6` |
 |---|---|---|---|
-| A1 | Worker hosting decided **and deployed** | #275 | **OPEN — hard gate, see below** |
-| A2 | ETL tool built, reconciliation harness included | #154 | **Tool does not exist in the repo** (no `tools/` project; design only) |
+| A1 | Worker hosting decided **and deployed** | #275 | **CLOSED 2026-08-19** — co-host deployed; all six jobs reporting heartbeats in production |
+| A2 | ~~ETL tool built, reconciliation harness included~~ | ~~#154~~ | **VOID — there is no data migration.** See [`no-data-migration.md`](../decisions/no-data-migration.md) |
 | A3 | Staging environment with production parity | #156 | Open |
 | A4 | Monitoring/alerting live, worker heartbeats scraped | #158 | Open — `WorkerHeartbeats` exists, nothing scrapes it (#275 notes this) |
 | A5 | Rollback tested, not just written | #159 | Open — [`rollback.md`](./rollback.md) is untested until #157 practises it |
@@ -65,20 +72,17 @@ an operational choice. What this gate requires is that one is **chosen, recorded
 **Exit criterion:** a structured heartbeat line from each of the six jobs observed in
 production logs. `____` (date observed, who verified)
 
-### A2 — ETL tool (#154)
+### A2 — ETL tool (#154): VOID
 
-Design is settled in `docs/superpowers/specs/2026-08-03-mongo-to-postgres-etl-design.md`
-(deterministic v5 GUIDs, idempotent upserts, dependency-ordered load, three-layer
-reconciliation), but at `1219dc6` **no `tools/ClimateProject.DataMigration` project
-exists** — searching the repo for `DataMigration` finds only doc comments. The design
-also records blockers that are not the ETL's to solve: #58/#113 (question collections
-have no target schema), and the #195 language-attribution rules for five collections.
-`Response`/`QuestionResponse` must load **after** #195's options migration (see the
-design's addendum §3).
+**There is no data migration.** The legacy MongoDB database held mock data produced by a
+previous development team, not production records, so it is abandoned rather than migrated.
+The ETL tool, its design document and its CI job were deleted on 2026-08-19 — see
+[`docs/decisions/no-data-migration.md`](../decisions/no-data-migration.md), which also records
+what was deliberately kept and how to reverse the decision.
 
-**Exit criterion:** tool exists, `--dry-run`/`--collections`/`--resume`/`--report-path`
-flags work, reconciliation harness (sub-issue G) built alongside, and a full run against
-a production snapshot completes on staging.
+Consequences for this runbook, applied below: **#157's dry run** was rehearsing the
+migration and has no subject; the **"index before ETL"** sequencing in pre-flight C3 is void;
+and the new platform starts from an empty database populated by real use.
 
 ### A7 — database secret on the session pooler, guard armed (#220)
 
