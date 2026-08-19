@@ -2368,6 +2368,8 @@
     "noJobsObserved": "No scheduler was observed on this instance. That is not the same as every job being healthy — it means nothing reported a heartbeat.",
     "everyHours": "Every {count}h",
     "everyMinutes": "Every {count}m",
-    "everySeconds": "Every {count}s"
+    "everySeconds": "Every {count}s",
+    "loadFailed": "Could not read the system status",
+    "loadFailedDescription": "The request itself failed, which is not the same as the platform being unhealthy — an unhealthy platform still answers with a full report."
   }
 }

@@ -2368,6 +2368,8 @@
     "noJobsObserved": "No se observó ningún planificador en esta instancia. Eso no equivale a que todas las tareas estén correctas: significa que nada informó de una señal de actividad.",
     "everyHours": "Cada {count} h",
     "everyMinutes": "Cada {count} min",
-    "everySeconds": "Cada {count} s"
+    "everySeconds": "Cada {count} s",
+    "loadFailed": "No se pudo leer el estado del sistema",
+    "loadFailedDescription": "La solicitud falló, lo que no es lo mismo que un fallo de la plataforma: una plataforma con fallos responde igualmente con un informe completo."
   }
 }

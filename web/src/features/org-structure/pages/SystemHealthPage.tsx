@@ -153,7 +153,12 @@ export default function SystemHealthPage() {
       {loading && <SkeletonText lines={6} />}
 
       {failed && !loading && (
-        <NetworkError onRetry={() => void load()} retryText={t('common.retry')} />
+        <NetworkError
+          title={t('systemHealth.loadFailed')}
+          description={t('systemHealth.loadFailedDescription')}
+          onRetry={() => void load()}
+          retryText={t('common.retry')}
+        />
       )}
 
       {status && !loading && !failed && (
