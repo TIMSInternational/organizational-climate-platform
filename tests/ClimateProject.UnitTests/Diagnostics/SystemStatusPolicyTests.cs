@@ -235,4 +235,149 @@ public class SystemStatusPolicyTests
     {
         Assert.Equal(200, SystemStatusPolicy.HttpStatusFor(aggregateStatus));
     }
+
+    // -------------------------------------------------------------------------------------
+    // #275 / #101: a silently dead scheduled job must not read as a healthy platform.
+    // -------------------------------------------------------------------------------------
+
+    private static SystemJobStatus Job(string status, string name = "notification-dispatch")
+        => new(
+            JobName: name,
+            IntervalSeconds: 300,
+            LastAttemptAt: null,
+            LastSuccessAt: null,
+            ConsecutiveFailures: 0,
+            Status: status);
+
+    private static readonly DateTimeOffset Now = new(2026, 8, 19, 12, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public void A_job_that_succeeded_within_its_cadence_is_ok()
+    {
+        var status = SystemStatusPolicy.ClassifyJob(
+            interval: TimeSpan.FromMinutes(5),
+            registeredAtUtc: Now.AddHours(-2),
+            lastSuccessUtc: Now.AddMinutes(-4),
+            consecutiveFailures: 0,
+            nowUtc: Now);
+
+        Assert.Equal(SystemComponentStatuses.Ok, status);
+    }
+
+    [Fact]
+    public void A_job_silent_for_more_than_three_intervals_is_stale()
+    {
+        // The failure #101 names: the job stopped, and because it emits nothing when it stops,
+        // absence is the only available signal.
+        var status = SystemStatusPolicy.ClassifyJob(
+            interval: TimeSpan.FromMinutes(5),
+            registeredAtUtc: Now.AddHours(-2),
+            lastSuccessUtc: Now.AddMinutes(-16),
+            consecutiveFailures: 0,
+            nowUtc: Now);
+
+        Assert.Equal(SystemComponentStatuses.Stale, status);
+    }
+
+    [Fact]
+    public void A_job_that_never_succeeded_goes_stale_on_the_clock_that_starts_at_registration()
+    {
+        // A worker that throws on its very first tick is exactly what a "compare last-run
+        // times" check misses, because it has no last run to compare.
+        var status = SystemStatusPolicy.ClassifyJob(
+            interval: TimeSpan.FromMinutes(5),
+            registeredAtUtc: Now.AddMinutes(-16),
+            lastSuccessUtc: null,
+            consecutiveFailures: 3,
+            nowUtc: Now);
+
+        Assert.Equal(SystemComponentStatuses.Stale, status);
+    }
+
+    [Fact]
+    public void A_job_still_inside_its_cadence_but_erroring_is_failing_not_ok()
+    {
+        var status = SystemStatusPolicy.ClassifyJob(
+            interval: TimeSpan.FromMinutes(5),
+            registeredAtUtc: Now.AddHours(-2),
+            lastSuccessUtc: Now.AddMinutes(-4),
+            consecutiveFailures: 2,
+            nowUtc: Now);
+
+        Assert.Equal(SystemComponentStatuses.Failing, status);
+    }
+
+    [Fact]
+    public void A_freshly_registered_job_is_never_run_rather_than_stale()
+    {
+        var status = SystemStatusPolicy.ClassifyJob(
+            interval: TimeSpan.FromMinutes(5),
+            registeredAtUtc: Now.AddSeconds(-30),
+            lastSuccessUtc: null,
+            consecutiveFailures: 0,
+            nowUtc: Now);
+
+        Assert.Equal(SystemComponentStatuses.NeverRun, status);
+    }
+
+    [Fact]
+    public void A_zero_interval_is_not_measured_for_staleness()
+    {
+        // WorkerHeartbeats.Record creates a transient beat with a zero interval when a job
+        // reports before it registers. Multiplying that by the tolerance gives zero, so a
+        // naive implementation calls every such beat stale the instant it appears.
+        var status = SystemStatusPolicy.ClassifyJob(
+            interval: TimeSpan.Zero,
+            registeredAtUtc: Now.AddDays(-7),
+            lastSuccessUtc: Now.AddDays(-7),
+            consecutiveFailures: 0,
+            nowUtc: Now);
+
+        Assert.Equal(SystemComponentStatuses.Ok, status);
+    }
+
+    [Fact]
+    public void A_stale_job_degrades_the_platform_even_when_every_other_component_is_green()
+    {
+        // The queue only shows a backlog once work is *due*. A dispatcher that died an hour
+        // after the last notification therefore looks perfect until the next one is scheduled,
+        // which is the window this check closes.
+        var status = SystemStatusPolicy.Evaluate(
+            Database(), Queue(), [Job(SystemComponentStatuses.Stale)]);
+
+        Assert.Equal(SystemStatuses.Degraded, status);
+    }
+
+    [Fact]
+    public void A_failing_job_degrades_the_platform()
+    {
+        var status = SystemStatusPolicy.Evaluate(
+            Database(), Queue(), [Job(SystemComponentStatuses.Failing)]);
+
+        Assert.Equal(SystemStatuses.Degraded, status);
+    }
+
+    [Fact]
+    public void Healthy_jobs_leave_the_verdict_alone()
+    {
+        var status = SystemStatusPolicy.Evaluate(
+            Database(),
+            Queue(),
+            [Job(SystemComponentStatuses.Ok), Job(SystemComponentStatuses.NeverRun, "digests")]);
+
+        Assert.Equal(SystemStatuses.Ok, status);
+    }
+
+    [Fact]
+    public void A_database_timeout_still_outranks_a_stale_job()
+    {
+        // Ordering: the worst component wins. A stale job must never downgrade an unhealthy
+        // verdict to degraded.
+        var status = SystemStatusPolicy.Evaluate(
+            Database(SystemComponentStatuses.Timeout),
+            Queue(),
+            [Job(SystemComponentStatuses.Stale)]);
+
+        Assert.Equal(SystemStatuses.Unhealthy, status);
+    }
 }

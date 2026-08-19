@@ -4,6 +4,7 @@ using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Diagnostics;
 using ClimateProject.Application.Notifications;
+using ClimateProject.Application.Scheduling;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -79,6 +80,7 @@ public static class SystemStatusEndpoints
         ClimateProjectDbContext db,
         IOptions<DatabaseOptions> databaseOptions,
         IHostEnvironment hostEnvironment,
+        WorkerHeartbeats heartbeats,
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
@@ -172,15 +174,35 @@ public static class SystemStatusEndpoints
                 Status: SystemStatusPolicy.ClassifyDispatcher(queueFacts.LastDispatchAt, now),
                 LastDispatchAt: queueFacts.LastDispatchAt);
 
+        // In-memory and per instance, so this costs no round-trip and cannot be affected by
+        // the database probe above having failed -- deliberately, because "the database is
+        // down" and "the scheduler stopped" are separate faults and an operator needs to see
+        // both at once. Ordered by name inside Snapshot() so the payload is stable.
+        var jobs = heartbeats.Snapshot()
+            .Select(beat => new SystemJobStatus(
+                JobName: beat.JobName,
+                IntervalSeconds: (long)beat.Interval.TotalSeconds,
+                LastAttemptAt: beat.LastAttemptUtc,
+                LastSuccessAt: beat.LastSuccessUtc,
+                ConsecutiveFailures: beat.ConsecutiveFailures,
+                Status: SystemStatusPolicy.ClassifyJob(
+                    beat.Interval,
+                    beat.RegisteredAtUtc,
+                    beat.LastSuccessUtc,
+                    beat.ConsecutiveFailures,
+                    now)))
+            .ToList();
+
         var response = new SystemStatusResponse(
             Service: ServiceName,
-            Status: SystemStatusPolicy.Evaluate(database, queue),
+            Status: SystemStatusPolicy.Evaluate(database, queue, jobs),
             CheckedAt: now,
             Environment: hostEnvironment.EnvironmentName,
             Build: new SystemBuildStatus(BuildInfo.CommitSha, BuildInfo.BuildTimestamp, System.Environment.Version.ToString()),
             Database: database,
             NotificationQueue: queue,
-            Dispatcher: dispatcher);
+            Dispatcher: dispatcher,
+            Jobs: jobs);
 
         return Results.Json(response, statusCode: SystemStatusPolicy.HttpStatusFor(response.Status));
     }
