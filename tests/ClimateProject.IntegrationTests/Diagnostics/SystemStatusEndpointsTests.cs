@@ -166,6 +166,12 @@ public class SystemStatusEndpointsTests : IAsyncLifetime
         // Testcontainers maps Postgres to an ephemeral host port, so this is never 6543 --
         // which is the point: on this instance the #220 flag is legitimately false, and the
         // unit tests cover the case where it is true.
+        // #275: the payload carries a heartbeat per scheduled job. The list is empty in this
+        // host because the integration suite deliberately runs with the jobs idle, which is
+        // also why the aggregate verdict above is still ok -- a stale or failing job would
+        // degrade it. WorkerHostingRegistrationTests is what pins that they are *deployed*.
+        Assert.NotNull(status.Jobs);
+
         Assert.False(status.Database.UsesTransactionPoolerPort);
         Assert.Equal(DatabaseConnectionStringPolicy.DefaultMaxPoolSize, status.Database.MaxPoolSize);
         Assert.True(status.Database.MaxPoolSizeDefaulted);

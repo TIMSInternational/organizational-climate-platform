@@ -44,6 +44,13 @@ public static class SystemComponentStatuses
     public const string Stale = "stale";
 
     /// <summary>
+    /// A scheduled job that is still ticking inside its cadence but whose last tick threw.
+    /// Distinct from <see cref="Stale"/>: the job is alive and erroring, which points at the
+    /// work rather than at the scheduler.
+    /// </summary>
+    public const string Failing = "failing";
+
+    /// <summary>
     /// Could not be determined, because the probe it depends on failed first. Deliberately
     /// not <see cref="Ok"/>: "we could not look" and "we looked and it was fine" are
     /// different answers and only one of them is reassuring.
@@ -129,6 +136,63 @@ public static class SystemStatusPolicy
             : SystemComponentStatuses.Ok;
 
     /// <summary>
+    /// How many of its own intervals a job may go without succeeding before it is
+    /// <see cref="SystemComponentStatuses.Stale"/>.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately the same tolerance <c>WorkerHeartbeats.StaleJobs</c> applies, and
+    /// relative to each job's own interval for the reason recorded there: dispatch runs every
+    /// few minutes and the digest sweep hourly, so one flat threshold is necessarily either
+    /// deaf to the fast job or screaming about the slow one.
+    /// </remarks>
+    public const double StaleJobIntervalTolerance = 3.0;
+
+    /// <summary>
+    /// Classifies one scheduled job from its own heartbeat.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Takes primitives rather than a <c>WorkerHeartbeat</c> so that the diagnostics policy
+    /// does not depend on the scheduling namespace — the dependency belongs the other way
+    /// round, and this keeps the rule unit-testable without constructing a scheduler.
+    /// </para>
+    /// <para>
+    /// A job that has never succeeded is measured from when it was registered, so it becomes
+    /// stale on the same schedule as one that succeeded once and stopped. Ordered worst-first:
+    /// a job that is both stale and failing is reported stale, because "not running" outranks
+    /// "running badly".
+    /// </para>
+    /// <para>
+    /// A non-positive interval cannot express a cadence, so staleness is not evaluated
+    /// against it. <c>WorkerSchedulingOptions.Validate</c> refuses zero intervals at startup;
+    /// this guard exists for the transient beat <c>WorkerHeartbeats.Record</c> creates when a
+    /// job reports before it registers, which would otherwise read as instantly stale.
+    /// </para>
+    /// </remarks>
+    public static string ClassifyJob(
+        TimeSpan interval,
+        DateTimeOffset registeredAtUtc,
+        DateTimeOffset? lastSuccessUtc,
+        int consecutiveFailures,
+        DateTimeOffset nowUtc)
+    {
+        if (interval > TimeSpan.Zero)
+        {
+            var measuredFrom = lastSuccessUtc ?? registeredAtUtc;
+            if (nowUtc - measuredFrom >= interval * StaleJobIntervalTolerance)
+            {
+                return SystemComponentStatuses.Stale;
+            }
+        }
+
+        if (consecutiveFailures > 0) return SystemComponentStatuses.Failing;
+
+        return lastSuccessUtc is null
+            ? SystemComponentStatuses.NeverRun
+            : SystemComponentStatuses.Ok;
+    }
+
+    /// <summary>
     /// Classifies the dispatcher from the most recent successful delivery.
     /// </summary>
     /// <remarks>
@@ -155,7 +219,10 @@ public static class SystemStatusPolicy
     /// Ordered worst-first and written as a straight sequence of guards so that adding a
     /// component cannot accidentally mask a more severe one.
     /// </remarks>
-    public static string Evaluate(SystemDatabaseStatus database, SystemNotificationQueueStatus queue)
+    public static string Evaluate(
+        SystemDatabaseStatus database,
+        SystemNotificationQueueStatus queue,
+        IReadOnlyList<SystemJobStatus>? jobs = null)
     {
         ArgumentNullException.ThrowIfNull(database);
         ArgumentNullException.ThrowIfNull(queue);
@@ -176,6 +243,18 @@ public static class SystemStatusPolicy
         if (database.UsesTransactionPoolerPort) return SystemStatuses.Degraded;
 
         if (queue.Status == SystemComponentStatuses.Backlog) return SystemStatuses.Degraded;
+
+        // A stopped or erroring scheduled job degrades the platform even while every other
+        // component is green, which is the whole point of #101: the queue only shows a
+        // backlog once work is *due*, so a dispatcher that died an hour after the last
+        // notification looks perfect until the next one is scheduled. `jobs` is null only for
+        // a caller that observed no scheduler at all; an empty list means one was observed and
+        // had nothing registered, which is not evidence of health either.
+        if (jobs is not null && jobs.Any(job =>
+                job.Status is SystemComponentStatuses.Stale or SystemComponentStatuses.Failing))
+        {
+            return SystemStatuses.Degraded;
+        }
 
         // Anything we could not determine is not evidence of health.
         if (database.Status == SystemComponentStatuses.Unknown

@@ -29,6 +29,7 @@ namespace ClimateProject.Application.Diagnostics;
 /// <param name="Database">Live Postgres probe plus the connection policy facts from #220.</param>
 /// <param name="NotificationQueue">Depth of the notification backlog.</param>
 /// <param name="Dispatcher">Evidence about whatever is (or is not) draining that backlog.</param>
+/// <param name="Jobs">Every scheduled job's own heartbeat — see <see cref="SystemJobStatus"/>.</param>
 public sealed record SystemStatusResponse(
     string Service,
     string Status,
@@ -37,7 +38,8 @@ public sealed record SystemStatusResponse(
     SystemBuildStatus Build,
     SystemDatabaseStatus Database,
     SystemNotificationQueueStatus NotificationQueue,
-    SystemDispatcherStatus Dispatcher);
+    SystemDispatcherStatus Dispatcher,
+    IReadOnlyList<SystemJobStatus> Jobs);
 
 /// <summary>Build provenance, identical to what <c>GET /version</c> reports.</summary>
 /// <param name="Commit">Full git SHA, or <c>"unknown"</c> for a build that carried no provenance.</param>
@@ -99,13 +101,11 @@ public sealed record SystemNotificationQueueStatus(
 /// </summary>
 /// <remarks>
 /// <para>
-/// <strong>There is no worker in this repository yet, and this record does not pretend
-/// otherwise.</strong> Dispatch happens when something external calls
-/// <c>POST /notifications/process</c>; the API registers no <c>BackgroundService</c> or
-/// <c>IHostedService</c>, and <c>src/ClimateProject.Workers</c> is still the four-line
-/// scaffold the template generated — it builds and hosts nothing. So there is no worker
-/// heartbeat to read, and #147's ask for one cannot be answered literally. Inventing a green
-/// one would be worse than reporting nothing.
+/// <strong>Corrected by #275.</strong> This text used to say there was no worker in the
+/// repository and therefore no heartbeat to read. That stopped being true when #275 chose
+/// co-hosting: <c>Program.cs</c> calls <c>AddClimateProjectScheduling</c>, so the six jobs
+/// and the heartbeat monitor deploy inside the API image. The heartbeats #147 asked for are
+/// now reported per job in <see cref="SystemStatusResponse.Jobs"/>.
 /// </para>
 /// <para>
 /// What can be observed honestly is the trace a dispatcher leaves behind:
@@ -119,3 +119,34 @@ public sealed record SystemNotificationQueueStatus(
 public sealed record SystemDispatcherStatus(
     string Status,
     DateTimeOffset? LastDispatchAt);
+
+/// <summary>
+/// One scheduled job's heartbeat, as <c>WorkerHeartbeats</c> recorded it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This is the answer to the failure #101 named: "a silently dead worker is the whole risk".
+/// The dispatcher component above infers liveness from <c>max(notifications.sent_at)</c>,
+/// which conflates "nothing is running" with "nothing needed sending". A per-job heartbeat
+/// cannot be fooled that way — a job that ticks and finds no work still records an attempt,
+/// so a gap in <see cref="LastAttemptAt"/> means the job itself stopped.
+/// </para>
+/// <para>
+/// <see cref="ConsecutiveFailures"/> is reported alongside <see cref="Status"/> rather than
+/// folded into it, because "succeeding again after three failures" and "succeeding, never
+/// failed" are operationally different and only the count distinguishes them.
+/// </para>
+/// </remarks>
+/// <param name="JobName">The job's registered name, from <c>WorkerJobs</c>.</param>
+/// <param name="IntervalSeconds">Its configured cadence, which is what staleness is measured against.</param>
+/// <param name="LastAttemptAt">Last tick of any outcome, or <see langword="null"/> if it has never run.</param>
+/// <param name="LastSuccessAt">Last tick that completed, or <see langword="null"/> if it has never succeeded.</param>
+/// <param name="ConsecutiveFailures">Failures since the last success; zero after any success.</param>
+/// <param name="Status"><c>ok</c>, <c>failing</c>, <c>stale</c>, or <c>never-run</c>.</param>
+public sealed record SystemJobStatus(
+    string JobName,
+    long IntervalSeconds,
+    DateTimeOffset? LastAttemptAt,
+    DateTimeOffset? LastSuccessAt,
+    int ConsecutiveFailures,
+    string Status);
