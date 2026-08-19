@@ -1,5 +1,31 @@
 # Question repositories (#58) — design
 
+> ## AMENDED 2026-08-19, same day — four defects, found by adversarial review before implementation
+>
+> This document was written in the morning and reviewed against the code in the afternoon. Four
+> things in it were wrong. They are corrected **in place** below, and listed here so nobody
+> implements the original.
+>
+> 1. **`QuestionCategory.Level` and `.Path` are removed.** The justification given was *"exactly the
+>    treatment `Department` already gets in the ETL pipeline"*. Both halves were false:
+>    `Department` (`src/ClimateProject.Domain/Entities/Department.cs`) stores **neither** column — it
+>    has only `ParentDepartmentId` — and the ETL was deleted hours later
+>    (`docs/decisions/no-data-migration.md`). A parent pointer alone is the house pattern.
+> 2. **`ReverseCoded` is removed.** `Question` has no such column and **nothing in `src/` implements
+>    reverse scoring** (verified: zero hits). Carrying it on the library while instantiation is a
+>    COPY means a copied question silently loses it — which inverts that question's contribution to
+>    its dimension score with no error and no reconciliation failure. That is worse than not having
+>    the field. Filed as its own concern below.
+> 3. **`scale` and `binary` are now resolved, not deferred.** `QuestionTypes.All`'s own comment
+>    defers them *to this document* — so leaving them open meant the design failed at the one job it
+>    was created for.
+> 4. **The type vocabulary is `ForSurvey`/`ForMicroclimate`, not `All`.** `All` includes
+>    `emoji_rating`; `ForSurvey` (`QuestionTypes.cs:81-89`) excludes it. A library item typed from
+>    `All` could be authored and then be **uninstantiable** into a survey.
+>
+> The lesson, recorded because it recurs: three of the four are the same mistake — asserting what a
+> neighbouring part of the codebase does without opening it.
+
 **Verified against `d3b1fce` (main, 2026-08-19)** and the legacy checkout at
 `../climate-project`, by reading the Mongoose models and counting their call sites. Nothing
 here is derived from memory of either codebase.
@@ -126,13 +152,14 @@ named `QuestionBankItem` and `QuestionLibraryItem` — symmetric, and neither co
 ### `QuestionCategory` (hierarchical, bilingual)
 
 `Id`, `CompanyId` (**nullable — null is global**), `ParentCategoryId` (nullable, self-ref),
-`NameEn`, `NameEs`, `DescriptionEn`, `DescriptionEs`, `Level`, `Path`, `Order`, `Icon`,
-`Color`, `IsActive`, `CreatedByUserId`, `CreatedAt`, `UpdatedAt`.
+`NameEn`, `NameEs`, `DescriptionEn`, `DescriptionEs`, `Order`, `Icon`, `Color`, `IsActive`,
+`CreatedByUserId`, `CreatedAt`, `UpdatedAt`.
 
-`Level` and `Path` are **recomputed from `ParentCategoryId`**, never migrated, and asserted
-against the legacy values as an integrity check — exactly the treatment `Department` already
-gets in the ETL pipeline, and for the same reason: a stored path is a denormalisation that
-can drift from the tree it describes.
+**No `Level`, no `Path`** (corrected — see the amendment banner). The hierarchy is the parent
+pointer and nothing else, which is exactly what `Department` does: it carries
+`ParentDepartmentId` and no depth or path column at all. Both are derivable from the pointer,
+and a stored copy is a denormalisation that can drift from the tree it describes. If a UI needs
+depth, it computes it from the tree it already fetched.
 
 `question_count` and `subcategory_count` are **dropped**. They are legacy denormalisations
 maintained by an `updateCounts()` method; a `COUNT(*)` is correct by construction and cannot
@@ -156,7 +183,7 @@ exactly one row per item, and a child table would buy nothing.
 
 `Id`, `CompanyId` (nullable — global), `QuestionCategoryId`, `TextEn`, `TextEs`, `Language`,
 `Type`, `ScaleMin`, `ScaleMax`, `ScaleLabelMinEn/Es`, `ScaleLabelMaxEn/Es`, `Dimension`,
-`ReverseCoded`, `UsageCount`, `LastUsedAt`, `IsActive`, `Version`,
+`UsageCount`, `LastUsedAt`, `IsActive`, `Version`,
 `PreviousVersionId` (nullable self-ref), `CreatedByUserId`, `LastModifiedByUserId`,
 `CreatedAt`, `UpdatedAt`.
 
@@ -175,6 +202,42 @@ intermediate points are a **named, reported loss** rather than a silent truncati
 per-point labels are ever wanted, they are additive to both `Question` and this table.
 
 ---
+
+## Type vocabulary — the deferral this document exists to resolve
+
+`QuestionTypes.All`'s own doc comment defers two legacy types **to #58**: `scale`, which overlaps
+`likert`/`rating`, and `binary`, which overlaps `yes_no`. Leaving them open would mean this design
+failed at its one job.
+
+**Resolved: neither is added.** The overlap the vocabulary comment describes is real, and adding
+both would bake in the duplication that vocabulary exists to remove. A repository item that would
+have been `scale` is `likert` or `rating`; one that would have been `binary` is `yes_no`. With the
+migration dropped there are no legacy rows to reconcile either, so this costs nothing but a written
+decision. `matrix` stays absent for the reason `QuestionTypes` already gives — the schema cannot
+represent it (#197).
+
+**A repository item's type must come from the surface that will instantiate it, not from `All`.**
+`QuestionTypes.All` has seven entries; `ForSurvey` (`QuestionTypes.cs:81-89`) has six — it excludes
+`emoji_rating`, and `ForMicroclimate` differs again. An item typed from `All` can therefore be
+authored and then be **uninstantiable**, which is a validation error discovered at the worst
+possible moment. So: validate a library item's type against the intersection of `ForSurvey` and
+`ForMicroclimate`, or carry an explicit target-surface field on the item. The intersection is
+simpler and is the recommendation.
+
+## Reverse scoring: removed here, and why it is its own problem
+
+`ReverseCoded` is gone from `QuestionLibraryItem` (see the amendment banner). It cannot be carried
+safely while it has no target: `Question` has no such column, nothing in `src/` implements reverse
+scoring, and instantiation is a COPY — so the flag would be silently dropped at the moment it starts
+to matter, inverting that question's contribution to its dimension score with **no error and no
+reconciliation failure**. A silent sign flip on a climate score is the worst class of bug this
+product can have.
+
+Reverse scoring is a real feature and worth having. It needs: a column on `Question`, the inversion
+applied inside `SurveyAggregation` (the single source, so results / statistics / analytics / reports
+all agree), and a decision about historical responses already stored un-inverted. That is a
+self-contained piece of work and should be its own issue rather than a field smuggled in on a
+repository schema.
 
 ## Multi-tenancy
 
