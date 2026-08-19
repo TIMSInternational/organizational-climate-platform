@@ -1467,7 +1467,8 @@
     "escapeKey": "ESC",
     "commandPalette": "Paleta de comandos",
     "commandPaletteHint": "Escribe para filtrar y pulsa Intro para abrir una página.",
-    "commandPaletteEmpty": "No se encontraron resultados."
+    "commandPaletteEmpty": "No se encontraron resultados.",
+    "commandPaletteResults": "Resultados"
   },
   "success": {
     "saved": "Guardado exitosamente",
