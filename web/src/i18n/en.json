@@ -1467,7 +1467,8 @@
     "escapeKey": "ESC",
     "commandPalette": "Command palette",
     "commandPaletteHint": "Type to filter, then press Enter to open a page.",
-    "commandPaletteEmpty": "No results found."
+    "commandPaletteEmpty": "No results found.",
+    "commandPaletteResults": "Results"
   },
   "success": {
     "saved": "Saved successfully",

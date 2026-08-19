@@ -1,9 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { ArrowRight, Search } from 'lucide-react'
+import { ArrowRight, ClipboardList, FileText, MessageCircleQuestion, Network, Search, Target, Users } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../ui'
 import type { NavSection } from '../../navigation/navSections'
+import { search, hrefForResult, type SearchEntityType, type SearchResultItem } from '../../features/search/api/search'
 
 /**
  * The Cmd+K palette, ported from the ForMaps shell
@@ -45,6 +46,28 @@ interface PaletteItem {
   group: string
 }
 
+/**
+ * The glyph for each searchable kind (#135).
+ *
+ * A result row is drawn exactly like a nav row -- same icon box, same two lines -- because
+ * to the person typing they are the same thing: somewhere to go. Only the group heading
+ * distinguishes them.
+ */
+const RESULT_ICONS: Record<SearchEntityType, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+  survey: ClipboardList,
+  question: MessageCircleQuestion,
+  department: Network,
+  user: Users,
+  action_plan: Target,
+  report: FileText,
+}
+
+/** Below this, a query is too broad to be worth a round-trip on every keystroke. */
+const MIN_QUERY_LENGTH = 2
+
+/** Per type. The palette is a jump-to affordance, not a results page. */
+const RESULT_LIMIT = 5
+
 export interface CommandPaletteProps {
   sections: NavSection[]
 }
@@ -55,8 +78,10 @@ export function CommandPalette({ sections }: CommandPaletteProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
+  const [results, setResults] = useState<SearchResultItem[]>([])
   const listId = useId()
   const listRef = useRef<HTMLDivElement>(null)
+  const baseUrl = import.meta.env.VITE_API_BASE_URL as string
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -109,13 +134,64 @@ export function CommandPalette({ sections }: CommandPaletteProps) {
     return collected
   }, [sections, t])
 
-  const matches = useMemo(() => {
+  const navMatches = useMemo(() => {
     const needle = query.trim().toLowerCase()
     if (!needle) return items
     return items.filter((item) =>
       `${item.label} ${item.description ?? ''}`.toLowerCase().includes(needle),
     )
   }, [items, query])
+
+  /**
+   * Search the data, not just the menu (#135).
+   *
+   * Debounced and abortable: a palette fires a request per keystroke otherwise, and
+   * out-of-order responses would let an earlier, broader query overwrite a later, narrower
+   * one -- the classic type-ahead flicker. The abort makes the last request the only one
+   * that can write state.
+   *
+   * Failures are swallowed to an empty list on purpose. The nav half of this palette still
+   * works without the API, and an error banner inside a jump-to sheet would be louder than
+   * the feature is important. `close()` clears the query, so the next open starts clean.
+   */
+  useEffect(() => {
+    const needle = query.trim()
+    if (!open || needle.length < MIN_QUERY_LENGTH) {
+      setResults([])
+      return
+    }
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
+      void search(baseUrl, needle, { limit: RESULT_LIMIT, signal: controller.signal })
+        .then((response) => setResults(response.groups.flatMap((group) => group.items)))
+        .catch(() => setResults([]))
+    }, 200)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [open, query, baseUrl])
+
+  const resultItems = useMemo<PaletteItem[]>(() => {
+    const group = t('shell.commandPaletteResults')
+    return results.flatMap((item) => {
+      const href = hrefForResult(item)
+      // A row with nowhere to go is dropped rather than rendered dead -- see hrefForResult.
+      if (!href) return []
+      return [{
+        labelKey: `search:${item.type}:${item.id}`,
+        label: item.title,
+        description: item.subtitle ?? undefined,
+        href,
+        icon: RESULT_ICONS[item.type],
+        group,
+      }]
+    })
+  }, [results, t])
+
+  // Destinations first, data second: the menu is instant and local, the results arrive a
+  // beat later, and a list that reorders under the cursor mid-type is the thing to avoid.
+  const matches = useMemo(() => [...navMatches, ...resultItems], [navMatches, resultItems])
 
   // A stale index survives a narrowing query and points past the end, which would
   // make Enter do nothing on a list that visibly has rows.
@@ -127,6 +203,7 @@ export function CommandPalette({ sections }: CommandPaletteProps) {
     setOpen(false)
     setQuery('')
     setSelected(0)
+    setResults([])
   }
 
   function go(href: string) {
