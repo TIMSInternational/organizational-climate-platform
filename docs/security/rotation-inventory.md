@@ -251,7 +251,10 @@ never values, per this file's rule. Evidence per console:
   `climate-project-api/prod/database-connection-string` (`…-jgthiv`);
   `INTERNAL_API_KEY_SECRET_ARN` → `climate-project-api/prod/InternalApiKey` (`…-rILWWK`) —
   all account `747814092517`, us-east-1, set 2026-08-04 — plus the two CORS origins
-  (production frontend: `https://organizational-climate-platform.vercel.app`).
+  (production frontend: `https://web-one-green-86.vercel.app` — corrected 2026-08-18;
+  the previously-recorded `organizational-climate-platform.vercel.app` is the LEGACY
+  deployment, which is consistent with this document's own finding that the legacy
+  Vercel project is not visible from this account).
 - Exactly one environment secret exists: `MIGRATION_DATABASE_CONNECTION_STRING`
   (set 2026-08-04 19:32 UTC). No stray secret beyond the inventory's list.
 

@@ -119,7 +119,20 @@ interface SurveyCopyRead {
  * setting rather than content, so it stays editable while the survey is live and stops
  * once it closes.
  */
-const SETTINGS_EDITABLE_STATUSES = ['draft', 'scheduled', 'active']
+export const SETTINGS_EDITABLE_STATUSES = ['draft', 'scheduled', 'active']
+
+/**
+ * Whether a survey can still be distributed, and therefore whether the entry points into
+ * the distribution page should exist for it.
+ *
+ * Exported so the two links (the survey's header action and its row action in the list)
+ * and this module's own `editable` flag all read the SAME set. Three copies of
+ * "draft, scheduled, active" is how a link comes to be offered for a survey whose page
+ * then refuses every control on it.
+ */
+export function canDistribute(status: string): boolean {
+  return SETTINGS_EDITABLE_STATUSES.includes(status)
+}
 
 /**
  * Which locales this survey must have copy in.

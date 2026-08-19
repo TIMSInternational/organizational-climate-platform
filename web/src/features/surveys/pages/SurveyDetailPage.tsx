@@ -23,6 +23,7 @@ import {
   Table,
 } from '../../../components/ui'
 import { languageLabel, statusLabel, typeLabel } from '../surveyVocabulary'
+import { canDistribute } from '../api/surveyInvitationCopy'
 import { calendarDay } from '../../../lib/calendarDay'
 
 /**
@@ -164,6 +165,19 @@ export default function SurveyDetailPage() {
             {survey.responseCount > 0 && (
               <Button asChild variant="primary">
                 <Link to={`/surveys/${id}/results`}>{t('surveyResults.viewResults')}</Link>
+              </Button>
+            )}
+            {/* The way in to distribution, and until now it did not exist: the router
+                comment promises this page is "reached from a survey, not from the
+                sidebar" and nothing implemented the reaching, so the only way to open it
+                was to type the URL. Gated on the same statuses that decide whether its
+                controls do anything (`canDistribute`), because a link to a page that
+                refuses every action on arrival is worse than no link. */}
+            {canDistribute(survey.status) && (
+              <Button asChild variant="outline">
+                <Link to={`/surveys/${id}/distribution`}>
+                  {t('surveys.distribution.title')}
+                </Link>
               </Button>
             )}
             <Button type="button" variant="outline" disabled={duplicating} onClick={handleDuplicate}>

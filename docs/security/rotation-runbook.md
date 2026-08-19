@@ -63,7 +63,9 @@ for i in $(seq 1 20); do curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 
   https://bhgrdkd4gt.us-east-1.awsapprunner.com/ready; done
 ```
 
-**PROBE-LOGIN** — open `https://organizational-climate-platform.vercel.app`, log in with a
+**PROBE-LOGIN** — open `https://web-one-green-86.vercel.app` (the production frontend;
+the old `organizational-climate-platform.vercel.app` is a legacy deployment — see
+`README.md` "Deployments", corrected 2026-08-18), log in with a
 known account, open a page that renders data (not just the shell).
 
 **REDEPLOY** — how a changed secret reaches the running API. App Runner resolves

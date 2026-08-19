@@ -1,0 +1,272 @@
+{
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+  "GET /surveys/s1": {
+    "id": "s1",
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "language": "both",
+    "status": "active",
+    "title": "Q4 Climate Survey",
+    "resolvedLocale": "en",
+    "fallbackFields": [],
+    "departmentIds": [
+      "d1",
+      "d2"
+    ],
+    "responseCount": 96,
+    "editable": true,
+    "requiredLocales": [
+      "en",
+      "es"
+    ],
+    "settings": {
+      "invitationCustomSubject": "Your invitation",
+      "invitationCustomMessage": "Please answer."
+    }
+  },
+  "GET /surveys/s1/distribution": {
+    "id": "dist-1",
+    "surveyId": "s1",
+    "accessType": "public",
+    "publicLink": "https://climate.example/s/7f3a9c21b4e8",
+    "qrCodeUrl": "",
+    "accessRules": {},
+    "qrCustomization": {},
+    "tokenizedLinksGenerated": 208,
+    "regeneratedCount": 2,
+    "lastRegeneratedAt": "2026-08-04T09:12:00Z",
+    "totalAccesses": 341,
+    "uniqueVisitors": 219,
+    "lastAccessedAt": "2026-08-17T18:22:00Z",
+    "invitations": {
+      "total": 208,
+      "pending": 4,
+      "sent": 61,
+      "opened": 33,
+      "started": 12,
+      "completed": 96,
+      "revoked": 2,
+      "expired": 0
+    },
+    "anonymity": {
+      "anonymous": false,
+      "highestRecordableState": "completed",
+      "suppressedStates": [],
+      "guarantee": "Tracking runs to completion, so each invitation records when it was opened, started and completed."
+    },
+    "createdAt": "2026-07-28T10:00:00Z",
+    "updatedAt": "2026-08-17T18:22:00Z"
+  },
+  "GET /surveys/s1/invitations": {
+    "invitations": [
+      {
+        "id": "i1",
+        "surveyId": "s1",
+        "userId": "u1",
+        "email": "ada.lovelace@northwind.example",
+        "status": "completed",
+        "isExpired": false,
+        "sentAt": "2026-08-01T09:00:00Z",
+        "openedAt": "2026-08-01T11:20:00Z",
+        "startedAt": "2026-08-01T11:22:00Z",
+        "completedAt": "2026-08-01T11:31:00Z",
+        "reminderCount": 0,
+        "lastReminderSent": null,
+        "expiresAt": "2026-09-01T09:00:00Z",
+        "createdAt": "2026-08-01T09:00:00Z"
+      },
+      {
+        "id": "i2",
+        "surveyId": "s1",
+        "userId": "u2",
+        "email": "grace.hopper@northwind.example",
+        "status": "started",
+        "isExpired": false,
+        "sentAt": "2026-08-01T09:00:00Z",
+        "openedAt": "2026-08-02T08:05:00Z",
+        "startedAt": "2026-08-02T08:07:00Z",
+        "completedAt": null,
+        "reminderCount": 1,
+        "lastReminderSent": "2026-08-09T09:00:00Z",
+        "expiresAt": "2026-09-01T09:00:00Z",
+        "createdAt": "2026-08-01T09:00:00Z"
+      },
+      {
+        "id": "i3",
+        "surveyId": "s1",
+        "userId": "u3",
+        "email": "alan.turing@northwind.example",
+        "status": "opened",
+        "isExpired": false,
+        "sentAt": "2026-08-01T09:00:00Z",
+        "openedAt": "2026-08-03T14:41:00Z",
+        "startedAt": null,
+        "completedAt": null,
+        "reminderCount": 2,
+        "lastReminderSent": "2026-08-14T09:00:00Z",
+        "expiresAt": "2026-09-01T09:00:00Z",
+        "createdAt": "2026-08-01T09:00:00Z"
+      },
+      {
+        "id": "i4",
+        "surveyId": "s1",
+        "userId": "u4",
+        "email": "katherine.johnson@northwind.example",
+        "status": "sent",
+        "isExpired": false,
+        "sentAt": "2026-08-01T09:00:00Z",
+        "openedAt": null,
+        "startedAt": null,
+        "completedAt": null,
+        "reminderCount": 2,
+        "lastReminderSent": "2026-08-14T09:00:00Z",
+        "expiresAt": "2026-09-01T09:00:00Z",
+        "createdAt": "2026-08-01T09:00:00Z"
+      },
+      {
+        "id": "i5",
+        "surveyId": "s1",
+        "userId": "u5",
+        "email": "margaret.hamilton@northwind.example",
+        "status": "pending",
+        "isExpired": false,
+        "sentAt": null,
+        "openedAt": null,
+        "startedAt": null,
+        "completedAt": null,
+        "reminderCount": 0,
+        "lastReminderSent": null,
+        "expiresAt": "2026-09-04T09:00:00Z",
+        "createdAt": "2026-08-15T16:30:00Z"
+      },
+      {
+        "id": "i6",
+        "surveyId": "s1",
+        "userId": "u6",
+        "email": "dorothy.vaughan@northwind.example",
+        "status": "revoked",
+        "isExpired": false,
+        "sentAt": "2026-08-01T09:00:00Z",
+        "openedAt": null,
+        "startedAt": null,
+        "completedAt": null,
+        "reminderCount": 0,
+        "lastReminderSent": null,
+        "expiresAt": "2026-09-01T09:00:00Z",
+        "createdAt": "2026-08-01T09:00:00Z"
+      }
+    ],
+    "summary": {
+      "total": 208,
+      "pending": 4,
+      "sent": 61,
+      "opened": 33,
+      "started": 12,
+      "completed": 96,
+      "revoked": 2,
+      "expired": 0
+    },
+    "anonymity": {
+      "anonymous": false,
+      "highestRecordableState": "completed",
+      "suppressedStates": [],
+      "guarantee": "Tracking runs to completion, so each invitation records when it was opened, started and completed."
+    }
+  },
+  "GET /admin/departments": {
+    "departments": [
+      {
+        "id": "d1",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Engineering",
+        "parentDepartmentId": null
+      },
+      {
+        "id": "d2",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Operations",
+        "parentDepartmentId": null
+      },
+      {
+        "id": "d3",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "People",
+        "parentDepartmentId": null
+      }
+    ]
+  },
+  "GET /admin/users": {
+    "users": [
+      {
+        "id": "u1",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Ada Lovelace",
+        "email": "ada.lovelace@northwind.example",
+        "role": "company_admin",
+        "departmentId": "d1",
+        "isActive": true
+      },
+      {
+        "id": "u2",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Grace Hopper",
+        "email": "grace.hopper@northwind.example",
+        "role": "employee",
+        "departmentId": "d1",
+        "isActive": true
+      },
+      {
+        "id": "u3",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Alan Turing",
+        "email": "alan.turing@northwind.example",
+        "role": "employee",
+        "departmentId": "d2",
+        "isActive": true
+      }
+    ]
+  },
+  "GET /admin/companies": {
+    "companies": [
+      {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "name": "Northwind Logistics",
+        "emailDomain": "northwind.example",
+        "industry": "Transportation",
+        "size": "large",
+        "country": "Colombia",
+        "subscriptionTier": "enterprise",
+        "createdAt": "2025-03-14T09:12:00Z"
+      },
+      {
+        "id": "22222222-2222-2222-2222-222222222222",
+        "name": "Helios Manufacturing",
+        "emailDomain": "helios.example",
+        "industry": "Manufacturing",
+        "size": "medium",
+        "country": "Mexico",
+        "subscriptionTier": "professional",
+        "createdAt": "2025-06-02T16:40:00Z"
+      },
+      {
+        "id": "33333333-3333-3333-3333-333333333333",
+        "name": "Vela Health",
+        "emailDomain": "vela.example",
+        "industry": "Healthcare",
+        "size": "small",
+        "country": "Chile",
+        "subscriptionTier": "basic",
+        "createdAt": "2026-01-21T11:05:00Z"
+      }
+    ]
+  },
+  "GET /profile": {
+    "id": "u1",
+    "name": "Ada Lovelace",
+    "email": "ada.lovelace@northwind.example",
+    "role": "super_admin",
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "companyName": "Northwind Logistics"
+  }
+}

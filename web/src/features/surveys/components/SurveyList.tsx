@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import { canDistribute } from '../api/surveyInvitationCopy'
 import type { SurveyListItem } from '../api/surveys'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { formatMetric } from '../../../components/charts/formatMetric'
@@ -207,6 +208,19 @@ export default function SurveyList({ surveys }: SurveyListProps) {
                           aria-label={t('surveyResults.resultsForNamed', { title })}
                         >
                           {t('surveys.results')}
+                        </Link>
+                      </Button>
+                    )}
+                    {/* Same gate as the detail page's header action, from the same
+                        predicate. A closed or archived survey gets no link, because
+                        nothing on that page would act for it. */}
+                    {canDistribute(survey.status) && (
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          to={`/surveys/${survey.id}/distribution`}
+                          aria-label={t('surveys.distribution.distributionForNamed', { title })}
+                        >
+                          {t('surveys.distribution.title')}
                         </Link>
                       </Button>
                     )}
