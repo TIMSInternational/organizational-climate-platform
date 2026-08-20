@@ -272,7 +272,30 @@ export default function SurveyDetailPage() {
         pendingStatus={pendingStatus}
       />
 
-      <H2>{t('surveys.questions')}</H2>
+      <div className="flex flex-wrap items-center justify-between gap-inline">
+        <H2>{t('surveys.questions')}</H2>
+        {/*
+          #273. The way in to the question editor, and the reason when there is none.
+
+          Shown rather than silently absent, because "why can't I change this?" is the
+          question an author arrives with. The two conditions are the server's two
+          refusals in the order it checks them: a status that freezes content, then any
+          response existing even on a draft. `responseCount` is only a hint — the server
+          falls through to `db.Responses.AnyAsync` when the counter is zero — so this
+          gates the LINK and the editor still shows whatever the save is refused with.
+        */}
+        {survey.isContentEditable && survey.responseCount === 0 ? (
+          <Button asChild variant="outline">
+            <Link to={`/surveys/${id}/questions`}>{t('surveys.questionEditor.edit')}</Link>
+          </Button>
+        ) : (
+          <span className="text-sm text-fg-secondary">
+            {survey.responseCount > 0
+              ? t('surveys.questionEditor.lockedByResponses')
+              : t('surveys.questionEditor.lockedByStatus')}
+          </span>
+        )}
+      </div>
       <SurveyQuestionList questions={survey.questions} />
     </div>
   )

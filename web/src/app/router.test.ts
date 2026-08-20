@@ -43,6 +43,10 @@ describe('router', () => {
     // name — which nothing mails yet. Both shipped with the API minting
     // links and the router serving nothing, so every one of them reached the error
     // boundary — this is the assertion that would have caught it.
+    // #273's editor. Asserted here for the same reason the two token routes are: a route
+    // the product links to and the router does not declare reaches the error boundary.
+    expect(paths).toContain('/surveys/:id/questions')
+
     expect(paths).toContain('/s/:token')
     expect(paths).toContain('/survey-invitations/:token')
 

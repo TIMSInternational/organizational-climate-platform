@@ -228,6 +228,52 @@ describe('SurveyDetailPage', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
   })
 
+  /**
+   * #273's way in. Offered only when BOTH of the server's refusals would pass, and
+   * replaced by the reason rather than by nothing when either would not — "why can't I
+   * change this?" is the question an author arrives with, and an absent control answers
+   * it with silence.
+   */
+  it('offers the question editor for a draft nobody has answered', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(detail({ isContentEditable: true, responseCount: 0 }))))
+    renderPage()
+
+    const link = await screen.findByRole('link', { name: 'Edit questions' })
+    expect(link.getAttribute('href')).toBe('/surveys/s1/questions')
+  })
+
+  it('explains the lock instead of offering the editor once responses exist', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ok(detail({ isContentEditable: true, responseCount: 3 }))),
+    )
+    renderPage()
+
+    expect(
+      await screen.findByText(
+        'This survey already has responses, so its questions can no longer be changed.',
+      ),
+    ).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Edit questions' })).toBeNull()
+  })
+
+  it('explains the lock when the status has frozen the content', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        ok(detail({ status: 'active', isContentEditable: false, responseCount: 0 })),
+      ),
+    )
+    renderPage()
+
+    expect(
+      await screen.findByText(
+        "This survey's content is frozen: only a draft or a scheduled survey can be rewritten.",
+      ),
+    ).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Edit questions' })).toBeNull()
+  })
+
   it('drives the editability notice from isContentEditable rather than from the status word', async () => {
     // The server applies a strictly stronger rule than "draft ⇒ editable" (it also
     // refuses when any response exists), so restating the status check here would be

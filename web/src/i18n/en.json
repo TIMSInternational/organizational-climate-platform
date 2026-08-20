@@ -1834,7 +1834,26 @@
     "noParticipationTarget": "No expected number of respondents was set for this survey, so it has no participation rate.",
     "use": "Use",
     "useNamed": "Use {name}",
-    "previewNamed": "Preview {name}"
+    "previewNamed": "Preview {name}",
+    "questionEditor": {
+      "category": "Dimension",
+      "categoryHint": "Questions sharing a dimension are aggregated together on the results map.",
+      "commentPrompt": "Comment prompt",
+      "commentRequired": "A comment is required",
+      "description": "Reword, reorder or remove this survey's questions. Answer options keep their stored key, so results recorded so far stay comparable.",
+      "edit": "Edit questions",
+      "lockedByResponses": "This survey already has responses, so its questions can no longer be changed.",
+      "lockedByStatus": "This survey's content is frozen: only a draft or a scheduled survey can be rewritten.",
+      "moveDown": "Move down",
+      "moveUp": "Move up",
+      "optionLabel": "Option",
+      "remove": "Remove",
+      "required": "An answer is required",
+      "scaleLabelMax": "Label for the highest point",
+      "scaleLabelMin": "Label for the lowest point",
+      "text": "Question",
+      "title": "Edit questions"
+    }
   },
   "users": {
     "userManagement": "User Management",
