@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Email;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
@@ -128,8 +129,6 @@ public static class InvitationEndpoints
 
         db.UserInvitations.Add(invitation);
         DemographicValueStore.AddForInvitation(db, invitation.Id, invitationDemographics.Values);
-        invitation.Status = InvitationValidation.StatusSent;
-        invitation.SentAt = now;
 
         // Committed before the mail goes out (#100). Under the logging stub the order did not
         // matter; with a real provider it does, in one direction only -- mailing first and
@@ -138,7 +137,17 @@ public static class InvitationEndpoints
         // never sent. Saving first can only produce the opposite: a committed invitation whose
         // mail failed, which is logged and is exactly what POST /invitations/{id}/resend is for.
         await db.SaveChangesAsync(cancellationToken);
-        await emailSender.SendAsync(invitation, cancellationToken);
+
+        // `sent` is recorded only when a send actually happened. It used to be written above,
+        // before this method even called the sender, so an invitation that could not be
+        // emailed still claimed delivery -- and the users screen rendered it as "Sent" /
+        // "Enviada". Production has run with no mail provider since it went live, so that was
+        // every invitation ever created.
+        //
+        // A failed send leaves the row `pending`, which is what it already was and what the
+        // screen already renders. `POST /invitations/{id}/resend` is the retry. No new status
+        // and no migration: the honest state existed all along.
+        await RecordDeliveryAsync(db, emailSender, invitation, now, cancellationToken);
 
         return Results.Json(ToDetail(invitation, DemographicValueStore.ToMap(invitationDemographics.Values)), statusCode: 201);
     }
@@ -192,9 +201,12 @@ public static class InvitationEndpoints
             InvitationToken = Guid.NewGuid().ToString("N"),
             InvitationType = InvitationValidation.TypeEmployeeSelfSignup,
             Role = request.Role,
-            Status = InvitationValidation.StatusSent,
+            // NOT `sent`, and no `SentAt`. A shareable link has no addressee and this method
+            // never calls the sender -- the admin distributes the link themselves. Recording
+            // it as sent claimed a delivery that not only failed but was never attempted.
+            // `pending` is exactly right: it is awaiting somebody redeeming it.
+            Status = InvitationValidation.StatusPending,
             ExpiresAt = now.Add(InvitationLifetime),
-            SentAt = now,
             ReminderCount = 0,
         };
 
@@ -232,18 +244,64 @@ public static class InvitationEndpoints
         var now = DateTimeOffset.UtcNow;
         invitation.InvitationToken = Guid.NewGuid().ToString("N");
         invitation.ExpiresAt = now.Add(InvitationLifetime);
+        // ReminderCount counts ATTEMPTS, so it rises either way -- an admin pressing resend
+        // four times against a dead provider should be able to see that they did. The two
+        // fields that assert a send instead of an attempt, `LastReminderSentAt` and `SentAt`,
+        // are written below and only if one happened.
         invitation.ReminderCount += 1;
-        invitation.LastReminderSentAt = now;
-        invitation.Status = InvitationValidation.StatusSent;
-        invitation.SentAt = now;
 
         // Same ordering as CreateAsync, and for the same reason: the freshly rotated token must
         // exist in the database before it is put in an inbox.
         await db.SaveChangesAsync(cancellationToken);
-        await emailSender.SendAsync(invitation, cancellationToken);
+
+        var resendOutcome = await RecordDeliveryAsync(db, emailSender, invitation, now, cancellationToken);
+        if (resendOutcome?.Delivered == true)
+        {
+            invitation.LastReminderSentAt = now;
+            await db.SaveChangesAsync(cancellationToken);
+        }
 
         var demographics = await DemographicValueStore.LoadForInvitationsAsync(db, [invitation.Id], cancellationToken);
         return Results.Ok(ToDetail(invitation, demographics.GetValueOrDefault(invitation.Id, DemographicValueStore.Empty)));
+    }
+
+    /// <summary>
+    /// Attempts delivery and promotes the invitation to <c>sent</c> only if the provider took
+    /// it. Returns the outcome, or <c>null</c> when no attempt was made.
+    ///
+    /// The sender is not called at all for an invitation with no address: a shareable link is
+    /// distributed by the admin, and "no addressee" is not a failed delivery, it is the
+    /// absence of one. Recording either as `sent` is the defect this exists to prevent.
+    ///
+    /// A second `SaveChangesAsync` is the cost of honesty here, and it is the right way round.
+    /// The row must be committed before its token can be put in an inbox — mailing first and
+    /// saving second can land a link in someone's inbox that no row backs, and a recipient
+    /// clicking a 404 cannot tell that from an invitation that was never sent. This ordering
+    /// can only produce the opposite: a committed invitation whose mail failed, which is
+    /// visible as `pending` and is what resend is for.
+    /// </summary>
+    private static async Task<EmailSendOutcome?> RecordDeliveryAsync(
+        ClimateProjectDbContext db,
+        IInvitationEmailSender emailSender,
+        UserInvitation invitation,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        if (invitation.Email is null)
+        {
+            return null;
+        }
+
+        var outcome = await emailSender.SendAsync(invitation, cancellationToken);
+        if (!outcome.Delivered)
+        {
+            return outcome;
+        }
+
+        invitation.Status = InvitationValidation.StatusSent;
+        invitation.SentAt = now;
+        await db.SaveChangesAsync(cancellationToken);
+        return outcome;
     }
 
     private static async Task<IResult> ListAsync(

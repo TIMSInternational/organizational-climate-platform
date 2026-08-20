@@ -57,7 +57,7 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     /// its own work cannot give, because it only ever measures its own window.
     /// </para>
     /// <para>
-    /// The five, and why each is allowed:
+    /// The six, and why each is allowed:
     /// <list type="number">
     ///   <item><description>
     ///     <see cref="PostgresContainerFixture"/> -- the one host the whole collection shares.
@@ -70,6 +70,16 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     ///     <c>NotificationEndpointsTests</c> -- three tests (a failing sender, a bouncing sender,
     ///     a command-counting interceptor) whose customised host IS the test. One each.
     ///   </description></item>
+    ///   <item><description>
+    ///     <c>InvitationEndpointsTests</c> -- one test, and it is the same reason as the three
+    ///     above: a host whose <c>IInvitationEmailSender</c> DELIVERS is the test. The shared
+    ///     host deliberately configures no mail provider, which is what every other invitation
+    ///     test needs and is what production has been running; that host can therefore only
+    ///     ever prove the failure direction. Without this one, "an invitation is recorded as
+    ///     sent when the provider takes it" is unprovable, and the assertion that it is NOT
+    ///     recorded as sent otherwise would be vacuous -- a test that passes because the code
+    ///     never writes that status at all would look identical.
+    ///   </description></item>
     /// </list>
     /// </para>
     /// <para>
@@ -78,7 +88,7 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     /// another. If you need one more host, say which of the reasons above yours is like.
     /// </para>
     /// </summary>
-    public const int HostBudget = 5;
+    public const int HostBudget = 6;
 
     /// <summary>
     /// Counts the database commands this application sends. Reset it immediately before the

@@ -3,12 +3,16 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Email;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using ClimateProject.IntegrationTests.Support;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace ClimateProject.IntegrationTests.OrgStructure;
 
@@ -16,6 +20,10 @@ namespace ClimateProject.IntegrationTests.OrgStructure;
 public class InvitationEndpointsTests : IAsyncLifetime
 {
     private readonly AuthWebApplicationFactory _factory;
+    /// Kept so one test can build a SECOND host with a delivering sender. The shared
+    /// fixture host is deliberately left alone: it configures no mail provider, which is
+    /// what every other test here needs.
+    private readonly string _postgresConnectionString;
     private readonly string _companyADomain = $"invitea-{Guid.NewGuid():N}.test";
     private readonly string _companyBDomain = $"inviteb-{Guid.NewGuid():N}.test";
     private Guid _companyAId;
@@ -24,6 +32,7 @@ public class InvitationEndpointsTests : IAsyncLifetime
     public InvitationEndpointsTests(PostgresContainerFixture postgres)
     {
         _factory = postgres.App;
+        _postgresConnectionString = postgres.ConnectionString;
     }
 
     public async Task InitializeAsync()
@@ -74,7 +83,11 @@ public class InvitationEndpointsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var created = await response.Content.ReadFromJsonAsync<InvitationDetail>();
         Assert.Equal(Roles.CompanyAdmin, created!.Role);
-        Assert.Equal(InvitationValidation.StatusSent, created.Status);
+        // `pending`, not `sent`. This assertion used to read StatusSent, and it passed for the
+        // wrong reason: the integration host configures no mail provider, so nothing was ever
+        // delivered -- the endpoint simply wrote `sent` before calling the sender at all. The
+        // status now follows the send, and the dedicated tests below pin both directions.
+        Assert.Equal(InvitationValidation.StatusPending, created.Status);
         Assert.False(string.IsNullOrEmpty(created.Token));
     }
 
@@ -386,5 +399,146 @@ public class InvitationEndpointsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
         var link = await accepted.Content.ReadFromJsonAsync<InvitationDetail>();
         Assert.Equal("onsite", link!.Demographics["work_mode"]);
+    }
+
+    /// <summary>
+    /// The defect this file's own assertion used to encode. Production has run with
+    /// `Email:Provider = none` since it went live, so every invitation ever created claimed a
+    /// delivery that never happened, and the users screen rendered it as "Sent" / "Enviada".
+    /// </summary>
+    [Fact]
+    public async Task An_invitation_is_not_recorded_as_sent_when_no_mail_provider_is_configured()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync("/admin/invitations", new CreateInvitationRequest(
+            InvitationType: InvitationValidation.TypeEmployeeDirect,
+            Email: "unreachable@invitee.test",
+            CompanyId: _companyAId,
+            DepartmentId: null,
+            Role: Roles.Employee));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<InvitationDetail>();
+
+        Assert.Equal(InvitationValidation.StatusPending, created!.Status);
+        // The timestamp matters as much as the status: a SentAt on a mail that never left is
+        // the number an operator would use to decide nobody needs chasing.
+        Assert.Null(created.SentAt);
+
+        // And it is the persisted row that is honest, not merely the response.
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var stored = await db.UserInvitations.SingleAsync(i => i.Id == created.Id);
+        Assert.Equal(InvitationValidation.StatusPending, stored.Status);
+        Assert.Null(stored.SentAt);
+    }
+
+    /// <summary>
+    /// A shareable link has no addressee and the endpoint never calls a sender at all — so
+    /// `sent` was not even a failed delivery, it was a delivery that was never attempted.
+    /// </summary>
+    [Fact]
+    public async Task A_shareable_link_is_never_recorded_as_sent_because_nothing_is_ever_sent()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync(
+            "/admin/invitations/shareable-link",
+            new CreateShareableLinkRequest(_companyAId, null, Roles.Employee, null));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var link = await response.Content.ReadFromJsonAsync<InvitationDetail>();
+
+        Assert.Null(link!.Email);
+        Assert.Equal(InvitationValidation.StatusPending, link.Status);
+        Assert.Null(link.SentAt);
+    }
+
+    /// <summary>
+    /// Resend distinguishes an attempt from a delivery. An admin pressing it four times
+    /// against a dead provider should be able to see that they did — so the counter rises —
+    /// while the two fields that assert a send stay empty.
+    /// </summary>
+    [Fact]
+    public async Task Resend_counts_the_attempt_but_does_not_claim_a_send_that_did_not_happen()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var created = await (await client.PostAsJsonAsync("/admin/invitations", new CreateInvitationRequest(
+            InvitationType: InvitationValidation.TypeEmployeeDirect,
+            Email: "resend-target@invitee.test",
+            CompanyId: _companyAId,
+            DepartmentId: null,
+            Role: Roles.Employee))).Content.ReadFromJsonAsync<InvitationDetail>();
+
+        var resent = await client.PostAsync($"/admin/invitations/{created!.Id}/resend", null);
+        Assert.Equal(HttpStatusCode.OK, resent.StatusCode);
+        var after = await resent.Content.ReadFromJsonAsync<InvitationDetail>();
+
+        Assert.Equal(1, after!.ReminderCount);
+        Assert.Equal(InvitationValidation.StatusPending, after.Status);
+        Assert.Null(after.SentAt);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var stored = await db.UserInvitations.SingleAsync(i => i.Id == created.Id);
+        Assert.Null(stored.LastReminderSentAt);
+        // The token still rotated: that is what resend is for, and it must not depend on the
+        // mail working.
+        Assert.NotEqual(created.Token, stored.InvitationToken);
+    }
+
+    /// <summary>
+    /// The other direction, which is what makes the tests above mean something: when a provider
+    /// DOES take the message, the invitation is recorded as sent with a timestamp.
+    /// </summary>
+    [Fact]
+    public async Task An_invitation_is_recorded_as_sent_when_the_provider_takes_it()
+    {
+        await using var factory = new DeliveringSenderFactory(_postgresConnectionString);
+        var client = factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync("/admin/invitations", new CreateInvitationRequest(
+            InvitationType: InvitationValidation.TypeEmployeeDirect,
+            Email: "reachable@invitee.test",
+            CompanyId: _companyAId,
+            DepartmentId: null,
+            Role: Roles.Employee));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<InvitationDetail>();
+
+        Assert.Equal(InvitationValidation.StatusSent, created!.Status);
+        Assert.NotNull(created.SentAt);
+    }
+
+    /// <summary>A sender that delivers, so the promotion path can be exercised at all.</summary>
+    private sealed class DeliveringInvitationEmailSender : IInvitationEmailSender
+    {
+        public Task<EmailSendOutcome> SendAsync(UserInvitation invitation, CancellationToken cancellationToken)
+            => Task.FromResult(EmailSendOutcome.Success());
+    }
+
+    private sealed class DeliveringSenderFactory(string connectionString)
+        : AuthWebApplicationFactory(connectionString)
+    {
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            base.ConfigureWebHost(builder);
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IInvitationEmailSender>();
+                services.AddScoped<IInvitationEmailSender>(_ => new DeliveringInvitationEmailSender());
+            });
+        }
     }
 }
