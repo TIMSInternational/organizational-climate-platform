@@ -1,3 +1,4 @@
+using System.Data.Common;
 using ClimateProject.Api.Infrastructure.Auditing;
 using ClimateProject.Application.Scheduling;
 using ClimateProject.Application.Surveys;
@@ -9,6 +10,7 @@ using ClimateProject.Workers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -41,9 +43,10 @@ public class SurveyLifecycleJobTests(PostgresContainerFixture postgres)
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 19, 12, 0, 0, TimeSpan.Zero);
 
-    private ClimateProjectDbContext CreateContext()
+    private ClimateProjectDbContext CreateContext(params IInterceptor[] interceptors)
         => new(new DbContextOptionsBuilder<ClimateProjectDbContext>()
             .UseNpgsql(postgres.ConnectionString)
+            .AddInterceptors(interceptors)
             .Options);
 
     private async Task<ClimateProjectDbContext> FreshAsync()
@@ -106,8 +109,10 @@ public class SurveyLifecycleJobTests(PostgresContainerFixture postgres)
         };
 
     private static Task<SurveyLifecycleSweepResult> SweepAsync(ClimateProjectDbContext db)
-        => SurveyLifecycleJob.RunAsync(
-            db, NullLoggerFactory.Instance, Now, SurveyLifecycleJob.DefaultBatchSize, default);
+        => SweepAsync(db, SurveyLifecycleJob.DefaultBatchSize);
+
+    private static Task<SurveyLifecycleSweepResult> SweepAsync(ClimateProjectDbContext db, int batchSize)
+        => SurveyLifecycleJob.RunAsync(db, NullLoggerFactory.Instance, Now, batchSize, default);
 
     private async Task<string> StatusOfAsync(Guid surveyId)
     {
@@ -306,6 +311,181 @@ public class SurveyLifecycleJobTests(PostgresContainerFixture postgres)
         Assert.Equal(1, result.Opened);
         Assert.Equal(0, result.Closed);
         Assert.Equal(SurveyStatuses.Active, await StatusOfAsync(survey.Id));
+    }
+
+    // -- every tenant at once --------------------------------------------------------------
+
+    /// <summary>
+    /// One sweep advances surveys in every company. The single most load-bearing property of
+    /// this job -- it is the only writer of <c>surveys.status</c> that exists, it runs with no
+    /// authenticated principal, and there is no per-tenant scheduler behind it, so a sweep that
+    /// silently served one tenant would leave every other company's surveys shut forever with
+    /// nothing anywhere reporting a problem. Two companies, one due to open and one due to
+    /// close, and both must move in the same tick.
+    /// </summary>
+    [Fact]
+    public async Task One_sweep_advances_surveys_in_every_company()
+    {
+        await using var db = await FreshAsync();
+        var (companyA, userA) = await SeedTenantAsync(db);
+        var (companyB, userB) = await SeedTenantAsync(db);
+        Assert.NotEqual(companyA, companyB);
+
+        var openingInA = NewSurvey(companyA, userA, SurveyStatuses.Scheduled, Now.AddDays(-1), Now.AddDays(20));
+        var closingInB = NewSurvey(companyB, userB, SurveyStatuses.Active, Now.AddDays(-30), Now.AddDays(-1));
+        db.Surveys.AddRange(openingInA, closingInB);
+        await db.SaveChangesAsync();
+
+        var result = await SweepAsync(db);
+
+        Assert.Equal(1, result.Opened);
+        Assert.Equal(1, result.Closed);
+        Assert.Equal(SurveyStatuses.Active, await StatusOfAsync(openingInA.Id));
+        Assert.Equal(SurveyStatuses.Closed, await StatusOfAsync(closingInB.Id));
+
+        // And each row's trail lands in its own tenant. Cross-tenant work with a mis-attributed
+        // audit row would put company B's transition into company A's /audit listing, which is
+        // a leak rather than a bookkeeping slip.
+        await using var read = CreateContext();
+        var rows = await read.AuditLogs.AsNoTracking().ToListAsync();
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(companyA, rows.Single(r => r.ResourceId == openingInA.Id.ToString()).CompanyId);
+        Assert.Equal(companyB, rows.Single(r => r.ResourceId == closingInB.Id.ToString()).CompanyId);
+    }
+
+    // -- racing a human ----------------------------------------------------------------------
+
+    /// <summary>
+    /// A transition made between this sweep's SELECT and its UPDATE wins; the job does not
+    /// clobber it.
+    ///
+    /// <para>The lease serialises this job against itself and against nothing else.
+    /// <c>PUT /surveys/{id}/status</c> is served by the API at any moment, and the window
+    /// between reading a candidate and writing it is the whole of a sweep. Unconditionally the
+    /// scheduler wins that race every time, and the transitions it would overwrite are exactly
+    /// the ones it refuses to make itself: <c>scheduled -&gt; draft</c> is the only remedy a
+    /// mis-dated survey has, and a survey opened out from under it lands in <c>active</c>, which
+    /// has no edge back to <c>draft</c> and whose content is frozen for good.</para>
+    ///
+    /// <para>The race is made deterministic with an interceptor rather than a second thread: it
+    /// fires once, after the sweep's first read of <c>surveys</c>, on its own connection.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_concurrent_transition_wins_over_the_sweep_instead_of_being_clobbered()
+    {
+        Guid surveyId;
+        await using (var seed = await FreshAsync())
+        {
+            var (companyId, userId) = await SeedTenantAsync(seed);
+            var survey = NewSurvey(companyId, userId, SurveyStatuses.Scheduled, Now.AddDays(-1), Now.AddDays(20));
+            seed.Surveys.Add(survey);
+            await seed.SaveChangesAsync();
+            surveyId = survey.Id;
+        }
+
+        // An administrator pulls the survey back to draft to re-date it -- the tracked read,
+        // assignment and save that `PUT /surveys/{id}/status` performs, on its own connection.
+        var human = new AfterFirstSurveyReadInterceptor(async () =>
+        {
+            await using var admin = CreateContext();
+            var mine = await admin.Surveys.SingleAsync(s => s.Id == surveyId);
+            mine.Status = SurveyStatuses.Draft;
+            mine.UpdatedAt = Now.AddMinutes(-1);
+            await admin.SaveChangesAsync();
+        });
+
+        await using var db = CreateContext(human);
+        var result = await SweepAsync(db);
+
+        // Without this the test would pass on a job that never read the row at all.
+        Assert.True(human.Fired, "the concurrent transition never ran, so nothing about the race was tested");
+
+        Assert.Equal(0, result.Opened);
+        Assert.Equal(SurveyStatuses.Draft, await StatusOfAsync(surveyId));
+
+        // No audit row either: a trail that records an open which did not happen is worse than
+        // one that records nothing.
+        await using var read = CreateContext();
+        Assert.Equal(0, await read.AuditLogs.CountAsync());
+    }
+
+    // -- what a sweep leaves behind ----------------------------------------------------------
+
+    /// <summary>
+    /// A transition stamps <c>updated_at</c>, and a refusal leaves it alone.
+    ///
+    /// <para>Not cosmetic. Every "recently changed" surface in the product orders on this column,
+    /// so a survey the platform closed on its own would be the one change an admin could not find
+    /// by looking at what changed. And the second half matters as much: a sweep that stamped
+    /// every row it examined would push every scheduled survey in the database to the top of that
+    /// listing every five minutes.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_transition_stamps_updated_at_and_a_refusal_leaves_it_alone()
+    {
+        await using var db = await FreshAsync();
+        var (companyId, userId) = await SeedTenantAsync(db);
+
+        var opening = NewSurvey(companyId, userId, SurveyStatuses.Scheduled, Now.AddDays(-1), Now.AddDays(20));
+        var closing = NewSurvey(companyId, userId, SurveyStatuses.Active, Now.AddDays(-30), Now.AddDays(-2));
+        var notYet = NewSurvey(companyId, userId, SurveyStatuses.Scheduled, Now.AddDays(1), Now.AddDays(20));
+        db.Surveys.AddRange(opening, closing, notYet);
+        await db.SaveChangesAsync();
+
+        var untouchedBefore = notYet.UpdatedAt;
+        Assert.NotEqual(Now, untouchedBefore);
+
+        await SweepAsync(db);
+
+        await using var read = CreateContext();
+        var rows = await read.Surveys.AsNoTracking().ToDictionaryAsync(s => s.Id, s => s.UpdatedAt);
+
+        Assert.Equal(Now, rows[opening.Id]);
+        Assert.Equal(Now, rows[closing.Id]);
+        Assert.Equal(untouchedBefore, rows[notYet.Id]);
+    }
+
+    /// <summary>
+    /// <c>MoreRemaining</c> means "the cap bit", and it is the only thing that tells an operator
+    /// a backlog is draining rather than stalled -- it is what the worker logs on. Pinned in both
+    /// directions, because the failure that matters is the quiet one: a flag stuck at false hides
+    /// a backlog, and a flag that fires whenever a page happens to be exactly full cries wolf on
+    /// every tick. The second assertion is the whole reason <c>TakeAsync</c> asks for
+    /// <c>cap + 1</c> rows instead of comparing the count to the cap.
+    /// </summary>
+    [Fact]
+    public async Task MoreRemaining_says_the_cap_bit_and_nothing_else()
+    {
+        await using (var seed = await FreshAsync())
+        {
+            var (companyId, userId) = await SeedTenantAsync(seed);
+            seed.Surveys.AddRange(
+                NewSurvey(companyId, userId, SurveyStatuses.Scheduled, Now.AddDays(-2), Now.AddDays(20)),
+                NewSurvey(companyId, userId, SurveyStatuses.Scheduled, Now.AddDays(-1), Now.AddDays(20)));
+            await seed.SaveChangesAsync();
+        }
+
+        // Two due, a cap of one: one moves, and the flag says there is more.
+        await using (var capped = CreateContext())
+        {
+            var result = await SweepAsync(capped, batchSize: 1);
+            Assert.Equal(1, result.Opened);
+            Assert.True(result.MoreRemaining);
+        }
+
+        // One due, the same cap: the page is exactly full and there is nothing behind it.
+        await using (var exact = CreateContext())
+        {
+            var result = await SweepAsync(exact, batchSize: 1);
+            Assert.Equal(1, result.Opened);
+            Assert.False(result.MoreRemaining);
+        }
+
+        // Nothing due at all.
+        await using var drained = CreateContext();
+        var empty = await SweepAsync(drained, batchSize: 1);
+        Assert.Equal(0, empty.Opened);
+        Assert.False(empty.MoreRemaining);
     }
 
     // -- attribution ----------------------------------------------------------------------
@@ -519,5 +699,36 @@ public class SurveyLifecycleJobTests(PostgresContainerFixture postgres)
         // worker is resolved here, and its scope needs nothing but the context and the lease
         // that AddClimateProjectScheduling already registered.
         return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// Runs <paramref name="interfere"/> exactly once, after the intercepted context's first read
+    /// of <c>surveys</c> and therefore before any write it decides to make. That is precisely the
+    /// window a human transition has to land in, and it is not reachable from a second thread
+    /// without a sleep and a coin toss.
+    ///
+    /// <para>The callback opens its own connection: it is a different actor, and running it on
+    /// the sweep's connection would be a self-update rather than a race. The sweep's SELECT holds
+    /// no row locks, so nothing blocks.</para>
+    /// </summary>
+    private sealed class AfterFirstSurveyReadInterceptor(Func<Task> interfere) : DbCommandInterceptor
+    {
+        /// <summary>Asserted by the test: a race nobody entered proves nothing.</summary>
+        public bool Fired { get; private set; }
+
+        public override async ValueTask<DbDataReader> ReaderExecutedAsync(
+            DbCommand command,
+            CommandExecutedEventData eventData,
+            DbDataReader result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!Fired && command.CommandText.Contains("FROM surveys", StringComparison.Ordinal))
+            {
+                Fired = true;
+                await interfere();
+            }
+
+            return await base.ReaderExecutedAsync(command, eventData, result, cancellationToken);
+        }
     }
 }

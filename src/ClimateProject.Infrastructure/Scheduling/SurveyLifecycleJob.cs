@@ -38,6 +38,17 @@ namespace ClimateProject.Infrastructure.Scheduling;
 /// what the job does, and a transition the domain's own map forbids becomes an error log and a
 /// skipped row rather than an UPDATE.</para>
 ///
+/// <para><b>A human always wins.</b> Every write is conditional on the status this sweep read
+/// (<c>UPDATE ... WHERE id = ? AND status = ?</c>). The job lease serialises this job against
+/// itself; nothing serialises it against a person, and <c>PUT /surveys/{id}/status</c> can land
+/// at any moment in the seconds between this sweep's SELECT and its UPDATE. Unconditionally,
+/// the scheduler would win that race every time -- and the transitions it would overwrite are
+/// the ones it is most careful never to make itself: from <c>scheduled</c> a human may go to
+/// <c>draft</c> or <c>archived</c>, and a survey dragged back to <c>draft</c> to fix its dates
+/// and then re-opened by this job is stuck in <c>active</c>, which has no edge back to
+/// <c>draft</c>, with its content frozen for good. So a row that moved underneath the sweep is
+/// left alone and logged, and the next tick re-reads it.</para>
+///
 /// <para><b>Cadence: five minutes</b> (<c>Scheduling:SurveyLifecycleInterval</c>), matching
 /// <c>ScheduledReportJob</c>'s reasoning -- this is about promptness, not correctness. It does
 /// mean the window is a scheduler tick rather than a hard cutoff: a response submitted three
@@ -121,9 +132,10 @@ public static class SurveyLifecycleJob
     private const int MaxStrandedIdsLogged = 10;
 
     /// <summary>
-    /// One sweep. Mutates through the caller's <see cref="ClimateProjectDbContext"/> and saves
-    /// once; the lease's transaction is what commits it, so a throw anywhere leaves every
-    /// status exactly where it was.
+    /// One sweep. Writes through the caller's <see cref="ClimateProjectDbContext"/> -- one
+    /// conditional UPDATE per transition, then a single save for the audit rows; the lease's
+    /// transaction is what commits the lot, so a throw anywhere leaves every status exactly
+    /// where it was.
     /// </summary>
     public static async Task<SurveyLifecycleSweepResult> RunAsync(
         ClimateProjectDbContext db,
@@ -150,6 +162,10 @@ public static class SurveyLifecycleJob
         // company is waiting on.
         var (toOpen, moreToOpen) = await TakeAsync(
             db.Surveys
+                // Read-only on purpose. Nothing below assigns to a tracked entity: the write is
+                // the conditional UPDATE in AdvanceAsync, and a tracked copy would only offer a
+                // second, unconditional way to write the same column.
+                .AsNoTracking()
                 .Where(s => s.Status == SurveyStatuses.Scheduled
                             && s.StartDate <= nowUtc
                             && s.EndDate > nowUtc)
@@ -160,14 +176,15 @@ public static class SurveyLifecycleJob
 
         var (toClose, moreToClose) = await TakeAsync(
             db.Surveys
+                .AsNoTracking()
                 .Where(s => s.Status == SurveyStatuses.Active && s.EndDate <= nowUtc)
                 .OrderBy(s => s.EndDate)
                 .ThenBy(s => s.Id),
             batchSize,
             cancellationToken);
 
-        var opened = Advance(db, toOpen, nowUtc, logger);
-        var closed = Advance(db, toClose, nowUtc, logger);
+        var opened = await AdvanceAsync(db, toOpen, nowUtc, logger, cancellationToken);
+        var closed = await AdvanceAsync(db, toClose, nowUtc, logger, cancellationToken);
 
         // Nothing here is written -- see SurveyLifecycleSchedule.WindowElapsedWhileScheduled for
         // why closing these would destroy the only remedy for them. It cannot overlap with what
@@ -231,15 +248,34 @@ public static class SurveyLifecycleJob
     /// <summary>
     /// Applies the schedule to each candidate and returns how many actually moved.
     ///
-    /// <para>Nothing is saved here. The caller saves once, inside the lease's transaction, so a
-    /// batch either lands whole or not at all -- which is what keeps a status change and its
-    /// audit row from ever existing without the other.</para>
+    /// <para><b>Every write is a compare-and-swap.</b> The <c>UPDATE</c> carries
+    /// <c>AND status = @from</c> -- the status this sweep actually read and made its decision
+    /// on -- so a row somebody moved in the meantime updates zero rows and is skipped instead of
+    /// being overwritten. This is not a theoretical race. The job lease serialises this job
+    /// against itself, but nothing serialises it against a person: <c>PUT /surveys/{id}/status</c>
+    /// runs on the API at any moment, and the gap between this sweep's SELECT and its UPDATE is
+    /// the whole of the sweep. Without the condition the last writer would win and it would
+    /// always be the scheduler, because the scheduler holds the transaction open longest.</para>
+    ///
+    /// <para>What that loses is exactly what makes the bug bad. From <c>scheduled</c> a human may
+    /// legally go to <c>draft</c> or to <c>archived</c> -- and this job refuses both directions,
+    /// so an admin who catches a mis-dated survey seconds before its start date and pulls it back
+    /// to <c>draft</c> would find it <c>active</c>, in a status with no edge back to <c>draft</c>
+    /// at all, its content frozen forever. Losing an update is not a lost write here; it is a
+    /// survey nobody can ever fix.</para>
+    ///
+    /// <para>No status is assigned to a tracked entity and nothing is saved here. The audit rows
+    /// are staged and the caller saves once; the lease's transaction is what makes a sweep atomic,
+    /// which is what keeps a status change and its audit row from ever existing without the
+    /// other. A caller that runs this outside a transaction gets each conditional UPDATE
+    /// committed on its own -- fine for a test, and the reason the worker never does it.</para>
     /// </summary>
-    private static int Advance(
+    private static async Task<int> AdvanceAsync(
         ClimateProjectDbContext db,
         List<Survey> candidates,
         DateTimeOffset nowUtc,
-        ILogger logger)
+        ILogger logger,
+        CancellationToken cancellationToken)
     {
         var moved = 0;
 
@@ -283,12 +319,34 @@ public static class SurveyLifecycleJob
             var from = survey.Status;
             var opening = string.Equals(target, SurveyStatuses.Active, StringComparison.Ordinal);
 
-            survey.Status = target;
+            // The compare-and-swap. `s.Status == from` is the whole of it: the row moves only if
+            // it is still in the status this sweep read. updated_at is set in the same statement
+            // for the same reason the endpoint sets it -- a status change is a change, and
+            // leaving it alone would hide an automatic close from every "recently changed"
+            // listing in the product, which is where an admin would look for it.
+            var written = await db.Surveys
+                .Where(s => s.Id == survey.Id && s.Status == from)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(s => s.Status, target)
+                        .SetProperty(s => s.UpdatedAt, nowUtc),
+                    cancellationToken);
 
-            // Touched for the same reason the endpoint touches it: a status change is a change,
-            // and leaving updated_at alone would hide an automatic close from every "recently
-            // changed" listing in the product, which is where an admin would look for it.
-            survey.UpdatedAt = nowUtc;
+            if (written == 0)
+            {
+                // Somebody moved this row between the SELECT and here. Their transition wins:
+                // it was made by a person, on a survey they administer, with the whole product
+                // in front of them. Information rather than a warning -- an admin racing the
+                // scheduler to the minute is unusual but entirely correct behaviour, and the
+                // row is now in whatever status they chose.
+                logger.LogInformation(
+                    "Survey {SurveyId} was '{From}' when the lifecycle sweep read it and is not any more, so the " +
+                    "move to '{To}' was not applied. A concurrent change wins over this job by design.",
+                    survey.Id,
+                    from,
+                    target);
+                continue;
+            }
 
             db.AuditLogs.Add(new AuditLog
             {
