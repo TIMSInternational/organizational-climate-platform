@@ -37,6 +37,15 @@ describe('router', () => {
     expect(paths).toContain('/microclimates/:id/respond')
     expect(paths).toContain('/survey/:id')
 
+    // The two links this product actually distributes. `/s/:token` is the literal
+    // `SurveyAccessTokens.PublicLinkPath` builds and `survey_distributions.public_url`
+    // already stores, and `/survey-invitations/:token` mirrors the API route of the same
+    // name — which nothing mails yet. Both shipped with the API minting
+    // links and the router serving nothing, so every one of them reached the error
+    // boundary — this is the assertion that would have caught it.
+    expect(paths).toContain('/s/:token')
+    expect(paths).toContain('/survey-invitations/:token')
+
     // #81's auth states. Each is a state the app is in BECAUSE there is no usable
     // session, so putting any of them behind RequireAuth would redirect it to
     // /login and lose the reason it exists. /auth/inactive is the subtle one --
@@ -84,6 +93,14 @@ describe('router', () => {
 
     expect(topLevel).toContain('/survey/:id')
     expect(topLevel).toContain('/microclimates/:id/respond')
+    // The two token-addressed link routes, for the same reason and then some: on both
+    // of them the token IS the credential, and the endpoints behind them take no
+    // `ClaimsPrincipal` at all. `RequireAuth` there would send every invitee to a
+    // sign-in form the invitation exists precisely to avoid — `Survey.Settings`
+    // has an `InvitationIncludeCredentials` flag because some of them have no
+    // credentials to hand.
+    expect(topLevel).toContain('/s/:token')
+    expect(topLevel).toContain('/survey-invitations/:token')
     // The authenticated twin is deliberately NOT out here: an employee answering a
     // survey their company does not run anonymously should be sent to sign in.
     expect(topLevel).not.toContain('/surveys/:id/respond')
@@ -130,6 +147,8 @@ describe('router', () => {
       '/surveys/:id/respond',
       '/survey/:id',
       '/microclimates/:id/respond',
+      '/s/:token',
+      '/survey-invitations/:token',
     ]) {
       expect(directPaths(shellChildren ?? [])).not.toContain(respondRoute)
     }

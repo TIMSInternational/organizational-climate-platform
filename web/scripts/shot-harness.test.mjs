@@ -146,6 +146,50 @@ describe('shot harness: fixture matching', () => {
   })
 })
 
+/**
+ * The harness could produce exactly two outcomes before this: 200 for a matched fixture
+ * and 404 for everything else. Every error state below the 404 was therefore
+ * unphotographable — including the pair this repository cares most about getting right,
+ * a revoked survey invitation and an expired one, which share a 410 and differ only in
+ * the body.
+ */
+describe('shot harness: fixture statuses', () => {
+  const fixtures = compileFixtures({
+    'GET /admin/companies': { companies: [] },
+    'GET /survey-invitations/*': { message: 'gone', reason: 'revoked' },
+    'GET /survey-links/* 404': { message: 'This link is not valid.' },
+    'POST /survey-invitations/*/opened 429': { message: 'slow down' },
+  })
+
+  it('defaults to 200, so every fixture written before this keeps its meaning', () => {
+    expect(matchFixture(fixtures, 'GET', '/admin/companies').status).toBe(200)
+    expect(matchFixture(fixtures, 'GET', '/survey-invitations/abc').status).toBe(200)
+  })
+
+  it('reads a trailing integer in the key as the status', () => {
+    expect(matchFixture(fixtures, 'GET', '/survey-links/abc').status).toBe(404)
+    expect(matchFixture(fixtures, 'POST', '/survey-invitations/abc/opened').status).toBe(429)
+  })
+
+  it('does not fold the status into the path it matches', () => {
+    // The obvious bug in a whitespace-split parser is taking the path as everything
+    // after the method, so `"/survey-links/* 404"` becomes the pattern and the fixture
+    // matches nothing a browser would ever request.
+    expect(matchFixture(fixtures, 'GET', '/survey-links/abc')).not.toBeNull()
+    expect(matchFixture(compileFixtures({ 'GET /x 404': {} }), 'GET', '/x')).not.toBeNull()
+  })
+
+  /**
+   * A typo in that position must fail the run rather than quietly photograph a 200 —
+   * a screenshot of the wrong state is worse than no screenshot, because it is evidence.
+   */
+  it('refuses a third token that is not an HTTP status', () => {
+    expect(() => compileFixtures({ 'GET /x maybe': {} })).toThrow(/not an HTTP status/)
+    expect(() => compileFixtures({ 'GET /x 99': {} })).toThrow(/not an HTTP status/)
+    expect(() => compileFixtures({ 'GET /x 600': {} })).toThrow(/not an HTTP status/)
+  })
+})
+
 describe('shot harness: request classification', () => {
   const app = 'http://127.0.0.1:5199'
 

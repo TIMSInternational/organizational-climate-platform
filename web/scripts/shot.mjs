@@ -304,8 +304,11 @@ async function main() {
           })
           return
         }
+        // `match.status` is 200 unless the fixture key named one. A fixture that
+        // deliberately answers 410 is not an unmatched request, so it is not reported
+        // as one at the end of the run.
         await routeRequest.fulfill({
-          status: 200,
+          status: match.status,
           contentType: 'application/json',
           body: JSON.stringify(match.body),
         })
