@@ -41,6 +41,7 @@ import SurveyResultsPage from '../features/surveys/pages/SurveyResultsPage'
 import SurveysListPage from '../features/surveys/pages/SurveysListPage'
 import SurveyCreatePage from '../features/surveys/pages/SurveyCreatePage'
 import SurveyDetailPage from '../features/surveys/pages/SurveyDetailPage'
+import SurveyQuestionsEditPage from '../features/surveys/pages/SurveyQuestionsEditPage'
 import MySurveysPage from '../features/surveys/pages/MySurveysPage'
 import SurveyTemplatesPage from '../features/surveys/pages/SurveyTemplatesPage'
 import SurveyTemplateDetailPage from '../features/surveys/pages/SurveyTemplateDetailPage'
@@ -223,6 +224,13 @@ export const router = createBrowserRouter([
               // a survey, not a place in the sidebar. `/surveys` and `/surveys/:id` are
               // #109's; this route only needs to exist beneath one of them.
               { path: '/surveys/:id/results', element: <SurveyResultsPage /> },
+              // #273. Same rule as `/surveys/:id/results` above: no nav entry, because it
+              // is a per-survey destination reached from a survey. The way in is on
+              // `SurveyDetailPage`, offered only when the survey can actually be edited —
+              // but the page defends itself anyway, since this URL is typeable and the
+              // server's second refusal (any response row exists) cannot be predicted from
+              // a read.
+              { path: '/surveys/:id/questions', element: <SurveyQuestionsEditPage /> },
               // Not under /admin, and gated by nothing beyond RequireAuth: every
               // authenticated role — plain employees included — owns a profile, and
               // every endpoint behind this page resolves the caller from their own

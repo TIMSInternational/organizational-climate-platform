@@ -1834,7 +1834,26 @@
     "noParticipationTarget": "No se fijó un número previsto de participantes para esta encuesta, así que no tiene tasa de participación.",
     "use": "Usar",
     "useNamed": "Usar {name}",
-    "previewNamed": "Vista previa de {name}"
+    "previewNamed": "Vista previa de {name}",
+    "questionEditor": {
+      "category": "Dimensión",
+      "categoryHint": "Las preguntas que comparten una dimensión se agregan juntas en el mapa de resultados.",
+      "commentPrompt": "Texto del comentario",
+      "commentRequired": "El comentario es obligatorio",
+      "description": "Reformule, reordene o elimine las preguntas de esta encuesta. Las opciones de respuesta conservan su clave almacenada, de modo que los resultados registrados hasta ahora siguen siendo comparables.",
+      "edit": "Editar preguntas",
+      "lockedByResponses": "Esta encuesta ya tiene respuestas, por lo que sus preguntas ya no se pueden cambiar.",
+      "lockedByStatus": "El contenido de esta encuesta está congelado: solo se puede reescribir un borrador o una encuesta programada.",
+      "moveDown": "Bajar",
+      "moveUp": "Subir",
+      "optionLabel": "Opción",
+      "remove": "Eliminar",
+      "required": "La respuesta es obligatoria",
+      "scaleLabelMax": "Etiqueta del punto más alto",
+      "scaleLabelMin": "Etiqueta del punto más bajo",
+      "text": "Pregunta",
+      "title": "Editar preguntas"
+    }
   },
   "users": {
     "userManagement": "Gestión de Usuarios",
