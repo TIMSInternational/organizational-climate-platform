@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { RespondCaption, RespondReading, RespondShell } from '../../../components/layout'
@@ -26,11 +26,29 @@ import {
  *
  * `SurveyDistributionEndpoints` maps four routes under `/survey-invitations/{token}`:
  * one that resolves the token and three that record `opened`, `started` and
- * `completed`. Nothing in the web app called any of them. The token is minted per
- * invitee, the notification sender resolves it into the mail body, and the link then
- * arrived at the router's error boundary — so the state columns on
+ * `completed`. Nothing in the web app called any of them, so a token that reached a
+ * browser arrived at the router's error boundary — the state columns on
  * `survey_invitations` could only ever hold what an administrator's own actions put
  * there, and the distribution screen's funnel was structurally empty.
+ *
+ * ## Nothing hands this link out yet, and that is on purpose here
+ *
+ * Grep for the writer, not the reader: `SurveyInvitation.InvitationToken` is minted in
+ * `SurveyDistributionEndpoints` (create, and again on regenerate) and read back only by
+ * the four routes above. **No mailer composes it into a message and no admin screen
+ * reveals it.** `SurveyInvitationDetail` — the row behind the distribution table —
+ * deliberately omits the token, and says why: "an admin who can list tokens can open any
+ * employee's survey as them, which is a privilege the admin role does not otherwise
+ * carry and which no screen needs." `InvitationTable` enforces the same rule from the
+ * other end.
+ *
+ * So this route is reachable today only by pasting a token, and surfacing one in the
+ * admin UI the way `ShareableLinkPanel` surfaces a user-invitation link is not the same
+ * cheap move: that panel prints a link the API returns to its creator, whereas this
+ * would mean adding a bearer credential for somebody else's identity to a list view. The
+ * share link `/s/:token` does have a producer — `SurveyDistributionDetail.PublicLink`,
+ * drawn masked by `ShareLinkPanel` — because the API chose to expose that one. The
+ * missing producer for this route is the invitation mail, which another slice owns.
  *
  * ## Why there is a landing card at all, rather than the questions straight away
  *
@@ -74,8 +92,28 @@ export default function SurveyInvitationPage() {
 
   const [state, setState] = useState<InvitationState>({ status: 'loading' })
 
+  // The token the respondent has already begun answering under, or null.
+  //
+  // A ref rather than state because the resolve effect has to READ it without being
+  // re-run by it: making it a dependency would restore the very teardown it exists to
+  // prevent. It holds the token rather than a bare boolean so that a genuinely different
+  // invitation — the same component, a new `:token` — still resolves from scratch.
+  const begunToken = useRef<string | null>(null)
+
   useEffect(() => {
     if (!token) return
+
+    // Once the questions are on screen, this effect is the only thing that could take
+    // them away, and on a language change that is exactly what it did: `setState` below
+    // replaces `answering` with `loading`, React unmounts `SurveyRespondForm`, and a
+    // remounted form starts with an empty answer map. The respondent was dropped back on
+    // the landing card having lost every answer, with nothing said about it — on the one
+    // route in this product whose visitor has no account, no draft and no way back.
+    //
+    // Nothing is lost by stopping here. The card this effect feeds is no longer rendered,
+    // and the form owns its own language switch: it re-reads the question text in the new
+    // locale and guards re-hydration behind a ref precisely so the answers survive it.
+    if (begunToken.current === token) return
 
     let cancelled = false
     setState({ status: 'loading' })
@@ -102,12 +140,16 @@ export default function SurveyInvitationPage() {
     }
     // `locale` is a dependency because the card renders the survey's own title and
     // description and they have to come back in the language the reader switched to.
-    // Re-resolving is free on this route: unlike the share link, it increments nothing,
-    // and `opened` cannot move once it is set.
+    // Re-resolving is free while the card is what is on screen: unlike the share link it
+    // increments nothing, and `opened` cannot move once it is set. It stops being free
+    // the moment there are answers behind it, which is what the guard above is for.
   }, [baseUrl, token, locale])
 
   function begin(): void {
     if (state.status !== 'landing' || !token) return
+    // Set before the state change, not after: from here on a language switch must find
+    // the guard already closed.
+    begunToken.current = token
     void recordSurveyInvitationStep(baseUrl, token, 'started').catch(ignoreTrackingFailure)
     // Not awaited. The respondent pressed a button to answer a survey; making them wait
     // on a round trip that only an administrator will ever read would be charging them

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { Link, MemoryRouter, Route, Routes } from 'react-router'
 import SurveyInvitationPage from './SurveyInvitationPage'
 import { TranslationProvider } from '../../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
@@ -10,6 +10,7 @@ import type { SurveyRespondView } from '../api/surveyResponses'
 import type { SurveyInvitationTokenDetail } from '../api/surveyLinks'
 
 const TOKEN = 'fixture-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+const OTHER_TOKEN = 'fixture-token-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 
 function invitation(
   overrides: Partial<SurveyInvitationTokenDetail> = {},
@@ -89,7 +90,13 @@ const SUBMISSION = {
  * One handler for the four endpoints this page touches, so the tests below can fail one
  * of them without the rest.
  */
-function serve(options: { resolve?: () => Response; steps?: () => Response } = {}): void {
+function serve(
+  options: {
+    resolve?: () => Response
+    steps?: () => Response
+    submission?: Partial<typeof SUBMISSION>
+  } = {},
+): void {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.includes('/survey-invitations/') && init?.method === 'POST') {
@@ -101,7 +108,9 @@ function serve(options: { resolve?: () => Response; steps?: () => Response } = {
       )
     }
     if (url.includes('/responses')) {
-      return Promise.resolve(new Response(JSON.stringify(SUBMISSION), { status: 201 }))
+      return Promise.resolve(
+        new Response(JSON.stringify({ ...SUBMISSION, ...options.submission }), { status: 201 }),
+      )
     }
     return Promise.resolve(new Response(JSON.stringify(respondView()), { status: 200 }))
   })
@@ -200,6 +209,112 @@ describe('SurveyInvitationPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Guardar y terminar después' }))
 
     await waitFor(() => expect(steps()).toEqual(['opened', 'started']))
+  })
+
+  /**
+   * The one surface on this route a non-employee touches, and the one control on it that
+   * can destroy their work: `RespondShell` renders `LanguageSwitcher` in its header, so
+   * the switcher is on screen with a half-answered form under it.
+   *
+   * This page resolved the invitation on every `locale` change so the landing card's
+   * title would come back translated. Doing that while the respondent was answering
+   * replaced the `answering` state with `loading`, which unmounts `SurveyRespondForm` --
+   * and a remounted form starts with an empty `answers` map. The respondent was returned
+   * to the landing card with every answer gone and nothing said about it.
+   *
+   * `SurveyRespondForm` handles its own language switch correctly (it re-reads the
+   * question text and guards re-hydration behind a ref), so the loss was entirely this
+   * page tearing the form down around it.
+   */
+  it('keeps the answers already given when the respondent switches language mid-survey', async () => {
+    serve()
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Comenzar la encuesta' }))
+    await userEvent.click(await screen.findByRole('radio', { name: 'Bien' }))
+    expect((screen.getByRole('radio', { name: 'Bien' }) as HTMLInputElement).checked).toBe(true)
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Cambiar Idioma' }), 'en')
+
+    // The switch really landed: the shell's own control is renamed by it.
+    await screen.findByRole('combobox', { name: 'Switch Language' })
+
+    // Still answering, and still holding the answer.
+    await waitFor(() =>
+      expect((screen.getByRole('radio', { name: 'Bien' }) as HTMLInputElement).checked).toBe(true),
+    )
+    expect(screen.queryByRole('button', { name: 'Start the survey' })).toBeNull()
+    expect(screen.queryByText('Your invitation')).toBeNull()
+  })
+
+  /**
+   * `started` is recorded once, when the respondent presses the button. A page that
+   * re-resolved on a language switch posted `opened` again, and one that returned the
+   * respondent to the card let them press "start" a second time. The server would ignore
+   * both -- but a client that has to be saved by the server's idempotency is a client
+   * that is getting the ladder wrong.
+   */
+  it('does not re-post a rung of the ladder because the language changed', async () => {
+    serve()
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Comenzar la encuesta' }))
+    await waitFor(() => expect(steps()).toEqual(['opened', 'started']))
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Cambiar Idioma' }), 'en')
+    await screen.findByRole('combobox', { name: 'Switch Language' })
+
+    expect(steps()).toEqual(['opened', 'started'])
+  })
+
+  /**
+   * `alreadySubmitted` means the server matched an existing complete response for this
+   * session and wrote nothing just now. Firing `completed` here would report a rung that
+   * whichever visit did write the response already reported, and would make
+   * `onSubmitted` mean "the form was submitted" rather than "a response was accepted".
+   * The exclusion is one `if` in `SurveyRespondForm`; this is the test that notices when
+   * it goes.
+   */
+  it('does not re-report completed when the server matched an existing response', async () => {
+    serve({ submission: { alreadySubmitted: true } })
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Comenzar la encuesta' }))
+    await userEvent.click(await screen.findByRole('radio', { name: 'Bien' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
+
+    // The submission landed -- the confirmation says so -- and the ladder did not move.
+    expect(await screen.findByText('Ya respondió esta encuesta')).toBeTruthy()
+    expect(steps()).toEqual(['opened', 'started'])
+  })
+
+  /**
+   * The guard that keeps the form mounted is keyed on the token, not a bare "has begun"
+   * flag, and this is the case that tells those two apart: a second invitation is a
+   * second survey, and a boolean would leave it showing the first one's questions
+   * forever. Reached in-app rather than by a fresh page load, which is the only way the
+   * component instance survives to be confused.
+   */
+  it('resolves a different invitation even after the first one was begun', async () => {
+    serve()
+    render(
+      <TranslationProvider>
+        <MemoryRouter initialEntries={[`/survey-invitations/${TOKEN}`]}>
+          <Link to={`/survey-invitations/${OTHER_TOKEN}`}>Otra invitación</Link>
+          <Routes>
+            <Route path="/survey-invitations/:token" element={<SurveyInvitationPage />} />
+          </Routes>
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Comenzar la encuesta' }))
+    await screen.findByRole('radio', { name: 'Bien' })
+
+    await userEvent.click(screen.getByRole('link', { name: 'Otra invitación' }))
+
+    // Its own landing card, not the previous invitation's half-answered form.
+    expect(await screen.findByRole('button', { name: 'Comenzar la encuesta' })).toBeTruthy()
   })
 
   /**
