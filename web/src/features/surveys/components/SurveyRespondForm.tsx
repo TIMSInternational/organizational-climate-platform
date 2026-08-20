@@ -66,6 +66,23 @@ export interface SurveyRespondFormProps {
    * for them rather than drawn and then bounced off `RequireAuth`.
    */
   publicEntry?: boolean
+  /**
+   * Called once, after the server has accepted a **complete** submission.
+   *
+   * Exists for `/survey-invitations/:token`, which has to close the invitation ladder
+   * by posting `completed` — the third of the three state routes, and the only rung
+   * this form is in a position to know about. A partial save does not fire it: the
+   * ladder's `completed` means finished, and reporting it when somebody pressed "save
+   * and finish later" would make an admin's invitation list say people had answered
+   * when they had not.
+   *
+   * Deliberately not called on the `alreadySubmitted` path either. That branch means
+   * the server matched an existing complete response for this session, so nothing was
+   * written just now; the rung was already reported by whichever visit did write one,
+   * and the server's monotonic rule would ignore it anyway. Not firing it keeps the
+   * callback's meaning ("a response was just accepted") true rather than nearly true.
+   */
+  onSubmitted?: () => void
 }
 
 type LoadState =
@@ -104,7 +121,11 @@ type LoadState =
  * form a third of the width, left a column of white space below the fold, and did
  * not exist at all on a phone — which is where this page is mostly answered.
  */
-export default function SurveyRespondForm({ surveyId, publicEntry = false }: SurveyRespondFormProps) {
+export default function SurveyRespondForm({
+  surveyId,
+  publicEntry = false,
+  onSubmitted,
+}: SurveyRespondFormProps) {
   const { t, locale } = useTranslation('surveyRespond')
   const { t: tRoot } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
@@ -226,6 +247,10 @@ export default function SurveyRespondForm({ surveyId, publicEntry = false }: Sur
         clearSessionId(view.id)
         setSubmittedAt(Date.now())
         setResult(submission)
+        // After the state updates, never before: whatever the caller does with this
+        // must not be able to stand between the respondent and their confirmation.
+        // `alreadySubmitted` is excluded for the reason written on the prop.
+        if (!submission.alreadySubmitted) onSubmitted?.()
       } else {
         announce(t('progressSaved'))
       }
@@ -422,8 +447,14 @@ export default function SurveyRespondForm({ surveyId, publicEntry = false }: Sur
  * survey gets a page rather than a sentence floating on a grey field. `flex-1`
  * fills the column `RespondShell`'s `<main>` gives it, for the same reason
  * `AdminLayout`'s content panel carries `min-h-full`.
+ *
+ * Exported because the two token-addressed link pages (`/s/:token` and
+ * `/survey-invitations/:token`) render states of their own — resolving, a dead link,
+ * an invitation's landing card — *before* this form ever mounts, and they have to sit
+ * on the same panel. Re-typing these classes in two more files is how a page comes to
+ * be half a step off the one it hands over to.
  */
-function RespondSurface({ children }: { children: React.ReactNode }) {
+export function RespondSurface({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-1 flex-col gap-panel-gap rounded-xl border border-line-panel bg-surface-panel p-panel">
       {children}
@@ -626,8 +657,17 @@ function SubmitBar({
  * Green means anonymous and blue means identified, but the chip beside the icon
  * spells out which — WCAG 1.4.1, and the same rule the rest of the redesign keeps:
  * colour does one job and never carries meaning alone.
+ *
+ * ## Why it is exported
+ *
+ * `/survey-invitations/:token` shows a landing card before the questions load, and the
+ * moment a respondent decides whether to answer honestly is the moment they press
+ * "start", not the moment the first question paints. The promise has to be on that card
+ * — and it has to be *this* promise, character for character, because two blocks that
+ * both claim to describe how a response is stored and disagree by a clause is worse
+ * than one of them not existing.
  */
-function AnonymityNotice({ anonymous }: { anonymous: boolean }) {
+export function AnonymityNotice({ anonymous }: { anonymous: boolean }) {
   const { t } = useTranslation('surveyRespond')
 
   return (

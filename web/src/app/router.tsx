@@ -28,6 +28,8 @@ import MicroclimateResultsPage from '../features/microclimates/pages/Microclimat
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
 import SurveyRespondPage from '../features/surveys/pages/SurveyRespondPage'
 import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespondPage'
+import PublicSurveyLinkPage from '../features/surveys/pages/PublicSurveyLinkPage'
+import SurveyInvitationPage from '../features/surveys/pages/SurveyInvitationPage'
 import NotificationPreferencesPage from '../features/notifications/pages/NotificationPreferencesPage'
 import ProfilePage from '../features/profile/pages/ProfilePage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
@@ -122,6 +124,19 @@ export const router = createBrowserRouter([
       // they cannot pass. The server still refuses this route for any survey that is
       // not both anonymous and open.
       { path: '/survey/:id', element: <PublicSurveyRespondPage /> },
+      // The two links this product actually distributes, and the reason they are here
+      // rather than under the gate: neither is followed by somebody with a session.
+      //
+      // `/s/:token` is the exact path `SurveyAccessTokens.PublicLinkPath` builds and
+      // `survey_distributions.public_url` stores, so the literal is not a choice made
+      // here — it is a contract with a string the API has already written into rows,
+      // printed on QR codes and handed to administrators to copy. Anything else and the
+      // links already in circulation stay broken.
+      //
+      // `/survey-invitations/:token` mirrors the API route of the same name for the
+      // same reason: it is what the notification sender puts in the mail body.
+      { path: '/s/:token', element: <PublicSurveyLinkPage /> },
+      { path: '/survey-invitations/:token', element: <SurveyInvitationPage /> },
       ...devOnlyRoutes,
       {
         element: <RequireAuth />,

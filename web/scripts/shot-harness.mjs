@@ -72,18 +72,39 @@ export function buildDevToken({ role, companyId, name, userId = '00000000-0000-0
  * read as a GET. A `*` stands for exactly one path segment, so
  * `"GET /admin/companies/&#42;/users"` covers any id. Every other regex metacharacter in
  * the key is escaped, so a literal `.` in a path cannot match any character.
+ *
+ * ## The optional third token is a status
+ *
+ * `"GET /survey-invitations/&#42; 410"` fulfils with 410 instead of 200. Until this
+ * existed the harness could produce exactly two outcomes — 200 for a match and 404 for
+ * everything else — so **no error state below the 404 could be photographed at all**,
+ * and this repository's own lesson is that the states nobody looks at are the ones that
+ * ship broken. The two survey link pages alone have five: a revoked invitation and an
+ * expired one are both 410 and differ only by the body's `reason`, and neither is
+ * reachable from a fixture map that can only say 200.
+ *
+ * It goes in the key rather than in an envelope around the body (`{ status, body }`)
+ * because a body may legitimately have a `status` field of its own — this API serves
+ * several — and a reader should not have to know which shape a given fixture is in.
+ * Every existing key keeps its meaning: no third token means 200.
  */
 export function compileFixtures(raw) {
   return Object.entries(raw).map(([key, body]) => {
-    const trimmed = key.trim()
-    const space = trimmed.search(/\s/)
-    const method = space === -1 ? 'GET' : trimmed.slice(0, space).toUpperCase()
-    const path = space === -1 ? trimmed : trimmed.slice(space).trim()
+    const parts = key.trim().split(/\s+/)
+    const method = parts.length > 1 ? parts[0].toUpperCase() : 'GET'
+    const path = parts.length > 1 ? parts[1] : parts[0]
+    // Only a bare integer is a status. Anything else in that position is a malformed
+    // key, and failing loudly beats silently photographing a 200 the author did not ask
+    // for.
+    const status = parts.length > 2 ? Number(parts[2]) : 200
+    if (!Number.isInteger(status) || status < 100 || status > 599) {
+      throw new Error(`fixture "${key}": "${parts[2]}" is not an HTTP status`)
+    }
     const pattern = path
       .split('/')
       .map((segment) => (segment === '*' ? '[^/]+' : segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
       .join('/')
-    return { key, method, regex: new RegExp(`^${pattern}$`), body }
+    return { key, method, regex: new RegExp(`^${pattern}$`), status, body }
   })
 }
 

@@ -1353,5 +1353,237 @@
         "unsegmentedRespondentCount": 4
       }
     ]
+  },
+  "GET /survey-links/dead-token 404": {
+    "message": "This link is not valid."
+  },
+  "GET /survey-links/*": {
+    "surveyId": "77777777-7777-7777-7777-777777777777",
+    "surveyTitle": "Q3 climate check",
+    "surveyDescription": "Twelve questions about how the last three months have felt.",
+    "language": "en",
+    "resolvedLocale": "en",
+    "fallbackFields": [],
+    "surveyStartDate": "2026-08-01T00:00:00Z",
+    "surveyEndDate": "2026-09-11T23:59:59Z",
+    "requireLogin": false,
+    "allowAnonymous": true,
+    "singleResponse": true
+  },
+  "GET /survey-invitations/revoked-token 410": {
+    "message": "This invitation has been revoked.",
+    "reason": "revoked"
+  },
+  "GET /survey-invitations/expired-token 410": {
+    "message": "This invitation has expired.",
+    "reason": "expired"
+  },
+  "GET /survey-invitations/used-token 409": {
+    "message": "This invitation has already been used.",
+    "reason": "already_completed"
+  },
+  "GET /survey-invitations/unknown-token 404": {
+    "message": "Invitation not found",
+    "reason": "not_found"
+  },
+  "GET /survey-invitations/named-token": {
+    "invitationId": "88888888-8888-8888-8888-888888888881",
+    "surveyId": "77777777-7777-7777-7777-777777777777",
+    "surveyTitle": "Q3 climate check",
+    "surveyDescription": "Twelve questions about how the last three months have felt.",
+    "language": "en",
+    "resolvedLocale": "en",
+    "fallbackFields": [],
+    "status": "sent",
+    "surveyStartDate": "2026-08-01T00:00:00Z",
+    "surveyEndDate": "2026-09-11T23:59:59Z",
+    "expiresAt": "2026-09-04T23:59:59Z",
+    "anonymity": {
+      "anonymous": false,
+      "highestRecordableState": "completed",
+      "suppressedStates": [],
+      "guarantee": "This survey is not anonymous; every state is recorded against the invitation."
+    }
+  },
+  "GET /survey-invitations/*": {
+    "invitationId": "88888888-8888-8888-8888-888888888881",
+    "surveyId": "77777777-7777-7777-7777-777777777777",
+    "surveyTitle": "Q3 climate check",
+    "surveyDescription": "Twelve questions about how the last three months have felt.",
+    "language": "en",
+    "resolvedLocale": "en",
+    "fallbackFields": [],
+    "status": "sent",
+    "surveyStartDate": "2026-08-01T00:00:00Z",
+    "surveyEndDate": "2026-09-11T23:59:59Z",
+    "expiresAt": "2026-09-04T23:59:59Z",
+    "anonymity": {
+      "anonymous": true,
+      "highestRecordableState": "opened",
+      "suppressedStates": [
+        "started",
+        "completed"
+      ],
+      "guarantee": "This survey is anonymous, so tracking stops at 'opened'; completion is only ever counted in aggregate."
+    }
+  },
+  "POST /survey-invitations/*/opened": {
+    "invitationId": "88888888-8888-8888-8888-888888888881",
+    "status": "opened",
+    "recorded": true,
+    "suppressedForAnonymity": false,
+    "reason": null,
+    "anonymity": {
+      "anonymous": true,
+      "highestRecordableState": "opened",
+      "suppressedStates": [
+        "started",
+        "completed"
+      ],
+      "guarantee": "This survey is anonymous, so tracking stops at 'opened'; completion is only ever counted in aggregate."
+    }
+  },
+  "POST /survey-invitations/*/started": {
+    "invitationId": "88888888-8888-8888-8888-888888888881",
+    "status": "opened",
+    "recorded": true,
+    "suppressedForAnonymity": false,
+    "reason": null,
+    "anonymity": {
+      "anonymous": true,
+      "highestRecordableState": "opened",
+      "suppressedStates": [
+        "started",
+        "completed"
+      ],
+      "guarantee": "This survey is anonymous, so tracking stops at 'opened'; completion is only ever counted in aggregate."
+    }
+  },
+  "POST /survey-invitations/*/completed": {
+    "invitationId": "88888888-8888-8888-8888-888888888881",
+    "status": "opened",
+    "recorded": true,
+    "suppressedForAnonymity": false,
+    "reason": null,
+    "anonymity": {
+      "anonymous": true,
+      "highestRecordableState": "opened",
+      "suppressedStates": [
+        "started",
+        "completed"
+      ],
+      "guarantee": "This survey is anonymous, so tracking stops at 'opened'; completion is only ever counted in aggregate."
+    }
+  },
+  "GET /surveys/*/respond": {
+    "id": "77777777-7777-7777-7777-777777777777",
+    "title": "Q3 climate check",
+    "description": "Twelve questions about how the last three months have felt. Nothing you write is shown with your name on it.",
+    "type": "general_climate",
+    "language": "en",
+    "resolvedLocale": "en",
+    "fallbackFields": [],
+    "startDate": "2026-08-01T00:00:00Z",
+    "endDate": "2026-09-11T23:59:59Z",
+    "anonymous": true,
+    "allowPartialResponses": true,
+    "randomizeQuestions": false,
+    "showProgress": true,
+    "timeLimitMinutes": null,
+    "questions": [
+      {
+        "id": "99999999-0000-0000-0000-000000000001",
+        "text": "I can raise a concern with my team without it being held against me.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 1,
+        "category": "psychological_safety"
+      },
+      {
+        "id": "99999999-0000-0000-0000-000000000002",
+        "text": "Mistakes are treated as something to learn from here.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 2,
+        "category": "psychological_safety"
+      },
+      {
+        "id": "99999999-0000-0000-0000-000000000003",
+        "text": "How often has your workload felt unmanageable in the last three months?",
+        "type": "multiple_choice",
+        "options": [
+          {
+            "order": 0,
+            "value": "never",
+            "label": "Never"
+          },
+          {
+            "order": 1,
+            "value": "rarely",
+            "label": "Rarely"
+          },
+          {
+            "order": 2,
+            "value": "sometimes",
+            "label": "Sometimes"
+          },
+          {
+            "order": 3,
+            "value": "often",
+            "label": "Often"
+          }
+        ],
+        "scaleMin": null,
+        "scaleMax": null,
+        "scaleLabelMin": null,
+        "scaleLabelMax": null,
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": "What made it feel that way?",
+        "order": 3,
+        "category": "workload"
+      },
+      {
+        "id": "99999999-0000-0000-0000-000000000004",
+        "text": "What is the one thing that would most improve your working week?",
+        "type": "open_ended",
+        "options": null,
+        "scaleMin": null,
+        "scaleMax": null,
+        "scaleLabelMin": null,
+        "scaleLabelMax": null,
+        "required": false,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 4,
+        "category": "open"
+      }
+    ],
+    "inProgress": null
+  },
+  "POST /surveys/*/responses 201": {
+    "responseId": "aaaaaaaa-1111-1111-1111-111111111111",
+    "sessionId": "shot-session",
+    "isComplete": true,
+    "isAnonymous": true,
+    "alreadySubmitted": false,
+    "language": "en",
+    "answeredQuestionCount": 4,
+    "questionCount": 4,
+    "suppressedDemographics": []
   }
 }
