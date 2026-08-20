@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import PublicSurveyLinkPage from './PublicSurveyLinkPage'
 import { TranslationProvider } from '../../../i18n'
@@ -146,6 +147,39 @@ describe('PublicSurveyLinkPage', () => {
     expect(resolves).toHaveLength(1)
     // And with no `?lang=`: the localized title it returns is never rendered here.
     expect(String(resolves[0][0])).not.toContain('lang=')
+  })
+
+  /**
+   * The loss that shipped on `/survey-invitations/:token`, pinned on the sibling route
+   * that would suffer it worse — this visitor may hold nothing but the link, with no
+   * account and no saved draft to fall back on.
+   *
+   * Adding `locale` to the resolve effect's deps is a one-word edit that typechecks,
+   * lints and passes every other test in this tree, and it is the edit somebody makes
+   * the first time a translated title is wanted here. The comment above those deps was
+   * the only thing standing against it, and a comment is not a test. The test above
+   * does not catch it because it never switches language.
+   */
+  it('keeps the answers already given when the visitor switches language mid-survey', async () => {
+    serve({})
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Bien' }))
+    expect((screen.getByRole('radio', { name: 'Bien' }) as HTMLInputElement).checked).toBe(true)
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Cambiar Idioma' }), 'en')
+    // The switch really landed: the shell's own control is renamed by it.
+    await screen.findByRole('combobox', { name: 'Switch Language' })
+
+    await waitFor(() =>
+      expect((screen.getByRole('radio', { name: 'Bien' }) as HTMLInputElement).checked).toBe(true),
+    )
+
+    // And one visit is still one visit — the resolve is what increments total_accesses.
+    const after = vi
+      .mocked(fetch)
+      .mock.calls.filter((call) => String(call[0]).includes('/survey-links/'))
+    expect(after).toHaveLength(1)
   })
 
   it('says one honest thing about a dead link, since the server says one thing', async () => {

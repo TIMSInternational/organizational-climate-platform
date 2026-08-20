@@ -39,8 +39,8 @@ describe('router', () => {
 
     // The two links this product actually distributes. `/s/:token` is the literal
     // `SurveyAccessTokens.PublicLinkPath` builds and `survey_distributions.public_url`
-    // already stores, and `/survey-invitations/:token` mirrors the API route the
-    // notification sender puts in the mail body. Both shipped with the API minting
+    // already stores, and `/survey-invitations/:token` mirrors the API route of the same
+    // name — which nothing mails yet. Both shipped with the API minting
     // links and the router serving nothing, so every one of them reached the error
     // boundary — this is the assertion that would have caught it.
     expect(paths).toContain('/s/:token')

@@ -318,6 +318,67 @@ describe('SurveyInvitationPage', () => {
   })
 
   /**
+   * The return leg, which the case above never reaches. `begunToken` is compared to the
+   * CURRENT token, so coming back to an invitation that was begun earlier makes the
+   * effect early-return on state that by then belongs to a different invitation --
+   * invitation B's card rendered at invitation A's URL, with A's ladder advancing. That
+   * is worse than the loss the guard prevents: the respondent answers the wrong survey
+   * under somebody else's invitation.
+   *
+   * The detour must NOT begin the second invitation. Beginning it would move the ref to
+   * B and the guard would let A resolve on the way back, which is why A -> B -> A is the
+   * only ordering that shows the bug.
+   */
+  it('resolves the first invitation again after a detour through a second one', async () => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/survey-invitations/') && init?.method === 'POST') {
+        return Promise.resolve(new Response('{}', { status: 200 }))
+      }
+      if (url.includes(OTHER_TOKEN)) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(invitation({ surveyId: 'survey-bbb', surveyTitle: 'Encuesta B' })),
+            { status: 200 },
+          ),
+        )
+      }
+      if (url.includes(TOKEN)) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(invitation({ surveyId: 'survey-aaa', surveyTitle: 'Encuesta A' })),
+            { status: 200 },
+          ),
+        )
+      }
+      return Promise.resolve(new Response(JSON.stringify(respondView()), { status: 200 }))
+    })
+
+    render(
+      <TranslationProvider>
+        <MemoryRouter initialEntries={[`/survey-invitations/${TOKEN}`]}>
+          <Link to={`/survey-invitations/${TOKEN}`}>Volver a la primera</Link>
+          <Link to={`/survey-invitations/${OTHER_TOKEN}`}>Otra invitación</Link>
+          <Routes>
+            <Route path="/survey-invitations/:token" element={<SurveyInvitationPage />} />
+          </Routes>
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+
+    await screen.findByRole('heading', { name: 'Encuesta A' })
+    await userEvent.click(screen.getByRole('button', { name: 'Comenzar la encuesta' }))
+    await screen.findByRole('radio', { name: 'Bien' })
+
+    await userEvent.click(screen.getByRole('link', { name: 'Otra invitación' }))
+    await screen.findByRole('heading', { name: 'Encuesta B' })
+
+    // The invitation named in the URL is the one that must be on screen.
+    await userEvent.click(screen.getByRole('link', { name: 'Volver a la primera' }))
+    expect(await screen.findByRole('heading', { name: 'Encuesta A' })).toBeTruthy()
+  })
+
+  /**
    * Tracking is telemetry about a link, not a precondition for answering. A respondent
    * kept out of a survey because a counter would not increment is a product that has
    * confused whose page this is.

@@ -100,6 +100,23 @@ export default function SurveyInvitationPage() {
   // invitation — the same component, a new `:token` — still resolves from scratch.
   const begunToken = useRef<string | null>(null)
 
+  // Cleared when the token changes, and only then.
+  //
+  // The guard above is keyed on the token, which makes A -> B resolve correctly. It does
+  // not make B -> A resolve, because the ref still holds A: the effect early-returns on a
+  // token it was begun under long ago, leaving invitation B's questions mounted at
+  // invitation A's URL while A's ladder is advanced. That is a worse bug than the one the
+  // guard fixes -- the respondent answers the wrong survey under someone else's
+  // invitation -- and it did not exist before the guard.
+  //
+  // `[token]` and not `[token, locale]` is the whole point: a cleanup that also ran on a
+  // language change would reopen the blocker exactly as if the guard were not here.
+  useEffect(() => {
+    return () => {
+      begunToken.current = null
+    }
+  }, [token])
+
   useEffect(() => {
     if (!token) return
 

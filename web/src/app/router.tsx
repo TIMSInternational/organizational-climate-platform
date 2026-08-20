@@ -133,8 +133,12 @@ export const router = createBrowserRouter([
       // printed on QR codes and handed to administrators to copy. Anything else and the
       // links already in circulation stay broken.
       //
-      // `/survey-invitations/:token` mirrors the API route of the same name for the
-      // same reason: it is what the notification sender puts in the mail body.
+      // `/survey-invitations/:token` mirrors the API route of the same name, but for a
+      // weaker reason: nothing mails this one. The token is minted in
+      // `SurveyDistributionEndpoints` and read back only by the four routes under that
+      // path — no mailer composes it and no admin screen reveals it, deliberately, since
+      // it is a bearer credential for one employee's survey. The producer it waits on is
+      // the invitation email.
       { path: '/s/:token', element: <PublicSurveyLinkPage /> },
       { path: '/survey-invitations/:token', element: <SurveyInvitationPage /> },
       ...devOnlyRoutes,
