@@ -25,8 +25,9 @@ namespace ClimateProject.Workers;
 /// in-memory configuration overrides are applied (they land at <c>builder.Build()</c>; see the
 /// long note at the top of the API's <c>Program.cs</c>). A registration-time branch on
 /// <c>Enabled</c> would therefore ignore the test suite's <c>Scheduling:Enabled=false</c> and
-/// tick six jobs against every test database. Binding lazily and branching in the worker reads
-/// the configuration as it stands when the host actually starts.</para>
+/// tick every job in <see cref="WorkerJobs.All"/> against every test database. Binding lazily
+/// and branching in the worker reads the configuration as it stands when the host actually
+/// starts.</para>
 /// </summary>
 public static class SchedulingServiceCollectionExtensions
 {
@@ -83,6 +84,7 @@ public static class SchedulingServiceCollectionExtensions
         services.AddHostedService<ScheduledReportWorker>();
         services.AddHostedService<SurveyDraftRetentionWorker>();
         services.AddHostedService<RetentionCleanupWorker>();
+        services.AddHostedService<SurveyLifecycleWorker>();
         services.AddHostedService<WorkerHeartbeatMonitor>();
 
         return services;
