@@ -61,7 +61,12 @@ public sealed class EmailNotificationSender(
         var message = NotificationEmailComposer.Compose(
             notification,
             recipient,
-            options.LinkTo(NotificationEmailComposer.PreferencesPath));
+            options.LinkTo(NotificationEmailComposer.PreferencesPath),
+            // The composer picks the survey path out of the notification's payload; this
+            // supplies the only thing it must not know, which is the origin to hang it off.
+            // Passing the method rather than a resolved URL is what keeps the payload
+            // reading in one place instead of half here and half there.
+            options.LinkTo);
 
         var outcome = await transport.SendAsync(message, cancellationToken).ConfigureAwait(false);
 

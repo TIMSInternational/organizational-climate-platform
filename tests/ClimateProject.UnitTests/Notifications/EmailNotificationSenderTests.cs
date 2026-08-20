@@ -1,6 +1,7 @@
 using ClimateProject.Application.Email;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Notifications;
+using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Notifications;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -21,7 +22,7 @@ public class EmailNotificationSenderTests
         AppBaseUrl = "https://app.example.com",
     };
 
-    private static Notification Notification(string channel) => new()
+    private static Notification Notification(string channel, string? data = null) => new()
     {
         Id = Guid.NewGuid(),
         UserId = Guid.NewGuid(),
@@ -31,6 +32,7 @@ public class EmailNotificationSenderTests
         Status = NotificationStatuses.Pending,
         Title = "Title",
         Message = "Message",
+        Data = data,
     };
 
     private static NotificationRecipient Recipient()
@@ -64,6 +66,25 @@ public class EmailNotificationSenderTests
 
         Assert.Contains(
             $"https://app.example.com/{NotificationEmailComposer.PreferencesPath}",
+            Assert.Single(transport.Sent).TextBody,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_survey_link_is_built_from_the_same_configured_app_base_url()
+    {
+        // The composer chooses the path; only the sender knows the origin. This pins the two
+        // halves together -- the reason a survey link cannot be hardcoded to one host.
+        const string Token = "fixture-invitation-token-aaaaaaaaaaaaaaaaaa";
+        var transport = new RecordingTransport(EmailSendOutcome.Success());
+
+        await Sender(transport).SendAsync(
+            Notification(NotificationChannels.Email, $$"""{"surveyInvitationToken":"{{Token}}"}"""),
+            Recipient(),
+            CancellationToken.None);
+
+        Assert.Contains(
+            $"https://app.example.com{SurveyAccessTokens.InvitationLinkPath(Token)}",
             Assert.Single(transport.Sent).TextBody,
             StringComparison.Ordinal);
     }
