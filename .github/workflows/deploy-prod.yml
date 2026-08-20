@@ -2,6 +2,14 @@ name: deploy-prod
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm_destructive_migration:
+        description: >-
+          Type "yes" only if a pending migration is MEANT to drop a table or column, or
+          truncate. The deploy refuses one otherwise. Read the migration-sql artifact first.
+        required: false
+        default: "no"
+        type: string
 
 # One production deployment at a time.
 #
@@ -226,10 +234,83 @@ jobs:
           fi
 
           dotnet tool restore
+
+          # Guard 3: SEE THE SQL BEFORE IT RUNS, and refuse a silent data-destroying one.
+          #
+          # This step applies migrations straight to the only copy of production, and at
+          # the time this guard was written that database had no automated backups and no
+          # point-in-time recovery. "Our migrations are additive" is not a property this
+          # repository has -- 20260804002058_RenameOpenTextQuestionTypeToOpenEnded rewrites
+          # existing rows, and the comment above already accepts a window for it -- so the
+          # difference between an additive deploy and a destructive one has to be MEASURED
+          # on each run rather than assumed once.
+          #
+          # The full idempotent script is written out first and uploaded unconditionally,
+          # so every deploy leaves a record of exactly what could run against production.
+          dotnet dotnet-ef migrations script --idempotent \
+            --project src/ClimateProject.Infrastructure \
+            --startup-project src/ClimateProject.Api \
+            --configuration Release \
+            --output migration-full.sql
+
+          # Only the PENDING migrations are scanned. The idempotent script above carries
+          # the whole history, including drops from migrations that ran months ago, so
+          # scanning it would fail every deploy forever. `(Pending)` is EF's own marker.
+          dotnet dotnet-ef migrations list \
+            --project src/ClimateProject.Infrastructure \
+            --startup-project src/ClimateProject.Api \
+            --configuration Release --no-build > migrations.txt || true
+
+          PENDING="$(grep -c '(Pending)' migrations.txt || true)"
+          echo "Pending migrations: ${PENDING:-0}"
+
+          if [ "${PENDING:-0}" -gt 0 ]; then
+            # The last migration NOT marked pending is where the delta starts. Empty means
+            # a virgin database, and EF spells that `0`.
+            FROM="$(grep -v '(Pending)' migrations.txt | grep -E '^[0-9]{14}_' | tail -1 || true)"
+            FROM="${FROM:-0}"
+            echo "Scripting the delta from ${FROM}"
+            dotnet dotnet-ef migrations script "$FROM" \
+              --project src/ClimateProject.Infrastructure \
+              --startup-project src/ClimateProject.Api \
+              --configuration Release \
+              --output migration-pending.sql
+
+            # DROP TABLE / DROP COLUMN / TRUNCATE destroy data that cannot be recovered
+            # without a backup. A dropped CONSTRAINT or INDEX is not on this list: it
+            # loses a guarantee, not a row, and #168's foreign-key work legitimately
+            # replaces constraints.
+            if grep -inE '(DROP[[:space:]]+TABLE|DROP[[:space:]]+COLUMN|TRUNCATE)' migration-pending.sql > destructive.txt; then
+              echo "::group::Destructive statements found"
+              cat destructive.txt
+              echo "::endgroup::"
+              if [ "${{ inputs.confirm_destructive_migration }}" != "yes" ]; then
+                echo "::error::A pending migration drops a table or column, or truncates. Download the migration-sql artifact, read it, and re-run this workflow with confirm_destructive_migration=yes if it is intended. Production has one copy of this data." >&2
+                exit 1
+              fi
+              echo "::warning::Applying a destructive migration because confirm_destructive_migration=yes was supplied."
+            fi
+          fi
+
           dotnet dotnet-ef database update \
             --project src/ClimateProject.Infrastructure \
             --startup-project src/ClimateProject.Api \
             --configuration Release
+
+      # `always()`, because the run that most needs this artifact is the one the guard
+      # above just stopped: you cannot decide whether a drop is intended without reading
+      # the statement. Retained a year -- this is the record of every schema change ever
+      # applied to production, and it costs kilobytes.
+      - name: Upload the migration SQL
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-sql
+          path: |
+            migration-full.sql
+            migration-pending.sql
+          if-no-files-found: ignore
+          retention-days: 365
 
       # Every parameter is now passed explicitly, including the ones that have
       # template defaults. `aws cloudformation deploy` reuses a parameter's PREVIOUS
