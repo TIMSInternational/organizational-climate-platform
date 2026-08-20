@@ -36,15 +36,17 @@ namespace ClimateProject.Application.Notifications;
 /// <c>resolveLink</c>. That split is why this stays free of configuration.
 /// </para>
 /// <para>
-/// **Only tokens are read out of <c>Data</c>, never a URL, and every one is shape-checked.**
+/// **An id is read out of <c>Data</c>, never a URL, and it is parsed before it is used.**
 /// <c>data</c> is a jsonb column, and <c>POST /notifications</c> lets a company admin write
 /// it verbatim. A composer that rendered an <c>href</c> straight from that blob would turn
 /// this platform's verified sending domain into a phishing relay -- the same attack
 /// <see cref="EmailBranding.Paragraphs"/> exists to stop, arriving through a different door.
-/// So the payload may only supply an opaque token, it must satisfy
-/// <see cref="SurveyAccessTokens.HasExpectedShape"/>, and the path around it is always built
-/// by <see cref="SurveyAccessTokens"/>. There is no input to this class that can change the
-/// host or the path of the link it renders.
+/// So the payload may supply exactly one thing, a survey id; it must parse as a
+/// <see cref="Guid"/>; and the path is then rendered from the parsed value by
+/// <see cref="SurveyWebPaths.Respond"/>. The caller's own characters never reach the URL, so
+/// there is no input to this class that can change the host or the path of the link it
+/// renders -- only *which* survey it points at, and only among surveys, which is the one
+/// choice the payload is meant to have.
 /// </para>
 /// </summary>
 public static class NotificationEmailComposer
@@ -53,31 +55,27 @@ public static class NotificationEmailComposer
     public const string PreferencesPath = "settings/notifications";
 
     /// <summary>
-    /// <see cref="Notification.Data"/> key carrying one invitee's own
-    /// <c>survey_invitations.invitation_token</c>.
+    /// The <see cref="Notification.Data"/> key carrying the survey a notification is about.
     ///
     /// <para>
-    /// **Deliberately not written by the queueing side.** <c>SurveyDistributionEndpoints</c>
-    /// persists <c>surveyId</c> and <c>surveyInvitationId</c> only, because <c>data</c> is
-    /// returned by <c>GET /notifications?companyId=</c> and a persisted token there would let
-    /// any CompanyAdmin open any employee's survey as that employee. The token is resolved
-    /// from <c>survey_invitations</c> at delivery time and handed to this composer on an
-    /// in-memory row, which is also what makes revocation between queueing and sending real.
-    /// A payload that reaches here without one is the normal case, not an error.
+    /// **This is the key the queueing side actually writes.** <c>SurveyDistributionEndpoints</c>
+    /// serialises <c>surveyId</c> and <c>surveyInvitationId</c> into <c>data</c> for every
+    /// invitation and every reminder it persists, and <c>surveyId</c> is the half that names
+    /// something a recipient can open. Reading anything else here would render a link on a
+    /// payload that is never produced, which is a composer that looks finished and mails the
+    /// same link-less invitation it always did.
+    /// </para>
+    /// <para>
+    /// **Not the invitation token, and not by accident.** <c>data</c> is returned by
+    /// <c>GET /notifications?companyId=</c>, which any CompanyAdmin may call, so a token
+    /// persisted there would hand them the ability to open any employee's survey as that
+    /// employee. The id is not a credential: <c>/surveys/{id}/respond</c> is behind
+    /// <c>RequireAuth</c> and the respond endpoint re-resolves the caller's own user row and
+    /// re-checks the survey's department targets, so a recipient who forwards this link gives
+    /// away nothing they were not already able to give away by forwarding the email.
     /// </para>
     /// </summary>
-    public const string SurveyInvitationTokenKey = "surveyInvitationToken";
-
-    /// <summary>
-    /// <see cref="Notification.Data"/> key carrying the survey's open share token -- the one
-    /// embedded in <c>survey_distributions.public_url</c>.
-    ///
-    /// The fallback, not the preference: a personalised link is what lets the invitation be
-    /// marked opened and, on a non-anonymous survey, attributed at all. The share token is
-    /// company-wide and already public by design, so unlike the invitation token it is safe
-    /// for the queueing side to persist.
-    /// </summary>
-    public const string SurveyShareTokenKey = "surveyShareToken";
+    public const string SurveyIdKey = "surveyId";
 
     /// <summary>
     /// The translated chrome, keyed by locale. Deliberately a dictionary keyed by
@@ -194,7 +192,7 @@ public static class NotificationEmailComposer
     }
 
     /// <summary>
-    /// The site-relative survey path a payload asks for, or null when it asks for none.
+    /// The site-relative survey path a payload names, or null when it names none.
     ///
     /// <para>
     /// **Every failure is null, never an exception.** This runs inside
@@ -208,9 +206,10 @@ public static class NotificationEmailComposer
     /// one.
     /// </para>
     /// <para>
-    /// The invitation token wins when both are present. A personalised link is the only one
-    /// that can mark the invitation opened, so preferring the share link would silently cost
-    /// the distribution surface its only pre-response signal.
+    /// <see cref="Guid.Empty"/> is rejected alongside the unparseable. It parses, so nothing
+    /// downstream would object, but <c>/surveys/00000000-0000-0000-0000-000000000000/respond</c>
+    /// is a 404 with a button on it -- worse for the recipient than the link-less email,
+    /// because it looks like the product is broken rather than like there was nothing to link.
     /// </para>
     /// </summary>
     /// <param name="data">The raw <c>data</c> column. Arbitrary JSON, or not JSON at all.</param>
@@ -229,13 +228,8 @@ public static class NotificationEmailComposer
                 return null;
             }
 
-            if (TokenOrNull(payload.RootElement, SurveyInvitationTokenKey) is { } invitationToken)
-            {
-                return SurveyAccessTokens.InvitationLinkPath(invitationToken);
-            }
-
-            return TokenOrNull(payload.RootElement, SurveyShareTokenKey) is { } shareToken
-                ? SurveyAccessTokens.PublicLinkPath(shareToken)
+            return SurveyIdOrNull(payload.RootElement) is { } surveyId
+                ? SurveyWebPaths.Respond(surveyId)
                 : null;
         }
         catch (JsonException)
@@ -247,19 +241,23 @@ public static class NotificationEmailComposer
     }
 
     /// <summary>
-    /// A token from the payload, or null unless it is a string that looks like one of ours.
+    /// The survey id a payload names, or null unless it is a string holding a real
+    /// <see cref="Guid"/> that is not <see cref="Guid.Empty"/>.
     ///
-    /// The shape check is load-bearing, not defensive tidiness: without it a value of
+    /// The parse is load-bearing, not defensive tidiness. Without it a value of
     /// <c>"../../login?next=https://evil.example"</c> written through
     /// <c>POST /notifications</c> would be concatenated into the path and mailed under this
-    /// platform's own domain. Rejecting anything that is not 43 base64url characters means a
-    /// payload can choose *between* our two links and can choose nothing else.
+    /// platform's own domain. Returning a <see cref="Guid"/> rather than the caller's string
+    /// is what makes that impossible rather than merely unlikely: the path is rendered from
+    /// the parsed value, so a payload can choose a survey and can choose nothing else --
+    /// braces, a trailing quote or a whole second path segment are all lost in the round trip.
     /// </summary>
-    private static string? TokenOrNull(JsonElement payload, string key)
-        => payload.TryGetProperty(key, out var value)
+    private static Guid? SurveyIdOrNull(JsonElement payload)
+        => payload.TryGetProperty(SurveyIdKey, out var value)
            && value.ValueKind == JsonValueKind.String
-           && SurveyAccessTokens.HasExpectedShape(value.GetString())
-            ? value.GetString()
+           && Guid.TryParse(value.GetString(), out var surveyId)
+           && surveyId != Guid.Empty
+            ? surveyId
             : null;
 
     private sealed record EmailChrome(

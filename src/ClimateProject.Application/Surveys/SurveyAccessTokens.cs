@@ -39,36 +39,11 @@ public static class SurveyAccessTokens
     /// </summary>
     public const string PublicLinkPrefix = "/s/";
 
-    /// <summary>
-    /// The path prefix a per-invitee link is addressed under. Identical to the route group
-    /// <c>SurveyDistributionEndpoints</c> registers, and that is not a coincidence: the API
-    /// and the web app answer the same path on different origins, so one constant is what
-    /// keeps a mailed link and the route that redeems it from drifting apart.
-    ///
-    /// <para>
-    /// Site-relative for the same reason <see cref="PublicLinkPrefix"/> is: whoever mails the
-    /// link resolves it against the origin *they* are configured for
-    /// (<c>EmailOptions.AppBaseUrl</c>), so staging mail cannot send a recipient to
-    /// production. Nothing here may ever concatenate a host.
-    /// </para>
-    /// </summary>
-    public const string InvitationLinkPrefix = "/survey-invitations/";
-
     /// <summary>A fresh, opaque, cryptographically random token.</summary>
     public static string Mint() => Encode(RandomNumberGenerator.GetBytes(EntropyBytes));
 
     /// <summary>The value stored in <c>public_url</c> for a given share token.</summary>
     public static string PublicLinkPath(string token) => PublicLinkPrefix + token;
-
-    /// <summary>
-    /// The site-relative path that opens one invitee's own copy of a survey.
-    ///
-    /// Not stored anywhere -- unlike <see cref="PublicLinkPath"/>, which is persisted in
-    /// <c>public_url</c>. It is derived at the moment a link is rendered, from a token read
-    /// out of <c>survey_invitations</c>, which is what makes revocation between queueing a
-    /// notification and sending it actually take effect.
-    /// </summary>
-    public static string InvitationLinkPath(string token) => InvitationLinkPrefix + token;
 
     /// <summary>
     /// Whether a caller-supplied token even looks like one of ours.

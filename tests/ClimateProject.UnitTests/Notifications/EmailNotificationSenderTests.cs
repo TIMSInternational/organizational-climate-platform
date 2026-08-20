@@ -74,19 +74,45 @@ public class EmailNotificationSenderTests
     public async Task The_survey_link_is_built_from_the_same_configured_app_base_url()
     {
         // The composer chooses the path; only the sender knows the origin. This pins the two
-        // halves together -- the reason a survey link cannot be hardcoded to one host.
-        const string Token = "fixture-invitation-token-aaaaaaaaaaaaaaaaaa";
+        // halves together -- the reason a survey link cannot be hardcoded to one host. The
+        // payload is the one SurveyDistributionEndpoints writes, so this fails if either end
+        // of the seam moves: the sender withholding EmailOptions.LinkTo, or the composer
+        // reading a key the queueing side does not produce.
+        var surveyId = Guid.NewGuid();
         var transport = new RecordingTransport(EmailSendOutcome.Success());
 
         await Sender(transport).SendAsync(
-            Notification(NotificationChannels.Email, $$"""{"surveyInvitationToken":"{{Token}}"}"""),
+            Notification(
+                NotificationChannels.Email,
+                $$"""{"surveyId":"{{surveyId}}","surveyInvitationId":"{{Guid.NewGuid()}}"}"""),
             Recipient(),
             CancellationToken.None);
 
         Assert.Contains(
-            $"https://app.example.com{SurveyAccessTokens.InvitationLinkPath(Token)}",
+            $"https://app.example.com{SurveyWebPaths.Respond(surveyId)}",
             Assert.Single(transport.Sent).TextBody,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_survey_link_never_carries_a_host_this_deployment_is_not_configured_for()
+    {
+        // Options.AppBaseUrl is the only origin in play. If any part of the link path ever
+        // grew a literal host, staging mail would walk a recipient into production data.
+        var transport = new RecordingTransport(EmailSendOutcome.Success());
+
+        await Sender(transport).SendAsync(
+            Notification(NotificationChannels.Email, $$"""{"surveyId":"{{Guid.NewGuid()}}"}"""),
+            Recipient(),
+            CancellationToken.None);
+
+        var sent = Assert.Single(transport.Sent);
+        foreach (var body in new[] { sent.TextBody, sent.HtmlBody })
+        {
+            Assert.Equal(
+                body.Split("://", StringSplitOptions.None).Length - 1,
+                body.Split("https://app.example.com", StringSplitOptions.None).Length - 1);
+        }
     }
 
     [Fact]

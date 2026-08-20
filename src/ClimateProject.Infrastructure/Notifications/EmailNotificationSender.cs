@@ -63,9 +63,11 @@ public sealed class EmailNotificationSender(
             recipient,
             options.LinkTo(NotificationEmailComposer.PreferencesPath),
             // The composer picks the survey path out of the notification's payload; this
-            // supplies the only thing it must not know, which is the origin to hang it off.
-            // Passing the method rather than a resolved URL is what keeps the payload
-            // reading in one place instead of half here and half there.
+            // supplies the only thing it must not know, which is the origin to hang it off --
+            // the same configured AppBaseUrl the preferences link above already uses, so
+            // staging mail cannot send a recipient into production. Passing the method rather
+            // than a resolved URL is what keeps the payload reading in one place instead of
+            // half here and half there.
             options.LinkTo);
 
         var outcome = await transport.SendAsync(message, cancellationToken).ConfigureAwait(false);

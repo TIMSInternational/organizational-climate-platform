@@ -1210,9 +1210,15 @@ public static class SurveyDistributionEndpoints
 
             // `data` is jsonb -- serialised, never concatenated, and deliberately carrying
             // the invitation's ID rather than its token. See the seam note on this class.
+            //
+            // `surveyId` is spelled through NotificationEmailComposer's own constant because
+            // the composer reads this key back out to build the survey link the invitation
+            // body promises. Two string literals across two projects is exactly how that link
+            // came to be built against a key nothing ever wrote; one constant makes a rename
+            // either move both ends or fail to compile.
             Data = JsonSerializer.Serialize(new Dictionary<string, string>
             {
-                ["surveyId"] = survey.Id.ToString(),
+                [NotificationEmailComposer.SurveyIdKey] = survey.Id.ToString(),
                 ["surveyInvitationId"] = invitation.Id.ToString(),
             }),
             ScheduledFor = scheduledFor,
@@ -1243,7 +1249,14 @@ public static class SurveyDistributionEndpoints
         return composed.Length <= NotificationTitleMaxLength ? composed : composed[..NotificationTitleMaxLength];
     }
 
-    private static string SurveyPath(Guid surveyId) => $"/surveys/{surveyId}";
+    /// <summary>
+    /// The survey's own page, for <c>qr_code_url</c> when there is no share link.
+    ///
+    /// Delegated rather than interpolated here because the invitation email links into
+    /// the same <c>/surveys/</c> space from a different project; two literals is how one
+    /// of them survives a route rename and the other silently does not.
+    /// </summary>
+    private static string SurveyPath(Guid surveyId) => SurveyWebPaths.Survey(surveyId);
 
     private static SurveyAnonymityGuaranteeDto AnonymityOf(Survey survey)
     {

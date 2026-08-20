@@ -672,6 +672,42 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_invitation_email_contains_the_survey_link_its_own_copy_promises()
+    {
+        // The crossing this suite was missing. Every other test here checks what the queueing
+        // side WRITES, and the composer's unit tests check what a composer READS from a
+        // hand-written payload -- so a composer keyed to a field nothing produces satisfied
+        // both sides at once and shipped an invitation whose body says "follow the link in
+        // this message to take part" with no link in it.
+        //
+        // This one runs the real persisted row through the real composer. It is the only test
+        // that fails if the producer and the consumer stop agreeing, so it is deliberately
+        // written against the row the endpoint actually saved rather than against a fixture.
+        var client = await AdminAAsync();
+        var survey = await CreateActiveSurveyAsync(client);
+        var employee = await SeedEmployeeAsync(_companyAId);
+
+        await InviteAsync(client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [employee]));
+
+        var notification = await _harness.WithDbAsync(db => db.Notifications
+            .AsNoTracking()
+            .FirstAsync(n => n.UserId == employee && n.Type == NotificationTypes.SurveyInvitation));
+
+        var message = NotificationEmailComposer.Compose(
+            notification,
+            new NotificationRecipient(employee, "ana@example.com", "Ana", ContentLanguages.English),
+            preferencesUrl: null,
+            resolveLink: path => "https://app.test" + path);
+
+        var expected = $"https://app.test/surveys/{survey.Id}/respond";
+        Assert.Contains(expected, message.TextBody, StringComparison.Ordinal);
+        Assert.Contains($"href=\"{expected}\"", message.HtmlBody, StringComparison.Ordinal);
+
+        // The body makes the promise; without the assertion above it went out unkept.
+        Assert.Contains("link", notification.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Two_invitations_never_share_a_token()
     {
         var client = await AdminAAsync();
