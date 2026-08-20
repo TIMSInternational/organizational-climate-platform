@@ -378,7 +378,11 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
         await InvitationReminderJob.RunAsync(
             db, NullLoggerFactory.Instance, Now, InvitationReminderJob.DefaultBatchSize, default);
 
-        var sender = new LoggingNotificationSender(NullLogger<LoggingNotificationSender>.Instance);
+        // A sender that DELIVERS, stated here rather than borrowed from the production
+        // default. `LoggingNotificationSender` is the no-provider sender and now reports a
+        // permanent failure, which is the truth about a send with nowhere to go -- this test
+        // is about the reminder-job-to-dispatch handoff, so it supplies the success itself.
+        var sender = new DeliveringNotificationSender();
         var dispatched = await NotificationDelivery.ProcessDueAsync(
             db, sender, NullLoggerFactory.Instance, companyId: null, Now.AddMinutes(1),
             NotificationDelivery.DefaultBatchSize, default);
@@ -417,7 +421,10 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
             db, NullLoggerFactory.Instance, Now, InvitationReminderJob.DefaultBatchSize, default);
 
         await NotificationDelivery.ProcessDueAsync(
-            db, new LoggingNotificationSender(NullLogger<LoggingNotificationSender>.Instance),
+            // Deliberately a sender that WOULD deliver: the assertion is that consent
+            // suppression cancels the row before any send is attempted, and a sender that
+            // fails would let this pass for the wrong reason.
+            db, new DeliveringNotificationSender(),
             NullLoggerFactory.Instance, companyId: null, Now.AddMinutes(1),
             NotificationDelivery.DefaultBatchSize, default);
 
@@ -910,5 +917,20 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     {
         public Task RunAsync(ScheduledReportOccurrence occurrence, CancellationToken cancellationToken)
             => throw new InvalidOperationException("Report generation failed.");
+    }
+
+    /// <summary>
+    /// A sender that delivers. Exists because the production default does not: with no mail
+    /// provider configured the registered sender is
+    /// <c>LoggingNotificationSender</c>, which reports a permanent failure. A test that wants
+    /// the delivered branch has to say so.
+    /// </summary>
+    private sealed class DeliveringNotificationSender : INotificationSender
+    {
+        public Task<NotificationDeliveryResult> SendAsync(
+            Notification notification,
+            NotificationRecipient recipient,
+            CancellationToken cancellationToken)
+            => Task.FromResult(NotificationDeliveryResult.Success());
     }
 }
