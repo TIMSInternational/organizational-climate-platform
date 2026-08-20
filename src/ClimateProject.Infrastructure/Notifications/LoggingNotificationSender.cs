@@ -40,6 +40,19 @@ namespace ClimateProject.Infrastructure.Notifications;
 /// the System Health screen becomes an honest reading of "mail is not armed" instead of
 /// sitting at zero while nothing is delivered.
 ///
+/// ## An in-app notification is still delivered, provider or not
+///
+/// The first version of this failed EVERY channel, which was its own lie in the opposite
+/// direction. `EmailNotificationSender` gets this right and this type must agree with it:
+/// for `NotificationChannels.InApp` "the row itself is the artefact -- nothing to transmit,
+/// and nothing that can fail". An in-app notice needs no mail provider, appears in the
+/// recipient's inbox by existing, and marking it failed would empty the one delivery surface
+/// that works today.
+///
+/// So the two senders now differ only in what they can do about EMAIL, which is the only
+/// thing a mail provider was ever needed for. Caught by the full integration suite; a
+/// filtered run missed it.
+///
 /// **It logs no message body.** A notification's <c>Message</c> is arbitrary user-authored
 /// text that routinely names a person, a department or a survey answer, and application logs
 /// are not a place to put that. Id, recipient, channel and type are enough to follow a
@@ -62,6 +75,13 @@ public class LoggingNotificationSender(ILogger<LoggingNotificationSender> logger
         ArgumentNullException.ThrowIfNull(notification);
         ArgumentNullException.ThrowIfNull(recipient);
         cancellationToken.ThrowIfCancellationRequested();
+
+        if (string.Equals(notification.Channel, NotificationChannels.InApp, StringComparison.Ordinal))
+        {
+            // Delivered, and not a courtesy: an in-app notification IS the row, and the row
+            // exists. Mirrors EmailNotificationSender exactly.
+            return Task.FromResult(NotificationDeliveryResult.Success());
+        }
 
         logger.LogWarning(
             "Notification {NotificationId} of type {NotificationType} to user {UserId} via {Channel} was NOT sent: "

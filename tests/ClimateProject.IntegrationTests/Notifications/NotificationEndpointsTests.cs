@@ -246,7 +246,14 @@ public class NotificationEndpointsTests : IAsyncLifetime
         // so does the in-app copy of the very type that was turned off.
         var otherType = await adminClient.PostAsJsonAsync("/notifications", Request(
             recipientId, _companyId, NotificationTypes.MicroclimateInvitation, NotificationChannels.Email));
-        Assert.Equal(NotificationStatuses.Sent, (await otherType.Content.ReadFromJsonAsync<NotificationDetail>())!.Status);
+        var otherDetail = (await otherType.Content.ReadFromJsonAsync<NotificationDetail>())!;
+        // NOT cancelled is the claim this test is making -- the opt-out is scoped to surveys
+        // and must not reach a microclimate. It used to assert `sent`, which was incidental
+        // and, on this host, false: no mail provider is configured here, so an EMAIL
+        // notification is now honestly recorded as failed. That is a delivery outcome, not a
+        // suppression, and the difference between those two is the whole subject here.
+        Assert.NotEqual(NotificationStatuses.Cancelled, otherDetail.Status);
+        Assert.Equal(NotificationStatuses.Failed, otherDetail.Status);
 
         var inApp = await adminClient.PostAsJsonAsync("/notifications", Request(
             recipientId, _companyId, NotificationTypes.SurveyInvitation, NotificationChannels.InApp));

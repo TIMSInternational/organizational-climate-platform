@@ -73,6 +73,23 @@ public class UnconfiguredSenderTests
     }
 
     [Fact]
+    public async Task An_in_app_notification_is_still_delivered_because_the_row_IS_the_delivery()
+    {
+        // The mistake the first version of this made. Failing every channel is a lie in the
+        // opposite direction: an in-app notice needs no mail provider, it appears in the
+        // recipient's inbox by existing, and marking it failed would empty the one delivery
+        // surface that works today. `EmailNotificationSender` says the same thing in the same
+        // words -- "the row itself is the artefact" -- and these two must agree.
+        var sender = new LoggingNotificationSender(NullLogger<LoggingNotificationSender>.Instance);
+        var inApp = NewNotification();
+        inApp.Channel = NotificationChannels.InApp;
+
+        var result = await sender.SendAsync(inApp, NewRecipient(), default);
+
+        Assert.True(result.Delivered);
+    }
+
+    [Fact]
     public void The_failure_reason_names_the_setting_and_carries_no_recipient_data()
     {
         // It is written verbatim to Notification.FailureReason (varchar(1000)) and read by an
