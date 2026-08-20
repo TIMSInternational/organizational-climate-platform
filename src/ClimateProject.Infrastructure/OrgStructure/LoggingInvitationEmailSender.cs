@@ -1,3 +1,4 @@
+using ClimateProject.Application.Email;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Domain.Entities;
 using Microsoft.Extensions.Logging;
@@ -23,7 +24,13 @@ namespace ClimateProject.Infrastructure.OrgStructure;
 /// </summary>
 public class LoggingInvitationEmailSender(ILogger<LoggingInvitationEmailSender> logger) : IInvitationEmailSender
 {
-    public Task SendAsync(UserInvitation invitation, CancellationToken cancellationToken)
+    /// <summary>
+    /// Written verbatim where an operator will read it. Names the setting, because the fix is
+    /// a deployment change and not a retry.
+    /// </summary>
+    public const string NotConfiguredReason = "No email provider is configured (Email:Provider is 'none').";
+
+    public Task<EmailSendOutcome> SendAsync(UserInvitation invitation, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(invitation);
 
@@ -34,6 +41,9 @@ public class LoggingInvitationEmailSender(ILogger<LoggingInvitationEmailSender> 
             invitation.InvitationType,
             invitation.Email is null ? "shareable link" : "addressed");
 
-        return Task.CompletedTask;
+        // PERMANENT, because another attempt calls this same sender: with no provider
+        // registered "retrying is pointless" is not an approximation, it is the truth. The
+        // caller therefore leaves the invitation `pending`, which is what it actually is.
+        return Task.FromResult(EmailSendOutcome.PermanentFailure(NotConfiguredReason));
     }
 }

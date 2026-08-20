@@ -16,15 +16,18 @@ namespace ClimateProject.Infrastructure.OrgStructure;
 /// and the rate limit with notification delivery -- one provider, configured once.
 /// </para>
 /// <para>
-/// **Failures are logged, not thrown, and not surfaced to the caller.**
-/// <c>IInvitationEmailSender.SendAsync</c> returns a bare <c>Task</c>, so it has no vocabulary
-/// for "the provider refused this address" -- and as of #100 the endpoints call it *after* the
-/// invitation row is committed. Throwing would turn a persisted invitation into a 500 on a
-/// request that had already succeeded, leaving the admin unable to tell what state anything is
-/// in; the invitation is still redeemable through its link, and <c>POST
-/// /invitations/{id}/resend</c> exists precisely for a retry. Giving invitations the same
-/// persisted delivery status notifications have is a schema change and therefore a separate
-/// issue -- see the PR for why it is not smuggled in here.
+/// **Failures are still not thrown — they are now returned.** Throwing would turn a persisted
+/// invitation into a 500 on a request that had already succeeded, leaving the admin unable to
+/// tell what state anything is in; the invitation is still redeemable through its link, and
+/// <c>POST /invitations/{id}/resend</c> exists precisely for a retry. What changed is that
+/// <c>IInvitationEmailSender.SendAsync</c> now returns an <see cref="EmailSendOutcome"/>, so
+/// the endpoint can decline to record a send that did not happen.
+/// </para>
+/// <para>
+/// This type's own doc used to call that fix "a schema change and therefore a separate
+/// issue". It was wrong, and the correction is worth keeping: the honest state after a failed
+/// send is <c>pending</c>, which is the state the row was created in, which the users screen
+/// already renders. No new status, no column, no migration — only a return value.
 /// </para>
 /// </summary>
 public sealed class EmailInvitationEmailSender(
@@ -32,7 +35,7 @@ public sealed class EmailInvitationEmailSender(
     EmailOptions options,
     ILogger<EmailInvitationEmailSender> logger) : IInvitationEmailSender
 {
-    public async Task SendAsync(UserInvitation invitation, CancellationToken cancellationToken)
+    public async Task<EmailSendOutcome> SendAsync(UserInvitation invitation, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(invitation);
 
@@ -51,7 +54,13 @@ public sealed class EmailInvitationEmailSender(
                 "Invitation {InvitationId} has no email address (type {InvitationType}); it is a shareable link and no mail was sent.",
                 invitation.Id,
                 invitation.InvitationType);
-            return;
+
+            // Defensive: the endpoints check for an addressee before calling, precisely so a
+            // link-type invitation is never recorded as sent. If this is ever reached from a
+            // new caller, `Delivered: false` is the truthful answer -- no mail was delivered
+            // -- and permanent because no retry gives this invitation an address.
+            return EmailSendOutcome.PermanentFailure(
+                "The invitation has no email address; it is a shareable link and is distributed by the admin.");
         }
 
         var outcome = await transport.SendAsync(message, cancellationToken).ConfigureAwait(false);
@@ -67,7 +76,7 @@ public sealed class EmailInvitationEmailSender(
                 invitation.Id,
                 invitation.InvitationType,
                 invitation.ExpiresAt);
-            return;
+            return outcome;
         }
 
         logger.Log(
@@ -78,5 +87,7 @@ public sealed class EmailInvitationEmailSender(
             outcome.Permanent ? "permanent" : "transient",
             outcome.FailureReason,
             invitation.Id);
+
+        return outcome;
     }
 }
