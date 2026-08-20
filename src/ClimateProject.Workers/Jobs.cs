@@ -310,3 +310,61 @@ public sealed class RetentionCleanupWorker(
         }
     }
 }
+
+/// <summary>
+/// Opens a survey on its start date and closes it on its end date. See
+/// <see cref="SurveyLifecycleJob"/> for which transitions it may make and, at greater length,
+/// for the ones it refuses.
+///
+/// <para><b>The one job here that writes a status.</b> Every other worker in this file raises a
+/// notification or deletes an expired row -- work whose worst failure is a duplicate mail or a
+/// row that lives a day longer. This one changes the lifecycle state of live customer data, so
+/// the conservatism is in <see cref="SurveyLifecycleSchedule"/> rather than here: this class
+/// does nothing but hand the sweep a clock and a cap, exactly like its five siblings.</para>
+///
+/// <para><b>Cross-tenant, like every job here.</b> No company id, because a scheduler that only
+/// advanced one tenant's surveys would be the wrong thing -- and unlike the sweeps that borrow
+/// a SuperAdmin-gated route's behaviour, this one has no HTTP equivalent to borrow from at all.
+/// <c>PUT /surveys/{id}/status</c> is a human moving one survey they administer; this is the
+/// platform honouring dates that were already agreed.</para>
+/// </summary>
+public sealed class SurveyLifecycleWorker(
+    IServiceScopeFactory scopeFactory,
+    WorkerHeartbeats heartbeats,
+    IOptions<WorkerSchedulingOptions> options,
+    ILogger<SurveyLifecycleWorker> logger)
+    : ScheduledJobWorker(
+        WorkerJobs.SurveyLifecycle,
+        options.Value.SurveyLifecycleInterval,
+        options.Value.Enabled,
+        scopeFactory,
+        heartbeats,
+        logger)
+{
+    private readonly int _batchSize = options.Value.SurveyLifecycleBatchSize;
+
+    protected override async Task RunOnceAsync(
+        IServiceProvider services,
+        DateTimeOffset nowUtc,
+        CancellationToken cancellationToken)
+    {
+        var db = services.GetRequiredService<ClimateProjectDbContext>();
+        var loggerFactory = services.GetRequiredService<ILoggerFactory>();
+
+        var result = await SurveyLifecycleJob.RunAsync(
+            db, loggerFactory, nowUtc, _batchSize, cancellationToken);
+
+        if (result.MoreRemaining)
+        {
+            // Only worth a line when the cap actually bit, and here that means surveys are
+            // waiting another five minutes to open or close. Expected exactly once -- on the
+            // first tick after this job is deployed, working through the backlog of surveys
+            // that have been past their end date since before anything closed them.
+            logger.LogInformation(
+                "Survey lifecycle sweep took its full batch (opened {Opened}, closed {Closed}); more surveys are " +
+                "due a transition on the next tick.",
+                result.Opened,
+                result.Closed);
+        }
+    }
+}

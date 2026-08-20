@@ -53,6 +53,14 @@ public static class WorkerJobs
     /// </summary>
     public const string RetentionCleanup = "retention-cleanup";
 
+    /// <summary>
+    /// Advances a survey by its own <c>start_date</c> and <c>end_date</c>. The only job here
+    /// that changes a status on live customer data, and the only one that replaces no legacy
+    /// cron: nothing anywhere ever did this, so a survey scheduled to open never opened and one
+    /// past its end date accepted responses forever. See <c>SurveyLifecycleJob</c>.
+    /// </summary>
+    public const string SurveyLifecycle = "survey-lifecycle";
+
     public static readonly string[] All =
     [
         NotificationDispatch,
@@ -61,5 +69,6 @@ public static class WorkerJobs
         ScheduledReports,
         SurveyDraftRetention,
         RetentionCleanup,
+        SurveyLifecycle,
     ];
 }

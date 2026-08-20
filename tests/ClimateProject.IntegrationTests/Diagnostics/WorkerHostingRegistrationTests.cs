@@ -50,6 +50,7 @@ public class WorkerHostingRegistrationTests
             "ScheduledReportWorker",
             "SurveyDraftRetentionWorker",
             "RetentionCleanupWorker",
+            "SurveyLifecycleWorker",
             "WorkerHeartbeatMonitor",
         ];
 

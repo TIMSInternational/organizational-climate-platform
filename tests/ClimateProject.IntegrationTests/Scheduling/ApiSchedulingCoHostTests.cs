@@ -43,28 +43,35 @@ public sealed class CoHostedApiFixture : IDisposable
 /// Does #275 actually take effect, and does it stay harmless where it must?
 ///
 /// <para>Three claims, each of which could silently be false while every other test stays
-/// green: that the API host really registers and constructs the six jobs plus the monitor
-/// (a missing <c>AddClimateProjectScheduling</c> call deploys an API that schedules nothing,
-/// with no error anywhere); that <c>Scheduling:Enabled=false</c> -- the value every test host
-/// in this suite runs on -- really stops the jobs from ticking (the override only works
-/// because the workers read it lazily, so an eager read would ignore it and this suite would
-/// acquire six background writers overnight); and that unconfigured mail keeps the logging
-/// report runner selected, so a host that cannot send the "report ready" mail never claims to
-/// have delivered one.</para>
+/// green: that the API host really registers and constructs every job in
+/// <see cref="WorkerJobs.All"/> plus the monitor (a missing
+/// <c>AddClimateProjectScheduling</c> call deploys an API that schedules nothing, with no error
+/// anywhere); that <c>Scheduling:Enabled=false</c> -- the value every test host in this suite
+/// runs on -- really stops the jobs from ticking (the override only works because the workers
+/// read it lazily, so an eager read would ignore it and this suite would acquire a background
+/// writer per job overnight); and that unconfigured mail keeps the logging report runner
+/// selected, so a host that cannot send the "report ready" mail never claims to have delivered
+/// one.</para>
 ///
 /// <para>The heartbeat assertions are deterministic, not racy: a <c>BackgroundService</c>'s
 /// <c>ExecuteAsync</c> runs synchronously up to its first <c>await</c>, and both the disabled
 /// early-return and the enabled path's <c>WorkerHeartbeats.Register</c> sit before any await
 /// -- so by the time <c>StartAsync</c> has returned, a disabled host has deterministically
-/// registered nothing and an enabled one would deterministically have registered all six.
+/// registered nothing and an enabled one would deterministically have registered them all.
 /// (That is also what makes removing the factory's <c>Scheduling:Enabled=false</c> fail
 /// <c>SharedHostTests</c> reliably rather than intermittently.)</para>
 /// </summary>
 [Collection("AppHost")]
 public class ApiSchedulingCoHostTests(CoHostedApiFixture fixture) : IClassFixture<CoHostedApiFixture>
 {
+    /// <summary>
+    /// Asserted against <see cref="WorkerJobs.All"/> rather than a literal count, so adding a
+    /// job to the registry and forgetting to host it fails here instead of shipping a name
+    /// nothing ticks. The count itself is pinned separately by
+    /// <c>WorkerHostingRegistrationTests</c>.
+    /// </summary>
     [Fact]
-    public void The_api_host_constructs_all_six_scheduled_jobs_and_the_heartbeat_monitor()
+    public void The_api_host_constructs_every_scheduled_job_and_the_heartbeat_monitor()
     {
         // GetServices constructs every hosted service with its full dependency chain, so a
         // registration whose collaborators cannot resolve inside the API host fails HERE,

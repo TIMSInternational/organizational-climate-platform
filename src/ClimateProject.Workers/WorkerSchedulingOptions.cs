@@ -30,6 +30,12 @@ namespace ClimateProject.Workers;
 /// expires, so this governs when disk comes back and nothing else. Hourly rather than daily
 /// so each tick's delete stays small; not faster, because there is nothing to be prompt
 /// about.</item>
+/// <item><b>Survey lifecycle, 5 minutes.</b> The lag between a survey's start or end date
+/// arriving and its status agreeing. It is felt in both directions -- a respondent seeing a
+/// survey that has not opened yet, and one whose answer is accepted after the deadline -- but
+/// the dates admins pick are hours and days, so five minutes is well inside the noise, and
+/// each tick is a sequential scan of <c>surveys</c> that there is no reason to run every
+/// minute.</item>
 /// </list>
 /// </summary>
 public sealed class WorkerSchedulingOptions
@@ -58,6 +64,13 @@ public sealed class WorkerSchedulingOptions
     /// prompt, and a daily tick keeps each run's delete small.
     /// </summary>
     public TimeSpan RetentionCleanupInterval { get; set; } = TimeSpan.FromDays(1);
+
+    /// <summary>
+    /// How often a survey's dates are compared against its status. Five minutes; see the class
+    /// remarks, and <c>SurveyLifecycleJob</c> for why the window is a tick rather than a hard
+    /// cutoff.
+    /// </summary>
+    public TimeSpan SurveyLifecycleInterval { get; set; } = TimeSpan.FromMinutes(5);
 
     /// <summary>How often the in-process liveness check runs. See <c>WorkerHeartbeatMonitor</c>.</summary>
     public TimeSpan HeartbeatMonitorInterval { get; set; } = TimeSpan.FromMinutes(5);
@@ -95,6 +108,14 @@ public sealed class WorkerSchedulingOptions
     public int RetentionCleanupBatchSize { get; set; } = RetentionCleanupJob.DefaultBatchSize;
 
     /// <summary>
+    /// Status transitions applied per category per tick. A cap on one transaction, not on what
+    /// the job will ever do -- but unlike the retention caps, whatever a tick does not reach is
+    /// a survey that stays shut, or open, for another five minutes. Sized so that only the
+    /// first sweep after deploy can reach it.
+    /// </summary>
+    public int SurveyLifecycleBatchSize { get; set; } = SurveyLifecycleJob.DefaultBatchSize;
+
+    /// <summary>
     /// Fail the host at startup on a configuration that cannot work, rather than at the first
     /// tick. #189 established that principle for the API: a process that boots misconfigured
     /// reports a healthy deploy and then does nothing useful. A zero interval is worse here
@@ -109,6 +130,7 @@ public sealed class WorkerSchedulingOptions
         Require(ScheduledReportInterval, nameof(ScheduledReportInterval));
         Require(SurveyDraftRetentionInterval, nameof(SurveyDraftRetentionInterval));
         Require(RetentionCleanupInterval, nameof(RetentionCleanupInterval));
+        Require(SurveyLifecycleInterval, nameof(SurveyLifecycleInterval));
         Require(HeartbeatMonitorInterval, nameof(HeartbeatMonitorInterval));
 
         Require(NotificationBatchSize, nameof(NotificationBatchSize));
@@ -118,6 +140,7 @@ public sealed class WorkerSchedulingOptions
         Require(ScheduledReportBatchSize, nameof(ScheduledReportBatchSize));
         Require(SurveyDraftRetentionBatchSize, nameof(SurveyDraftRetentionBatchSize));
         Require(RetentionCleanupBatchSize, nameof(RetentionCleanupBatchSize));
+        Require(SurveyLifecycleBatchSize, nameof(SurveyLifecycleBatchSize));
 
         if (HeartbeatStaleTolerance <= 0)
         {
