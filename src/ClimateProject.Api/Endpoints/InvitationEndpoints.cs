@@ -10,7 +10,8 @@ namespace ClimateProject.Api.Endpoints;
 
 public static class InvitationEndpoints
 {
-    private static readonly TimeSpan InvitationLifetime = TimeSpan.FromDays(7);
+    // Internal: bulk import mints the same invitation and must expire it on the same clock.
+    internal static readonly TimeSpan InvitationLifetime = TimeSpan.FromDays(7);
 
     public static void MapInvitationEndpoints(this WebApplication app)
     {
@@ -35,7 +36,11 @@ public static class InvitationEndpoints
     // not necessarily a Guid) once that backfill runs, so parsing currentUser.Sub as a Guid
     // here would silently break for any user with a populated PersonaExternalId. Resolve
     // the acting user's real Id via their (unique, stable) email instead.
-    private static async Task<Guid> ResolveActingUserIdAsync(CurrentUser currentUser, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    /// <summary>
+    /// Internal rather than private because bulk import mints the same kind of invitation and
+    /// must stamp the same `invited_by`. One definition, so the two paths cannot drift.
+    /// </summary>
+    internal static async Task<Guid> ResolveActingUserIdAsync(CurrentUser currentUser, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var actingUser = await db.Users.FirstOrDefaultAsync(u => u.Email == currentUser.Email, cancellationToken);
         return actingUser?.Id ?? Guid.Empty;
@@ -280,7 +285,12 @@ public static class InvitationEndpoints
     /// can only produce the opposite: a committed invitation whose mail failed, which is
     /// visible as `pending` and is what resend is for.
     /// </summary>
-    private static async Task<EmailSendOutcome?> RecordDeliveryAsync(
+    /// <summary>
+    /// The one place that decides an invitation was `sent` (#368): only after a provider took
+    /// the message. Internal so bulk import records delivery by the same rule rather than a
+    /// second copy of it -- a copy is how "sent" came to mean "we tried" in the first place.
+    /// </summary>
+    internal static async Task<EmailSendOutcome?> RecordDeliveryAsync(
         ClimateProjectDbContext db,
         IInvitationEmailSender emailSender,
         UserInvitation invitation,

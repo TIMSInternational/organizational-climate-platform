@@ -43,7 +43,7 @@ public static class BulkImportEndpoints
         HttpRequest httpRequest,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
-        IPasswordHasher passwordHasher,
+        IInvitationEmailSender emailSender,
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
@@ -86,10 +86,29 @@ public static class BulkImportEndpoints
         // an unhandled DbUpdateException out of the single SaveChangesAsync call
         // below -- rolling back every other valid row in the same file.
         var existingEmails = (await db.Users.Select(u => u.Email).ToListAsync(cancellationToken)).ToHashSet();
+
+        var now = DateTimeOffset.UtcNow;
+
+        // Global for the same reason `existingEmails` is: an invitation is a promise of a row
+        // in `users`, and that table's unique index on email is platform-wide. Minting a second
+        // live token for somebody who already holds one is not a harmless duplicate -- whichever
+        // they redeem first makes the other permanently unredeemable, and nothing tells them
+        // which of the two mails in their inbox is the real one. Accepted and expired
+        // invitations are not live and do not block a re-invite.
+        var invitedEmails = (await db.UserInvitations
+            .Where(i => i.Email != null && i.AcceptedAt == null && i.ExpiresAt > now)
+            .Select(i => i.Email!)
+            .ToListAsync(cancellationToken))
+            .ToHashSet();
+
         var seenInThisFile = new HashSet<string>();
 
+        // Resolved once rather than per row: it is a lookup by the caller's own email and the
+        // caller does not change halfway through a file.
+        var invitedBy = await InvitationEndpoints.ResolveActingUserIdAsync(currentUser, db, cancellationToken);
+
         var results = new List<BulkImportRowResult>();
-        var now = DateTimeOffset.UtcNow;
+        var created = new List<UserInvitation>();
 
         foreach (var row in parsedRows)
         {
@@ -134,10 +153,10 @@ public static class BulkImportEndpoints
             {
                 status = "error";
             }
-            else if (existingEmails.Contains(email) || !seenInThisFile.Add(email))
+            else if (existingEmails.Contains(email) || invitedEmails.Contains(email) || !seenInThisFile.Add(email))
             {
                 status = "duplicate";
-                errors.Add("A user with this email already exists or appears twice in this file");
+                errors.Add("A user with this email already exists, already holds an invitation, or appears twice in this file");
             }
             else if (isPreview)
             {
@@ -145,22 +164,37 @@ public static class BulkImportEndpoints
             }
             else
             {
-                var user = new User
+                // An invitation, not an account. This branch used to write a `User` whose
+                // PasswordHash was a freshly generated Guid that was hashed and then
+                // discarded -- active, addressable, and impossible for anybody, including
+                // its owner, to sign in to. A bulk import exists to onboard a workforce
+                // before a survey, so that failure was invisible until the moment it
+                // mattered most.
+                //
+                // The row's Name is deliberately not carried. `UserInvitation` has nowhere
+                // to put it, and the accept flow already requires the person to give their
+                // own name and password (InvitationAcceptEndpoints.cs:53). Their spelling of
+                // their name beats a spreadsheet cell's. The name still reaches the admin in
+                // this endpoint's own result row, which is where they check what they
+                // uploaded.
+                var invitation = new UserInvitation
                 {
                     Id = Guid.NewGuid(),
-                    CompanyId = companyId,
                     Email = email,
-                    Name = row.Name.Trim(),
-                    PasswordHash = passwordHasher.Hash(Guid.NewGuid().ToString("N")),
-                    Role = row.Role,
+                    CompanyId = companyId,
                     DepartmentId = department?.Id,
-                    IsActive = true,
-                    CreatedAt = now,
-                    UpdatedAt = now,
+                    InvitedBy = invitedBy,
+                    InvitationToken = Guid.NewGuid().ToString("N"),
+                    InvitationType = InvitationValidation.TypeEmployeeDirect,
+                    Role = row.Role,
+                    Status = InvitationValidation.StatusPending,
+                    ExpiresAt = now.Add(InvitationEndpoints.InvitationLifetime),
+                    ReminderCount = 0,
                 };
-                db.Users.Add(user);
-                existingEmails.Add(email);
-                status = "created";
+                db.UserInvitations.Add(invitation);
+                created.Add(invitation);
+                invitedEmails.Add(email);
+                status = "invited";
             }
 
             results.Add(new BulkImportRowResult(row.RowNumber, row.Name, email, row.Role, row.Department, status, errors));
@@ -168,10 +202,24 @@ public static class BulkImportEndpoints
 
         if (!isPreview)
         {
+            // Saved before a single mail goes out, for the reason InvitationEndpoints.CreateAsync
+            // spells out: mailing first can put a token in somebody's inbox that no row backs,
+            // and a recipient whose link 404s cannot tell that from never having been invited.
+            // The opposite order can only produce a committed invitation whose mail failed,
+            // which is what resend is for.
             await db.SaveChangesAsync(cancellationToken);
+
+            // Delivery is recorded by the same rule as every other invitation (#368): `sent`
+            // only once a provider took the message. A row whose mail failed stays `pending`,
+            // which is the honest state and the one `POST /invitations/{id}/resend` retries.
+            // Sequential on purpose -- this shares a DbContext, and RecordDeliveryAsync saves.
+            foreach (var invitation in created)
+            {
+                await InvitationEndpoints.RecordDeliveryAsync(db, emailSender, invitation, now, cancellationToken);
+            }
         }
 
-        var successCount = results.Count(r => r.Status is "valid" or "created");
+        var successCount = results.Count(r => r.Status is "valid" or "invited");
         var errorCount = results.Count - successCount;
 
         return Results.Ok(new BulkImportResponse(results, successCount, errorCount));

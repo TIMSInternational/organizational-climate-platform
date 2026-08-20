@@ -57,7 +57,7 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     /// its own work cannot give, because it only ever measures its own window.
     /// </para>
     /// <para>
-    /// The six, and why each is allowed:
+    /// The seven, and why each is allowed:
     /// <list type="number">
     ///   <item><description>
     ///     <see cref="PostgresContainerFixture"/> -- the one host the whole collection shares.
@@ -80,6 +80,14 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     ///     recorded as sent otherwise would be vacuous -- a test that passes because the code
     ///     never writes that status at all would look identical.
     ///   </description></item>
+    ///   <item><description>
+    ///     <c>BulkImportEndpointsTests</c> -- one test, and the same reason as 4, on the other
+    ///     path that now mints invitations (#372). It is not a duplicate of 4: that host proves
+    ///     the SINGLE invitation endpoint promotes to sent, and nothing it asserts would notice
+    ///     if bulk import committed its invitations and mailed none of them. Proved rather than
+    ///     assumed -- deleting the delivery loop from <c>BulkImportEndpoints</c> compiles, leaves
+    ///     every row committed, still answers "invited", and is caught by this test alone.
+    ///   </description></item>
     /// </list>
     /// </para>
     /// <para>
@@ -88,7 +96,7 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     /// another. If you need one more host, say which of the reasons above yours is like.
     /// </para>
     /// </summary>
-    public const int HostBudget = 6;
+    public const int HostBudget = 7;
 
     /// <summary>
     /// Counts the database commands this application sends. Reset it immediately before the
