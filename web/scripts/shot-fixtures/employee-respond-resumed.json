@@ -14,7 +14,7 @@
     "autoSave": true,
     "randomizeQuestions": false,
     "showProgress": true,
-    "timeLimitMinutes": 10,
+    "timeLimitMinutes": null,
     "questions": [
       {
         "id": "11111111-0000-0000-0000-000000000001",
@@ -134,7 +134,30 @@
         "category": "open"
       }
     ],
-    "inProgress": null
+    "inProgress": {
+      "responseId": "22222222-0000-0000-0000-000000000001",
+      "sessionId": "9f2c1ab84e5d4f0e9b3d7c6a15e80d42",
+      "isComplete": false,
+      "language": "es",
+      "startTime": "2026-08-19T14:02:00Z",
+      "completionTime": null,
+      "answers": [
+        {
+          "questionId": "11111111-0000-0000-0000-000000000001",
+          "value": "4",
+          "values": null,
+          "text": null,
+          "timeSpentSeconds": 21
+        },
+        {
+          "questionId": "11111111-0000-0000-0000-000000000002",
+          "value": "heavy",
+          "values": null,
+          "text": null,
+          "timeSpentSeconds": 34
+        }
+      ]
+    }
   },
   "GET /microclimates/*": {
     "id": "m1",

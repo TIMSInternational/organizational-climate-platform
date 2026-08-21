@@ -134,6 +134,7 @@
     "endDate": "2026-09-12T17:00:00Z",
     "anonymous": true,
     "allowPartialResponses": true,
+    "autoSave": true,
     "randomizeQuestions": false,
     "showProgress": true,
     "timeLimitMinutes": null,

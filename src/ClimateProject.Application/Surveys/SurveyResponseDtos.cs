@@ -82,6 +82,22 @@ public sealed record SurveyResponseState(
 /// respondent's business and one of which (this survey is anonymous and has had 3
 /// responses) is actively harmful to hand to the person about to be the fourth.
 /// </summary>
+/// <param name="AutoSave">
+/// <c>Survey.Settings.AutoSave</c>, served so the respond form can honour it (#369).
+///
+/// It was the one setting on this page the client could not see. Every other flag that
+/// shapes the form -- ShowProgress, AllowPartialResponses, RandomizeQuestions,
+/// TimeLimitMinutes -- is carried here, and the form's own comment recorded AutoSave as
+/// a gap rather than a decision: the setting existed on <c>SurveySettingsDto</c>, the
+/// respondent's payload did not carry it, so the page could not tell a survey that
+/// asked for background saving from one that did not, and offered the save BUTTON to
+/// both. Autosaving without it would have been inventing behaviour for every survey
+/// whose author had turned it off.
+///
+/// It is a second gate, never a replacement for <see cref="AllowPartialResponses"/>: a
+/// survey that forbids partial responses is refused by the submit endpoint itself, so
+/// background saving is impossible there whatever this says.
+/// </param>
 public sealed record SurveyRespondView(
     Guid Id,
     string? Title,
@@ -94,6 +110,7 @@ public sealed record SurveyRespondView(
     DateTimeOffset EndDate,
     bool Anonymous,
     bool AllowPartialResponses,
+    bool AutoSave,
     bool RandomizeQuestions,
     bool ShowProgress,
     int? TimeLimitMinutes,

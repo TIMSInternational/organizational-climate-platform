@@ -282,6 +282,7 @@ public static class SurveyResponseEndpoints
             survey.EndDate,
             survey.Settings.Anonymous,
             survey.Settings.AllowPartialResponses,
+            survey.Settings.AutoSave,
             survey.Settings.RandomizeQuestions,
             survey.Settings.ShowProgress,
             survey.Settings.TimeLimitMinutes,

@@ -334,6 +334,135 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
     }
 
     // ------------------------------------------------------------------
+    // Autosave (#369): what the endpoint does when a client saves on a timer
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The gap #369 closed on this seam. Every other setting that shapes the respond
+    /// page is served; AutoSave was not, so the form could not tell a survey whose
+    /// author asked for background saving from one who turned it off.
+    /// </summary>
+    [Fact]
+    public async Task The_respond_payload_carries_the_surveys_autosave_setting_both_ways()
+    {
+        var on = await ActiveSurveyAsync(settings: new SurveySettingsInput(AutoSave: true));
+        var off = await ActiveSurveyAsync(settings: new SurveySettingsInput(AutoSave: false));
+        var employee = await EmployeeAsync(_departmentId);
+
+        var onView = (await employee.GetFromJsonAsync<SurveyRespondView>($"/surveys/{on.Id}/respond"))!;
+        var offView = (await employee.GetFromJsonAsync<SurveyRespondView>($"/surveys/{off.Id}/respond"))!;
+
+        Assert.True(onView.AutoSave);
+        Assert.False(offView.AutoSave);
+    }
+
+    /// <summary>
+    /// The property a debounced autosave rests on: saving the same growing answer set
+    /// over and over writes ONE response and one row per question, not one per tick.
+    ///
+    /// Proven end to end rather than by reading <c>UpsertAnswersAsync</c>, because the
+    /// thing that would break is a primary-key violation on
+    /// <c>question_responses (response_id, question_id)</c> -- which no in-memory test
+    /// sees, and which a respondent would meet as a generic 409 in the middle of
+    /// answering.
+    /// </summary>
+    [Fact]
+    public async Task Repeated_partial_saves_accumulate_into_one_response_rather_than_many()
+    {
+        var survey = await ActiveSurveyAsync(questions:
+        [
+            WorkModeQuestion(bilingual: false),
+            new CreateSurveyQuestionInput(
+                LocalizedInput.FromBare("What would you change?"),
+                QuestionTypes.OpenEnded,
+                Order: 1),
+        ]);
+        var employee = await EmployeeAsync(_departmentId);
+        var sessionId = Guid.NewGuid().ToString("N");
+        var choice = survey.Questions.Single(q => q.Type == QuestionTypes.MultipleChoice).Id;
+        var text = survey.Questions.Single(q => q.Type == QuestionTypes.OpenEnded).Id;
+
+        // Tick one: the first answer.
+        var first = await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(choice, "remote")], SessionId: sessionId, IsComplete: false));
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+
+        // Tick two: the same answer again, because a debounce fired on an unrelated edit.
+        var second = await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(choice, "remote")], SessionId: sessionId, IsComplete: false));
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+
+        // Tick three: the whole answer set so far, which is what a client that posts its
+        // current state rather than a delta sends every time.
+        var third = await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers:
+            [
+                new SurveyAnswerInput(choice, "hybrid"),
+                new SurveyAnswerInput(text, "Fewer meetings."),
+            ],
+            SessionId: sessionId,
+            IsComplete: false));
+        Assert.Equal(HttpStatusCode.OK, third.StatusCode);
+
+        var responseId = (await third.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId;
+        Assert.Equal(1, await _harness.WithDbAsync(db => db.Responses.CountAsync(r => r.SurveyId == survey.Id)));
+        Assert.Equal(2, await _harness.WithDbAsync(db => db.QuestionResponses.CountAsync(qr => qr.ResponseId == responseId)));
+
+        var view = (await employee.GetFromJsonAsync<SurveyRespondView>(
+            $"/surveys/{survey.Id}/respond?sessionId={sessionId}"))!;
+        Assert.Equal("hybrid", view.InProgress!.Answers.Single(a => a.QuestionId == choice).Value);
+    }
+
+    /// <summary>
+    /// Why the client must not fire its first autosave until an answer exists.
+    ///
+    /// This asserts what the endpoint DOES, not what it should: a partial save carrying
+    /// no answers is accepted and creates a bare response row. That row is two things
+    /// #369 does not want -- a write per visitor who merely opened the link, and a
+    /// record that a named employee opened a survey they never answered. The endpoint is
+    /// deliberately left alone (an anonymous client can always post an empty body, so
+    /// refusing here would buy nothing) and the restraint lives in the form instead.
+    /// If this ever goes red because the endpoint learned to refuse an empty partial,
+    /// that is good news and the client gate becomes belt and braces rather than the
+    /// only guard.
+    /// </summary>
+    [Fact]
+    public async Task An_empty_partial_save_still_creates_a_response_row_which_is_why_the_form_waits()
+    {
+        var survey = await ActiveSurveyAsync();
+        var employee = await EmployeeAsync(_departmentId);
+
+        var http = await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [], SessionId: Guid.NewGuid().ToString("N"), IsComplete: false));
+
+        Assert.Equal(HttpStatusCode.Created, http.StatusCode);
+        var row = await ResponseRowAsync((await http.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId);
+        Assert.False(row.IsComplete);
+        Assert.NotNull(row.UserId);
+    }
+
+    /// <summary>
+    /// The other reason the form gates on AllowPartialResponses: a survey that forbids
+    /// them refuses every autosave tick with a 400 the respondent would have to be
+    /// shown. Asserted here so the client's gate is documented as mirroring a server
+    /// rule rather than inventing one.
+    /// </summary>
+    [Fact]
+    public async Task A_survey_that_forbids_partial_responses_refuses_a_background_save()
+    {
+        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(AllowPartialResponses: false));
+        var employee = await EmployeeAsync(_departmentId);
+
+        var http = await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(survey.Questions[0].Id, "remote")],
+            SessionId: Guid.NewGuid().ToString("N"),
+            IsComplete: false));
+
+        Assert.Equal(HttpStatusCode.BadRequest, http.StatusCode);
+        Assert.Empty(await _harness.WithDbAsync(db => db.Responses.Where(r => r.SurveyId == survey.Id).ToListAsync()));
+    }
+
+    // ------------------------------------------------------------------
     // Idempotency
     // ------------------------------------------------------------------
 
