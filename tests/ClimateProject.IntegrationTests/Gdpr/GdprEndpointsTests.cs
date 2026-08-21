@@ -1157,6 +1157,75 @@ public class GdprEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// The account row's org placement — <c>department_id</c> and <c>manager_id</c> — is gone
+    /// afterwards.
+    /// </summary>
+    /// <remarks>
+    /// <para>Split out from the test above rather than folded into it because it needs a
+    /// subject who <b>has</b> a department and a manager, and the shared seed deliberately does
+    /// not give one: every other assertion there is about tables reached by user id or by
+    /// address, and adding an org placement to that fixture would change what the export
+    /// sections contain.</para>
+    ///
+    /// <para>Why it is asserted at all: <c>SubjectErasure.AnonymiseAccount</c> clears both
+    /// columns, the privacy page tells the subject so in as many words
+    /// (<c>privacy.erasureAnonymisedUsers</c>: "your department and manager are cleared"), and
+    /// until this test both assignments could be deleted with the whole suite green — the
+    /// pseudonymised email and the deactivation were asserted, these two were not. "Worked in
+    /// this team, reported to this person" is a fact about the individual, and a promise about
+    /// it on a page whose only value is that it can be believed needs a test that reads the
+    /// columns back.</para>
+    ///
+    /// <para>The pre-condition is asserted before the erasure runs, because the failure mode
+    /// this guards against is a vacuous pass: <c>Assert.Null</c> on a column that was null all
+    /// along proves nothing about the code under test.</para>
+    /// </remarks>
+    [Fact]
+    public async Task Erasure_clears_the_department_and_the_manager_the_page_says_it_clears()
+    {
+        var (_, subjectId, _) = await SignInAsync(Roles.Employee);
+        var (adminClient, _, _) = await SignInAsync(Roles.CompanyAdmin);
+        var (_, managerId, _) = await SignInAsync(Roles.Supervisor);
+
+        var now = DateTimeOffset.UtcNow;
+        await using (var seed = NewContext())
+        {
+            var department = new Department
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _companyId,
+                Name = $"Engineering {Guid.NewGuid():N}",
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            seed.Departments.Add(department);
+
+            var subject = await seed.Users.SingleAsync(u => u.Id == subjectId);
+            subject.DepartmentId = department.Id;
+            subject.ManagerId = managerId;
+            await seed.SaveChangesAsync();
+        }
+
+        await using (var before = NewContext())
+        {
+            var placed = await before.Users.SingleAsync(u => u.Id == subjectId);
+            Assert.NotNull(placed.DepartmentId);
+            Assert.NotNull(placed.ManagerId);
+        }
+
+        var response = await adminClient.PostAsJsonAsync("/gdpr/erasure", new ErasureRequest(subjectId, true));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var db = NewContext();
+        var erased = await db.Users.SingleAsync(u => u.Id == subjectId);
+        Assert.Null(erased.DepartmentId);
+        Assert.Null(erased.ManagerId);
+
+        // The manager's own row is somebody else's data and is not touched by this erasure.
+        Assert.NotNull(await db.Users.SingleOrDefaultAsync(u => u.Id == managerId && u.IsActive));
+    }
+
+    /// <summary>
     /// After an erasure, the subject's own address survives in no column of any table.
     /// </summary>
     /// <remarks>
