@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { getConsolidado, type ConsolidadoResponse, type NodoConsolidado } from '../api/trackingApi'
-import { getNodoNames } from '../api/trackingPicker'
+import { getNodoNames } from '../api/trackingPickers'
+import { SemaforoGlyph } from '../components/SemaforoChip'
 import SemaforoSummary from '../components/SemaforoSummary'
-import { SEMAFORO_ESTADOS, SEMAFORO_PRESENTATION, semaforoCount } from '../semaforo'
+import { SEMAFORO_ORDER, semaforoCount, semaforoPresentation } from '../semaforo'
 import { canViewConsolidado } from '../trackingAccess'
-import { formatPercentOrUnavailable } from '../trackingUnits'
+import { formatPercentOrUnavailable, percentagePoints } from '../trackingUnits'
 import { useCompanyScope } from '../../../company-context'
 import { useCompanyName } from '../../../company-context/useCompanyName'
 import { getToken } from '../../../auth/token'
@@ -152,6 +153,13 @@ export default function ConsolidadoPage() {
   }
 
   const rows: NodoRow[] = data?.porNodo ?? []
+  /**
+   * The company's plan total according to the ROWS, which is the figure the table
+   * below actually shows. `ConsolidadoResponse` has no company-level `totalPlanes`
+   * — only `conteos` and the per-nodo rows — so this is the only server-derived
+   * total on the page, and it is what the strip is checked against.
+   */
+  const serverTotal = rows.reduce((sum, nodo) => sum + nodo.totalPlanes, 0)
 
   return (
     <div>
@@ -170,9 +178,17 @@ export default function ConsolidadoPage() {
       {/* The strip is company-wide `conteos`, which the server totals over every
           plan rather than over the rows below — so it stays correct even for a
           company whose plans are all in one nodo. Hidden while loading and on
-          failure: a strip of zeros is a reading nobody took. */}
+          failure: a strip of zeros is a reading nobody took.
+
+          `total` is the sum of the rows' own `totalPlanes`, and passing it is what
+          lets the strip NOTICE a disagreement rather than paper over one.
+          `CountSemaforo` tallies three states and `TotalPlanes` is `g.Count()` over
+          the same group; they agree only while `EstadoSemaforo` has exactly three
+          members. Give it a fourth and the KPI row would read 9 above a table
+          reading 10, with neither number wrong and nothing to flag it. See
+          `countsCoverTotal`. */}
       {!loading && !loadError && data && (
-        <SemaforoSummary counts={data.conteos} locale={locale} />
+        <SemaforoSummary counts={data.conteos} total={serverTotal} locale={locale} />
       )}
 
       {loadError ? (
@@ -199,21 +215,26 @@ export default function ConsolidadoPage() {
                   <tr>
                     <th>{t('tracking.columnNodo')}</th>
                     <th>{t('tracking.columnTotalPlanes')}</th>
-                    {/* One column per state, each headed by its own glyph as well
-                        as its word — the header is where a reader learns which
-                        outline means what, so dropping the icon here would leave
-                        the chips elsewhere on the module unexplained. */}
-                    {SEMAFORO_ESTADOS.map((estado) => {
-                      const { icon: Icon, labelKey } = SEMAFORO_PRESENTATION[estado]
-                      return (
-                        <th key={estado}>
-                          <span className="inline-flex items-center gap-1">
-                            <Icon aria-hidden="true" className="size-3.5 shrink-0" />
-                            {t(labelKey)}
-                          </span>
-                        </th>
-                      )
-                    })}
+                    {/* One column per state, headed by its own silhouette as well as
+                        its word. The header is where a reader learns which outline
+                        means what, so a bare word here would leave the chips
+                        elsewhere in the module unexplained.
+
+                        `SemaforoGlyph` rather than a whole `SemaforoChip`: three
+                        filled pills in a table head read as three controls sitting
+                        on the data, and repeat the pills in the strip immediately
+                        above. The glyph still comes from the ONE icon map — this
+                        heading previously reached into a second presentation record
+                        for a raw icon component, which is what let the strip and
+                        the rows disagree about whether a state has a shape. */}
+                    {SEMAFORO_ORDER.map((estado) => (
+                      <th key={estado}>
+                        <span className="inline-flex items-center gap-1">
+                          <SemaforoGlyph estado={estado} className="size-3.5" />
+                          {t(semaforoPresentation(estado).labelKey)}
+                        </span>
+                      </th>
+                    ))}
                     <th>{t('tracking.columnPriorYear')}</th>
                   </tr>
                 </thead>
@@ -232,7 +253,7 @@ export default function ConsolidadoPage() {
                         </Link>
                       </td>
                       <td className="font-mono tabular-nums">{nodo.totalPlanes}</td>
-                      {SEMAFORO_ESTADOS.map((estado) => (
+                      {SEMAFORO_ORDER.map((estado) => (
                         <td key={estado} className="font-mono tabular-nums">
                           {semaforoCount(nodo.conteos, estado)}
                         </td>
@@ -251,10 +272,20 @@ export default function ConsolidadoPage() {
               {/* Why the column reads "not available" rather than a number. Said
                   once under the table instead of as a tooltip per cell: this
                   audience should not have to hover to find out that a blank is
-                  not a zero. */}
-              <Caption className="mt-panel-gap block text-fg-secondary">
-                {t('tracking.priorYearNote')}
-              </Caption>
+                  not a zero.
+
+                  Conditional, and that is the point. The note asserts the figure is
+                  UNAVAILABLE; printed unconditionally it would keep saying so
+                  underneath a column of real percentages the moment #89 lands and
+                  the service starts populating `resultadoAnioAnteriorPct` — the
+                  page contradicting itself, in the one place a reader would go to
+                  resolve the contradiction. It appears while at least one cell has
+                  no reading and disappears by itself when they all do. */}
+              {rows.some((nodo) => percentagePoints(nodo.resultadoAnioAnteriorPct) === null) && (
+                <Caption className="mt-panel-gap block text-fg-secondary">
+                  {t('tracking.priorYearNote')}
+                </Caption>
+              )}
             </>
           )}
         </LoadingRegion>

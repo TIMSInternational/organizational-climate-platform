@@ -1,5 +1,8 @@
 {
-  "GET /notifications/mine": { "notifications": [], "unreadCount": 0 },
+  "GET /notifications/mine": {
+    "notifications": [],
+    "unreadCount": 0
+  },
   "GET /profile": {
     "id": "00000000-0000-0000-0000-000000000001",
     "companyId": "11111111-1111-1111-1111-111111111111",
@@ -11,46 +14,113 @@
   },
   "GET /tracking/picker/nodos": {
     "nodos": [
-      { "id": "nodo-operaciones", "name": "Dirección de Operaciones" },
-      { "id": "nodo-comercial", "name": "Dirección Comercial" },
-      { "id": "nodo-financiero", "name": "Dirección Financiera" },
-      { "id": "nodo-talento", "name": "Dirección de Talento Humano" },
-      { "id": "nodo-tecnologia", "name": "Dirección de Tecnologías de Información" }
+      {
+        "id": "nodo-operaciones",
+        "name": "Dirección de Operaciones"
+      },
+      {
+        "id": "nodo-comercial",
+        "name": "Dirección Comercial"
+      },
+      {
+        "id": "nodo-financiero",
+        "name": "Dirección Financiera"
+      },
+      {
+        "id": "nodo-talento",
+        "name": "Dirección de Talento Humano"
+      },
+      {
+        "id": "nodo-tecnologia",
+        "name": "Dirección de Tecnologías de Información"
+      }
+    ]
+  },
+  "GET /tracking/picker/personas": {
+    "personas": [
+      {
+        "id": "persona-1",
+        "name": "Ana Rojas",
+        "email": "ana.rojas@acme.example"
+      },
+      {
+        "id": "persona-2",
+        "name": "Beto Solís",
+        "email": "beto.solis@acme.example"
+      },
+      {
+        "id": "persona-3",
+        "name": "Carla Mora",
+        "email": "carla.mora@acme.example"
+      },
+      {
+        "id": "persona-4",
+        "name": "Diego Vargas",
+        "email": "diego.vargas@acme.example"
+      }
     ]
   },
   "GET /api/consolidado": {
-    "conteos": { "rojo": 4, "amarillo": 6, "verde": 13 },
+    "conteos": {
+      "rojo": 4,
+      "amarillo": 6,
+      "verde": 13
+    },
     "porNodo": [
       {
         "nodoExternalId": "nodo-operaciones",
-        "conteos": { "rojo": 2, "amarillo": 1, "verde": 4 },
+        "conteos": {
+          "rojo": 2,
+          "amarillo": 1,
+          "verde": 4
+        },
         "totalPlanes": 7
       },
       {
         "nodoExternalId": "nodo-comercial",
-        "conteos": { "rojo": 0, "amarillo": 2, "verde": 3 },
+        "conteos": {
+          "rojo": 0,
+          "amarillo": 2,
+          "verde": 3
+        },
         "totalPlanes": 5
       },
       {
         "nodoExternalId": "nodo-financiero",
-        "conteos": { "rojo": 1, "amarillo": 0, "verde": 2 },
+        "conteos": {
+          "rojo": 1,
+          "amarillo": 0,
+          "verde": 2
+        },
         "totalPlanes": 3
       },
       {
         "nodoExternalId": "nodo-talento",
-        "conteos": { "rojo": 0, "amarillo": 3, "verde": 3 },
+        "conteos": {
+          "rojo": 0,
+          "amarillo": 3,
+          "verde": 3
+        },
         "totalPlanes": 6
       },
       {
         "nodoExternalId": "nodo-tecnologia",
-        "conteos": { "rojo": 1, "amarillo": 0, "verde": 1 },
+        "conteos": {
+          "rojo": 1,
+          "amarillo": 0,
+          "verde": 1
+        },
         "totalPlanes": 2
       }
     ]
   },
   "GET /api/tablero-seguimiento": {
     "nodoExternalId": "nodo-operaciones",
-    "conteos": { "rojo": 2, "amarillo": 1, "verde": 4 },
+    "conteos": {
+      "rojo": 2,
+      "amarillo": 1,
+      "verde": 4
+    },
     "planes": [
       {
         "id": "11111111-0000-0000-0000-000000000001",
@@ -86,7 +156,9 @@
         "cicloEncuestaExternalId": null,
         "fechaUltimaActualizacion": "2026-05-30",
         "cumplido": false,
-        "involucradosExternalIds": ["persona-0088"]
+        "involucradosExternalIds": [
+          "persona-0088"
+        ]
       },
       {
         "id": "11111111-0000-0000-0000-000000000003",
@@ -122,7 +194,9 @@
         "cicloEncuestaExternalId": null,
         "fechaUltimaActualizacion": "2026-08-14",
         "cumplido": false,
-        "involucradosExternalIds": ["persona-0088"]
+        "involucradosExternalIds": [
+          "persona-0088"
+        ]
       },
       {
         "id": "11111111-0000-0000-0000-000000000005",
@@ -179,5 +253,130 @@
         "involucradosExternalIds": []
       }
     ]
-  }
+  },
+  "GET /api/planes-accion": [
+    {
+      "id": "aaaaaaaa-0000-0000-0000-000000000001",
+      "planCode": "PA-2026-00001",
+      "nodoExternalId": "nodo-operaciones",
+      "liderExternalId": "persona-1",
+      "hallazgoExternalId": "hallazgo-comunicacion-2026Q1",
+      "descripcionQue": "Reforzar la comunicación de los cambios de turno entre jefaturas y planta",
+      "metodologiaComo": "Boletín quincenal impreso en la cartelera y reunión de cierre de mes",
+      "responsableEjecucionExternalId": "persona-2",
+      "fechaCreacion": "2026-02-01",
+      "fechaCompromiso": "2026-07-30",
+      "porcentajeAvance": 0.15,
+      "estadoSemaforo": "Rojo",
+      "cicloEncuestaExternalId": "ciclo-2026-q1",
+      "fechaUltimaActualizacion": "2026-05-04",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "persona-3"
+      ]
+    },
+    {
+      "id": "aaaaaaaa-0000-0000-0000-000000000002",
+      "planCode": "PA-2026-00004",
+      "nodoExternalId": "nodo-operaciones",
+      "liderExternalId": "persona-1",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Revisar la carga de trabajo del turno nocturno",
+      "metodologiaComo": "Medición de horas extra por persona y ajuste del rol de turnos",
+      "responsableEjecucionExternalId": "persona-3",
+      "fechaCreacion": "2026-03-10",
+      "fechaCompromiso": "2026-10-15",
+      "porcentajeAvance": 0.4,
+      "estadoSemaforo": "Amarillo",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-08-01",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "persona-2",
+        "persona-4"
+      ]
+    },
+    {
+      "id": "aaaaaaaa-0000-0000-0000-000000000003",
+      "planCode": "PA-2026-00006",
+      "nodoExternalId": "nodo-financiero",
+      "liderExternalId": "persona-4",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Publicar el calendario de pagos con un mes de anticipación",
+      "metodologiaComo": "Calendario anual aprobado en comité y publicado en la intranet",
+      "responsableEjecucionExternalId": "persona-4",
+      "fechaCreacion": "2026-04-02",
+      "fechaCompromiso": "2026-12-01",
+      "porcentajeAvance": 0.8,
+      "estadoSemaforo": "Verde",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-08-18",
+      "cumplido": false,
+      "involucradosExternalIds": []
+    }
+  ],
+  "GET /api/planes-accion/*": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000002",
+    "planCode": "PA-2026-00004",
+    "nodoExternalId": "nodo-operaciones",
+    "liderExternalId": "persona-1",
+    "hallazgoExternalId": "hallazgo-carga-2026Q1",
+    "descripcionQue": "Revisar la carga de trabajo del turno nocturno",
+    "metodologiaComo": "Medición de horas extra por persona y ajuste del rol de turnos",
+    "responsableEjecucionExternalId": "persona-3",
+    "fechaCreacion": "2026-03-10",
+    "fechaCompromiso": "2026-10-15",
+    "porcentajeAvance": 0.4,
+    "estadoSemaforo": "Amarillo",
+    "cicloEncuestaExternalId": "ciclo-2026-q1",
+    "fechaUltimaActualizacion": "2026-08-01",
+    "cumplido": false,
+    "involucradosExternalIds": [
+      "persona-2",
+      "persona-4"
+    ]
+  },
+  "GET /api/mis-tareas": [
+    {
+      "id": "aaaaaaaa-0000-0000-0000-000000000001",
+      "planCode": "PA-2026-00001",
+      "nodoExternalId": "nodo-operaciones",
+      "liderExternalId": "persona-1",
+      "hallazgoExternalId": "hallazgo-comunicacion-2026Q1",
+      "descripcionQue": "Reforzar la comunicación de los cambios de turno entre jefaturas y planta",
+      "metodologiaComo": "Boletín quincenal impreso en la cartelera y reunión de cierre de mes",
+      "responsableEjecucionExternalId": "persona-2",
+      "fechaCreacion": "2026-02-01",
+      "fechaCompromiso": "2026-07-30",
+      "porcentajeAvance": 0.15,
+      "estadoSemaforo": "Rojo",
+      "cicloEncuestaExternalId": "ciclo-2026-q1",
+      "fechaUltimaActualizacion": "2026-05-04",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "persona-3"
+      ]
+    },
+    {
+      "id": "aaaaaaaa-0000-0000-0000-000000000002",
+      "planCode": "PA-2026-00004",
+      "nodoExternalId": "nodo-operaciones",
+      "liderExternalId": "persona-1",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Revisar la carga de trabajo del turno nocturno",
+      "metodologiaComo": "Medición de horas extra por persona y ajuste del rol de turnos",
+      "responsableEjecucionExternalId": "persona-3",
+      "fechaCreacion": "2026-03-10",
+      "fechaCompromiso": "2026-10-15",
+      "porcentajeAvance": 0.4,
+      "estadoSemaforo": "Amarillo",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-08-01",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "persona-2",
+        "persona-4"
+      ]
+    }
+  ]
 }

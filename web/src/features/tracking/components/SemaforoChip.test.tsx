@@ -1,11 +1,17 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
-import SemaforoChip from './SemaforoChip'
 import { TranslationProvider } from '../../../i18n'
-import { SEMAFORO_ESTADOS } from '../semaforo'
+import SemaforoChip from './SemaforoChip'
+import { SEMAFORO_ORDER } from '../semaforo'
 
-afterEach(cleanup)
-
+/**
+ * §7 of the client's spec: colour alone is not a signal. Every state must carry a
+ * shape AND an accessible name, and must survive a greyscale print.
+ *
+ * A screenshot is what actually proves the greyscale part — these pin the two
+ * things a DOM test can see: that the word is there, and that the three states do
+ * not share a glyph.
+ */
 function renderChip(estado: string) {
   return render(
     <TranslationProvider initialLocale="es">
@@ -14,23 +20,60 @@ function renderChip(estado: string) {
   )
 }
 
-describe('SemaforoChip', () => {
-  it.each([...SEMAFORO_ESTADOS])('renders %s as a word and a glyph, never a colour alone', (estado) => {
+function glyphPath(): string {
+  const svg = document.querySelector('[data-slot="chip"] svg')
+  return svg ? (svg.innerHTML ?? '') : ''
+}
+
+afterEach(cleanup)
+
+describe('the semáforo chip', () => {
+  it('names every state in words, not only in colour', () => {
+    renderChip('Rojo')
+    expect(screen.getByText('Atrasado')).toBeTruthy()
+    cleanup()
+
+    renderChip('Amarillo')
+    expect(screen.getByText('En riesgo')).toBeTruthy()
+    cleanup()
+
+    renderChip('Verde')
+    expect(screen.getByText('Al día')).toBeTruthy()
+  })
+
+  it.each([...SEMAFORO_ORDER])('renders %s as a word AND a glyph, never a colour alone', (estado) => {
     const { container } = renderChip(estado)
     const chip = container.querySelector('[data-slot="chip"]')
 
-    expect(chip?.textContent?.trim()).toBe(estado)
+    expect(chip?.textContent?.trim(), 'no word').toBeTruthy()
     expect(chip?.querySelector('svg'), 'no glyph').toBeTruthy()
   })
 
-  it('draws a different glyph for each state, so greyscale still separates them', () => {
-    const drawings = SEMAFORO_ESTADOS.map((estado) => {
-      const { container } = renderChip(estado)
-      const svg = container.querySelector('[data-slot="chip"] svg')?.innerHTML
+  it('draws a DIFFERENT glyph for each state', () => {
+    // Three coloured dots would pass a "has an icon" check and fail a photocopy.
+    renderChip('Rojo')
+    const rojo = glyphPath()
+    cleanup()
+
+    renderChip('Amarillo')
+    const amarillo = glyphPath()
+    cleanup()
+
+    renderChip('Verde')
+    const verde = glyphPath()
+
+    expect(rojo).not.toBe('')
+    expect(new Set([rojo, amarillo, verde]).size).toBe(3)
+  })
+
+  it('gives each state a different tone as the THIRD signal', () => {
+    const classes = SEMAFORO_ORDER.map((estado) => {
+      renderChip(estado)
+      const className = document.querySelector('[data-slot="chip"]')?.className ?? ''
       cleanup()
-      return svg
+      return className
     })
-    expect(new Set(drawings).size).toBe(SEMAFORO_ESTADOS.length)
+    expect(new Set(classes).size).toBe(SEMAFORO_ORDER.length)
   })
 
   /**
@@ -39,13 +82,10 @@ describe('SemaforoChip', () => {
    * way to challenge it, so the neutral tone — the one that claims nothing — carries
    * the server's own word instead.
    */
-  it('shows an unknown state neutrally, with the server word and no borrowed meaning', () => {
-    const { container } = renderChip('Azul')
-    const chip = container.querySelector('[data-slot="chip"]')
-
-    expect(chip?.textContent?.trim()).toBe('Azul')
-    expect(chip?.querySelector('svg')).toBeNull()
-    expect(chip?.className).toContain('chip-neutral')
+  it('renders an unknown state as neutral and shows the raw value', () => {
+    renderChip('Naranja')
+    expect(screen.getByText('Naranja')).toBeTruthy()
+    expect(document.querySelector('[data-slot="chip"]')?.className).toContain('chip-neutral')
   })
 
   it('falls back to translated copy when the state is not even a word', () => {

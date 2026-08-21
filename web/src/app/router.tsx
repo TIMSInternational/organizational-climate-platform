@@ -99,27 +99,25 @@ function HomeRedirect() {
  * router awaits it during navigation, so no fallback element is needed and the
  * dynamic import stays inline here instead of in a statically-imported wrapper.
  *
- * ## The three that are missing, and why they cannot be here yet
+ * ## All five are here, and that is the whole point of this table
  *
- * #125 owns the route table for the whole module so it is edited once, and the
- * remaining three paths belong to #126's pages:
+ * #125 owned the route table for the module so it would be edited once, and while
+ * the two slices were in flight this array held only #125's own two paths with the
+ * other three written out in a comment — a dynamic `import()` of a file the branch
+ * does not contain is a **build** failure, not a runtime one, since Rollup resolves
+ * it while bundling.
  *
- *     { path: '/tracking/planes', lazy: … 'PlanesAccionListPage' },
- *     { path: '/tracking/planes/:id', lazy: … 'PlanAccionDetailPage' },
- *     { path: '/tracking/mis-tareas', lazy: … 'MisTareasPage' },
+ * The cost of that arrangement was the thing worth recording: #126 shipped four
+ * pages and 4034 lines that NOTHING imported, so Rollup tree-shook the lot and the
+ * feature was absent from the bundle while its own tests passed. "The tests pass"
+ * and "this is in the product" are different claims, and only a route table
+ * connects them. `router.test.ts` now reads this file and asserts every tracking
+ * page under `features/tracking/pages/` is registered here, so a page added without
+ * a path fails rather than silently disappearing.
  *
- * They are written out rather than registered because a dynamic `import()` of a
- * module that does not exist is a **build** failure, not a runtime one — Rollup
- * resolves it while bundling — so declaring them against files this branch does not
- * contain would make `npm run build` fail here and in CI. Adding placeholder pages
- * instead would put two authors on three files and ship three screens that lie. So
- * #126 pastes those three entries into this array beside the two below; the shape,
- * the paths and the filenames are settled here and nothing else about the table
- * moves.
- *
- * `/tracking/planes` is declared before `/tracking/planes/:id` when they arrive, for
- * readability only — react-router ranks a static segment above a dynamic one
- * whatever the declaration order.
+ * `/tracking/planes` is declared before `/tracking/planes/:id` for readability only
+ * — react-router ranks a static segment above a dynamic one whatever the
+ * declaration order.
  */
 const trackingRoutes: RouteObject[] = [
   {
@@ -138,6 +136,26 @@ const trackingRoutes: RouteObject[] = [
     path: '/tracking/tablero',
     lazy: async () => ({
       Component: (await import('../features/tracking/pages/TableroSeguimientoPage')).default,
+    }),
+  },
+  {
+    path: '/tracking/planes',
+    lazy: async () => ({
+      Component: (await import('../features/tracking/pages/PlanesAccionListPage')).default,
+    }),
+  },
+  {
+    path: '/tracking/planes/:id',
+    lazy: async () => ({
+      Component: (await import('../features/tracking/pages/PlanDeAccionDetailPage')).default,
+    }),
+  },
+  {
+    // The involucrado's view. `MisTareasAsync` scopes to the caller's own `sub`
+    // claim, so this path takes no parameter and cannot be pointed at anyone else.
+    path: '/tracking/mis-tareas',
+    lazy: async () => ({
+      Component: (await import('../features/tracking/pages/MisTareasPage')).default,
     }),
   },
 ]

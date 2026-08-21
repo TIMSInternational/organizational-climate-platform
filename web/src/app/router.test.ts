@@ -201,10 +201,18 @@ describe('router', () => {
   })
 
   /**
-   * The tracking module (#125). Its two dashboards shipped as an integration layer
-   * with no consuming UI at all — `trackingApi.ts` existed, worked, and no user
-   * could reach any of it — so "is it routed" is the first acceptance criterion and
-   * this is where it is answered.
+   * The tracking module (#125, #126). Its dashboards shipped as an integration
+   * layer with no consuming UI at all — `trackingApi.ts` existed, worked, and no
+   * user could reach any of it — so "is it routed" is the first acceptance
+   * criterion and this is where it is answered.
+   *
+   * It was then answered wrongly. #125 owned the route table and registered only
+   * its own two paths, so #126's four pages and 4034 lines were imported by
+   * nothing, tree-shaken out of the bundle entirely, and absent from the product
+   * while their own tests passed. The last test in this block is the guard against
+   * that specific failure: it reads the pages directory and demands a route for
+   * each page, so the next page added without one fails here instead of
+   * disappearing quietly.
    */
   describe('the tracking module', () => {
     function shellChildren(): typeof router.routes {
@@ -227,10 +235,48 @@ describe('router', () => {
       return found ?? []
     }
 
-    it('registers both dashboards inside the admin shell', () => {
+    it('registers every tracking screen inside the admin shell', () => {
       const paths = shellChildren().flatMap((route) => (route.path ? [route.path] : []))
+      // #125's two aggregate dashboards.
       expect(paths).toContain('/tracking')
       expect(paths).toContain('/tracking/tablero')
+      // #126's three, which were reachable from nowhere until the two slices were
+      // reconciled. `/tracking/planes/:id` is the one the tablero and the listing
+      // both link to; without it every plan code on either screen reached the error
+      // boundary.
+      expect(paths).toContain('/tracking/planes')
+      expect(paths).toContain('/tracking/planes/:id')
+      expect(paths).toContain('/tracking/mis-tareas')
+    })
+
+    /**
+     * The structural version of the assertion above: not "these five paths exist"
+     * but "no page in this feature lacks a path".
+     *
+     * The two lists are derived from different places — one from the filesystem,
+     * one from `router.tsx` — so a page added to `features/tracking/pages/` and
+     * never routed fails here. That is the exact shape of the defect this module
+     * shipped with, and a hardcoded list of five would not have caught it.
+     */
+    it('leaves no tracking page unrouted', () => {
+      const pagesDir = join(process.cwd(), 'src', 'features', 'tracking', 'pages')
+      const pages = globSync('*.tsx', { cwd: pagesDir })
+        .filter((file) => !/\.test\.tsx$/.test(file))
+        .map((file) => file.replace(/\.tsx$/, ''))
+
+      expect(pages.length, 'no tracking pages found — the glob is wrong').toBeGreaterThan(4)
+
+      const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
+      const unrouted = pages.filter(
+        (page) => !source.includes(`await import('../features/tracking/pages/${page}')`),
+      )
+
+      expect(
+        unrouted,
+        'These tracking pages are imported by no route, so Rollup tree-shakes them ' +
+          'out of the bundle and no user can reach them. Register them in ' +
+          '`trackingRoutes` in router.tsx, or delete them.',
+      ).toEqual([])
     })
 
     /**
@@ -254,17 +300,17 @@ describe('router', () => {
      * semáforo table and the client in the main bundle regardless. The same
      * mechanism, and the same failure mode, as the dev-only chart gallery above.
      */
-    it('loads both pages lazily and is reached by no static import', () => {
+    it('loads every page lazily and is reached by no static import', () => {
       const src = join(process.cwd(), 'src')
       const source = readFileSync(join(src, 'app', 'router.tsx'), 'utf8')
-      expect(source).toContain("await import('../features/tracking/pages/ConsolidadoPage')")
-      expect(source).toContain("await import('../features/tracking/pages/TableroSeguimientoPage')")
-      expect(source).not.toMatch(/^import .*(ConsolidadoPage|TableroSeguimientoPage).*$/m)
+      const pageNames =
+        'ConsolidadoPage|TableroSeguimientoPage|PlanesAccionListPage|PlanDeAccionDetailPage|MisTareasPage'
+      expect(source).not.toMatch(new RegExp(`^import .*(${pageNames}).*$`, 'm'))
 
       const offenders = globSync('**/*.{ts,tsx}', { cwd: src })
         .filter((file) => !file.includes('features/tracking/') && !/\.test\.tsx?$/.test(file))
         .filter((file) =>
-          /^\s*import\s[^\n]*(ConsolidadoPage|TableroSeguimientoPage)/m.test(
+          new RegExp(`^\\s*import\\s[^\\n]*(${pageNames})`, 'm').test(
             readFileSync(join(src, file), 'utf8'),
           ),
         )

@@ -7,6 +7,20 @@ import { TranslationProvider } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
 import { clearCompanyNameCache } from '../../../company-context/useCompanyName'
+import { SEMAFORO_ORDER, semaforoPresentation } from '../semaforo'
+import { CATALOGUES } from '../../../i18n/locale'
+import type { MessageNode } from '../../../i18n/translate'
+
+/** An already-translated string from the Spanish catalogue, by dotted path. */
+function copy(path: string): string {
+  const value = path
+    .split('.')
+    .reduce<MessageNode | undefined>(
+      (node, segment) => (typeof node === 'object' && node !== null ? node[segment] : undefined),
+      CATALOGUES.es as MessageNode,
+    )
+  return typeof value === 'string' ? value : ''
+}
 
 const TRACKING = 'http://tracking.test'
 
@@ -119,10 +133,18 @@ describe('ConsolidadoPage', () => {
     renderPage()
     await screen.findByText('Dirección de Operaciones')
 
-    // Three words, each appearing in the summary strip AND as a column header —
-    // so `getAllByText`, and the count is what proves the word is not decorative.
-    for (const word of ['Rojo', 'Amarillo', 'Verde']) {
-      expect(screen.getAllByText(word).length).toBeGreaterThan(0)
+    // The words come from the ONE presentation table rather than being spelled out
+    // here. #125 and #126 shipped two different vocabularies for these three states
+    // — "Rojo/Amarillo/Verde" against "Atrasado/En riesgo/Al día" — and a test that
+    // hardcodes either one passes against a page reading the other table, which is
+    // exactly the drift this assertion is supposed to catch.
+    //
+    // Each word appears in the summary strip AND as a column header, so
+    // `getAllByText`, and the count is what proves the word is not decorative.
+    for (const estado of SEMAFORO_ORDER) {
+      const word = copy(semaforoPresentation(estado).labelKey)
+      expect(word, `no catalogue entry for ${estado}`).not.toBe('')
+      expect(screen.getAllByText(word).length, `"${word}" is not on the page`).toBeGreaterThan(0)
     }
   })
 
@@ -152,6 +174,80 @@ describe('ConsolidadoPage', () => {
     renderPage()
     await screen.findByText('Dirección de Operaciones')
     expect(screen.getByText(/No disponible.*no quiere decir cero/)).toBeTruthy()
+  })
+
+  /**
+   * And STOPS saying it once the figure arrives.
+   *
+   * The note asserts a fact about the data — "the prior-year result is not
+   * available yet". Rendered unconditionally it keeps asserting that underneath a
+   * column of real percentages the moment #89 lands and the service starts
+   * populating `resultadoAnioAnteriorPct`: the page contradicting itself, in the
+   * one place a reader would go to resolve the contradiction.
+   *
+   * This is the forward-looking half of the criterion and the half nothing else
+   * covers — every other fixture on this page has the field absent, which is
+   * exactly why an unconditional caption looked correct.
+   */
+  it('drops the note once every nodo HAS a prior-year result', async () => {
+    routeFetch({
+      consolidado: () =>
+        new Response(
+          JSON.stringify({
+            ...CONSOLIDADO,
+            porNodo: CONSOLIDADO.porNodo.map((nodo) => ({
+              ...nodo,
+              // 0.55 and 0.07, chosen because BOTH carry IEEE-754 float dust:
+              // `0.55 * 100` is 55.00000000000001 and `0.07 * 100` is
+              // 7.000000000000001. Exactly 8 of the 101 whole percentages do this
+              // (7, 14, 28, 29, 55, 56, 57, 58), so a fixture picking a round
+              // number like 0.62 — which multiplies cleanly — would exercise this
+              // column without ever touching the defect the column had.
+              resultadoAnioAnteriorPct: nodo.nodoExternalId === 'nodo-alpha' ? 0.55 : 0.07,
+            })),
+          }),
+          { status: 200 },
+        ),
+    })
+    renderPage()
+    await screen.findByText('Dirección de Operaciones')
+
+    // The figures are on screen, as WHOLE percentages. Unrounded, `0.55 * 100`
+    // renders "55,0 %" beside "7,0 %" — the same readings dressed as a precision
+    // this data does not have — and `formatMetric` picks that decimal on its own
+    // because the product is not an integer.
+    expect(screen.getByText('55 %')).toBeTruthy()
+    expect(screen.getByText('7 %')).toBeTruthy()
+    // ...so the "not available" explanation must not be.
+    expect(screen.queryByText(/no quiere decir cero/)).toBeNull()
+    expect(screen.queryByText('No disponible')).toBeNull()
+  })
+
+  /**
+   * A partially-populated column still needs the note: the cells that ARE absent
+   * are still absent, and "No disponible" beside a real percentage is precisely
+   * the reading the sentence exists to disambiguate.
+   */
+  it('keeps the note while ANY nodo is still missing its result', async () => {
+    routeFetch({
+      consolidado: () =>
+        new Response(
+          JSON.stringify({
+            ...CONSOLIDADO,
+            porNodo: [
+              { ...CONSOLIDADO.porNodo[0], resultadoAnioAnteriorPct: 0.55 },
+              { ...CONSOLIDADO.porNodo[1], resultadoAnioAnteriorPct: null },
+            ],
+          }),
+          { status: 200 },
+        ),
+    })
+    renderPage()
+    await screen.findByText('Dirección de Operaciones')
+
+    expect(screen.getByText('55 %')).toBeTruthy()
+    expect(screen.getByText('No disponible')).toBeTruthy()
+    expect(screen.getByText(/no quiere decir cero/)).toBeTruthy()
   })
 
   /**

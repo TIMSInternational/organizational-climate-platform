@@ -7,6 +7,20 @@ import { TranslationProvider } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
 import { clearCompanyNameCache } from '../../../company-context/useCompanyName'
+import { SEMAFORO_ORDER, semaforoPresentation } from '../semaforo'
+import { CATALOGUES } from '../../../i18n/locale'
+import type { MessageNode } from '../../../i18n/translate'
+
+/** An already-translated string from the Spanish catalogue, by dotted path. */
+function copy(path: string): string {
+  const value = path
+    .split('.')
+    .reduce<MessageNode | undefined>(
+      (node, segment) => (typeof node === 'object' && node !== null ? node[segment] : undefined),
+      CATALOGUES.es as MessageNode,
+    )
+  return typeof value === 'string' ? value : ''
+}
 
 const TRACKING = 'http://tracking.test'
 
@@ -190,8 +204,14 @@ describe('TableroSeguimientoPage', () => {
     const table = screen.getByRole('table')
     const chips = [...table.querySelectorAll('[data-slot="chip"]')]
     expect(chips).toHaveLength(PLANES.length)
+    // The expected words come from the ONE presentation table, not from a literal
+    // here: #125 and #126 shipped two vocabularies for these three states, and a
+    // hardcoded list passes against a page reading the other one.
+    const words = SEMAFORO_ORDER.map((estado) => copy(semaforoPresentation(estado).labelKey))
     for (const chip of chips) {
-      expect(chip.textContent?.trim()).toMatch(/^(Rojo|Amarillo|Verde)$/)
+      expect(words, `"${chip.textContent}" is not one of the three states`).toContain(
+        chip.textContent?.trim(),
+      )
       expect(chip.querySelector('svg'), `${chip.textContent} has no glyph`).toBeTruthy()
     }
     // And the three glyphs are three different drawings — see `semaforo.ts`.

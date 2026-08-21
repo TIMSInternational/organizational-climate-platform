@@ -1,8 +1,21 @@
 import { formatMetric } from '../../components/charts'
+import { toPercent } from './semaforo'
 
 /**
- * The unit conversion every reading on these two screens goes through, and the
- * one place that decides what "no value" looks like.
+ * The one place that decides what "no value" looks like on the tracking screens.
+ *
+ * ## This module does NOT convert — `semaforo.toPercent` does
+ *
+ * That is the whole point of it now. It used to carry its own `fraction * 100`,
+ * which made two fraction→percentage conversions in one feature: this one, and
+ * `semaforo.toPercent` for the progress bars. Two conversions is how a bar comes
+ * to be fed a raw `0.15` while the figure beside it reads "15%", and it is how one
+ * of them came to be missing a `Math.round`.
+ *
+ * `percentagePoints` is a null-aware wrapper around `toPercent` and nothing else.
+ * If you need the number, call `toPercent`; if you need "or say it is missing",
+ * call `formatPercentOrUnavailable`. There is no third option and no second
+ * multiplication in this feature.
  *
  * ## The tracking service stores fractions, not percentages
  *
@@ -20,23 +33,28 @@ import { formatMetric } from '../../components/charts'
  * shape: `numeric(5,4)` on the migration, `decimal?` on `HallazgoDto`.
  *
  * `formatMetric`'s `percentage` kind takes **percentage points** (`78` means 78%),
- * so a fraction has to be multiplied here before it goes in. Doing that at the one
- * call site rather than in each page is the point of this module.
+ * which is exactly what `toPercent` returns.
  */
 
 /**
- * A stored 0–1 fraction as the percentage points `formatMetric` wants, or `null`
- * when there is no reading.
+ * A stored 0–1 fraction as whole percentage points, or `null` when there is no
+ * reading.
  *
  * `null` and `undefined` both mean "no value" — the second because a field the API
  * has not grown yet is absent rather than null (see `formatPercentOrUnavailable`).
  * A non-finite number is also no reading: `NaN * 100` is `NaN`, and `formatMetric`
  * would render it as an em dash with no explanation.
+ *
+ * The scaling itself is `toPercent`'s, so this inherits its rounding and its
+ * clamp. The rounding is what stops `0.07` — which is `7.000000000000001` once
+ * multiplied — printing as `7,0 %` in a column whose other rows read `8 %`,
+ * because `formatMetric` defaults to "no decimals for an integer, one otherwise"
+ * and float dust makes a whole percentage look fractional.
  */
 export function percentagePoints(fraction: number | null | undefined): number | null {
   if (fraction === null || fraction === undefined) return null
   if (!Number.isFinite(fraction)) return null
-  return fraction * 100
+  return toPercent(fraction)
 }
 
 /**
@@ -62,9 +80,8 @@ export function formatPercentOrUnavailable(
   fraction: number | null | undefined,
   unavailable: string,
   locale?: string,
-  decimals?: number,
 ): string {
   const points = percentagePoints(fraction)
   if (points === null) return unavailable
-  return formatMetric(points, { kind: 'percentage', decimals }, locale)
+  return formatMetric(points, { kind: 'percentage' }, locale)
 }

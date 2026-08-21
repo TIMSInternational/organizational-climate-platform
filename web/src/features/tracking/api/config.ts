@@ -1,11 +1,16 @@
 // The one place in web/src that actually reads VITE_TRACKING_API_BASE_URL. Every
 // trackingApi.ts export defaults its `baseUrl` parameter to this, so the env var is wired
-// up end-to-end (not just documented in web/.env.example).
-// Callers can still pass an explicit baseUrl (e.g. tests, or a page that needs a
-// different environment) to override this default.
+// up end-to-end (not just documented in web/.env.example). The tracking pages —
+// features/tracking/pages/, the two dashboards (#125) and the planes-acción screens (#126)
+// — all reach the service through that default; callers can still pass an explicit baseUrl
+// (tests, or a page pointed at a different environment) to override it.
 //
-// #125 added the second reader below, `isTrackingEnabled`, and it is here rather than
-// beside the nav so this stays the ONE module that touches the variable.
+// Note that the PICKERS are not here: `api/trackingPickers.ts` talks to climate-project at
+// VITE_API_BASE_URL, because the names behind an external nodo/persona id live in that
+// service's database and not in climate-tracking's.
+//
+// `isTrackingEnabled` below is the second reader, and it lives here rather than beside the
+// nav so this stays the ONE module that touches the variable.
 export function getTrackingApiBaseUrl(): string {
   return import.meta.env.VITE_TRACKING_API_BASE_URL as string
 }
@@ -36,6 +41,16 @@ export function getTrackingApiBaseUrl(): string {
  * Undefined, empty and whitespace all read as "no". `import.meta.env` is typed as
  * `string` for a declared variable but an unset one is genuinely `undefined` at
  * runtime, which is why this does not just call `.trim()` on the result.
+ *
+ * ## Turning this on REPLACES Action Plans, so it must be opt-in
+ *
+ * `navSections.workspacePlanItems` swaps `/action-plans` for the tracking rows —
+ * Federico's decision of 2026-08-21, one place to manage plans rather than two that
+ * disagree. That makes a non-blank value here a destructive default: `web/.env.example`
+ * therefore ships the variable COMMENTED OUT, so copying the example to `.env` leaves
+ * a developer with the working Action Plans nav rather than silently removing it and
+ * offering a tracking module whose service is not running. `config.test.ts` pins that
+ * the example ships it commented.
  */
 export function isTrackingEnabled(): boolean {
   const baseUrl: unknown = getTrackingApiBaseUrl()

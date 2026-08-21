@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { formatPercentOrUnavailable, percentagePoints } from './trackingUnits'
+import { toPercent } from './semaforo'
 
 const UNAVAILABLE = 'No disponible'
 
@@ -13,7 +14,7 @@ describe('percentagePoints', () => {
    */
   it('multiplies a stored 0-1 fraction into percentage points', () => {
     expect(percentagePoints(0)).toBe(0)
-    expect(percentagePoints(0.87)).toBeCloseTo(87)
+    expect(percentagePoints(0.87)).toBe(87)
     expect(percentagePoints(1)).toBe(100)
   })
 
@@ -22,6 +23,62 @@ describe('percentagePoints', () => {
     expect(percentagePoints(undefined)).toBeNull()
     expect(percentagePoints(Number.NaN)).toBeNull()
     expect(percentagePoints(Number.POSITIVE_INFINITY)).toBeNull()
+  })
+
+  /**
+   * The defect. `0.07 * 100` is `7.000000000000001`, and `formatMetric`'s default
+   * precision is "0 places for an integer, 1 otherwise" — so an unrounded
+   * conversion renders `7,0 %` in a column whose neighbouring rows read `8 %`.
+   *
+   * Swept over all 101 whole percentages rather than spot-checked on 0.07: which
+   * values carry float dust is a property of binary floating point, and a fix that
+   * special-cased the one value the review happened to name would still be broken
+   * for the other seven.
+   */
+  it('returns a whole number for every whole percentage', () => {
+    const dusty: string[] = []
+    for (let percent = 0; percent <= 100; percent += 1) {
+      const points = percentagePoints(percent / 100)
+      if (points === null || !Number.isInteger(points)) dusty.push(`${percent}% -> ${points}`)
+    }
+    expect(dusty).toEqual([])
+  })
+
+  /**
+   * There is ONE fraction→percentage conversion in this feature and it lives in
+   * `semaforo.ts`. This module is a null-aware wrapper around it, not a second
+   * implementation — two of them is how the progress bars and the figures beside
+   * them came to disagree.
+   */
+  it('is exactly toPercent, for every value that is a reading at all', () => {
+    for (let percent = 0; percent <= 100; percent += 1) {
+      expect(percentagePoints(percent / 100)).toBe(toPercent(percent / 100))
+    }
+    expect(percentagePoints(0.875)).toBe(toPercent(0.875))
+  })
+
+  /**
+   * A consequence of that delegation, stated so it is a decision and not a
+   * surprise: the module renders WHOLE percentages everywhere. `RegistrarAvance`
+   * is fed `Math.round(percent)/100` by `fromPercent`, so a plan's avance is a
+   * whole percentage by construction; a legacy `numeric(5,4)` row carrying 0.875
+   * reads as 88 %, matching the bar drawn beside it rather than disagreeing with
+   * it by half a point.
+   */
+  it('renders whole percentages, the same units the progress bars use', () => {
+    expect(percentagePoints(0.875)).toBe(88)
+    expect(percentagePoints(0.874)).toBe(87)
+  })
+
+  /**
+   * Inherited from `toPercent`, and the trade is deliberate: a bar that ran past
+   * the end of its own track is a rendering bug on every screen, whereas an
+   * out-of-range reading is a service defect this client cannot fix. Clamping
+   * keeps the page honest about its own drawing.
+   */
+  it('clamps a reading the domain says cannot exist', () => {
+    expect(percentagePoints(1.4)).toBe(100)
+    expect(percentagePoints(-0.2)).toBe(0)
   })
 })
 
@@ -55,7 +112,17 @@ describe('formatPercentOrUnavailable', () => {
     expect(formatPercentOrUnavailable(0.72, UNAVAILABLE, 'es')).toMatch(/^72\s?%$/)
   })
 
-  it('honours a requested precision, so an avance of 0.875 does not read as 88', () => {
-    expect(formatPercentOrUnavailable(0.875, UNAVAILABLE, 'en', 1)).toBe('87.5%')
+  /**
+   * The rounding defect as it reaches a reader: two rows of the same column, one
+   * whole percentage each, rendered in two different shapes. Before the conversion
+   * was rounded this produced "7,0 %" beside "8 %", which reads as a precision
+   * this data does not have.
+   */
+  it('renders neighbouring whole percentages in the same shape', () => {
+    const seven = formatPercentOrUnavailable(0.07, UNAVAILABLE, 'es')
+    const eight = formatPercentOrUnavailable(0.08, UNAVAILABLE, 'es')
+    expect(seven).toMatch(/^7\s?%$/)
+    expect(eight).toMatch(/^8\s?%$/)
+    expect(seven).not.toMatch(/[,.]/)
   })
 })

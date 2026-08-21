@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { getTablero, type TableroResponse } from '../api/trackingApi'
 import { getTrackingApiBaseUrl } from '../api/config'
-import { getNodoNames } from '../api/trackingPicker'
+import { getNodoNames } from '../api/trackingPickers'
 import SemaforoChip from '../components/SemaforoChip'
 import SemaforoSummary from '../components/SemaforoSummary'
 import { canViewConsolidado, canViewTablero } from '../trackingAccess'
@@ -205,11 +205,17 @@ export default function TableroSeguimientoPage() {
                   <tbody>
                     {(data?.planes ?? []).map((plan) => (
                       <tr key={plan.id}>
-                        {/* Plain text, not a link: `/tracking/planes/:id` is #126's
-                            route and does not exist in this build, and a row whose
-                            code links to the error boundary is worse than one that
-                            does not link at all. */}
-                        <td className="font-mono tabular-nums font-semibold">{plan.planCode}</td>
+                        {/* A link now. `/tracking/planes/:id` is registered in
+                            `app/router.tsx` since #125 and #126 were reconciled —
+                            before that it was plain text, because a row whose code
+                            links to the error boundary is worse than one that does
+                            not link at all. `router.test.ts` is what keeps that
+                            true. */}
+                        <td className="font-mono tabular-nums font-semibold">
+                          <Link to={`/tracking/planes/${plan.id}`} className="text-accent-blue">
+                            {plan.planCode}
+                          </Link>
+                        </td>
                         <td>{plan.descripcionQue}</td>
                         <td className="font-mono tabular-nums text-fg-secondary">
                           {calendarDay(Date.parse(plan.fechaCompromiso), locale)}

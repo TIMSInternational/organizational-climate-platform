@@ -16,6 +16,7 @@ import {
   Inbox,
   LayoutDashboard,
   LayoutTemplate,
+  ListChecks,
   Network,
   SquareKanban,
 } from 'lucide-react'
@@ -202,6 +203,26 @@ const TRACKING_TABLERO_ITEM: NavItem = {
   icon: Gauge,
 }
 
+// The plans listing (#126). `PlanesAccionEndpoints.ListAsync` scopes the query
+// itself — an admin gets the tenant, everyone else gets their own nodo plus the
+// plans they are responsable or involucrado on — so this row is safe for every role
+// that has one. It is offered to the roles that MANAGE plans; an involucrado gets
+// the task view below instead, which is §7's split.
+const TRACKING_PLANES_ITEM: NavItem = {
+  labelKey: 'navigation.trackingPlans',
+  href: '/tracking/planes',
+  icon: Target,
+}
+
+// The involucrado's view (#126). `MisTareasAsync` reads no role claim at all — it
+// filters on the caller's own `sub` — so every authenticated role is a first-class
+// caller, and this is the one tracking row a plain employee gets.
+const TRACKING_MIS_TAREAS_ITEM: NavItem = {
+  labelKey: 'navigation.trackingMisTareas',
+  href: '/tracking/mis-tareas',
+  icon: ListChecks,
+}
+
 /**
  * Options that are properties of the DEPLOYMENT rather than of the caller.
  *
@@ -238,8 +259,13 @@ export interface NavOptions {
  */
 function workspacePlanItems(role: string, options: NavOptions): NavItem[] {
   if (!options.trackingEnabled) return [ACTION_PLANS_ITEM]
-  // Both admin roles get the consolidado; neither gets a board of their own.
-  return role === 'super_admin' || role === 'company_admin' ? [TRACKING_CONSOLIDADO_ITEM] : []
+  // Both admin roles get the consolidado and the plans listing; neither gets a
+  // board of their own. The listing is what makes a plan reachable at all — every
+  // plan code on it links to `/tracking/planes/:id`, which is the only screen where
+  // avance is recorded.
+  return role === 'super_admin' || role === 'company_admin'
+    ? [TRACKING_CONSOLIDADO_ITEM, TRACKING_PLANES_ITEM]
+    : []
 }
 
 export function buildNavSections(
@@ -441,15 +467,24 @@ export function buildNavSections(
   // My surveys first: it is a work destination, Notifications is an inbox. Same
   // ordering principle as the admin branches above.
   //
-  // The tracking board (#125) is the first entry this branch has ever had that is
-  // NOT offered to every role in it. `leader` is the node leader -- the role
-  // `services/tracking-api` spells `Roles.PlanCreator` and the role the client's §7
-  // gives the full board to -- and it is the only one of these roles with a
-  // jefatura to show. An `employee` or `supervisor` gets the task-only view
-  // (`/tracking/mis-tareas`, #126) instead, which is why no row for them appears
-  // here yet: that route does not exist in this build.
-  const trackingItems: NavItem[] =
-    options.trackingEnabled && role === 'leader' ? [TRACKING_TABLERO_ITEM] : []
+  // The tracking rows (#125, #126) are the first entries this branch has ever had
+  // that are NOT offered to every role in it. `leader` is the node leader -- the
+  // role `services/tracking-api` spells `Roles.PlanCreator` and the role the
+  // client's §7 gives the full board to -- and it is the only one of these roles
+  // with a jefatura to show. An `employee` or `supervisor` gets the task-only view
+  // (`/tracking/mis-tareas`) instead.
+  const trackingItems: NavItem[] = !options.trackingEnabled
+    ? []
+    : role === 'leader'
+      ? // The node leader manages: their own board, the plans they own, and the
+        // tasks they were named on like anybody else.
+        [TRACKING_TABLERO_ITEM, TRACKING_PLANES_ITEM, TRACKING_MIS_TAREAS_ITEM]
+      : // An employee or a supervisor gets the task-only view and nothing else.
+        // `TableroAsync` would in fact serve them their nodo's whole board — it
+        // gates on nodo membership, not on role — but §7 says the full board is
+        // the leader's screen, so the nav implements the product rule. See
+        // `trackingAccess.ts` on why that is a rule and not protection.
+        [TRACKING_MIS_TAREAS_ITEM]
 
   return [
     // Dashboard first: since #132 it is where this role lands after login, and it is

@@ -1271,7 +1271,7 @@
     "tracking": "Seguimiento",
     "trackingDashboard": "Tablero de Seguimiento",
     "trackingDashboardDesc": "Estado de semáforo y planes de acción de tu nodo",
-    "trackingPlans": "Planes de Acción (Seguimiento)",
+    "trackingPlans": "Planes de Acción",
     "trackingPlansDesc": "Crear y gestionar planes de acción de seguimiento",
     "trackingMisTareas": "Mis Tareas",
     "trackingMisTareasDesc": "Planes asignados a ti o donde estás involucrado",
@@ -2434,13 +2434,7 @@
     "serviceUnavailableBody": "El módulo de seguimiento no respondió. El resto de la plataforma sigue funcionando; vuelva a intentarlo en unos minutos.",
     "totalPlanes": "Planes de acción",
     "totalPlanesSub": "En total",
-    "semaforoRojo": "Rojo",
-    "semaforoAmarillo": "Amarillo",
-    "semaforoVerde": "Verde",
-    "semaforoSubRojo": "Vencido o sin avance",
-    "semaforoSubAmarillo": "Atrasado o sin novedades",
-    "semaforoSubVerde": "Al día",
-    "semaforoDesconocido": "Estado desconocido",
+    "countsPartial": "Los tres estados suman {shown} de {total} planes. Los demás están en un estado que esta versión no reconoce.",
     "columnNodo": "Nodo",
     "columnTotalPlanes": "Planes",
     "columnPriorYear": "Resultado año anterior",
@@ -2452,6 +2446,108 @@
     "columnEstado": "Semáforo",
     "priorYearUnavailable": "No disponible",
     "avanceUnavailable": "Sin dato",
-    "priorYearNote": "El resultado del año anterior todavía no está disponible porque aún no se ha enlazado el período anterior. «No disponible» no quiere decir cero."
+    "priorYearNote": "El resultado del año anterior todavía no está disponible porque aún no se ha enlazado el período anterior. «No disponible» no quiere decir cero.",
+    "semaforo": {
+      "rojo": "Atrasado",
+      "amarillo": "En riesgo",
+      "verde": "Al día",
+      "subRojo": "Vencido o sin avance",
+      "subAmarillo": "Atrasado o sin novedades",
+      "subVerde": "En tiempo y con avance",
+      "desconocido": "Estado desconocido",
+      "summaryLabel": "Resumen del semáforo"
+    },
+    "planes": {
+      "title": "Planes de acción",
+      "description": "Planes de acción de seguimiento por nodo, con su semáforo y su avance.",
+      "listTitle": "Planes registrados",
+      "empty": "No hay planes de acción que mostrar.",
+      "created": "Plan {code} creado."
+    },
+    "misTareas": {
+      "title": "Mis tareas",
+      "description": "Los planes de acción en los que usted participa.",
+      "listTitle": "Tareas asignadas",
+      "empty": "No tiene tareas asignadas.",
+      "readOnly": "Esta vista es de consulta. El registro de avance lo realiza la jefatura del nodo."
+    },
+    "create": {
+      "title": "Nuevo plan de acción",
+      "description": "Registre el qué, el cómo y la fecha de compromiso del plan.",
+      "notAllowedTitle": "Sin permiso para crear planes",
+      "notAllowed": "Solo la jefatura del nodo o una administración pueden crear planes de acción."
+    },
+    "detail": {
+      "title": "Plan de acción",
+      "estadoTitle": "Estado del plan",
+      "involucradosTitle": "Involucrados",
+      "avanceTitle": "Registrar avance",
+      "sinInvolucrados": "Este plan no tiene involucrados registrados.",
+      "readOnly": "Usted participa en este plan pero no puede modificarlo. El registro de avance corresponde a la jefatura del nodo.",
+      "cumplido": "Cumplido",
+      "yaCumplido": "Este plan ya fue marcado como cumplido.",
+      "confirmCumplido": "El plan quedará al 100% y en estado verde. Esta acción no se puede deshacer desde esta pantalla."
+    },
+    "table": {
+      "codigo": "Código",
+      "descripcion": "Qué se hará",
+      "estado": "Semáforo",
+      "avance": "Avance",
+      "compromiso": "Fecha de compromiso",
+      "percent": "{percent}%"
+    },
+    "filters": {
+      "estado": "Filtrar por semáforo",
+      "allStates": "Todos los estados"
+    },
+    "form": {
+      "directoryUnavailable": "No fue posible cargar el directorio de nodos y personas. Escriba los identificadores externos a mano."
+    },
+    "fields": {
+      "nodo": "Nodo",
+      "nodoHint": "La jefatura responsable del plan.",
+      "nodoPlaceholder": "Seleccione un nodo",
+      "nodoIdHint": "Identificador externo del nodo.",
+      "descripcionQue": "Qué se hará",
+      "descripcionQueHint": "La acción concreta que se compromete.",
+      "metodologiaComo": "Cómo se hará",
+      "metodologiaComoHint": "La metodología con la que se ejecutará.",
+      "responsable": "Responsable de ejecución",
+      "responsableHint": "Quién ejecuta el plan.",
+      "responsablePlaceholder": "Seleccione una persona",
+      "responsableIdHint": "Identificador externo de la persona responsable.",
+      "fechaCompromiso": "Fecha de compromiso",
+      "fechaCompromisoHint": "La fecha en la que el plan debe estar cumplido.",
+      "fechaCreacion": "Fecha de creación",
+      "ultimaActualizacion": "Última actualización",
+      "hallazgo": "Hallazgo de origen",
+      "hallazgoHint": "Identificador del hallazgo que originó el plan. Opcional.",
+      "involucrados": "Involucrados",
+      "involucradosHint": "Puede seleccionar varias personas.",
+      "agregarInvolucrados": "Agregar involucrados",
+      "agregarInvolucradosHint": "Seleccione una o varias personas. No es posible retirar a quien ya está en el plan.",
+      "avance": "Avance (%)",
+      "avanceHint": "Un porcentaje entre 0 y 100.",
+      "avanceRange": "Escriba un porcentaje entre 0 y 100.",
+      "fechaAvance": "Fecha del avance",
+      "fechaAvanceHint": "El día al que corresponde este avance.",
+      "comentario": "Comentario",
+      "comentarioHint": "Queda registrado en la bitácora del plan. Opcional."
+    },
+    "involucrados": {
+      "filterPlaceholder": "Buscar por nombre o correo",
+      "noDirectory": "No hay un directorio de personas disponible para este usuario.",
+      "noMatches": "Ninguna persona coincide con la búsqueda.",
+      "alreadyOnPlan": "Ya en el plan",
+      "selectedCount": "Seleccionadas: {count}",
+      "remove": "Quitar a {name}"
+    },
+    "actions": {
+      "newPlan": "Nuevo plan",
+      "createPlan": "Crear plan de acción",
+      "registrarAvance": "Registrar avance",
+      "marcarCumplido": "Marcar como cumplido",
+      "agregarInvolucrados": "Agregar involucrados"
+    }
   }
 }
