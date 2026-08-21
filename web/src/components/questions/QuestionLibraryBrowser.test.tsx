@@ -184,6 +184,31 @@ describe('QuestionLibraryBrowser', () => {
     expect(screen.queryByText('A question belonging to another company')).toBeNull()
   })
 
+  /**
+   * The other half of the scoping argument, and the half that has no visible symptom.
+   *
+   * `ListItemsAsync` answers a SuperAdmin's `?companyId=` with `i.CompanyId ==
+   * companyId`, which EXCLUDES every global row — the shipped library this picker
+   * mostly exists to offer. A picker that sent it would look like it worked and would
+   * quietly show a tenant only their own handful of questions, so what is pinned here
+   * is the request, not the rendering.
+   */
+  it('never asks the server to scope by company, which would drop the global rows', async () => {
+    stubApi()
+    renderBrowser()
+    await screen.findByText('My manager keeps their word')
+
+    const requested = vi
+      .mocked(fetch)
+      .mock.calls.map(([url]) => String(url))
+      .filter((url) => /\/admin\/question-(library|categories)(\?|$)/.test(url))
+
+    expect(requested).toHaveLength(2)
+    for (const url of requested) {
+      expect(new URL(url, 'http://localhost').searchParams.get('companyId')).toBeNull()
+    }
+  })
+
   it('narrows to a category and its descendants when one is chosen', async () => {
     stubApi()
     const user = userEvent.setup()
@@ -317,5 +342,62 @@ describe('QuestionLibraryBrowser', () => {
 
     expect(await screen.findByText('My manager keeps their word')).toBeTruthy()
     expect(screen.queryByText('How often do you meet your manager?')).toBeNull()
+  })
+
+  /**
+   * The picker cannot see the wizard. `addedIds` is a record of what THIS dialog
+   * handed over, not of what the questions step still holds, so an author who adds a
+   * question, deletes the card and comes back for it must not find the row greyed out
+   * with no way to un-grey it. Reopening is a new session.
+   */
+  it('offers a question again after the dialog has been closed and reopened', async () => {
+    stubApi()
+    const user = userEvent.setup()
+    const onAdd = vi.fn()
+
+    function Harness({ open }: { open: boolean }) {
+      return (
+        <TranslationProvider>
+          <QuestionLibraryBrowser
+            open={open}
+            onOpenChange={vi.fn()}
+            companyId={OWN}
+            allowedTypes={['likert', 'multiple_choice']}
+            typeLabel={(type) => type}
+            onAdd={onAdd}
+          />
+        </TranslationProvider>
+      )
+    }
+
+    const { rerender } = render(<Harness open />)
+    await screen.findByText('My manager keeps their word')
+    await user.click(
+      screen.getByRole('button', { name: /Add "How often do you meet your manager\?"/ }),
+    )
+    await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(1))
+    // While the dialog stays open the row is spent, so it cannot be added twice.
+    expect(
+      screen
+        .getByRole('button', { name: /Add "How often do you meet your manager\?"/ })
+        .hasAttribute('disabled'),
+    ).toBe(true)
+
+    rerender(<Harness open={false} />)
+    rerender(<Harness open />)
+
+    await screen.findByText('My manager keeps their word')
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole('button', { name: /Add "How often do you meet your manager\?"/ })
+          .hasAttribute('disabled'),
+      ).toBe(false),
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: /Add "How often do you meet your manager\?"/ }),
+    )
+    await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(2))
   })
 })
