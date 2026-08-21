@@ -289,9 +289,20 @@ describe('PrivacySettingsPage', () => {
         screen.getByText(/the answers themselves and the demographic values attached/),
       ).toBeTruthy()
 
-      // Kept in full.
-      expect(screen.getByText(/Audit records are kept in full/)).toBeTruthy()
+      // Kept in full — and named, because only one of the two audit tables is.
+      expect(
+        screen.getByText(/The platform-wide audit trail \(audit_logs\) is kept in full/),
+      ).toBeTruthy()
       expect(screen.getByText(/Free text is not scrubbed/)).toBeTruthy()
+
+      // The divergence between SubjectDataMap and SubjectErasure, stated the way the code
+      // behaves rather than the way the map declares it. `SubjectDataMap` marks
+      // survey_audit_logs `Redacted`, but `SubjectErasure` calls
+      // `db.SurveyAuditLogs.RemoveRange(...)` and `GdprEndpointsTests` asserts none survive.
+      // Telling a data subject the row is kept with their details overwritten would be false
+      // in the worst direction. See ERASURE_MAP_DIVERGENCES in `components/privacyScope.ts`.
+      expect(screen.getByText('survey_audit_logs')).toBeTruthy()
+      expect(screen.getByText(/Your rows are deleted outright, not overwritten/)).toBeTruthy()
     })
 
     it('hands over the identifiers a controller needs, once they are known', async () => {

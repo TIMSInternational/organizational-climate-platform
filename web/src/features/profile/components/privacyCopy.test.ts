@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import { CATALOGUES, LOCALES } from '../../../i18n/locale'
 import type { MessageNode } from '../../../i18n/translate'
-import { CONSENT_LABEL_PATH } from './ConsentRecordPanel'
 import {
+  CONSENT_LABEL_PATH,
   ERASURE_ANONYMISED_TABLES,
   ERASURE_DELETED_TABLES,
   ERASURE_LABEL_PATHS,
   ERASURE_REDACTED_TABLES,
-} from './ErasureRequestPanel'
+} from './privacyScope'
 import { exportTreatmentLabelPath, subjectLinkLabelPath } from '../api/gdpr'
 
 /**

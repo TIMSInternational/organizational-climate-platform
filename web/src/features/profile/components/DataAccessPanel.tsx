@@ -160,7 +160,19 @@ export default function DataAccessPanel({
               </ul>
             </section>
 
-            <section className="grid gap-inline">
+            {/* `min-w-0`, and it is load-bearing. This section is a grid item, and a grid
+                item's automatic minimum size is its *content's* min-content width — the six
+                columns of `SectionTable`, whose headers are `whitespace-nowrap` and whose
+                first cell is an unbreakable table name like `question_responses`. Without
+                it the track is sized to that content, the card grows past the viewport, and
+                at 390px the right edge of every card on the page — including the page
+                title's own description, which is nowhere near the table — is cut off. The
+                `overflow-x-auto` on `Table`'s own container does not prevent this: it lets
+                the table scroll, but this is the ancestor that must be allowed to be
+                narrower than its contents first. Measured before and after: the top bar goes
+                from right:361 to right:392 in a 390px viewport. Vitest runs on happy-dom and
+                cannot see any of it; a screenshot can. */}
+            <section className="grid min-w-0 gap-inline">
               <h3 className="text-base font-medium text-fg-primary">
                 {t('privacy.sectionsTitle')}
               </h3>
@@ -169,7 +181,9 @@ export default function DataAccessPanel({
             </section>
 
             {empty.length > 0 && (
-              <section className="grid gap-inline">
+              // `min-w-0` for the same reason as the section above: expanding this reveals a
+              // second `SectionTable`, and without it the page widens the moment it opens.
+              <section className="grid min-w-0 gap-inline">
                 {/* Wrapped so the button shrink-wraps. `Button`'s base is
                     `inline-flex justify-center`, and a bare child of this `grid`
                     stretches to the full column — which rendered the toggle as a line

@@ -26,13 +26,62 @@
  */
 
 /**
+ * Tables where `SubjectDataMap` and `SubjectErasure` **disagree**, and the treatment this
+ * page states instead.
+ *
+ * ## Why this exists, and why it is not a workaround
+ *
+ * The rule everywhere else on this page is "the map is the truth". For one table it cannot
+ * be, because the map and the code that does the erasing say different things:
+ *
+ * - `SubjectDataMap` declares `survey_audit_logs` as `ErasureTreatment.Redacted`, with a
+ *   rationale describing the actor's name, email and role being overwritten while
+ *   "everything else — user_id, action, entity, changes, timestamp, IP, user agent — is
+ *   kept".
+ * - `SubjectErasure` **deletes the rows**: `db.SurveyAuditLogs.RemoveRange(surveyAuditLogs)`,
+ *   under a comment that opens "DELETED, not redacted -- the decided treatment".
+ * - `GdprEndpointsTests.Erasure_deletes_redacts_anonymises_and_retains_exactly_what_the_map_declares`
+ *   asserts the deletion — `Assert.False(await db.SurveyAuditLogs.AnyAsync(...))` — so the
+ *   behaviour is not an accident, and despite its name that test does not derive this one
+ *   table from the map.
+ * - `SubjectErasure.KnownLimitations` sides with the map ("survey_audit_logs keeps
+ *   everything except the denormalised copy of the actor's name and email"), which is how
+ *   the disagreement stayed invisible: an erasure response says one thing and does another.
+ *
+ * Three sources, two stories. Resolving it is a compliance decision that belongs to whoever
+ * owns the erasure semantics (#144) — the map's prose, the limitation sentence and the
+ * decision record all have to move together, and this page is not the place to make that
+ * call.
+ *
+ * What this page **must not** do is repeat the map's version, because the map's version is
+ * the one that is false, and it is false in the worst direction: it tells a data subject
+ * that a record about them is kept when it is destroyed. So the page states what the code
+ * does, and `erasureScope.test.ts` pins the divergence from both ends — it re-reads the map
+ * to confirm the map still says `Redacted`, and re-reads `SubjectErasure` to confirm it
+ * still calls `RemoveRange`. Fix either side and this file goes red rather than silently
+ * drifting back into a false claim.
+ */
+export const ERASURE_MAP_DIVERGENCES = [
+  {
+    table: 'survey_audit_logs',
+    /** What `SubjectDataMap` declares. */
+    mapSays: 'Redacted',
+    /** What `SubjectErasure` actually does, and what this page therefore says. */
+    codeDoes: 'Deleted',
+    /** The call in `SubjectErasure.cs` that makes `codeDoes` true. */
+    anchor: 'db.SurveyAuditLogs.RemoveRange(surveyAuditLogs)',
+  },
+] as const
+
+/**
  * The tables an erasure **deletes outright**.
  *
- * Mirrors `ErasureTreatment.Deleted` in
- * `src/ClimateProject.Application/Gdpr/SubjectDataMap.cs`.
+ * `ErasureTreatment.Deleted` in `src/ClimateProject.Application/Gdpr/SubjectDataMap.cs`,
+ * plus `survey_audit_logs` — see `ERASURE_MAP_DIVERGENCES`.
  */
 export const ERASURE_DELETED_TABLES = [
   'notifications',
+  'survey_audit_logs',
   'survey_drafts',
   'user_demographics',
   'user_invitation_demographics',
@@ -41,10 +90,12 @@ export const ERASURE_DELETED_TABLES = [
 /** Tables whose link to the person is severed, the rows surviving. `ErasureTreatment.Anonymised`. */
 export const ERASURE_ANONYMISED_TABLES = ['responses', 'users'] as const
 
-/** Tables where named columns are overwritten and the rest is left intact. `ErasureTreatment.Redacted`. */
+/**
+ * Tables where named columns are overwritten and the rest is left intact.
+ * `ErasureTreatment.Redacted`, minus `survey_audit_logs` — see `ERASURE_MAP_DIVERGENCES`.
+ */
 export const ERASURE_REDACTED_TABLES = [
   'microclimate_invitations',
-  'survey_audit_logs',
   'survey_invitations',
   'user_invitations',
 ] as const
@@ -52,6 +103,7 @@ export const ERASURE_REDACTED_TABLES = [
 /** Catalogue paths for the deleted tables, keyed by the table's own name. */
 export const DELETED_LABEL_PATH: Record<string, string> = {
   notifications: 'privacy.erasureDeletedNotifications',
+  survey_audit_logs: 'privacy.erasureDeletedSurveyAuditLogs',
   survey_drafts: 'privacy.erasureDeletedSurveyDrafts',
   user_demographics: 'privacy.erasureDeletedUserDemographics',
   user_invitation_demographics: 'privacy.erasureDeletedInvitationDemographics',
@@ -64,7 +116,6 @@ export const ANONYMISED_LABEL_PATH: Record<string, string> = {
 
 export const REDACTED_LABEL_PATH: Record<string, string> = {
   microclimate_invitations: 'privacy.erasureRedactedMicroclimateInvitations',
-  survey_audit_logs: 'privacy.erasureRedactedSurveyAuditLogs',
   survey_invitations: 'privacy.erasureRedactedSurveyInvitations',
   user_invitations: 'privacy.erasureRedactedUserInvitations',
 }

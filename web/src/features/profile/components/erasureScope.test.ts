@@ -4,8 +4,9 @@ import { join, resolve } from 'node:path'
 import {
   ERASURE_ANONYMISED_TABLES,
   ERASURE_DELETED_TABLES,
+  ERASURE_MAP_DIVERGENCES,
   ERASURE_REDACTED_TABLES,
-} from './ErasureRequestPanel'
+} from './privacyScope'
 
 /**
  * The privacy page's erasure statement, checked against the code that does the erasing.
@@ -78,6 +79,21 @@ describe('the erasure scope the privacy page states', () => {
     expect([...map.matchAll(ENTRY)].length).toBeGreaterThan(10)
   })
 
+  /**
+   * The map's list for a treatment, with the known divergences applied: a table the code
+   * treats differently is removed from the treatment the map declares and added to the one
+   * `SubjectErasure` actually performs. With no divergences declared this is the map
+   * verbatim, which is what it was before one was found.
+   */
+  function expectedFor(treatment: string): string[] {
+    const parsed = tablesWithTreatment(map, treatment)
+    const moved = parsed.filter(
+      (table) => !ERASURE_MAP_DIVERGENCES.some((d) => d.table === table && d.mapSays === treatment),
+    )
+    const gained = ERASURE_MAP_DIVERGENCES.filter((d) => d.codeDoes === treatment).map((d) => d.table)
+    return [...moved, ...gained].sort()
+  }
+
   it.each([
     ['Deleted', ERASURE_DELETED_TABLES],
     ['Anonymised', ERASURE_ANONYMISED_TABLES],
@@ -91,8 +107,32 @@ describe('the erasure scope the privacy page states', () => {
     expect(parsed.length).toBe(occurrences(map, treatment))
     expect(parsed.length).toBeGreaterThan(0)
 
-    expect([...stated].sort()).toEqual(parsed)
+    expect([...stated].sort()).toEqual(expectedFor(treatment))
   })
+
+  /**
+   * Every declared divergence is still real, checked from **both** ends.
+   *
+   * A divergence is a licence for this page to contradict `SubjectDataMap`, so it has to
+   * expire the moment it stops being true. If somebody corrects the map, `mapSays` no longer
+   * matches and this fails. If somebody changes the erasure to match the map, the anchor
+   * call disappears from `SubjectErasure.cs` and this fails. Either way a human re-reads the
+   * page's copy instead of the page quietly reverting to a claim that is false in the
+   * direction that matters most — telling a data subject a record survives when it does not.
+   */
+  describe.each(ERASURE_MAP_DIVERGENCES)(
+    'the declared divergence on $table',
+    ({ table, mapSays, codeDoes, anchor }) => {
+      it(`is still declared ${mapSays} by SubjectDataMap`, () => {
+        expect(tablesWithTreatment(map, mapSays)).toContain(table)
+        expect(tablesWithTreatment(map, codeDoes)).not.toContain(table)
+      })
+
+      it(`is still ${codeDoes} by SubjectErasure`, () => {
+        expect(readFileSync(ERASURE, 'utf8')).toContain(anchor)
+      })
+    },
+  )
 
   /**
    * The four claims on the page that are not about a single table, each anchored to the
@@ -103,6 +143,14 @@ describe('the erasure scope the privacy page states', () => {
    * If one of these phrases is reworded on the server, this fails and somebody re-reads the
    * page's copy. That is the intended outcome: the alternative is copy that quietly stops
    * being true.
+   *
+   * One caveat, on the `audit records are retained` row. The page no longer paraphrases the
+   * whole of that limitation, because the second half of it — "survey_audit_logs keeps
+   * everything except the denormalised copy of the actor's name and email" — is not what
+   * `SubjectErasure` does; see `ERASURE_MAP_DIVERGENCES`. The page restates the half that is
+   * true (`audit_logs` is untouched, and it names the table) and states the deletion
+   * separately. The anchor is kept because the sentence is still the origin of the retention
+   * argument the page makes, and because a reword should still send somebody back here.
    */
   it.each([
     ['responses are anonymised, not deleted', 'Survey responses are anonymised, not deleted'],
