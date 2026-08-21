@@ -59,6 +59,10 @@ public static class MicroclimateEndpoints
 
         group.MapGet("", ListAsync);
         group.MapPost("", CreateAsync);
+
+        // Literal segment, so it is unreachable by the "/{id:guid}" templates below whatever
+        // order they are registered in -- "bulk" is not a GUID.
+        group.MapPost("/bulk", BulkAsync);
         // AllowAnonymous so the public MicroclimateRespondPage (Task 7) can load a microclimate's
         // title/questions without a JWT -- GetAsync still enforces its own access rule below
         // (authenticated requests get the usual CanAccessCompany check; unauthenticated requests
@@ -69,6 +73,24 @@ public static class MicroclimateEndpoints
         group.MapGet("/{id:guid}", GetAsync).AllowAnonymous();
         group.MapPut("/{id:guid}", UpdateAsync);
         group.MapGet("/{id:guid}/live-results", GetLiveResultsAsync);
+
+        // The lifecycle. Both routes funnel into ApplyStatusAsync, as does the Status field
+        // on PUT /{id} and every item of POST /bulk -- four callers, one rule.
+        //
+        // /activate is kept as its own verb rather than left to /status because it is the
+        // transition with consequences (it is what puts content in front of respondents and
+        // therefore what runs the translation gate), and because the legacy surface this
+        // replaces named it. It is exactly `status -> active`, never a second code path.
+        group.MapPost("/{id:guid}/activate", ActivateAsync);
+        group.MapPut("/{id:guid}/status", UpdateStatusAsync);
+
+        // Export. Two routes over one projection: /export negotiates on the Accept header
+        // (JSON by default), /export/csv is the unambiguous link an admin can put in a
+        // browser address bar and get a file from. Both suppress before they serialise.
+        group.MapGet("/{id:guid}/export", ExportAsync);
+        group.MapGet("/{id:guid}/export/csv", ExportCsvAsync);
+
+        group.MapGet("/{id:guid}/insights", GetInsightsAsync);
 
         // Unauthenticated write surface -- rate-limited per caller so a single visitor/bot
         // holding the microclimate's GUID can't unboundedly inflate ResponseCount/
@@ -347,7 +369,7 @@ public static class MicroclimateEndpoints
             CompanyId = request.CompanyId,
             CreatedBy = actingUser?.Id ?? Guid.Empty,
             TemplateId = request.TemplateId,
-            Status = "draft",
+            Status = MicroclimateStatuses.Draft,
             TargetParticipantCount = request.TargetParticipantCount,
             CreatedAt = now,
             UpdatedAt = now,
@@ -420,7 +442,7 @@ public static class MicroclimateEndpoints
         // anonymous responses AND currently active -- the same policy SubmitResponseAsync
         // enforces for the actual submission. Draft (unlaunched) and closed (finished)
         // microclimates must never be publicly readable, even when AnonymousResponses is true.
-        if (!microclimate.RealtimeSettings.AnonymousResponses || microclimate.Status != "active")
+        if (!microclimate.RealtimeSettings.AnonymousResponses || !MicroclimateStatuses.AcceptsResponses(microclimate.Status))
         {
             return Results.Json(new { message = "This microclimate is not currently available" }, statusCode: 401);
         }
@@ -503,37 +525,16 @@ public static class MicroclimateEndpoints
 
         if (!string.IsNullOrWhiteSpace(request.Status))
         {
-            if (!MicroclimateValidation.ValidStatuses.Contains(request.Status))
+            // Was: a membership test against ValidStatuses and nothing else, which let this
+            // route walk a microclimate to ANY status from ANY status -- closed back to
+            // active, or active back to draft where its questions become editable again
+            // underneath responses already counted into the aggregate. The transition map now
+            // runs here exactly as it does on PUT /status.
+            var transitionError = await ApplyStatusAsync(db, microclimate, request.Status, cancellationToken);
+            if (transitionError is not null)
             {
-                return Results.Json(new { message = $"Invalid status: {request.Status}" }, statusCode: 400);
+                return transitionError;
             }
-
-            // The publish gate. Leaving draft is the point at which "export/show the
-            // survey in ES and EN without untranslated strings" has to be
-            // deterministically true, and a read-time fallback can only ever make it
-            // usually true. Not enforced on save: autosave runs every 5-10s and
-            // side-by-side editing means saving a half-translated question is normal.
-            if (ContentPublishValidation.IsPublishTransition(microclimate.Status, request.Status))
-            {
-                var gateQuestions = await db.MicroclimateQuestions
-                    .Where(q => q.MicroclimateId == microclimate.Id)
-                    .ToListAsync(cancellationToken);
-                var gateOptions = await MicroclimateContent.LoadOptionsAsync(
-                    db, gateQuestions.Select(q => q.Id).ToList(), cancellationToken);
-
-                var missing = ContentPublishValidation.FindMissing(
-                    microclimate.Language,
-                    MicroclimateContent.GateFields(microclimate, gateQuestions, gateOptions));
-
-                if (missing.Count > 0)
-                {
-                    return Results.Json(
-                        new { message = ContentPublishValidation.Describe(missing), missingTranslations = missing },
-                        statusCode: 400);
-                }
-            }
-
-            microclimate.Status = request.Status;
         }
 
         microclimate.UpdatedAt = DateTimeOffset.UtcNow;
@@ -541,6 +542,372 @@ public static class MicroclimateEndpoints
 
         return Results.Ok(await ToDetailAsync(microclimate, db, lang, cancellationToken));
     }
+
+    // ------------------------------------------------------------------
+    // Lifecycle
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The whole lifecycle rule, in one place so <c>POST /activate</c>, <c>PUT /status</c>,
+    /// the <c>Status</c> field on <c>PUT /{id}</c> and <c>POST /bulk</c> cannot drift apart.
+    /// Mutates <paramref name="microclimate"/> and returns null on success, or the
+    /// <see cref="IResult"/> to send back. Does not save.
+    /// </summary>
+    private static async Task<IResult?> ApplyStatusAsync(
+        ClimateProjectDbContext db,
+        Microclimate microclimate,
+        string? requestedStatus,
+        CancellationToken cancellationToken)
+    {
+        if (!MicroclimateStatuses.IsValid(requestedStatus))
+        {
+            return Results.Json(
+                new { message = $"Invalid status: {requestedStatus}. Expected one of: {string.Join(", ", MicroclimateStatuses.All)}" },
+                statusCode: 400);
+        }
+
+        var target = requestedStatus!;
+        if (!MicroclimateStatuses.CanTransition(microclimate.Status, target))
+        {
+            var allowed = MicroclimateStatuses.AllowedTransitionsFrom(microclimate.Status);
+            return Results.Json(
+                new
+                {
+                    message = allowed.Count == 0
+                        ? $"A microclimate in status '{microclimate.Status}' is final and cannot change status."
+                        : $"Cannot move a microclimate from '{microclimate.Status}' to '{target}'. Allowed from '{microclimate.Status}': {string.Join(", ", allowed)}.",
+                    from = microclimate.Status,
+                    to = target,
+                    allowedTransitions = allowed,
+                },
+                statusCode: 409);
+        }
+
+        if (string.Equals(microclimate.Status, target, StringComparison.Ordinal))
+        {
+            // Idempotent no-op: a retried activate is not an error, and re-running the
+            // publish gate on an already-live microclimate could only ever fail one that is
+            // already in front of respondents.
+            return null;
+        }
+
+        // The publish gate. Leaving draft for 'active' is the point at which "export/show
+        // the survey in ES and EN without untranslated strings" has to be deterministically
+        // true, and a read-time fallback can only ever make it usually true. Not enforced on
+        // save: autosave runs every 5-10s and side-by-side editing means saving a
+        // half-translated question is normal.
+        //
+        // MicroclimateStatuses.IsPublish, not ContentPublishValidation.IsPublishTransition:
+        // the shared predicate is "left draft for anything", which also catches
+        // draft -> closed. Demanding a complete set of translations in order to throw an
+        // abandoned draft away is a gate that blocks cleanup and protects no respondent.
+        if (MicroclimateStatuses.IsPublish(microclimate.Status, target))
+        {
+            var gateQuestions = await db.MicroclimateQuestions
+                .Where(q => q.MicroclimateId == microclimate.Id)
+                .ToListAsync(cancellationToken);
+            var gateOptions = await MicroclimateContent.LoadOptionsAsync(
+                db, gateQuestions.Select(q => q.Id).ToList(), cancellationToken);
+
+            var missing = ContentPublishValidation.FindMissing(
+                microclimate.Language,
+                MicroclimateContent.GateFields(microclimate, gateQuestions, gateOptions));
+
+            if (missing.Count > 0)
+            {
+                return Results.Json(
+                    new { message = ContentPublishValidation.Describe(missing), missingTranslations = missing },
+                    statusCode: 400);
+            }
+        }
+
+        microclimate.Status = target;
+        microclimate.UpdatedAt = DateTimeOffset.UtcNow;
+        return null;
+    }
+
+    /// <summary>
+    /// Loads a microclimate and checks the caller may administer it. Returns the row, or the
+    /// <see cref="IResult"/> to send back -- never both.
+    /// </summary>
+    /// <remarks>
+    /// The admin-role check and the tenancy check are separate conditions on purpose and are
+    /// both required: <see cref="CanAccessCompany"/> alone would let a company's own employee
+    /// through, which is the regression its own docblock records.
+    /// </remarks>
+    private static async Task<(Microclimate? Microclimate, IResult? Error)> LoadForAdminAsync(
+        Guid id,
+        CurrentUser currentUser,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var microclimate = await db.Microclimates.FirstOrDefaultAsync(m => m.Id == id, cancellationToken);
+        if (microclimate is null)
+        {
+            return (null, Results.Json(new { message = "Microclimate not found" }, statusCode: 404));
+        }
+
+        if (!Roles.Admin.Contains(currentUser.Role) || !CanAccessCompany(currentUser, microclimate.CompanyId))
+        {
+            return (null, Results.Forbid());
+        }
+
+        return (microclimate, null);
+    }
+
+    private static async Task<IResult> ActivateAsync(
+        Guid id,
+        string? lang,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+        => await TransitionAsync(id, MicroclimateStatuses.Active, lang, principal, db, cancellationToken);
+
+    private static async Task<IResult> UpdateStatusAsync(
+        Guid id,
+        UpdateMicroclimateStatusRequest request,
+        string? lang,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+        => await TransitionAsync(id, request?.Status, lang, principal, db, cancellationToken);
+
+    private static async Task<IResult> TransitionAsync(
+        Guid id,
+        string? target,
+        string? lang,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var (microclimate, error) = await LoadForAdminAsync(id, principal.GetCurrentUser(), db, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        var transitionError = await ApplyStatusAsync(db, microclimate!, target, cancellationToken);
+        if (transitionError is not null)
+        {
+            return transitionError;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return Results.Ok(await ToDetailAsync(microclimate!, db, lang, cancellationToken));
+    }
+
+    // ------------------------------------------------------------------
+    // Bulk
+    // ------------------------------------------------------------------
+
+    private static async Task<IResult> BulkAsync(
+        BulkMicroclimateActionRequest request,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        if (!Roles.Admin.Contains(currentUser.Role))
+        {
+            return Results.Forbid();
+        }
+
+        var action = request?.Action?.Trim().ToLowerInvariant();
+        if (action is null || !MicroclimateValidation.BulkActions.Contains(action, StringComparer.Ordinal))
+        {
+            return Results.Json(
+                new { message = $"Invalid action: {request?.Action}. Expected one of: {string.Join(", ", MicroclimateValidation.BulkActions)}" },
+                statusCode: 400);
+        }
+
+        var ids = (request!.MicroclimateIds ?? []).Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return Results.Json(new { message = "MicroclimateIds is required" }, statusCode: 400);
+        }
+
+        var rows = await db.Microclimates.Where(m => ids.Contains(m.Id)).ToListAsync(cancellationToken);
+        var byId = rows.ToDictionary(m => m.Id);
+
+        var target = action == MicroclimateValidation.BulkActionActivate
+            ? MicroclimateStatuses.Active
+            : MicroclimateStatuses.Closed;
+
+        var results = new List<BulkMicroclimateActionResult>(ids.Count);
+        foreach (var id in ids)
+        {
+            if (!byId.TryGetValue(id, out var microclimate)
+                || !CanAccessCompany(currentUser, microclimate.CompanyId))
+            {
+                // A row in another tenant is reported as "not found", not "forbidden".
+                // Telling a CompanyAdmin which arbitrary GUIDs exist in other companies is a
+                // cross-tenant probe, and an endpoint that takes a list of ids and answers
+                // one-by-one is the ideal shape for one.
+                results.Add(new BulkMicroclimateActionResult(id, false, "Microclimate not found"));
+                continue;
+            }
+
+            // Every item goes through the same helper a single-microclimate call uses. Bulk
+            // is a loop, never a bypass: a bulk close must not be able to close something
+            // PUT /status would have refused, and a bulk activate must still run the
+            // translation gate on each row it publishes.
+            var error = await ApplyStatusAsync(db, microclimate, target, cancellationToken);
+            results.Add(error is null
+                ? new BulkMicroclimateActionResult(id, true, null)
+                : new BulkMicroclimateActionResult(
+                    id,
+                    false,
+                    $"Cannot move a microclimate from '{microclimate.Status}' to '{target}'."));
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(new BulkMicroclimateActionResponse(results));
+    }
+
+    // ------------------------------------------------------------------
+    // Export
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds the suppressed export payload. The single path to a microclimate's contents
+    /// leaving the server as a file, so the floors cannot be skipped by picking a format.
+    /// </summary>
+    private static async Task<(MicroclimateExport? Export, IResult? Error)> BuildExportAsync(
+        Guid id,
+        string? lang,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var (microclimate, error) = await LoadForAdminAsync(id, principal.GetCurrentUser(), db, cancellationToken);
+        if (error is not null)
+        {
+            return (null, error);
+        }
+
+        var locale = MicroclimateContent.ResolveRequestLocale(lang, microclimate!.Language);
+        var fallbackFields = new List<string>();
+        var questions = await LoadQuestionDtosAsync(microclimate, db, locale, fallbackFields, cancellationToken);
+
+        var words = string.IsNullOrWhiteSpace(microclimate.LiveResults.WordCloudData)
+            ? []
+            : System.Text.Json.JsonSerializer.Deserialize<List<WordCloudEntry>>(microclimate.LiveResults.WordCloudData) ?? [];
+
+        return (MicroclimateExportProjection.Project(
+            microclimate.Id,
+            MicroclimateContent.Resolve(microclimate.TitleEn, microclimate.TitleEs, locale, microclimate.Language, "title", fallbackFields),
+            MicroclimateContent.Resolve(microclimate.DescriptionEn, microclimate.DescriptionEs, locale, microclimate.Language, "description", fallbackFields),
+            microclimate.CompanyId,
+            microclimate.Status,
+            microclimate.Language,
+            locale,
+            microclimate.Scheduling.StartTime,
+            microclimate.Scheduling.EndTime,
+            microclimate.ResponseCount,
+            microclimate.TargetParticipantCount,
+            microclimate.LiveResults.EngagementLevel,
+            microclimate.LiveResults.SentimentScore,
+            questions,
+            words,
+            DateTimeOffset.UtcNow), null);
+    }
+
+    private static async Task<IResult> ExportAsync(
+        Guid id,
+        string? format,
+        string? lang,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var (export, error) = await BuildExportAsync(id, lang, principal, db, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        // ?format=csv is accepted here as well as at /export/csv so a caller that only knows
+        // the legacy query-string shape still gets a file rather than JSON it did not ask
+        // for. Same projection either way.
+        return string.Equals(format?.Trim(), "csv", StringComparison.OrdinalIgnoreCase)
+            ? CsvFile(export!)
+            : Results.Ok(export);
+    }
+
+    private static async Task<IResult> ExportCsvAsync(
+        Guid id,
+        string? lang,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var (export, error) = await BuildExportAsync(id, lang, principal, db, cancellationToken);
+        return error ?? CsvFile(export!);
+    }
+
+    private static IResult CsvFile(MicroclimateExport export)
+        => Results.File(
+            MicroclimateExportProjection.ToCsv(export),
+            "text/csv",
+            $"microclimate-{export.Id}.csv");
+
+    // ------------------------------------------------------------------
+    // Insights
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Serves whatever has been persisted to <c>MicroclimateAiInsight</c> for this session.
+    /// </summary>
+    /// <remarks>
+    /// <b>This endpoint reads a table nothing writes.</b> #131 asked for insights to be
+    /// "stubbed or deferred" because they depend on #67, the AI provider decision. #67 is
+    /// closed and produced <c>docs/superpowers/specs/2026-08-02-ai-provider-decision.md</c>,
+    /// but no inference client was ever built -- there is no Bedrock or Anthropic call
+    /// anywhere in <c>src/</c>, and the only writer of <c>MicroclimateAiInsights</c> in the
+    /// repository is a persistence test. <c>SubmitResponseAsync</c> hard-codes
+    /// <c>SentimentScore = 0</c> for the same reason.
+    ///
+    /// <para>
+    /// So the stub is the read side, wired to the real table, and it reports the gap in the
+    /// payload instead of hiding it: <c>generated: false</c> with a reason code, rather than
+    /// an empty array that a client would render identically to "the model had nothing to
+    /// say". When a generator does land it writes rows and this endpoint starts returning
+    /// them with no change here and no change in the client. Inventing plausible-looking
+    /// insight text was the alternative and is the one thing this must not do -- a fabricated
+    /// narrative about a real team is worse than an empty one.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> GetInsightsAsync(
+        Guid id,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var (microclimate, error) = await LoadForAdminAsync(id, principal.GetCurrentUser(), db, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        var insights = await db.MicroclimateAiInsights
+            .AsNoTracking()
+            .Where(i => i.MicroclimateId == microclimate!.Id)
+            .OrderByDescending(i => i.Timestamp)
+            .Select(i => new MicroclimateInsightItem(i.Id, i.Type, i.Message, i.Confidence, i.Timestamp))
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(new MicroclimateInsightsResponse(
+            microclimate!.Id,
+            insights.Count > 0,
+            insights.Count > 0 ? null : NoInsightGeneratorReason,
+            insights));
+    }
+
+    /// <summary>
+    /// Machine-readable, rendered through the client's own i18n keys. Not display copy.
+    /// </summary>
+    internal const string NoInsightGeneratorReason = "no_insight_generator_configured";
 
     // Keyed by (language, word), not by word. Counting "trabajo" and "work" as
     // unrelated entries in one map was the whole defect: the frequencies were correct
@@ -638,7 +1005,7 @@ public static class MicroclimateEndpoints
             }
         }
 
-        if (microclimate.Status != "active")
+        if (!MicroclimateStatuses.AcceptsResponses(microclimate.Status))
         {
             return Results.Json(new { message = "This microclimate is not currently accepting responses" }, statusCode: 400);
         }

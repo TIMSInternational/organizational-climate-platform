@@ -127,3 +127,113 @@ public sealed record LiveResultsDetail(
 /// it has exactly one.
 /// </param>
 public sealed record SubmitResponseRequest(Dictionary<Guid, string> Answers, string? Language = null);
+
+// ---------------------------------------------------------------------------
+// Status lifecycle (#131)
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// Body of <c>PUT /microclimates/{id}/status</c>. A dedicated route rather than a field on
+/// <c>PUT /microclimates/{id}</c> because a lifecycle move is not a content edit: it has its
+/// own legality rules, its own 409, and -- unlike a title change -- it is the thing that
+/// makes content visible to respondents. Mirrors <c>PUT /surveys/{id}/status</c>.
+/// </summary>
+public sealed record UpdateMicroclimateStatusRequest(string Status);
+
+/// <summary>
+/// Body of <c>POST /microclimates/bulk</c>.
+/// </summary>
+/// <param name="Action">One of <c>MicroclimateValidation.BulkActions</c>.</param>
+public sealed record BulkMicroclimateActionRequest(string Action, List<Guid> MicroclimateIds);
+
+/// <param name="Message">
+/// Null on success. On failure, why -- including "Microclimate not found" for a row in
+/// another tenant, which is deliberate: see the handler.
+/// </param>
+public sealed record BulkMicroclimateActionResult(Guid MicroclimateId, bool Succeeded, string? Message);
+
+/// <summary>
+/// Per-item outcomes. A bulk call is 200 even when every item failed: the transport
+/// succeeded, and the caller needs the breakdown to know which ids to retry.
+/// </summary>
+public sealed record BulkMicroclimateActionResponse(IReadOnlyList<BulkMicroclimateActionResult> Results);
+
+// ---------------------------------------------------------------------------
+// Insights (#131, blocked on #67)
+// ---------------------------------------------------------------------------
+
+public sealed record MicroclimateInsightItem(
+    Guid Id,
+    string Type,
+    string Message,
+    double Confidence,
+    DateTimeOffset Timestamp);
+
+/// <param name="Generated">
+/// False whenever no generator has ever run for this microclimate. Stated explicitly so a
+/// client can tell "the model found nothing worth saying" from "nothing has analysed this",
+/// which an empty <paramref name="Insights"/> list alone cannot express.
+/// </param>
+/// <param name="Reason">
+/// Machine-readable, null when <paramref name="Generated"/> is true. The client renders it
+/// through its own i18n keys -- this is not display copy.
+/// </param>
+public sealed record MicroclimateInsightsResponse(
+    Guid MicroclimateId,
+    bool Generated,
+    string? Reason,
+    IReadOnlyList<MicroclimateInsightItem> Insights);
+
+// ---------------------------------------------------------------------------
+// Export (#131)
+// ---------------------------------------------------------------------------
+
+/// <param name="Occurrences">
+/// Word occurrences, NOT distinct respondents -- one person writing "visa visa" contributes
+/// 2. See <see cref="MicroclimateExport"/> for why that distinction bounds what the word
+/// floor can promise.
+/// </param>
+public sealed record MicroclimateExportWord(string Text, string Language, int Occurrences);
+
+/// <summary>
+/// A microclimate session reduced to everything that survives disclosure control.
+/// </summary>
+/// <param name="IsSuppressed">
+/// True when the session is below <c>SurveyResultsPrivacy.MinimumRespondents</c>. Free text
+/// is then withheld entirely and <paramref name="Words"/> is empty.
+/// </param>
+/// <param name="WithheldWordCount">
+/// Distinct words withheld, by either floor. Reported rather than silently dropped so the
+/// reader can tell "nobody wrote anything" from "this was withheld" -- and so the export
+/// still reconciles against <paramref name="ResponseCount"/>, which is never suppressed.
+/// </param>
+/// <param name="SuppressionReason">Machine-readable, null when nothing was withheld.</param>
+/// <param name="FallbackFields">
+/// The fields that had to fall back to a different language to produce a value. Carried
+/// because <see cref="MicroclimateDetail"/> promises exactly this -- "an admin gets a badge,
+/// an export gets a label" -- and an export that resolved a missing Spanish title to the
+/// English one without saying so is the silent substitution #195 exists to prevent, in the
+/// one artefact that leaves the building.
+/// </param>
+public sealed record MicroclimateExport(
+    Guid Id,
+    string? Title,
+    string? Description,
+    Guid CompanyId,
+    string Status,
+    string Language,
+    string ResolvedLocale,
+    IReadOnlyList<string> FallbackFields,
+    DateTimeOffset StartTime,
+    DateTimeOffset EndTime,
+    int ResponseCount,
+    int TargetParticipantCount,
+    double? ParticipationPercent,
+    string EngagementLevel,
+    double SentimentScore,
+    IReadOnlyList<QuestionDto> Questions,
+    IReadOnlyList<MicroclimateExportWord> Words,
+    bool IsSuppressed,
+    int WithheldWordCount,
+    string? SuppressionReason,
+    DateTimeOffset GeneratedAt);
