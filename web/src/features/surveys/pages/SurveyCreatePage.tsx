@@ -915,6 +915,22 @@ export default function SurveyCreatePage() {
                       <legend className="mb-inline font-medium">
                         {t('surveyCreate.scaleEnds')}
                       </legend>
+                      {/* A picked library item is the only thing that sets the
+                          numeric ends, and nothing on this card edits them — so
+                          without this line the difference between a 1–5 question and
+                          a 0–10 one is invisible while its WORDS sit in the boxes
+                          below, which is exactly how the bounds got dropped
+                          unnoticed. Shown only when set: a null pair is the product
+                          default and saying "1 to 5" would claim an author choice
+                          that was never made. */}
+                      {question.scaleMin !== null && question.scaleMax !== null && (
+                        <p className="m-0 text-sm text-fg-secondary">
+                          {t('surveyCreate.scalePoints', {
+                            min: question.scaleMin,
+                            max: question.scaleMax,
+                          })}
+                        </p>
+                      )}
                       <div className="grid gap-inline md:grid-cols-2">
                         {both ? (
                           <>

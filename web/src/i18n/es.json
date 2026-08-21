@@ -1518,6 +1518,7 @@
     "floorBody": "Los resultados de cualquier grupo con menos de {floor} respuestas se retienen: el grupo conserva su fila en el mapa de clima, mostrado como protegido. Un departamento de 6 donde responden 4 se retiene igual que uno de 600. El umbral es un ajuste de la empresa; puede subirse, nunca bajarse.",
     "scaleEnds": "Extremos de la escala",
     "scaleEndsHelp": "Se imprimen bajo la escala para quien responde, y en la página de resultados bajo cada distribución.",
+    "scalePoints": "Se responde en una escala de {min} a {max}, copiada de la biblioteca junto con la pregunta.",
     "scaleMin": "Extremo bajo",
     "scaleMax": "Extremo alto",
     "scaleMinEn": "Extremo bajo (inglés)",

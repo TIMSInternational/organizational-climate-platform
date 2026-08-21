@@ -87,6 +87,20 @@
         "color": null,
         "isActive": true,
         "itemCount": 1
+      },
+      {
+        "id": "c0000000-0000-0000-0000-000000000006",
+        "companyId": "22222222-2222-2222-2222-222222222222",
+        "parentCategoryId": null,
+        "nameEn": "RIVAL TENANT — this rail row must never be drawn",
+        "nameEs": "OTRA EMPRESA — esta fila nunca debe dibujarse",
+        "descriptionEn": null,
+        "descriptionEs": null,
+        "order": 4,
+        "icon": null,
+        "color": null,
+        "isActive": true,
+        "itemCount": 9
       }
     ]
   },
@@ -219,6 +233,20 @@
         "tags": ["week-one"]
       },
       {
+        "id": "a0000000-0000-0000-0000-000000000012",
+        "companyId": null,
+        "questionCategoryId": "c0000000-0000-0000-0000-000000000004",
+        "textEn": "How likely are you to recommend working here to a friend?",
+        "textEs": "¿Qué tan probable es que recomiendes trabajar aquí a un amigo?",
+        "type": "likert",
+        "dimension": "enps",
+        "usageCount": 7,
+        "lastUsedAt": "2026-07-30T09:00:00Z",
+        "isActive": true,
+        "version": 1,
+        "tags": ["loyalty"]
+      },
+      {
         "id": "a0000000-0000-0000-0000-000000000010",
         "companyId": "22222222-2222-2222-2222-222222222222",
         "questionCategoryId": "c0000000-0000-0000-0000-000000000003",
@@ -247,6 +275,30 @@
         "tags": []
       }
     ]
+  },
+  "GET /admin/question-library/a0000000-0000-0000-0000-000000000012": {
+    "id": "a0000000-0000-0000-0000-000000000012",
+    "companyId": null,
+    "questionCategoryId": "c0000000-0000-0000-0000-000000000004",
+    "textEn": "How likely are you to recommend working here to a friend?",
+    "textEs": "¿Qué tan probable es que recomiendes trabajar aquí a un amigo?",
+    "language": "both",
+    "scaleMin": 0,
+    "scaleMax": 10,
+    "scaleLabelMinEn": "Not at all likely",
+    "scaleLabelMinEs": "Nada probable",
+    "scaleLabelMaxEn": "Extremely likely",
+    "scaleLabelMaxEs": "Extremadamente probable",
+    "dimension": "enps",
+    "usageCount": 7,
+    "lastUsedAt": "2026-07-30T09:00:00Z",
+    "isActive": true,
+    "version": 1,
+    "previousVersionId": null,
+    "createdAt": "2026-05-02T09:00:00Z",
+    "updatedAt": "2026-07-30T09:00:00Z",
+    "tags": ["loyalty"],
+    "options": []
   },
   "GET /admin/question-library/a0000000-0000-0000-0000-000000000003": {
     "id": "a0000000-0000-0000-0000-000000000003",

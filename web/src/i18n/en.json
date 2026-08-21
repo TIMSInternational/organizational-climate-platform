@@ -1518,6 +1518,7 @@
     "floorBody": "Results for any group with fewer than {floor} responses are withheld — the group keeps its row on the climate map, shown as protected. A department of 6 where 4 respond is withheld the same as one of 600. The floor is a company setting; it can be raised, never lowered.",
     "scaleEnds": "Scale ends",
     "scaleEndsHelp": "Printed under the scale for respondents, and on the results page under each distribution.",
+    "scalePoints": "Answered on a {min}–{max} scale, copied from the library with the question.",
     "scaleMin": "Low end",
     "scaleMax": "High end",
     "scaleMinEn": "Low end (English)",

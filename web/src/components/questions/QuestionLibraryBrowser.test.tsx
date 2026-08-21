@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { setToken } from '../../auth/token'
 import { TranslationProvider } from '../../i18n'
@@ -37,6 +37,23 @@ const CATEGORIES = [
     color: null,
     isActive: true,
     itemCount: 1,
+  },
+  {
+    // Another tenant's OWN category. `ListCategoriesAsync` applies no company filter
+    // for a SuperAdmin, so this row really is in the response the component receives
+    // — the same asymmetry `other-tenant` covers for items.
+    id: 'other-cat',
+    companyId: OTHER,
+    parentCategoryId: null,
+    nameEn: 'Rival Corp onboarding',
+    nameEs: 'Incorporación de Rival Corp',
+    descriptionEn: null,
+    descriptionEs: null,
+    order: 0,
+    icon: null,
+    color: null,
+    isActive: true,
+    itemCount: 4,
   },
 ]
 
@@ -147,13 +164,17 @@ function stubApi(overrides: { detailFails?: boolean } = {}): void {
   )
 }
 
-function renderBrowser(onAdd = vi.fn(), allowedTypes = ['likert', 'multiple_choice']) {
+function renderBrowser(
+  onAdd = vi.fn(),
+  allowedTypes = ['likert', 'multiple_choice'],
+  companyId: string | null = OWN,
+) {
   render(
     <TranslationProvider>
       <QuestionLibraryBrowser
         open
         onOpenChange={vi.fn()}
-        companyId={OWN}
+        companyId={companyId}
         allowedTypes={allowedTypes}
         typeLabel={(type) => type}
         onAdd={onAdd}
@@ -161,6 +182,14 @@ function renderBrowser(onAdd = vi.fn(), allowedTypes = ['likert', 'multiple_choi
     </TranslationProvider>,
   )
   return onAdd
+}
+
+/** The category rail's own buttons, by their visible name. */
+async function railNames(): Promise<string[]> {
+  const rail = await screen.findByRole('navigation', { name: 'Categories' })
+  return within(rail)
+    .getAllByRole('button')
+    .map((button) => button.textContent ?? '')
 }
 
 beforeEach(() => {
@@ -207,6 +236,43 @@ describe('QuestionLibraryBrowser', () => {
     for (const url of requested) {
       expect(new URL(url, 'http://localhost').searchParams.get('companyId')).toBeNull()
     }
+  })
+
+  /**
+   * The CATEGORY half of the same scoping rule, which the item assertions above
+   * cannot reach.
+   *
+   * `visibleToCompany` is applied twice in the component — once to items, once to
+   * categories — and only the items call site has a visible symptom in a list of
+   * questions. A rail built from unscoped categories leaks the other tenant's own
+   * taxonomy by NAME ("Rival Corp onboarding") and by ITEM COUNT, which is a
+   * cross-tenant read wearing a nav element's clothing, with every question in the
+   * list still correctly scoped. Unscoping the categories alone is therefore a change
+   * no other test in this repository notices.
+   */
+  it('never offers another tenant category in the rail', async () => {
+    stubApi()
+    renderBrowser()
+
+    const names = await railNames()
+    // Positive control first: this must not pass by rendering an empty rail.
+    expect(names.some((name) => name.includes('Leadership'))).toBe(true)
+    expect(names.some((name) => name.includes('Trust in leadership'))).toBe(true)
+    expect(names.some((name) => name.includes('Rival Corp onboarding'))).toBe(false)
+  })
+
+  /**
+   * `companyId` null means "no company chosen yet". Offering the global categories
+   * alone would silently narrow the library instead of saying a company is missing —
+   * and the rail is where that would be least visible, since a global-only rail looks
+   * exactly like a complete one.
+   */
+  it('offers no category at all until a company is chosen', async () => {
+    stubApi()
+    renderBrowser(vi.fn(), ['likert', 'multiple_choice'], null)
+
+    // Only "All categories" — the rail's own fixed row — survives.
+    await waitFor(async () => expect(await railNames()).toEqual(['All categories']))
   })
 
   it('narrows to a category and its descendants when one is chosen', async () => {

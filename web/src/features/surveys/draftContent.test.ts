@@ -43,6 +43,12 @@ function filled(): SurveyWizardValues {
         scaleLabelMinEs: 'Muy en desacuerdo',
         scaleLabelMaxEn: 'Strongly agree',
         scaleLabelMaxEs: 'Muy de acuerdo',
+        // And the NUMBERS at those ends. Unlike every other field here they cannot
+        // be recovered by retyping — nothing in the wizard collects a bound, they
+        // arrive only from a picked library item, and a lost bound reads as the
+        // default 1-5 rather than as blank.
+        scaleMin: 0,
+        scaleMax: 10,
       },
     ],
   }
@@ -83,7 +89,7 @@ describe('toDraftContent / draftValuesFrom', () => {
 
   it('restores a draft from before the dimension picker with blanks, not by refusing it', () => {
     // Drafts live for the whole retention window, so the parser will meet the
-    // pre-picker question shape. The five new fields are additive and deliberately
+    // pre-picker question shape. The seven new fields are additive and deliberately
     // did NOT bump `SURVEY_DRAFT_CONTENT_VERSION` — a bump would make every stored
     // draft unrecoverable for the sake of fields it never held.
     const legacy = toDraftContent(filled()) as unknown as Record<string, unknown>
@@ -94,6 +100,8 @@ describe('toDraftContent / draftValuesFrom', () => {
         scaleLabelMinEs: _minEs,
         scaleLabelMaxEn: _maxEn,
         scaleLabelMaxEs: _maxEs,
+        scaleMin: _min,
+        scaleMax: _max,
         ...rest
       } = question
       return rest
@@ -105,6 +113,35 @@ describe('toDraftContent / draftValuesFrom', () => {
     expect(restored.questions[0].category).toBe('')
     expect(restored.questions[0].scaleLabelMinEn).toBe('')
     expect(restored.questions[0].scaleLabelMaxEs).toBe('')
+    // Null, not 1 and 5: a draft that never held a bound had the product default,
+    // and inventing numbers here would file an author choice nobody made.
+    expect(restored.questions[0].scaleMin).toBeNull()
+    expect(restored.questions[0].scaleMax).toBeNull()
+  })
+
+  it('keeps a picked question scale bounds across an autosave and a recovery', () => {
+    // The round-trip test above compares whole objects, which would also pass if
+    // both sides lost the same field. This names it: a 0-10 question recovered as a
+    // 1-5 one is the drop this branch fixed, arriving one refresh later instead.
+    const restored = draftValuesFrom(toDraftContent(filled()), 'p', 'en')!
+
+    expect(restored.questions[0].scaleMin).toBe(0)
+    expect(restored.questions[0].scaleMax).toBe(10)
+  })
+
+  it('refuses a stored bound that is not a whole number rather than carrying it to a 400', () => {
+    // `content` is arbitrary JSON the server never interprets, so the parser meets
+    // whatever is in that column. `Question.ScaleMin` is an `int?`: a 2.5 or a NaN
+    // would be refused on create, and a draft that cannot be submitted is worse
+    // than one that lost a bound.
+    const content = toDraftContent(filled()) as unknown as Record<string, unknown>
+    ;(content.questions as Record<string, unknown>[])[0].scaleMin = 2.5
+    ;(content.questions as Record<string, unknown>[])[0].scaleMax = 'ten'
+
+    const restored = draftValuesFrom(content, 'p', 'en')!
+
+    expect(restored.questions[0].scaleMin).toBeNull()
+    expect(restored.questions[0].scaleMax).toBeNull()
   })
 
   it('gives an option a key distinct from every question key', () => {

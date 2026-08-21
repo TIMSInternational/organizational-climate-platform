@@ -277,6 +277,44 @@ describe('buildCreateInput', () => {
     expect(input.questions?.[1]).not.toHaveProperty('scaleLabelMax')
   })
 
+  it('sends the numeric scale bounds beside the words, and never for a type with no scale', () => {
+    const input = buildCreateInput(
+      complete({
+        questions: [
+          {
+            ...emptyQuestion('q1'),
+            textEn: 'How likely are you to recommend working here?',
+            scaleMin: 0,
+            scaleMax: 10,
+            scaleLabelMinEn: 'Not at all likely',
+            scaleLabelMaxEn: 'Extremely likely',
+          },
+          {
+            // Same card, retyped as open_ended: the bounds survive in wizard state
+            // and must not be filed on a question that has no scale to file them on.
+            ...emptyQuestion('q2'),
+            textEn: 'Anything else?',
+            type: 'open_ended',
+            scaleMin: 0,
+            scaleMax: 10,
+          },
+          // A hand-written likert. Nothing in the wizard types a bound, so this is
+          // what every survey has always sent, and it must stay omitted rather than
+          // become an invented 1 and 5.
+          { ...emptyQuestion('q3'), textEn: 'Safe?' },
+        ],
+      }),
+      COMPANY,
+    )
+
+    expect(input.questions?.[0].scaleMin).toBe(0)
+    expect(input.questions?.[0].scaleMax).toBe(10)
+    expect(input.questions?.[1]).not.toHaveProperty('scaleMin')
+    expect(input.questions?.[1]).not.toHaveProperty('scaleMax')
+    expect(input.questions?.[2]).not.toHaveProperty('scaleMin')
+    expect(input.questions?.[2]).not.toHaveProperty('scaleMax')
+  })
+
   it('omits untouched scale labels, and sends only the filled half of a bilingual pair', () => {
     const input = buildCreateInput(
       complete({
