@@ -91,6 +91,15 @@ const devOnlyRoutes: RouteObject[] = import.meta.env.DEV
           Component: (await import('../features/charts/pages/ChartGalleryPage')).default,
         }),
       },
+      // #115. The shared question picker is a dialog inside step 4 of a wizard, and
+      // `scripts/shot.mjs` photographs a ROUTE — it cannot click. Same dev-only
+      // mechanism as the gallery above, and asserted the same way in router.test.ts.
+      {
+        path: '/dev/question-library',
+        lazy: async () => ({
+          Component: (await import('../features/questions/pages/QuestionLibraryDevPage')).default,
+        }),
+      },
     ]
   : []
 
