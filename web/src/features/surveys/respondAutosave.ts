@@ -88,9 +88,52 @@ export function respondAutosaveAllowed(view: SurveyRespondView | null): boolean 
  * accepts such a post and creates the row (asserted by
  * `An_empty_partial_save_still_creates_a_response_row_which_is_why_the_form_waits`),
  * so the restraint has to be here.
+ *
+ * `cleared` is why this is not simply `inputs.length > 0`. A respondent who erases the
+ * only answer they had produces no inputs at all, and that submission is the one that
+ * matters most: it IS the erasure. Gating on the answers alone is precisely how a
+ * taken-back answer used to stay on the server forever.
  */
-export function hasProgressToSave(inputs: readonly SurveyAnswerInput[]): boolean {
-  return inputs.length > 0
+export function hasProgressToSave(
+  inputs: readonly SurveyAnswerInput[],
+  cleared: readonly string[] = [],
+): boolean {
+  return inputs.length > 0 || cleared.length > 0
+}
+
+/**
+ * The questions the server still holds an answer for that the respondent has since
+ * taken back — the payload's other half, and the one the first cut of #369 was missing.
+ *
+ * `toAnswerInputs` omits an unanswered question, so erasing an answer simply removed it
+ * from the payload; the server's writer only ever touched what it was sent, and the
+ * stored row survived. A respondent who deleted a free-text comment kept reading a form
+ * that no longer showed it while the server kept it indefinitely. Naming the question is
+ * what makes the erasure travel.
+ *
+ * **Scoped to `serverAnswered`**, so this can only ever ask for the deletion of a row the
+ * server is known to hold — never a question that was simply never answered.
+ *
+ * **Scoped to questions this page can render**, which is the subtle one. `toAnswerInputs`
+ * skips an `unsupported` question type, so such a question can never appear in `inputs`;
+ * without this filter it would look permanently "taken back" and every save would ask the
+ * server to delete an answer some other client had legitimately stored.
+ */
+export function clearedQuestionIds(
+  serverAnswered: ReadonlySet<string>,
+  questions: readonly SurveyRespondQuestion[],
+  answers: AnswerMap,
+): string[] {
+  if (serverAnswered.size === 0) return []
+
+  return questions
+    .filter(
+      (question) =>
+        serverAnswered.has(question.id) &&
+        answerShapeOf(question) !== 'unsupported' &&
+        !isAnswered(question, answers[question.id]),
+    )
+    .map((question) => question.id)
 }
 
 /**

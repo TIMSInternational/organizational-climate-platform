@@ -382,7 +382,8 @@ public static class SurveyResponseEndpoints
             .Select(a => new SurveyAnswerSubmission(a.QuestionId, a.Value, a.Values, a.Text, a.TimeSpentSeconds))
             .ToList();
 
-        var validation = SurveyAnswerValidation.Validate(questions, submissions, request.IsComplete, alreadyAnswered);
+        var validation = SurveyAnswerValidation.Validate(
+            questions, submissions, request.IsComplete, alreadyAnswered, request.ClearedQuestionIds);
         if (validation.Error is not null)
         {
             return Results.Json(new { message = validation.Error }, statusCode: 400);
@@ -432,7 +433,13 @@ public static class SurveyResponseEndpoints
             response.Language = language;
         }
 
-        await UpsertAnswersAsync(response.Id, validation.Answers, existing is not null, db, cancellationToken);
+        await UpsertAnswersAsync(
+            response.Id,
+            validation.Answers,
+            validation.ClearedQuestionIds,
+            existing is not null,
+            db,
+            cancellationToken);
 
         IReadOnlyList<string> suppressed = [];
         if (request.IsComplete)
@@ -543,11 +550,15 @@ public static class SurveyResponseEndpoints
     private static async Task UpsertAnswersAsync(
         Guid responseId,
         IReadOnlyList<ValidatedSurveyAnswer> answers,
+        IReadOnlyList<Guid> clearedQuestionIds,
         bool mayHaveExistingRows,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
-        if (answers.Count == 0)
+        // NOT `answers.Count == 0`. A submission that only takes an answer back carries no
+        // answers at all and is the single most important one to honour: it is a
+        // respondent erasing something they decided they did not want stored.
+        if (answers.Count == 0 && clearedQuestionIds.Count == 0)
         {
             return;
         }
@@ -562,6 +573,24 @@ public static class SurveyResponseEndpoints
                 .Where(qr => qr.ResponseId == responseId)
                 .ToDictionaryAsync(qr => qr.QuestionId, cancellationToken)
             : new Dictionary<Guid, QuestionResponse>();
+
+        // The delete branch, and the reason an upsert alone was not enough. Without it an
+        // answer the respondent took back stayed on the server for good: the client simply
+        // stops sending a question it no longer has an answer for, and every loop below
+        // only ever writes what it was sent. A free-text comment somebody deliberately
+        // erased outliving the erasure is the worst shape that bug can take on a product
+        // that promises confidentiality, so the removal is explicit and it is here.
+        foreach (var questionId in clearedQuestionIds)
+        {
+            if (existingRows.TryGetValue(questionId, out var stored))
+            {
+                db.QuestionResponses.Remove(stored);
+                // So a later answer for the same question in this same submission cannot
+                // resurrect the row object being deleted. Validation refuses that
+                // combination, but the writer does not depend on it having run.
+                existingRows.Remove(questionId);
+            }
+        }
 
         foreach (var answer in answers)
         {

@@ -931,6 +931,208 @@ describe('SurveyRespondPage autosave', () => {
       (screen.getByRole('button', { name: 'Enviar mis respuestas' }) as HTMLButtonElement).disabled,
     ).toBe(false)
   })
+
+  /**
+   * The debounce has to COALESCE, which is the only reason to make a respondent wait
+   * 1500ms for a save at all. A timer per change that is never cancelled costs the delay
+   * and buys nothing: every edit still becomes its own POST, just a second and a half
+   * late.
+   *
+   * Asserted as timing rather than as a count, because a count alone passes either way
+   * once the signature check has deduplicated the extra writes. Answering a second
+   * question 1300ms in must push the save out; a save that lands at 1900ms is one that
+   * was armed by the FIRST answer and never re-armed by the second.
+   */
+  it('re-arms the delay on each answer instead of letting every change keep its own timer', async () => {
+    respondWith(autosaving({ questions: [question(), question({ id: 'q2', order: 1 })] }))
+    renderPage()
+
+    const [first, second] = await screen.findAllByRole('radio', { name: 'Muy de acuerdo' })
+    await userEvent.click(first)
+    await new Promise((resolve) => setTimeout(resolve, 1300))
+    await userEvent.click(second)
+    await new Promise((resolve) => setTimeout(resolve, 600))
+
+    // 1900ms after the first answer, 600ms after the second. A timer left armed by the
+    // first fired 400ms ago.
+    expect(
+      submissions(),
+      'the second answer must restart the delay, not race a timer the first one left running',
+    ).toHaveLength(0)
+
+    // And when it does land it is ONE write carrying both answers, not two.
+    await waitFor(() => expect(submissions()).toHaveLength(1), { timeout: 4000 })
+    expect(submissions()[0].answers).toHaveLength(2)
+  })
+
+  /**
+   * Why the POSTs are queued rather than fired at will.
+   *
+   * `FindExistingResponseAsync` is a check-then-insert: two submissions on the same key
+   * that overlap can both find nothing and both insert, and a respondent ends up with
+   * two response rows. Before autosave this page could not produce overlapping posts,
+   * because the only two buttons that made one were disabled while it was in flight. A
+   * timer plus a page-hide flush can, so nothing may go on the wire while a save is
+   * still open.
+   */
+  it('never has two saves in flight at once, so one tab cannot race itself', async () => {
+    let releaseFirst: (() => void) | undefined
+    const held = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    let posts = 0
+    const payload = autosaving()
+    vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method !== 'POST') {
+        return Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }))
+      }
+      posts += 1
+      const body = new Response(
+        JSON.stringify({
+          responseId: 'r1',
+          sessionId: 'session-1',
+          isComplete: false,
+          isAnonymous: true,
+          alreadySubmitted: false,
+          language: 'es',
+          answeredQuestionCount: 1,
+          questionCount: 1,
+          suppressedDemographics: [],
+        }),
+        { status: 201 },
+      )
+      // The first save never resolves until this test lets it, which is what makes the
+      // second one an overlap rather than a sequel.
+      return posts === 1 ? held.then(() => body) : Promise.resolve(body)
+    })
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await waitFor(() => expect(posts).toBe(1), { timeout: 4000 })
+
+    // A second save asked for while the first is still open: the respondent changes
+    // their answer and leaves the page.
+    await userEvent.click(screen.getByRole('radio', { name: 'En desacuerdo' }))
+    window.dispatchEvent(new Event('pagehide'))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(
+      posts,
+      'the second save must wait for the first to finish, not open a second write against the same check-then-insert window',
+    ).toBe(1)
+
+    // Queued, not dropped: it goes out as soon as the wire is free.
+    releaseFirst?.()
+    await waitFor(() => expect(posts).toBe(2), { timeout: 4000 })
+  })
+
+  /**
+   * An answer the respondent takes back has to be taken back on the server too.
+   *
+   * `toAnswerInputs` omits an unanswered question, so erasing one simply removed it from
+   * the payload — and the server's writer only ever touched what it was sent. The stored
+   * answer survived the erasure indefinitely. On an instrument whose promise to the
+   * respondent is confidentiality, a free-text comment somebody deliberately deleted
+   * still sitting in `question_responses` is the worst shape the bug can take, so the
+   * withdrawal is NAMED on the wire rather than left to be inferred from an absence.
+   */
+  it('tells the server about an answer the respondent erased, instead of just omitting it', async () => {
+    respondWith(
+      autosaving({
+        questions: [question({ id: 'q1', type: 'open_ended', text: '¿Qué cambiarías?', options: null })],
+        inProgress: {
+          responseId: 'r1',
+          sessionId: 'session-1',
+          isComplete: false,
+          language: 'es',
+          startTime: '2026-06-01T10:00:00Z',
+          completionTime: null,
+          answers: [
+            { questionId: 'q1', value: 'Menos reuniones.', values: null, text: null, timeSpentSeconds: null },
+          ],
+        },
+      }),
+    )
+    renderPage()
+
+    const box = await screen.findByRole('textbox')
+    expect((box as HTMLTextAreaElement).value).toBe('Menos reuniones.')
+    await userEvent.clear(box)
+
+    await waitFor(() => expect(submissions()).toHaveLength(1), { timeout: 4000 })
+    expect(
+      submissions()[0],
+      'the erased comment must be named for deletion; omitting it leaves it on the server for good',
+    ).toMatchObject({ answers: [], clearedQuestionIds: ['q1'] })
+  })
+
+  /**
+   * The guard on the test above. "Everything the payload does not mention is deleted"
+   * would also make that test pass, and would be far worse than the bug it fixes: a
+   * partial save is allowed to be a delta, so it would turn every tick into a wipe of
+   * whatever it did not happen to mention.
+   */
+  /**
+   * The erasure that happens while the first save is still on the wire.
+   *
+   * `serverAnswered` only learns what the server holds when a save LANDS, so an erasure
+   * made before that moment is computed against an empty set and names nothing. If the
+   * page does not reconsider once the save resolves, the deletion is never sent at all —
+   * the same answer-outliving-its-erasure bug, reached by timing instead of by omission.
+   */
+  it('sends the erasure even when the answer was taken back mid-save', async () => {
+    let releaseFirst: (() => void) | undefined
+    const held = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    let posts = 0
+    const bodies: Record<string, unknown>[] = []
+    const payload = autosaving({
+      questions: [question({ id: 'q1', type: 'open_ended', text: '¿Qué cambiarías?', options: null })],
+    })
+    vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method !== 'POST') {
+        return Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }))
+      }
+      posts += 1
+      bodies.push(JSON.parse(init.body as string) as Record<string, unknown>)
+      const body = new Response(
+        JSON.stringify({
+          responseId: 'r1', sessionId: 'session-1', isComplete: false, isAnonymous: true,
+          alreadySubmitted: false, language: 'es', answeredQuestionCount: 1,
+          questionCount: 1, suppressedDemographics: [],
+        }),
+        { status: 201 },
+      )
+      return posts === 1 ? held.then(() => body) : Promise.resolve(body)
+    })
+    renderPage()
+
+    const box = await screen.findByRole('textbox')
+    await userEvent.type(box, 'Menos')
+    await waitFor(() => expect(posts).toBe(1), { timeout: 5000 })
+
+    // Taken back while that first save is still open.
+    await userEvent.clear(box)
+    releaseFirst?.()
+
+    await waitFor(() => expect(posts).toBe(2), { timeout: 5000 })
+    expect(
+      bodies[1],
+      'the erasure must still reach the server once the save it raced has landed',
+    ).toMatchObject({ answers: [], clearedQuestionIds: ['q1'] })
+  }, 20000)
+
+  it('names nothing for deletion when the respondent has only ever added answers', async () => {
+    respondWith(autosaving({ questions: [question(), question({ id: 'q2', order: 1 })] }))
+    renderPage()
+
+    const [first] = await screen.findAllByRole('radio', { name: 'Muy de acuerdo' })
+    await userEvent.click(first)
+
+    await waitFor(() => expect(submissions()).toHaveLength(1), { timeout: 4000 })
+    expect(submissions()[0].clearedQuestionIds).toBeUndefined()
+  })
 })
 
 /**
@@ -965,6 +1167,40 @@ describe('SurveyRespondPage save state', () => {
 
     await waitFor(() => expect(saveState()).toContain('Guardado a las'), { timeout: 4000 })
   })
+
+  /**
+   * The bar must not go on claiming a save that no longer describes anything.
+   *
+   * A respondent who erases their only answer leaves a form with nothing on it. "Guardado
+   * a las 09:14" underneath it is the same claim about work that does not exist that
+   * `idle` exists to avoid — and until the erasure was actually sent it was worse than
+   * odd, because the server really did still hold the answer they had just taken back.
+   */
+  it('stops claiming a save once the respondent has erased everything', async () => {
+    respondWith(
+      autosaving({
+        questions: [question({ id: 'q1', type: 'open_ended', text: '¿Qué cambiarías?', options: null })],
+      }),
+    )
+    renderPage()
+
+    const box = await screen.findByRole('textbox')
+    await userEvent.type(box, 'Menos')
+    await waitFor(() => expect(saveState()).toContain('Guardado a las'), { timeout: 5000 })
+
+    await userEvent.clear(box)
+
+    await waitFor(
+      () =>
+        expect(
+          document.querySelector('[data-slot="respond-save-state"]'),
+          'an emptied form has nothing saved to report',
+        ).toBeNull(),
+      { timeout: 5000 },
+    )
+    // The whole point: no lingering "Guardado a las 09:14" over a form with nothing on it.
+    expect(saveState()).not.toContain('Guardado a las')
+  }, 20000)
 
   it('reports the save state in the bar the respondent finishes from', async () => {
     respondWith(autosaving())

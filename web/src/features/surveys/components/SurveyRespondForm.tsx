@@ -37,6 +37,7 @@ import {
 import {
   RESPOND_AUTOSAVE_DELAY_MS,
   RESPOND_SAVE_IDLE,
+  clearedQuestionIds,
   answerSignature,
   firstUnansweredQuestion,
   hasProgressToSave,
@@ -50,6 +51,7 @@ import {
   SurveyRespondError,
   getSurveyRespondView,
   submitSurveyResponse,
+  type SurveyAnswerInput,
   type SurveyRespondView,
   type SurveySubmissionResult,
 } from '../api/surveyResponses'
@@ -206,6 +208,17 @@ export default function SurveyRespondForm({
   // to reassure anybody about, and "saved" on a form nobody has touched is a claim
   // about a write that never happened.
   const [saveState, setSaveState] = useState<RespondSaveState>(RESPOND_SAVE_IDLE)
+  /**
+   * Bumped every time a save lands, for no reason except to make the debounce below
+   * reconsider.
+   *
+   * `serverAnswered` only learns what the server holds at the moment a save RESOLVES, and
+   * it is a ref, so it changes nothing on screen. An answer taken back while the first
+   * save was still on the wire was therefore compared against a set that was still empty,
+   * named nothing for deletion, and the effect never ran again to notice — the erasure
+   * was dropped on the floor. This is the edge that makes the effect re-derive it.
+   */
+  const [savesLanded, setSavesLanded] = useState(0)
 
   // The session id is minted before the first read, because it is both the resume
   // key on the way in and the idempotency key on the way out. Deriving it later
@@ -233,6 +246,12 @@ export default function SurveyRespondForm({
           hydrated.current = true
           if (view.inProgress) {
             setAnswers(hydrateAnswers(view.inProgress.answers))
+            // Exactly the `question_responses` rows the server holds, which is what
+            // makes a later erasure expressible: a question that leaves this set is one
+            // the respondent has taken back, as opposed to one they never answered.
+            serverAnswered.current = new Set(
+              view.inProgress.answers.map((answer) => answer.questionId),
+            )
             startedAt.current = Date.parse(view.inProgress.startTime) || Date.now()
             // A completed response renders the terminal notice, not a form: there is
             // no question to put anybody on and nothing left to save.
@@ -313,6 +332,14 @@ export default function SurveyRespondForm({
 
   /** The answer set the server is known to hold, as `answerSignature`. */
   const savedSignature = useRef<string | null>(null)
+  /**
+   * The question ids the server is known to hold an answer for.
+   *
+   * Kept alongside `savedSignature` because the signature can only say THAT the answer
+   * set changed, never that a particular answer was withdrawn — and a withdrawal is the
+   * one change that has to be named on the wire for the server to act on it.
+   */
+  const serverAnswered = useRef<Set<string>>(new Set())
   /** True once a complete submission has been accepted: nothing partial may follow it. */
   const finished = useRef(false)
   /** False after unmount, so a late resolution does not set state on a dead component. */
@@ -341,6 +368,24 @@ export default function SurveyRespondForm({
   }, [])
 
   /**
+   * What the server holds after a save lands: what it already had, minus what this
+   * submission deleted, plus what it wrote.
+   *
+   * Not simply the ids in `inputs`. A question type this page cannot render is never in
+   * `inputs` and is never cleared either, so the server keeps its row — and forgetting
+   * that here would make the next save ask to delete it.
+   */
+  const recordServerAnswers = useCallback(
+    (inputs: readonly SurveyAnswerInput[], cleared: readonly string[]): void => {
+      const next = new Set(serverAnswered.current)
+      for (const questionId of cleared) next.delete(questionId)
+      for (const input of inputs) next.add(input.questionId)
+      serverAnswered.current = next
+    },
+    [],
+  )
+
+  /**
    * Writes progress without the respondent asking, and without touching `busy`.
    *
    * `busy` disables every control on the page, which is right for a save somebody
@@ -359,10 +404,14 @@ export default function SurveyRespondForm({
       if (busyRef.current !== 'idle') return
 
       const inputs = toAnswerInputs(current.questions, current.answers)
-      if (!hasProgressToSave(inputs)) return
+      const cleared = clearedQuestionIds(serverAnswered.current, current.questions, current.answers)
+      if (!hasProgressToSave(inputs, cleared)) return
 
       const signature = answerSignature(inputs)
-      if (signature === savedSignature.current) return
+      // `cleared` is checked too: an erasure that empties the form leaves a signature
+      // identical to the one a never-touched form would produce, and skipping on the
+      // signature alone would drop the very submission that carries the deletion.
+      if (signature === savedSignature.current && cleared.length === 0) return
 
       setSaveState(markSaving)
       try {
@@ -375,6 +424,9 @@ export default function SurveyRespondForm({
               // identifier or a demographic — the anonymity guarantee in #116 is a
               // property of this payload, and autosave must not widen it.
               answers: inputs,
+              // Named, never inferred from absence — see `clearedQuestionIds`. This is
+              // what carries an erasure to the server.
+              ...(cleared.length > 0 ? { clearedQuestionIds: cleared } : {}),
               sessionId,
               isComplete: false,
               language: currentView.resolvedLocale,
@@ -383,8 +435,19 @@ export default function SurveyRespondForm({
           ),
         )
         savedSignature.current = signature
+        recordServerAnswers(inputs, cleared)
         if (!mounted.current) return
-        setSaveState({ status: 'saved', savedAt: Date.now(), message: null })
+        setSavesLanded((landed) => landed + 1)
+        // An erasure that landed leaves nothing answered and nothing stored, and the bar
+        // goes back to saying nothing at all. "Guardado a las 09:14" over an empty form
+        // is the same claim about work that does not exist that `idle` exists to avoid —
+        // and before the clear was sent it was worse than odd, because the server still
+        // held the answer the respondent had just taken back.
+        setSaveState(
+          inputs.length === 0
+            ? RESPOND_SAVE_IDLE
+            : { status: 'saved', savedAt: Date.now(), message: null },
+        )
         // Announced ONCE. A screen-reader user has to learn that this page keeps their
         // work by itself, and then never hear about it again: on a fifty-question
         // instrument, a polite region that says "saved" every fifteen seconds talks
@@ -402,7 +465,7 @@ export default function SurveyRespondForm({
         setSaveState((previous) => ({ status: 'error', savedAt: previous.savedAt, message }))
       }
     },
-    [announce, baseUrl, enqueue, sessionId, t, tRoot],
+    [announce, baseUrl, enqueue, recordServerAnswers, sessionId, t, tRoot],
   )
 
   async function send(isComplete: boolean): Promise<void> {
@@ -412,9 +475,14 @@ export default function SurveyRespondForm({
     if (!isComplete) setSaveState(markSaving)
     try {
       const inputs = toAnswerInputs(questions, answers)
+      // The button erases as much as the timer does. A respondent who clears an answer
+      // and presses Save Progress has asked for the erasure at least as plainly as one
+      // who waited for the debounce.
+      const cleared = clearedQuestionIds(serverAnswered.current, questions, answers)
       const submission = await enqueue(() =>
         submitSurveyResponse(baseUrl, view.id, {
           answers: inputs,
+          ...(cleared.length > 0 ? { clearedQuestionIds: cleared } : {}),
           sessionId,
           isComplete,
           // The locale the respondent actually READ, not the one they asked for. A
@@ -430,6 +498,8 @@ export default function SurveyRespondForm({
       )
 
       savedSignature.current = answerSignature(inputs)
+      recordServerAnswers(inputs, cleared)
+      setSavesLanded((landed) => landed + 1)
 
       if (isComplete) {
         // Terminal, and checked by the autosave and by the unmount flush: a partial
@@ -446,7 +516,11 @@ export default function SurveyRespondForm({
         // `alreadySubmitted` is excluded for the reason written on the prop.
         if (!submission.alreadySubmitted) onSubmitted?.()
       } else {
-        setSaveState({ status: 'saved', savedAt: Date.now(), message: null })
+        setSaveState(
+          inputs.length === 0
+            ? RESPOND_SAVE_IDLE
+            : { status: 'saved', savedAt: Date.now(), message: null },
+        )
         announce(t('progressSaved'))
       }
     } catch (error: unknown) {
@@ -525,14 +599,27 @@ export default function SurveyRespondForm({
     if (!respondAutosaveAllowed(view) || finished.current) return
 
     const inputs = toAnswerInputs(questions, answers)
-    if (!hasProgressToSave(inputs)) return
-    if (answerSignature(inputs) === savedSignature.current) return
+    const cleared = clearedQuestionIds(serverAnswered.current, questions, answers)
+    if (!hasProgressToSave(inputs, cleared)) {
+      // Nothing on the screen and nothing on the server. Reached by the respondent
+      // taking back everything they had answered, once the erasure has landed — and
+      // this is the line that stops the bar reading "Guardado a las 09:14" underneath a
+      // form that is now empty and a server that now holds nothing. It also settles the
+      // shorter version of the same lie: answering and immediately erasing inside the
+      // debounce window used to leave "not saved yet" on screen permanently, describing
+      // a write that was never going to happen.
+      setSaveState(RESPOND_SAVE_IDLE)
+      return
+    }
+    if (answerSignature(inputs) === savedSignature.current && cleared.length === 0) return
 
     setSaveState(markPending)
 
     const handle = window.setTimeout(() => void autosave(), RESPOND_AUTOSAVE_DELAY_MS)
     return () => window.clearTimeout(handle)
-  }, [answers, autosave, questions, view])
+    // `savesLanded` is a dependency and not a value: see its declaration. Without it an
+    // erasure made while a save was in flight is never reconsidered.
+  }, [answers, autosave, questions, savesLanded, view])
 
   /**
    * The save that beats the debounce window, on the three ways out of a page.

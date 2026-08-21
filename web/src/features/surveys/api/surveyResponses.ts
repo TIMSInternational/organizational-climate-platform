@@ -119,6 +119,16 @@ export interface SurveyAnswerInput {
 
 export interface SubmitSurveyResponseRequest {
   answers?: SurveyAnswerInput[]
+  /**
+   * Questions the respondent has taken back, to be deleted from the stored response
+   * (#369).
+   *
+   * Omitting a question from `answers` does NOT mean this and must not: a partial save
+   * is allowed to be a delta, so "everything I did not mention is deleted" would make
+   * each tick a wipe. An answer erased on screen is only erased on the server if it is
+   * named here.
+   */
+  clearedQuestionIds?: string[]
   sessionId?: string
   isComplete?: boolean
   language?: string

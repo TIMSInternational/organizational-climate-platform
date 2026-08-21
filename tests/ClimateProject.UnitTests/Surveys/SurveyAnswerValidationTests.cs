@@ -433,4 +433,106 @@ public class SurveyAnswerValidationTests
             Assert.Null(result.Error);
         }
     }
+
+    // ------------------------------------------------------------------
+    // Taking an answer back (#369).
+    // ------------------------------------------------------------------
+
+    private static readonly Guid SecondQuestionId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+
+    [Fact]
+    public void A_cleared_question_is_reported_for_deletion()
+    {
+        var question = Question(QuestionTypes.MultipleChoice, optionValues: ["remote", "hybrid"]);
+
+        var result = SurveyAnswerValidation.Validate(
+            [question],
+            [],
+            completing: false,
+            alreadyAnswered: [QuestionId],
+            cleared: [QuestionId]);
+
+        Assert.Null(result.Error);
+        Assert.Empty(result.Answers);
+        Assert.Equal(QuestionId, Assert.Single(result.ClearedQuestionIds));
+    }
+
+    /// <summary>
+    /// Same reason an answer to a foreign question is refused rather than dropped: a
+    /// delete naming a question this survey does not have is a client bug, and obeying it
+    /// quietly is a destructive no-op nobody ever finds.
+    /// </summary>
+    [Fact]
+    public void Clearing_a_question_that_is_not_on_this_survey_is_refused()
+    {
+        var result = SurveyAnswerValidation.Validate(
+            [Question(QuestionTypes.MultipleChoice, optionValues: ["remote"])],
+            [],
+            completing: false,
+            alreadyAnswered: [],
+            cleared: [SecondQuestionId]);
+
+        Assert.NotNull(result.Error);
+        Assert.Empty(result.ClearedQuestionIds);
+    }
+
+    [Fact]
+    public void Answering_and_clearing_the_same_question_at_once_is_refused_rather_than_guessed()
+    {
+        var question = Question(QuestionTypes.MultipleChoice, optionValues: ["remote"]);
+
+        var result = SurveyAnswerValidation.Validate(
+            [question],
+            [new SurveyAnswerSubmission(QuestionId, "remote", null, null, null)],
+            completing: false,
+            alreadyAnswered: [],
+            cleared: [QuestionId]);
+
+        Assert.NotNull(result.Error);
+    }
+
+    /// <summary>
+    /// The interaction that makes this a validation concern and not only a writer one.
+    ///
+    /// <c>alreadyAnswered</c> exists so a required question answered on an earlier tick is
+    /// not demanded again at completion. A question cleared in the SAME submission is
+    /// about to stop being answered, so counting it would let a respondent answer a
+    /// required question, erase it, and still complete -- leaving a response marked
+    /// complete with the required answer missing.
+    /// </summary>
+    [Fact]
+    public void A_required_answer_cleared_in_the_same_submission_cannot_be_completed_around()
+    {
+        var required = Question(QuestionTypes.MultipleChoice, required: true, optionValues: ["remote"]);
+
+        var result = SurveyAnswerValidation.Validate(
+            [required],
+            [],
+            completing: true,
+            alreadyAnswered: [QuestionId],
+            cleared: [QuestionId]);
+
+        Assert.NotNull(result.Error);
+        Assert.Contains("Required questions are unanswered", result.Error);
+    }
+
+    /// <summary>
+    /// The same subtraction, on the "a completed response must contain something" gate:
+    /// erasing the only answer must not leave a completed response with nothing in it.
+    /// </summary>
+    [Fact]
+    public void Clearing_the_only_answer_cannot_produce_an_empty_completed_response()
+    {
+        var optional = Question(QuestionTypes.MultipleChoice, optionValues: ["remote"]);
+
+        var result = SurveyAnswerValidation.Validate(
+            [optional],
+            [],
+            completing: true,
+            alreadyAnswered: [QuestionId],
+            cleared: [QuestionId]);
+
+        Assert.NotNull(result.Error);
+        Assert.Contains("must answer at least one question", result.Error);
+    }
 }

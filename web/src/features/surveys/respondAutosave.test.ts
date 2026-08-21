@@ -4,6 +4,7 @@ import {
   answerSignature,
   firstUnansweredQuestion,
   hasProgressToSave,
+  clearedQuestionIds,
   respondAutosaveAllowed,
 } from './respondAutosave'
 import { toAnswerInputs, type AnswerMap } from './respondAnswers'
@@ -141,6 +142,46 @@ describe('hasProgressToSave', () => {
   it('is true from the first real answer', () => {
     const answers: AnswerMap = { q1: { value: 'agree' } }
     expect(hasProgressToSave(toAnswerInputs([question()], answers))).toBe(true)
+  })
+
+  /**
+   * The erasure case, and the reason this is not `inputs.length > 0`. A respondent who
+   * takes back the only answer they had produces no inputs at all — and that submission
+   * is the one that matters most, because it IS the erasure. Gating on the answers alone
+   * is exactly how a taken-back answer used to stay on the server forever.
+   */
+  it('is true for an erasure that leaves nothing answered, because the deletion still has to travel', () => {
+    expect(hasProgressToSave(toAnswerInputs([question()], {}), ['q1'])).toBe(true)
+  })
+})
+
+describe('clearedQuestionIds', () => {
+  it('names a question the server holds an answer for that is no longer answered', () => {
+    expect(clearedQuestionIds(new Set(['q1']), [question()], {})).toEqual(['q1'])
+  })
+
+  it('names nothing while the answer is still there', () => {
+    const answers: AnswerMap = { q1: { value: 'agree' } }
+    expect(clearedQuestionIds(new Set(['q1']), [question()], answers)).toEqual([])
+  })
+
+  /**
+   * A question that was never saved cannot be "taken back". Without this the first save
+   * of a 40-question survey would ask the server to delete the 39 not yet reached.
+   */
+  it('names nothing the server was never told about', () => {
+    expect(clearedQuestionIds(new Set(), [question()], {})).toEqual([])
+  })
+
+  /**
+   * The subtle one. `toAnswerInputs` skips a question type this page cannot render, so
+   * such a question can NEVER appear in the payload — and a rule that read "on the server
+   * and not in the payload" would therefore mark it deleted on every single save,
+   * destroying an answer some other client had legitimately stored.
+   */
+  it('never asks to delete an answer to a question this page cannot render', () => {
+    const unsupported = question({ id: 'q1', type: 'matrix', options: null })
+    expect(clearedQuestionIds(new Set(['q1']), [unsupported], {})).toEqual([])
   })
 })
 

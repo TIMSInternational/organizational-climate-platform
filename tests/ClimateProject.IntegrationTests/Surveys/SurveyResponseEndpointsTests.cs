@@ -414,6 +414,164 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// An answer the respondent takes back has to be taken back on the server too.
+    ///
+    /// This is the WRITER half of #369's worst bug. The client stopped sending a question
+    /// it no longer had an answer for, and <c>UpsertAnswersAsync</c> only ever touched the
+    /// rows it was sent -- so an erased answer survived the erasure indefinitely, with the
+    /// form showing it gone and <c>question_responses</c> still holding it. On an
+    /// instrument whose promise to the respondent is confidentiality, a free-text comment
+    /// somebody deliberately deleted still sitting in the database is the worst shape the
+    /// bug can take.
+    ///
+    /// End to end rather than against the writer in isolation, because the row surviving
+    /// is only visible in the table and on the way back out through the respond payload --
+    /// which is the exact pair of places a respondent's deletion is supposed to have
+    /// reached.
+    /// </summary>
+    [Fact]
+    public async Task An_answer_the_respondent_takes_back_is_deleted_rather_than_left_behind()
+    {
+        var survey = await ActiveSurveyAsync(questions:
+        [
+            WorkModeQuestion(bilingual: false),
+            new CreateSurveyQuestionInput(
+                LocalizedInput.FromBare("What would you change?"),
+                QuestionTypes.OpenEnded,
+                Order: 1),
+        ]);
+        var employee = await EmployeeAsync(_departmentId);
+        var sessionId = Guid.NewGuid().ToString("N");
+        var choice = survey.Questions.Single(q => q.Type == QuestionTypes.MultipleChoice).Id;
+        var text = survey.Questions.Single(q => q.Type == QuestionTypes.OpenEnded).Id;
+
+        var stored = await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers:
+            [
+                new SurveyAnswerInput(choice, "remote"),
+                new SurveyAnswerInput(text, "I regret writing this."),
+            ],
+            SessionId: sessionId,
+            IsComplete: false));
+        Assert.Equal(HttpStatusCode.Created, stored.StatusCode);
+        var responseId = (await stored.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId;
+        Assert.Equal(2, await _harness.WithDbAsync(db => db.QuestionResponses.CountAsync(qr => qr.ResponseId == responseId)));
+
+        // The respondent erases the comment and leaves the other answer alone.
+        var erased = await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(choice, "remote")],
+            SessionId: sessionId,
+            IsComplete: false,
+            ClearedQuestionIds: [text]));
+        Assert.Equal(HttpStatusCode.OK, erased.StatusCode);
+
+        Assert.Equal(
+            0,
+            await _harness.WithDbAsync(db => db.QuestionResponses.CountAsync(qr => qr.ResponseId == responseId && qr.QuestionId == text)));
+        Assert.Equal(
+            1,
+            await _harness.WithDbAsync(db => db.QuestionResponses.CountAsync(qr => qr.ResponseId == responseId)));
+
+        var view = (await employee.GetFromJsonAsync<SurveyRespondView>(
+            $"/surveys/{survey.Id}/respond?sessionId={sessionId}"))!;
+        Assert.DoesNotContain(view.InProgress!.Answers, a => a.QuestionId == text);
+        Assert.Equal("remote", view.InProgress!.Answers.Single(a => a.QuestionId == choice).Value);
+    }
+
+    /// <summary>
+    /// The submission that carries no answers at all and still has work to do.
+    ///
+    /// A respondent erasing the only answer they had produces exactly this, and
+    /// <c>UpsertAnswersAsync</c> used to return early on <c>answers.Count == 0</c> --
+    /// which would have made the fix above pass for a two-question survey and quietly do
+    /// nothing on a one-question one.
+    /// </summary>
+    [Fact]
+    public async Task A_save_that_only_erases_is_honoured_even_though_it_carries_no_answers()
+    {
+        var survey = await ActiveSurveyAsync();
+        var employee = await EmployeeAsync(_departmentId);
+        var sessionId = Guid.NewGuid().ToString("N");
+        var choice = survey.Questions.Single(q => q.Type == QuestionTypes.MultipleChoice).Id;
+
+        var stored = await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(choice, "remote")], SessionId: sessionId, IsComplete: false));
+        var responseId = (await stored.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId;
+
+        var erased = await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [], SessionId: sessionId, IsComplete: false, ClearedQuestionIds: [choice]));
+        Assert.Equal(HttpStatusCode.OK, erased.StatusCode);
+
+        Assert.Equal(
+            0,
+            await _harness.WithDbAsync(db => db.QuestionResponses.CountAsync(qr => qr.ResponseId == responseId)));
+    }
+
+    /// <summary>
+    /// The guard on both tests above, and the reason absence is not treated as deletion.
+    ///
+    /// A partial save is allowed to be a delta -- that is what <c>alreadyAnswered</c>
+    /// exists for -- so "everything the payload does not mention is deleted" would turn
+    /// every one of those ticks into a wipe of the answers it did not happen to carry.
+    /// Only a question NAMED for deletion is deleted.
+    /// </summary>
+    [Fact]
+    public async Task A_partial_save_that_simply_omits_a_question_leaves_its_answer_alone()
+    {
+        var survey = await ActiveSurveyAsync(questions:
+        [
+            WorkModeQuestion(bilingual: false),
+            new CreateSurveyQuestionInput(
+                LocalizedInput.FromBare("What would you change?"),
+                QuestionTypes.OpenEnded,
+                Order: 1),
+        ]);
+        var employee = await EmployeeAsync(_departmentId);
+        var sessionId = Guid.NewGuid().ToString("N");
+        var choice = survey.Questions.Single(q => q.Type == QuestionTypes.MultipleChoice).Id;
+        var text = survey.Questions.Single(q => q.Type == QuestionTypes.OpenEnded).Id;
+
+        var stored = await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(choice, "remote"), new SurveyAnswerInput(text, "Fewer meetings.")],
+            SessionId: sessionId,
+            IsComplete: false));
+        var responseId = (await stored.Content.ReadFromJsonAsync<SurveySubmissionResult>())!.ResponseId;
+
+        // A delta that mentions only the question that changed.
+        var delta = await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(choice, "hybrid")], SessionId: sessionId, IsComplete: false));
+        Assert.Equal(HttpStatusCode.OK, delta.StatusCode);
+
+        Assert.Equal(2, await _harness.WithDbAsync(db => db.QuestionResponses.CountAsync(qr => qr.ResponseId == responseId)));
+        var view = (await employee.GetFromJsonAsync<SurveyRespondView>(
+            $"/surveys/{survey.Id}/respond?sessionId={sessionId}"))!;
+        Assert.Equal("Fewer meetings.", view.InProgress!.Answers.Single(a => a.QuestionId == text).Value);
+    }
+
+    /// <summary>
+    /// Erasing a required answer must not be a way past the completion gate. The
+    /// required-question check reads the rows already stored, so without subtracting what
+    /// this submission is about to delete it would pass a response that ends up complete
+    /// and missing the answer.
+    /// </summary>
+    [Fact]
+    public async Task A_required_answer_cannot_be_erased_and_completed_around()
+    {
+        var survey = await ActiveSurveyAsync(questions: [WorkModeQuestion(bilingual: false, required: true)]);
+        var employee = await EmployeeAsync(_departmentId);
+        var sessionId = Guid.NewGuid().ToString("N");
+        var choice = survey.Questions.Single(q => q.Type == QuestionTypes.MultipleChoice).Id;
+
+        await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(choice, "remote")], SessionId: sessionId, IsComplete: false));
+
+        var completing = await SubmitAsync(employee, survey.Id, new SubmitSurveyResponseRequest(
+            Answers: [], SessionId: sessionId, IsComplete: true, ClearedQuestionIds: [choice]));
+
+        Assert.Equal(HttpStatusCode.BadRequest, completing.StatusCode);
+    }
+
+    /// <summary>
     /// Why the client must not fire its first autosave until an answer exists.
     ///
     /// This asserts what the endpoint DOES, not what it should: a partial save carrying

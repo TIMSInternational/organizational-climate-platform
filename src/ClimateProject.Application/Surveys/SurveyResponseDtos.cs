@@ -45,12 +45,29 @@ public sealed record SurveyAnswerInput(
 /// live word cloud counted "trabajo" and "work" as unrelated entries with nothing
 /// anywhere recording which language a respondent had been reading.
 /// </param>
+/// <param name="ClearedQuestionIds">
+/// Questions the respondent has deliberately taken back, to be REMOVED from the
+/// response.
+///
+/// Absence from <paramref name="Answers"/> cannot mean this, which is why the list is
+/// here. A partial save is allowed to be a delta -- <c>alreadyAnswered</c> exists so
+/// that a required question answered on an earlier tick is not demanded again at
+/// completion -- so treating every omitted question as a deletion would turn each of
+/// those ticks into a wipe of everything it did not happen to mention. Naming the
+/// question makes taking an answer back impossible to trigger by accident, and
+/// impossible to confuse with never having answered it.
+///
+/// This matters more here than the write it undoes. A respondent who erases a free-text
+/// comment has decided they do not want it stored, and on a product whose promise is
+/// confidentiality, silently keeping it is the one failure there is no way to walk back.
+/// </param>
 public sealed record SubmitSurveyResponseRequest(
     IReadOnlyList<SurveyAnswerInput>? Answers = null,
     string? SessionId = null,
     bool IsComplete = true,
     string? Language = null,
-    int? TotalTimeSeconds = null);
+    int? TotalTimeSeconds = null,
+    IReadOnlyList<Guid>? ClearedQuestionIds = null);
 
 /// <param name="Value">Set for a single-valued answer.</param>
 /// <param name="Values">Set for a ranking answer.</param>
