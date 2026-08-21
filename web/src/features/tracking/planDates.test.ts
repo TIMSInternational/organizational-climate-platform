@@ -44,4 +44,25 @@ describe('todayIso', () => {
   it('zero-pads to the YYYY-MM-DD a DateOnly parses', () => {
     expect(todayIso(new Date(2026, 0, 5, 12, 0, 0))).toBe('2026-01-05')
   })
+
+  it('reads the local fields even on a UTC host', () => {
+    // The test above is only decisive on a machine with a non-zero UTC offset: on a
+    // UTC host, `toISOString().slice(0, 10)` and the local fields agree for every
+    // instant, so the wrong implementation would pass it. This repository's own
+    // lesson is that a timezone bug which cannot reproduce on a UTC host is the one
+    // that ships — CI runs in UTC and every developer here does not.
+    //
+    // So this hands `todayIso` a stand-in whose local getters and whose ISO string
+    // deliberately disagree, which makes "which one did you read" decidable in ANY
+    // zone. It is 21:30 on the 21st somewhere west of UTC; the instant is already
+    // the 22nd in UTC. The answer must be the 21st.
+    const westOfUtcLateEvening = {
+      getFullYear: () => 2026,
+      getMonth: () => 7,
+      getDate: () => 21,
+      toISOString: () => '2026-08-22T02:30:00.000Z',
+    } as unknown as Date
+
+    expect(todayIso(westOfUtcLateEvening)).toBe('2026-08-21')
+  })
 })
