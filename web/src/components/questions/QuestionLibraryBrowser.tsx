@@ -134,6 +134,15 @@ export default function QuestionLibraryBrowser({
     let cancelled = false
     setStatus('loading')
     setActionError(null)
+    // Each opening is a fresh pick session. `addedIds` is what greys a row out, and
+    // it is a memory of what THIS dialog handed over -- not of what the wizard still
+    // holds, which the picker cannot see. Carrying it across an open/close therefore
+    // strands an author who added a question, removed the card and came back for it:
+    // the row is permanently "Added" and its button permanently disabled, with no way
+    // back short of reloading the page. Clearing on open keeps the within-session
+    // double-add guard and drops the claim it cannot support.
+    setAddedIds([])
+    setSelected([])
     void Promise.all([
       // No `?companyId=`: for a SuperAdmin the server reads that as
       // `CompanyId == companyId`, which drops every global row. Scoping happens
