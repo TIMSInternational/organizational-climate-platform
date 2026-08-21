@@ -42,6 +42,26 @@ describe('questionFromLibrary (survey wizard)', () => {
     expect(question.scaleLabelMaxEs).toBe('Siempre')
   })
 
+  it('carries the scale BOUNDS, which a null reads as 1-5 rather than as absent', () => {
+    // The words and the numbers are one fact. `respondAnswers.ts` answers a null
+    // bound with DEFAULT_SCALE_MIN/MAX (1 and 5), so an item authored 0-10 whose
+    // bounds were dropped is not an incomplete question, it is a five-point question
+    // wearing an eleven-point question's labels.
+    const question = questionFromLibrary(detail({ scaleMin: 0, scaleMax: 10 }), 'k1')
+
+    expect(question.scaleMin).toBe(0)
+    expect(question.scaleMax).toBe(10)
+  })
+
+  it('leaves the bounds null when the library item sets none', () => {
+    // Null is the product default, and the honest value for it: inventing 1 and 5
+    // here would file an author choice that was never made.
+    const question = questionFromLibrary(detail({ scaleMin: null, scaleMax: null }), 'k1')
+
+    expect(question.scaleMin).toBeNull()
+    expect(question.scaleMax).toBeNull()
+  })
+
   it('files the library dimension as the RAW category key', () => {
     // `Question.Category` is what the climate map, the standings table and the
     // respond page group on. A display name here would mint a second dimension

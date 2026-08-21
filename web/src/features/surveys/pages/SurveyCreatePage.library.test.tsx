@@ -59,6 +59,40 @@ const DETAIL = {
   ],
 }
 
+/**
+ * A second item, and deliberately one whose scale is NOT the product default: an eNPS
+ * question is answered 0–10, and `respondAnswers.ts` reads a null bound as 1–5.
+ */
+const LIKERT_ROW = {
+  id: 'lib-likert',
+  companyId: null,
+  questionCategoryId: 'cat-1',
+  textEn: 'How likely are you to recommend working here?',
+  textEs: '¿Qué tan probable es que recomiendes trabajar aquí?',
+  type: 'likert',
+  dimension: 'psychological_safety',
+  usageCount: 2,
+  lastUsedAt: null,
+  isActive: true,
+  version: 1,
+  tags: ['enps'],
+}
+
+const LIKERT_DETAIL = {
+  ...LIKERT_ROW,
+  language: 'both',
+  scaleMin: 0,
+  scaleMax: 10,
+  scaleLabelMinEn: 'Not at all likely',
+  scaleLabelMinEs: 'Nada probable',
+  scaleLabelMaxEn: 'Extremely likely',
+  scaleLabelMaxEs: 'Extremadamente probable',
+  previousVersionId: null,
+  createdAt: '2026-05-02T09:00:00Z',
+  updatedAt: '2026-05-02T09:00:00Z',
+  options: [],
+}
+
 const posted: unknown[] = []
 
 function routeFetch() {
@@ -81,8 +115,13 @@ function routeFetch() {
     if (url.endsWith('/admin/question-library/lib-choice')) {
       return Promise.resolve(new Response(JSON.stringify(DETAIL), { status: 200 }))
     }
+    if (url.endsWith('/admin/question-library/lib-likert')) {
+      return Promise.resolve(new Response(JSON.stringify(LIKERT_DETAIL), { status: 200 }))
+    }
     if (url.includes('/admin/question-library')) {
-      return Promise.resolve(new Response(JSON.stringify({ items: [LIST_ROW] }), { status: 200 }))
+      return Promise.resolve(
+        new Response(JSON.stringify({ items: [LIST_ROW, LIKERT_ROW] }), { status: 200 }),
+      )
     }
     if (url.includes('/admin/departments')) {
       return Promise.resolve(new Response(JSON.stringify({ departments: [] }), { status: 200 }))
@@ -191,5 +230,98 @@ describe('the shared question picker, inside the survey wizard', () => {
     // And the library's dimension arrives as the raw category key the climate map
     // groups on.
     expect(body.questions[0].category).toBe('psychological_safety')
+  })
+
+  /**
+   * The scale is one fact, and half of it is worse than none.
+   *
+   * An eNPS item is authored 0–10. The wizard collected its four scale-END WORDS from
+   * the day the picker shipped and dropped the two BOUNDS, and a dropped bound is not
+   * absent: `respondAnswers.ts` answers null with `DEFAULT_SCALE_MIN`/`MAX` (1 and 5)
+   * and `SurveyAnswerValidation` does the same server-side. So the survey went out as
+   * a five-point scale still labelled "Not at all likely … Extremely likely", every
+   * answer stored against a scale nobody chose, and nothing anywhere said so.
+   *
+   * Asserted on the POST body rather than on the mapper, because the drop could have
+   * happened at either of two places — `questionFromLibrary` not carrying them, or
+   * `buildCreateInput` not sending them — and the wizard is only correct if neither
+   * does.
+   */
+  it('sends the picked scale BOUNDS, not just the words at its ends', async () => {
+    renderPage()
+    await reachQuestionsStep()
+
+    await press('Add from library')
+    await screen.findByText(LIKERT_ROW.textEn)
+    await press(/Add "How likely are you to recommend working here\?"/)
+    await press('Cancel')
+    await waitFor(() => expect(screen.getByLabelText(/Question Text/i)).toBeTruthy())
+
+    // Visible on the card too: nothing in this wizard edits a bound, so without a
+    // line naming it the difference between a 1–5 question and a 0–10 one is
+    // invisible while its words sit in the boxes underneath.
+    expect(screen.getByText(/Answered on a 0–10 scale/)).toBeTruthy()
+
+    await press('Next')
+    await press(/Create survey/i)
+
+    await waitFor(() => expect(posted).toHaveLength(1))
+    const body = posted[0] as {
+      questions: {
+        scaleMin?: number
+        scaleMax?: number
+        scaleLabelMin?: unknown
+        scaleLabelMax?: unknown
+      }[]
+    }
+    expect(body.questions[0].scaleMin).toBe(0)
+    expect(body.questions[0].scaleMax).toBe(10)
+    // The words that made the drop invisible, still there — the point is that both
+    // halves travel, not that one replaced the other.
+    expect(body.questions[0].scaleLabelMin).toBe('Not at all likely')
+    expect(body.questions[0].scaleLabelMax).toBe('Extremely likely')
+  })
+
+  /**
+   * Acceptance criterion 2 is multi-SELECT, and multi-select is the only path in this
+   * wizard that mints more than one React key in a single event.
+   *
+   * `takeKeys` exists for that and says why in its own docstring: `makeKey()` reads
+   * `nextKey` out of the render closure, so N calls in one handler all return the
+   * same string. A shared key is not merely a React warning here — `patchQuestion`
+   * finds a question BY KEY, so every edit to one card lands on all of its twins, and
+   * the card an author is typing into is not the only card changing.
+   *
+   * Driving the wizard with one picked item can never see it, which is why every
+   * other test in this file could pass with `takeKeys` returning the same key twice.
+   */
+  it('gives each question of one multi-add its own key, so editing one leaves the other alone', async () => {
+    renderPage()
+    await reachQuestionsStep()
+
+    await press('Add from library')
+    await screen.findByText(LIST_ROW.textEn)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('checkbox', { name: LIST_ROW.textEn }))
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('checkbox', { name: LIKERT_ROW.textEn }))
+    })
+    await press('Add 2 selected')
+
+    const texts = () =>
+      screen
+        .getAllByLabelText(/Question Text/i)
+        .map((field) => (field as HTMLInputElement).value)
+
+    await waitFor(() => expect(texts()).toEqual([LIST_ROW.textEn, LIKERT_ROW.textEn]))
+
+    await act(async () => {
+      fireEvent.change(screen.getAllByLabelText(/Question Text/i)[0], {
+        target: { value: 'Rewritten by the author' },
+      })
+    })
+
+    expect(texts()).toEqual(['Rewritten by the author', LIKERT_ROW.textEn])
   })
 })

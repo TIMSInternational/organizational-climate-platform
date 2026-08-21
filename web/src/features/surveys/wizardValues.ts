@@ -130,6 +130,24 @@ export interface SurveyQuestionValues {
   scaleLabelMinEs: string
   scaleLabelMaxEn: string
   scaleLabelMaxEs: string
+  /**
+   * The NUMBERS at those two ends — `Question.ScaleMin`/`ScaleMax` — or null for
+   * "the product's default scale".
+   *
+   * They travel with the words, and the pairing is the whole reason they are here.
+   * A null bound is not "no scale": `respondAnswers.ts` answers a null with
+   * `DEFAULT_SCALE_MIN`/`DEFAULT_SCALE_MAX` (1 and 5), and `SurveyAnswerValidation`
+   * does the same server-side. So a question authored 0–10 whose bounds were dropped
+   * but whose words survived is not incomplete, it is WRONG: eleven points collapse
+   * to five, still labelled "Not at all likely … Extremely likely", and every stored
+   * answer is on a scale nobody chose.
+   *
+   * Nothing in the wizard types a bound — the only source is a picked library item
+   * (`questionFromLibrary`), which is exactly why the drop was invisible. `null` is
+   * therefore what a hand-written question keeps, and what it has always sent.
+   */
+  scaleMin: number | null
+  scaleMax: number | null
 }
 
 export interface SurveyWizardValues {
@@ -190,6 +208,8 @@ export function emptyQuestion(key: string): SurveyQuestionValues {
     scaleLabelMinEs: '',
     scaleLabelMaxEn: '',
     scaleLabelMaxEs: '',
+    scaleMin: null,
+    scaleMax: null,
   }
 }
 
@@ -223,6 +243,14 @@ export function emptyQuestion(key: string): SurveyQuestionValues {
  * preserve — see the note in the PR; the wizard's option shape has no value field to
  * put it in.
  *
+ * The scale is copied WHOLE — both bounds and all four words. They are one fact
+ * about a question, and copying half of it is worse than copying none: a library
+ * item authored 0–10 whose bounds were left behind arrives as a 1–5 question still
+ * carrying "Not at all likely … Extremely likely", because a null bound is not
+ * absent, it is `DEFAULT_SCALE_MIN`/`MAX` on the respond page and
+ * `SurveyAnswerValidation.DefaultScaleMin`/`Max` on the server. The words made the
+ * question look copied while its answer space had quietly changed underneath them.
+ *
  * Keys are derived from one caller-supplied `key` rather than pulled one at a time
  * from the page's counter: `makeKey()` reads its counter out of a render closure, so
  * two calls in one event handler return the SAME string, and two options sharing a
@@ -248,6 +276,8 @@ export function questionFromLibrary(
     scaleLabelMinEs: item.scaleLabelMinEs ?? '',
     scaleLabelMaxEn: item.scaleLabelMaxEn ?? '',
     scaleLabelMaxEs: item.scaleLabelMaxEs ?? '',
+    scaleMin: item.scaleMin,
+    scaleMax: item.scaleMax,
   }
 }
 
@@ -571,6 +601,14 @@ export function buildCreateInput(
     const category = question.category.trim()
     if (category !== '') built.category = category
     if (needsScaleLabels(question.type)) {
+      // The bounds go with the words, and both are gated on the type for the same
+      // reason: a card typed as a likert and then switched to `open_ended` keeps the
+      // scale in wizard state, and sending it would file a scale on a question with
+      // no scale. Sent only when set — an omitted bound is the server's null, which
+      // is the honest value for "the default scale", and is what every hand-written
+      // question has always sent.
+      if (question.scaleMin !== null) built.scaleMin = question.scaleMin
+      if (question.scaleMax !== null) built.scaleMax = question.scaleMax
       const scaleLabelMin = optionalLocalizedFor(
         values.language,
         question.scaleLabelMinEn,

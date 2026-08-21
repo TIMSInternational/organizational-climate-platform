@@ -53,18 +53,28 @@ interface DraftQuestion {
   required: boolean
   options: DraftOption[]
   /**
-   * These five joined the wire shape with the dimension picker and the scale-ends
-   * fields, WITHOUT a `version` bump, deliberately: they are additive, and the
-   * parser below is forgiving about absent fields ("losing one field is
-   * recoverable by retyping it"). An old draft restores with blanks — exactly what
-   * its author had — while a bump would make every existing draft in the retention
-   * window unrecoverable for the sake of fields it never held.
+   * These seven joined the wire shape with the dimension picker, the scale-ends
+   * fields and the shared question picker, WITHOUT a `version` bump, deliberately:
+   * they are additive, and the parser below is forgiving about absent fields
+   * ("losing one field is recoverable by retyping it"). An old draft restores with
+   * blanks — exactly what its author had — while a bump would make every existing
+   * draft in the retention window unrecoverable for the sake of fields it never
+   * held.
+   *
+   * `scaleMin`/`scaleMax` are the one pair here that CANNOT be recovered by
+   * retyping: no field in the wizard collects them, they arrive only from a picked
+   * library item, and a null bound reads as the default 1–5 rather than as missing.
+   * Leaving them out of the round trip would mean an autosave-and-recover silently
+   * turned a picked 0–10 question into a 1–5 one — the same defect as dropping them
+   * on the way in, one refresh later.
    */
   category: string
   scaleLabelMinEn: string
   scaleLabelMinEs: string
   scaleLabelMaxEn: string
   scaleLabelMaxEs: string
+  scaleMin: number | null
+  scaleMax: number | null
 }
 
 /** The wire shape. Changing a member here changes what is already in the database. */
@@ -120,6 +130,8 @@ export function toDraftContent(values: SurveyWizardValues): SurveyDraftContent {
       scaleLabelMinEs: question.scaleLabelMinEs,
       scaleLabelMaxEn: question.scaleLabelMaxEn,
       scaleLabelMaxEs: question.scaleLabelMaxEs,
+      scaleMin: question.scaleMin,
+      scaleMax: question.scaleMax,
     })),
   }
 }
@@ -137,6 +149,20 @@ function str(source: Record<string, unknown>, key: string, fallback = ''): strin
 function bool(source: Record<string, unknown>, key: string, fallback: boolean): boolean {
   const value = source[key]
   return typeof value === 'boolean' ? value : fallback
+}
+
+/**
+ * A stored scale bound, or null.
+ *
+ * Integers only, and `Number.isInteger` rather than `typeof === 'number'`: `NaN`,
+ * `Infinity` and `2.5` all pass a typeof check, and `Question.ScaleMin` is an `int?`
+ * column that would refuse every one of them with a 400 on create — a draft that
+ * cannot be submitted is worse than a draft that lost a bound it can only have got
+ * from a library item.
+ */
+function intOrNull(source: Record<string, unknown>, key: string): number | null {
+  const value = source[key]
+  return typeof value === 'number' && Number.isInteger(value) ? value : null
 }
 
 function stringArray(source: Record<string, unknown>, key: string): string[] {
@@ -179,6 +205,8 @@ function questionsFrom(source: Record<string, unknown>, keyPrefix: string): Surv
       scaleLabelMinEs: str(question, 'scaleLabelMinEs'),
       scaleLabelMaxEn: str(question, 'scaleLabelMaxEn'),
       scaleLabelMaxEs: str(question, 'scaleLabelMaxEs'),
+      scaleMin: intOrNull(question, 'scaleMin'),
+      scaleMax: intOrNull(question, 'scaleMax'),
     }
   })
 }
