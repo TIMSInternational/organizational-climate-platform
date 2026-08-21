@@ -170,5 +170,19 @@
         "records": []
       }
     ]
+  },
+  "GET /admin/companies": {
+    "companies": [
+      {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "name": "Northwind Logistics",
+        "emailDomain": "northwind.example",
+        "industry": "Transportation",
+        "size": "large",
+        "country": "Colombia",
+        "subscriptionTier": "enterprise",
+        "createdAt": "2025-03-14T09:12:00Z"
+      }
+    ]
   }
 }

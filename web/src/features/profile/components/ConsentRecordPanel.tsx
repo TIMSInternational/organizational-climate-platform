@@ -16,26 +16,7 @@ import {
 import { useTranslation } from '../../../i18n'
 import { formatNotificationTimestamp } from '../../notifications/formatTimestamp'
 import type { ConsentRecord } from '../api/gdpr'
-
-/**
- * Catalogue paths for the six columns of `UserConsent`.
- *
- * Keyed by the column name as the exporter flattens it (`Consent.Analytics` minus its
- * prefix), so a column with no copy renders as the raw name rather than as a blank row —
- * the same fallback `ProfileActivityList` gives an unrecognised audit action. A consent
- * surface that hides a flag it has never heard of is exactly the wrong failure mode.
- *
- * `privacyCopy.test.ts` asserts every path here resolves in both catalogues, which is the
- * check `keysExist.test.ts` cannot do: the lookup is dynamic at the call site.
- */
-export const CONSENT_LABEL_PATH: Record<string, string> = {
-  Essential: 'privacy.consentEssential',
-  Analytics: 'privacy.consentAnalytics',
-  Marketing: 'privacy.consentMarketing',
-  Personalization: 'privacy.consentPersonalization',
-  ThirdParty: 'privacy.consentThirdParty',
-  Demographics: 'privacy.consentDemographics',
-}
+import { CONSENT_LABEL_PATH } from './privacyScope'
 
 export interface ConsentRecordPanelProps {
   /** Null until the export it is read from has been requested. */

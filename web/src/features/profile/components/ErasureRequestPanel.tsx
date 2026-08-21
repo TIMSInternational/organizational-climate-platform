@@ -12,62 +12,14 @@ import {
 } from '../../../components/ui'
 import { useTranslation } from '../../../i18n'
 import type { SubjectIdentity } from '../api/gdpr'
-
-/**
- * The tables an erasure **deletes outright**, by table name.
- *
- * Mirrors `ErasureTreatment.Deleted` in `src/ClimateProject.Application/Gdpr/SubjectDataMap.cs`
- * and is checked against it by `erasureScope.test.ts`, which parses the map out of the C#
- * source. That test is the whole reason these three constants are arrays of table names
- * rather than four sentences in the catalogue: this page tells a data subject what will and
- * will not be destroyed, and a prose promise cannot be compared to the code that keeps it.
- * Prose still carries the *reasons* — those live in the catalogue — but the list of tables
- * is data, and it goes red when the map changes underneath it.
- */
-export const ERASURE_DELETED_TABLES = [
-  'notifications',
-  'survey_drafts',
-  'user_demographics',
-  'user_invitation_demographics',
-] as const
-
-/** Tables whose link to the person is severed, the rows surviving. `ErasureTreatment.Anonymised`. */
-export const ERASURE_ANONYMISED_TABLES = ['responses', 'users'] as const
-
-/** Tables where named columns are overwritten and the rest is left intact. `ErasureTreatment.Redacted`. */
-export const ERASURE_REDACTED_TABLES = [
-  'microclimate_invitations',
-  'survey_audit_logs',
-  'survey_invitations',
-  'user_invitations',
-] as const
-
-/** Catalogue paths for the deleted tables, keyed by the table's own name. */
-const DELETED_LABEL_PATH: Record<string, string> = {
-  notifications: 'privacy.erasureDeletedNotifications',
-  survey_drafts: 'privacy.erasureDeletedSurveyDrafts',
-  user_demographics: 'privacy.erasureDeletedUserDemographics',
-  user_invitation_demographics: 'privacy.erasureDeletedInvitationDemographics',
-}
-
-const ANONYMISED_LABEL_PATH: Record<string, string> = {
-  responses: 'privacy.erasureAnonymisedResponses',
-  users: 'privacy.erasureAnonymisedUsers',
-}
-
-const REDACTED_LABEL_PATH: Record<string, string> = {
-  microclimate_invitations: 'privacy.erasureRedactedMicroclimateInvitations',
-  survey_audit_logs: 'privacy.erasureRedactedSurveyAuditLogs',
-  survey_invitations: 'privacy.erasureRedactedSurveyInvitations',
-  user_invitations: 'privacy.erasureRedactedUserInvitations',
-}
-
-/** Every path the three lookups above can produce, for the catalogue guard test. */
-export const ERASURE_LABEL_PATHS: Record<string, string> = {
-  ...DELETED_LABEL_PATH,
-  ...ANONYMISED_LABEL_PATH,
-  ...REDACTED_LABEL_PATH,
-}
+import {
+  ANONYMISED_LABEL_PATH,
+  DELETED_LABEL_PATH,
+  ERASURE_ANONYMISED_TABLES,
+  ERASURE_DELETED_TABLES,
+  ERASURE_REDACTED_TABLES,
+  REDACTED_LABEL_PATH,
+} from './privacyScope'
 
 export interface ErasureRequestPanelProps {
   /**
@@ -101,10 +53,12 @@ export interface ErasureRequestPanelProps {
  *
  * "Erasure must state plainly what it does and does not remove" is the acceptance criterion
  * this panel exists for, and the only way to keep such a statement true is to derive it from
- * the thing that does the removing. The three exported constants are compared against
- * `SubjectDataMap` by `erasureScope.test.ts`; the reasons beside them are catalogue copy
- * traceable to `SubjectErasure`'s own `KnownLimitations`, which `erasureScope.test.ts` also
- * pins by anchor phrase.
+ * the thing that does the removing. The three lists live in `./privacyScope` — a plain module
+ * rather than exports here, because `oxlint`'s `react/only-export-components` counts every
+ * non-component export against the repo's `--max-warnings 10` budget, and five of them put it
+ * over — and `erasureScope.test.ts` compares them against `SubjectDataMap` by parsing the C#
+ * source. The reasons beside them are catalogue copy traceable to `SubjectErasure`'s own
+ * `KnownLimitations`, which `erasureScope.test.ts` also pins by anchor phrase.
  */
 export default function ErasureRequestPanel({ subject }: ErasureRequestPanelProps) {
   const { t } = useTranslation()
