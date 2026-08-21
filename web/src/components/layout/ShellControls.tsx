@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { BellRing, LogOut, UserRound } from 'lucide-react'
+import { BellRing, LogOut, ShieldCheck, UserRound } from 'lucide-react'
 import { useTranslation, LanguageSwitcher } from '../../i18n'
 import { Avatar, AvatarFallback } from '../ui/avatar'
 import { getToken } from '../../auth/token'
@@ -198,6 +198,19 @@ export function ShellControls({ onSignOut }: ShellControlsProps) {
       >
         <BellRing aria-hidden="true" className="nav-icon" />
         {t('notifications.preferences.title')}
+      </Link>
+      {/* #137. Third per-account row, on the same argument as the two above: the one
+          endpoint behind `/settings/privacy` is `GET /gdpr/access` with no user id,
+          which the handler documents as the self-service case that needs no role, so
+          every role can load it and `navSections` would hide it from most of them. */}
+      <Link
+        to="/settings/privacy"
+        className="flex w-full items-center gap-inline rounded-md px-2 py-1 text-sm text-fg-secondary no-underline hover:bg-state-hover hover:text-fg-primary"
+      >
+        <ShieldCheck aria-hidden="true" className="nav-icon" />
+        {/* The short label, matching `SidebarUserMenu`: this rail is 230px and the two
+            rows above it are two words each. */}
+        {t('privacy.navLabel')}
       </Link>
       <button
         type="button"
