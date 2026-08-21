@@ -4,6 +4,7 @@ import { useTranslation } from '../../i18n'
 import { getToken } from '../../auth/token'
 import { decodeJwtPayload } from '../../auth/jwt'
 import { buildNavSections, sectionTitleKeyForPath } from '../../navigation/navSections'
+import { isTrackingEnabled } from '../../features/tracking/api/config'
 import {
   Badge,
   Breadcrumb,
@@ -282,6 +283,12 @@ function useSectionEyebrow(): string | null {
   const role = typeof claims?.role === 'string' ? claims.role : undefined
   const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
 
-  const titleKey = sectionTitleKeyForPath(pathname, buildNavSections(role, companyId))
+  // Same options as `AdminLayout` passes, and it has to be: the eyebrow names the
+  // nav group the open page sits in, so a `/tracking` page under a nav built
+  // WITHOUT the tracking rows would resolve to no group and print no eyebrow.
+  const titleKey = sectionTitleKeyForPath(
+    pathname,
+    buildNavSections(role, companyId, { trackingEnabled: isTrackingEnabled() }),
+  )
   return titleKey ? t(titleKey) : null
 }

@@ -200,6 +200,78 @@ describe('router', () => {
     expect(paths).toContain('/departments')
   })
 
+  /**
+   * The tracking module (#125). Its two dashboards shipped as an integration layer
+   * with no consuming UI at all — `trackingApi.ts` existed, worked, and no user
+   * could reach any of it — so "is it routed" is the first acceptance criterion and
+   * this is where it is answered.
+   */
+  describe('the tracking module', () => {
+    function shellChildren(): typeof router.routes {
+      function directPaths(routes: typeof router.routes): string[] {
+        return routes.flatMap((route) => (route.path ? [route.path] : []))
+      }
+      function find(routes: typeof router.routes): typeof router.routes | null {
+        for (const route of routes) {
+          const children = (route.children ?? []) as typeof router.routes
+          if (children.length === 0) continue
+          const paths = directPaths(children)
+          if (paths.includes('/dashboard') && paths.includes('/admin/companies')) return children
+          const nested = find(children)
+          if (nested) return nested
+        }
+        return null
+      }
+      const found = find(router.routes)
+      expect(found, 'the AdminLayout branch was not found').not.toBeNull()
+      return found ?? []
+    }
+
+    it('registers both dashboards inside the admin shell', () => {
+      const paths = shellChildren().flatMap((route) => (route.path ? [route.path] : []))
+      expect(paths).toContain('/tracking')
+      expect(paths).toContain('/tracking/tablero')
+    })
+
+    /**
+     * `?nodoId=`, not `/tracking/tablero/:nodoId`, and it is a contract with the
+     * endpoint rather than a style choice: `GET /api/tablero-seguimiento` takes
+     * `nodoId` as an OPTIONAL query parameter and answers with the caller's own
+     * nodo when it is absent. A path parameter would make the id mandatory in the
+     * URL for the node leader, who has exactly one board and no reason to know its
+     * external id.
+     */
+    it('addresses a board by query parameter, so a leader needs no id to open theirs', () => {
+      const paths = shellChildren().flatMap((route) => (route.path ? [route.path] : []))
+      expect(paths.some((path) => path.startsWith('/tracking/tablero/'))).toBe(false)
+    })
+
+    /**
+     * Both are `lazy`, and nothing outside `features/tracking/` imports them
+     * statically. The module exists only where a deployment configured a tracking
+     * service, so every other build should carry it as a chunk it never fetches —
+     * and a static import at the top of `router.tsx` would put both pages, the
+     * semáforo table and the client in the main bundle regardless. The same
+     * mechanism, and the same failure mode, as the dev-only chart gallery above.
+     */
+    it('loads both pages lazily and is reached by no static import', () => {
+      const src = join(process.cwd(), 'src')
+      const source = readFileSync(join(src, 'app', 'router.tsx'), 'utf8')
+      expect(source).toContain("await import('../features/tracking/pages/ConsolidadoPage')")
+      expect(source).toContain("await import('../features/tracking/pages/TableroSeguimientoPage')")
+      expect(source).not.toMatch(/^import .*(ConsolidadoPage|TableroSeguimientoPage).*$/m)
+
+      const offenders = globSync('**/*.{ts,tsx}', { cwd: src })
+        .filter((file) => !file.includes('features/tracking/') && !/\.test\.tsx?$/.test(file))
+        .filter((file) =>
+          /^\s*import\s[^\n]*(ConsolidadoPage|TableroSeguimientoPage)/m.test(
+            readFileSync(join(src, file), 'utf8'),
+          ),
+        )
+      expect(offenders).toEqual([])
+    })
+  })
+
   it('has an error element so a thrown render does not blank the page', () => {
     expect(router.routes[0]?.errorElement ?? router.routes[0]?.ErrorBoundary).toBeTruthy()
   })

@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync, globSync } from 'node:fs'
+import { join, sep } from 'node:path'
 import {
   activeHref,
   buildNavSections,
@@ -26,6 +28,14 @@ function labelKeys(sections: NavSection[]): string[] {
 const ALL_SECTIONS: NavSection[] = [
   ...buildNavSections('super_admin', 'company-1'),
   ...buildNavSections('company_admin', 'company-1'),
+  // The tracking-enabled variants (#125). Without these the label sweeps below
+  // would never see `navigation.trackingConsolidado` or
+  // `navigation.trackingDashboard`, which is exactly how an unresolved key ships:
+  // `t()` falls back to the dotted path and a Spanish reader gets
+  // "navigation.trackingConsolidado" in their sidebar.
+  ...buildNavSections('super_admin', 'company-1', { trackingEnabled: true }),
+  ...buildNavSections('company_admin', 'company-1', { trackingEnabled: true }),
+  ...buildNavSections('leader', 'company-1', { trackingEnabled: true }),
 ]
 
 describe('buildNavSections', () => {
@@ -209,6 +219,131 @@ describe('buildNavSections', () => {
     // Guard the guard, as above: a role that produced no sections at all would
     // satisfy "every section has a row" without there being one.
     expect(swept, 'swept no sections at all').toBeGreaterThan(0)
+  })
+
+  /**
+   * The tracking module's nav rules (#125).
+   *
+   * Two decisions are pinned here. Federico's, on 2026-08-21: where a tenant uses
+   * tracking, `/action-plans` and `/tracking` are two models of the same idea and
+   * the client should see ONE place to manage plans — so the generic row is hidden
+   * rather than the two being converged. And the standing house rule: never offer a
+   * row that would 403, which for the consolidado is `Roles.Admin` and nothing else.
+   */
+  describe('the tracking module', () => {
+    it('changes nothing at all where no tracking service is configured', () => {
+      // The default. Every other assertion in this file calls `buildNavSections`
+      // with two arguments, so this is what keeps them meaningful.
+      for (const role of ['super_admin', 'company_admin', 'leader', 'employee']) {
+        const links = hrefs(buildNavSections(role, 'company-1'))
+        expect(links.some((href) => href.startsWith('/tracking')), `${role}`).toBe(false)
+      }
+      expect(hrefs(buildNavSections('super_admin', 'company-1'))).toContain('/action-plans')
+      expect(hrefs(buildNavSections('company_admin', 'company-1'))).toContain('/action-plans')
+    })
+
+    it('hides the generic Action Plans row for both admin roles where tracking is enabled', () => {
+      for (const role of ['super_admin', 'company_admin']) {
+        const links = hrefs(buildNavSections(role, 'company-1', { trackingEnabled: true }))
+        expect(links, `${role} still offers the generic listing`).not.toContain('/action-plans')
+        expect(links, `${role} has no tracking entry`).toContain('/tracking')
+      }
+    })
+
+    it('offers the consolidado to exactly the roles the tracking service will not forbid', () => {
+      // `DashboardEndpoints.ConsolidadoAsync` returns Results.Forbid() for anything
+      // outside `Roles.Admin` = company_admin | super_admin.
+      for (const role of ['super_admin', 'company_admin']) {
+        expect(hrefs(buildNavSections(role, 'company-1', { trackingEnabled: true }))).toContain('/tracking')
+      }
+      for (const role of ['leader', 'supervisor', 'employee', undefined]) {
+        expect(
+          hrefs(buildNavSections(role, 'company-1', { trackingEnabled: true })),
+          `${role} is offered a row that would 403`,
+        ).not.toContain('/tracking')
+      }
+    })
+
+    it('gives a node leader their own board and nobody else one', () => {
+      // A leader is `Roles.PlanCreator` in the tracking service and the role §7
+      // gives the full board to. `TableroAsync` hands them their own nodo when the
+      // URL names none, so the row needs no id in it.
+      expect(hrefs(buildNavSections('leader', 'company-1', { trackingEnabled: true }))).toContain(
+        '/tracking/tablero',
+      )
+      // Not the admins: their own nodoId claim is `unassigned-<companyId>` or
+      // empty, so this row would lead to an empty board every time — the same
+      // always-empty-page rule that keeps /surveys/my out of the super_admin branch.
+      for (const role of ['super_admin', 'company_admin', 'supervisor', 'employee']) {
+        expect(
+          hrefs(buildNavSections(role, 'company-1', { trackingEnabled: true })),
+          `${role} is offered a board that would be empty`,
+        ).not.toContain('/tracking/tablero')
+      }
+    })
+
+    it('keeps the four mobile tab slots, because the swap is in place rather than appended', () => {
+      // The reason `workspacePlanItems` returns its rows in `/action-plans`' own
+      // position: `leafNavItems` feeds MobileNav the first four leaves, and
+      // removing a row from the middle while appending another at the end would
+      // shift every role's bottom bar.
+      expect(
+        leafNavItems(buildNavSections('super_admin', 'company-1', { trackingEnabled: true }))
+          .slice(0, 4)
+          .map((item) => item.href),
+      ).toEqual(['/dashboard', '/admin/companies', '/admin/system-settings', '/analytics/benchmarks'])
+      expect(
+        leafNavItems(buildNavSections('company_admin', 'company-1', { trackingEnabled: true }))
+          .slice(0, 4)
+          .map((item) => item.href),
+      ).toEqual([
+        '/dashboard',
+        '/admin/companies/company-1',
+        '/admin/companies/company-1/users',
+        '/admin/companies/company-1/demographic-fields',
+      ])
+    })
+
+    it('still ends every admin branch on Notifications', () => {
+      for (const role of ['super_admin', 'company_admin']) {
+        const links = hrefs(buildNavSections(role, 'company-1', { trackingEnabled: true }))
+        expect(links[links.length - 1], `${role}`).toBe('/notifications')
+      }
+    })
+
+    /**
+     * `buildNavSections`' third argument has a default, so a caller that forgets it
+     * loses the tracking rows **silently** — the sidebar simply does not show the
+     * module and nothing fails. There are exactly two callers and this reads both.
+     *
+     * A source read rather than a render, for the same reason `router.test.ts`
+     * reads `router.tsx`: what is being asserted is the wiring, and a rendered
+     * assertion would need the whole shell plus a stubbed env to see it.
+     */
+    it('is asked for by both callers of buildNavSections', () => {
+      const src = join(process.cwd(), 'src')
+      const callers = ['app/AdminLayout.tsx', 'components/layout/PageTopBar.tsx']
+
+      // Guard the guard: if a third caller appears, this list is stale and the
+      // assertion below would silently stop covering it.
+      //
+      // Found by the IMPORT rather than by `buildNavSections(` in the text.
+      // `CommandPalette.tsx` names the call in its own doc comment while taking
+      // `sections` as a prop, so a text match reports it as a caller it is not.
+      const found = globSync('**/*.tsx', { cwd: src })
+        .filter((file) => !/\.test\.tsx$/.test(file))
+        .filter((file) =>
+          /^\s*import\s*\{[^}]*\bbuildNavSections\b/m.test(readFileSync(join(src, file), 'utf8')),
+        )
+      expect(found.sort()).toEqual(callers.map((file) => file.replace(/\//g, sep)).sort())
+
+      for (const caller of callers) {
+        const source = readFileSync(join(src, caller), 'utf8')
+        expect(source, `${caller} does not pass trackingEnabled`).toMatch(
+          /buildNavSections\([^)]*trackingEnabled: isTrackingEnabled\(\)/s,
+        )
+      }
+    })
   })
 
   it('puts Notifications last for an admin, so it does not displace their primary pages', () => {

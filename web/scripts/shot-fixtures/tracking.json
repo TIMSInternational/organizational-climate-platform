@@ -1,0 +1,183 @@
+{
+  "GET /notifications/mine": { "notifications": [], "unreadCount": 0 },
+  "GET /profile": {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "companyName": "PROCOMER",
+    "email": "shot@example.invalid",
+    "name": "Ada Lovelace",
+    "role": "company_admin",
+    "isActive": true
+  },
+  "GET /tracking/picker/nodos": {
+    "nodos": [
+      { "id": "nodo-operaciones", "name": "Dirección de Operaciones" },
+      { "id": "nodo-comercial", "name": "Dirección Comercial" },
+      { "id": "nodo-financiero", "name": "Dirección Financiera" },
+      { "id": "nodo-talento", "name": "Dirección de Talento Humano" },
+      { "id": "nodo-tecnologia", "name": "Dirección de Tecnologías de Información" }
+    ]
+  },
+  "GET /api/consolidado": {
+    "conteos": { "rojo": 4, "amarillo": 6, "verde": 13 },
+    "porNodo": [
+      {
+        "nodoExternalId": "nodo-operaciones",
+        "conteos": { "rojo": 2, "amarillo": 1, "verde": 4 },
+        "totalPlanes": 7
+      },
+      {
+        "nodoExternalId": "nodo-comercial",
+        "conteos": { "rojo": 0, "amarillo": 2, "verde": 3 },
+        "totalPlanes": 5
+      },
+      {
+        "nodoExternalId": "nodo-financiero",
+        "conteos": { "rojo": 1, "amarillo": 0, "verde": 2 },
+        "totalPlanes": 3
+      },
+      {
+        "nodoExternalId": "nodo-talento",
+        "conteos": { "rojo": 0, "amarillo": 3, "verde": 3 },
+        "totalPlanes": 6
+      },
+      {
+        "nodoExternalId": "nodo-tecnologia",
+        "conteos": { "rojo": 1, "amarillo": 0, "verde": 1 },
+        "totalPlanes": 2
+      }
+    ]
+  },
+  "GET /api/tablero-seguimiento": {
+    "nodoExternalId": "nodo-operaciones",
+    "conteos": { "rojo": 2, "amarillo": 1, "verde": 4 },
+    "planes": [
+      {
+        "id": "11111111-0000-0000-0000-000000000001",
+        "planCode": "PA-2026-00012",
+        "nodoExternalId": "nodo-operaciones",
+        "liderExternalId": "persona-lider-1",
+        "hallazgoExternalId": null,
+        "descripcionQue": "Revisar la carga de trabajo del turno nocturno de planta",
+        "metodologiaComo": "Mesa de trabajo mensual con las jefaturas de turno",
+        "responsableEjecucionExternalId": "persona-0091",
+        "fechaCreacion": "2026-02-01",
+        "fechaCompromiso": "2026-08-01",
+        "porcentajeAvance": 0,
+        "estadoSemaforo": "Rojo",
+        "cicloEncuestaExternalId": null,
+        "fechaUltimaActualizacion": "2026-02-01",
+        "cumplido": false,
+        "involucradosExternalIds": []
+      },
+      {
+        "id": "11111111-0000-0000-0000-000000000002",
+        "planCode": "PA-2026-00015",
+        "nodoExternalId": "nodo-operaciones",
+        "liderExternalId": "persona-lider-1",
+        "hallazgoExternalId": null,
+        "descripcionQue": "Cerrar la brecha de equipo de protección personal en bodega",
+        "metodologiaComo": "Compra trimestral y revisión de inventario",
+        "responsableEjecucionExternalId": "persona-0077",
+        "fechaCreacion": "2026-03-11",
+        "fechaCompromiso": "2026-08-25",
+        "porcentajeAvance": 0.35,
+        "estadoSemaforo": "Rojo",
+        "cicloEncuestaExternalId": null,
+        "fechaUltimaActualizacion": "2026-05-30",
+        "cumplido": false,
+        "involucradosExternalIds": ["persona-0088"]
+      },
+      {
+        "id": "11111111-0000-0000-0000-000000000003",
+        "planCode": "PA-2026-00019",
+        "nodoExternalId": "nodo-operaciones",
+        "liderExternalId": "persona-lider-1",
+        "hallazgoExternalId": null,
+        "descripcionQue": "Publicar el plan de capacitación anual de la dirección",
+        "metodologiaComo": "Comité de formación, sesiones quincenales",
+        "responsableEjecucionExternalId": "persona-0077",
+        "fechaCreacion": "2026-03-01",
+        "fechaCompromiso": "2026-09-05",
+        "porcentajeAvance": 0.4,
+        "estadoSemaforo": "Amarillo",
+        "cicloEncuestaExternalId": null,
+        "fechaUltimaActualizacion": "2026-07-02",
+        "cumplido": false,
+        "involucradosExternalIds": []
+      },
+      {
+        "id": "11111111-0000-0000-0000-000000000004",
+        "planCode": "PA-2026-00021",
+        "nodoExternalId": "nodo-operaciones",
+        "liderExternalId": "persona-lider-1",
+        "hallazgoExternalId": null,
+        "descripcionQue": "Reforzar la inducción del personal de nuevo ingreso",
+        "metodologiaComo": "Acompañamiento de un padrino durante el primer mes",
+        "responsableEjecucionExternalId": "persona-0091",
+        "fechaCreacion": "2026-01-10",
+        "fechaCompromiso": "2026-09-30",
+        "porcentajeAvance": 0.87,
+        "estadoSemaforo": "Verde",
+        "cicloEncuestaExternalId": null,
+        "fechaUltimaActualizacion": "2026-08-14",
+        "cumplido": false,
+        "involucradosExternalIds": ["persona-0088"]
+      },
+      {
+        "id": "11111111-0000-0000-0000-000000000005",
+        "planCode": "PA-2026-00024",
+        "nodoExternalId": "nodo-operaciones",
+        "liderExternalId": "persona-lider-1",
+        "hallazgoExternalId": null,
+        "descripcionQue": "Habilitar un canal de sugerencias anónimas por turno",
+        "metodologiaComo": "Buzón físico y revisión semanal por la jefatura",
+        "responsableEjecucionExternalId": "persona-0077",
+        "fechaCreacion": "2026-04-02",
+        "fechaCompromiso": "2026-10-15",
+        "porcentajeAvance": 0.6,
+        "estadoSemaforo": "Verde",
+        "cicloEncuestaExternalId": null,
+        "fechaUltimaActualizacion": "2026-08-18",
+        "cumplido": false,
+        "involucradosExternalIds": []
+      },
+      {
+        "id": "11111111-0000-0000-0000-000000000006",
+        "planCode": "PA-2026-00027",
+        "nodoExternalId": "nodo-operaciones",
+        "liderExternalId": "persona-lider-1",
+        "hallazgoExternalId": null,
+        "descripcionQue": "Revisar el rol de vacaciones para la temporada alta",
+        "metodologiaComo": "Planificación conjunta con jefaturas de turno",
+        "responsableEjecucionExternalId": "persona-0091",
+        "fechaCreacion": "2026-05-04",
+        "fechaCompromiso": "2026-11-30",
+        "porcentajeAvance": 1,
+        "estadoSemaforo": "Verde",
+        "cicloEncuestaExternalId": null,
+        "fechaUltimaActualizacion": "2026-08-19",
+        "cumplido": true,
+        "involucradosExternalIds": []
+      },
+      {
+        "id": "11111111-0000-0000-0000-000000000007",
+        "planCode": "PA-2026-00031",
+        "nodoExternalId": "nodo-operaciones",
+        "liderExternalId": "persona-lider-1",
+        "hallazgoExternalId": null,
+        "descripcionQue": "Documentar el procedimiento de entrega de turno",
+        "metodologiaComo": "Redacción conjunta y validación con seguridad ocupacional",
+        "responsableEjecucionExternalId": "persona-0077",
+        "fechaCreacion": "2026-06-01",
+        "fechaCompromiso": "2026-12-12",
+        "porcentajeAvance": 0.15,
+        "estadoSemaforo": "Verde",
+        "cicloEncuestaExternalId": null,
+        "fechaUltimaActualizacion": "2026-08-20",
+        "cumplido": false,
+        "involucradosExternalIds": []
+      }
+    ]
+  }
+}

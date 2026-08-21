@@ -83,6 +83,65 @@ function HomeRedirect() {
  * inline here instead of in a wrapper component that would have to be statically
  * imported — defeating the point.
  */
+/**
+ * The tracking module's routes (#125, #126), declared in one place.
+ *
+ * ## Why they are together and lazy
+ *
+ * The module is a *separate surface* from the generic `/action-plans` — Federico's
+ * decision of 2026-08-21 — and it exists only where a deployment has configured a
+ * `services/tracking-api` to talk to (see `features/tracking/api/config.ts`). Every
+ * other deployment ships these pages and never reaches them, so they are route-level
+ * `lazy` imports and land in their own chunks rather than in the main bundle: the
+ * same mechanism `/dev/chart-gallery` uses above, for the same reason.
+ *
+ * Route-level `lazy` rather than `React.lazy` + `<Suspense>`, again as above: the
+ * router awaits it during navigation, so no fallback element is needed and the
+ * dynamic import stays inline here instead of in a statically-imported wrapper.
+ *
+ * ## The three that are missing, and why they cannot be here yet
+ *
+ * #125 owns the route table for the whole module so it is edited once, and the
+ * remaining three paths belong to #126's pages:
+ *
+ *     { path: '/tracking/planes', lazy: … 'PlanesAccionListPage' },
+ *     { path: '/tracking/planes/:id', lazy: … 'PlanAccionDetailPage' },
+ *     { path: '/tracking/mis-tareas', lazy: … 'MisTareasPage' },
+ *
+ * They are written out rather than registered because a dynamic `import()` of a
+ * module that does not exist is a **build** failure, not a runtime one — Rollup
+ * resolves it while bundling — so declaring them against files this branch does not
+ * contain would make `npm run build` fail here and in CI. Adding placeholder pages
+ * instead would put two authors on three files and ship three screens that lie. So
+ * #126 pastes those three entries into this array beside the two below; the shape,
+ * the paths and the filenames are settled here and nothing else about the table
+ * moves.
+ *
+ * `/tracking/planes` is declared before `/tracking/planes/:id` when they arrive, for
+ * readability only — react-router ranks a static segment above a dynamic one
+ * whatever the declaration order.
+ */
+const trackingRoutes: RouteObject[] = [
+  {
+    path: '/tracking',
+    lazy: async () => ({
+      Component: (await import('../features/tracking/pages/ConsolidadoPage')).default,
+    }),
+  },
+  {
+    // `?nodoId=` rather than `/tracking/tablero/:nodoId`, and that is a contract
+    // with the endpoint: `GET /api/tablero-seguimiento` takes `nodoId` as an
+    // optional QUERY parameter and answers with the CALLER'S OWN nodo when it is
+    // absent. A path parameter would make the id mandatory in the URL, which is
+    // exactly wrong for the node leader — the role this screen is for — who has
+    // one board and should not have to know its external id to open it.
+    path: '/tracking/tablero',
+    lazy: async () => ({
+      Component: (await import('../features/tracking/pages/TableroSeguimientoPage')).default,
+    }),
+  },
+]
+
 const devOnlyRoutes: RouteObject[] = import.meta.env.DEV
   ? [
       {
@@ -247,6 +306,12 @@ export const router = createBrowserRouter([
               { path: '/surveys/:surveyId/distribution', element: <SurveyDistributionPage /> },
               { path: '/analytics/benchmarks', element: <BenchmarksPage /> },
               { path: '/analytics/ai-insights', element: <AIInsightsPage /> },
+              // The tracking module (#125, #126). Inside `AdminLayout` like every
+              // other work surface — these are administration screens, not a
+              // respondent flow — and gated by nothing beyond `RequireAuth`,
+              // because each page reads its own role claim and the tracking
+              // service authorizes every call itself. See `trackingRoutes` above.
+              ...trackingRoutes,
             ],
           },
         ],
