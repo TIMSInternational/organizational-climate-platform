@@ -1,0 +1,131 @@
+{
+  "GET /notifications/mine": { "notifications": [] },
+  "GET /profile": { "companyName": "Acme Manufacturing" },
+  "GET /tracking/picker/nodos": {
+    "nodos": [
+      { "id": "nodo-operaciones", "name": "Operaciones" },
+      { "id": "nodo-finanzas", "name": "Finanzas" },
+      { "id": "nodo-comercial", "name": "Comercial" }
+    ]
+  },
+  "GET /tracking/picker/personas": {
+    "personas": [
+      { "id": "persona-1", "name": "Ana Rojas", "email": "ana.rojas@acme.example" },
+      { "id": "persona-2", "name": "Beto Solís", "email": "beto.solis@acme.example" },
+      { "id": "persona-3", "name": "Carla Mora", "email": "carla.mora@acme.example" },
+      { "id": "persona-4", "name": "Diego Vargas", "email": "diego.vargas@acme.example" }
+    ]
+  },
+  "GET /api/planes-accion": [
+    {
+      "id": "aaaaaaaa-0000-0000-0000-000000000001",
+      "planCode": "PA-2026-00001",
+      "nodoExternalId": "nodo-operaciones",
+      "liderExternalId": "persona-1",
+      "hallazgoExternalId": "hallazgo-comunicacion-2026Q1",
+      "descripcionQue": "Reforzar la comunicación de los cambios de turno entre jefaturas y planta",
+      "metodologiaComo": "Boletín quincenal impreso en la cartelera y reunión de cierre de mes",
+      "responsableEjecucionExternalId": "persona-2",
+      "fechaCreacion": "2026-02-01",
+      "fechaCompromiso": "2026-07-30",
+      "porcentajeAvance": 0.15,
+      "estadoSemaforo": "Rojo",
+      "cicloEncuestaExternalId": "ciclo-2026-q1",
+      "fechaUltimaActualizacion": "2026-05-04",
+      "cumplido": false,
+      "involucradosExternalIds": ["persona-3"]
+    },
+    {
+      "id": "aaaaaaaa-0000-0000-0000-000000000002",
+      "planCode": "PA-2026-00004",
+      "nodoExternalId": "nodo-operaciones",
+      "liderExternalId": "persona-1",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Revisar la carga de trabajo del turno nocturno",
+      "metodologiaComo": "Medición de horas extra por persona y ajuste del rol de turnos",
+      "responsableEjecucionExternalId": "persona-3",
+      "fechaCreacion": "2026-03-10",
+      "fechaCompromiso": "2026-10-15",
+      "porcentajeAvance": 0.4,
+      "estadoSemaforo": "Amarillo",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-08-01",
+      "cumplido": false,
+      "involucradosExternalIds": ["persona-2", "persona-4"]
+    },
+    {
+      "id": "aaaaaaaa-0000-0000-0000-000000000003",
+      "planCode": "PA-2026-00006",
+      "nodoExternalId": "nodo-finanzas",
+      "liderExternalId": "persona-4",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Publicar el calendario de pagos con un mes de anticipación",
+      "metodologiaComo": "Calendario anual aprobado en comité y publicado en la intranet",
+      "responsableEjecucionExternalId": "persona-4",
+      "fechaCreacion": "2026-04-02",
+      "fechaCompromiso": "2026-12-01",
+      "porcentajeAvance": 0.8,
+      "estadoSemaforo": "Verde",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-08-18",
+      "cumplido": false,
+      "involucradosExternalIds": []
+    }
+  ],
+  "GET /api/planes-accion/*": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000002",
+    "planCode": "PA-2026-00004",
+    "nodoExternalId": "nodo-operaciones",
+    "liderExternalId": "persona-1",
+    "hallazgoExternalId": "hallazgo-carga-2026Q1",
+    "descripcionQue": "Revisar la carga de trabajo del turno nocturno",
+    "metodologiaComo": "Medición de horas extra por persona y ajuste del rol de turnos",
+    "responsableEjecucionExternalId": "persona-3",
+    "fechaCreacion": "2026-03-10",
+    "fechaCompromiso": "2026-10-15",
+    "porcentajeAvance": 0.4,
+    "estadoSemaforo": "Amarillo",
+    "cicloEncuestaExternalId": "ciclo-2026-q1",
+    "fechaUltimaActualizacion": "2026-08-01",
+    "cumplido": false,
+    "involucradosExternalIds": ["persona-2", "persona-4"]
+  },
+  "GET /api/mis-tareas": [
+    {
+      "id": "aaaaaaaa-0000-0000-0000-000000000001",
+      "planCode": "PA-2026-00001",
+      "nodoExternalId": "nodo-operaciones",
+      "liderExternalId": "persona-1",
+      "hallazgoExternalId": "hallazgo-comunicacion-2026Q1",
+      "descripcionQue": "Reforzar la comunicación de los cambios de turno entre jefaturas y planta",
+      "metodologiaComo": "Boletín quincenal impreso en la cartelera y reunión de cierre de mes",
+      "responsableEjecucionExternalId": "persona-2",
+      "fechaCreacion": "2026-02-01",
+      "fechaCompromiso": "2026-07-30",
+      "porcentajeAvance": 0.15,
+      "estadoSemaforo": "Rojo",
+      "cicloEncuestaExternalId": "ciclo-2026-q1",
+      "fechaUltimaActualizacion": "2026-05-04",
+      "cumplido": false,
+      "involucradosExternalIds": ["persona-3"]
+    },
+    {
+      "id": "aaaaaaaa-0000-0000-0000-000000000002",
+      "planCode": "PA-2026-00004",
+      "nodoExternalId": "nodo-operaciones",
+      "liderExternalId": "persona-1",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Revisar la carga de trabajo del turno nocturno",
+      "metodologiaComo": "Medición de horas extra por persona y ajuste del rol de turnos",
+      "responsableEjecucionExternalId": "persona-3",
+      "fechaCreacion": "2026-03-10",
+      "fechaCompromiso": "2026-10-15",
+      "porcentajeAvance": 0.4,
+      "estadoSemaforo": "Amarillo",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-08-01",
+      "cumplido": false,
+      "involucradosExternalIds": ["persona-2", "persona-4"]
+    }
+  ]
+}
