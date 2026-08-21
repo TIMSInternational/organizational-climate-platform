@@ -7,7 +7,6 @@ import {
   Monitor,
   Moon,
   Settings,
-  ShieldCheck,
   Sun,
   User,
 } from 'lucide-react'
@@ -262,26 +261,6 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
                     <User aria-hidden="true" style={{ width: 16, height: 16, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
                     <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {t('profile.title')}
-                    </span>
-                  </Link>
-                  {/* #137, immediately after Profile because it answers the same
-                      question — "what does this product know about me". Same
-                      argument for being here rather than in `navSections`: the page
-                      is per-user surface every role can load, and that module is
-                      role-aware. */}
-                  <Link
-                    to="/settings/privacy"
-                    role="menuitem"
-                    style={{ ...ROW, textDecoration: 'none' }}
-                    onClick={close}
-                  >
-                    <ShieldCheck aria-hidden="true" style={{ width: 16, height: 16, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
-                    {/* `navLabel`, not `title`. This menu is 200px wide and the page's
-                        own title ("Privacy and your data") ellipsised to "Privacy and
-                        your dat…" in a screenshot — the same overrun the Settings and
-                        Sign-out row above was rebuilt for. */}
-                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {t('privacy.navLabel')}
                     </span>
                   </Link>
                   <button type="button" role="menuitem" style={ROW} onClick={() => setSubmenu('theme')}>
