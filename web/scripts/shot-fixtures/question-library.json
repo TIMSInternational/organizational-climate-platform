@@ -283,6 +283,7 @@
     "textEn": "How likely are you to recommend working here to a friend?",
     "textEs": "¿Qué tan probable es que recomiendes trabajar aquí a un amigo?",
     "language": "both",
+    "type": "likert",
     "scaleMin": 0,
     "scaleMax": 10,
     "scaleLabelMinEn": "Not at all likely",
