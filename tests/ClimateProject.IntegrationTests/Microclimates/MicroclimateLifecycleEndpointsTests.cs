@@ -247,6 +247,64 @@ public class MicroclimateLifecycleEndpointsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    // Every route that funnels through LoadForAdminAsync. The helper is one guard, one
+    // condition -- MicroclimateEndpoints.CanAccessCompany -- and these two tests are what
+    // hold it. Listed as data rather than as five tests so that a sixth route added to the
+    // helper is one line here, and so that the day the guard is weakened the failure names
+    // every surface it opened rather than one of them.
+    public static TheoryData<string> AdminOnlyRoutes => new()
+    {
+        "activate",
+        "status",
+        "export",
+        "export/csv",
+        "insights",
+    };
+
+    private static Task<HttpResponseMessage> CallAsync(HttpClient client, Guid id, string route)
+        => route switch
+        {
+            "activate" => client.PostAsync($"/microclimates/{id}/activate", null),
+            "status" => client.PutAsJsonAsync(
+                $"/microclimates/{id}/status",
+                new UpdateMicroclimateStatusRequest(MicroclimateStatuses.Closed)),
+            _ => client.GetAsync($"/microclimates/{id}/{route}"),
+        };
+
+    [Theory]
+    [MemberData(nameof(AdminOnlyRoutes))]
+    public async Task An_employee_of_the_owning_company_is_refused_every_admin_route(string route)
+    {
+        // The regression CanAccessCompany's own comment records: weakened to a bare CompanyId
+        // match, it let any authenticated employee of the company rewrite a microclimate and
+        // flip its status. That weakening used to be invisible here, because LoadForAdminAsync
+        // repeated the role test in a second condition and caught the employee the mutation
+        // let through. The duplicate is gone, so this is now the test that fails.
+        var admin = await AdminClientAsync(_companyAId, _companyADomain);
+        var created = await CreateAsync(admin, _companyAId);
+
+        var employee = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(employee, Roles.Employee, _companyADomain, _companyAId);
+        employee.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await CallAsync(employee, created.Id, route);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Theory]
+    [MemberData(nameof(AdminOnlyRoutes))]
+    public async Task An_admin_of_another_company_is_refused_every_admin_route(string route)
+    {
+        var adminB = await AdminClientAsync(_companyBId, _companyBDomain);
+        var theirs = await CreateAsync(adminB, _companyBId);
+
+        var adminA = await AdminClientAsync(_companyAId, _companyADomain);
+        var response = await CallAsync(adminA, theirs.Id, route);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     // ------------------------------------------------------------------
     // Bulk
     // ------------------------------------------------------------------
@@ -498,6 +556,62 @@ public class MicroclimateLifecycleEndpointsTests : IAsyncLifetime
         var csv = await client.GetStringAsync($"/microclimates/{created.Id}/export/csv?lang=es");
 
         Assert.Contains("\"summary\",\"untranslated_field\",\"es\",\"title\"", csv, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_export_route_serves_a_file_when_the_legacy_format_query_asks_for_one()
+    {
+        // /export?format=csv is the shape the legacy surface used and the one a client that
+        // has not learned /export/csv still sends. It has to produce the FILE, not JSON with
+        // a 200 on it -- a caller that asked for a spreadsheet and got a JSON body has no
+        // error to report and nothing to open.
+        var client = await AdminClientAsync(_companyAId, _companyADomain);
+        var created = await CreateAsync(client, _companyAId, "Pulso semanal");
+
+        var response = await client.GetAsync($"/microclimates/{created.Id}/export?format=csv");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/csv", response.Content.Headers.ContentType!.MediaType);
+
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        Assert.Equal([0xEF, 0xBB, 0xBF], bytes[..3]);
+        Assert.Contains("\"section\",\"key\",\"language\",\"value\"", Encoding.UTF8.GetString(bytes), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("CSV")]
+    [InlineData("Csv")]
+    [InlineData("%20csv%20")]
+    public async Task The_format_query_is_matched_case_insensitively_and_trimmed(string format)
+    {
+        // The comparison is OrdinalIgnoreCase over a trimmed value on purpose: this is a
+        // hand-typed query string, and the failure mode of getting it wrong is silent --
+        // JSON with a 200, not a 400 anyone would notice.
+        var client = await AdminClientAsync(_companyAId, _companyADomain);
+        var created = await CreateAsync(client, _companyAId);
+
+        var response = await client.GetAsync($"/microclimates/{created.Id}/export?format={format}");
+
+        Assert.Equal("text/csv", response.Content.Headers.ContentType!.MediaType);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("?format=json")]
+    [InlineData("?format=pdf")]
+    public async Task The_export_route_serves_json_for_anything_that_is_not_csv(string query)
+    {
+        // Including ?format=pdf. The PDF route was dropped deliberately; an unknown format
+        // falls back to the JSON default rather than erroring, which is the documented
+        // behaviour and has to stay pinned so the csv branch above cannot be widened into a
+        // catch-all by accident.
+        var client = await AdminClientAsync(_companyAId, _companyADomain);
+        var created = await CreateAsync(client, _companyAId);
+
+        var response = await client.GetAsync($"/microclimates/{created.Id}/export{query}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType!.MediaType);
     }
 
     [Fact]

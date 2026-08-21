@@ -84,9 +84,10 @@ public static class MicroclimateEndpoints
         group.MapPost("/{id:guid}/activate", ActivateAsync);
         group.MapPut("/{id:guid}/status", UpdateStatusAsync);
 
-        // Export. Two routes over one projection: /export negotiates on the Accept header
-        // (JSON by default), /export/csv is the unambiguous link an admin can put in a
-        // browser address bar and get a file from. Both suppress before they serialise.
+        // Export. Two routes over one projection: /export serves JSON unless the legacy
+        // ?format=csv query asks otherwise (it does NOT read the Accept header -- see
+        // ExportAsync), and /export/csv is the unambiguous link an admin can put in a browser
+        // address bar and get a file from. Both suppress before they serialise.
         group.MapGet("/{id:guid}/export", ExportAsync);
         group.MapGet("/{id:guid}/export/csv", ExportCsvAsync);
 
@@ -566,12 +567,6 @@ public static class MicroclimateEndpoints
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// The whole lifecycle rule, in one place so <c>POST /activate</c>, <c>PUT /status</c>,
-    /// the <c>Status</c> field on <c>PUT /{id}</c> and <c>POST /bulk</c> cannot drift apart.
-    /// Mutates <paramref name="microclimate"/> and returns null on success, or the
-    /// <see cref="IResult"/> to send back. Does not save.
-    /// </summary>
-    /// <summary>
     /// A refused status change: the response a single-microclimate route sends back, and the
     /// same reason as bare text so <see cref="BulkAsync"/> can report it per item.
     /// </summary>
@@ -584,6 +579,12 @@ public static class MicroclimateEndpoints
     /// </remarks>
     private sealed record StatusChangeFailure(IResult Result, string Message);
 
+    /// <summary>
+    /// The whole lifecycle rule, in one place so <c>POST /activate</c>, <c>PUT /status</c>,
+    /// the <c>Status</c> field on <c>PUT /{id}</c> and <c>POST /bulk</c> cannot drift apart.
+    /// Mutates <paramref name="microclimate"/> and returns null on success, or the
+    /// <see cref="IResult"/> to send back. Does not save.
+    /// </summary>
     private static async Task<StatusChangeFailure?> ApplyStatusAsync(
         ClimateProjectDbContext db,
         Microclimate microclimate,
@@ -666,9 +667,34 @@ public static class MicroclimateEndpoints
     /// <see cref="IResult"/> to send back -- never both.
     /// </summary>
     /// <remarks>
-    /// The admin-role check and the tenancy check are separate conditions on purpose and are
-    /// both required: <see cref="CanAccessCompany"/> alone would let a company's own employee
-    /// through, which is the regression its own docblock records.
+    /// <para>
+    /// <b>One condition, not two.</b> This guard read
+    /// <c>!Roles.Admin.Contains(currentUser.Role) || !CanAccessCompany(...)</c> under a comment
+    /// claiming the two halves were "both required" because "CanAccessCompany alone would let a
+    /// company's own employee through". That was false as written.
+    /// <see cref="CanAccessCompany"/> returns true only for a SuperAdmin, or for a CompanyAdmin
+    /// whose tenant matches, and <c>Roles.Admin</c> is exactly <c>[super_admin, company_admin]</c>
+    /// -- so the role test could not refuse a caller the tenancy test had already admitted. The
+    /// employee the comment was worried about is refused by <see cref="CanAccessCompany"/>
+    /// itself.
+    /// </para>
+    /// <para>
+    /// <b>The redundancy was not free.</b> While both conditions stood, neither could be killed
+    /// on its own: weakening <see cref="CanAccessCompany"/> to the bare <c>CompanyId</c> match
+    /// its own comment warns against -- the exact regression that once let any authenticated
+    /// employee rewrite Title/Description/EndTime and flip Status -- passed all 34 lifecycle
+    /// tests, because the redundant <c>Roles.Admin</c> test here caught the employee that
+    /// mutation let through. A duplicated check does not double the protection; it hides which
+    /// copy is load-bearing. With one condition left,
+    /// <c>An_employee_of_the_owning_company_is_refused_every_admin_route</c> fails on all five
+    /// routes the moment the role clause of <see cref="CanAccessCompany"/> goes.
+    /// </para>
+    /// <para>
+    /// <c>CreateAsync</c>, <c>UpdateAsync</c> and <c>MicroclimateTemplateEndpoints</c> still
+    /// carry the same redundant pair. They predate #131 and are left alone rather than swept
+    /// up here; they are inert now that the role clause of <see cref="CanAccessCompany"/> is
+    /// held through this helper, which fails whatever those three do.
+    /// </para>
     /// </remarks>
     private static async Task<(Microclimate? Microclimate, IResult? Error)> LoadForAdminAsync(
         Guid id,
@@ -682,7 +708,7 @@ public static class MicroclimateEndpoints
             return (null, Results.Json(new { message = "Microclimate not found" }, statusCode: 404));
         }
 
-        if (!Roles.Admin.Contains(currentUser.Role) || !CanAccessCompany(currentUser, microclimate.CompanyId))
+        if (!CanAccessCompany(currentUser, microclimate.CompanyId))
         {
             return (null, Results.Forbid());
         }
