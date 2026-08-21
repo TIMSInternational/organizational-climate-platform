@@ -12,7 +12,8 @@ public class MicroclimateExportProjectionTests
     private static MicroclimateExport Project(
         int responseCount,
         IReadOnlyList<WordCloudEntry> words,
-        int targetParticipantCount = 40)
+        int targetParticipantCount = 40,
+        IReadOnlyList<string>? fallbackFields = null)
         => MicroclimateExportProjection.Project(
             Guid.NewGuid(),
             "Weekly pulse",
@@ -21,6 +22,7 @@ public class MicroclimateExportProjectionTests
             MicroclimateStatuses.Closed,
             "en",
             "en",
+            fallbackFields ?? [],
             DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow.AddHours(1),
             responseCount,

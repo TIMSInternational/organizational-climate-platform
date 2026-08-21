@@ -90,6 +90,24 @@ public static class MicroclimateEndpoints
         group.MapGet("/{id:guid}/export", ExportAsync);
         group.MapGet("/{id:guid}/export/csv", ExportCsvAsync);
 
+        // DROPPED, deliberately: GET /{id}/export/pdf. The legacy surface had one; this
+        // repository has no PDF renderer and no package that could be one -- neither
+        // ClimateProject.Api nor ClimateProject.Application references QuestPDF, iText or a
+        // headless browser, and the only "pdf" in src/ is SurveyDistribution.QrCodePdfUrl,
+        // a string column holding a URL. Adding a rendering engine is a dependency decision
+        // with a licence question attached (QuestPDF is royalty-free only under a revenue
+        // threshold), which is not #131's to take. The honest surface is the two formats
+        // that exist. A caller wanting PDF gets a 404 rather than a route that returns
+        // something that is not a PDF.
+        //
+        // DROPPED, deliberately: GET /{id}/responses. There is nothing to serve. A
+        // microclimate persists no per-respondent row -- there is no MicroclimateResponse
+        // entity and no DbSet for one; SubmitResponseAsync folds each submission straight
+        // into the ResponseCount/SentimentScore/WordCloudData aggregate on the parent row
+        // and discards the individual answers. That is the anonymity guarantee, not an
+        // oversight, so this route cannot be implemented without first deciding to store
+        // what the product currently promises not to. POST /{id}/responses (the write half
+        // of the legacy path) exists and predates #131.
         group.MapGet("/{id:guid}/insights", GetInsightsAsync);
 
         // Unauthenticated write surface -- rate-limited per caller so a single visitor/bot
@@ -530,10 +548,10 @@ public static class MicroclimateEndpoints
             // active, or active back to draft where its questions become editable again
             // underneath responses already counted into the aggregate. The transition map now
             // runs here exactly as it does on PUT /status.
-            var transitionError = await ApplyStatusAsync(db, microclimate, request.Status, cancellationToken);
-            if (transitionError is not null)
+            var transitionFailure = await ApplyStatusAsync(db, microclimate, request.Status, cancellationToken);
+            if (transitionFailure is not null)
             {
-                return transitionError;
+                return transitionFailure.Result;
             }
         }
 
@@ -553,7 +571,20 @@ public static class MicroclimateEndpoints
     /// Mutates <paramref name="microclimate"/> and returns null on success, or the
     /// <see cref="IResult"/> to send back. Does not save.
     /// </summary>
-    private static async Task<IResult?> ApplyStatusAsync(
+    /// <summary>
+    /// A refused status change: the response a single-microclimate route sends back, and the
+    /// same reason as bare text so <see cref="BulkAsync"/> can report it per item.
+    /// </summary>
+    /// <remarks>
+    /// Both halves come from one construction site so they cannot disagree. Bulk previously
+    /// discarded the <see cref="IResult"/> and rebuilt a message from the target status,
+    /// which made every per-item failure read "Cannot move a microclimate from 'draft' to
+    /// 'active'" -- false for the case that actually reaches it most, a bulk activate blocked
+    /// by the translation gate on a legal transition.
+    /// </remarks>
+    private sealed record StatusChangeFailure(IResult Result, string Message);
+
+    private static async Task<StatusChangeFailure?> ApplyStatusAsync(
         ClimateProjectDbContext db,
         Microclimate microclimate,
         string? requestedStatus,
@@ -561,26 +592,29 @@ public static class MicroclimateEndpoints
     {
         if (!MicroclimateStatuses.IsValid(requestedStatus))
         {
-            return Results.Json(
-                new { message = $"Invalid status: {requestedStatus}. Expected one of: {string.Join(", ", MicroclimateStatuses.All)}" },
-                statusCode: 400);
+            var invalid = $"Invalid status: {requestedStatus}. Expected one of: {string.Join(", ", MicroclimateStatuses.All)}";
+            return new StatusChangeFailure(Results.Json(new { message = invalid }, statusCode: 400), invalid);
         }
 
         var target = requestedStatus!;
         if (!MicroclimateStatuses.CanTransition(microclimate.Status, target))
         {
             var allowed = MicroclimateStatuses.AllowedTransitionsFrom(microclimate.Status);
-            return Results.Json(
-                new
-                {
-                    message = allowed.Count == 0
-                        ? $"A microclimate in status '{microclimate.Status}' is final and cannot change status."
-                        : $"Cannot move a microclimate from '{microclimate.Status}' to '{target}'. Allowed from '{microclimate.Status}': {string.Join(", ", allowed)}.",
-                    from = microclimate.Status,
-                    to = target,
-                    allowedTransitions = allowed,
-                },
-                statusCode: 409);
+            var refused = allowed.Count == 0
+                ? $"A microclimate in status '{microclimate.Status}' is final and cannot change status."
+                : $"Cannot move a microclimate from '{microclimate.Status}' to '{target}'. Allowed from '{microclimate.Status}': {string.Join(", ", allowed)}.";
+
+            return new StatusChangeFailure(
+                Results.Json(
+                    new
+                    {
+                        message = refused,
+                        from = microclimate.Status,
+                        to = target,
+                        allowedTransitions = allowed,
+                    },
+                    statusCode: 409),
+                refused);
         }
 
         if (string.Equals(microclimate.Status, target, StringComparison.Ordinal))
@@ -615,9 +649,10 @@ public static class MicroclimateEndpoints
 
             if (missing.Count > 0)
             {
-                return Results.Json(
-                    new { message = ContentPublishValidation.Describe(missing), missingTranslations = missing },
-                    statusCode: 400);
+                var untranslated = ContentPublishValidation.Describe(missing);
+                return new StatusChangeFailure(
+                    Results.Json(new { message = untranslated, missingTranslations = missing }, statusCode: 400),
+                    untranslated);
             }
         }
 
@@ -686,10 +721,10 @@ public static class MicroclimateEndpoints
             return error;
         }
 
-        var transitionError = await ApplyStatusAsync(db, microclimate!, target, cancellationToken);
-        if (transitionError is not null)
+        var failure = await ApplyStatusAsync(db, microclimate!, target, cancellationToken);
+        if (failure is not null)
         {
-            return transitionError;
+            return failure.Result;
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -751,13 +786,14 @@ public static class MicroclimateEndpoints
             // is a loop, never a bypass: a bulk close must not be able to close something
             // PUT /status would have refused, and a bulk activate must still run the
             // translation gate on each row it publishes.
-            var error = await ApplyStatusAsync(db, microclimate, target, cancellationToken);
-            results.Add(error is null
+            // The reason comes back from the helper rather than being reconstructed here: a
+            // bulk activate refused by the translation gate is a LEGAL transition that failed
+            // for another reason entirely, and a message guessed from the target status would
+            // send the admin looking at the wrong thing.
+            var itemFailure = await ApplyStatusAsync(db, microclimate, target, cancellationToken);
+            results.Add(itemFailure is null
                 ? new BulkMicroclimateActionResult(id, true, null)
-                : new BulkMicroclimateActionResult(
-                    id,
-                    false,
-                    $"Cannot move a microclimate from '{microclimate.Status}' to '{target}'."));
+                : new BulkMicroclimateActionResult(id, false, itemFailure.Message));
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -802,6 +838,7 @@ public static class MicroclimateEndpoints
             microclimate.Status,
             microclimate.Language,
             locale,
+            fallbackFields,
             microclimate.Scheduling.StartTime,
             microclimate.Scheduling.EndTime,
             microclimate.ResponseCount,

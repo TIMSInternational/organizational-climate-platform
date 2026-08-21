@@ -8,13 +8,23 @@ namespace ClimateProject.Application.Exports;
 /// spreadsheet formula injection.
 ///
 /// <para>
-/// <b>Provenance.</b> The escaping rule here is lifted verbatim, reasoning included, from
-/// the private <c>Csv</c> helper in <c>AuditEndpoints</c> -- the only place in this
-/// repository that had got it right. It is promoted to the Application layer rather than
-/// copied a second time so that the next export does not have to rediscover the two
-/// separate jobs below. <c>AuditEndpoints</c> itself still carries its own copy: retiring it
-/// onto this class is a behaviour-preserving refactor of a file outside #131's slice, and is
-/// left to whoever owns that surface.
+/// <b>Provenance.</b> The <em>escaping rule</em> -- <see cref="Escape"/> and
+/// <see cref="FormulaLeadingCharacters"/> -- is lifted verbatim, reasoning included, from the
+/// private <c>Csv</c> helper in <c>AuditEndpoints</c>, the only place in this solution that
+/// had got it right. It is promoted to the Application layer rather than copied a second time
+/// so that the next export does not have to rediscover the two separate jobs below. The same
+/// rule, with the same character set, is independently maintained in the tracking service's
+/// <c>TrackingSheetExport</c>; that service is a separate solution and cannot reference this
+/// assembly, so the duplication there is structural rather than accidental.
+/// </para>
+///
+/// <para>
+/// <b>This is not a drop-in replacement for the audit export.</b> <c>AuditEndpoints</c> still
+/// carries its own copy, and swapping it onto this class would NOT be behaviour-preserving:
+/// that endpoint writes bare <c>\n</c> line endings and no BOM, where this class writes
+/// RFC 4180 <c>\r\n</c> and a UTF-8 preamble. Retiring it is a deliberate change to the bytes
+/// of an existing download, on a surface outside #131's slice, and is left to whoever owns
+/// it -- not to be done as a tidy-up on the assumption that the two are already identical.
 /// </para>
 ///
 /// <para>
@@ -53,18 +63,6 @@ public sealed class CsvWriter
     /// character after it into the leading position this rule is about.
     /// </remarks>
     private static readonly char[] FormulaLeadingCharacters = ['=', '+', '-', '@', '\t', '\r'];
-
-    /// <summary>
-    /// U+FEFF, written first so Excel reads the file as UTF-8 rather than as the host's
-    /// legacy code page.
-    /// </summary>
-    /// <remarks>
-    /// Not cosmetic on this product: without it Excel renders every accented character in a
-    /// Spanish-language microclimate as mojibake, and the export is the artefact an admin
-    /// forwards to people who will never see the app. <see cref="ToBytes"/> is the only
-    /// supported way to serialise a document, so the BOM cannot be forgotten at a call site.
-    /// </remarks>
-    private const string ByteOrderMark = "﻿";
 
     private readonly StringBuilder _builder = new();
     private readonly int _columnCount;
@@ -117,7 +115,23 @@ public sealed class CsvWriter
     public static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>The document as UTF-8 bytes, BOM first. The only supported serialisation.</summary>
-    public byte[] ToBytes() => Encoding.UTF8.GetBytes(ByteOrderMark + _builder.ToString());
+    /// <remarks>
+    /// <para>
+    /// The BOM is not cosmetic on this product: without it Excel renders every accented
+    /// character in a Spanish-language export as mojibake, and the export is the artefact an
+    /// admin forwards to people who will never see the app. This is the only supported way to
+    /// serialise a document, so it cannot be forgotten at a call site.
+    /// </para>
+    /// <para>
+    /// <c>Encoding.UTF8.GetPreamble()</c> rather than a literal U+FEFF prepended to the
+    /// string, matching the choice <c>TrackingSheetExport</c> documents: the BOM is a
+    /// byte-level artefact of the file, not a character in the document. A literal would put
+    /// an invisible character in this source file that an editor, a re-encode or a lint
+    /// autofix can silently eat, and the failure would show up only as mojibake in a
+    /// customer's spreadsheet.
+    /// </para>
+    /// </remarks>
+    public byte[] ToBytes() => [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(_builder.ToString())];
 
     private void AppendFields(IReadOnlyList<string?> fields)
     {

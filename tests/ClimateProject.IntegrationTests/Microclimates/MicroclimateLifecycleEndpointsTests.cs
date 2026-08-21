@@ -315,6 +315,42 @@ public class MicroclimateLifecycleEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_bulk_item_reports_the_reason_it_actually_failed_not_the_transition()
+    {
+        // draft -> active IS a legal transition, so "cannot move from draft to active" would
+        // be a lie. What stopped this row is the translation gate, and that is what the admin
+        // has to be told or they go looking at the status field.
+        var client = await AdminClientAsync(_companyAId, _companyADomain);
+        var createResponse = await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+            Title: LocalizedInput.FromLocales(new Dictionary<string, string?> { ["en"] = "Half translated" }),
+            Description: null,
+            CompanyId: _companyAId,
+            StartTime: DateTimeOffset.UtcNow,
+            EndTime: DateTimeOffset.UtcNow.AddHours(1),
+            TargetParticipantCount: 5,
+            AnonymousResponses: true,
+            TemplateId: null,
+            Questions: null,
+            Timezone: null,
+            Language: "both"));
+        var created = await createResponse.Content.ReadFromJsonAsync<MicroclimateDetail>();
+
+        var response = await client.PostAsJsonAsync(
+            "/microclimates/bulk",
+            new BulkMicroclimateActionRequest("activate", [created!.Id]));
+
+        var body = await response.Content.ReadFromJsonAsync<BulkMicroclimateActionResponse>();
+        var result = Assert.Single(body!.Results);
+
+        Assert.False(result.Succeeded);
+        Assert.DoesNotContain("Cannot move a microclimate", result.Message!, StringComparison.Ordinal);
+
+        // And it is still not activated: the gate refused it, the loop did not bypass it.
+        var after = await client.GetFromJsonAsync<MicroclimateDetail>($"/microclimates/{created.Id}");
+        Assert.Equal(MicroclimateStatuses.Draft, after!.Status);
+    }
+
+    [Fact]
     public async Task An_unknown_bulk_action_is_rejected()
     {
         var client = await AdminClientAsync(_companyAId, _companyADomain);
@@ -430,6 +466,38 @@ public class MicroclimateLifecycleEndpointsTests : IAsyncLifetime
 
         Assert.DoesNotContain("visa", csv, StringComparison.Ordinal);
         Assert.Contains("\"is_suppressed\",\"\",\"true\"", csv, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task An_export_read_in_a_language_the_content_lacks_labels_the_fields_that_fell_back()
+    {
+        // Regression: BuildExportAsync collected fallbackFields and then did not pass them to
+        // the projection, so every export claimed a complete set of translations. The export
+        // is the one artefact that leaves the building, which makes an unlabelled fallback
+        // exactly the silent substitution #195 exists to prevent -- a Spanish reader would get
+        // the English title with nothing saying so.
+        var client = await AdminClientAsync(_companyAId, _companyADomain);
+        var created = await CreateAsync(client, _companyAId, "Weekly pulse");
+
+        // Authored in English (the company default), read in Spanish.
+        var export = await client.GetFromJsonAsync<MicroclimateExport>(
+            $"/microclimates/{created.Id}/export?lang=es");
+
+        Assert.Equal("es", export!.ResolvedLocale);
+        Assert.Equal("Weekly pulse", export.Title);
+        Assert.Contains("title", export.FallbackFields);
+    }
+
+    [Fact]
+    public async Task The_csv_export_carries_the_fallback_labels_as_rows()
+    {
+        // The label has to travel in the FILE, not only in the JSON an admin never opens.
+        var client = await AdminClientAsync(_companyAId, _companyADomain);
+        var created = await CreateAsync(client, _companyAId, "Weekly pulse");
+
+        var csv = await client.GetStringAsync($"/microclimates/{created.Id}/export/csv?lang=es");
+
+        Assert.Contains("\"summary\",\"untranslated_field\",\"es\",\"title\"", csv, StringComparison.Ordinal);
     }
 
     [Fact]
