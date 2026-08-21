@@ -2651,5 +2651,28 @@
     "referenceCopy": "Copiar datos",
     "referenceCopied": "Copiado.",
     "referenceCopyFailed": "Se bloqueó la copia; selecciona el texto de arriba."
+  },
+  "questionLibrary": {
+    "title": "Biblioteca de preguntas",
+    "description": "Reutiliza una pregunta ya escrita. Las preguntas elegidas se copian en este borrador, así que editar la biblioteca más adelante no cambia una encuesta que ya las preguntó.",
+    "openButton": "Agregar desde la biblioteca",
+    "categoriesLabel": "Categorías",
+    "allCategories": "Todas las categorías",
+    "searchLabel": "Buscar en la biblioteca",
+    "searchHint": "Busca en el texto en inglés, el texto en español y las etiquetas.",
+    "noMatches": "Ninguna pregunta de la biblioteca coincide con esta búsqueda.",
+    "loadFailed": "No se pudo cargar la biblioteca de preguntas. Aún puedes escribir preguntas a mano.",
+    "previewFailed": "No se pudo abrir esa pregunta.",
+    "addFailed": "No se pudo copiar esa pregunta, así que no se agregó nada.",
+    "added": "Agregada",
+    "addedCount": "Se agregaron {count} pregunta(s) a este borrador.",
+    "addNamed": "Agregar «{question}»",
+    "previewNamed": "Vista previa de «{question}»",
+    "addSelected": "Agregar {count} seleccionadas",
+    "selectedCount": "{count} seleccionadas",
+    "scaleRange": "Escala {min}-{max}",
+    "scaleEnds": "Extremos de la escala: {min} … {max}",
+    "usageCount": "Usada {count} vez/veces",
+    "companyItem": "Tu biblioteca"
   }
 }

@@ -5,6 +5,7 @@ import type {
   LocalizedInput,
 } from './api/surveyCreate'
 import type { InstantiateSurveyTemplateInput } from './api/surveyTemplates'
+import type { QuestionLibraryItemDetail } from '../questions/api/questionLibrary'
 import { DEFAULT_SURVEY_QUESTION_TYPE, needsOptions, needsScaleLabels } from './surveyVocabulary'
 
 /**
@@ -189,6 +190,64 @@ export function emptyQuestion(key: string): SurveyQuestionValues {
     scaleLabelMinEs: '',
     scaleLabelMaxEn: '',
     scaleLabelMaxEs: '',
+  }
+}
+
+/**
+ * One picked library item (#115), as a question this wizard can edit.
+ *
+ * ## Why the mapping lives here and not in the picker
+ *
+ * The picker is shared by two wizards whose question shapes differ — a survey
+ * question carries a dimension and scale-end labels, a microclimate question carries
+ * neither. Handing the picker a target shape would make one component know about
+ * both, which is how a "shared" component becomes two. It hands back the library's
+ * own record; each wizard owns its own translation of it, beside the shape it is
+ * translating into.
+ *
+ * ## What is carried, and what is not
+ *
+ * `dimension` becomes `category` — the RAW key, never a display name, for the reason
+ * `SurveyQuestionValues.category` gives: a display name would mint a second dimension
+ * beside every survey that stored the key.
+ *
+ * `required` is not in the library at all. A library item is a question, not a
+ * policy about answering it, so a picked question starts required like a typed one
+ * (`emptyQuestion`) and the author changes it in place.
+ *
+ * `options` keep their ENGLISH label, or the stable value where the item carries no
+ * English label. That is what makes `derivedOptionValue` reproduce the value the
+ * library stored, because the server derives an omitted option value from the
+ * English label by exactly the same rule (`NormaliseOptions`). An item whose author
+ * set an explicit value DIFFERENT from its English label is the one case this cannot
+ * preserve — see the note in the PR; the wizard's option shape has no value field to
+ * put it in.
+ *
+ * Keys are derived from one caller-supplied `key` rather than pulled one at a time
+ * from the page's counter: `makeKey()` reads its counter out of a render closure, so
+ * two calls in one event handler return the SAME string, and two options sharing a
+ * React key is a remount on every keystroke.
+ */
+export function questionFromLibrary(
+  item: QuestionLibraryItemDetail,
+  key: string,
+): SurveyQuestionValues {
+  return {
+    key,
+    textEn: item.textEn,
+    textEs: item.textEs,
+    type: item.type,
+    required: true,
+    options: item.options.map((option, index) => ({
+      key: `${key}-o${index}`,
+      labelEn: option.labelEn ?? option.value,
+      labelEs: option.labelEs ?? '',
+    })),
+    category: item.dimension ?? '',
+    scaleLabelMinEn: item.scaleLabelMinEn ?? '',
+    scaleLabelMinEs: item.scaleLabelMinEs ?? '',
+    scaleLabelMaxEn: item.scaleLabelMaxEn ?? '',
+    scaleLabelMaxEs: item.scaleLabelMaxEs ?? '',
   }
 }
 

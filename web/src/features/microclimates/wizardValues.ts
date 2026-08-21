@@ -4,6 +4,7 @@ import type {
   CreateQuestionInput,
   LocalizedInput,
 } from './api/microclimates'
+import type { QuestionLibraryItemDetail } from '../questions/api/questionLibrary'
 import { DEFAULT_QUESTION_TYPE } from './questionTypes'
 
 /**
@@ -102,6 +103,45 @@ export function emptyQuestion(key: string): WizardQuestionValues {
     type: DEFAULT_QUESTION_TYPE,
     required: true,
     options: [],
+  }
+}
+
+/**
+ * One picked library item (#115), as a question this wizard can edit.
+ *
+ * The sibling of `features/surveys/wizardValues.ts`'s function of the same name, and
+ * deliberately not shared with it: the two question shapes differ, and the whole
+ * point of #115 is that the PICKER is one component, not that the two wizards become
+ * one. That file carries the full argument.
+ *
+ * ## Two things a microclimate cannot carry, stated rather than silently dropped
+ *
+ * - **The dimension.** `MicroclimateQuestion` has no `Category` column, so
+ *   `item.dimension` has nowhere to go. A library item's dimension is shown in the
+ *   picker and lost on the way in here; the picker is honest about it because the
+ *   chip is visibly a property of the LIBRARY item, not of the question being built.
+ * - **The scale-end labels.** `CreateQuestionInput` has no `scaleLabelMin`/`Max` —
+ *   the microclimate write DTO never had them — so a likert item's words arrive
+ *   nowhere. Faking them into the text would change the question.
+ *
+ * Both are backend gaps rather than choices made here, and both are reported rather
+ * than worked around.
+ */
+export function questionFromLibrary(
+  item: QuestionLibraryItemDetail,
+  key: string,
+): WizardQuestionValues {
+  return {
+    key,
+    textEn: item.textEn,
+    textEs: item.textEs,
+    type: item.type,
+    required: true,
+    options: item.options.map((option, index) => ({
+      key: `${key}-o${index}`,
+      labelEn: option.labelEn ?? option.value,
+      labelEs: option.labelEs ?? '',
+    })),
   }
 }
 

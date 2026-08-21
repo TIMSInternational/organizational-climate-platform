@@ -21,10 +21,12 @@ import {
   TextField,
   TextareaField,
 } from '../../../components/ui'
+import { QuestionLibraryBrowser } from '../../../components/questions'
 import { createMicroclimate } from '../api/microclimates'
 import { listMicroclimateTemplates, type MicroclimateTemplate } from '../api/microclimateTemplates'
 import MicroclimateQuestionEditor from '../components/MicroclimateQuestionEditor'
 import { languageLabel, questionTypeLabel } from '../microclimateVocabulary'
+import { QUESTION_TYPES } from '../questionTypes'
 import {
   CONTENT_LANGUAGES,
   WIZARD_STEPS,
@@ -32,6 +34,7 @@ import {
   emptyQuestion,
   emptyWizardValues,
   needsBothLanguages,
+  questionFromLibrary,
   scheduledMinutes,
   wizardStepErrors,
   type ContentLanguage,
@@ -136,6 +139,7 @@ export default function MicroclimateCreatePage() {
   const [templates, setTemplates] = useState<MicroclimateTemplate[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [libraryOpen, setLibraryOpen] = useState(false)
 
   // A counter rather than an index: removing the second of three questions must not
   // renumber the third's React key, or the browser moves focus and the DOM state of
@@ -437,7 +441,7 @@ export default function MicroclimateCreatePage() {
                 />
               ))
             )}
-            <div>
+            <div className="flex flex-wrap gap-inline">
               <Button
                 type="button"
                 variant="outline"
@@ -446,7 +450,36 @@ export default function MicroclimateCreatePage() {
               >
                 {t('surveys.addQuestion')}
               </Button>
+              {/* #115 — the same component the survey wizard opens, from the same
+                  shared folder, with this surface's own type vocabulary
+                  (`QuestionTypes.ForMicroclimate`) rather than the survey's. */}
+              <Button
+                type="button"
+                variant="outline"
+                disabled={submitting}
+                onClick={() => setLibraryOpen(true)}
+              >
+                {t('questionLibrary.openButton')}
+              </Button>
             </div>
+
+            <QuestionLibraryBrowser
+              open={libraryOpen}
+              onOpenChange={setLibraryOpen}
+              companyId={companyId ?? null}
+              allowedTypes={QUESTION_TYPES}
+              typeLabel={(type) => questionTypeLabel(t, type)}
+              onAdd={(picked) => {
+                // `nextKey` here is a ref-backed counter, so calling it once per
+                // picked item is safe -- unlike the survey wizard's `makeKey`, which
+                // reads its counter out of a render closure.
+                const mapped = picked.map((item) => questionFromLibrary(item, nextKey()))
+                setValues((current) => ({
+                  ...current,
+                  questions: [...current.questions, ...mapped],
+                }))
+              }}
+            />
           </>
         )}
 

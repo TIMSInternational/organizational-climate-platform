@@ -2651,5 +2651,28 @@
     "referenceCopy": "Copy details",
     "referenceCopied": "Copied.",
     "referenceCopyFailed": "Copying was blocked - select the text above instead."
+  },
+  "questionLibrary": {
+    "title": "Question library",
+    "description": "Reuse a question that has already been written. Picked questions are copied into this draft, so editing the library later never changes a survey that has already asked them.",
+    "openButton": "Add from library",
+    "categoriesLabel": "Categories",
+    "allCategories": "All categories",
+    "searchLabel": "Search the library",
+    "searchHint": "Matches the English text, the Spanish text and the tags.",
+    "noMatches": "No library question matches this search.",
+    "loadFailed": "The question library could not be loaded. You can still write questions by hand.",
+    "previewFailed": "That question could not be opened.",
+    "addFailed": "That question could not be copied, so nothing was added.",
+    "added": "Added",
+    "addedCount": "Added {count} question(s) to this draft.",
+    "addNamed": "Add \"{question}\"",
+    "previewNamed": "Preview \"{question}\"",
+    "addSelected": "Add {count} selected",
+    "selectedCount": "{count} selected",
+    "scaleRange": "Scale {min}-{max}",
+    "scaleEnds": "Scale ends: {min} … {max}",
+    "usageCount": "Used {count} time(s)",
+    "companyItem": "Your library"
   }
 }
