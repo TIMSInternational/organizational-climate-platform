@@ -89,6 +89,7 @@ function view(overrides: Partial<SurveyRespondView> = {}): SurveyRespondView {
     endDate: '2026-09-12T12:00:00Z',
     anonymous: true,
     allowPartialResponses: false,
+    autoSave: true,
     randomizeQuestions: false,
     showProgress: false,
     timeLimitMinutes: null,

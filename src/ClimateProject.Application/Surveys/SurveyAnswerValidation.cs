@@ -109,11 +109,16 @@ public sealed record ValidatedSurveyAnswer(
     int? TimeSpentSeconds);
 
 /// <param name="Error">Null when every answer validated; otherwise the first failure, addressed to the caller.</param>
+/// <param name="ClearedQuestionIds">
+/// Questions whose stored answer is to be deleted. Validated to belong to the survey and
+/// to not also be answered in the same submission, so the writer can delete on trust.
+/// </param>
 public sealed record SurveyAnswerValidationResult(
     IReadOnlyList<ValidatedSurveyAnswer> Answers,
-    string? Error)
+    string? Error,
+    IReadOnlyList<Guid> ClearedQuestionIds)
 {
-    public static SurveyAnswerValidationResult Failed(string error) => new([], error);
+    public static SurveyAnswerValidationResult Failed(string error) => new([], error, []);
 }
 
 /// <summary>
@@ -155,11 +160,20 @@ public static class SurveyAnswerValidation
     /// Question ids already stored on the response being resumed. A required question
     /// answered in an earlier partial save must not be demanded again at completion.
     /// </param>
+    /// <param name="cleared">
+    /// Question ids the respondent has taken back. Removed from the stored response, and
+    /// -- the reason this cannot be handled at the writer alone -- subtracted from
+    /// <paramref name="alreadyAnswered"/> before the required-question gate runs. Without
+    /// that subtraction a respondent could answer a required question on one tick, erase
+    /// it on the next, and still complete: the gate would see the row that this very
+    /// submission is about to delete and pass a response that ends up missing it.
+    /// </param>
     public static SurveyAnswerValidationResult Validate(
         IReadOnlyList<SurveyAnswerableQuestion> questions,
         IReadOnlyList<SurveyAnswerSubmission> submissions,
         bool completing,
-        IReadOnlyCollection<Guid> alreadyAnswered)
+        IReadOnlyCollection<Guid> alreadyAnswered,
+        IReadOnlyCollection<Guid>? cleared = null)
     {
         ArgumentNullException.ThrowIfNull(questions);
         ArgumentNullException.ThrowIfNull(submissions);
@@ -196,13 +210,40 @@ public static class SurveyAnswerValidation
             validated.Add(answer!);
         }
 
+        var clearedIds = new HashSet<Guid>();
+        foreach (var questionId in cleared ?? [])
+        {
+            if (!questionsById.ContainsKey(questionId))
+            {
+                // Same reason an answer to a foreign question is refused rather than
+                // dropped: a delete naming a question this survey does not have is a
+                // client bug, and obeying it quietly would be a destructive no-op nobody
+                // ever finds.
+                return SurveyAnswerValidationResult.Failed(
+                    $"Question {questionId} does not belong to this survey");
+            }
+
+            if (seen.Contains(questionId))
+            {
+                // Answered and erased in one submission is not a state the caller can
+                // have meant, and picking a winner here would be this layer guessing.
+                return SurveyAnswerValidationResult.Failed(
+                    $"Question {questionId} was both answered and cleared in this submission");
+            }
+
+            clearedIds.Add(questionId);
+        }
+
         if (!completing)
         {
-            return new SurveyAnswerValidationResult(validated, null);
+            return new SurveyAnswerValidationResult(validated, null, [.. clearedIds]);
         }
 
         var answeredIds = new HashSet<Guid>(alreadyAnswered);
         answeredIds.UnionWith(seen);
+        // The rows this submission is about to delete are not answers any more, so
+        // neither the required-question gate nor the empty-response gate may count them.
+        answeredIds.ExceptWith(clearedIds);
 
         var missing = questions
             .Where(q => q.Required && !answeredIds.Contains(q.QuestionId))
@@ -222,7 +263,7 @@ public static class SurveyAnswerValidation
             return SurveyAnswerValidationResult.Failed("A completed response must answer at least one question");
         }
 
-        return new SurveyAnswerValidationResult(validated, null);
+        return new SurveyAnswerValidationResult(validated, null, [.. clearedIds]);
     }
 
     private static ValidatedSurveyAnswer? ValidateOne(

@@ -91,6 +91,17 @@ export interface SurveyRespondView {
   endDate: string
   anonymous: boolean
   allowPartialResponses: boolean
+  /**
+   * `Survey.Settings.AutoSave` — whether this survey's author asked for progress to be
+   * kept without the respondent pressing anything (#369).
+   *
+   * Served since #369; before that this payload carried every other setting that shapes
+   * the page and not this one, so the form could not honour it and offered the manual
+   * save button to every survey instead. It is a second gate on top of
+   * `allowPartialResponses`, never a replacement: a survey that forbids partial
+   * responses has the write refused server-side whatever this says.
+   */
+  autoSave: boolean
   randomizeQuestions: boolean
   showProgress: boolean
   timeLimitMinutes: number | null
@@ -108,6 +119,16 @@ export interface SurveyAnswerInput {
 
 export interface SubmitSurveyResponseRequest {
   answers?: SurveyAnswerInput[]
+  /**
+   * Questions the respondent has taken back, to be deleted from the stored response
+   * (#369).
+   *
+   * Omitting a question from `answers` does NOT mean this and must not: a partial save
+   * is allowed to be a delta, so "everything I did not mention is deleted" would make
+   * each tick a wipe. An answer erased on screen is only erased on the server if it is
+   * named here.
+   */
+  clearedQuestionIds?: string[]
   sessionId?: string
   isComplete?: boolean
   language?: string
@@ -195,16 +216,29 @@ export async function getSurveyRespondView(
  * `sessionId` for an anonymous one — so a retry after a timeout returns the same
  * response id with `alreadySubmitted: true` rather than creating a second response.
  * That is why the caller must send a session id that survives a reload.
+ *
+ * A partial save is an upsert on `question_responses (response_id, question_id)`
+ * (verified against the endpoint, and asserted end to end by
+ * `Repeated_partial_saves_accumulate_into_one_response_rather_than_many`), so a client
+ * may post its whole current answer set on a timer without accumulating rows.
+ *
+ * @param options.keepalive keeps the request alive past the document that started it.
+ * Set only by the save fired when the page is being hidden or closed: an ordinary
+ * `fetch` is cancelled with its document, which is exactly the moment a respondent's
+ * unsaved answers matter most. `sendBeacon` is not used instead because it cannot carry
+ * the `Authorization` header this endpoint reads on an identified survey.
  */
 export async function submitSurveyResponse(
   baseUrl: string,
   id: string,
   request: SubmitSurveyResponseRequest,
+  options: { keepalive?: boolean } = {},
 ): Promise<SurveySubmissionResult> {
   const response = await fetch(`${baseUrl}/surveys/${encodeURIComponent(id)}/responses`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(request),
+    ...(options.keepalive === true ? { keepalive: true } : {}),
   })
   if (!response.ok) return fail(response)
   return response.json() as Promise<SurveySubmissionResult>

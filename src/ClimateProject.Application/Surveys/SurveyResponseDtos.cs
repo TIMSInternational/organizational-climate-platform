@@ -45,12 +45,29 @@ public sealed record SurveyAnswerInput(
 /// live word cloud counted "trabajo" and "work" as unrelated entries with nothing
 /// anywhere recording which language a respondent had been reading.
 /// </param>
+/// <param name="ClearedQuestionIds">
+/// Questions the respondent has deliberately taken back, to be REMOVED from the
+/// response.
+///
+/// Absence from <paramref name="Answers"/> cannot mean this, which is why the list is
+/// here. A partial save is allowed to be a delta -- <c>alreadyAnswered</c> exists so
+/// that a required question answered on an earlier tick is not demanded again at
+/// completion -- so treating every omitted question as a deletion would turn each of
+/// those ticks into a wipe of everything it did not happen to mention. Naming the
+/// question makes taking an answer back impossible to trigger by accident, and
+/// impossible to confuse with never having answered it.
+///
+/// This matters more here than the write it undoes. A respondent who erases a free-text
+/// comment has decided they do not want it stored, and on a product whose promise is
+/// confidentiality, silently keeping it is the one failure there is no way to walk back.
+/// </param>
 public sealed record SubmitSurveyResponseRequest(
     IReadOnlyList<SurveyAnswerInput>? Answers = null,
     string? SessionId = null,
     bool IsComplete = true,
     string? Language = null,
-    int? TotalTimeSeconds = null);
+    int? TotalTimeSeconds = null,
+    IReadOnlyList<Guid>? ClearedQuestionIds = null);
 
 /// <param name="Value">Set for a single-valued answer.</param>
 /// <param name="Values">Set for a ranking answer.</param>
@@ -82,6 +99,22 @@ public sealed record SurveyResponseState(
 /// respondent's business and one of which (this survey is anonymous and has had 3
 /// responses) is actively harmful to hand to the person about to be the fourth.
 /// </summary>
+/// <param name="AutoSave">
+/// <c>Survey.Settings.AutoSave</c>, served so the respond form can honour it (#369).
+///
+/// It was the one setting on this page the client could not see. Every other flag that
+/// shapes the form -- ShowProgress, AllowPartialResponses, RandomizeQuestions,
+/// TimeLimitMinutes -- is carried here, and the form's own comment recorded AutoSave as
+/// a gap rather than a decision: the setting existed on <c>SurveySettingsDto</c>, the
+/// respondent's payload did not carry it, so the page could not tell a survey that
+/// asked for background saving from one that did not, and offered the save BUTTON to
+/// both. Autosaving without it would have been inventing behaviour for every survey
+/// whose author had turned it off.
+///
+/// It is a second gate, never a replacement for <see cref="AllowPartialResponses"/>: a
+/// survey that forbids partial responses is refused by the submit endpoint itself, so
+/// background saving is impossible there whatever this says.
+/// </param>
 public sealed record SurveyRespondView(
     Guid Id,
     string? Title,
@@ -94,6 +127,7 @@ public sealed record SurveyRespondView(
     DateTimeOffset EndDate,
     bool Anonymous,
     bool AllowPartialResponses,
+    bool AutoSave,
     bool RandomizeQuestions,
     bool ShowProgress,
     int? TimeLimitMinutes,

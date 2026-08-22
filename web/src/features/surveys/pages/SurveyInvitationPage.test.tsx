@@ -50,6 +50,7 @@ function respondView(): SurveyRespondView {
     endDate: '2026-12-31T00:00:00Z',
     anonymous: true,
     allowPartialResponses: true,
+    autoSave: true,
     randomizeQuestions: false,
     showProgress: false,
     timeLimitMinutes: null,
