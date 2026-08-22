@@ -33,6 +33,7 @@ import {
   type SurveyTemplateDetail,
   type SurveyTemplateListItem,
 } from '../api/surveyTemplates'
+import { QuestionLibraryBrowser } from '../../../components/questions'
 import SurveyQuestionList from '../components/SurveyQuestionList'
 import SurveyWizardSetup from '../components/SurveyWizardSetup'
 import { useSurveyDraft } from '../useSurveyDraft'
@@ -51,6 +52,7 @@ import {
   emptyWizardValues,
   needsBothLanguages,
   positionsWithoutDimension,
+  questionFromLibrary,
   scheduledDays,
   startsFromTemplate,
   surveyQuestionCount,
@@ -208,6 +210,7 @@ export default function SurveyCreatePage() {
   // Monotonic, so a key is never reused after a removal — React would otherwise
   // reconcile a new question onto the removed one's DOM and carry its focus over.
   const [nextKey, setNextKey] = useState(0)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   // The question cards whose "+ New dimension…" free-text box is open. UI state, not
   // survey state: which box is open is not part of what the survey will be, so it
   // lives beside the wizard values rather than inside them (and is deliberately not
@@ -337,6 +340,21 @@ export default function SurveyCreatePage() {
     const key = `${keyPrefix}-${nextKey}`
     setNextKey((n) => n + 1)
     return key
+  }
+
+  /**
+   * `count` keys at once.
+   *
+   * `makeKey()` cannot be called in a loop: it reads `nextKey` out of the render
+   * closure, so N calls in one event handler all return the same string, and two
+   * questions sharing a React key remount each other on every keystroke. Adding a
+   * whole library selection is the first thing in this wizard that needs more than
+   * one key per click.
+   */
+  function takeKeys(count: number): string[] {
+    const keys = Array.from({ length: count }, (_, index) => `${keyPrefix}-${nextKey + index}`)
+    setNextKey((n) => n + count)
+    return keys
   }
 
   const fromTemplate = startsFromTemplate(values)
@@ -897,6 +915,22 @@ export default function SurveyCreatePage() {
                       <legend className="mb-inline font-medium">
                         {t('surveyCreate.scaleEnds')}
                       </legend>
+                      {/* A picked library item is the only thing that sets the
+                          numeric ends, and nothing on this card edits them — so
+                          without this line the difference between a 1–5 question and
+                          a 0–10 one is invisible while its WORDS sit in the boxes
+                          below, which is exactly how the bounds got dropped
+                          unnoticed. Shown only when set: a null pair is the product
+                          default and saying "1 to 5" would claim an author choice
+                          that was never made. */}
+                      {question.scaleMin !== null && question.scaleMax !== null && (
+                        <p className="m-0 text-sm text-fg-secondary">
+                          {t('surveyCreate.scalePoints', {
+                            min: question.scaleMin,
+                            max: question.scaleMax,
+                          })}
+                        </p>
+                      )}
                       <div className="grid gap-inline md:grid-cols-2">
                         {both ? (
                           <>
@@ -1045,7 +1079,7 @@ export default function SurveyCreatePage() {
               </Card>
             ))}
 
-            <div>
+            <div className="flex flex-wrap gap-inline">
               <Button
                 variant="primary"
                 type="button"
@@ -1054,7 +1088,39 @@ export default function SurveyCreatePage() {
                 <Plus aria-hidden="true" className="size-icon" />
                 {t('surveys.addQuestion')}
               </Button>
+              {/* #115 — the SHARED picker, the same component the microclimate
+                  wizard opens. `SURVEY_QUESTION_TYPES` is this surface's own
+                  vocabulary: the library only stores the ForSurvey ∩ ForMicroclimate
+                  intersection today, and passing the destination's list rather than
+                  assuming that intersection is what keeps a widened library from
+                  offering a type this wizard cannot render. */}
+              <Button variant="outline" type="button" onClick={() => setLibraryOpen(true)}>
+                <Plus aria-hidden="true" className="size-icon" />
+                {t('questionLibrary.openButton')}
+              </Button>
             </div>
+
+            <QuestionLibraryBrowser
+              open={libraryOpen}
+              onOpenChange={setLibraryOpen}
+              companyId={companyId ?? null}
+              allowedTypes={SURVEY_QUESTION_TYPES}
+              typeLabel={(type) => questionTypeLabel(t, type)}
+              onAdd={(picked) => {
+                const keys = takeKeys(picked.length)
+                // Functional update, not `patch({ questions: [...values.questions, …] })`:
+                // quick-add fires repeatedly without the dialog closing, and the second
+                // add in a batch would otherwise append to the `values` its render
+                // captured and drop the first.
+                setValues((current) => ({
+                  ...current,
+                  questions: [
+                    ...current.questions,
+                    ...picked.map((item, index) => questionFromLibrary(item, keys[index])),
+                  ],
+                }))
+              }}
+            />
           </div>
         )}
 
