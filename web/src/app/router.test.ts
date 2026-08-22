@@ -200,6 +200,124 @@ describe('router', () => {
     expect(paths).toContain('/departments')
   })
 
+  /**
+   * The tracking module (#125, #126). Its dashboards shipped as an integration
+   * layer with no consuming UI at all — `trackingApi.ts` existed, worked, and no
+   * user could reach any of it — so "is it routed" is the first acceptance
+   * criterion and this is where it is answered.
+   *
+   * It was then answered wrongly. #125 owned the route table and registered only
+   * its own two paths, so #126's four pages and 4034 lines were imported by
+   * nothing, tree-shaken out of the bundle entirely, and absent from the product
+   * while their own tests passed. The last test in this block is the guard against
+   * that specific failure: it reads the pages directory and demands a route for
+   * each page, so the next page added without one fails here instead of
+   * disappearing quietly.
+   */
+  describe('the tracking module', () => {
+    function shellChildren(): typeof router.routes {
+      function directPaths(routes: typeof router.routes): string[] {
+        return routes.flatMap((route) => (route.path ? [route.path] : []))
+      }
+      function find(routes: typeof router.routes): typeof router.routes | null {
+        for (const route of routes) {
+          const children = (route.children ?? []) as typeof router.routes
+          if (children.length === 0) continue
+          const paths = directPaths(children)
+          if (paths.includes('/dashboard') && paths.includes('/admin/companies')) return children
+          const nested = find(children)
+          if (nested) return nested
+        }
+        return null
+      }
+      const found = find(router.routes)
+      expect(found, 'the AdminLayout branch was not found').not.toBeNull()
+      return found ?? []
+    }
+
+    it('registers every tracking screen inside the admin shell', () => {
+      const paths = shellChildren().flatMap((route) => (route.path ? [route.path] : []))
+      // #125's two aggregate dashboards.
+      expect(paths).toContain('/tracking')
+      expect(paths).toContain('/tracking/tablero')
+      // #126's three, which were reachable from nowhere until the two slices were
+      // reconciled. `/tracking/planes/:id` is the one the tablero and the listing
+      // both link to; without it every plan code on either screen reached the error
+      // boundary.
+      expect(paths).toContain('/tracking/planes')
+      expect(paths).toContain('/tracking/planes/:id')
+      expect(paths).toContain('/tracking/mis-tareas')
+    })
+
+    /**
+     * The structural version of the assertion above: not "these five paths exist"
+     * but "no page in this feature lacks a path".
+     *
+     * The two lists are derived from different places — one from the filesystem,
+     * one from `router.tsx` — so a page added to `features/tracking/pages/` and
+     * never routed fails here. That is the exact shape of the defect this module
+     * shipped with, and a hardcoded list of five would not have caught it.
+     */
+    it('leaves no tracking page unrouted', () => {
+      const pagesDir = join(process.cwd(), 'src', 'features', 'tracking', 'pages')
+      const pages = globSync('*.tsx', { cwd: pagesDir })
+        .filter((file) => !/\.test\.tsx$/.test(file))
+        .map((file) => file.replace(/\.tsx$/, ''))
+
+      expect(pages.length, 'no tracking pages found — the glob is wrong').toBeGreaterThan(4)
+
+      const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
+      const unrouted = pages.filter(
+        (page) => !source.includes(`await import('../features/tracking/pages/${page}')`),
+      )
+
+      expect(
+        unrouted,
+        'These tracking pages are imported by no route, so Rollup tree-shakes them ' +
+          'out of the bundle and no user can reach them. Register them in ' +
+          '`trackingRoutes` in router.tsx, or delete them.',
+      ).toEqual([])
+    })
+
+    /**
+     * `?nodoId=`, not `/tracking/tablero/:nodoId`, and it is a contract with the
+     * endpoint rather than a style choice: `GET /api/tablero-seguimiento` takes
+     * `nodoId` as an OPTIONAL query parameter and answers with the caller's own
+     * nodo when it is absent. A path parameter would make the id mandatory in the
+     * URL for the node leader, who has exactly one board and no reason to know its
+     * external id.
+     */
+    it('addresses a board by query parameter, so a leader needs no id to open theirs', () => {
+      const paths = shellChildren().flatMap((route) => (route.path ? [route.path] : []))
+      expect(paths.some((path) => path.startsWith('/tracking/tablero/'))).toBe(false)
+    })
+
+    /**
+     * Both are `lazy`, and nothing outside `features/tracking/` imports them
+     * statically. The module exists only where a deployment configured a tracking
+     * service, so every other build should carry it as a chunk it never fetches —
+     * and a static import at the top of `router.tsx` would put both pages, the
+     * semáforo table and the client in the main bundle regardless. The same
+     * mechanism, and the same failure mode, as the dev-only chart gallery above.
+     */
+    it('loads every page lazily and is reached by no static import', () => {
+      const src = join(process.cwd(), 'src')
+      const source = readFileSync(join(src, 'app', 'router.tsx'), 'utf8')
+      const pageNames =
+        'ConsolidadoPage|TableroSeguimientoPage|PlanesAccionListPage|PlanDeAccionDetailPage|MisTareasPage'
+      expect(source).not.toMatch(new RegExp(`^import .*(${pageNames}).*$`, 'm'))
+
+      const offenders = globSync('**/*.{ts,tsx}', { cwd: src })
+        .filter((file) => !file.includes('features/tracking/') && !/\.test\.tsx?$/.test(file))
+        .filter((file) =>
+          new RegExp(`^\\s*import\\s[^\\n]*(${pageNames})`, 'm').test(
+            readFileSync(join(src, file), 'utf8'),
+          ),
+        )
+      expect(offenders).toEqual([])
+    })
+  })
+
   it('has an error element so a thrown render does not blank the page', () => {
     expect(router.routes[0]?.errorElement ?? router.routes[0]?.ErrorBoundary).toBeTruthy()
   })

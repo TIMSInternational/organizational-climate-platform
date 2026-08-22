@@ -16,7 +16,9 @@ import {
   Inbox,
   LayoutDashboard,
   LayoutTemplate,
+  ListChecks,
   Network,
+  SquareKanban,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -167,7 +169,110 @@ const DEPARTMENTS_ITEM: NavItem = {
   icon: Network,
 }
 
-export function buildNavSections(role: string | undefined, companyId: string | undefined): NavSection[] {
+// The generic action-plan listing, lifted out of both admin branches so the one
+// place that can hide it is `workspaceActionPlanItems` below.
+const ACTION_PLANS_ITEM: NavItem = {
+  labelKey: 'navigation.actionPlans',
+  href: '/action-plans',
+  icon: Target,
+}
+
+// The tracking module's two dashboards (#125). Both labels already existed in the
+// catalogue from the legacy port and had no caller.
+//
+// The consolidado is offered to the two admin roles ONLY, and that is the
+// role-awareness rule rather than a preference: `DashboardEndpoints.ConsolidadoAsync`
+// returns `Results.Forbid()` for anything outside `Roles.Admin` (`company_admin`,
+// `super_admin`), so this row would 403 for anyone else.
+const TRACKING_CONSOLIDADO_ITEM: NavItem = {
+  labelKey: 'navigation.trackingConsolidado',
+  href: '/tracking',
+  icon: SquareKanban,
+}
+
+// A node leader's own board. Deliberately NOT offered to either admin role even
+// though the endpoint admits them: `TableroAsync` falls back to the caller's own
+// `nodoId` claim, and an administrator's is `unassigned-<companyId>` or empty
+// (`TrackingIdentifiers.NodoIdClaimForUser`), so the row would lead to an empty
+// board every time. An always-empty page is not a destination — the same rule that
+// keeps `/surveys/my` out of the super_admin branch. Admins reach a board by
+// drilling into a nodo from the consolidado, which is where the id comes from.
+const TRACKING_TABLERO_ITEM: NavItem = {
+  labelKey: 'navigation.trackingDashboard',
+  href: '/tracking/tablero',
+  icon: Gauge,
+}
+
+// The plans listing (#126). `PlanesAccionEndpoints.ListAsync` scopes the query
+// itself — an admin gets the tenant, everyone else gets their own nodo plus the
+// plans they are responsable or involucrado on — so this row is safe for every role
+// that has one. It is offered to the roles that MANAGE plans; an involucrado gets
+// the task view below instead, which is §7's split.
+const TRACKING_PLANES_ITEM: NavItem = {
+  labelKey: 'navigation.trackingPlans',
+  href: '/tracking/planes',
+  icon: Target,
+}
+
+// The involucrado's view (#126). `MisTareasAsync` reads no role claim at all — it
+// filters on the caller's own `sub` — so every authenticated role is a first-class
+// caller, and this is the one tracking row a plain employee gets.
+const TRACKING_MIS_TAREAS_ITEM: NavItem = {
+  labelKey: 'navigation.trackingMisTareas',
+  href: '/tracking/mis-tareas',
+  icon: ListChecks,
+}
+
+/**
+ * Options that are properties of the DEPLOYMENT rather than of the caller.
+ *
+ * Kept as an options object with a default so the two existing call sites and the
+ * forty-odd assertions in `navSections.test.ts` keep meaning what they meant. The
+ * risk that buys — a caller forgetting to pass it and silently losing the tracking
+ * rows — is covered by `navSections.test.ts`, which reads `AdminLayout.tsx` and
+ * `PageTopBar.tsx` and fails if either stops asking.
+ */
+export interface NavOptions {
+  /**
+   * Whether this build has a `services/tracking-api` configured.
+   *
+   * Comes from `features/tracking/api/config.ts`'s `isTrackingEnabled()`, which is
+   * a capability flag and not company scoping — the tracking service decides the
+   * tenant itself, from the caller's own `companyId` claim. See that module.
+   */
+  trackingEnabled?: boolean
+}
+
+/**
+ * The work-surface rows for managing plans, which is **either** the generic
+ * listing **or** the tracking module and never both.
+ *
+ * Federico's decision of 2026-08-21: where a tenant uses tracking, `/action-plans`
+ * and `/tracking` are two different models of the same idea, and the client should
+ * see one place to manage plans rather than two that disagree. They are not being
+ * converged — the models stay separate — so the nav is what resolves the ambiguity.
+ *
+ * Returned in `/action-plans`' own position in both admin branches, deliberately:
+ * `leafNavItems` feeds the mobile tab bar the first four leaves, and swapping a row
+ * in place cannot move them, whereas appending the tracking rows at the end and
+ * removing Action Plans from the middle would.
+ */
+function workspacePlanItems(role: string, options: NavOptions): NavItem[] {
+  if (!options.trackingEnabled) return [ACTION_PLANS_ITEM]
+  // Both admin roles get the consolidado and the plans listing; neither gets a
+  // board of their own. The listing is what makes a plan reachable at all — every
+  // plan code on it links to `/tracking/planes/:id`, which is the only screen where
+  // avance is recorded.
+  return role === 'super_admin' || role === 'company_admin'
+    ? [TRACKING_CONSOLIDADO_ITEM, TRACKING_PLANES_ITEM]
+    : []
+}
+
+export function buildNavSections(
+  role: string | undefined,
+  companyId: string | undefined,
+  options: NavOptions = {},
+): NavSection[] {
   if (role === 'super_admin') {
     // Three titled groups rather than one unheaded list, matching the ForMaps admin
     // sidebar this shell is modelled on. `.nav-section-title` was ported for exactly
@@ -213,12 +318,10 @@ export function buildNavSections(role: string | undefined, companyId: string | u
             href: '/analytics/benchmarks',
             icon: Gauge,
           },
-          // Restored by #124 -- see the block comment above.
-          {
-            labelKey: 'navigation.actionPlans',
-            href: '/action-plans',
-            icon: Target,
-          },
+          // Restored by #124 -- see the block comment above. Since #125 this slot
+          // is Action Plans OR the tracking consolidado, never both; the swap is
+          // in place so the mobile tab bar's first four leaves cannot move.
+          ...workspacePlanItems('super_admin', options),
           {
             labelKey: 'navigation.microclimates',
             href: '/microclimates',
@@ -291,11 +394,9 @@ export function buildNavSections(role: string | undefined, companyId: string | u
       {
         titleKey: 'navigation.sectionWorkspace',
         items: [
-          {
-            labelKey: 'navigation.actionPlans',
-            href: '/action-plans',
-            icon: Target,
-          },
+          // Action Plans OR the tracking consolidado, in the same slot -- see
+          // `workspacePlanItems`.
+          ...workspacePlanItems('company_admin', options),
           {
             labelKey: 'navigation.microclimates',
             href: '/microclimates',
@@ -365,10 +466,33 @@ export function buildNavSections(role: string | undefined, companyId: string | u
   //
   // My surveys first: it is a work destination, Notifications is an inbox. Same
   // ordering principle as the admin branches above.
+  //
+  // The tracking rows (#125, #126) are the first entries this branch has ever had
+  // that are NOT offered to every role in it. `leader` is the node leader -- the
+  // role `services/tracking-api` spells `Roles.PlanCreator` and the role the
+  // client's §7 gives the full board to -- and it is the only one of these roles
+  // with a jefatura to show. An `employee` or `supervisor` gets the task-only view
+  // (`/tracking/mis-tareas`) instead.
+  const trackingItems: NavItem[] = !options.trackingEnabled
+    ? []
+    : role === 'leader'
+      ? // The node leader manages: their own board, the plans they own, and the
+        // tasks they were named on like anybody else.
+        [TRACKING_TABLERO_ITEM, TRACKING_PLANES_ITEM, TRACKING_MIS_TAREAS_ITEM]
+      : // An employee or a supervisor gets the task-only view and nothing else.
+        // `TableroAsync` would in fact serve them their nodo's whole board — it
+        // gates on nodo membership, not on role — but §7 says the full board is
+        // the leader's screen, so the nav implements the product rule. See
+        // `trackingAccess.ts` on why that is a rule and not protection.
+        [TRACKING_MIS_TAREAS_ITEM]
+
   return [
     // Dashboard first: since #132 it is where this role lands after login, and it is
     // their only page that is a summary rather than a list.
-    { titleKey: 'navigation.sectionWorkspace', items: [DASHBOARD_ITEM, MY_SURVEYS_ITEM] },
+    {
+      titleKey: 'navigation.sectionWorkspace',
+      items: [DASHBOARD_ITEM, MY_SURVEYS_ITEM, ...trackingItems],
+    },
     { titleKey: 'navigation.sectionCommunication', items: [NOTIFICATIONS_ITEM] },
   ]
 }

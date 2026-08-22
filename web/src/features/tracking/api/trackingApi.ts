@@ -1,22 +1,30 @@
 import { authFetch } from '../../../api/authFetch'
 import { getTrackingApiBaseUrl } from './config'
 
-// NOT YET USABLE FROM A BROWSER IN PRODUCTION: climate-tracking has no CORS configuration
-// today, and authFetch always sets both Authorization and Content-Type: application/json,
-// which forces a preflight on every cross-origin call this client makes. Every export
-// below will fail until climate-tracking's CORS policy allows this frontend's origin(s) --
-// tracked as #56's Plan B (climate-tracking-side change, not fixable here). Don't build UI
-// that depends on this client succeeding until that lands. See
-// docs/superpowers/specs/2026-07-31-tracking-integration-design.md ("Requires: ...CORS...").
+// The client for climate-tracking. Both of the warnings that stood here are now out of
+// date, and both are replaced rather than deleted so the next reader does not re-derive
+// them from scratch.
 //
-// No page in this repo calls this client yet -- the plan's own "Global Constraints"
-// explicitly scope tracking-page UI out of this plan, so there's deliberately no caller
-// here (not an oversight). Each export still defaults `baseUrl` to
-// `getTrackingApiBaseUrl()` (reads VITE_TRACKING_API_BASE_URL, see ./config.ts) so a future
-// page can call these with zero wiring, and pass an explicit `baseUrl` only to override it
-// (e.g. in tests). trackingApi.live.test.ts is an opt-in test, skipped unless
-// TRACKING_API_LIVE_URL is set, for verifying this client against a real running
-// climate-tracking instance once CORS is configured there -- the 9 tests in
+// **CORS.** The old note said "climate-tracking has no CORS configuration today" and
+// "don't build UI that depends on this client succeeding". The configuration exists:
+// `ClimateTracking.Api/Program.cs` calls `AddCors()`, builds a "Frontend" policy from
+// `Cors:AllowedOrigins` with `AllowAnyHeader().AllowAnyMethod()`, and `UseCors("Frontend")`
+// runs ahead of authentication. What is still on the deployer is the LIST: `appsettings.json`
+// ships `Cors:AllowedOrigins` as an empty array and nothing in this repo's `infra/` deploys
+// the tracking service at all, so each environment must put this frontend's origin in
+// `Cors__AllowedOrigins__0` there. `authFetch` always sets Authorization and
+// `Content-Type: application/json`, so every call here is preflighted and an unlisted origin
+// fails at the preflight rather than at the request. See `web/.env.example`.
+//
+// **Callers.** "No page in this repo calls this client yet" was true when the tracking-page
+// UI was scoped out; #126 brought it in. `features/tracking/pages/` — the plans listing, the
+// plan detail and mis-tareas — are the callers now.
+//
+// Each export defaults `baseUrl` to `getTrackingApiBaseUrl()` (reads
+// VITE_TRACKING_API_BASE_URL, see ./config.ts), so a page calls these with zero wiring and
+// passes an explicit `baseUrl` only to override it (e.g. in tests).
+// trackingApi.live.test.ts is an opt-in test, skipped unless TRACKING_API_LIVE_URL is set,
+// for verifying this client against a real running climate-tracking instance; the tests in
 // trackingApi.test.ts only ever exercise a stubbed fetch.
 
 export interface SemaforoCounts {

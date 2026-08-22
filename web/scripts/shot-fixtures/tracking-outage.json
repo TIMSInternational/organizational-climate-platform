@@ -1,0 +1,17 @@
+{
+  "GET /notifications/mine": { "notifications": [], "unreadCount": 0 },
+  "GET /profile": {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "companyName": "PROCOMER",
+    "email": "shot@example.invalid",
+    "name": "Ada Lovelace",
+    "role": "company_admin",
+    "isActive": true
+  },
+  "GET /tracking/picker/nodos": {
+    "nodos": [{ "id": "nodo-operaciones", "name": "Direccion de Operaciones" }]
+  },
+  "GET /api/consolidado 503": { "message": "tracking service unavailable" },
+  "GET /api/tablero-seguimiento 503": { "message": "tracking service unavailable" }
+}

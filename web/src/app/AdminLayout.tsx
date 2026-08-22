@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet, useNavigate } from 'react-router'
 import RoleBasedNav from '../navigation/RoleBasedNav'
 import { buildNavSections, withUnreadBadge } from '../navigation/navSections'
+import { isTrackingEnabled } from '../features/tracking/api/config'
 import { clearToken, getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import { useTranslation } from '../i18n'
@@ -72,7 +73,15 @@ function AdminShell() {
   // The bell owns the poll; the rail just reads the number it reports, so the two
   // can never disagree and nothing is fetched twice. See `withUnreadBadge` for why
   // Notifications is the only badged row.
-  const sections = withUnreadBadge(buildNavSections(role, companyId), unreadCount)
+  // `trackingEnabled` is a deployment capability, not company scoping -- the
+  // tracking service resolves the tenant from the caller's own claim. See
+  // `features/tracking/api/config.ts`. Both callers of `buildNavSections` must pass
+  // it or the module's rows silently vanish; `navSections.test.ts` reads this file
+  // and PageTopBar.tsx to make sure neither stops asking.
+  const sections = withUnreadBadge(
+    buildNavSections(role, companyId, { trackingEnabled: isTrackingEnabled() }),
+    unreadCount,
+  )
 
   return (
     <div className="flex h-dvh flex-col bg-surface-shell">

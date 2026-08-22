@@ -83,6 +83,83 @@ function HomeRedirect() {
  * inline here instead of in a wrapper component that would have to be statically
  * imported — defeating the point.
  */
+/**
+ * The tracking module's routes (#125, #126), declared in one place.
+ *
+ * ## Why they are together and lazy
+ *
+ * The module is a *separate surface* from the generic `/action-plans` — Federico's
+ * decision of 2026-08-21 — and it exists only where a deployment has configured a
+ * `services/tracking-api` to talk to (see `features/tracking/api/config.ts`). Every
+ * other deployment ships these pages and never reaches them, so they are route-level
+ * `lazy` imports and land in their own chunks rather than in the main bundle: the
+ * same mechanism `/dev/chart-gallery` uses above, for the same reason.
+ *
+ * Route-level `lazy` rather than `React.lazy` + `<Suspense>`, again as above: the
+ * router awaits it during navigation, so no fallback element is needed and the
+ * dynamic import stays inline here instead of in a statically-imported wrapper.
+ *
+ * ## All five are here, and that is the whole point of this table
+ *
+ * #125 owned the route table for the module so it would be edited once, and while
+ * the two slices were in flight this array held only #125's own two paths with the
+ * other three written out in a comment — a dynamic `import()` of a file the branch
+ * does not contain is a **build** failure, not a runtime one, since Rollup resolves
+ * it while bundling.
+ *
+ * The cost of that arrangement was the thing worth recording: #126 shipped four
+ * pages and 4034 lines that NOTHING imported, so Rollup tree-shook the lot and the
+ * feature was absent from the bundle while its own tests passed. "The tests pass"
+ * and "this is in the product" are different claims, and only a route table
+ * connects them. `router.test.ts` now reads this file and asserts every tracking
+ * page under `features/tracking/pages/` is registered here, so a page added without
+ * a path fails rather than silently disappearing.
+ *
+ * `/tracking/planes` is declared before `/tracking/planes/:id` for readability only
+ * — react-router ranks a static segment above a dynamic one whatever the
+ * declaration order.
+ */
+const trackingRoutes: RouteObject[] = [
+  {
+    path: '/tracking',
+    lazy: async () => ({
+      Component: (await import('../features/tracking/pages/ConsolidadoPage')).default,
+    }),
+  },
+  {
+    // `?nodoId=` rather than `/tracking/tablero/:nodoId`, and that is a contract
+    // with the endpoint: `GET /api/tablero-seguimiento` takes `nodoId` as an
+    // optional QUERY parameter and answers with the CALLER'S OWN nodo when it is
+    // absent. A path parameter would make the id mandatory in the URL, which is
+    // exactly wrong for the node leader — the role this screen is for — who has
+    // one board and should not have to know its external id to open it.
+    path: '/tracking/tablero',
+    lazy: async () => ({
+      Component: (await import('../features/tracking/pages/TableroSeguimientoPage')).default,
+    }),
+  },
+  {
+    path: '/tracking/planes',
+    lazy: async () => ({
+      Component: (await import('../features/tracking/pages/PlanesAccionListPage')).default,
+    }),
+  },
+  {
+    path: '/tracking/planes/:id',
+    lazy: async () => ({
+      Component: (await import('../features/tracking/pages/PlanDeAccionDetailPage')).default,
+    }),
+  },
+  {
+    // The involucrado's view. `MisTareasAsync` scopes to the caller's own `sub`
+    // claim, so this path takes no parameter and cannot be pointed at anyone else.
+    path: '/tracking/mis-tareas',
+    lazy: async () => ({
+      Component: (await import('../features/tracking/pages/MisTareasPage')).default,
+    }),
+  },
+]
+
 const devOnlyRoutes: RouteObject[] = import.meta.env.DEV
   ? [
       {
@@ -247,6 +324,12 @@ export const router = createBrowserRouter([
               { path: '/surveys/:surveyId/distribution', element: <SurveyDistributionPage /> },
               { path: '/analytics/benchmarks', element: <BenchmarksPage /> },
               { path: '/analytics/ai-insights', element: <AIInsightsPage /> },
+              // The tracking module (#125, #126). Inside `AdminLayout` like every
+              // other work surface — these are administration screens, not a
+              // respondent flow — and gated by nothing beyond `RequireAuth`,
+              // because each page reads its own role claim and the tracking
+              // service authorizes every call itself. See `trackingRoutes` above.
+              ...trackingRoutes,
             ],
           },
         ],
