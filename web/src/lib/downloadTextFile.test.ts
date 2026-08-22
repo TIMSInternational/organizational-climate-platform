@@ -44,4 +44,26 @@ describe('downloadTextFile', () => {
     expect(text).toContain('Departamento,Participación')
     expect((captured as unknown as Blob).type).toBe('text/csv;charset=utf-8')
   })
+
+  /**
+   * The GDPR subject access export (#137) is downloaded through this helper, and a BOM in
+   * front of it is not cosmetic: `JSON.parse` throws on a leading U+FEFF, so an export
+   * carrying one cannot be opened by the tools a data subject would actually use.
+   */
+  it('omits the BOM when the caller asks, so the file is parseable JSON', async () => {
+    let captured: Blob | null = null
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob: Blob | MediaSource) => {
+      captured = blob as Blob
+      return 'blob:stub'
+    })
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+
+    const payload = JSON.stringify({ subject: { email: 'a@b.test' } })
+    downloadTextFile('export.json', 'application/json', payload, { byteOrderMark: false })
+
+    const text = await (captured as unknown as Blob).text()
+    expect(text.charCodeAt(0)).not.toBe(0xfeff)
+    expect(text).toBe(payload)
+    expect(() => JSON.parse(text)).not.toThrow()
+  })
 })
