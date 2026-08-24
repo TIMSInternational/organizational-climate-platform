@@ -668,7 +668,27 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
 
         // Data is a jsonb column: it has to parse, or Postgres would have rejected the insert.
         using var parsed = JsonDocument.Parse(notification.Data!);
-        Assert.Equal(survey.Id.ToString(), parsed.RootElement.GetProperty("surveyId").GetString());
+        Assert.Equal(
+            survey.Id.ToString(),
+            parsed.RootElement.GetProperty(SurveyNotificationData.SurveyIdKey).GetString());
+        Assert.Equal(
+            result.InvitationIds[0].ToString(),
+            parsed.RootElement.GetProperty(SurveyNotificationData.SurveyInvitationIdKey).GetString());
+
+        // The payload's ENTIRE key set, not merely "the token is not in it". A `DoesNotContain`
+        // on the token value alone stays green against a payload that gained an
+        // `invitationToken` key holding a rotated or a stale token -- still a bearer credential
+        // in a blob any CompanyAdmin can read through GET /notifications?companyId=.
+        Assert.Equal(
+            new[] { SurveyNotificationData.SurveyIdKey, SurveyNotificationData.SurveyInvitationIdKey }.Order(StringComparer.Ordinal),
+            parsed.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+
+        // And the same holds on the reminder path, which builds its notification through the
+        // same helper but from a different call site.
+        Assert.DoesNotContain(
+            "token",
+            string.Join(' ', parsed.RootElement.EnumerateObject().Select(p => p.Name)),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

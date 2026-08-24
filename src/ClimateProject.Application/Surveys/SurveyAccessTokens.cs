@@ -39,11 +39,41 @@ public static class SurveyAccessTokens
     /// </summary>
     public const string PublicLinkPrefix = "/s/";
 
+    /// <summary>
+    /// The path prefix a per-invitee token is addressed under. Site-relative for the reason
+    /// <see cref="PublicLinkPrefix"/> is, and additionally because this one is only ever
+    /// resolved against an origin the *sender* is configured for
+    /// (<c>EmailOptions.AppBaseUrl</c>), which is what stops staging mail from sending a
+    /// recipient into production.
+    ///
+    /// <para>
+    /// The same literal names three things that must agree: this constant, the API's
+    /// <c>/survey-invitations/{token}</c> route group in <c>SurveyDistributionEndpoints</c>,
+    /// and the web app's <c>/survey-invitations/:token</c> route in
+    /// <c>web/src/app/router.tsx</c>. The first two are held together by a C# reference; the
+    /// third is a TypeScript file no reference can reach, so renaming the web route still
+    /// breaks a mailed link and no .NET test will notice. Say that plainly rather than imply
+    /// a guarantee that stops at the language boundary.
+    /// </para>
+    /// </summary>
+    public const string InvitationLinkPrefix = "/survey-invitations/";
+
     /// <summary>A fresh, opaque, cryptographically random token.</summary>
     public static string Mint() => Encode(RandomNumberGenerator.GetBytes(EntropyBytes));
 
     /// <summary>The value stored in <c>public_url</c> for a given share token.</summary>
     public static string PublicLinkPath(string token) => PublicLinkPrefix + token;
+
+    /// <summary>
+    /// Where the holder of <paramref name="token"/> goes to take part -- the destination of
+    /// the link a survey invitation email carries.
+    ///
+    /// <para>
+    /// Site-relative. Whoever emits one resolves it against the origin they are configured
+    /// for; nothing here may ever concatenate a host.
+    /// </para>
+    /// </summary>
+    public static string InvitationLinkPath(string token) => InvitationLinkPrefix + token;
 
     /// <summary>
     /// Whether a caller-supplied token even looks like one of ours.

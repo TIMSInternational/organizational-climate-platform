@@ -9,12 +9,14 @@ using ClimateProject.Application.Email;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Scheduling;
+using ClimateProject.Application.Surveys;
 using ClimateProject.Infrastructure.Auth;
 using ClimateProject.Infrastructure.Email;
 using ClimateProject.Infrastructure.Notifications;
 using ClimateProject.Infrastructure.OrgStructure;
 using ClimateProject.Infrastructure.Persistence;
 using ClimateProject.Infrastructure.Scheduling;
+using ClimateProject.Infrastructure.Surveys;
 using ClimateProject.Workers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -374,6 +376,12 @@ builder.Services.AddScoped<IEmailTransport, SmtpEmailTransport>();
 builder.Services.AddScoped<IInvitationEmailSender>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
     ? ActivatorUtilities.CreateInstance<EmailInvitationEmailSender>(sp)
     : ActivatorUtilities.CreateInstance<LoggingInvitationEmailSender>(sp));
+
+// What turns a queued survey invitation into a link the recipient can follow. Registered
+// unconditionally rather than inside the selection rule below: it reads a token, it does not
+// send anything, and a registration that exists only on the configured branch is a
+// registration nobody exercises until mail is armed in production.
+builder.Services.AddScoped<ISurveyInvitationTokens, SurveyInvitationTokens>();
 
 builder.Services.AddScoped<INotificationSender>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
     ? ActivatorUtilities.CreateInstance<EmailNotificationSender>(sp)

@@ -1210,11 +1210,13 @@ public static class SurveyDistributionEndpoints
 
             // `data` is jsonb -- serialised, never concatenated, and deliberately carrying
             // the invitation's ID rather than its token. See the seam note on this class.
-            Data = JsonSerializer.Serialize(new Dictionary<string, string>
-            {
-                ["surveyId"] = survey.Id.ToString(),
-                ["surveyInvitationId"] = invitation.Id.ToString(),
-            }),
+            //
+            // Built through SurveyNotificationData rather than from literals typed here,
+            // because the reader of this blob lives in another project: EmailNotificationSender
+            // resolves the token from `surveyInvitationId` when it composes the mail, and a key
+            // spelled out independently at each end is how a sender ships green while reading a
+            // key that was never written.
+            Data = SurveyNotificationData.Serialize(survey.Id, invitation.Id),
             ScheduledFor = scheduledFor,
             RetryCount = 0,
             MaxRetries = 3,

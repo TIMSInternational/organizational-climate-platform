@@ -1,8 +1,10 @@
 using ClimateProject.Application.Email;
 using ClimateProject.Application.Notifications;
+using ClimateProject.Application.Surveys;
 using ClimateProject.Infrastructure.Email;
 using ClimateProject.Infrastructure.Notifications;
 using ClimateProject.Infrastructure.Persistence;
+using ClimateProject.Infrastructure.Surveys;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -100,6 +102,13 @@ public static class WorkerHostFactory
         // real sender resolves them per scope, so copying the selection rule without them would
         // compile, start, and then die inside every dispatch tick -- at runtime, where
         // ScheduledJobWorker catches, logs and retries forever.
+
+        // The survey-link lookup, mirroring the API's registration -- and this host is the one
+        // that matters. #101's sweep runs HERE, so the invitation mail a recipient actually
+        // receives is composed by the sender this line feeds. Registered in only one of the two
+        // hosts, the link would appear in every test and in no production email.
+        builder.Services.AddScoped<ISurveyInvitationTokens, SurveyInvitationTokens>();
+
         builder.Services.AddScoped<INotificationSender>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
             ? ActivatorUtilities.CreateInstance<EmailNotificationSender>(sp)
             : ActivatorUtilities.CreateInstance<LoggingNotificationSender>(sp));
