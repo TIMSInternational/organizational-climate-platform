@@ -32,6 +32,7 @@ import PublicSurveyLinkPage from '../features/surveys/pages/PublicSurveyLinkPage
 import SurveyInvitationPage from '../features/surveys/pages/SurveyInvitationPage'
 import NotificationPreferencesPage from '../features/notifications/pages/NotificationPreferencesPage'
 import ProfilePage from '../features/profile/pages/ProfilePage'
+import PrivacySettingsPage from '../features/profile/pages/PrivacySettingsPage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
 import SurveyDistributionPage from '../features/surveys/pages/SurveyDistributionPage'
 import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
@@ -316,6 +317,13 @@ export const router = createBrowserRouter([
               // Not under /admin: every authenticated role owns their own preferences,
               // and the API behind this page takes no user id at all (#103).
               { path: '/settings/notifications', element: <NotificationPreferencesPage /> },
+              // #137, and gated the same way for the same reason. `GET /gdpr/access` with
+              // no `userId` is the self-service case and needs no role — the handler says
+              // so — so every authenticated role reaches this page and none of them can
+              // ask it about anybody else. Under `/settings` beside notification
+              // preferences rather than under `/admin`: the erasure endpoint IS admin
+              // surface, but nothing on this page calls it.
+              { path: '/settings/privacy', element: <PrivacySettingsPage /> },
               // Self-service, so no role gate beyond RequireAuth: /notifications/mine
               // is scoped per user and every authenticated role can load it.
               { path: '/notifications', element: <NotificationsInboxPage /> },

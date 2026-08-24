@@ -187,6 +187,15 @@ describe('router', () => {
     // behind this page resolves the caller from their own token and takes no user
     // id, so a plain employee must be able to load it.
     expect(paths).toContain('/profile')
+    // #137. Same rule again, and this one is an acceptance criterion rather than a
+    // convenience: the page must be "reachable by every role". `GET /gdpr/access` with
+    // no userId is documented in the handler as "the self-service case and needs no
+    // role", and `SubjectAccessWireShapeTests.Any_role_can_ask_what_is_held_about_itself`
+    // holds that end for all five. This is the other end — a route with no role gate.
+    // It is deliberately NOT in `navSections`, which is role-aware and would hide a
+    // person's own privacy page from the employees whose data it is about; the shell's
+    // account menu links it instead.
+    expect(paths).toContain('/settings/privacy')
     expect(paths).toContain('/analytics/benchmarks')
     expect(paths).toContain('/analytics/ai-insights')
     expect(paths).toContain('/admin/companies/:companyId/reports')

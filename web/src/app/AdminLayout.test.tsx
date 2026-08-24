@@ -50,6 +50,26 @@ function stubUnread(count: number): void {
   )
 }
 
+/**
+ * The bell's poll plus the company list #124's switcher fetches for a super_admin.
+ *
+ * Hoisted out of the company-context block below because the entry-point tests at the foot of
+ * this file render the shell for every role, and a super_admin whose `/admin/companies` call
+ * comes back shaped like a notifications page is a banner over the shell rather than the shell.
+ */
+function stubShellFetch(): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      const body = url.includes('/admin/companies')
+        ? { companies: [{ id: 'co-a', name: 'Acme Holdings', emailDomain: null, industry: null, size: null, country: null, subscriptionTier: null, createdAt: '2026-01-01T00:00:00Z' }] }
+        : { notifications: [] }
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
+    }),
+  )
+}
+
 /** An unsigned JWT carrying just the claims the shell reads. */
 function tokenFor(claims: Record<string, unknown>): string {
   const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
@@ -261,19 +281,6 @@ describe('AdminLayout', () => {
    * component, because "it is on every page" is a property of where it is mounted.
    */
   describe('the company-context selector', () => {
-    function stubShellFetch(): void {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockImplementation((input: RequestInfo | URL) => {
-          const url = String(input)
-          const body = url.includes('/admin/companies')
-            ? { companies: [{ id: 'co-a', name: 'Acme Holdings', emailDomain: null, industry: null, size: null, country: null, subscriptionTier: null, createdAt: '2026-01-01T00:00:00Z' }] }
-            : { notifications: [] }
-          return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
-        }),
-      )
-    }
-
     it('is in the shell header for a super_admin, so it is legible from every page', async () => {
       setToken(tokenFor({ role: 'super_admin', companyId: '' }))
       stubShellFetch()
@@ -313,6 +320,56 @@ describe('AdminLayout', () => {
       await userEvent.click(screen.getAllByRole('button', { name: /Sign out/ })[0])
       await waitFor(() => expect(screen.getByText('login page')).toBeTruthy())
       expect(localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBeNull()
+    })
+  })
+
+  /**
+   * #137's first acceptance criterion is that the privacy page is "reachable by every role",
+   * and reachability has two ends. `router.test.ts` holds the routing end — `/settings/privacy`
+   * carries no role gate — and `SubjectAccessWireShapeTests.Any_role_can_ask_what_is_held_about_itself`
+   * holds the API end. This is the third: **the affordance**. A route nothing links to is
+   * reachable only by someone who already knows the URL, which is nobody.
+   *
+   * That end had no gate at all. Both links could be deleted with the whole tree green: the
+   * page is deliberately not in `navSections` (that module is role-aware and would hide a
+   * person's own privacy page from the employees whose data it is about), so no navigation test
+   * saw them, and the components they live in had no test file of their own.
+   *
+   * Two entry points, therefore two tests rather than one that either satisfies — deleting
+   * either link must turn something red on its own. The desktop rail's account menu is one; the
+   * mobile drawer, where the sidebar does not exist below `md`, is the other. Both are asserted
+   * for all five roles, because "every role" is the criterion and neither component's contents
+   * are role-aware today — a fact worth pinning rather than assuming.
+   */
+  describe('the way to the privacy page', () => {
+    const ROLES = ['super_admin', 'company_admin', 'leader', 'supervisor', 'employee'] as const
+
+    beforeEach(stubShellFetch)
+
+    it.each(ROLES)('is in the sidebar account menu for %s', async (role) => {
+      setToken(tokenFor({ role, companyId: 'c1' }))
+      renderShell()
+
+      await userEvent.click(screen.getAllByRole('button', { name: /Account/i })[0])
+
+      const menu = await screen.findByRole('menu')
+      expect(within(menu).getByRole('menuitem', { name: 'Privacy' }).getAttribute('href')).toBe(
+        '/settings/privacy',
+      )
+    })
+
+    it.each(ROLES)('is in the mobile drawer for %s', async (role) => {
+      // Below `md` the sidebar — and with it the account menu above — is `hidden`
+      // entirely, so on a phone the drawer is the only way to this page.
+      setToken(tokenFor({ role, companyId: 'c1' }))
+      renderShell()
+
+      await userEvent.click(screen.getByRole('button', { name: 'More' }))
+
+      const drawer = await screen.findByRole('dialog')
+      expect(within(drawer).getByRole('link', { name: 'Privacy' }).getAttribute('href')).toBe(
+        '/settings/privacy',
+      )
     })
   })
 

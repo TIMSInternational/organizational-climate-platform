@@ -1,0 +1,188 @@
+{
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+  "GET /gdpr/access": {
+    "subject": {
+      "userId": "00000000-0000-0000-0000-000000000001",
+      "email": "m.herrera@northwind.example",
+      "name": "María Herrera"
+    },
+    "generatedAt": "2026-08-20T09:14:00Z",
+    "complete": false,
+    "sources": [
+      {
+        "name": "organizational-climate-platform (this API's Postgres)",
+        "included": true,
+        "detail": "Read in full: one section for each of the 22 tables classified as holding subject data."
+      },
+      {
+        "name": "services/tracking-api (climate-tracking Postgres)",
+        "included": false,
+        "detail": "NOT INCLUDED. The climate-tracking service keeps its own Postgres (persona cache, action plans, progress log, notification recipients) and this API cannot read it: no project reference, no client and no connection string exist, and the only link between the services runs the other way. This response is therefore incomplete. A data subject request must be completed by hand against that service until an internal GDPR endpoint is added there."
+      }
+    ],
+    "limitations": [
+      "Free-text answers (question_responses.response_text) and change payloads (survey_audit_logs.changes, audit_logs.details, user_invitations.invitation_data) are opaque strings. They are exported verbatim, but nothing here can find a third party named inside one, so a request about a person mentioned only in someone else's free text will not match.",
+      "Responses submitted anonymously carry no user_id and are not linked to the person who submitted them. They cannot be included in, or removed from, a response to a request about that person — by design.",
+      "Rows matched by email address are searched only inside the tenant the caller has authority over. An email address is not unique across tenants, so an invitation or an audit copy of the address held by another company is that company's record and is not disclosed here. A super admin's export is not scoped this way."
+    ],
+    "sections": [
+      {
+        "entity": "User",
+        "table": "users",
+        "link": 1,
+        "treatment": 1,
+        "lawfulBasis": "Art. 6(1)(b) — necessary to provide the service the employer has engaged on the employee's behalf.",
+        "retention": "For as long as the account exists; pseudonymised on erasure and never afterwards restored.",
+        "recordCount": 1,
+        "records": [
+          {
+            "_link": "Id",
+            "Id": "00000000-0000-0000-0000-000000000001",
+            "Email": "m.herrera@northwind.example",
+            "Name": "María Herrera",
+            "Role": "company_admin",
+            "PasswordHash": "[redacted: credential]",
+            "IsActive": true,
+            "CreatedAt": "2025-03-14T09:12:00Z",
+            "ConsentUpdatedAt": "2026-06-02T11:40:00Z",
+            "Consent.Essential": true,
+            "Consent.Analytics": false,
+            "Consent.Marketing": false,
+            "Consent.Personalization": false,
+            "Consent.ThirdParty": false,
+            "Consent.Demographics": false,
+            "Preferences.Timezone": "America/Mexico_City",
+            "Notifications.EmailSurveys": true,
+            "Notifications.EmailReminders": false
+          }
+        ]
+      },
+      {
+        "entity": "Response",
+        "table": "responses",
+        "link": 1,
+        "treatment": 1,
+        "lawfulBasis": "Art. 6(1)(b) — necessary to provide the service the employer has engaged on the employee's behalf.",
+        "retention": "Retained indefinitely; anonymised on erasure.",
+        "recordCount": 4,
+        "records": []
+      },
+      {
+        "entity": "QuestionResponse",
+        "table": "question_responses",
+        "link": 3,
+        "treatment": 1,
+        "lawfulBasis": "Art. 6(1)(b) — necessary to provide the service the employer has engaged on the employee's behalf.",
+        "retention": "With its response.",
+        "recordCount": 46,
+        "records": []
+      },
+      {
+        "entity": "UserDemographic",
+        "table": "user_demographics",
+        "link": 1,
+        "treatment": 1,
+        "lawfulBasis": "Art. 6(1)(b) — necessary to provide the service the employer has engaged on the employee's behalf.",
+        "retention": "For as long as the account exists; deleted on erasure.",
+        "recordCount": 3,
+        "records": []
+      },
+      {
+        "entity": "Notification",
+        "table": "notifications",
+        "link": 1,
+        "treatment": 1,
+        "lawfulBasis": "Art. 6(1)(b) — necessary to provide the service the employer has engaged on the employee's behalf.",
+        "retention": "Deleted once terminal and older than the configured notification window (retention cleanup), or on erasure.",
+        "recordCount": 12,
+        "records": []
+      },
+      {
+        "entity": "SurveyInvitation",
+        "table": "survey_invitations",
+        "link": 1,
+        "treatment": 1,
+        "lawfulBasis": "Art. 6(1)(b) — necessary to provide the service the employer has engaged on the employee's behalf.",
+        "retention": "Redacted on erasure.",
+        "recordCount": 5,
+        "records": []
+      },
+      {
+        "entity": "AuditLog",
+        "table": "audit_logs",
+        "link": 1,
+        "treatment": 1,
+        "lawfulBasis": "Art. 6(1)(f) — legitimate interest of the controller in operating, securing and evidencing the platform.",
+        "retention": "Retained under Art. 17(3)(b) and (e); never swept.",
+        "recordCount": 61,
+        "records": []
+      },
+      {
+        "entity": "Survey",
+        "table": "surveys",
+        "link": 2,
+        "treatment": 2,
+        "lawfulBasis": "Art. 6(1)(f) — legitimate interest of the controller in operating, securing and evidencing the platform.",
+        "retention": "For as long as the record exists; attribution survives erasure.",
+        "recordCount": 7,
+        "records": []
+      },
+      {
+        "entity": "ActionPlan",
+        "table": "action_plans",
+        "link": 2,
+        "treatment": 2,
+        "lawfulBasis": "Art. 6(1)(f) — legitimate interest of the controller in operating, securing and evidencing the platform.",
+        "retention": "For as long as the record exists; attribution survives erasure.",
+        "recordCount": 2,
+        "records": []
+      },
+      {
+        "entity": "SurveyDraft",
+        "table": "survey_drafts",
+        "link": 1,
+        "treatment": 1,
+        "lawfulBasis": "Art. 6(1)(b) — necessary to provide the service the employer has engaged on the employee's behalf.",
+        "retention": "Deleted 30 days after last save (SurveyDraftRetention), or on erasure.",
+        "recordCount": 0,
+        "records": []
+      },
+      {
+        "entity": "MicroclimateInvitation",
+        "table": "microclimate_invitations",
+        "link": 1,
+        "treatment": 1,
+        "lawfulBasis": "Art. 6(1)(b) — necessary to provide the service the employer has engaged on the employee's behalf.",
+        "retention": "Redacted on erasure.",
+        "recordCount": 0,
+        "records": []
+      },
+      {
+        "entity": "Report",
+        "table": "reports",
+        "link": 2,
+        "treatment": 2,
+        "lawfulBasis": "Art. 6(1)(f) — legitimate interest of the controller in operating, securing and evidencing the platform.",
+        "retention": "For as long as the record exists; attribution survives erasure.",
+        "recordCount": 0,
+        "records": []
+      }
+    ]
+  },
+  "GET /admin/companies": {
+    "companies": [
+      {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "name": "Northwind Logistics",
+        "emailDomain": "northwind.example",
+        "industry": "Transportation",
+        "size": "large",
+        "country": "Colombia",
+        "subscriptionTier": "enterprise",
+        "createdAt": "2025-03-14T09:12:00Z"
+      }
+    ]
+  }
+}
