@@ -104,6 +104,15 @@ export interface Benchmark {
   isActive: boolean
   validationStatus: string
   qualityScore: number
+  /**
+   * The prior period's id **as this caller may see it** — `null` when the linked row belongs
+   * to a tenant they cannot read, on the same terms as `priorPeriod`.
+   *
+   * So this is not the way to tell `linked` from `unlinked`; `priorPeriodStatus` is. Reading
+   * a null here as "not linked" is the exact conflation #89 exists to end, one level down.
+   * `followPriorPeriodChain` stops here rather than firing a request that can only be
+   * refused.
+   */
   priorPeriodBenchmarkId: string | null
   metrics: BenchmarkMetric[]
   priorPeriodStatus: PriorPeriodStatus

@@ -9,7 +9,13 @@ public sealed record BenchmarkListItem(
 public sealed record BenchmarkDetail(
     Guid Id, string Name, string Description, string Type, string Category, string Source,
     string? Industry, string? CompanySize, string? Region, Guid? CompanyId, bool IsActive,
-    string ValidationStatus, double QualityScore, Guid? PriorPeriodBenchmarkId,
+    string ValidationStatus, double QualityScore,
+    // The prior period's id AS THIS CALLER MAY SEE IT: null when the row it points at belongs
+    // to a tenant they cannot read, on the same terms as PriorPeriod below. A stored pointer
+    // is not a permission, and returning the id while withholding the numbers still discloses
+    // that a benchmark with that id exists somewhere -- and hands a chain walk an id it can
+    // only be refused on. Use PriorPeriodStatus, not this, to tell `linked` from `unlinked`.
+    Guid? PriorPeriodBenchmarkId,
     IReadOnlyList<BenchmarkMetricDto> Metrics,
     // One of PriorPeriodStatuses. `PriorPeriodBenchmarkId is null` cannot answer the question
     // this does: see Benchmark.PriorPeriodStatus for why "no prior period exists" and "nobody
