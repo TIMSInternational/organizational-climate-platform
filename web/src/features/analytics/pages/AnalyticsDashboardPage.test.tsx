@@ -17,6 +17,7 @@ function benchmarkRow(overrides: Partial<BenchmarkListItem> = {}): BenchmarkList
     companyId: 'c1',
     isActive: true,
     qualityScore: 70,
+    priorPeriodStatus: 'unlinked',
     ...overrides,
   }
 }

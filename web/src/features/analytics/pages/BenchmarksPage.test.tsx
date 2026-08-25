@@ -17,7 +17,7 @@ const OWN = 'company-1'
 const OTHER = 'company-2'
 
 function listRow(id: string, name: string, companyId: string | null): BenchmarkListItem {
-  return { id, name, type: 'industry', category: 'engagement', companyId, isActive: true, qualityScore: 0.9 }
+  return { id, name, type: 'industry', category: 'engagement', companyId, isActive: true, qualityScore: 0.9, priorPeriodStatus: 'unlinked' }
 }
 
 function detail(id: string, name: string, companyId: string | null, overrides: Partial<Benchmark> = {}): Benchmark {
@@ -37,6 +37,8 @@ function detail(id: string, name: string, companyId: string | null, overrides: P
     qualityScore: 0.9,
     priorPeriodBenchmarkId: null,
     metrics: [{ id: `${id}-m`, metricName: 'engagement', value: 72, unit: '%', percentile: null, sampleSize: null }],
+    priorPeriodStatus: 'unlinked',
+    priorPeriod: null,
     ...overrides,
   }
 }
@@ -443,17 +445,109 @@ describe('BenchmarksPage comparison and trend', () => {
     expect(comparison.textContent).not.toContain('1,198.8')
   })
 
-  it('says so plainly when a benchmark has no prior period', async () => {
+  /**
+   * The criterion #89 turns on: a first-year company and a data-entry backlog are not the
+   * same claim, and the page must not print one over the other.
+   *
+   * Both benchmarks below have `priorPeriodBenchmarkId: null` — which is the whole of what
+   * this page used to have to go on, and why both used to render "This benchmark does not
+   * link to a prior period." The assertion is on the two rendered sentences and on their
+   * being different from each other, not on a status attribute, because the status arriving
+   * and the reader being told apart are separate claims.
+   */
+  it('distinguishes a benchmark with no prior period from one nobody has linked yet', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [/\/admin\/benchmarks\/o$/, () => detail('o', 'Our 2026 baseline', OWN)],
+      [/\/prior-period\/candidates$/, () => []],
+      [/\/admin\/benchmarks\/first$/, () => detail('first', 'Our first measurement', OWN, { priorPeriodStatus: 'none' })],
+      [/\/admin\/benchmarks\/backlog$/, () => detail('backlog', 'Our 2026 baseline', OWN)],
+      [
+        /\/admin\/benchmarks(\?|$)/,
+        () => [listRow('first', 'Our first measurement', OWN), listRow('backlog', 'Our 2026 baseline', OWN)],
+      ],
+    ])
+
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Our first measurement/ }))
+    const none = await screen.findByText(/There is no prior period\./)
+    expect(none.textContent).toContain('first measurement')
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Our first measurement/ }))
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Our 2026 baseline/ }))
+    const unlinked = await screen.findByText(/No prior period has been chosen yet\./)
+
+    expect(unlinked.textContent).not.toEqual(none.textContent)
+  })
+
+  /**
+   * `linked` with no comparison attached is a fourth state, not a loading one: the link
+   * points at a row this caller may not read, and `LoadPriorPeriodAsync` omits the numbers
+   * rather than handing them over. Falling back to "not linked" here would be a lie about
+   * the data.
+   */
+  it('says a prior period exists but is unreadable rather than calling it unlinked', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [/\/prior-period\/candidates$/, () => []],
+      [
+        /\/admin\/benchmarks\/o$/,
+        () => detail('o', 'Our 2026 baseline', OWN, { priorPeriodStatus: 'linked', priorPeriodBenchmarkId: 'hidden', priorPeriod: null }),
+      ],
       [/\/admin\/benchmarks(\?|$)/, () => [listRow('o', 'Our 2026 baseline', OWN)]],
     ])
 
     renderPage()
     await userEvent.click(await screen.findByRole('checkbox', { name: /Our 2026 baseline/ }))
 
-    expect(await screen.findByText('This benchmark does not link to a prior period.')).toBeTruthy()
+    expect(await screen.findByText(/not allowed to read/)).toBeTruthy()
+    expect(screen.queryByText(/No prior period has been chosen yet\./)).toBeNull()
+  })
+
+  /**
+   * Linking is a human act, all the way to the button. The page offers the shortlist the
+   * API suggests and sends nothing until somebody picks one — an unambiguous candidate is
+   * still not applied on its own.
+   */
+  it('links a prior period only once an administrator picks one', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    const sent: Array<{ url: string; body: unknown }> = []
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (init?.method === 'PUT' && /\/prior-period$/.test(url)) {
+        sent.push({ url, body: JSON.parse(String(init.body)) })
+        return Promise.resolve(
+          new Response(JSON.stringify(detail('o', 'Our 2026 baseline', OWN, { priorPeriodStatus: 'linked', priorPeriodBenchmarkId: 'p' })), { status: 200 }),
+        )
+      }
+      if (/\/prior-period\/candidates$/.test(url)) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([
+              { id: 'p', name: 'Our 2025 baseline', category: 'engagement', type: 'industry', createdAt: '2025-01-01T00:00:00Z', metricCount: 1, unambiguous: true },
+            ]),
+            { status: 200 },
+          ),
+        )
+      }
+      if (/\/admin\/benchmarks\/o$/.test(url)) {
+        return Promise.resolve(new Response(JSON.stringify(detail('o', 'Our 2026 baseline', OWN)), { status: 200 }))
+      }
+      return Promise.resolve(new Response(JSON.stringify([listRow('o', 'Our 2026 baseline', OWN)]), { status: 200 }))
+    })
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Our 2026 baseline/ }))
+    await screen.findByRole('option', { name: 'Our 2025 baseline' })
+
+    // Nothing sent yet, even though the one candidate is unambiguous.
+    expect(sent).toHaveLength(0)
+
+    await userEvent.selectOptions(screen.getByLabelText('Prior period'), 'p')
+    await userEvent.click(screen.getByRole('button', { name: 'Link prior period' }))
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0].body).toEqual({ status: 'linked', priorPeriodBenchmarkId: 'p' })
   })
 })
 

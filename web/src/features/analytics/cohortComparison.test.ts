@@ -23,6 +23,8 @@ function benchmark(id: string, metrics: BenchmarkMetric[]): Benchmark {
     qualityScore: 0.9,
     priorPeriodBenchmarkId: null,
     metrics,
+    priorPeriodStatus: 'unlinked',
+    priorPeriod: null,
   }
 }
 

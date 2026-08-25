@@ -10,6 +10,7 @@ function benchmark(overrides: Partial<BenchmarkListItem> & { id: string }): Benc
     companyId: 'c1',
     isActive: true,
     qualityScore: 0,
+    priorPeriodStatus: 'unlinked',
     ...overrides,
   }
 }

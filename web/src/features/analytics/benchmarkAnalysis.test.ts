@@ -23,6 +23,8 @@ function benchmark(id: string, metrics: BenchmarkMetric[], priorPeriodBenchmarkI
     qualityScore: 1,
     priorPeriodBenchmarkId,
     metrics,
+    priorPeriodStatus: priorPeriodBenchmarkId === null ? 'unlinked' : 'linked',
+    priorPeriod: null,
   }
 }
 
