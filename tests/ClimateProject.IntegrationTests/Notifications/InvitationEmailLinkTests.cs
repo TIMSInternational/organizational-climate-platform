@@ -404,9 +404,16 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
 
     /// <summary>
     /// <b>The exploit, across tenants.</b> The same attack aimed at another company's
-    /// invitation. Worth its own test rather than folding into the one above: the two are
-    /// stopped by two different predicates, so a fix that scoped by user but not by company
-    /// would leave this one live, and vice versa.
+    /// invitation.
+    ///
+    /// <para>
+    /// <b>Which predicate stops this one, stated honestly.</b> The recipient predicate does --
+    /// the victim is a different user, so the row fails to match before tenancy is even
+    /// consulted. Removing the company predicate leaves this test green, which was measured
+    /// rather than assumed. It is kept anyway because it is the attack somebody will actually
+    /// try, and a defence that holds for the reason next to it is worth pinning; the case where
+    /// tenancy is the ONLY thing standing in the way is the re-homing test below.
+    /// </para>
     /// </summary>
     [Fact]
     public async Task An_admin_cannot_have_another_TENANTS_token_mailed_to_themselves()
@@ -464,6 +471,94 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
         Assert.DoesNotContain(victimToken, message.TextBody, StringComparison.Ordinal);
         Assert.DoesNotContain(victimToken, message.HtmlBody, StringComparison.Ordinal);
         Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.TextBody, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>The case the tenancy predicate is actually for: an employee who moved companies.</b>
+    ///
+    /// <para>
+    /// `survey_invitations.company_id` is the SURVEY's tenant, frozen when the row was minted,
+    /// and `users.company_id` is where that person is now. They agree at mint time and diverge
+    /// the moment somebody is re-homed -- which leaves a live invitation whose `user_id` points
+    /// at an employee of a DIFFERENT tenant. Scoped only by recipient, the new tenant's admin
+    /// could then have the old tenant's token mailed out, because the row genuinely does belong
+    /// to that user. Only `company_id` separates the two.
+    /// </para>
+    /// <para>
+    /// Narrow, and real: re-homing a user is an ordinary administrative act, and the leak it
+    /// opens crosses a tenant boundary. This is the test that fails when the tenancy predicate
+    /// is removed.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_re_homed_employees_previous_tenant_token_is_not_mailed_by_their_new_tenant()
+    {
+        // The former tenant: its own survey, and an invitation minted for the employee while
+        // they still worked there.
+        var formerCompanyId = await _harness.SeedCompanyAsync("Mail Link Former Co");
+        var formerAdmin = await _harness.ClientAsync(Roles.CompanyAdmin, formerCompanyId);
+
+        var employeeId = await _harness.WithDbAsync(async db =>
+        {
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = formerCompanyId,
+                Email = $"{Guid.NewGuid():N}@rehomed.test",
+                Name = "Rehomed",
+                Role = Roles.Employee,
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            };
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
+            return user.Id;
+        });
+
+        var formerSurvey = await SurveyTestHarness.CreateSurveyAsync(
+            formerAdmin, SurveyTestHarness.MinimalRequest(formerCompanyId));
+        (await SurveyTestHarness.SetStatusAsync(formerAdmin, formerSurvey.Id, SurveyStatuses.Active))
+            .EnsureSuccessStatusCode();
+
+        var invited = await formerAdmin.PostAsJsonAsync(
+            $"/surveys/{formerSurvey.Id}/invitations", new CreateSurveyInvitationsRequest(UserIds: [employeeId]));
+        invited.EnsureSuccessStatusCode();
+        var oldInvitationId = (await invited.Content.ReadFromJsonAsync<SurveyInvitationBatchResult>())!.InvitationIds[0];
+
+        var oldToken = await _harness.WithDbAsync(db => db.SurveyInvitations
+            .AsNoTracking().Where(i => i.Id == oldInvitationId).Select(i => i.InvitationToken).FirstAsync());
+
+        // The employee moves to this test class's company. The old invitation row is untouched:
+        // its user_id still names them, its company_id still names their former employer.
+        var employeeEmail = await _harness.WithDbAsync(async db =>
+        {
+            var user = await db.Users.FirstAsync(u => u.Id == employeeId);
+            user.CompanyId = _companyId;
+            user.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+            return user.Email;
+        });
+
+        // Their NEW employer's admin names the OLD invitation. Recipient matches -- the row
+        // really is this person's -- so only tenancy can refuse it.
+        var client = await AdminAsync();
+        var posted = await client.PostAsJsonAsync("/notifications", new CreateNotificationRequest(
+            UserId: employeeId,
+            CompanyId: _companyId,
+            Type: NotificationTypes.SurveyInvitation,
+            Channel: NotificationChannels.Email,
+            Priority: NotificationPriorities.Default,
+            Title: "Your survey",
+            Message: "Please respond.",
+            Data: SurveyNotificationData.Serialize(formerSurvey.Id, oldInvitationId)));
+        posted.EnsureSuccessStatusCode();
+
+        var message = Assert.Single(_mail.Mailbox.To(employeeEmail));
+        Assert.DoesNotContain(oldToken, message.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(oldToken, message.HtmlBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.HtmlBody, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------------
