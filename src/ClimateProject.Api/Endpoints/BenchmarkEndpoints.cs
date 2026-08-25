@@ -96,8 +96,6 @@ public static class BenchmarkEndpoints
         if (request.PriorPeriodBenchmarkId.HasValue)
         {
             var priorAtCreate = await db.Benchmarks.FirstOrDefaultAsync(b => b.Id == request.PriorPeriodBenchmarkId.Value, cancellationToken);
-            if (priorAtCreate is null) return Results.Json(new { message = "PriorPeriodBenchmarkId does not reference an existing benchmark" }, statusCode: 400);
-
             var linkError = ValidateLinkTarget(
                 subjectCompanyId: request.CompanyId, subjectCategory: category, subjectType: type, prior: priorAtCreate);
             if (linkError is not null) return linkError;
@@ -237,7 +235,6 @@ public static class BenchmarkEndpoints
 
             var priorId = request.PriorPeriodBenchmarkId.Value;
             var prior = await db.Benchmarks.FirstOrDefaultAsync(b => b.Id == priorId, cancellationToken);
-            if (prior is null) return Results.Json(new { message = "PriorPeriodBenchmarkId does not reference an existing benchmark" }, statusCode: 400);
 
             var linkError = ValidateLinkTarget(benchmark.CompanyId, benchmark.Category, benchmark.Type, prior);
             if (linkError is not null) return linkError;
@@ -419,19 +416,49 @@ public static class BenchmarkEndpoints
     }
 
     /// <summary>
-    /// The three things that make a proposed prior period the wrong benchmark, whichever
-    /// route proposed it. See <see cref="BenchmarkPriorPeriod.CandidatesQuery"/> for why each
-    /// one is here; this is the write-side half of the same rule.
+    /// The things that make a proposed prior period the wrong benchmark, whichever route
+    /// proposed it. See <see cref="BenchmarkPriorPeriod.CandidatesQuery"/> for why each one is
+    /// here; this is the write-side half of the same rule.
     /// </summary>
-    private static IResult? ValidateLinkTarget(Guid? subjectCompanyId, string subjectCategory, string subjectType, Benchmark prior)
+    /// <param name="prior">
+    /// The proposed row, or null when no benchmark carries that id. Null is handled here and
+    /// not by the callers because the answer has to be the same either way -- see below.
+    /// </param>
+    /// <remarks>
+    /// <para>
+    /// <b>"Not a benchmark" and "not one of yours" are one answer.</b> They used to be two
+    /// different messages, which made the route an existence oracle: a CompanyAdmin who put an
+    /// arbitrary GUID in the body learned from the wording alone whether it was a benchmark
+    /// somewhere in the platform. That is not much on its own, and it is exactly what an
+    /// attacker with a handful of ids does first. The scope check already declines to
+    /// distinguish another tenant's row from a global one, for the same reason; a row that is
+    /// not there at all belongs in the same bucket.
+    /// </para>
+    /// <para>
+    /// <b>What is deliberately NOT checked: that the prior period is older.</b>
+    /// <see cref="BenchmarkPriorPeriod.CandidatesQuery"/> requires
+    /// <c>CreatedAt &lt; subject.CreatedAt</c> and this does not, and the asymmetry is the
+    /// whole decision (<c>docs/decisions/prior-period-benchmark-linkage.md</c>) rather than an
+    /// oversight. A benchmark has no period field; <c>CreatedAt</c> records when somebody
+    /// typed the row in, which is a usable hint for a SHORTLIST and a falsehood as a rule.
+    /// Entering 2024's figures after 2025's are already in is ordinary, and it makes the 2024
+    /// row the younger of the two. Enforcing the ordering here would refuse the one case the
+    /// explicit mechanism exists to serve -- an administrator who knows which year is which
+    /// saying so -- and would refuse it with a message about creation timestamps that no
+    /// reader can act on. A period that precedes itself is still refused, by
+    /// <see cref="BenchmarkPriorPeriod.WouldCreateCycleAsync"/>, which asks about the link
+    /// graph rather than about the clock.
+    /// </para>
+    /// </remarks>
+    private static IResult? ValidateLinkTarget(Guid? subjectCompanyId, string subjectCategory, string subjectType, Benchmark? prior)
     {
-        if (prior.CompanyId != subjectCompanyId)
+        if (prior is null || prior.CompanyId != subjectCompanyId)
         {
-            // Deliberately the same message for "another tenant's benchmark" and "a global
-            // benchmark": a CompanyAdmin probing ids must not learn which of the two an
-            // unknown id is.
+            // Deliberately the same message for "no such benchmark", "another tenant's
+            // benchmark" and "a global benchmark": a CompanyAdmin probing ids must not learn
+            // which of the three an unknown id is.
             return Results.Json(
-                new { message = "A prior period must belong to the same company scope as the benchmark" },
+                new { message = "A prior period must be an existing benchmark in the same company scope as the benchmark" },
                 statusCode: 400);
         }
 
@@ -466,12 +493,25 @@ public static class BenchmarkEndpoints
             .Select(m => new BenchmarkMetricDto(m.Id, m.MetricName, m.Value, m.Unit, m.Percentile, m.SampleSize))
             .ToListAsync(cancellationToken);
 
+        // `metrics` is handed over rather than re-read: this benchmark's readings are already
+        // in hand and LoadPriorPeriodAsync would otherwise issue the identical query, with the
+        // identical ORDER BY, on every read of a linked benchmark.
         var priorPeriod = await BenchmarkPriorPeriod.LoadPriorPeriodAsync(
-            db, b, companyId => CanReadBenchmark(currentUser, companyId), cancellationToken);
+            db, b, metrics, companyId => CanReadBenchmark(currentUser, companyId), cancellationToken);
+
+        // The POINTER is withheld on the same terms as the comparison it points at. Omitting
+        // the rich DTO while returning the id kept the promise only in the part a reader would
+        // notice: the id is the thing that says "a benchmark with this id exists in a tenant
+        // you cannot see", it turns an unguessable GUID into a known one, and the browser then
+        // spends a doomed cross-tenant request on it in followPriorPeriodChain. `linked` with
+        // nothing attached is still distinguishable from `unlinked` -- that is what
+        // PriorPeriodStatus is for, and it is a fact about this row rather than about another
+        // tenant's.
+        var visiblePriorPeriodId = priorPeriod?.Id;
 
         return new BenchmarkDetail(
             b.Id, b.Name, b.Description, b.Type, b.Category, b.Source, b.Industry, b.CompanySize,
-            b.Region, b.CompanyId, b.IsActive, b.ValidationStatus, b.QualityScore, b.PriorPeriodBenchmarkId, metrics,
+            b.Region, b.CompanyId, b.IsActive, b.ValidationStatus, b.QualityScore, visiblePriorPeriodId, metrics,
             b.PriorPeriodStatus, priorPeriod);
     }
 }

@@ -11,12 +11,24 @@ namespace ClimateProject.Api.Endpoints;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>One source, several consumers.</b> #90 adds <c>compare</c> and <c>trends</c>, both of
-/// which need exactly this arithmetic; the tracking module's
-/// <c>resultado_anio_anterior_pct</c> needs the same subtraction over the same chain; and
-/// <c>benchmarkAnalysis.buildTrend</c> in the browser already does its own copy of it. Every
-/// one of those is a place where "current minus prior" could be written a second time and
-/// come out different. It is written here.
+/// <b>One source for the consumers that can share one.</b> #90 adds <c>compare</c> and
+/// <c>trends</c>, both of which need exactly this arithmetic, and the tracking module's
+/// <c>resultado_anio_anterior_pct</c> needs the same subtraction over the same pair. Each is a
+/// place where "current minus prior" could be written a second time and come out different, so
+/// it is written here, once.
+/// </para>
+/// <para>
+/// <b>One consumer cannot share it, and that is worth being precise about.</b>
+/// <c>benchmarkAnalysis.buildTrend</c> in the browser differences a whole CHAIN of periods,
+/// which no route returns -- the page assembles it by walking
+/// <c>priorPeriodBenchmarkId</c> one GET at a time -- so it is a second implementation and
+/// will stay one until a chain endpoint exists. What the two must never disagree about is the
+/// rule below: <b>no delta across two different units</b>. It held here and not there, and the
+/// screen is the half a reader sees, so a linked benchmark recorded in <c>percent</c> one
+/// period and <c>fraction</c> the next printed a 69-point collapse directly underneath an API
+/// response that had correctly withheld it. Both sides now withhold it, and both sides assert
+/// it (<c>A_change_is_not_computed_across_two_different_units</c> here,
+/// <c>benchmarkAnalysis.test.ts</c> and <c>BenchmarksPage.test.tsx</c> there).
 /// </para>
 /// <para>
 /// <b>Automatic matching suggests; it never writes.</b> The matching rule
@@ -119,6 +131,12 @@ public static class BenchmarkPriorPeriod
     /// Loads the prior period of <paramref name="benchmark"/> with this period's metrics
     /// already read against it, or null when there is nothing to read.
     /// </summary>
+    /// <param name="currentMetrics">
+    /// <paramref name="benchmark"/>'s own metrics, in the order
+    /// <see cref="LoadMetricsAsync"/> produces. Passed in rather than read again because the
+    /// only caller has just read them; the ordering is part of the contract, since the pairing
+    /// below matches on name and an unordered list pairs a different duplicate each time.
+    /// </param>
     /// <param name="canRead">
     /// The caller's read check, applied to the prior row's owner. A CompanyAdmin can only
     /// create links inside their own tenant, but rows predating #89 and rows written by a
@@ -128,6 +146,7 @@ public static class BenchmarkPriorPeriod
     public static async Task<BenchmarkPriorPeriodDto?> LoadPriorPeriodAsync(
         ClimateProjectDbContext db,
         Benchmark benchmark,
+        IReadOnlyList<BenchmarkMetricDto> currentMetrics,
         Func<Guid?, bool> canRead,
         CancellationToken cancellationToken)
     {
@@ -140,10 +159,9 @@ public static class BenchmarkPriorPeriod
         var prior = await db.Benchmarks.FirstOrDefaultAsync(b => b.Id == priorId, cancellationToken);
         if (prior is null || !canRead(prior.CompanyId)) return null;
 
-        var current = await LoadMetricsAsync(db, benchmark.Id, cancellationToken);
         var priorMetrics = await LoadMetricsAsync(db, prior.Id, cancellationToken);
 
-        return new BenchmarkPriorPeriodDto(prior.Id, prior.Name, BuildChanges(current, priorMetrics));
+        return new BenchmarkPriorPeriodDto(prior.Id, prior.Name, BuildChanges(currentMetrics, priorMetrics));
     }
 
     /// <summary>

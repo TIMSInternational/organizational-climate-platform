@@ -394,15 +394,23 @@ public class BenchmarkPriorPeriodEndpointsTests : IAsyncLifetime
 
         var older = await CreateAsync(client, "2024 Engagement", _companyAId);
         var wrongCategory = await CreateAsync(client, "2024 Wellbeing", _companyAId, category: "wellbeing");
+        // Same company, same category, earlier -- and a different KIND of benchmark. An
+        // `internal` row is this company's own measurement and an `industry` row is a market
+        // reading; differencing one against the other is not a year-over-year change, it is
+        // two populations subtracted. Type is also the only condition standing between the
+        // ?apply=true backfill and doing exactly that unattended, which is why the case is
+        // here rather than left to the name of the test.
+        var wrongType = await CreateAsync(client, "2024 Engagement (internal)", _companyAId, type: "internal");
         var subject = await CreateAsync(client, "2026 Engagement", _companyAId);
 
         var single = await client.GetAsync($"/admin/benchmarks/{subject.Id}/prior-period/candidates");
         Assert.Equal(HttpStatusCode.OK, single.StatusCode);
-        // Single, so the wellbeing benchmark created between the two is not a candidate: a
-        // prior period has to measure the same thing.
+        // Single, so neither the wellbeing benchmark nor the internal one created between the
+        // two is a candidate: a prior period has to measure the same thing, the same way.
         var only = Assert.Single((await single.Content.ReadFromJsonAsync<List<PriorPeriodCandidateDto>>())!);
         Assert.Equal(older.Id, only.Id);
         Assert.NotEqual(wrongCategory.Id, only.Id);
+        Assert.NotEqual(wrongType.Id, only.Id);
         Assert.True(only.Unambiguous);
 
         // A second same-category benchmark makes the choice a judgement call, and the flag
@@ -413,8 +421,62 @@ public class BenchmarkPriorPeriodEndpointsTests : IAsyncLifetime
         var many = await client.GetAsync($"/admin/benchmarks/{laterSubject.Id}/prior-period/candidates");
         var candidates = (await many.Content.ReadFromJsonAsync<List<PriorPeriodCandidateDto>>())!;
         Assert.All(candidates, c => Assert.False(c.Unambiguous));
+        Assert.DoesNotContain(candidates, c => c.Id == wrongCategory.Id || c.Id == wrongType.Id);
         // Newest first, so the most plausible prior period is the one a reader sees first.
         Assert.Equal(new[] { alsoOlder.Id, subject.Id, older.Id }, candidates.Select(c => c.Id).ToArray());
+    }
+
+    /// <summary>
+    /// A benchmark somebody has taken out of use is not offered as the thing this year is
+    /// measured against.
+    ///
+    /// <para>
+    /// The consequence is asserted, not just the shortlist: with the retired row still in it
+    /// the subject has two candidates instead of one, which is the difference between a
+    /// backfill that links it and a backfill that declares the choice ambiguous and walks
+    /// away. Deactivating last year's benchmark would silently stop this year's from being
+    /// linked at all.
+    /// </para>
+    /// <para>
+    /// <b>The one fixture here that a route cannot build.</b> <c>is_active</c> is written
+    /// <c>true</c> at creation and by nothing else in the product -- there is no deactivation
+    /// route yet, though the column is indexed for one and the benchmarks table renders it --
+    /// so the row is retired straight through the DbContext, which is what a support fix or
+    /// that future route will do. The alternative was to leave the predicate as the only
+    /// condition in the matching rule that nothing anywhere asserts.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_deactivated_benchmark_is_not_suggested_as_a_prior_period()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var category = $"retired-{Guid.NewGuid():N}";
+
+        var retired = await CreateAsync(client, "2024 retired", _companyAId, category: category);
+        var inUse = await CreateAsync(client, "2025 in use", _companyAId, category: category);
+        var subject = await CreateAsync(client, "2026 subject", _companyAId, category: category);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var row = await db.Benchmarks.FirstAsync(b => b.Id == retired.Id);
+            row.IsActive = false;
+            await db.SaveChangesAsync();
+        }
+
+        var response = await client.GetAsync($"/admin/benchmarks/{subject.Id}/prior-period/candidates");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var only = Assert.Single((await response.Content.ReadFromJsonAsync<List<PriorPeriodCandidateDto>>())!);
+        Assert.Equal(inUse.Id, only.Id);
+        Assert.True(only.Unambiguous);
+
+        // And so the backfill has exactly one answer for this benchmark rather than a
+        // judgement call it is not allowed to make.
+        var dryRun = await client.PostAsync("/admin/benchmarks/prior-period/backfill", null);
+        var planned = (await dryRun.Content.ReadFromJsonAsync<PriorPeriodBackfillResult>())!;
+        var decision = planned.Decisions.Single(d => d.BenchmarkId == subject.Id);
+        Assert.Equal("linked", decision.Outcome);
+        Assert.Equal(inUse.Id, decision.PriorPeriodBenchmarkId);
     }
 
     /// <summary>
@@ -561,8 +623,206 @@ public class BenchmarkPriorPeriodEndpointsTests : IAsyncLifetime
 
         Assert.Equal(PriorPeriodStatuses.Linked, detail.PriorPeriodStatus);
         Assert.Null(detail.PriorPeriod);
+        // The pointer goes too, and this half is the one that was missing: withholding the
+        // comparison while returning the id still tells company A that a benchmark with this
+        // id exists in a tenant they cannot see, hands them an id they could not have guessed,
+        // and sends the benchmarks page off to fetch it (`followPriorPeriodChain`) for a 403.
+        // `linked` with nothing attached is still distinguishable from `unlinked` -- that is
+        // what the status is for.
+        Assert.Null(detail.PriorPeriodBenchmarkId);
 
-        // The SuperAdmin, who may read both, still sees it.
-        Assert.NotNull((await GetAsync(superAdmin, companyASubject.Id)).PriorPeriod);
+        // The SuperAdmin, who may read both, still sees both. Withholding is a property of
+        // this reader, not of the row: blanking the pointer for everybody would break the
+        // trend chain for the caller entitled to walk it.
+        var superAdminDetail = await GetAsync(superAdmin, companyASubject.Id);
+        Assert.NotNull(superAdminDetail.PriorPeriod);
+        Assert.Equal(companyBPrior.Id, superAdminDetail.PriorPeriodBenchmarkId);
+    }
+
+    /// <summary>
+    /// Two ways of naming a benchmark this caller may not link to, refused in the same words.
+    ///
+    /// <para>
+    /// A GUID that is not a benchmark at all and a GUID that is another tenant's benchmark
+    /// used to produce two different messages, which made the route an existence oracle: put
+    /// an id in the body, read the wording, learn whether it names a row. The whole response
+    /// body is compared rather than the message field, because anything that differs at all is
+    /// the signal.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task An_unknown_id_and_another_tenants_id_are_refused_in_the_same_words()
+    {
+        var superAdmin = await ClientAsync(Roles.SuperAdmin, _companyADomain);
+        var otherTenant = await CreateAsync(superAdmin, "B 2025 oracle", _companyBId);
+
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var subject = await CreateAsync(client, "2026 oracle", _companyAId);
+
+        var unknown = await SetPriorPeriodAsync(client, subject.Id, PriorPeriodStatuses.Linked, Guid.NewGuid());
+        var foreign = await SetPriorPeriodAsync(client, subject.Id, PriorPeriodStatuses.Linked, otherTenant.Id);
+
+        Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, foreign.StatusCode);
+        Assert.Equal(await unknown.Content.ReadAsStringAsync(), await foreign.Content.ReadAsStringAsync());
+
+        // Create is the other door onto the same rule, and it must not answer differently
+        // either.
+        async Task<string> CreateWithPriorAsync(Guid priorId)
+        {
+            var response = await client.PostAsJsonAsync("/admin/benchmarks", new CreateBenchmarkRequest(
+                "2026 oracle create", "d", "industry", "engagement", "internal", null, null, null, _companyAId, priorId));
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            return await response.Content.ReadAsStringAsync();
+        }
+
+        Assert.Equal(await CreateWithPriorAsync(Guid.NewGuid()), await CreateWithPriorAsync(otherTenant.Id));
+    }
+
+    /// <summary>
+    /// Neither the suggestion route nor the bulk one is open to anybody below an
+    /// administrator.
+    ///
+    /// <para>
+    /// Nothing asserted this: the benchmarks tests exercise SuperAdmin and CompanyAdmin only,
+    /// so both new routes could have had their authorization removed outright without a single
+    /// test noticing. The backfill is the one that matters -- it is a bulk WRITER whose only
+    /// gate is the role check -- so its refusal is asserted against the stored rows and not
+    /// against the status code, which is a claim about what the endpoint thinks it did.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData(Roles.Leader)]
+    [InlineData(Roles.Supervisor)]
+    [InlineData(Roles.Employee)]
+    public async Task Suggesting_and_backfilling_are_closed_below_an_administrator(string role)
+    {
+        var admin = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var category = $"below-admin-{Guid.NewGuid():N}";
+        var prior = await CreateAsync(admin, "2025 below", _companyAId, category: category);
+        var subject = await CreateAsync(admin, "2026 below", _companyAId, category: category);
+
+        var client = await ClientAsync(role, _companyADomain, _companyAId);
+
+        var candidates = await client.GetAsync($"/admin/benchmarks/{subject.Id}/prior-period/candidates");
+        Assert.Equal(HttpStatusCode.Forbidden, candidates.StatusCode);
+
+        var backfill = await client.PostAsync("/admin/benchmarks/prior-period/backfill?apply=true", null);
+        Assert.Equal(HttpStatusCode.Forbidden, backfill.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var stored = await db.Benchmarks.AsNoTracking().FirstAsync(b => b.Id == subject.Id);
+        Assert.Equal(PriorPeriodStatuses.Unlinked, stored.PriorPeriodStatus);
+        Assert.Null(stored.PriorPeriodBenchmarkId);
+        Assert.NotEqual(prior.Id, stored.PriorPeriodBenchmarkId);
+    }
+
+    /// <summary>
+    /// The database refuses a status that is not one of the three, whatever writes it.
+    ///
+    /// <para>
+    /// The other half of <c>ck_benchmarks_prior_period_status</c>, and it is load-bearing on
+    /// its own: for a row with no pointer the second clause reads <c>false = false</c>, which
+    /// is true, so the vocabulary list is the only thing standing between a bulk writer (#90)
+    /// and a stored status nothing recognises. A benchmark carrying one renders no sentence at
+    /// all on the prior-period panel -- every branch there tests for a known value -- which is
+    /// precisely the silence the third state was added to end.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task The_database_refuses_a_status_that_is_not_one_of_the_three()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var subject = await CreateAsync(client, "vocabulary subject", _companyAId);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var row = await db.Benchmarks.FirstAsync(b => b.Id == subject.Id);
+            // No pointer, so the pointer/status clause is satisfied and only the vocabulary
+            // can refuse this.
+            row.PriorPeriodStatus = "archived";
+            await Assert.ThrowsAnyAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        }
+
+        // Read back through the route, in a fresh scope: the value the page would have had to
+        // make sense of never landed.
+        Assert.Equal(PriorPeriodStatuses.Unlinked, (await GetAsync(client, subject.Id)).PriorPeriodStatus);
+    }
+
+    /// <summary>
+    /// A prior period that read zero yields the change and withholds the ratio.
+    ///
+    /// <para>
+    /// Zero is an ordinary reading for half the things a climate benchmark counts --
+    /// grievances, accidents, resignations -- and "5 more than last year" is exactly what a
+    /// reader wants from it. The ratio is the part that cannot exist: 5/0 is infinity, and an
+    /// infinity does not survive System.Text.Json, so the guard is what stands between a
+    /// zero-valued prior period and a detail response that will not serialise at all.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_prior_period_that_read_zero_gives_a_change_but_no_ratio()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var category = $"zero-{Guid.NewGuid():N}";
+
+        var prior = await CreateAsync(client, "2025 zero", _companyAId, category: category);
+        await AddMetricAsync(client, prior.Id, "formal_grievances", 0, "count");
+        var current = await CreateAsync(client, "2026 zero", _companyAId, category: category);
+        await AddMetricAsync(client, current.Id, "formal_grievances", 5, "count");
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await SetPriorPeriodAsync(client, current.Id, PriorPeriodStatuses.Linked, prior.Id)).StatusCode);
+
+        var change = Assert.Single((await GetAsync(client, current.Id)).PriorPeriod!.Metrics);
+        Assert.Equal(0d, change.PriorValue!.Value);
+        Assert.Equal(5d, change.Delta!.Value);
+        Assert.Null(change.ChangeRatio);
+    }
+
+    /// <summary>
+    /// Last year's figures, typed in this year, are still last year's figures.
+    ///
+    /// <para>
+    /// This test exists to hold a decision open rather than to close a hole. The matching rule
+    /// requires a candidate to be <c>CreatedAt</c>-earlier and the write path deliberately does
+    /// not, because <c>created_at</c> records when somebody typed the row in and a benchmark
+    /// has no period field at all. Entering 2025's numbers after 2026's are already in is
+    /// ordinary -- it is the very example
+    /// <c>docs/decisions/prior-period-benchmark-linkage.md</c> uses to argue against automatic
+    /// matching -- and it makes the earlier period the younger ROW. An ordering check on the
+    /// write path reads as a tightening and would refuse the one case explicit linkage exists
+    /// to serve, so it is asserted here that it does not.
+    /// </para>
+    /// <para>
+    /// The suggestion side is asserted in the same test, because the two answers being
+    /// different is the point: the shortlist says nothing, and the administrator says 2025.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task An_earlier_period_typed_in_late_can_still_be_linked()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var category = $"late-entry-{Guid.NewGuid():N}";
+
+        var current = await CreateAsync(client, "2026 Engagement", _companyAId, category: category);
+        await AddMetricAsync(client, current.Id, "engagement_score", 74, "percent");
+        // Typed in afterwards, and older in every sense except the one the database records.
+        var lastYear = await CreateAsync(client, "2025 Engagement", _companyAId, category: category);
+        await AddMetricAsync(client, lastYear.Id, "engagement_score", 70, "percent");
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await SetPriorPeriodAsync(client, current.Id, PriorPeriodStatuses.Linked, lastYear.Id)).StatusCode);
+
+        var detail = await GetAsync(client, current.Id);
+        Assert.Equal(lastYear.Id, detail.PriorPeriodBenchmarkId);
+        Assert.Equal(4d, Assert.Single(detail.PriorPeriod!.Metrics).Delta!.Value);
+
+        // The shortlist would never have proposed it, and that asymmetry is deliberate: a
+        // suggestion may lean on `created_at`, an answer may not be refused by it.
+        var candidates = await client.GetAsync($"/admin/benchmarks/{current.Id}/prior-period/candidates");
+        Assert.Empty((await candidates.Content.ReadFromJsonAsync<List<PriorPeriodCandidateDto>>())!);
     }
 }
