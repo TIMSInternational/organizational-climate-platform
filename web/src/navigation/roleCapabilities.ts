@@ -20,7 +20,7 @@
  * derived from it, deliberately: a derived table would agree with the nav by
  * construction and could not catch the nav being wrong.
  *
- * ## `authorizedBy` is the evidence, and it is not decoration
+ * ## `authorizedBy` is the evidence, and it is checked
  *
  * Every entry names the endpoint behind the destination and the rule that makes it safe
  * for that role. Where the rule is "the handler resolves the caller's own row and reads
@@ -28,6 +28,26 @@
  * never heard of. Where the rule is a role list, the destination belongs to those roles
  * and to nobody else. Reviewed against `src/ClimateProject.Api/Endpoints/` and
  * `services/tracking-api/` at 8f0eacc.
+ *
+ * That used to be all it was — prose a reviewer was trusted to check, asserted only to be
+ * longer than twenty characters, which meant the whole table could be replaced with lorem
+ * ipsum, or a non-admin role handed `/microclimates`, with the suite still green. Three
+ * things now hold it to the backend, and they are in `roleCapabilities.test.ts`:
+ *
+ * 1. every entry must name at least one `VERB /path`, and that path must be a route the
+ *    C# actually registers — the check that found this table claiming a
+ *    `GET /admin/analytics` which has never existed;
+ * 2. no destination given to a non-admin role may carry evidence that names an admin gate
+ *    (`Roles.Admin`, `super_admin`, `CanAdminister`, `CanAccessCompany`…), so a row cannot
+ *    be pasted from the admin section and keep its own refutation in its evidence;
+ * 3. the endpoints a non-admin role may call are listed a second time, in the test, with
+ *    the reason each is caller-scoped. Widening the non-admin surface takes two edits in
+ *    two files, and the second one is next to that reasoning.
+ *
+ * What none of that is: a proof. Only the backend's own integration tests can say what a
+ * role really gets, and they are the reason each `authorizedBy` names a handler rather
+ * than a feeling. These checks make a wrong entry hard to write by accident, not
+ * impossible to write on purpose.
  *
  * ## What a leader and a supervisor can see of their team, in full
  *
@@ -86,7 +106,20 @@ export interface RoleCapability {
    * what says whether a row belongs to a role or merely has not 403'd yet.
    */
   authorizedBy: string
-  /** True when the sidebar offers it; false when it is reached from a page or the user menu. */
+  /**
+   * True when **some** role's sidebar offers this destination in **some** deployment;
+   * false when it is only ever reached from a page or from the user menu.
+   *
+   * Deliberately a property of the destination rather than of the role holding it, because
+   * the same row object is shared by several roles and they do not agree: a company_admin's
+   * sidebar carries `/admin/companies/{id}/users`, a super_admin reaches the same page by
+   * opening a tenant first, and `/action-plans` is a sidebar row only where the deployment
+   * has no `services/tracking-api`. `roleCapabilities.test.ts` asserts exactly that
+   * reading — every `true` is a row `buildNavSections` really emits for somebody, and every
+   * `false` is a route no role's sidebar offers under either tracking setting. Until #138
+   * was reviewed the field was read by nothing at all, so all thirty-nine values could be
+   * inverted with the suite still green.
+   */
   inNav: boolean
   /**
    * True when the destination only exists where the deployment has configured a
@@ -151,15 +184,29 @@ const SELF_SERVICE: readonly RoleCapability[] = [
       'no role claim is read, so every role that can be sent a survey can answer one.',
     inNav: false,
   },
+  {
+    route: '/surveys/my',
+    labelKey: 'navigation.mySurveys',
+    authorizedBy:
+      'GET /surveys/my — resolves the caller’s own user row and filters by that row’s company and department, ' +
+      'reading no role claim.',
+    inNav: true,
+  },
 ]
 
 /**
  * The one tracking row every role gets.
  *
  * `MisTareasAsync` filters on the caller's own `sub` claim and reads no role, so an
- * involucrado of any role is a first-class caller. It is the *only* tracking screen a
- * plain employee or a supervisor is offered — the full board is the node leader's, which
- * is §7 of the client's spec rather than a boundary (see `trackingAccess.ts`).
+ * involucrado of any role is a first-class caller — an administrator named on a plan is
+ * as much an involucrado as anybody. It is the *only* tracking screen a plain employee or
+ * a supervisor is **offered**; the full board is the node leader's, which is §7 of the
+ * client's spec rather than a boundary (see `trackingAccess.ts`).
+ *
+ * Offered and reachable are different questions, and this table answers the second. The
+ * admin sidebar does not carry this row when the token has a company id — it carries the
+ * consolidated view instead — but the page loads for them, so it is their capability too.
+ * See {@link ROLE_CAPABILITIES} on why that distinction had to be made explicit.
  */
 const TRACKING_TASKS: RoleCapability = {
   route: '/tracking/mis-tareas',
@@ -193,33 +240,26 @@ const TRACKING_PLANS: readonly RoleCapability[] = [
 ]
 
 /**
- * The work surface all three non-admin roles share, and — beyond the tracking module —
- * the whole of it.
+ * ## Where the non-admin work surface went, and where the team view is
  *
- * Deliberately **not** offered to a super_admin: `#191` makes a global super admin's
- * `User.CompanyId` null, so `/surveys/my` correctly answers them with an empty list, and
- * an always-empty page is not a destination. `navSections.ts` files it in the fallback
- * branch for the same reason.
+ * There is no `NON_ADMIN_WORK` list. `/surveys/my` is in {@link SELF_SERVICE} with the
+ * rest of the caller-scoped pages, because that is what it is: `ListMineAsync` resolves
+ * the caller's own user row and reads no role claim, so it loads for a company_admin
+ * exactly as it loads for an employee. It was filed as a non-admin capability, and that
+ * was wrong in a way a sweep could see: `buildNavSections` puts a company_admin whose
+ * token carries **no** companyId (`AdminLayout` reads the claim, and #191 leaves it
+ * absent for a global admin) into the same fallback branch as the non-admin roles, so
+ * that role's own sidebar offered a row this table said it could not reach. The table
+ * records what a role can **load**; which roles are *offered* a row is
+ * `navSections.ts`'s judgement and belongs there.
  *
- * ## Where the team view is
- *
- * There is no entry here for it, and that is the finding rather than an omission.
- * `/dashboard` (in {@link SELF_SERVICE}) dispatches to `DepartmentAdminDashboardView` for
- * `leader` and `supervisor`, and *that* is the team view — the single team-scoped read the
- * backend offers. A page mounted at `/team` would be a second caller of the same endpoint
- * drawing the same figures, so this table records the capability where it lives instead of
- * inventing a route for it.
+ * The team view is not missing either, and its absence is the finding rather than an
+ * omission. `/dashboard` (in {@link SELF_SERVICE}) dispatches to
+ * `DepartmentAdminDashboardView` for `leader` and `supervisor`, and *that* is the team
+ * view — the single team-scoped read the backend offers. A page mounted at `/team` would
+ * be a second caller of the same endpoint drawing the same figures, so this table records
+ * the capability where it lives instead of inventing a route for it.
  */
-const NON_ADMIN_WORK: readonly RoleCapability[] = [
-  {
-    route: '/surveys/my',
-    labelKey: 'navigation.mySurveys',
-    authorizedBy:
-      'GET /surveys/my — resolves the caller’s own user row and filters by that row’s company and department, ' +
-      'reading no role claim.',
-    inNav: true,
-  },
-]
 
 // ---------------------------------------------------------------------------
 // The administration surface, for the two roles that have one
@@ -411,7 +451,12 @@ const COMPANY_SCOPED: readonly RoleCapability[] = [
   {
     route: '/admin/companies/:companyId/analytics',
     labelKey: 'navigation.analytics',
-    authorizedBy: 'GET /admin/analytics — Roles.Admin plus a company match.',
+    // There is no `GET /admin/analytics`, which is what this row used to claim and what
+    // the endpoint sweep below caught. `AnalyticsDashboardPage` is assembled from two
+    // existing admin reads.
+    authorizedBy:
+      'GET /admin/benchmarks and GET /admin/ai-insights — BenchmarkEndpoints gates on Roles.Admin, ' +
+      'AIInsightEndpoints on Roles.Admin plus a company match.',
     inNav: true,
   },
 ]
@@ -423,22 +468,35 @@ const COMPANY_SCOPED: readonly RoleCapability[] = [
 /**
  * Every destination each role can reach and load, nav rows and non-nav destinations alike.
  *
+ * **Reach and load, not "is offered".** A row here says the page renders and its requests
+ * come back — it does not say the sidebar points at it, which is `inNav`'s much weaker
+ * claim, and it does not say the page is worth offering. `/surveys/my` answers a
+ * super_admin with an empty list (#191 leaves a global admin no company), and an
+ * always-empty page is a poor nav row; it is still a page they can open, so it is in their
+ * list and out of their nav. Conflating the two is how the first draft of this table came
+ * to refuse a company_admin a row their own sidebar offers.
+ *
  * The three non-admin lists are deliberately short, and that shortness is the finding this
  * issue was opened to establish. **A supervisor's list and an employee's differ by nothing
- * at all outside the tracking module**, because the one thing that distinguishes them —
- * running a team — has exactly one endpoint behind it and that endpoint is reached at
- * `/dashboard`, which every role already has. `leader` differs from `supervisor` only
- * inside the tracking module, where the client's §7 gives the node leader the board and
- * the plans.
+ * at all**, because the one thing that distinguishes them — running a team — has exactly
+ * one endpoint behind it and that endpoint is reached at `/dashboard`, which every role
+ * already has. `leader` differs from `supervisor` only inside the tracking module, where
+ * the client's §7 gives the node leader the board and the plans.
  */
 export const ROLE_CAPABILITIES: Record<PlatformRole, readonly RoleCapability[]> = {
-  super_admin: [...SELF_SERVICE, ...SUPER_ADMIN_ONLY, ...COMPANY_SCOPED, ...ADMIN_SHARED, ...TRACKING_PLANS],
-  company_admin: [...SELF_SERVICE, ...COMPANY_SCOPED, ...ADMIN_SHARED, ...TRACKING_PLANS],
+  super_admin: [
+    ...SELF_SERVICE,
+    ...SUPER_ADMIN_ONLY,
+    ...COMPANY_SCOPED,
+    ...ADMIN_SHARED,
+    ...TRACKING_PLANS,
+    TRACKING_TASKS,
+  ],
+  company_admin: [...SELF_SERVICE, ...COMPANY_SCOPED, ...ADMIN_SHARED, ...TRACKING_PLANS, TRACKING_TASKS],
   // The node leader. `Roles.PlanCreator` in the tracking service, and the only non-admin
   // role with a jefatura of its own to show.
   leader: [
     ...SELF_SERVICE,
-    ...NON_ADMIN_WORK,
     {
       route: '/tracking/tablero',
       labelKey: 'navigation.trackingDashboard',
@@ -451,8 +509,8 @@ export const ROLE_CAPABILITIES: Record<PlatformRole, readonly RoleCapability[]> 
     ...TRACKING_PLANS,
     TRACKING_TASKS,
   ],
-  supervisor: [...SELF_SERVICE, ...NON_ADMIN_WORK, TRACKING_TASKS],
-  employee: [...SELF_SERVICE, ...NON_ADMIN_WORK, TRACKING_TASKS],
+  supervisor: [...SELF_SERVICE, TRACKING_TASKS],
+  employee: [...SELF_SERVICE, TRACKING_TASKS],
 }
 
 /**
@@ -466,7 +524,13 @@ export function reachableRoutes(
   role: string | undefined,
   trackingEnabled = false,
 ): ReadonlySet<string> {
-  const capabilities = ROLE_CAPABILITIES[role as PlatformRole] ?? ROLE_CAPABILITIES.employee
+  // `Object.hasOwn`, not `?? ROLE_CAPABILITIES.employee`: `??` only catches null and
+  // undefined, so `ROLE_CAPABILITIES['constructor']` — a truthy inherited function —
+  // reached `.filter` and threw. A role arrives here as an untrusted string off a JWT
+  // claim, and `toString`, `valueOf` and `__proto__` are all strings a claim can carry.
+  const capabilities = Object.hasOwn(ROLE_CAPABILITIES, role as PlatformRole)
+    ? ROLE_CAPABILITIES[role as PlatformRole]
+    : ROLE_CAPABILITIES.employee
   return new Set(
     capabilities
       .filter((capability) => trackingEnabled || capability.requiresTracking !== true)
@@ -524,7 +588,20 @@ const LITERAL_ROUTES: ReadonlySet<string> = new Set(
  * role's list and not from the caller's.
  */
 export function canReach(role: string | undefined, href: string, trackingEnabled = false): boolean {
-  const routes = reachableRoutes(role, trackingEnabled)
+  return canReachIn(reachableRoutes(role, trackingEnabled), href)
+}
+
+/**
+ * {@link canReach}'s rule, over an explicit set of patterns rather than a role's.
+ *
+ * Exported so the ranking above can be tested on a set the test writes itself. It could
+ * not otherwise be tested at all: whether any *role* currently holds a parameter pattern
+ * that would swallow a literal it does not hold is an accident of the table's present
+ * contents, and today no role does — so a test phrased over roles would pass with the
+ * `LITERAL_ROUTES` clause deleted. The guard is for the table's future, so it is asserted
+ * against a set that states the hazard directly.
+ */
+export function canReachIn(routes: ReadonlySet<string>, href: string): boolean {
   if (routes.has(href)) return true
   if (LITERAL_ROUTES.has(href)) return false
   return [...routes].some((pattern) => pattern.includes(':') && matchesRoute(href, pattern))
