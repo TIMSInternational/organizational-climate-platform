@@ -205,6 +205,57 @@ describe('base ink contrast', () => {
   })
 
   /**
+   * A form control inside the chrome must not keep the page's ground.
+   *
+   * The base element layer paints every `input`/`select`/`textarea` with
+   * `color: var(--admin-font-primary)` on `background: var(--admin-bg-input)`.
+   * `.on-shell` re-points the ink tokens at the navy palette for its whole
+   * subtree — so any ground that rule leaves alone is a page colour under chrome
+   * ink. `CompanyContextSwitcher` is such a control (the SuperAdmin's native
+   * `<select>` in the top strip), and until #83 it printed #eef3f9 on #ffffff:
+   * **1.12:1**, the tenant name for the scope the entire product runs under,
+   * invisible.
+   *
+   * Both ends are read out of the shipped stylesheets, and the ground is read
+   * from `.on-shell` rather than named here — an assertion naming
+   * `--admin-shell-bg-raised` would stay green if the rule stopped re-pointing
+   * `--admin-bg-input` at all, which is the exact defect.
+   */
+  it('the ground a form control gets inside the shell carries the shell ink', () => {
+    const index = readFileSync(join(process.cwd(), 'src', 'index.css'), 'utf8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      '',
+    )
+    const onShell = /\.on-shell\s*\{([^}]*)\}/.exec(index)
+    expect(onShell, 'index.css no longer has an .on-shell rule').not.toBeNull()
+
+    // Which ground the element layer actually gives a control, read from the rule
+    // rather than assumed — if `input, select, textarea` is ever repainted from a
+    // different token this follows it.
+    const control = /\binput,\s*select,\s*textarea\s*\{([^}]*)\}/.exec(index)
+    expect(control, 'index.css no longer styles input/select/textarea as one').not.toBeNull()
+    const groundToken = /background:\s*var\((--admin-[\w-]+)\)/.exec(control![1])?.[1]
+    const inkToken = /color:\s*var\((--admin-[\w-]+)\)/.exec(control![1])?.[1]
+    expect(groundToken, 'the control rule declares no background token').toBeDefined()
+    expect(inkToken, 'the control rule declares no colour token').toBeDefined()
+
+    const remap = new RegExp(`${groundToken}:\\s*var\\((--admin-shell-[\\w-]+)\\)`).exec(onShell![1])
+    expect(
+      remap,
+      `.on-shell does not re-point ${groundToken}, so a control in the chrome keeps the page's ground under the chrome's ink`,
+    ).not.toBeNull()
+    const inkRemap = new RegExp(`${inkToken}:\\s*var\\((--admin-shell-[\\w-]+)\\)`).exec(onShell![1])
+    expect(inkRemap, `.on-shell does not re-point ${inkToken}`).not.toBeNull()
+
+    for (const [theme, palette] of [['light', light], ['dark', dark]] as const) {
+      expect(
+        contrast(palette[inkRemap![1]], palette[remap![1]]),
+        `${inkRemap![1]} on ${remap![1]} in ${theme}`,
+      ).toBeGreaterThanOrEqual(AA_TEXT_CONTRAST)
+    }
+  })
+
+  /**
    * The exemption, kept honest.
    *
    * `--admin-font-light` is the only ink held to 3:1 instead of 4.5:1, and that

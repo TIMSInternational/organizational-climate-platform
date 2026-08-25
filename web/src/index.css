@@ -443,6 +443,19 @@
    * `background: var(--admin-bg-overlay)`, which in light is a translucent white --
    * a light popover hanging out of a dark rail, printing light ink on itself. It
    * lifts to `--admin-shell-bg-raised` instead.
+   *
+   * `--admin-bg-input` is remapped for the SAME reason, and #83 found it the hard
+   * way: the base element layer gives every `input`/`select`/`textarea`
+   * `color: var(--admin-font-primary); background: var(--admin-bg-input)`, and this
+   * rule re-points the ink but used not to re-point the ground. The one form
+   * control that lives in the chrome -- `CompanyContextSwitcher`, the SuperAdmin's
+   * native `<select>` in the top strip -- therefore printed
+   * `--admin-shell-font-strong` (#eef3f9) on `--admin-bg-input` (#ffffff in light).
+   * That is **1.12:1**: the name of the tenant whose data the whole product is
+   * scoped to, effectively invisible. Photographed at /dashboard, light, 1440x900;
+   * tsc, oxlint and 3286 tests were all green over it, because every one of them
+   * measures a token pairing that this rule silently did not use. On the raised
+   * navy it is 10.46:1 in light and 11.93:1 in dark.
    * ------------------------------------------------------------------------- */
   .on-shell {
     --admin-font-primary: var(--admin-shell-font-strong);
@@ -453,6 +466,7 @@
     --admin-bg-hover: var(--admin-shell-bg-hover);
     --admin-bg-active: var(--admin-shell-bg-active);
     --admin-bg-overlay: var(--admin-shell-bg-raised);
+    --admin-bg-input: var(--admin-shell-bg-raised);
     --admin-border-light: var(--admin-shell-border);
     --admin-border-hover: var(--admin-shell-border);
     --admin-border-default: var(--admin-shell-border);
