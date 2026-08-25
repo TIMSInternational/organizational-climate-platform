@@ -161,9 +161,36 @@ Consequences to plan for:
 
 ### C. Internal service auth
 
+> **Correction, 2026-08-24 (#219): this row's "the only caller is climate-tracking's
+> backend" describes the ARCHITECTURE, not production.** There is no caller. Verified
+> 2026-08-04 and re-verified 2026-08-24: `services/tracking-api` is deployed nowhere.
+> There is no tracking CloudFormation stack in account `747814092517`, no tracking image
+> in ECR, no tracking database, and until this correction there was no deploy workflow
+> for it either (`grep -rn tracking-api .github/workflows/*.yml` returned nothing). The
+> secret `climate-project-api/prod/InternalApiKey`, created 2026-08-04, **currently has
+> no consumer at all**, so a rotation of it today is one-sided by definition and cannot
+> break anything downstream.
+>
+> That changes what "rotate on both sides together" means *right now*: steps 4–5 of
+> runbook **C** are a no-op until the tracking service is first deployed. It does not
+> change the instruction, because the moment tracking IS deployed the coupling becomes
+> live with no further warning — which is precisely why #219 was filed before it could
+> be discovered by breaking it.
+>
+> **The deployment path now exists as files and has never been dispatched:**
+> `.github/workflows/deploy-tracking-prod.yml`,
+> `infra/aws/climate-tracking-api-bootstrap.yml`,
+> `infra/aws/climate-tracking-api-prod-service.yml`, and
+> [`docs/runbooks/tracking-service-provisioning.md`](../runbooks/tracking-service-provisioning.md).
+> That workflow reads `vars.INTERNAL_API_KEY_SECRET_ARN` — **the same GitHub environment
+> variable `deploy-prod.yml` reads**, on the same `production` environment — and refuses
+> to deploy unless the ARN it is about to pass equals the one the live
+> `climate-project-api-prod` stack is running with. One secret, checked at deploy time,
+> so this row can never quietly become two rows.
+
 | Item | Where | Notes | Rotated? |
 |---|---|---|---|
-| `InternalApiKey` | Secrets Manager (`InternalApiKeySecretArn`) → env `InternalApiKey` | Static bearer token guarding `/api/internal/*`; the only caller is climate-tracking's backend, which passes it as `ClimateProjectInternalApiKey`. **Rotate on both sides together.** Two distinct failure modes, worth keeping apart when planning the rotation: an **unset/empty** value now fails the host at *startup* (`.ValidateOnStart()`, added by #189), so a blank rotation means the service does not boot and the deploy fails outright — loud, not silent. A **mismatched** value (set on one side, stale on the other) is not a 500: `InternalApiKeyFilter` returns **401 `"Invalid or missing internal API key."`** per request, failing closed. The filter's 500 `"Internal API is not configured."` branch is now unreachable in a running service and is retained only as defence in depth. **Enumerated 2026-08-15:** secret name `climate-project-api/prod/InternalApiKey` (ARN suffix `-rILWWK`), account `747814092517` — ARN published as the `INTERNAL_API_KEY_SECRET_ARN` variable on the `production` environment. Click-by-click: runbook **C**. | ☐ |
+| `InternalApiKey` | Secrets Manager (`InternalApiKeySecretArn`) → env `InternalApiKey` | Static bearer token guarding `/api/internal/*`; the intended caller is climate-tracking's backend, which reads the same value under the configuration key `ClimateProjectInternalApiKey` (**not deployed as of 2026-08-24 — see the correction above**). **Rotate on both sides together, once there are two sides.** Two distinct failure modes, worth keeping apart when planning the rotation: an **unset/empty** value now fails the host at *startup* (`.ValidateOnStart()`, added by #189), so a blank rotation means the service does not boot and the deploy fails outright — loud, not silent. A **mismatched** value (set on one side, stale on the other) is not a 500: `InternalApiKeyFilter` returns **401 `"Invalid or missing internal API key."`** per request, failing closed. The filter's 500 `"Internal API is not configured."` branch is now unreachable in a running service and is retained only as defence in depth. **Enumerated 2026-08-15:** secret name `climate-project-api/prod/InternalApiKey` (ARN suffix `-rILWWK`), account `747814092517` — ARN published as the `INTERNAL_API_KEY_SECRET_ARN` variable on the `production` environment. Click-by-click: runbook **C**. | ☐ |
 
 ### D. Identity / OAuth
 
