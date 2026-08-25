@@ -31,8 +31,11 @@ namespace ClimateProject.Infrastructure.Notifications;
 /// **The one thing it is not thin about: the survey link.** A <c>survey_invitation</c> or
 /// <c>survey_reminder</c> row carries the invitation's <b>id</b> and deliberately not its
 /// token, because <c>notifications.data</c> is readable by any CompanyAdmin through
-/// <c>GET /notifications?companyId=</c> and a token there is that admin's key to any
-/// employee's survey session. So this class makes the trip to <c>survey_invitations</c> that
+/// <c>GET /notifications?companyId=</c> -- and a leaked token lets its holder mark another
+/// employee's invitation <c>completed</c>, irreversibly, which locks the real invitee out of
+/// their own survey with a 409 and falsifies the response rate. (It does not let them answer
+/// AS that employee; see <see cref="ISurveyInvitationTokens"/> for why, and for what the
+/// token does and does not buy.) So this class makes the trip to <c>survey_invitations</c> that
 /// turns the id into <c>/survey-invitations/{token}</c>, and it makes it <b>here</b>, at send
 /// time, rather than at queue time. That placement is the whole security argument: an
 /// invitation revoked in the minutes between the row being queued and the sweep picking it up

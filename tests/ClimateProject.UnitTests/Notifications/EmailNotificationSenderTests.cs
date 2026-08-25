@@ -310,14 +310,25 @@ public class EmailNotificationSenderTests
         Assert.DoesNotContain("survey-invitations", Assert.Single(transport.Sent).TextBody, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task The_token_is_never_written_to_a_log()
+    /// <summary>
+    /// `SurveyAccessTokens` states these are never logged, and until this test nothing enforced
+    /// it: logging the composed URL compiled and survived the whole suite. A token in an
+    /// application log is a bearer credential in a log aggregator, readable by everyone who can
+    /// read operational logs and outliving the survey itself.
+    ///
+    /// <para>
+    /// <b>Every outcome, not just the happy one.</b> A first version drove only the delivered
+    /// path, and a `LogWarning` on the `!outcome.Delivered` branch slipped straight past it --
+    /// writing the whole URL on every transport failure, which is exactly when logs get read.
+    /// The failure branches are where a tired author reaches for "log more detail", so they are
+    /// the branches that need pinning most.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(EveryTransportOutcome))]
+    public async Task The_token_is_never_written_to_a_log(EmailSendOutcome outcome)
     {
-        // `SurveyAccessTokens` states these are never logged, and until this test nothing
-        // enforced it: logging the composed URL at Information compiled and survived the whole
-        // suite. A token in an application log is a bearer credential in a log aggregator,
-        // readable by everyone who can read operational logs and outliving the survey itself.
-        var transport = new RecordingTransport(EmailSendOutcome.Success());
+        var transport = new RecordingTransport(outcome);
         var logger = new CapturingLogger();
 
         await new EmailNotificationSender(transport, Options(), new RecordingTokens(Token), logger)
@@ -326,10 +337,39 @@ public class EmailNotificationSenderTests
         // The mail really did carry it -- otherwise this passes for the wrong reason.
         Assert.Contains(Token, Assert.Single(transport.Sent).TextBody, StringComparison.Ordinal);
 
-        Assert.NotEmpty(logger.Lines);
         Assert.DoesNotContain(logger.Lines, line => line.Contains(Token, StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(logger.Lines, line => line.Contains("survey-invitations", StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>
+    /// The instrument, checked separately rather than as a `NotEmpty` inside the theory above.
+    ///
+    /// <para>
+    /// The sender writes NOTHING on its failure branches -- measured, not assumed -- so
+    /// asserting "some line was written" there fails against correct code and would have to be
+    /// deleted, taking the non-vacuity guard with it. Splitting them keeps both properties: the
+    /// logger provably captures what the sender writes, and no branch writes a token.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task The_capturing_logger_really_does_observe_what_the_sender_writes()
+    {
+        var logger = new CapturingLogger();
+
+        await new EmailNotificationSender(
+                new RecordingTransport(EmailSendOutcome.Success()), Options(), new RecordingTokens(Token), logger)
+            .SendAsync(Notification(NotificationChannels.Email), Recipient(), CancellationToken.None);
+
+        Assert.Contains(logger.Lines, line => line.Contains("Delivered notification", StringComparison.Ordinal));
+    }
+
+    public static TheoryData<EmailSendOutcome> EveryTransportOutcome() =>
+    [
+        EmailSendOutcome.Success(),
+        EmailSendOutcome.Transient("SMTP 451"),
+        EmailSendOutcome.PermanentFailure("SMTP 550"),
+        new EmailSendOutcome(false, false, null),
+    ];
 
     [Fact]
     public void A_delivery_result_is_transient_unless_it_says_otherwise()

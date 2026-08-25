@@ -68,9 +68,14 @@ namespace ClimateProject.Api.Endpoints;
 /// carries <c>surveyId</c> and <c>surveyInvitationId</c> only, and the sender resolves the
 /// token from <c>survey_invitations</c> when it actually builds the mail. Otherwise every
 /// token would be readable through <c>GET /notifications?companyId=</c>, which any
-/// CompanyAdmin can call -- handing them the ability to open any employee's survey as that
-/// employee. It also makes revocation real: a token revoked between queueing and sending is
-/// gone by the time the sender looks it up.</item>
+/// CompanyAdmin can call. What that would hand them is <b>invitation-state tampering, not
+/// impersonation</b>: a token holder can mark a non-anonymous survey's invitation
+/// <c>completed</c>, which is irreversible, answers the real invitee's own link with a 409,
+/// and falsifies the response rate. Answering is a separate surface that never consults the
+/// token at all. (This wording used to claim impersonation; it was wrong, and
+/// <c>ISurveyInvitationTokens</c> carries the checked version.) It also makes revocation real:
+/// a token revoked between queueing and sending is gone by the time the sender looks it
+/// up.</item>
 /// </list></para>
 /// </summary>
 public static class SurveyDistributionEndpoints

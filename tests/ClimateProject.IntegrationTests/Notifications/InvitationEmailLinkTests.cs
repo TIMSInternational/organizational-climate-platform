@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
@@ -108,6 +109,12 @@ public sealed class CapturedMailbox
     public void Add(EmailMessage message)
     {
         lock (_gate) { _messages.Add(message); }
+    }
+
+    /// <summary>Forgets everything captured so far, so one test can measure two sends separately.</summary>
+    public void Clear()
+    {
+        lock (_gate) { _messages.Clear(); }
     }
 
     public IReadOnlyList<EmailMessage> To(string address)
@@ -485,9 +492,14 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
     /// to that user. Only `company_id` separates the two.
     /// </para>
     /// <para>
-    /// Narrow, and real: re-homing a user is an ordinary administrative act, and the leak it
-    /// opens crosses a tenant boundary. This is the test that fails when the tenancy predicate
-    /// is removed.
+    /// <b>Unreachable through the product today, and kept anyway.</b> Nothing in <c>src/</c>
+    /// writes <c>User.CompanyId</c> after creation -- <c>UpdateUserRequest</c> has no such
+    /// field -- so this test manufactures the state with a direct write, and the mail it blocks
+    /// would land in the employee's OWN mailbox carrying their OWN token, which is not a
+    /// disclosure to the admin who sent it. So this is defence-in-depth, not a live hole: the
+    /// predicate is here so that adding a re-homing feature later cannot silently open one, and
+    /// this test is what makes the predicate fail a build if it is ever deleted. Claiming more
+    /// than that would be overselling it.
     /// </para>
     /// </summary>
     [Fact]
@@ -559,6 +571,159 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
         Assert.DoesNotContain(oldToken, message.HtmlBody, StringComparison.Ordinal);
         Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.TextBody, StringComparison.Ordinal);
         Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.HtmlBody, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>The token mailed is the one the notification NAMED.</b>
+    ///
+    /// <para>
+    /// The predicate the whole design was originally keyed on, and the only one that had no
+    /// test: every other case here gives its recipient exactly one invitation, so "the row you
+    /// asked for" and "this user's first live row in this tenant" are indistinguishable.
+    /// Deleting <c>i.Id == invitationId</c> left both suites fully green.
+    /// </para>
+    /// <para>
+    /// The consequence is not a security one -- the scope predicates still confine it to this
+    /// person, in this tenant -- it is plain wrongness: an employee invited to two open surveys
+    /// receives survey A's link under a subject and body about survey B, and answers the wrong
+    /// survey or none. Asserted in BOTH directions from one recipient holding two live
+    /// invitations, because with the id predicate gone an unordered <c>FirstOrDefault</c> may
+    /// coincidentally return the right row for one of them; it cannot for both.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task The_link_names_the_invitation_the_notification_asked_for_not_just_one_of_the_recipients()
+    {
+        var client = await AdminAsync();
+        var (employeeId, employeeEmail) = await SeedEmployeeAsync();
+
+        var first = await CreateActiveSurveyAsync(client);
+        var second = await CreateActiveSurveyAsync(client);
+
+        async Task<(Guid InvitationId, string Token)> InviteAsync(Guid surveyId)
+        {
+            var response = await client.PostAsJsonAsync(
+                $"/surveys/{surveyId}/invitations", new CreateSurveyInvitationsRequest(UserIds: [employeeId]));
+            response.EnsureSuccessStatusCode();
+            var invitationId = (await response.Content.ReadFromJsonAsync<SurveyInvitationBatchResult>())!.InvitationIds[0];
+            var token = await _harness.WithDbAsync(db => db.SurveyInvitations
+                .AsNoTracking().Where(i => i.Id == invitationId).Select(i => i.InvitationToken).FirstAsync());
+            return (invitationId, token);
+        }
+
+        var a = await InviteAsync(first.Id);
+        var b = await InviteAsync(second.Id);
+        Assert.NotEqual(a.Token, b.Token);
+
+        // Both invitations are live, both belong to this employee, both sit in this tenant.
+        // Only the id distinguishes them.
+        var mailed = new List<string>();
+        foreach (var (surveyId, invitation) in new[] { (first.Id, a), (second.Id, b) })
+        {
+            _mail.Mailbox.Clear();
+            (await client.PostAsJsonAsync("/notifications", new CreateNotificationRequest(
+                UserId: employeeId,
+                CompanyId: _companyId,
+                Type: NotificationTypes.SurveyInvitation,
+                Channel: NotificationChannels.Email,
+                Priority: NotificationPriorities.Default,
+                Title: "Your survey",
+                Message: "Please respond.",
+                Data: SurveyNotificationData.Serialize(surveyId, invitation.InvitationId)))).EnsureSuccessStatusCode();
+
+            var body = Assert.Single(_mail.Mailbox.To(employeeEmail)).TextBody;
+            Assert.Contains(
+                $"{CapturingMailHostFixture.AppBaseUrl}/survey-invitations/{invitation.Token}",
+                body,
+                StringComparison.Ordinal);
+            mailed.Add(invitation.Token);
+        }
+
+        // ...and the two mails did not carry the same link, which is what a lookup that
+        // ignored the id would produce.
+        Assert.Equal(2, mailed.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    /// <summary>
+    /// <b>A blank token column is treated as no token, not as a link to nowhere.</b>
+    /// <c>FirstOrDefaultAsync</c> gives null for "no row", and the lookup collapses a blank
+    /// column into the same answer. Untested, that collapse could be deleted -- `return token;`
+    /// passes everything -- and the mail would carry a live-looking button pointing at
+    /// <c>/survey-invitations/</c> with nothing after it.
+    /// </summary>
+    [Fact]
+    public async Task A_blank_token_column_produces_no_link_rather_than_a_link_to_nowhere()
+    {
+        var client = await AdminAsync();
+        var survey = await CreateActiveSurveyAsync(client);
+        var (employeeId, employeeEmail) = await SeedEmployeeAsync();
+
+        var invited = await client.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/invitations", new CreateSurveyInvitationsRequest(UserIds: [employeeId]));
+        invited.EnsureSuccessStatusCode();
+        var invitationId = (await invited.Content.ReadFromJsonAsync<SurveyInvitationBatchResult>())!.InvitationIds[0];
+
+        await _harness.WithDbAsync(async db =>
+        {
+            var invitation = await db.SurveyInvitations.FirstAsync(i => i.Id == invitationId);
+            invitation.InvitationToken = string.Empty;
+            await db.SaveChangesAsync();
+        });
+
+        await SweepAsync(client);
+
+        var message = Assert.Single(_mail.Mailbox.To(employeeEmail));
+        Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.HtmlBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("href=\"\"", message.HtmlBody, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>A completed invitation still gets its link, and that is the decision rather than an
+    /// oversight.</b>
+    ///
+    /// <para>
+    /// The reminder job excludes completed invitations when it plans, but a reminder queued
+    /// before the invitee answered and swept afterwards still goes out. Only revocation
+    /// suppresses the link; completion does not, because the token resolves and
+    /// <c>GET /survey-invitations/{token}</c> answers 409 <c>already_completed</c> -- "you have
+    /// already answered this" tells the recipient more than a link-less mail does. Pinned so
+    /// the behaviour is a choice somebody made, not an artefact of the filter being short.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_completed_invitation_still_carries_its_link_and_the_link_says_already_answered()
+    {
+        var client = await AdminAsync();
+        var survey = await CreateActiveSurveyAsync(client);
+        var (employeeId, employeeEmail) = await SeedEmployeeAsync();
+
+        var invited = await client.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/invitations", new CreateSurveyInvitationsRequest(UserIds: [employeeId]));
+        invited.EnsureSuccessStatusCode();
+        var invitationId = (await invited.Content.ReadFromJsonAsync<SurveyInvitationBatchResult>())!.InvitationIds[0];
+
+        var token = await _harness.WithDbAsync(async db =>
+        {
+            var invitation = await db.SurveyInvitations.FirstAsync(i => i.Id == invitationId);
+            invitation.Status = SurveyInvitationStatuses.Completed;
+            invitation.CompletedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+            return invitation.InvitationToken;
+        });
+
+        await SweepAsync(client);
+
+        var message = Assert.Single(_mail.Mailbox.To(employeeEmail));
+        Assert.Contains(
+            $"{CapturingMailHostFixture.AppBaseUrl}/survey-invitations/{token}",
+            message.TextBody,
+            StringComparison.Ordinal);
+
+        // ...and following it is informative rather than broken.
+        using var anonymous = _factory.CreateClient();
+        var opened = await anonymous.GetAsync($"/survey-invitations/{token}");
+        Assert.Equal(HttpStatusCode.Conflict, opened.StatusCode);
     }
 
     // ------------------------------------------------------------------

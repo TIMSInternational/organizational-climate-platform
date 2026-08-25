@@ -167,6 +167,7 @@ public static class InvitationReminderJob
             planned.Add(new PlannedReminder(
                 DeterministicNotificationId.ForReminder(row.Invitation.Id, decision.ReminderNumber),
                 recipient,
+                row.Survey.CompanyId,
                 NotificationTypes.SurveyReminder,
                 title,
                 row.Survey.EndDate,
@@ -287,6 +288,7 @@ public static class InvitationReminderJob
             planned.Add(new PlannedReminder(
                 DeterministicNotificationId.ForMicroclimateReminder(row.Invitation.Id, decision.ReminderNumber),
                 recipient,
+                row.Microclimate.CompanyId,
                 // There is no `microclimate_reminder` in NotificationTypes, and there must not
                 // be: the nine values are the legacy Mongoose enum verbatim and a unit test pins
                 // them. `deadline_reminder` is documented as "nudges for anything still
@@ -358,14 +360,15 @@ public static class InvitationReminderJob
                 Id = reminder.NotificationId,
                 UserId = reminder.Recipient.Id,
 
-                // Guarded by the caller's recipient filter: notifications.company_id is a
-                // non-nullable FK, so a global-scope user (CompanyId null, i.e. a super admin --
-                // see #191) cannot own one. They are also not survey respondents.
-                CompanyId = reminder.Recipient.CompanyId!.Value,
+                // The CONTENT's tenant, matching what SurveyDistributionEndpoints writes for the
+                // same invitation. See the remarks on PlannedReminder.CompanyId for why the
+                // recipient's own company is the wrong answer here.
+                CompanyId = reminder.CompanyId,
                 Type = reminder.Type,
                 Channel = NotificationChannels.Email,
                 Priority = NotificationPriorities.Medium,
                 Status = NotificationStatuses.Pending,
+                Data = reminder.Data,
                 Title = ScheduledNotificationCopy.ReminderTitleFor(reminder.Recipient.Preferences.Language),
                 Message = ScheduledNotificationCopy.ReminderBodyFor(
                     reminder.Recipient.Preferences.Language, reminder.ContentTitle, reminder.ClosesAt),
@@ -373,7 +376,6 @@ public static class InvitationReminderJob
                 // The instant the reminder became due, not the instant a tick noticed it. Two
                 // instances racing compute the same value, and a late sweep records when the
                 // nudge was owed rather than when the scheduler got round to it.
-                Data = reminder.Data,
                 ScheduledFor = reminder.DueAt,
                 RetryCount = 0,
                 MaxRetries = 3,
@@ -417,6 +419,19 @@ public static class InvitationReminderJob
 
     private sealed record MicroclimateReminderRow(MicroclimateInvitation Invitation, Microclimate Microclimate);
 
+    /// <param name="CompanyId">
+    /// The tenant the reminder belongs to: the CONTENT's company (the survey's, the
+    /// microclimate's), not the recipient's.
+    ///
+    /// <para>
+    /// They are the same until somebody is re-homed, and then they disagree -- and the manual
+    /// invite path in <c>SurveyDistributionEndpoints</c> has always written the content's, so
+    /// writing the recipient's here meant the same invitation to the same person produced two
+    /// different answers depending on which producer raised the row. That also decided whether
+    /// the mailed link survived, because the sender scopes its token lookup by this column.
+    /// One answer, and it is the one that matches <c>survey_invitations.company_id</c>.
+    /// </para>
+    /// </param>
     /// <param name="Data">
     /// The <c>notifications.data</c> payload, or null for a reminder that names no survey
     /// invitation. Carried here rather than derived in <c>RaiseAsync</c> because only the
@@ -427,6 +442,7 @@ public static class InvitationReminderJob
     private sealed record PlannedReminder(
         Guid NotificationId,
         User Recipient,
+        Guid CompanyId,
         string Type,
         string? ContentTitle,
         DateTimeOffset ClosesAt,

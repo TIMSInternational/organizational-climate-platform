@@ -8,7 +8,7 @@ namespace ClimateProject.Infrastructure.Surveys;
 /// <see cref="ISurveyInvitationTokens"/> against <c>survey_invitations</c>.
 ///
 /// <para>
-/// One projected, no-tracking read of two columns, keyed by primary key. No entity is
+/// One projected, no-tracking read of a single column, keyed by primary key. No entity is
 /// materialised and nothing is attached to the change tracker: this runs inside the
 /// notification dispatch sweep, once per mail, and a tracked <c>SurveyInvitation</c> per
 /// send is a graph that grows for the length of a batch and buys nothing -- the sender never

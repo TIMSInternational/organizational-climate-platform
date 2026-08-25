@@ -19,8 +19,11 @@ namespace ClimateProject.Application.Notifications;
 /// <para>
 /// <b>The token is deliberately absent, and this is the class that has to keep it absent.</b>
 /// <c>GET /notifications?companyId=</c> returns <c>data</c> verbatim to any CompanyAdmin, so
-/// a token persisted here would hand them the ability to open any employee's survey <i>as
-/// that employee</i>. Only the invitation's <b>id</b> travels; the sender resolves the token
+/// a token persisted here would hand every one of them a bearer credential for every
+/// employee's invitation -- enough to mark it <c>completed</c> on a non-anonymous survey,
+/// irreversibly, locking the real invitee out with a 409 and corrupting the response rate. Not
+/// enough to answer as them: see <c>ISurveyInvitationTokens</c>. Only the invitation's
+/// <b>id</b> travels; the sender resolves the token
 /// from <c>survey_invitations</c> at send time, which also makes revocation real -- an
 /// invitation revoked between queueing and sending has no live token left to find.
 /// </para>

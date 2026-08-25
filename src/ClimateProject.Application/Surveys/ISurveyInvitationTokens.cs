@@ -33,9 +33,21 @@ public interface ISurveyInvitationTokens
     /// <c>POST /notifications</c> writes that column from the request body verbatim. A
     /// CompanyAdmin may therefore choose <i>which invitation id</i> is looked up. Keyed on the
     /// id alone, that is a working exfiltration primitive: post a <c>survey_invitation</c> to
-    /// your own user, in your own company, naming <i>another employee's</i> -- or another
-    /// <i>tenant's</i> -- invitation id, and the sender resolves that victim's live token and
-    /// mails it to you. You then open their survey as them.
+    /// your own user, in your own company, naming <i>another employee's</i> invitation id, and
+    /// the sender resolves that victim's live token and mails it to you.
+    /// </para>
+    /// <para>
+    /// <b>What a stolen token actually buys, stated precisely.</b> Not impersonation. It reads
+    /// the survey's title and description through <c>GET /survey-invitations/{token}</c>, and
+    /// on a non-anonymous survey it can <c>POST .../completed</c> -- which sets
+    /// <c>CompletedAt</c>, cannot be undone because
+    /// <c>SurveyInvitationStatuses.Advances</c> is strictly monotonic, makes the real invitee's
+    /// own link answer 409 <c>already_completed</c>, and corrupts the response rate. Answering
+    /// is a different surface entirely: <c>SurveyResponseEndpoints.ResolveRespondentAsync</c>
+    /// never consults an invitation token, attributing an authenticated respondent to their own
+    /// JWT and serving an unauthenticated one only when the survey is anonymous and open, where
+    /// no token is needed. So the loss is denial of participation and falsified data, which is
+    /// serious enough on its own and is what this doc should say.
     /// </para>
     /// <para>
     /// That is precisely the capability the producer-side design removed when it kept tokens
@@ -54,18 +66,35 @@ public interface ISurveyInvitationTokens
     /// "this invitation has been revoked" is worse than mailing them no link.
     /// </para>
     /// <para>
-    /// Expiry is deliberately <b>not</b> consulted. An expired token still resolves, and
+    /// <b>Only revocation suppresses the link. Expiry and completion deliberately do not.</b>
+    /// Revocation is a decision an administrator made about this person, so a link that greets
+    /// them with "this invitation has been revoked" is worse than no link. An expired or
+    /// already-completed invitation is different: the token still resolves, and
     /// <c>GET /survey-invitations/{token}</c> answers it with a specific, informative
-    /// "this invitation has expired" -- which tells the recipient more than a link-less
-    /// email does. Revocation and expiry are different facts and this method treats them as
-    /// different facts, exactly as the token route does.
+    /// "this invitation has expired" or 409 <c>already_completed</c> -- each of which tells the
+    /// recipient more than a link-less email does. The three are different facts and this
+    /// method keeps them different, exactly as the token route does.
+    /// </para>
+    /// <para>
+    /// Completion is worth naming explicitly because a reminder CAN reach it: the reminder job
+    /// excludes completed invitations when it plans, but a reminder queued before the invitee
+    /// answered and swept afterwards still goes out. That mail carries a working link to a page
+    /// that says "you have already answered this", which is the honest thing for it to say.
     /// </para>
     /// </summary>
     /// <param name="recipientUserId">
-    /// The user the mail is being addressed to -- taken from the resolved
-    /// <c>NotificationRecipient</c>, i.e. the row whose e-mail address is about to receive
-    /// this. Deliberately that rather than <c>Notification.UserId</c>: the binding that matters
-    /// is between the token and the mailbox it lands in.
+    /// The user the mail is being addressed to. The sender passes
+    /// <c>NotificationRecipient.UserId</c> -- the row whose e-mail address is about to receive
+    /// this.
+    ///
+    /// <para>
+    /// No claim is made that this differs from <c>Notification.UserId</c>. It cannot: the
+    /// dispatch path resolves the recipient BY <c>Notification.UserId</c>, so the two are the
+    /// same value on every path that exists, and substituting one for the other changes
+    /// nothing and breaks no test. An earlier version of this comment called the choice
+    /// deliberate and load-bearing, which was decoration -- the scoping is what matters, not
+    /// which of two equal values expresses it.
+    /// </para>
     /// </param>
     /// <param name="companyId">The notification's tenant, already authorised against the caller by the endpoint.</param>
     Task<string?> LiveTokenAsync(
