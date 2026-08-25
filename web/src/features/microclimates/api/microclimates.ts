@@ -16,6 +16,26 @@ export interface QuestionOption {
   label: string | null
 }
 
+/**
+ * One point on an `emoji_rating` question's scale (#198).
+ *
+ * `emoji` is the glyph and is decoration ONLY -- it must be rendered `aria-hidden`.
+ * `label` is the option's accessible name, already resolved for the requested locale,
+ * and it is what names the control: an emoji-only radio is announced by whatever the
+ * screen reader's own emoji dictionary calls the character, in whatever language that
+ * dictionary happens to be in. That is the failure this shape exists to prevent, and
+ * it is why the glyph and the name are two fields rather than one.
+ *
+ * `value` is the stable key and it is what must be SUBMITTED -- as a string, since
+ * answers travel as text. It is not necessarily 1..n: an author may configure -1..1.
+ */
+export interface QuestionEmojiOption {
+  order: number
+  emoji: string
+  value: number
+  label: string | null
+}
+
 export interface Question {
   id: string
   /** Already resolved for the requested locale -- never a per-language object. */
@@ -24,6 +44,8 @@ export interface Question {
   options: QuestionOption[] | null
   required: boolean
   order: number
+  /** The scale of an `emoji_rating` question; null on every other type. */
+  emojiOptions?: QuestionEmojiOption[] | null
 }
 
 /**
@@ -38,12 +60,27 @@ export interface CreateQuestionOptionInput {
   label: LocalizedInput
 }
 
+/**
+ * Write shape for one point on an emoji scale (#198).
+ *
+ * `value` may be omitted, in which case the server numbers the scale by position
+ * (1..n). `label` is not optional in practice: the server rejects a face with no
+ * label, because that face would reach a respondent with no accessible name.
+ */
+export interface CreateQuestionEmojiOptionInput {
+  emoji: string
+  value?: number
+  label: LocalizedInput
+}
+
 export interface CreateQuestionInput {
   text: LocalizedInput
   type: string
   options?: CreateQuestionOptionInput[]
   required: boolean
   order: number
+  /** Only valid on `emoji_rating`; the server rejects it on any other type. */
+  emojiOptions?: CreateQuestionEmojiOptionInput[]
 }
 
 export interface Microclimate {

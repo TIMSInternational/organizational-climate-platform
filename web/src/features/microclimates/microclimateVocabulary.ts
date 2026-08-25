@@ -68,6 +68,11 @@ const QUESTION_TYPE_KEYS: Record<string, string> = {
   open_ended: 'surveys.textResponse',
   yes_no: 'surveys.yesNo',
   rating: 'surveys.rating',
+  // #198. In the `surveys.*` namespace with the rest, by the rule above — the label is
+  // a noun for a server value, not microclimate copy — even though `emoji_rating` is
+  // not currently a valid SURVEY type. The namespace records where the label lives, not
+  // which vocabulary the value is in.
+  emoji_rating: 'surveys.questionTypeEmojiRating',
 }
 
 /** The content-language values `ContentLanguages` recognises. */

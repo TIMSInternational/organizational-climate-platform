@@ -44,6 +44,20 @@ function QuestionInput({
   const { t } = useTranslation()
 
   switch (question.type) {
+    // An emoji scale is answered on the values ITS AUTHOR configured, so unlike
+    // likert/rating there is no 1-5 fallback to draw when the set is missing --
+    // `MicroclimateEndpoints` refuses to create such a question and rejects any answer
+    // to one that reached the database another way, so drawing a scale here would be
+    // offering a control whose every answer is a 400.
+    case 'emoji_rating':
+      if (!question.emojiOptions || question.emojiOptions.length === 0) {
+        return (
+          <p role="alert" className="text-sm text-fg-secondary">
+            {t('microclimates.questionHasNoOptions')}
+          </p>
+        )
+      }
+      return <EmojiScale question={question} value={value} onChange={onChange} />
     case 'multiple_choice':
       // The backend now rejects multiple_choice questions with fewer than 2 options at
       // creation time, but this stays defensive against any question created before that
@@ -194,6 +208,84 @@ function ChoiceList({
               className="mb-0 flex min-h-control-lg items-center text-base font-normal text-fg-primary"
             >
               {choice.label}
+            </label>
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * The emoji scale of an `emoji_rating` question (#198).
+ *
+ * ## The glyph is not the name
+ *
+ * Every face is drawn `aria-hidden`, and the control's accessible name comes from the
+ * authored `label` beside it. This is the entire reason the backend stores an emoji
+ * scale in its own table instead of reusing the plain option rows: an emoji-only radio
+ * is announced by whatever the reader's own emoji dictionary calls the character, in
+ * whatever language that dictionary happens to be in — so a Spanish respondent could
+ * hear an English phrase, and a respondent on a reader without that character in its
+ * table could hear nothing at all. The server refuses to store a face without a label,
+ * so `label` is present on anything authored through the product; `?? String(value)`
+ * is the type-level acknowledgement of a row that predates that rule, not a fallback
+ * anyone is meant to see.
+ *
+ * ## The label is visible, not screen-reader-only
+ *
+ * `sr-only` would have kept the drawing pure emoji and still passed an automated a11y
+ * check. It is not used, because this product's stated audience includes people with
+ * low digital literacy and a bare face is ambiguous to a sighted respondent too — 🙂
+ * as "fine" or as "not bad"? The word under each face is the answer to that, for
+ * everybody.
+ *
+ * ## What is submitted
+ *
+ * `String(option.value)`, never the glyph and never the label — the same rule
+ * `ChoiceList` follows for the stable option value (#195), and what the server
+ * validates against.
+ */
+function EmojiScale({
+  question,
+  value,
+  onChange,
+}: {
+  question: Question
+  value: string
+  onChange: (value: string) => void
+}) {
+  const options = question.emojiOptions ?? []
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label={question.text ?? undefined}
+      className="flex flex-wrap gap-x-section gap-y-1"
+    >
+      {options.map((option) => {
+        const submitted = String(option.value)
+        const inputId = `${question.id}-emoji-${option.order}`
+        return (
+          <span key={option.order} className="flex items-center gap-inline">
+            <input
+              type="radio"
+              id={inputId}
+              name={question.id}
+              value={submitted}
+              checked={value === submitted}
+              required={question.required}
+              onChange={(e) => onChange(e.target.value)}
+            />
+            <label
+              htmlFor={inputId}
+              className="mb-0 flex min-h-control-lg flex-col items-center justify-center text-base font-normal text-fg-primary"
+            >
+              {/* Decoration. The name is the line below it. */}
+              <span aria-hidden="true" className="text-2xl leading-none">
+                {option.emoji}
+              </span>
+              <span className="text-sm">{option.label ?? String(option.value)}</span>
             </label>
           </span>
         )

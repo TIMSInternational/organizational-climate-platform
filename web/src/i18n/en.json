@@ -1217,7 +1217,18 @@
     "sessionsHeading": "Sessions",
     "columnResults": "Results",
     "openResults": "Open results",
-    "resultsPending": "Not opened yet"
+    "resultsPending": "Not opened yet",
+    "emojiScaleHint": "Each emoji needs a name. The name is what a screen reader reads out, and it tells every respondent what the face means.",
+    "emojiGlyph": "Emoji {number}",
+    "emojiLabel": "Name for emoji {number}",
+    "emojiLabelEn": "Name for emoji {number} (English)",
+    "emojiLabelEs": "Name for emoji {number} (Spanish)",
+    "addEmojiOption": "Add emoji",
+    "removeEmojiOption": "Remove emoji {number}",
+    "validationEmojiOptionsMin2": "Question {order} needs at least two emoji.",
+    "validationEmojiRequired": "Emoji {number} of question {order} is missing its emoji.",
+    "validationEmojiLabel": "Emoji {number} of question {order} needs a name.",
+    "validationEmojiLabelBoth": "Emoji {number} of question {order} needs a name in English and in Spanish."
   },
   "navigation": {
     "sectionAdministration": "Administration",
@@ -1854,7 +1865,8 @@
       "scaleLabelMin": "Label for the lowest point",
       "text": "Question",
       "title": "Edit questions"
-    }
+    },
+    "questionTypeEmojiRating": "Emoji Rating"
   },
   "users": {
     "userManagement": "User Management",

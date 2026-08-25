@@ -270,6 +270,10 @@ public static class SubjectDataMap
         NotPersonal("MicroclimateQuestion", "microclimate_questions", "Question text. No person referenced."),
         NotPersonal("MicroclimateQuestionOption", "microclimate_question_options",
             "Answer options. No person referenced."),
+        NotPersonal("MicroclimateQuestionEmojiOption", "microclimate_question_emoji_options",
+            "The emoji scale of a question: a glyph, its authored name and a numeric value. Authored "
+            + "content, not a response — no person referenced. Individual microclimate responses are "
+            + "never persisted at all, so no row here can be tied back to who chose which face."),
         Actor("MicroclimateTemplate", "microclimate_templates", "CreatedBy", "Authorship of a reusable template."),
         NotPersonal("MicroclimateTemplateQuestion", "microclimate_template_questions",
             "Template question text. No person referenced."),

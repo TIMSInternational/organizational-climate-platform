@@ -35,9 +35,10 @@ import { DEFAULT_QUESTION_TYPE } from './questionTypes'
  *
  * Mirrored, because the message is better attached to the field than to a failed
  * request: title present, end after start, a positive participant target, question
- * text present, `multiple_choice` with at least two options, duplicate option values.
- * Each of these is also enforced server-side and the wizard is not the authority —
- * the server's own message is rendered verbatim if one gets through.
+ * text present, `multiple_choice` with at least two options, duplicate option values,
+ * and — since #198 — `emoji_rating` with at least two faces, each carrying a glyph and
+ * a label. Each of these is also enforced server-side and the wizard is not the
+ * authority — the server's own message is rendered verbatim if one gets through.
  *
  * **Not** mirrored: the publish translation gate (it applies to `draft -> active`,
  * which this flow never performs) and template scoping (the server checks the
@@ -63,6 +64,26 @@ export interface WizardOptionValues {
   labelEs: string
 }
 
+/**
+ * One point on an emoji scale, as the author edits it (#198).
+ *
+ * The glyph and the label are two fields because they are two things: the glyph is
+ * what a respondent sees and the label is what a screen reader says, and the server
+ * refuses a face that has only the first. Deliberately NOT `WizardOptionValues` with
+ * the emoji stuffed into `labelEn`, which is the shape #198 rejected.
+ *
+ * There is no `value` field. The server numbers the scale by position (1..n) when the
+ * author does not say, and exposing the number here would invite two faces that differ
+ * only in a value nobody can see — the same argument the plain option editor makes for
+ * hiding its derived value.
+ */
+export interface WizardEmojiOptionValues {
+  key: string
+  emoji: string
+  labelEn: string
+  labelEs: string
+}
+
 export interface WizardQuestionValues {
   key: string
   textEn: string
@@ -70,6 +91,8 @@ export interface WizardQuestionValues {
   type: string
   required: boolean
   options: WizardOptionValues[]
+  /** Only meaningful on `emoji_rating`; the server rejects it on any other type. */
+  emojiOptions: WizardEmojiOptionValues[]
 }
 
 export interface MicroclimateWizardValues {
@@ -95,6 +118,26 @@ export function emptyOption(key: string): WizardOptionValues {
   return { key, labelEn: '', labelEs: '' }
 }
 
+export function emptyEmojiOption(key: string): WizardEmojiOptionValues {
+  return { key, emoji: '', labelEn: '', labelEs: '' }
+}
+
+/**
+ * A four-point scale, prefilled, for an author who has just picked `emoji_rating`.
+ *
+ * The glyphs are seeded and the labels are NOT: a default label would be English copy
+ * living in a `.ts` module (which the #217 guard rejects, correctly), and — more to the
+ * point — a prefilled name is a name nobody chose, on the one field whose whole job is
+ * to say what this face means in this question. The author fills it in or the server
+ * refuses the question.
+ */
+export function defaultEmojiScale(nextKey: () => string): WizardEmojiOptionValues[] {
+  return ['\u{1F622}', '\u{1F610}', '\u{1F642}', '\u{1F929}'].map((emoji) => ({
+    ...emptyEmojiOption(nextKey()),
+    emoji,
+  }))
+}
+
 export function emptyQuestion(key: string): WizardQuestionValues {
   return {
     key,
@@ -103,6 +146,7 @@ export function emptyQuestion(key: string): WizardQuestionValues {
     type: DEFAULT_QUESTION_TYPE,
     required: true,
     options: [],
+    emojiOptions: [],
   }
 }
 
@@ -142,6 +186,11 @@ export function questionFromLibrary(
       labelEn: option.labelEn ?? option.value,
       labelEs: option.labelEs ?? '',
     })),
+    // A library item can never be `emoji_rating`: `QuestionRepositoryTypes.Supported` is
+    // the INTERSECTION of both wizards' vocabularies, and surveys do not accept the type,
+    // so the picker cannot offer one. Empty rather than mapped from a field that does not
+    // exist on `QuestionLibraryItemDetail`.
+    emojiOptions: [],
   }
 }
 
@@ -265,6 +314,40 @@ function questionErrors(values: MicroclimateWizardValues, t: TranslateFn): strin
       }
     }
 
+    if (question.type === 'emoji_rating') {
+      // Mirrors the server's three refusals, in the order it applies them, so the author
+      // reads the message beside the field instead of after a failed request: a scale
+      // needs at least two faces, every face needs a glyph, and every face needs a
+      // label -- the label being the option's accessible name is the reason the type
+      // has its own table at all (#198).
+      const faces = question.emojiOptions
+      if (faces.filter((face) => face.emoji.trim().length > 0).length < 2) {
+        errors.push(t('microclimates.validationEmojiOptionsMin2', { order }))
+        return
+      }
+
+      faces.forEach((face, faceIndex) => {
+        const number = faceIndex + 1
+        if (isBlank(face.emoji)) {
+          errors.push(t('microclimates.validationEmojiRequired', { order, number }))
+          return
+        }
+
+        if (needsBothLanguages(values.language)) {
+          if (isBlank(face.labelEn) || isBlank(face.labelEs)) {
+            errors.push(t('microclimates.validationEmojiLabelBoth', { order, number }))
+          }
+          return
+        }
+
+        const single = values.language === 'es' ? face.labelEs : face.labelEn
+        if (isBlank(single)) {
+          errors.push(t('microclimates.validationEmojiLabel', { order, number }))
+        }
+      })
+      return
+    }
+
     if (question.type !== 'multiple_choice') return
 
     const optionValues = question.options
@@ -339,6 +422,22 @@ function toCreateQuestion(
           .map((option) => ({ label: localizedFor(language, option.labelEn, option.labelEs) ?? '' }))
       : undefined
 
+  // Sent only for `emoji_rating`. The server REJECTS an emoji scale on any other type
+  // rather than ignoring it, so a question that changed type after its faces were typed
+  // must not carry them along -- and rejecting rather than dropping is what makes that
+  // rule worth having on the server.
+  const emojiOptions =
+    question.type === 'emoji_rating'
+      ? question.emojiOptions
+          .filter((face) => face.emoji.trim().length > 0)
+          .map((face) => ({
+            emoji: face.emoji.trim(),
+            // No `value`: the server numbers the scale by position. See
+            // WizardEmojiOptionValues for why the number is not an authored field.
+            label: localizedFor(language, face.labelEn, face.labelEs) ?? '',
+          }))
+      : undefined
+
   return {
     // `text` is non-null by the time this runs: `wizardStepErrors` gates the submit.
     // The `?? ''` is the type-level acknowledgement, not a fallback anyone should hit
@@ -348,6 +447,7 @@ function toCreateQuestion(
     options,
     required: question.required,
     order,
+    emojiOptions,
   }
 }
 

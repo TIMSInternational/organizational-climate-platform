@@ -437,3 +437,120 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
     expect(alert.textContent).toContain('Microclimate not found')
   })
 })
+
+/**
+ * `emoji_rating` (#198).
+ *
+ * The type was refused on microclimates until the server had somewhere to store an
+ * emoji set, and the reason the plain option rows were rejected as that storage is the
+ * one thing these cases have to prove: **an emoji is not an accessible name.** So the
+ * assertions are about the ACCESSIBLE NAME the browser computes for each radio, not
+ * about the text rendered next to it — those coincide only if the glyph is correctly
+ * hidden from assistive technology, which is exactly what could regress.
+ */
+describe('MicroclimateRespondPage emoji scale', () => {
+  function emojiMicroclimate(): PublicMicroclimateDetail {
+    return {
+      id: 'm1',
+      title: 'Pulso semanal',
+      status: 'active',
+      language: 'both',
+      resolvedLocale: 'es',
+      fallbackFields: [],
+      questions: [
+        {
+          id: 'q1',
+          text: '¿Cómo estuvo tu semana?',
+          type: 'emoji_rating',
+          required: true,
+          order: 0,
+          options: null,
+          emojiOptions: [
+            { order: 0, emoji: '\u{1F622}', value: 1, label: 'Triste' },
+            { order: 1, emoji: '\u{1F610}', value: 2, label: 'Normal' },
+            { order: 2, emoji: '\u{1F642}', value: 3, label: 'Bien' },
+          ],
+        },
+      ],
+    }
+  }
+
+  beforeEach(() => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    cleanup()
+    window.localStorage.clear()
+    vi.unstubAllGlobals()
+  })
+
+  it('gives every face an accessible name that is the authored word, not the glyph', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(emojiMicroclimate()), { status: 200 }),
+    )
+    renderPage()
+
+    const faces = await screen.findAllByRole('radio')
+    expect(faces).toHaveLength(3)
+
+    // `getByRole(..., { name })` matches the COMPUTED accessible name exactly, so this
+    // fails both if the word is missing and if the glyph leaks into the name.
+    for (const name of ['Triste', 'Normal', 'Bien']) {
+      expect(screen.getByRole('radio', { name })).toBeTruthy()
+    }
+
+    // The glyph itself is hidden, which is what makes the name above exactly the word.
+    for (const glyph of ['\u{1F622}', '\u{1F610}', '\u{1F642}']) {
+      expect(screen.getByText(glyph).getAttribute('aria-hidden')).toBe('true')
+    }
+  })
+
+  it('keeps the word visible as well as announced', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(emojiMicroclimate()), { status: 200 }),
+    )
+    renderPage()
+
+    // `sr-only` would satisfy the assertion above and still leave a sighted respondent
+    // guessing whether 🙂 means "fine" or "not bad". The word is on the screen.
+    const word = await screen.findByText('Triste')
+    expect(word.className).not.toContain('sr-only')
+  })
+
+  it('submits the stable value as a string, never the glyph or the word', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify(emojiMicroclimate()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 201 }))
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Bien' }))
+    await userEvent.click(screen.getByRole('button', { name: /enviar|submit/i }))
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+    const body = JSON.parse(
+      String((vi.mocked(fetch).mock.calls[1][1] as RequestInit).body),
+    ) as { answers: Record<string, string> }
+
+    // '3' -- what MicroclimateEndpoints validates against the question's emoji values.
+    expect(body.answers.q1).toBe('3')
+  })
+
+  it('says so rather than drawing an empty group when a question has no scale', async () => {
+    const detail = emojiMicroclimate()
+    detail.questions[0].emojiOptions = []
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(detail), { status: 200 }))
+    renderPage()
+
+    // There is no 1-5 fallback for this type: the server rejects every answer to a
+    // scale-less emoji question, so a rendered control would be one whose every answer
+    // is a 400.
+    expect(
+      await screen.findByText(
+        'Esta pregunta no tiene opciones configuradas y no se puede responder.',
+      ),
+    ).toBeTruthy()
+    expect(screen.queryByRole('radio')).toBeNull()
+  })
+})
