@@ -198,6 +198,12 @@ public static class MicroclimateLifecycleJob
                 closed);
         }
 
+        // The stranded query is capped at the batch size, so a full page means the true number is
+        // this or higher. Carried out of here rather than left implicit: the count is the thing an
+        // operator alarms on, and a number silently ceilinged at 100 turns "500 sessions were
+        // never run" into "100 sessions were never run" with nothing anywhere saying so.
+        var strandedCapped = stranded.Count == batchSize;
+
         if (stranded.Count > 0)
         {
             // A warning, not information: each of these is a session with a scheduled window that
@@ -205,17 +211,29 @@ public static class MicroclimateLifecycleJob
             // this job will not do it, nothing else anywhere reports that. It will name abandoned
             // authoring drafts as well, which the vocabulary cannot tell apart from scheduled
             // ones; the line says so rather than implying every id needs action.
+            //
+            // KNOWN AND NOT FIXED HERE: this re-fires every tick, for ever, for the same drafts --
+            // 288 identical lines a day for any tenant with one forgotten draft. Suppressing a
+            // repeat means remembering which ids have already been warned about, and there is
+            // nowhere to remember it: no per-microclimate audit table, no state column, and the
+            // slice carries no migration. A process-local set would not do it either, since the
+            // advisory lease hands the sweep to whichever co-hosting API instance takes it. What
+            // IS fixed is the half that made the number wrong rather than merely repetitive: the
+            // count was silently ceilinged at the batch size, so five hundred abandoned drafts
+            // logged as a hundred with nothing saying so. SurveyLifecycleJob has the same
+            // repetition, and the honest fix for both is a status the vocabulary does not have.
             logger.LogWarning(
-                "{Stranded} microclimate(s) are still 'draft' with an end time already in the past as of " +
+                "{Stranded} microclimate(s){Capped} are still 'draft' with an end time already in the past as of " +
                 "{NowUtc:O}; their window elapsed without anyone activating them, and this job will not open a " +
                 "draft, because publishing runs a translation gate no background job can report on. Some of these " +
                 "are simply abandoned drafts. First ids: {MicroclimateIds}.",
                 stranded.Count,
+                strandedCapped ? " or more (this count is capped at the batch size)" : string.Empty,
                 nowUtc,
                 string.Join(", ", stranded.Take(MaxStrandedIdsLogged)));
         }
 
-        return new MicroclimateLifecycleSweepResult(closed, stranded.Count, more);
+        return new MicroclimateLifecycleSweepResult(closed, stranded.Count, more, strandedCapped);
     }
 
     /// <summary>
@@ -310,6 +328,18 @@ public static class MicroclimateLifecycleJob
                 // The domain's map has the last word, even over this job's own rule. An edge
                 // removed from MicroclimateStatuses stops being taken here on the same deploy,
                 // without anybody having to remember that this file exists.
+                //
+                // DISCLOSED: this branch is not independently killable and is not meant to be.
+                // It is unreachable by construction today -- the pre-filter admits only `active`,
+                // NextStatusFor answers `closed` for it, and active -> closed is legal -- so no
+                // fixture can enter it without first breaking the rule above. The property it
+                // guards is instead asserted exhaustively one layer up, in
+                // MicroclimateLifecycleScheduleTests.Every_transition_it_names_is_legal_..., over
+                // every status crossed with every arrangement of the window. That test is what
+                // fails the day somebody adds an edge here; this branch is what stops the edge
+                // reaching a customer's database if it is ever added anywhere this test does not
+                // see. Named rather than left for a reviewer to find, because an unkillable
+                // branch nobody has declared is indistinguishable from dead code.
                 logger.LogError(
                     "Microclimate {MicroclimateId} would move '{From}' -> '{To}' on its dates, but that is not a " +
                     "legal transition. Left unchanged. Allowed from '{From}': {Allowed}.",
@@ -464,4 +494,14 @@ public static class MicroclimateLifecycleJob
 /// True when the close batch filled, so more transitions are waiting for the next tick. Expected
 /// on the first sweep after this job is deployed and on no sweep thereafter.
 /// </param>
-public sealed record MicroclimateLifecycleSweepResult(int Closed, int Stranded, bool MoreRemaining);
+/// <param name="StrandedCapped">
+/// True when <paramref name="Stranded"/> hit the batch size, so it is a floor rather than a
+/// count. <paramref name="MoreRemaining"/>'s counterpart for the query that only ever reports:
+/// without it a deployment with five hundred forgotten drafts is indistinguishable from one with
+/// exactly a hundred, on the one number anybody would alarm on.
+/// </param>
+public sealed record MicroclimateLifecycleSweepResult(
+    int Closed,
+    int Stranded,
+    bool MoreRemaining,
+    bool StrandedCapped);

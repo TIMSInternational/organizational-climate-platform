@@ -19,13 +19,16 @@ undeployed, but that being undeployed was invisible.
 
 ## The two options, and the choice
 
-**Chosen: co-host.** `Program.cs` calls `AddClimateProjectScheduling`, so the six jobs and
-the heartbeat monitor ship inside the API image that `deploy-prod.yml` already builds.
+**Chosen: co-host.** `Program.cs` calls `AddClimateProjectScheduling`, so every job in
+`WorkerJobs.All` and the heartbeat monitor ship inside the API image that `deploy-prod.yml`
+already builds. (Six at the time of this decision; `survey-lifecycle` was added by #371 and
+`microclimate-lifecycle` by #376. The count is deliberately not repeated below — `WorkerJobs.All`
+is the register, and a number written here goes stale the next time a job is added.)
 
 **Rejected: a second App Runner service** built from `Dockerfile.workers`. It is not wrong —
 the advisory-lease design in `docs/superpowers/specs/2026-08-06-scheduling-design.md` makes
 either correct — but it doubles the deployable surface, the secret wiring and the rollback
-story for six jobs whose combined duty cycle is minutes per hour. `Dockerfile.workers`
+story for a set of jobs whose combined duty cycle is minutes per hour. `Dockerfile.workers`
 remains in the tree as the opt-out path if the jobs ever need a dedicated instance.
 
 **Why co-hosting is safe at any instance count:** every job runs under a Postgres advisory
@@ -70,4 +73,4 @@ Deployed and live: production `1567e70` reports `dispatcher.lastDispatchAt` adva
 
 **#275 is not closed by this file alone.** Its second criterion asks for jobs demonstrably
 executing in production evidenced by a heartbeat — that becomes checkable from the product
-once this change deploys and `/admin/system/status` reports all six. Verify there, then close.
+once this change deploys and `/admin/system/status` reports every job in `WorkerJobs.All`. Verify there, then close.
