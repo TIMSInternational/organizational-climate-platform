@@ -27,6 +27,37 @@ public static class BenchmarkEndpoints
         group.MapGet("/{id:guid}/prior-period/candidates", ListPriorPeriodCandidatesAsync);
     }
 
+    /// <summary>
+    /// The Postgres advisory-lock key every writer of a prior-period link takes before it
+    /// looks at the link graph.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why a lock at all.</b> <see cref="BenchmarkPriorPeriod.WouldCreateCycleAsync"/> reads
+    /// committed state and then the handler writes, so two requests arriving together --
+    /// A→B and B→A -- could each walk a graph in which the other's edge did not exist yet, both
+    /// pass, and both commit. The refusal is the write path's job, and a check that only holds
+    /// when nobody else is writing is not a check, it is a coincidence.
+    /// </para>
+    /// <para>
+    /// <b>Why one key for the whole table rather than one per company.</b> Writing a link is a
+    /// rare, deliberate administrative act on a table with a few rows per tenant; there is
+    /// nothing to gain from letting two of them proceed at once, and a single key means no
+    /// argument about which tenant a global benchmark belongs to. It is also the shape that
+    /// stays correct when #90 adds bulk and import writers.
+    /// </para>
+    /// <para>
+    /// <b>Why the transaction-scoped variant.</b> Same reason as
+    /// <c>PostgresAdvisoryJobLease</c>: a session lock outlives the transaction, and under a
+    /// pooled connection -- or Supabase's transaction pooler, which production points at --
+    /// "the session" is not a thing that survives. <c>pg_advisory_xact_lock</c> is released by
+    /// commit, by rollback, and by the connection dropping, with nothing to clean up. Blocking
+    /// rather than <c>try</c>, because unlike a scheduled job this is somebody waiting on a
+    /// button: the correct answer is "in a moment", not "no".
+    /// </para>
+    /// </remarks>
+    public const long PriorPeriodLinkLockKey = 89_0089_0089;
+
     // Read access: a CompanyAdmin may view global benchmarks (CompanyId == null, visible to
     // every tenant for comparison purposes -- see ListAsync) as well as their own company's.
     private static bool CanReadBenchmark(CurrentUser currentUser, Guid? benchmarkCompanyId)
@@ -226,6 +257,14 @@ public static class BenchmarkEndpoints
                 statusCode: 400);
         }
 
+        // Taken after the authorization and status checks -- a caller who is not allowed to
+        // write, or who sent a status that is not a status, should not queue behind anybody --
+        // and held until the commit below, so the cycle walk and the write it authorises are
+        // one indivisible act. See PriorPeriodLinkLockKey.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await db.Database.ExecuteSqlRawAsync(
+            "SELECT pg_advisory_xact_lock({0})", [PriorPeriodLinkLockKey], cancellationToken);
+
         if (status == PriorPeriodStatuses.Linked)
         {
             if (!request.PriorPeriodBenchmarkId.HasValue)
@@ -265,6 +304,7 @@ public static class BenchmarkEndpoints
         benchmark.PriorPeriodStatus = status!;
         benchmark.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return Results.Ok(await LoadDetailAsync(db, id, currentUser, cancellationToken));
     }
@@ -339,6 +379,15 @@ public static class BenchmarkEndpoints
         var currentUser = principal.GetCurrentUser();
         if (!Roles.Admin.Contains(currentUser.Role)) return Results.Forbid();
 
+        // The same lock the single-link route takes, for the same reason and against the same
+        // hazard: this run reads every candidate graph it is about to write into. A dry run
+        // takes it too -- it is reporting what it WOULD write, and a report computed against a
+        // graph somebody is halfway through changing is the thing an administrator then
+        // approves.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await db.Database.ExecuteSqlRawAsync(
+            "SELECT pg_advisory_xact_lock({0})", [PriorPeriodLinkLockKey], cancellationToken);
+
         var scope = db.Benchmarks.AsQueryable();
         if (currentUser.Role == Roles.SuperAdmin)
         {
@@ -405,6 +454,7 @@ public static class BenchmarkEndpoints
         }
 
         if (apply == true) await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return Results.Ok(new PriorPeriodBackfillResult(
             Applied: apply == true,

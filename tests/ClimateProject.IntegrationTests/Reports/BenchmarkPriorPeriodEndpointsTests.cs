@@ -783,6 +783,54 @@ public class BenchmarkPriorPeriodEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A link is not written while another writer holds the prior-period lock.
+    ///
+    /// <para>
+    /// The cycle check reads committed state and the write follows it, so without something
+    /// serialising the two, requests to link A→B and B→A arriving together each walk a graph
+    /// in which the other's edge does not exist, both pass, and both commit. "The write path is
+    /// the place to refuse a loop" is only true if the walk and the write cannot be
+    /// interleaved.
+    /// </para>
+    /// <para>
+    /// <b>What this asserts, exactly.</b> That the route blocks on
+    /// <c>BenchmarkEndpoints.PriorPeriodLinkLockKey</c> and completes when it is released -- the
+    /// mechanism, from outside, with this test holding the lock rather than racing for it. It
+    /// does not stage a real collision: a test that fires two requests and checks the result
+    /// would pass most of the time without any lock at all, which is worse than no test. What
+    /// makes the collision safe is that the lock is transaction-scoped, so it is held across
+    /// the walk and released by the commit.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_link_waits_while_another_writer_holds_the_prior_period_lock()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var category = $"lock-{Guid.NewGuid():N}";
+        var prior = await CreateAsync(client, "2025 lock", _companyAId, category: category);
+        var subject = await CreateAsync(client, "2026 lock", _companyAId, category: category);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        await using var holder = await db.Database.BeginTransactionAsync();
+        await db.Database.ExecuteSqlRawAsync(
+            "SELECT pg_advisory_xact_lock({0})", [BenchmarkEndpoints.PriorPeriodLinkLockKey]);
+
+        var write = SetPriorPeriodAsync(client, subject.Id, PriorPeriodStatuses.Linked, prior.Id);
+
+        var raced = await Task.WhenAny(write, Task.Delay(TimeSpan.FromSeconds(2)));
+        Assert.NotSame(write, raced);
+        Assert.False(write.IsCompleted);
+
+        // Releasing it is the only thing that changes, and the write goes through.
+        await holder.RollbackAsync();
+
+        var response = await write.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(prior.Id, (await GetAsync(client, subject.Id)).PriorPeriodBenchmarkId);
+    }
+
+    /// <summary>
     /// Last year's figures, typed in this year, are still last year's figures.
     ///
     /// <para>

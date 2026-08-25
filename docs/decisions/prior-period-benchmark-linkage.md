@@ -52,15 +52,17 @@ earlier. Ordered newest first.
 It backs the candidates route, and the backfill uses it under a much narrower condition:
 exactly one candidate, i.e. the case where there is nothing to choose between.
 
-### The same rule guards explicit links
+### Most of the same rule guards explicit links
 
 Choosing by hand is not the same as choosing freely. `PUT .../prior-period` refuses a target
 that is:
 
-- **another company's, or global when the subject is not** (and vice versa) — a
-  cross-tenant link would read another tenant's movement out of this tenant's detail
-  response, and a company-to-global link relabels an industry comparison as a
-  year-over-year one;
+- **not a benchmark at all, another company's, or global when the subject is not** (and vice
+  versa) — a cross-tenant link would read another tenant's movement out of this tenant's
+  detail response, and a company-to-global link relabels an industry comparison as a
+  year-over-year one. All three get **one message**: two different messages made the route an
+  existence oracle, where a CompanyAdmin could put an arbitrary GUID in the body and learn
+  from the wording whether it named a row somewhere in the platform;
 - **a different category or type** — those say what the benchmark measures, and
   "engagement 2026 against absenteeism 2025" is not a prior period of anything;
 - **anything that closes a loop**, including a self-link. Nothing refused this before: the
@@ -70,6 +72,36 @@ that is:
 `POST /admin/benchmarks` applies the identical checks to a link supplied at create time. It
 previously checked only that the id existed, so the whole rule could be walked round by
 choosing the other door.
+
+#### The one condition that does *not* cross over: "strictly earlier"
+
+The matching rule requires `CreatedAt < subject.CreatedAt`. The write path deliberately does
+not, and the asymmetry is the decision rather than a gap in it.
+
+`created_at` records when somebody typed the row in. As a hint for a **shortlist** that is
+usable — most rows are entered in the order they were measured. As a **rule** it is false, and
+falsest in exactly the case this mechanism exists for: enter 2025's figures after 2026's are
+already in, which is the same late entry the argument against automatic matching turns on, and
+the earlier period is the younger row. An ordering check on the write path would refuse an
+administrator who knows which year is which, and refuse them with a message about creation
+timestamps that they cannot act on — there is no field they could correct.
+
+So: a suggestion may lean on `created_at`; an answer may not be overruled by it. A period that
+precedes *itself* is still refused, by `WouldCreateCycleAsync`, which asks about the link graph
+rather than about the clock.
+`An_earlier_period_typed_in_late_can_still_be_linked` holds this open, because the check reads
+like a tightening and would otherwise be added by the next person to notice its absence.
+
+#### Two writers cannot interleave
+
+`WouldCreateCycleAsync` reads committed state and the write follows it, so A→B and B→A
+arriving together could each walk a graph without the other's edge in it, both pass, and both
+commit — a cycle created by a route that refuses cycles. Every writer of a link (the PUT and
+the backfill, dry run included) therefore takes `pg_advisory_xact_lock` on one key for the
+whole table before it walks, and holds it to the commit: the walk and the write it authorises
+are one act. Transaction-scoped for the reasons `PostgresAdvisoryJobLease` gives, and blocking
+rather than `try`, because there is somebody waiting on a button and the right answer is "in a
+moment".
 
 ## The third state, and why it needed a column
 
@@ -99,6 +131,27 @@ There is a fourth state on screen and it is not stored: `linked` where the reade
 read the linked row. `LoadPriorPeriodAsync` omits the comparison rather than handing over
 another tenant's numbers, and the panel says so instead of falling back to "not linked",
 which would be untrue.
+
+The **pointer** is withheld on the same terms as the comparison. Returning the id while
+omitting the rich object kept the promise only in the part a reader would notice: the id says a
+benchmark with that id exists in a tenant they cannot see, it turns an unguessable GUID into a
+known one, and the page then spends a doomed cross-tenant request on it walking the chain. The
+status still tells `linked` from `unlinked` — that is a fact about this row rather than about
+somebody else's.
+
+## Where the year-over-year figures go
+
+`BenchmarkPriorPeriod.BuildChanges` differences the two periods once, on the server, and the
+prior-period panel renders exactly that: this period's reading, the prior period's, the change,
+and the change as a fraction. Two shapes of missing are printed rather than left blank — a
+metric only one of the periods recorded, and a change the server declined to compute.
+
+That second one is a rule both sides have to hold. `BenchmarkMetric.Unit` is a free string, so
+the same metric arrives as `percent` one year and `fraction` the next, and 0.74 differenced
+against 70 is a 69-point collapse that never happened. The server withheld it from the start;
+the browser's `buildTrend` — a second derivation, because it walks a *chain* that no route
+returns — did not, and printed it a few hundred pixels below. Both withhold it now, and both
+say "units differ" rather than showing a gap that reads as "unchanged".
 
 ## Backfill — what replaced the #154 plan
 
