@@ -181,11 +181,12 @@ export default function BenchmarkPriorPeriodPanel({
                       <td className="text-right">{reading(change.priorValue, change.priorUnit)}</td>
                       <td className="text-right">
                         {change.delta === null ? (
+                          // Both values present and no change means the server refused to
+                          // difference two different units, and that is worth saying: a blank
+                          // in a column of signed numbers reads as "unchanged". Any other
+                          // missing change is a metric one of the periods did not record, and
+                          // the row itself already shows which.
                           <span className="text-fg-tertiary">
-                            {/* The two periods both recorded it and disagreed about the unit
-                                is the only way a change goes missing with both values
-                                present; anything else is a metric one period did not record,
-                                and the row already shows which. */}
                             {change.value !== null && change.priorValue !== null
                               ? t('benchmarks.unitsDiffer')
                               : '—'}
