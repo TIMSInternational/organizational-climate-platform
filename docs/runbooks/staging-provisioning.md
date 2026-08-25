@@ -1,7 +1,7 @@
 # Staging provisioning runbook — #156
 
-**Status: repo side DONE, console side NOT STARTED.** Every artifact staging needs from
-this repository exists on `feat/156-staging-scaffold`: the two CloudFormation templates
+**Status: repo side DONE and MERGED, console side NOT STARTED.** Every artifact staging
+needs from this repository is now on `main` (commit `3856acf`): the two CloudFormation templates
 are environment-parameterised (production defaults render the live prod stacks
 byte-identically — proven by rendered diff, recorded in that branch's commit message),
 `.github/workflows/deploy-staging.yml` mirrors the prod deploy including its canary, and
@@ -36,10 +36,40 @@ prod stack — that is a property of the bootstrap template, not of care taken o
 Either way, the workflow itself only needs `AWS_ACCOUNT_ID` set on the `staging` GitHub
 environment — nothing else in the repo changes with this decision.
 
-Approximate steady cost of the staging App Runner service (us-east-1 public pricing,
-verify in the calculator): ~$2.60/mo provisioned memory while idle
-(0.5 GB × $0.007/GB-hr) plus $0.064/vCPU-hr + $0.007/GB-hr while serving requests —
-under ~$15/mo for a service that mostly sits idle. ECR storage ~$0.10/GB-month.
+**Monthly cost, at verified rates.** Every rate below was read from the AWS Price List
+API on **2026-08-24** for `us-east-1` — not from the pricing calculator, and not from
+memory. The two "not incurred" rows are the ones people usually forget to check:
+
+| Line item | Verified rate | Staging assumption | $/mo |
+|---|---|---|---|
+| App Runner provisioned memory | $0.007 /GB-hr | 0.5 GB, billed continuously at `MinSize` 1 | **$2.56** |
+| App Runner active vCPU | $0.064 /vCPU-hr | 0.25 vCPU, billed only while requests are processed — see caveat | $0.00–$11.68 |
+| App Runner auto-deployment pipeline | $1.00 /pipeline/mo | **not incurred** — the template sets `AutoDeploymentsEnabled: false` | $0.00 |
+| App Runner build minutes | $0.005 /min | **not incurred** — we push prebuilt images to ECR; this charge is for source-based builds | $0.00 |
+| Secrets Manager secrets | $0.40 /secret/mo | the 3 staging secrets from step 3 | **$1.20** |
+| Secrets Manager API requests | $0.05 /10k requests | read at instance start, not per request | ~$0.00 |
+| ECR storage | $0.10 /GB-mo | ~2–4 GB once the 40-image lifecycle cap settles (base layers dedupe across tags) | $0.20–$0.40 |
+| Supabase Micro compute | $10 /mo | one staging project or branch (step 2) | **$10.00** |
+| Vercel `climate-staging` | $0 | a second project adds no fee; usage bills to the team plan | $0.00 |
+| | | | **≈ $14–$26/mo** |
+
+Two honest caveats, because the vCPU row is the only volatile line:
+
+- **I am guessing whether App Runner health-check probes bill as active vCPU, and the
+  guess is worth $11/mo.** The service is probed every 20 seconds forever
+  (`Interval: 20` in the service template). If probes count as "actively processing
+  requests" then 0.25 vCPU is billed essentially continuously —
+  0.25 × $0.064 × 730 = **$11.68/mo** — and staging lands near $26 rather than $14.
+  AWS documents CPU as billed while actively processing requests without saying which
+  side of that line a health check falls on. **Settle it by reading the first month's
+  Cost Explorer line for `USE1-AppRunner-vCPU-hours`**; do not budget on either figure
+  until you have.
+- The $2.56 memory row is a **floor, not an estimate.** It is charged for as long as the
+  service exists, whether or not anyone opens staging all month. Pausing the App Runner
+  service stops it; deleting the stack stops it and the ECR line too.
+
+Neither figure is large. It is written down because a recurring charge needs a named
+owner before it starts rather than after.
 
 > **Decide:** account `____________`  date `________`  by `________`
 
@@ -125,6 +155,20 @@ database plus a green deploy is the correct end state.
 
 Costs are the same order either way; the meaningful difference is isolation and the
 misclick surface. Both are ~$120/yr; killing it is one console action in both cases.
+
+**The free-tier project cap — check this before you click "New project".** #156's own
+body warns about it, and it has been hit on this account before. Supabase's Free plan
+allows **two active projects per organization**, so if the org is on Free and already has
+two, creating a staging project fails outright; the fix is to delete a dead project or
+move the org to Pro. There is a second, nastier edge: a Free-plan project **pauses after
+about a week of inactivity** and needs a manual restore. Staging is used in bursts — a
+week around the ETL dry run, a week around cutover — which is precisely the pattern that
+trips it, and a paused staging database fails `/ready`, which fails the deploy canary,
+which reads as a broken deploy rather than a paused database. *(I am reporting the
+two-project cap and the ~7-day pause from general knowledge of the Free plan, not from a
+reading of this org's billing page — confirm both on the plan page before relying on
+them.)* The **$10/mo Micro compute** line in the cost table above is the paid answer to
+both, and is why that table budgets staging as a paid project rather than a free one.
 
 Whichever is chosen, record TWO connection strings, both pointing at the **session
 pooler** (the same host, **port 5432**, username `postgres.<project-ref>` — never 6543,
@@ -240,6 +284,73 @@ Then fill the step-1 CORS variables from what Vercel assigned:
 **Verify:** the project's Production deployment serves the app shell (login page
 renders; API calls will fail until step 7 — that is expected).
 
+### 5a — turn OFF Vercel Deployment Protection
+
+**Vercel turns Deployment Protection on by default for new projects**, and #156's body
+calls this out for a reason. With it on, every request to `climate-staging` — including
+from a browser already logged in to Vercel, and including `curl` — is answered with a
+**302 to a Vercel SSO login** instead of the app. It does not present as a protection
+setting; it presents as a broken deployment, and it will be misdiagnosed as a bad build
+or a bad CORS origin for an hour before anyone thinks to check a toggle.
+
+Settings → Deployment Protection → set **Vercel Authentication** to **Disabled** for
+Production (and for Preview too, if preview URLs are to be shared with the client).
+
+**Verify from a terminal, not a browser** — an authenticated browser session masks
+exactly this failure:
+
+```
+curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' https://<staging-domain>/
+```
+
+`200` with an empty redirect URL means protection is off. A `302` toward
+`vercel.com/sso-api...` means it is still on.
+
+> Leaving it **on** is a defensible choice — staging will hold logins you would rather
+> not expose — but then it has to be a *deliberate* choice, and step 7's smoke test must
+> be run from an authenticated browser session. What must not happen is discovering it by
+> accident at the moment someone is trying to demo.
+
+### 5b — `web/vercel.json` hardcodes PRODUCTION's API host, and staging inherits it
+
+**Found 2026-08-24; not previously recorded anywhere.** `web/vercel.json` sits at the
+`web/` root, so **every Vercel project that imports this repository with root directory
+`web/` gets it — `climate-staging` included.** It contains:
+
+```
+"Content-Security-Policy-Report-Only":
+  "... connect-src 'self' https://bhgrdkd4gt.us-east-1.awsapprunner.com; ..."
+```
+
+That host is **production's** App Runner service. Vercel does not interpolate environment
+variables into `vercel.json` headers, so this cannot be made per-environment by setting a
+variable on `climate-staging`; it is a literal shipped to whichever project builds the
+file.
+
+Today the damage is cosmetic, because the header is
+`Content-Security-Policy-**Report-Only**`: nothing is blocked, but staging's browser
+console fills with a CSP violation for every call staging makes to its own API. That
+noise is not free — it is the same console step 7.2 asks you to watch for CORS errors.
+
+The damage if the header is ever promoted to an enforcing `Content-Security-Policy` — a
+natural pre-go-live hardening step, and one this project is likely to take — is not
+cosmetic, and it fails in the backwards direction: staging's front end would be
+**blocked from reaching staging's API** while remaining **permitted to reach
+production's**.
+
+**This was not fixed here: `web/` is owned by another lane and was not edited.** The fix
+is a human choice between two shapes:
+
+1. **Move the CSP out of `vercel.json`**, emitting it from the app or from a per-project
+   Vercel header override so the API origin can vary by environment. Correct; larger.
+2. **Widen `connect-src` to list both hosts.** One line, works immediately, but it
+   permanently grants every environment permission to talk to production's API. Fine
+   under a Report-Only header; think harder before doing it under an enforcing one.
+
+Either way, note that `web/.env.example` also defines `VITE_TRACKING_API_BASE_URL`: if the
+tracking service is ever wired to the web app (step 9), its host needs a `connect-src`
+entry too, in every environment.
+
 ## Step 6 — first staging deploy
 
 Everything from steps 1–5 is now in place, so:
@@ -273,11 +384,169 @@ the point of the `AspNetCoreEnvironment` parameter. Read the host from the stack
 2. Log in on the staging web URL; watch the browser console for CORS errors (there
    should be none — if there are, the `CORS_ALLOWED_ORIGIN` value and the actual origin
    disagree, usually a trailing slash or `www`).
-3. If Decision 2 chose synthetic data: seed it now via the app/API as admin.
+3. **You cannot "log in as admin" yet — there is no admin, and no way to make one
+   through the product.** Go to step 8 before attempting anything in the product; then
+   return here.
 
 **Verify:** an end-to-end action (create survey → respond → see results) works against
 staging, and prod's `/version` still reports the same commit it did this morning —
 staging provisioning must be a no-op for production.
+
+## Step 8 — bootstrap the first user (staging is UNREACHABLE without this)
+
+**Found 2026-08-24, and it is a hard blocker on two of #156's acceptance criteria**
+— "staging API, database and frontend all reachable", and "usable as the target for the
+ETL dry run". The earlier revision of step 7.3 ("seed it now via the app/API as admin")
+is **not executable as written**: you cannot act as an admin, because a freshly
+EF-migrated staging database contains no admin and the product offers no way to create
+one.
+
+The chicken-and-egg, each half verified in source on 2026-08-24:
+
+- **No migration seeds any data.**
+  `grep -rln "InsertData" src/ClimateProject.Infrastructure/Migrations/*.cs` returns
+  nothing. A migrated database is entirely empty — zero companies, zero users.
+- **No host-side bootstrap exists.** Nothing in `src/ClimateProject.Api/Program.cs`
+  seeds or ensures a first user.
+- **`POST /api/auth/signup` cannot be the way in, and fails twice over.** It resolves a
+  company by email domain first —
+  `db.Companies.FirstOrDefaultAsync(c => c.EmailDomain == domain)`
+  (`src/ClimateProject.Api/Endpoints/AuthEndpoints.cs:134`) — and returns **404** when
+  there is none, which on an empty database is always. And even on success it always
+  mints `Role = Roles.Employee` (same file, lines 148 and 230). It can never produce an
+  administrator.
+- **Creating a company requires an authenticated administrator**, which is the thing you
+  do not have.
+
+So the first user must be made **outside the product**, with SQL against the staging
+database. The recipe below deliberately does **not** hand-write a bcrypt hash: it lets
+the application hash the password on its own signup path and only corrects the role
+afterwards, so there is no second copy of the hashing parameters to get wrong.
+
+> **Two schema facts that bite anyone writing this SQL from memory**, both read from
+> `src/ClimateProject.Infrastructure/Migrations/ClimateProjectDbContextModelSnapshot.cs`:
+> **table names are snake_case (`companies`, `users`) while column names are quoted
+> PascalCase (`"Id"`, `"Name"`, `"Role"`).** Unquoted `Id` folds to lowercase `id` and
+> errors.
+
+**8.1 — insert exactly one company**, carrying the email domain you intend to sign up
+under:
+
+```
+psql "<staging session-pooler string>" <<'SQL'
+INSERT INTO companies ("Id", "Name", "EmailDomain", "CreatedAt")
+VALUES (gen_random_uuid(), 'TIMS Staging', 'timsint.com', now());
+SQL
+```
+
+Only `"Name"` is `IsRequired` on this entity; `"Country"`, `"Industry"`, `"Size"` and
+`"SubscriptionTier"` are nullable and are omitted on purpose, so the row is visibly a
+bootstrap artifact rather than something pretending to be real.
+
+**8.2 — sign up through the running staging API**, so the password is hashed by the same
+code that will later verify it:
+
+```
+curl -sS -X POST https://<staging-apprunner-host>/api/auth/signup \
+  -H 'content-type: application/json' \
+  -d '{"email":"staging-admin@timsint.com","name":"Staging Admin","password":"<fresh password>"}'
+```
+
+The domain after the `@` must equal the `"EmailDomain"` inserted in 8.1, or this returns
+404 with the "no company for domain" message.
+
+**8.3 — promote that one row to `super_admin`:**
+
+```
+psql "<staging session-pooler string>" <<'SQL'
+UPDATE users SET "Role" = 'super_admin', "UpdatedAt" = now()
+WHERE "Email" = 'staging-admin@timsint.com';
+SQL
+```
+
+`'super_admin'` is the literal wire value of `Roles.SuperAdmin`
+(`src/ClimateProject.Application/Auth/Roles.cs:5`); the five valid values are
+`super_admin`, `company_admin`, `leader`, `supervisor`, `employee`. A typo here does not
+error — it produces a user with an unrecognised role and a confusing spray of 403s.
+
+Nothing needs to touch `"SecurityStamp"` (it defaults to `gen_random_uuid()` in the
+database) or `"SearchVector"` (a computed column).
+
+**8.4 — log in on the staging web URL as that user.** From here the rest is reachable
+through the product: departments, demographic fields, surveys, and the bulk import that
+creates the remaining population.
+
+**Verify:** `POST /api/auth/login` with those credentials returns a token, and the
+staging front end renders admin navigation rather than employee navigation.
+
+> **The isolation check, and this is the criterion #156 is strictest about.** The
+> password chosen in 8.2 must not be one that exists in production, and the
+> `climate-project-api/staging/*` secrets from step 3 must be freshly generated — never
+> copies of production's. The danger with `tracking-jwt-secret` is concrete, not
+> theoretical: a shared signing key means a token minted by staging **verifies in
+> production**, which turns "somebody has a staging login" into "somebody has a
+> production login". Step 3 states this; step 8 is where it is easiest to violate, by
+> reaching for a password you already know.
+
+**8.5 — populate beyond the first user.** With an admin in hand, Decision box 2 option A
+(synthetic only) is reachable entirely through the product's own APIs: create departments
+and demographic fields, then use the bulk import (`src/ClimateProject.Api/Endpoints/BulkImportEndpoints.cs`)
+to create the population, then create and run a survey. **There is no seed script in this
+repository** — `find . -iname "*seed*"` returns only test fixtures and one design note —
+so this is manual work, or a script somebody still has to write. Budget it as real work
+rather than as a footnote to step 7.
+
+Two things are known to make a synthetic seed *look* successful while leaving every
+dashboard empty, and both are worth re-deriving before seeding rather than after:
+responses must clear the **anonymity floor of 5** per reporting group before results
+render at all, and respondents must be **authenticated** for a department to be attached
+to their response — an anonymous response carries no user id by design, so a population
+seeded as anonymous respondents yields surveys that have responses and a climate map with
+nothing on it.
+
+## Step 9 — the parity gap this runbook cannot close: `services/tracking-api`
+
+**Verified 2026-08-24. Staging cannot honestly claim "production parity" while this is
+true — though the reason is that *production* has no parity with the repository either.**
+
+`services/tracking-api` is a second .NET service with its own solution
+(`ClimateTracking.slnx`), five projects and its own test suite. It has **no deployment
+path to any environment at all**:
+
+| Artifact | Exists? | The check |
+|---|---|---|
+| Deploy workflow | **No** | `grep -rn "tracking-api\|ClimateTracking" .github/workflows/*.yml` → no matches |
+| Dockerfile | **No** | `find . -name "Dockerfile*"` → only `./Dockerfile` and `./Dockerfile.workers`, both for the main API |
+| CloudFormation | **No** | no template in `infra/aws/` names a tracking service |
+
+This is not a staging oversight — it is missing for **production too**, and the
+consequence is current: a Procomer `.xlsx` export has merged into that service and
+therefore ships to nobody. #157's ETL dry run cannot exercise the tracking side of the
+product against staging, because there is no staging tracking side to exercise.
+
+Closing it needs three artifacts that do not exist, and all three are **out of scope for
+this runbook**, which provisions the *API's* staging environment:
+
+1. `services/tracking-api/Dockerfile`
+2. a CloudFormation service stack for it — most cheaply by parameterising
+   `infra/aws/climate-project-api-prod-service.yml` further, or by a sibling template
+3. `.github/workflows/deploy-tracking-staging.yml` and a prod counterpart, mirroring
+   `deploy-staging.yml`'s preflight, canary and deployed-commit assertion closely enough
+   that `scripts/verify-prod-deploy-invariants.py` can pin them the same way it pins
+   these two
+
+**One constraint that must not be discovered late.** #219 records that when the tracking
+service is first deployed, **`InternalApiKey` must be wired on BOTH sides in the same
+change**. For staging that means `climate-project-api/staging/internal-api-key` (step 3)
+and the tracking service's `INTERNAL_API_KEY` must carry the **same value**, set in **one**
+operation. A half-wired pair does not degrade gracefully: since #189 the API validates
+`InternalApiKey` at startup under `ValidateOnStart`, and `/api/internal/*`
+(`src/ClimateProject.Api/Endpoints/TrackingInternalEndpoints.cs`) rejects a mismatched
+caller — so the result is a service that either refuses to boot or 401s every internal
+call, discovered at the canary rather than at the desk.
+
+**File this as its own issue.** Folding it into #156 would mean #156 never closes, and
+#157 is already waiting on #156.
 
 ---
 
@@ -288,10 +557,18 @@ staging provisioning must be a no-op for production.
   template.
 - **A custom domain for staging.** The App Runner and Vercel generated hostnames are
   enough for a rehearsal environment.
-- **`Database__RequireSessionPooler` stays `"false"`,** same as prod (the README's
-  "Arming the guard" step 3 remains open). Staging is in fact the right place to
-  rehearse flipping it to `"true"` before prod does — but that is that ratchet's
-  runbook, not this one.
+- ~~**`Database__RequireSessionPooler` stays `"false"`, same as prod.**~~
+  **CORRECTED 2026-08-24 — this bullet was stale, and wrong in both halves.** Production
+  armed the guard on 2026-08-17 (commit `966c054`), and the flag is **not a parameter**:
+  it is hardcoded `Value: "true"` in
+  `infra/aws/climate-project-api-prod-service.yml`, the same file the staging deploy
+  renders. **Staging therefore inherits `"true"` on its very first deploy**, and there
+  is nothing left to rehearse. What is left is a trap: if step 2's staging connection
+  string is on port **6543**, the service throws inside `ValidateOnStart`, never answers
+  `/ready`, and step 6's canary fails the deploy five minutes later with no obvious
+  cause. Avoiding it is step 2's "port 5432, never 6543" instruction, which is now
+  load-bearing rather than advisory. Nothing about staging can un-arm the flag short of
+  editing the shared template — which would un-arm production at the same time.
 - **Copying any production data.** Whatever Decision box 2 says, the copy itself is a
   separate, deliberate operation with its own review — this runbook provisions the
   environment, empty.
