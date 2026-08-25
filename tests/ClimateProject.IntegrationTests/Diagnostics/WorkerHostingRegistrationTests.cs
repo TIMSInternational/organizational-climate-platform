@@ -51,6 +51,7 @@ public class WorkerHostingRegistrationTests
             "SurveyDraftRetentionWorker",
             "RetentionCleanupWorker",
             "SurveyLifecycleWorker",
+            "MicroclimateLifecycleWorker",
             "WorkerHeartbeatMonitor",
         ];
 

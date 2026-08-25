@@ -36,6 +36,12 @@ namespace ClimateProject.Workers;
 /// the dates admins pick are hours and days, so five minutes is well inside the noise, and
 /// each tick is a sequential scan of <c>surveys</c> that there is no reason to run every
 /// minute.</item>
+/// <item><b>Microclimate lifecycle, 5 minutes.</b> The lag between a microclimate's end time
+/// arriving and its status agreeing. Felt in one direction only -- the job never opens a
+/// session, only closes one -- and matching the survey cadence deliberately, so there is one
+/// number to reason about rather than two. Microclimates are shorter-lived (hours to days),
+/// which argues for a tighter tick and not for a different mechanism; five minutes is still
+/// small against a window an admin sets in hours.</item>
 /// </list>
 /// </summary>
 public sealed class WorkerSchedulingOptions
@@ -71,6 +77,13 @@ public sealed class WorkerSchedulingOptions
     /// cutoff.
     /// </summary>
     public TimeSpan SurveyLifecycleInterval { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// How often a microclimate's end time is compared against its status. Five minutes; see the
+    /// class remarks, and <c>MicroclimateLifecycleJob</c> for why the window is a tick rather
+    /// than a hard cutoff.
+    /// </summary>
+    public TimeSpan MicroclimateLifecycleInterval { get; set; } = TimeSpan.FromMinutes(5);
 
     /// <summary>How often the in-process liveness check runs. See <c>WorkerHeartbeatMonitor</c>.</summary>
     public TimeSpan HeartbeatMonitorInterval { get; set; } = TimeSpan.FromMinutes(5);
@@ -116,6 +129,14 @@ public sealed class WorkerSchedulingOptions
     public int SurveyLifecycleBatchSize { get; set; } = SurveyLifecycleJob.DefaultBatchSize;
 
     /// <summary>
+    /// Microclimates closed per tick. A cap on one transaction, not on what the job will ever do
+    /// -- but whatever a tick does not reach is a session that goes on accepting answers past its
+    /// deadline for another five minutes, and those answers cannot be unpicked. Sized so that
+    /// only the first sweep after deploy can reach it.
+    /// </summary>
+    public int MicroclimateLifecycleBatchSize { get; set; } = MicroclimateLifecycleJob.DefaultBatchSize;
+
+    /// <summary>
     /// Fail the host at startup on a configuration that cannot work, rather than at the first
     /// tick. #189 established that principle for the API: a process that boots misconfigured
     /// reports a healthy deploy and then does nothing useful. A zero interval is worse here
@@ -131,6 +152,7 @@ public sealed class WorkerSchedulingOptions
         Require(SurveyDraftRetentionInterval, nameof(SurveyDraftRetentionInterval));
         Require(RetentionCleanupInterval, nameof(RetentionCleanupInterval));
         Require(SurveyLifecycleInterval, nameof(SurveyLifecycleInterval));
+        Require(MicroclimateLifecycleInterval, nameof(MicroclimateLifecycleInterval));
         Require(HeartbeatMonitorInterval, nameof(HeartbeatMonitorInterval));
 
         Require(NotificationBatchSize, nameof(NotificationBatchSize));
@@ -141,6 +163,7 @@ public sealed class WorkerSchedulingOptions
         Require(SurveyDraftRetentionBatchSize, nameof(SurveyDraftRetentionBatchSize));
         Require(RetentionCleanupBatchSize, nameof(RetentionCleanupBatchSize));
         Require(SurveyLifecycleBatchSize, nameof(SurveyLifecycleBatchSize));
+        Require(MicroclimateLifecycleBatchSize, nameof(MicroclimateLifecycleBatchSize));
 
         if (HeartbeatStaleTolerance <= 0)
         {
