@@ -62,8 +62,19 @@ export interface NavSection {
 //   DemographicFieldsPage were reachable only via a link buried inside
 //   CompanyDetailPage, which is itself unreachable without a nav entry (a
 //   CompanyAdmin has no companies-list page to click into one from).
-// - Any other role (employee/supervisor/leader): no admin pages exist for them
-//   yet (see postAcceptRoute.ts) -- empty nav, not a broken link.
+// - Any other role (employee/supervisor/leader): a real nav since #109/#132 -- the
+//   pages that authorize per USER rather than per role. It was `[]` when none of
+//   those existed, on the principle that an empty rail beats a broken link.
+//
+// Since #138 the rule above is checked rather than merely stated.
+// `navigation/roleCapabilities.ts` records, per role, every destination that role
+// can load and the endpoint that authorizes it, and `roleCapabilities.test.ts`
+// fails if anything this module returns for a role is not in that role's list --
+// with tracking on and off, and for a role neither module has heard of. Add a row
+// here and the table has to gain the destination, with its `authorizedBy`, or the
+// suite goes red. That table is also what non-nav links are checked against: the
+// defect that prompted it was a primary button on `/action-plans` drawn on a page
+// only `leader` and `supervisor` ever see, which 403s for both.
 //
 // Action Plans, Microclimates and AI Insights ARE in the SuperAdmin section, as
 // of #124. They were withheld because those pages had no company-picker, so a
