@@ -1,0 +1,221 @@
+name: ops-synthetic-probe
+
+# The outside-in half of #158, and it exists because every CloudWatch alarm in
+# infra/aws/climate-project-observability.yml shares a fate with the thing it watches.
+#
+# Those alarms are built on log metric filters. A metric filter only produces a datapoint when
+# CloudWatch receives a log event, so the failures it cannot report are exactly the total ones:
+# the service deleted, the log group deleted, the AWS account suspended, the alarm stack rolled
+# back, the region unreachable. In each case the graph goes flat and quiet, which is what a
+# perfectly healthy midnight also looks like. TreatMissingData: breaching covers some of that
+# from inside; nothing inside covers all of it.
+#
+# So this runs from outside AWS entirely, on GitHub's infrastructure, and asks the two
+# questions a customer would ask: does the API answer, and is it answering with a working
+# database. It also carries the alert routing that deploy-drift.yml was written without --
+# that workflow's own header records the gap ("Alert routing is the remainder of #158. Today
+# the alert is the workflow failure itself"), and the relay job below closes it WITHOUT
+# editing deploy-drift.yml, by triggering on its completion instead.
+#
+# NOT ENABLED ON A SCHEDULE UNTIL THE SECRET EXISTS. TEAMS_WEBHOOK_URL is read through an
+# `if:` guard on every posting step, so until someone adds it this workflow probes and fails
+# loudly in the Actions tab without ever attempting a post. That is deliberate: a notify step
+# that silently no-ops on a missing secret is how an alerting pipeline ends up decorative.
+
+on:
+  schedule:
+    # Every 15 minutes. Chosen against SystemStatusPolicy.BacklogAgeThresholdSeconds (900s),
+    # the point at which the product itself calls the notification queue a backlog -- probing
+    # slower than the product's own patience would mean learning about an outage from the
+    # customer. GitHub delays scheduled runs under load, routinely by several minutes and
+    # occasionally by tens of them, so this is a floor on detection latency and not a
+    # guarantee. That imprecision is the price of a prober that does not live in the account
+    # it is watching, and it is why this supplements the CloudWatch alarms rather than
+    # replacing them.
+    - cron: "*/15 * * * *"
+  workflow_run:
+    workflows: ["deploy-drift"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Same override shape deploy-drift.yml uses, so #160's cutover to a customer-facing domain
+  # is one repository variable rather than an edit in two files that can disagree.
+  API_BASE_URL: ${{ vars.PROD_API_BASE_URL || 'https://bhgrdkd4gt.us-east-1.awsapprunner.com' }}
+
+jobs:
+  # -------------------------------------------------------------------------------------
+  # Relay: deploy-drift.yml failed, so say so in the channel.
+  #
+  # Triggering on workflow_run rather than adding a step to deploy-drift.yml is the whole
+  # point -- that workflow is the one thing standing between production and another
+  # month-old build, and a notify step appended to it is a new way for it to fail. This
+  # cannot affect whether the drift check runs or what it concludes.
+  # -------------------------------------------------------------------------------------
+  relay-drift-result:
+    name: Relay a drift failure to Teams
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion != 'success'
+    runs-on: ubuntu-latest
+    # Lifted to job-level env because the `secrets` context is NOT available in a step's
+    # `if:` -- only `env` is. Testing the secret directly there is silently invalid and the
+    # step would never run.
+    env:
+      WEBHOOK: ${{ secrets.TEAMS_WEBHOOK_URL }}
+    steps:
+      - name: Post to Teams
+        if: env.WEBHOOK != ''
+        env:
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg title "Deployed-commit drift: $CONCLUSION" \
+            --arg body "Production is running a build that has drifted from main beyond the configured threshold, or the live commit could not be identified at all. This does NOT auto-deploy: deploy-prod.yml carries a migration step with a known unsafe window and needs a person. Open the run for the exact commit distance and build age." \
+            --arg url "$RUN_URL" \
+            '{
+              type: "message",
+              attachments: [{
+                contentType: "application/vnd.microsoft.card.adaptive",
+                content: {
+                  type: "AdaptiveCard",
+                  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                  version: "1.4",
+                  body: [
+                    {type:"TextBlock", size:"Medium", weight:"Bolder", color:"attention", text:$title},
+                    {type:"TextBlock", wrap:true, text:$body}
+                  ],
+                  actions: [{type:"Action.OpenUrl", title:"Open the run", url:$url}]
+                }
+              }]
+            }' > /tmp/card.json
+          # --fail-with-body so a webhook that rejects the payload fails this step instead of
+          # returning 200-shaped silence. A Teams webhook that has been revoked answers 4xx;
+          # one whose payload SHAPE is wrong can answer 200 and render nothing, which is why
+          # the runbook insists on a human-eyeballed test post rather than a green step here.
+          curl -sS --fail-with-body -X POST -H "Content-Type: application/json" \
+            --data @/tmp/card.json "$WEBHOOK"
+
+  # -------------------------------------------------------------------------------------
+  # Probe: is the API up, and is its database attached.
+  # -------------------------------------------------------------------------------------
+  probe:
+    name: Probe /ready and /version from outside AWS
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-latest
+    # See the note on the relay job: `secrets` cannot be read from a step `if:`.
+    env:
+      WEBHOOK: ${{ secrets.TEAMS_WEBHOOK_URL }}
+    outputs:
+      failure: ${{ steps.probe.outputs.failure }}
+      detail: ${{ steps.probe.outputs.detail }}
+    steps:
+      - name: Probe
+        id: probe
+        run: |
+          set -uo pipefail
+          FAILURE=""
+
+          # Three attempts, 10 seconds apart, and a failure is only declared if ALL THREE
+          # fail. A single miss is App Runner replacing an instance, a TLS handshake losing a
+          # race, or GitHub's own egress hiccuping -- all things the platform is built to ride
+          # out, and none worth a 3am message. Three consecutive misses over ~20 seconds is a
+          # service that is genuinely not answering.
+          probe_thrice() {
+            local path="$1" expect="$2" last=""
+            for attempt in 1 2 3; do
+              last="$(curl -s -o /tmp/body -w '%{http_code}' -m 15 "${API_BASE_URL}${path}" || echo 000)"
+              if [ "$last" = "$expect" ]; then
+                echo "  attempt $attempt: $last OK"
+                return 0
+              fi
+              echo "  attempt $attempt: $last (want $expect)"
+              [ "$attempt" -lt 3 ] && sleep 10
+            done
+            echo "  body: $(head -c 300 /tmp/body 2>/dev/null)"
+            return 1
+          }
+
+          echo "GET ${API_BASE_URL}/ready"
+          if ! probe_thrice /ready 200; then
+            # /ready round-trips Postgres, so a 503 here is specifically "the process is up and
+            # cannot reach its database" -- distinct from no answer at all, which is the
+            # process or the service being gone. Both land in the same alert because both mean
+            # the product does not work; the body in the log tells them apart.
+            FAILURE="/ready did not return 200 on three consecutive attempts. Either the service is down, or it is up and cannot reach Postgres."
+          fi
+
+          echo "GET ${API_BASE_URL}/version"
+          if [ -z "$FAILURE" ]; then
+            if probe_thrice /version 200; then
+              cp /tmp/body /tmp/version.json
+              echo "  running: $(jq -r '.commit // "unknown"' /tmp/version.json) built $(jq -r '.builtAt // "unknown"' /tmp/version.json)"
+            else
+              FAILURE="/version did not return 200 on three consecutive attempts."
+            fi
+          fi
+
+          {
+            echo "## Synthetic probe"
+            echo
+            echo "- Target: \`${API_BASE_URL}\`"
+            if [ -n "$FAILURE" ]; then
+              echo "- Result: **FAILED** -- $FAILURE"
+            else
+              echo "- Result: OK"
+              echo "- Running commit: \`$(jq -r '.commit // "unknown"' /tmp/version.json)\`"
+              echo "- Built at: $(jq -r '.builtAt // "unknown"' /tmp/version.json)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          {
+            echo "failure=$([ -n "$FAILURE" ] && echo true || echo false)"
+            echo "detail=$FAILURE"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post to Teams
+        if: steps.probe.outputs.failure == 'true' && env.WEBHOOK != ''
+        env:
+          DETAIL: ${{ steps.probe.outputs.detail }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TARGET: ${{ env.API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg title "Production API is not answering" \
+            --arg body "$DETAIL" \
+            --arg target "Target: $TARGET" \
+            --arg url "$RUN_URL" \
+            '{
+              type: "message",
+              attachments: [{
+                contentType: "application/vnd.microsoft.card.adaptive",
+                content: {
+                  type: "AdaptiveCard",
+                  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                  version: "1.4",
+                  body: [
+                    {type:"TextBlock", size:"Medium", weight:"Bolder", color:"attention", text:$title},
+                    {type:"TextBlock", wrap:true, text:$body},
+                    {type:"TextBlock", wrap:true, isSubtle:true, text:$target}
+                  ],
+                  actions: [{type:"Action.OpenUrl", title:"Open the run", url:$url}]
+                }
+              }]
+            }' > /tmp/card.json
+          curl -sS --fail-with-body -X POST -H "Content-Type: application/json" \
+            --data @/tmp/card.json "$WEBHOOK"
+
+      - name: Fail the run when the probe failed
+        # Last, so the Teams post above always happens first. A failing step here is also what
+        # makes GitHub email the repository watchers, which is the second delivery path for
+        # free and the only one that still works if the webhook has been revoked.
+        if: steps.probe.outputs.failure == 'true'
+        run: |
+          echo "::error::${{ steps.probe.outputs.detail }}"
+          exit 1

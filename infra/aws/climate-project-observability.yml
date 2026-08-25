@@ -1,0 +1,1029 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Alarms and alert routing for climate-project-api (#158). A SEPARATE stack from
+  climate-project-api-prod-service.yml on purpose: alarms are edited far more often than the
+  service is, and an alarm typo must never be able to roll the running service. Deploying
+  this stack changes nothing about the API -- it only reads its log group and its metrics.
+
+  NOT APPLIED. Authored under a read-only brief; see docs/runbooks/alerting.md for the
+  create-stack command, the parameters a human has to supply, and the two things that must
+  be verified against real log output before the alarms are trusted.
+
+Parameters:
+  ServiceName:
+    Type: String
+    Default: climate-project-api-prod
+    Description: App Runner service name. Must match the deployed service exactly.
+
+  ServiceId:
+    Type: String
+    AllowedPattern: "[0-9a-f]{32}"
+    Description: >-
+      App Runner service ID -- the 32-hex-character segment in the log group name, NOT the
+      service ARN and not the generated hostname. It is an Output of the service stack
+      (`ServiceId`) and is also readable with:
+        aws apprunner list-services --region us-east-1 \
+          --query "ServiceSummaryList[?ServiceName=='climate-project-api-prod'].ServiceId" --output text
+      There is no way to derive it from the service name, which is why it is a parameter.
+
+  TeamsWebhookUrl:
+    Type: String
+    NoEcho: true
+    Description: >-
+      Microsoft Teams incoming-webhook URL. The channel decision is settled; this is the
+      wire. See docs/runbooks/alerting.md -- which flavour of webhook your tenant issues
+      changes the payload the forwarder must send, and getting that wrong fails silently
+      with an HTTP 200.
+
+  FallbackEmail:
+    Type: String
+    AllowedPattern: ".+@.+"
+    Description: >-
+      Email address subscribed to both topics as the fallback channel. A distribution list,
+      not a person: the named-individual failure mode is that the alert arrives while they
+      are on a plane. AWS sends a confirmation link that MUST be clicked -- an unconfirmed
+      subscription is silently discarded, which is the exact class of failure #158 exists
+      to end.
+
+  AlarmsEnabled:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Set "false" for a first deploy that creates the alarms without letting them notify.
+      Recommended for the first 48 hours: several thresholds here are reasoned from the
+      code rather than from observed production traffic, and a noisy alarm on day one is
+      how a channel gets muted.
+
+Conditions:
+  NotifyingEnabled: !Equals [!Ref AlarmsEnabled, "true"]
+
+# EVERY FilterPattern BELOW IS A QUOTED SUBSTRING, deliberately. Two reasons.
+#
+# 1. The app logs with the default .NET SimpleConsole formatter, which writes each event as
+#    TWO lines -- "fail: Category[0]" then the indented message -- and App Runner ships each
+#    line to CloudWatch as its own event. The level and the message are therefore never in the
+#    same log event, so NO pattern can filter on both. Matching the message text is the only
+#    thing that works today.
+# 2. A quoted substring keeps working unchanged if Logging__Console__FormatterName=json is set
+#    later (see the runbook): the JSON line still CONTAINS the rendered message, so these
+#    filters survive that upgrade rather than needing a rewrite alongside it.
+#
+# The strings are copied from source. If one is edited in src/, its alarm goes quiet with no
+# error anywhere -- which is why docs/runbooks/alerting.md lists the file each one comes from,
+# and why the pinning test named there is worth adding.
+
+Resources:
+
+  # ---------------------------------------------------------------------------------------
+  # Routing. Two topics, one channel.
+  #
+  # Both feed the same Teams channel and the same mailbox; the split exists so that severity
+  # can diverge later (a pager, a different channel, a quiet-hours rule) without re-pointing
+  # every alarm. Splitting later is a 40-alarm edit; splitting now is free.
+  # ---------------------------------------------------------------------------------------
+
+  CriticalTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub ${ServiceName}-alerts-critical
+      DisplayName: climate critical
+      Tags:
+        - Key: Project
+          Value: climate-project-api
+        - Key: Environment
+          Value: production
+
+  WarningTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub ${ServiceName}-alerts-warning
+      DisplayName: climate warning
+      Tags:
+        - Key: Project
+          Value: climate-project-api
+        - Key: Environment
+          Value: production
+
+  CriticalEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref CriticalTopic
+      Protocol: email
+      Endpoint: !Ref FallbackEmail
+
+  WarningEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref WarningTopic
+      Protocol: email
+      Endpoint: !Ref FallbackEmail
+
+  # ---------------------------------------------------------------------------------------
+  # The Teams forwarder.
+  #
+  # SNS cannot post to Teams directly. Its HTTPS subscription sends SNS's own envelope, which
+  # Teams does not render -- the message arrives blank or is rejected. Something has to
+  # translate, and this Lambda is the smallest thing that does.
+  #
+  # The alternative is AWS Chatbot, which speaks Teams natively and needs no code, but
+  # requires a Teams administrator to authorise the tenant through the AWS console once. That
+  # is a human step this template cannot perform and a dependency on a person with rights
+  # nobody on this project may have; the Lambda needs only a webhook URL. If someone with
+  # tenant rights is available, Chatbot is the better long-term answer -- see the runbook.
+  # ---------------------------------------------------------------------------------------
+
+  TeamsForwarderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ServiceName}-teams-forwarder
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      # Logs only. The forwarder reads nothing and writes nothing but its own log stream; it
+      # receives the alarm as its event payload and has no reason to hold any other grant.
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  TeamsForwarder:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${ServiceName}-teams-forwarder
+      Role: !GetAtt TeamsForwarderRole.Arn
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 15
+      MemorySize: 128
+      Environment:
+        Variables:
+          TEAMS_WEBHOOK_URL: !Ref TeamsWebhookUrl
+      Code:
+        # Raises on a non-2xx rather than swallowing it. A forwarder that silently drops the
+        # message is worse than no forwarder: SNS retries a failed Lambda invocation, and a
+        # raise is what makes a broken webhook show up as Lambda Errors instead of as silence.
+        ZipFile: |
+          import json, os, urllib.request
+
+          HOOK = os.environ["TEAMS_WEBHOOK_URL"]
+
+          def handler(event, context):
+              for record in event.get("Records", []):
+                  sns = record["Sns"]
+                  try:
+                      alarm = json.loads(sns["Message"])
+                  except Exception:
+                      alarm = {}
+                  name = alarm.get("AlarmName") or sns.get("Subject") or "CloudWatch"
+                  state = alarm.get("NewStateValue", "UNKNOWN")
+                  desc = alarm.get("AlarmDescription") or ""
+                  reason = (alarm.get("NewStateReason") or sns.get("Message") or "")[:1200]
+                  colour = {"ALARM": "attention", "OK": "good"}.get(state, "warning")
+                  card = {
+                      "type": "message",
+                      "attachments": [{
+                          "contentType": "application/vnd.microsoft.card.adaptive",
+                          "content": {
+                              "type": "AdaptiveCard",
+                              "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                              "version": "1.4",
+                              "body": [
+                                  {"type": "TextBlock", "size": "Medium", "weight": "Bolder",
+                                   "color": colour, "text": "%s: %s" % (state, name)},
+                                  {"type": "TextBlock", "wrap": True, "text": desc},
+                                  {"type": "TextBlock", "wrap": True, "isSubtle": True,
+                                   "text": reason},
+                              ],
+                          },
+                      }],
+                  }
+                  request = urllib.request.Request(
+                      HOOK,
+                      data=json.dumps(card).encode("utf-8"),
+                      headers={"Content-Type": "application/json"},
+                  )
+                  with urllib.request.urlopen(request, timeout=10) as response:
+                      if response.status >= 300:
+                          raise RuntimeError("Teams webhook returned %s" % response.status)
+              return {"ok": True}
+
+  TeamsForwarderInvokeFromCritical:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt TeamsForwarder.Arn
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref CriticalTopic
+
+  TeamsForwarderInvokeFromWarning:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt TeamsForwarder.Arn
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref WarningTopic
+
+  CriticalTeamsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref CriticalTopic
+      Protocol: lambda
+      Endpoint: !GetAtt TeamsForwarder.Arn
+
+  WarningTeamsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref WarningTopic
+      Protocol: lambda
+      Endpoint: !GetAtt TeamsForwarder.Arn
+
+  # The forwarder is the one component whose failure is invisible to every alarm below,
+  # because every one of them routes THROUGH it. Alarmed on its own error count, delivered to
+  # the email fallback only -- routing a broken-Teams alert through Teams is a loop.
+  TeamsForwarderFailingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-teams-forwarder-failing
+      AlarmDescription: >-
+        The Teams forwarder is throwing, so alerts are not reaching the channel. Every other
+        alarm in this stack is currently mute. Usual cause: the webhook URL was rotated or
+        the Teams workflow behind it was deleted.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TeamsForwarder
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref WarningTopic], !Ref "AWS::NoValue"]
+
+  # ---------------------------------------------------------------------------------------
+  # METRIC FILTERS -- scheduled job heartbeats.
+  #
+  # ScheduledJobWorker.TickAsync logs one line per job per tick that HELD THE LEASE. Under the
+  # Postgres advisory lease exactly one instance wins per tick, so the fleet-wide count of this
+  # line is ~1 per interval no matter whether one instance is running or twenty-five. That is
+  # what makes a fixed numeric threshold meaningful here: the expected rate does not move with
+  # autoscaling. Instances that LOSE the lease log a different line ("another instance holds
+  # the lease") which is deliberately NOT matched -- counting it would make twenty-four idle
+  # instances look like healthy work.
+  #
+  # DefaultValue 0 is load-bearing. Without it a period with no match emits no datapoint, and
+  # "no datapoint" and "zero" would be indistinguishable. With it, a log group that is still
+  # receiving events reports a real 0 (job wedged), and a log group receiving nothing at all
+  # reports nothing (process gone) -- caught by TreatMissingData: breaching on every alarm.
+  # Both failure modes, two mechanisms, one alarm.
+  # ---------------------------------------------------------------------------------------
+
+  NotificationDispatchHeartbeatFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"Heartbeat: scheduled job notification-dispatch completed a run"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: Heartbeat.NotificationDispatch
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  SurveyLifecycleHeartbeatFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"Heartbeat: scheduled job survey-lifecycle completed a run"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: Heartbeat.SurveyLifecycle
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  InvitationRemindersHeartbeatFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"Heartbeat: scheduled job invitation-reminders completed a run"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: Heartbeat.InvitationReminders
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  DigestsHeartbeatFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"Heartbeat: scheduled job digests completed a run"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: Heartbeat.Digests
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  ScheduledReportsHeartbeatFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"Heartbeat: scheduled job scheduled-reports completed a run"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: Heartbeat.ScheduledReports
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  SurveyDraftRetentionHeartbeatFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"Heartbeat: scheduled job survey-draft-retention completed a run"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: Heartbeat.SurveyDraftRetention
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  RetentionCleanupHeartbeatFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"Heartbeat: scheduled job retention-cleanup completed a run"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: Heartbeat.RetentionCleanup
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  # ---------------------------------------------------------------------------------------
+  # METRIC FILTERS -- everything else.
+  # ---------------------------------------------------------------------------------------
+
+  # WorkerHeartbeatMonitor.Check, logged at Error. The in-process detector for a job that
+  # wedges while the host stays up -- the case the absence alarms are worst at, because the
+  # other six jobs keep the log busy and every "is anything logging" check stays green.
+  JobStaleReportedFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"has not completed a run since"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: JobStaleReported
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  # ScheduledJobWorker.TickAsync's catch-all. The job is alive and ticking, and every tick is
+  # rolling back.
+  JobThrewFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"Scheduled job" "threw at"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: JobThrew
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  ReadinessProbeFailedFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"Readiness probe failed: database round-trip did not succeed."'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: ReadinessProbeFailed
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  # Npgsql's own wording when MaxPoolSize is reached. Matched on the stable clause rather than
+  # the whole sentence, because the parenthetical carries the configured numbers and the exact
+  # punctuation has changed between driver majors.
+  DbPoolExhaustedFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"connection pool has been exhausted"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: DbPoolExhausted
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  # The #220 signature. With Database__RequireSessionPooler armed this should be unreachable at
+  # runtime -- the host refuses to boot instead -- so a hit means the guard was disarmed.
+  TransactionPoolerFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"TRANSACTION pooler"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: TransactionPoolerWarning
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  # EmailDeliveryStartupReport, once per process start. Categorical, not statistical.
+  MailNotConfiguredFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"Email delivery is NOT CONFIGURED"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: MailNotConfigured
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  MailMisconfiguredFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"SMTP transport is misconfigured"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: MailMisconfigured
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  # SmtpEmailTransport.Classify. 5xx -- the provider will never accept this message.
+  MailPermanentRejectFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"SMTP" "treated as permanent"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: MailPermanentReject
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  # 4xx -- try later. Individually normal; a spike is the relay throttling or refusing us.
+  MailTransientRejectFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"SMTP" "treated as transient"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: MailTransientReject
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  NotificationSenderThrewFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"Notification sender threw while delivering notification"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: NotificationSenderThrew
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  RateLimitRejectedFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"Rate limit rejected"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: RateLimitRejected
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  # App Runner writes rollout and health-check events to a SECOND log group, /service, which
+  # is where instance replacement is visible at all. THE PATTERN BELOW IS A GUESS -- it was
+  # written without sight of a real replacement event, because nothing in this repository or
+  # this AWS account can produce one. Verify it before trusting it; the runbook has the
+  # command and the fallback.
+  InstanceReplacementFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/service
+      FilterPattern: '"Health check failed"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: InstanceHealthCheckFailed
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  # ---------------------------------------------------------------------------------------
+  # ALARMS -- the scheduler.
+  #
+  # Every window below is a multiple of the job's OWN interval (WorkerSchedulingOptions), not
+  # a flat number. A flat threshold across jobs that tick every minute and every day is
+  # necessarily either deaf to the fast one or screaming about the slow one -- the same
+  # reasoning WorkerHeartbeats.StaleJobs already applies in-process, restated here so the
+  # external and internal detectors agree instead of contradicting each other.
+  # ---------------------------------------------------------------------------------------
+
+  NotificationDispatchStoppedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-job-notification-dispatch-stopped
+      AlarmDescription: >-
+        notification-dispatch has not completed a run in 10 minutes. Nothing is draining the
+        notifications table: no reminder, digest or scheduled report is leaving the building.
+        Check GET /admin/system/status for queue depth, then the App Runner application log.
+      # Interval 1 min, so ~5 runs are expected per 5-minute period. Two empty periods = 10
+      # minutes. The number is set by what it has to beat: SystemStatusPolicy declares the
+      # queue a BACKLOG at 900 seconds, so 10 minutes puts the alert 5 minutes ahead of the
+      # point the product itself calls this a fault. It is also comfortably longer than an App
+      # Runner rolling replacement, which is the only routine reason dispatch pauses.
+      Namespace: ClimateProject/Prod
+      MetricName: Heartbeat.NotificationDispatch
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
+      OKActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
+
+  SurveyLifecycleStoppedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-job-survey-lifecycle-stopped
+      AlarmDescription: >-
+        survey-lifecycle has not completed a run in 15 minutes. Surveys are not opening on
+        their start date and -- the half that matters for a government client -- are not
+        CLOSING on their end date, so responses are being accepted after the deadline.
+      # Interval 5 min x the 3.0 tolerance WorkerSchedulingOptions.HeartbeatStaleTolerance
+      # already uses = 15 minutes, so this alarm and the in-process monitor call the same job
+      # stale at the same moment rather than arguing. This is the only job that mutates live
+      # customer data on a timer, which is why it is Critical at the same window that leaves
+      # scheduled-reports a Warning.
+      Namespace: ClimateProject/Prod
+      MetricName: Heartbeat.SurveyLifecycle
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
+      OKActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
+
+  InvitationRemindersStoppedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-job-invitation-reminders-stopped
+      AlarmDescription: >-
+        invitation-reminders has not completed a run in 45 minutes. Outstanding survey and
+        microclimate invitations are not being nudged. This is the regression #101 exists to
+        prevent, and its symptom is a response rate that quietly underperforms.
+      # Interval 15 min x 3 = 45 minutes. Critical rather than Warning because the absence of
+      # a reminder is invisible in the product -- there is no failed row, no error, and no
+      # screen that looks different. Nothing else would ever surface it.
+      Namespace: ClimateProject/Prod
+      MetricName: Heartbeat.InvitationReminders
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
+      OKActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
+
+  DigestsStoppedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-job-digests-stopped
+      AlarmDescription: >-
+        digests has not completed a run in 45 minutes. Per-user digest emails are not being
+        assembled; recipients on a daily or weekly preference will silently receive nothing.
+      # Interval 15 min x 3 = 45 minutes. Warning rather than Critical: a digest is a
+      # convenience over notifications the user can already see in-app, so a missed window
+      # degrades the experience without losing data or breaking an obligation.
+      Namespace: ClimateProject/Prod
+      MetricName: Heartbeat.Digests
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref WarningTopic], !Ref "AWS::NoValue"]
+
+  ScheduledReportsStoppedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-job-scheduled-reports-stopped
+      AlarmDescription: >-
+        scheduled-reports has not completed a run in 15 minutes. Recurring report schedules
+        are not advancing.
+      # Interval 5 min x 3 = 15 minutes. Warning: recurring reports are daily at their most
+      # frequent, so a 15-minute stall has no observable consequence -- but a stall that lasts
+      # is a missed daily report, and this is what makes the difference visible before a user
+      # notices it.
+      Namespace: ClimateProject/Prod
+      MetricName: Heartbeat.ScheduledReports
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref WarningTopic], !Ref "AWS::NoValue"]
+
+  SurveyDraftRetentionStoppedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-job-survey-draft-retention-stopped
+      AlarmDescription: >-
+        survey-draft-retention has not completed a run in 3 hours. Expired survey drafts are
+        accumulating. Nothing user-visible depends on this; it is disk and tidiness.
+      # Interval 1 h x 3 = 3 hours. Three periods rather than one because a fixed hourly
+      # CloudWatch boundary and a timer that drifts across process restarts will occasionally
+      # put two runs in one window and none in the next; that jitter cannot survive three
+      # consecutive periods.
+      Namespace: ClimateProject/Prod
+      MetricName: Heartbeat.SurveyDraftRetention
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref WarningTopic], !Ref "AWS::NoValue"]
+
+  RetentionCleanupStoppedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-job-retention-cleanup-stopped
+      AlarmDescription: >-
+        retention-cleanup has not completed a run in 2 days. This is the GDPR
+        storage-limitation sweep (#144): personal data past its retention window is being
+        kept. A compliance obligation, not a performance one.
+      # Interval 1 day, so the period must be a full day -- a shorter window would report zero
+      # for a perfectly healthy job. Two consecutive empty days rather than one because a
+      # daily timer measured against a fixed UTC boundary drifts across restarts and will
+      # produce a single empty window without anything being wrong.
+      Namespace: ClimateProject/Prod
+      MetricName: Heartbeat.RetentionCleanup
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref WarningTopic], !Ref "AWS::NoValue"]
+
+  JobStaleReportedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-job-reported-stale-in-process
+      AlarmDescription: >-
+        WorkerHeartbeatMonitor reported a stale job. One job has wedged while the host stays
+        up -- a hung query, a lease never released, an exception loop. The log line names the
+        job, its last success and its consecutive failure count.
+      # Threshold 1, on purpose. The monitor already waits 3x the job's own interval before it
+      # says anything, so by the time this line exists the tolerance has been spent and the
+      # finding is confirmed. Requiring a second occurrence would only add HeartbeatMonitorInterval
+      # (5 minutes) of delay to a fact that is already established.
+      Namespace: ClimateProject/Prod
+      MetricName: JobStaleReported
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
+
+  ScheduledJobThrowingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-job-throwing
+      AlarmDescription: >-
+        A scheduled job has thrown 3 or more times in 15 minutes. The scheduler is alive and
+        the work is failing -- transactions are rolling back every tick. The heartbeat alarms
+        will NOT catch this, because the job is still ticking.
+      # Three, not one. TickAsync deliberately swallows and retries on the next interval, and
+      # a single throw is a lock timeout or a bad row that the next tick clears by itself --
+      # alarming on it would page someone for a condition that has already fixed itself.
+      # Three in fifteen minutes is not self-healing: for notification-dispatch that is 3 of
+      # 15 ticks, and for the 5-minute jobs it is every tick in the window.
+      Namespace: ClimateProject/Prod
+      MetricName: JobThrew
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
+
+  # ---------------------------------------------------------------------------------------
+  # ALARMS -- readiness, instances, database.
+  # ---------------------------------------------------------------------------------------
+
+  ReadinessFailingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-readiness-failing
+      AlarmDescription: >-
+        /ready failed its Postgres round-trip 3 or more times in 5 minutes. App Runner is
+        about to replace the instance -- and replacing an instance does not fix a database
+        outage, so if this persists the cause is Supabase, not the container.
+      # App Runner replaces after UnhealthyThreshold 5 x Interval 20s = 100 seconds of
+      # CONTINUOUS failure. Three failures inside five minutes therefore fires at roughly the
+      # moment of the first replacement rather than after it, which is the point: the alert
+      # should arrive with the event, not as an explanation for one that already happened.
+      # Not 1, because the health-check thresholds were deliberately tuned to absorb a blip
+      # and an alarm that contradicts them would page someone for a condition the platform is
+      # designed to ride out.
+      Namespace: ClimateProject/Prod
+      MetricName: ReadinessProbeFailed
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
+      OKActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
+
+  InstanceReplacementLoopAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-instance-replacement-loop
+      AlarmDescription: >-
+        App Runner has failed 3 or more health checks in 15 minutes: instances are being
+        replaced repeatedly. A replacement loop serves errors the whole time it runs, and a
+        fresh instance cannot fix a database-side cause. VERIFY THIS ALARM'S FILTER PATTERN
+        against real /service log output before trusting it -- see the runbook.
+      # Three in fifteen minutes distinguishes a loop from a single replacement, which is
+      # routine and self-correcting. This alarm is the one most likely to be silently wrong,
+      # because its pattern was written without a real event to match against.
+      Namespace: ClimateProject/Prod
+      MetricName: InstanceHealthCheckFailed
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref WarningTopic], !Ref "AWS::NoValue"]
+
+  ServerErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-5xx-elevated
+      AlarmDescription: >-
+        The API returned 20 or more 5xx responses in 5 minutes. Note this metric also counts
+        the 503 that /ready returns when Postgres is unreachable, so a spike here alongside
+        the readiness alarm is one fault, not two.
+      # App Runner's own metric, so it survives the log pipeline being broken -- which every
+      # metric-filter alarm in this stack does not. Twenty in five minutes rather than one:
+      # a government client's traffic is bursty and small, a handful of 500s is a bad request
+      # shape rather than an outage, and a threshold of 1 on a 42-route API is a muted alarm
+      # within a week.
+      Namespace: AWS/AppRunner
+      MetricName: 5xxStatusResponses
+      Dimensions:
+        - Name: ServiceName
+          Value: !Ref ServiceName
+        - Name: ServiceID
+          Value: !Ref ServiceId
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 20
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      # notBreaching, NOT breaching. App Runner does not publish request metrics in a period
+      # with no requests, so "missing" here means "nobody called the API", which is normal
+      # overnight for a Costa Rican working-hours product and is not a fault. Liveness is
+      # covered by the heartbeat alarms and by the external probe in
+      # .github/workflows/ops-synthetic-probe.yml, both of which measure presence rather than
+      # absence of errors.
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref WarningTopic], !Ref "AWS::NoValue"]
+
+  DbPoolExhaustedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-db-pool-exhausted
+      AlarmDescription: >-
+        Npgsql exhausted its connection pool. Either a connection leak, a hung query holding
+        all ten slots, or genuine saturation. Check GET /admin/system/status for the effective
+        pool bound, and infra/aws/README.md for the 25 x 10 = 250 connection budget before
+        raising anything.
+      # Threshold 1. Max Pool Size is 10 per instance against an App Runner ceiling of 25
+      # instances, a bound chosen to sit UNDER the Supabase pooler limit with headroom -- so
+      # exhaustion is not a capacity signal that degrades gracefully, it is a request that has
+      # already failed and a bound that was supposed to be unreachable. There is no rate of
+      # this that is acceptable, so there is no rate to tune.
+      Namespace: ClimateProject/Prod
+      MetricName: DbPoolExhausted
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
+
+  TransactionPoolerRegressionAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-transaction-pooler-regression
+      AlarmDescription: >-
+        The runtime connection string points at Supavisor's TRANSACTION pooler (port 6543).
+        This is the #220 configuration: roughly half of all /ready probes hang for 30 seconds.
+        Database__RequireSessionPooler should have refused the boot, so this also means the
+        guard has been disarmed.
+      # Threshold 1 for the same reason as pool exhaustion: it reports a configuration fact,
+      # not a rate. One occurrence is the whole finding.
+      Namespace: ClimateProject/Prod
+      MetricName: TransactionPoolerWarning
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
+
+  # ---------------------------------------------------------------------------------------
+  # ALARMS -- mail.
+  # ---------------------------------------------------------------------------------------
+
+  MailNotConfiguredAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-mail-not-configured
+      AlarmDescription: >-
+        The API started with Email:Provider unset. NO MAIL LEAVES THIS PROCESS: every email
+        notification is recorded as failed and every survey invitation send fails inside the
+        request. EXPECTED TO FIRE ON THE FIRST DEPLOY OF THIS STACK -- as of 2026-08-24 the
+        production service template sets no Email__ variables at all.
+      # Threshold 1 over an hour. This line appears once per process start and is categorical:
+      # it does not describe a rate of failure, it describes a deploy that cannot send mail at
+      # all. The one-hour period exists only so a rolling replacement of several instances
+      # reads as one alert rather than one per instance.
+      Namespace: ClimateProject/Prod
+      MetricName: MailNotConfigured
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
+
+  MailMisconfiguredAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-mail-misconfigured
+      AlarmDescription: >-
+        The SMTP transport could not be constructed. Mail is configured but unusable -- a
+        missing host, an unparseable address. Distinct from a rejection: nothing is being
+        submitted at all.
+      Namespace: ClimateProject/Prod
+      MetricName: MailMisconfigured
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
+
+  MailPermanentRejectAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-mail-permanent-rejections
+      AlarmDescription: >-
+        10 or more permanent (5xx) SMTP rejections in 15 minutes. At this rate the cause is
+        not address quality -- it is the sending domain being refused: SPF/DKIM broken,
+        relay credentials revoked, or the domain blocklisted. Check one rejected address by
+        hand before assuming a bad import.
+      # Ten, and the number is a judgement about which failure this is. The code treats a
+      # handful of dead mailboxes as normal and dead-letters them deliberately, and an
+      # invitation batch into a government org with stale HR data will produce several hard
+      # bounces legitimately. Ten in fifteen minutes is the shape of losing the CHANNEL rather
+      # than losing a message, and that distinction is the only thing worth waking someone for.
+      # Tune it downward once a real invitation batch has been observed; it is a guess about
+      # this client's address hygiene, not a measurement.
+      Namespace: ClimateProject/Prod
+      MetricName: MailPermanentReject
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref WarningTopic], !Ref "AWS::NoValue"]
+
+  MailTransientRejectAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-mail-transient-rejections
+      AlarmDescription: >-
+        50 or more transient (4xx) SMTP rejections in 15 minutes. The relay is throttling or
+        greylisting. Retries will continue, but the queue may not drain faster than it fills.
+      # Fifty, above the permanent threshold rather than below it, because a 4xx is the
+      # provider asking us to slow down and EmailSendRateLimiter already paces sends -- some
+      # transient rejection during a large batch is the system working. Fifty in fifteen
+      # minutes exceeds any plausible pacing and means the pacing has lost.
+      Namespace: ClimateProject/Prod
+      MetricName: MailTransientReject
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 50
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref WarningTopic], !Ref "AWS::NoValue"]
+
+  NotificationSenderThrewAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-notification-sender-throwing
+      AlarmDescription: >-
+        The notification sender threw 5 or more times in 15 minutes. Distinct from an SMTP
+        rejection: the provider did not answer at all. Rows are marked failed and retried
+        until RetryCount is exhausted, so a sustained spike is silent permanent data loss of
+        notifications.
+      Namespace: ClimateProject/Prod
+      MetricName: NotificationSenderThrew
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref WarningTopic], !Ref "AWS::NoValue"]
+
+  RateLimitRejectionSpikeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-rate-limit-rejection-spike
+      AlarmDescription: >-
+        100 or more rate-limit rejections in 5 minutes (#146). Either an attack, or -- the
+        likelier and more dangerous reading -- RateLimiting__TrustedProxyHopCount is wrong and
+        every caller is sharing one bucket, which turns a survey launch into a self-inflicted
+        outage. Check whether the rejected callers share one IP.
+      # A hundred, because the global ceiling is 600/minute and the per-address policies are
+      # far tighter: a genuine survey launch with a few hundred employees responding at once
+      # WILL produce rejections, and alarming on those would train everyone to ignore this.
+      # A guess -- there is no production rate-limit data to calibrate against, and this
+      # threshold should be revisited after the first real launch.
+      Namespace: ClimateProject/Prod
+      MetricName: RateLimitRejected
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 100
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref WarningTopic], !Ref "AWS::NoValue"]
+
+Outputs:
+  CriticalTopicArn:
+    Description: SNS topic for alarms that need someone tonight.
+    Value: !Ref CriticalTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-critical-topic
+
+  WarningTopicArn:
+    Description: SNS topic for alarms that need someone this week.
+    Value: !Ref WarningTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-warning-topic
+
+  TeamsForwarderName:
+    Description: Lambda that translates SNS into a Teams Adaptive Card.
+    Value: !Ref TeamsForwarder
+
+  ApplicationLogGroup:
+    Description: Log group every metric filter in this stack reads.
+    Value: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
