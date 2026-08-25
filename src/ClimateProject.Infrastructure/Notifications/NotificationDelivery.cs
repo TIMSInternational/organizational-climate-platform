@@ -39,8 +39,26 @@ public static class NotificationDelivery
     /// Deliver everything that is now due -- notifications scheduled for the future whose time
     /// has come, and earlier attempts that failed and still have retries left.
     ///
-    /// <para>Bounded the same way bulk dispatch is: one SELECT for the due batch, one SELECT
-    /// for the distinct recipients, one save. There is no per-notification query.</para>
+    /// <para><b>Cost, stated as it actually is.</b> The sweep's own work is bounded the way
+    /// bulk dispatch is: one SELECT for the due batch, one SELECT for the distinct recipients,
+    /// one save -- independent of batch size. This method issues no per-notification query.</para>
+    ///
+    /// <para>The SENDER may, and for one type it does. <c>EmailNotificationSender</c> resolves
+    /// a survey invitation's token from <c>survey_invitations</c> when it composes the mail, so
+    /// a batch of <i>n</i> <c>survey_invitation</c>/<c>survey_reminder</c> emails costs <i>n</i>
+    /// extra single-row primary-key lookups, issued sequentially, one per mail. Every other
+    /// type costs none -- the sender returns before querying. At
+    /// <see cref="DefaultBatchSize"/> that is a worst case of 200 indexed point reads against
+    /// an SMTP round trip apiece, so the query is not what makes the sweep slow.</para>
+    ///
+    /// <para>It is stated rather than removed deliberately. Pre-resolving the batch would mean
+    /// either this method learning to read <c>survey_invitations</c>, or
+    /// <see cref="INotificationSender"/> growing a survey-shaped parameter that
+    /// <c>LoggingNotificationSender</c> would also have to carry -- putting one notification
+    /// type's payload into the channel-agnostic seam that exists precisely to have none of
+    /// that. The round trips are cheap and the seam is not. <c>InvitationEmailLinkTests</c>
+    /// pins the cost, so a regression to something worse than one lookup per mail fails a
+    /// build rather than being discovered in production.</para>
     ///
     /// <para><b>Idempotency.</b> The batch is selected on
     /// <see cref="NotificationStatuses.Retryable"/>, and a successful attempt moves the row to

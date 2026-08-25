@@ -221,12 +221,18 @@ export const router = createBrowserRouter([
       // printed on QR codes and handed to administrators to copy. Anything else and the
       // links already in circulation stay broken.
       //
-      // `/survey-invitations/:token` mirrors the API route of the same name, but for a
-      // weaker reason: nothing mails this one. The token is minted in
-      // `SurveyDistributionEndpoints` and read back only by the four routes under that
-      // path — no mailer composes it and no admin screen reveals it, deliberately, since
-      // it is a bearer credential for one employee's survey. The producer it waits on is
-      // the invitation email.
+      // `/survey-invitations/:token` mirrors the API route of the same name, and this is
+      // now the path the invitation email actually mails. The token is minted in
+      // `SurveyDistributionEndpoints`, never persisted into `notifications.data`, and
+      // resolved by `EmailNotificationSender` at send time — so no admin screen and no
+      // notification listing ever reveals it, which matters because it is a bearer
+      // credential for one employee's survey.
+      //
+      // The literal is a contract with a string the API already composes into outbound
+      // mail: `SurveyAccessTokens.InvitationLinkPrefix` builds `/survey-invitations/` on
+      // the C# side, and no reference connects it to this line. Renaming this route
+      // breaks every link already sitting in a recipient's inbox and no .NET test will
+      // notice, so it moves only in lockstep with that constant.
       { path: '/s/:token', element: <PublicSurveyLinkPage /> },
       { path: '/survey-invitations/:token', element: <SurveyInvitationPage /> },
       ...devOnlyRoutes,

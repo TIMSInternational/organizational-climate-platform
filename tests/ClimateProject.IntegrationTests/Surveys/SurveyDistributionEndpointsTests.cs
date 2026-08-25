@@ -668,7 +668,46 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
 
         // Data is a jsonb column: it has to parse, or Postgres would have rejected the insert.
         using var parsed = JsonDocument.Parse(notification.Data!);
-        Assert.Equal(survey.Id.ToString(), parsed.RootElement.GetProperty("surveyId").GetString());
+        Assert.Equal(
+            survey.Id.ToString(),
+            parsed.RootElement.GetProperty(SurveyNotificationData.SurveyIdKey).GetString());
+        Assert.Equal(
+            result.InvitationIds[0].ToString(),
+            parsed.RootElement.GetProperty(SurveyNotificationData.SurveyInvitationIdKey).GetString());
+
+        // The payload's ENTIRE key set, not merely "the token is not in it". A `DoesNotContain`
+        // on the token value alone stays green against a payload that gained an
+        // `invitationToken` key holding a rotated or a stale token -- still a bearer credential
+        // in a blob any CompanyAdmin can read through GET /notifications?companyId=.
+        Assert.Equal(
+            new[] { SurveyNotificationData.SurveyIdKey, SurveyNotificationData.SurveyInvitationIdKey }.Order(StringComparer.Ordinal),
+            parsed.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+
+        // The reminder path builds its notification through the same helper from a different
+        // call site, so it is asserted by actually FETCHING a reminder -- an earlier version of
+        // this test claimed to cover it and then re-read the invitation notification it already
+        // had, which is a dead assertion under a label that says otherwise.
+        //
+        // Aged first: the reminder cadence has not elapsed for an invitation queued a moment
+        // ago, so without this the endpoint returns 200 having queued nothing and the fetch
+        // below throws "Sequence contains no elements" -- which is how this was caught.
+        await AgeInvitationAsync(result.InvitationIds[0], days: 5);
+        (await client.PostAsync($"/surveys/{survey.Id}/invitations/reminders", null)).EnsureSuccessStatusCode();
+
+        var reminder = await _harness.WithDbAsync(db => db.Notifications
+            .AsNoTracking()
+            .FirstAsync(n => n.UserId == employee && n.Type == NotificationTypes.SurveyReminder));
+
+        Assert.NotNull(reminder.Data);
+        Assert.DoesNotContain(token, reminder.Data!, StringComparison.Ordinal);
+
+        using var reminderPayload = JsonDocument.Parse(reminder.Data!);
+        Assert.Equal(
+            new[] { SurveyNotificationData.SurveyIdKey, SurveyNotificationData.SurveyInvitationIdKey }.Order(StringComparer.Ordinal),
+            reminderPayload.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            result.InvitationIds[0].ToString(),
+            reminderPayload.RootElement.GetProperty(SurveyNotificationData.SurveyInvitationIdKey).GetString());
     }
 
     [Fact]

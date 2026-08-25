@@ -88,6 +88,18 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     ///     assumed -- deleting the delivery loop from <c>BulkImportEndpoints</c> compiles, leaves
     ///     every row committed, still answers "invited", and is caught by this test alone.
     ///   </description></item>
+    ///   <item><description>
+    ///     <c>InvitationEmailLinkTests</c> -- ONE host for the whole class, held in a class
+    ///     fixture, and the same reason as 4 and 5 on the third delivery path. The shared host
+    ///     configures no provider, so it selects the logging stub, which composes nothing: on
+    ///     it, "the invitation email carries a link that opens the survey" is not merely
+    ///     unproven, it is unobservable. This host configures a provider (so <c>Program.cs</c>
+    ///     picks the real <c>EmailNotificationSender</c>) and replaces the SMTP transport with
+    ///     one that records, which is what lets the assertions be on the rendered mail body
+    ///     rather than on a status column. That distinction is the whole defect: every test in
+    ///     the suite stayed green for months while the product mailed link-less invitations,
+    ///     because nothing anywhere read a body.
+    ///   </description></item>
     /// </list>
     /// </para>
     /// <para>
@@ -96,7 +108,7 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     /// another. If you need one more host, say which of the reasons above yours is like.
     /// </para>
     /// </summary>
-    public const int HostBudget = 7;
+    public const int HostBudget = 8;
 
     /// <summary>
     /// Counts the database commands this application sends. Reset it immediately before the

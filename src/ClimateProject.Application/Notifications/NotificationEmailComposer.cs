@@ -23,6 +23,18 @@ namespace ClimateProject.Application.Notifications;
 /// already resolved for one recipient's locale. Adding a third language is a row in
 /// <see cref="Copy"/>, and nothing that consumes this changes.
 /// </para>
+/// <para>
+/// **The survey link, and why it arrives already absolute.** An invitation's body tells the
+/// recipient to follow the link in the message; until <c>surveyUrl</c> existed this composer
+/// read <c>Title</c> and <c>Message</c> and nothing else, so the one mail on the critical
+/// path of the product promised something it did not contain. The URL is passed in rather
+/// than derived here because deriving it means two things this class must not do: read
+/// configuration (which origin?) and read the database (which token?). What it does own is
+/// that a link, once supplied, appears in <b>both</b> parts of the message. A call to action
+/// that exists only in the HTML part is a dead end for every plain-text reader, and mail
+/// clients that render text are exactly the conservative corporate clients this product's
+/// recipients read their mail in.
+/// </para>
 /// </summary>
 public static class NotificationEmailComposer
 {
@@ -40,12 +52,14 @@ public static class NotificationEmailComposer
             Greeting: "Hi {0},",
             WhyReceiving: "You are receiving this because you have an account on {0}.",
             ManagePreferences: "Manage your notification preferences",
-            SubjectFallback: "A notification from {0}"),
+            SubjectFallback: "A notification from {0}",
+            OpenSurvey: "Open the survey"),
         [ContentLanguages.Spanish] = new EmailChrome(
             Greeting: "Hola {0}:",
             WhyReceiving: "Recibes este mensaje porque tienes una cuenta en {0}.",
             ManagePreferences: "Gestiona tus preferencias de notificación",
-            SubjectFallback: "Una notificación de {0}"),
+            SubjectFallback: "Una notificación de {0}",
+            OpenSurvey: "Abrir la encuesta"),
     };
 
     /// <summary>
@@ -57,10 +71,23 @@ public static class NotificationEmailComposer
     /// Absolute URL of the preferences page, or null to omit the link. Passed in rather than
     /// built here so the composer stays free of configuration and stays a pure function.
     /// </param>
+    /// <param name="surveyUrl">
+    /// Absolute URL of the survey this notification invites the recipient to, or null when
+    /// there is none -- a notification that is not about a survey, or one whose invitation
+    /// has been revoked since it was queued.
+    ///
+    /// <para>
+    /// Required rather than optional-with-a-default, and that is the point of it: a default
+    /// of null is how this composer spent its whole life sending link-less invitations
+    /// without a single call site having to decide anything. Every caller now states whether
+    /// this mail has a destination.
+    /// </para>
+    /// </param>
     public static EmailMessage Compose(
         Notification notification,
         NotificationRecipient recipient,
-        string? preferencesUrl)
+        string? preferencesUrl,
+        string? surveyUrl)
     {
         ArgumentNullException.ThrowIfNull(notification);
         ArgumentNullException.ThrowIfNull(recipient);
@@ -73,10 +100,18 @@ public static class NotificationEmailComposer
             ? string.Format(System.Globalization.CultureInfo.InvariantCulture, chrome.SubjectFallback, EmailBranding.ProductName)
             : EmailMessage.ToHeaderValue(notification.Title);
 
+        // One decision, read by both bodies below, so the two parts of the same message
+        // cannot disagree about whether this mail has a destination.
+        var hasSurveyLink = !string.IsNullOrWhiteSpace(surveyUrl);
+
         var html = new StringBuilder();
         html.Append(EmailBranding.Heading(subject));
         html.Append(EmailBranding.Paragraphs(greeting));
         html.Append(EmailBranding.Paragraphs(notification.Message));
+        if (hasSurveyLink)
+        {
+            html.Append(EmailBranding.Button(surveyUrl!, chrome.OpenSurvey));
+        }
 
         var footer = new StringBuilder();
         footer.Append(EmailBranding.Escape(why));
@@ -91,6 +126,14 @@ public static class NotificationEmailComposer
         var text = new StringBuilder();
         text.Append(greeting).Append("\n\n");
         text.Append(notification.Message).Append("\n\n");
+        if (hasSurveyLink)
+        {
+            // The bare URL, not a label wrapping one. A plain-text reader has to be able to
+            // copy this line into a browser, and every mail client that autolinks text needs
+            // the scheme and the whole of the path present as characters.
+            text.Append(chrome.OpenSurvey).Append(": ").Append(surveyUrl).Append("\n\n");
+        }
+
         text.Append("--\n").Append(why);
         if (!string.IsNullOrWhiteSpace(preferencesUrl))
         {
@@ -115,5 +158,6 @@ public static class NotificationEmailComposer
         string Greeting,
         string WhyReceiving,
         string ManagePreferences,
-        string SubjectFallback);
+        string SubjectFallback,
+        string OpenSurvey);
 }
