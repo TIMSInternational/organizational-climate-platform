@@ -45,6 +45,7 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<MicroclimateDepartmentTarget> MicroclimateDepartmentTargets => Set<MicroclimateDepartmentTarget>();
     public DbSet<MicroclimateQuestion> MicroclimateQuestions => Set<MicroclimateQuestion>();
     public DbSet<MicroclimateQuestionOption> MicroclimateQuestionOptions => Set<MicroclimateQuestionOption>();
+    public DbSet<MicroclimateQuestionEmojiOption> MicroclimateQuestionEmojiOptions => Set<MicroclimateQuestionEmojiOption>();
     public DbSet<MicroclimateAiInsight> MicroclimateAiInsights => Set<MicroclimateAiInsight>();
     public DbSet<MicroclimateInvitation> MicroclimateInvitations => Set<MicroclimateInvitation>();
     public DbSet<ActionPlanTemplate> ActionPlanTemplates => Set<ActionPlanTemplate>();
