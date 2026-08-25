@@ -12,10 +12,16 @@ namespace ClimateProject.Application.Questions;
 /// <para>
 /// Why the intersection and not <see cref="QuestionTypes.All"/>: the library exists to be picked
 /// into <em>both</em> wizards (#115 is #58's own acceptance criterion). An item typed from the wider
-/// vocabulary — <c>ranking</c>, which only surveys accept, or <c>emoji_rating</c>, which neither
-/// currently does — could be authored and then be <b>uninstantiable</b> into one of the two surfaces
-/// it exists to serve. Refusing it at authoring time turns a confusing failure at pick time into a
-/// clear one at create time.
+/// vocabulary — <c>ranking</c>, which only surveys accept, or <c>emoji_rating</c>, which since #198
+/// only microclimates accept — could be authored and then be <b>uninstantiable</b> into one of the
+/// two surfaces it exists to serve. Refusing it at authoring time turns a confusing failure at pick
+/// time into a clear one at create time.
+/// </para>
+/// <para>
+/// Note what "derived" bought when #198 landed: adding <c>emoji_rating</c> to
+/// <see cref="QuestionTypes.ForMicroclimate"/> needed no edit here, and correctly left the library
+/// vocabulary alone, because a library item is only supported once <em>both</em> wizards can
+/// instantiate it. A hand-written third list would have had to be remembered.
 /// </para>
 /// </remarks>
 public static class QuestionRepositoryTypes
