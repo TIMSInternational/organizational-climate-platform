@@ -26,12 +26,11 @@ const DEFAULT_MIN_PASSWORD_LENGTH = 8
  *
  * ## The success branch, and why it is still here
  *
- * `resolvePostAcceptRoute` now has a real destination for employee, supervisor
- * and leader (`/surveys/my`, #109), so almost every accepted invitation
- * navigates. What is left is the genuinely destination-less case — a token whose
- * claims carry no company, or a role this client does not recognise — and for
- * that, confirming success in place still beats navigating into a page that will
- * 403 on its first fetch.
+ * `resolvePostAcceptRoute` has a destination for every role since #138 —
+ * `/dashboard`, the same page a login lands on, including for a role string this
+ * client does not recognise. So the only thing left in this branch is the token
+ * whose claims carry **no company at all**, and for that, confirming success in
+ * place still beats navigating into a page that will 403 on its first fetch.
  */
 export default function AcceptInvitationPage() {
   const { t } = useTranslation()
