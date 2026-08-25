@@ -65,3 +65,27 @@ in Chromium, and every `securitypolicyviolation` event collected. `/dev/chart-ga
 is **not** a useful route for this: `router.tsx` gates the dev routes behind
 `import.meta.env.DEV`, so a production build answers it with the not-found page. The
 finding above came from `/login`, which every visitor sees.
+
+
+## The one per-path header: `X-Robots-Tag` on `/shared/reports/(.*)` (#139)
+
+Every header above is site-wide. This one is not, and the scoping is the decision.
+
+`/shared/reports/{token}` is the public consumption side of a report share link — the
+one route in the product that serves a company's climate data to anybody holding a URL.
+It must not end up in a search index, so `SharedReportPage` mounts
+`<meta name="robots" content="noindex, nofollow">` (`web/src/lib/noIndex.ts`). That tag
+is the weak half: a crawler only reads it if it renders the page. `X-Robots-Tag` is
+obeyed by a fetcher that never runs JavaScript at all, which is why the header belongs
+here as well.
+
+It is **not** added to the site-wide block, because deindexing the whole product is a
+different decision — one about the marketing surface — and not one a report page gets
+to make. `web/src/lib/noIndex.test.ts` asserts both directions off this file: the
+shared-report rule carries the header and its `source` matches a real token URL, and the
+site-wide rule does not carry it.
+
+`Referrer-Policy` was checked for the same page and needs no per-path value. The URL of
+a shared report *is* the credential, but the site-wide
+`strict-origin-when-cross-origin` already sends only the origin on a cross-origin
+request, so the token cannot leave in a `Referer`.

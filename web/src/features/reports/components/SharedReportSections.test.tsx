@@ -192,6 +192,22 @@ function rowCells(label: string): string[] {
   )
 }
 
+/**
+ * The value on the KPI tile carrying `label`.
+ *
+ * `data-slot="kpi-tile"` is the handle `KpiTile` documents for exactly this: the labels
+ * on this strip — "Respuestas" — also appear as a table column heading on the same
+ * screen, so matching on text alone reaches the wrong node.
+ */
+function tileValue(label: string): string {
+  const tile = [...screen.getAllByText(label)]
+    .map((node) => node.closest('[data-slot="kpi-tile"]'))
+    .find((node): node is HTMLElement => node !== null)
+  expect(tile).toBeTruthy()
+  const value = tile?.children[1]?.textContent ?? ''
+  return value.replace(/\u00a0/g, ' ')
+}
+
 afterEach(cleanup)
 
 describe('the shared report body', () => {
@@ -217,6 +233,26 @@ describe('the shared report body', () => {
     expect(rowCells('Carga de trabajo')).toEqual(['Carga de trabajo', '3', '0', 'n/d'])
 
     expect(rowCells('Operaciones')).toEqual(['Operaciones', '42', '84 %'])
+  })
+
+  /**
+   * The participation ladder, tile by tile.
+   *
+   * Four numbers in four boxes, and nothing but the order of the JSX says which is
+   * which. `SurveyAggregation` guarantees `responseCount == completedCount +
+   * partialCount` by construction, so a tile that computed the completed count from the
+   * other two would be right on every document this product can produce — an equivalent
+   * mutation no fixture can catch and none should pretend to. What a fixture CAN catch
+   * is a tile reading the wrong field, which is the defect that is actually available
+   * here, so each tile is read by its own label.
+   */
+  it('reads each participation tile off its own field', () => {
+    renderSections()
+
+    expect(tileValue('Invitados')).toBe('248')
+    expect(tileValue('Respuestas')).toBe('187')
+    expect(tileValue('Completadas')).toBe('175')
+    expect(tileValue('Tasa de participación')).toBe('70,6 %')
   })
 
   /**
