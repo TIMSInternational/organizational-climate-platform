@@ -11,11 +11,19 @@ export type AlertProps = ComponentProps<'div'> & AlertVariantProps
  * failure the user just caused should be `role="alert"` so it is announced, but a
  * standing informational banner should not interrupt. Defaults to `status`, which
  * announces politely.
+ *
+ * `data-variant` is emitted for the same reason `DropdownMenuItem` emits one: the
+ * variant is the difference between "here is a fact" and "something went wrong",
+ * and a caller that must not regress from one to the other needs to be able to
+ * assert which it drew without reaching for a Tailwind class. `#138` needed exactly
+ * that — its no-team notice replaced a red error panel, and "it is not an error" was
+ * otherwise unassertable.
  */
 export function Alert({ className, variant, role = 'status', ...props }: AlertProps) {
   return (
     <div
       data-slot="alert"
+      data-variant={variant ?? 'default'}
       role={role}
       className={cn(alertVariants({ variant }), className)}
       {...props}

@@ -78,6 +78,15 @@ const ALLOWED = new Set([
   // name above.
   'CLIMA',
   'TE',
+  // Two **server** strings, matched on and never rendered
+  // (`features/dashboard/api/dashboard.ts`). `GET /dashboard/department-admin` answers a
+  // leader with no team and an orphaned account with the same 400 status and different
+  // bodies, and the client draws a different screen for each — so these are protocol, like
+  // a status code, and translating them would break the comparison. Both are pinned
+  // against the C# that sends them in `features/dashboard/api/dashboard.test.ts`; the copy
+  // the reader actually sees is `dashboard.noDepartment*` and `dashboard.noUserRecord*`.
+  'The authenticated user is not assigned to a department',
+  'The authenticated user has no matching user record',
 ])
 
 /**

@@ -260,6 +260,19 @@ export async function getCompanyAdminDashboard(
 export type DepartmentAdminDashboardResult =
   | { kind: 'department'; dashboard: DepartmentAdminDashboard }
   | { kind: 'no-department' }
+  | { kind: 'no-user-record' }
+
+/**
+ * The two 400 bodies this client can draw a screen for, verbatim.
+ *
+ * Exported so `dashboard.test.ts` can assert both literals still appear in the C# that
+ * sends them — the same technique `roleCapabilities.test.ts` uses on `Roles.cs`, and the
+ * answer to the obvious objection that matching English prose is matching something the
+ * server may reword. It may; the suite goes red the moment it does, which is a great deal
+ * better than the alternative this replaced.
+ */
+export const NO_DEPARTMENT_MESSAGE = 'The authenticated user is not assigned to a department'
+export const NO_USER_RECORD_MESSAGE = 'The authenticated user has no matching user record'
 
 /**
  * `departmentId` is omitted by a leader or supervisor — the server reads their own user
@@ -267,19 +280,27 @@ export type DepartmentAdminDashboardResult =
  * serving the old team. It is required for the two admin roles, who have no department of
  * their own.
  *
- * ## Why any 400 is `no-department` rather than an error
+ * ## The 400 branches are not one thing, and treating them as one shipped the defect
  *
- * `DepartmentAdminAsync` has exactly three 400 branches, and every one of them means the
- * same thing to this caller: *there is no department view to draw*. Two are the caller
- * having no team (`ActingUserRequired`, and the unassigned-department message above); the
- * third is `DepartmentIdRequired`, which only fires for an admin role that passed no
- * `departmentId` — a call this client does not make, and which would still mean no
- * department view if it did. Matching on the message text would be matching on English
- * prose the server is free to reword.
+ * This read "every 400 means the same thing to this caller", folded all three into
+ * `no-department`, and was wrong about the most likely one. `DepartmentAdminAsync` calls
+ * `SurveyEndpoints.ActingUserRequired()` when the token resolves to **no user row at all**
+ * (`DashboardEndpoints.cs:290`) — an orphaned account, not a missing team. And
+ * `EmployeeAsync` resolves that same row (`:408`) and returns that same 400, so the
+ * fallback view drew a red panel containing the raw English server string over a Retry
+ * that could never succeed, directly beneath a calm blue band asserting the person merely
+ * had no department yet. That is verbatim the screen #138 exists to have removed,
+ * surviving for one branch in three.
  *
- * A 403 is deliberately **not** folded in. That would mean a role reached this endpoint
- * that has no business calling it, which is a wiring bug worth surfacing as one rather
- * than dressing up as an empty team.
+ * So the two are separated by the message the server actually sent, and `dashboard.test.ts`
+ * pins both literals against the C# source. `DepartmentIdRequired` — the third branch, and
+ * one only an admin role passing no `departmentId` can provoke, which this client never
+ * does — is left to throw with the server's own message.
+ *
+ * A 403 is deliberately **not** folded in either. That would mean a role reached this
+ * endpoint that has no business calling it, which is a wiring bug worth surfacing as one
+ * rather than dressing up as an empty team. Nor is any other status: a 404 or a 500 is a
+ * failure, and drawing "you have no team" over one would be inventing a cause.
  */
 export async function getDepartmentAdminDashboard(
   baseUrl: string,
@@ -294,7 +315,11 @@ export async function getDepartmentAdminDashboard(
     { allowStatus: [400] },
   )
   if (response.status === 400) {
-    return { kind: 'no-department' }
+    const body = (await response.json().catch(() => null)) as { message?: string } | null
+    if (body?.message === NO_DEPARTMENT_MESSAGE) return { kind: 'no-department' }
+    if (body?.message === NO_USER_RECORD_MESSAGE) return { kind: 'no-user-record' }
+    // `authFetch` would have thrown this had it not been asked to hand the 400 back.
+    throw new Error(body?.message || 'Request failed: 400')
   }
   return { kind: 'department', dashboard: (await response.json()) as DepartmentAdminDashboard }
 }

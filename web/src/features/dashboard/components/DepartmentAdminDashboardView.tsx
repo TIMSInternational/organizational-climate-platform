@@ -94,6 +94,11 @@ export default function DepartmentAdminDashboardView() {
     return (
       <EmployeeDashboardView
         notice={
+          // `variant="info"` and the default `role="status"`, both load-bearing. The screen
+          // this replaced was a red error panel, and the substance of the fix is that
+          // having no team assigned is not an error and not something to interrupt a
+          // screen reader with — it is a standing condition with a sentence explaining it.
+          // `DepartmentAdminDashboardView.test.tsx` asserts both.
           <Alert variant="info">
             <Info aria-hidden="true" />
             <AlertTitle>{t('dashboard.noDepartmentTitle')}</AlertTitle>
@@ -101,6 +106,26 @@ export default function DepartmentAdminDashboardView() {
           </Alert>
         }
       />
+    )
+  }
+
+  // The other 400 this endpoint sends: the token resolved to no user row at all. Falling
+  // back to the employee dashboard would be pointless and worse than pointless —
+  // `EmployeeAsync` resolves the *same* row and answers the same 400, so the fallback drew
+  // the server's raw English string in a red panel over a dead Retry, underneath a notice
+  // telling this person they merely had no department yet. Both sentences on one screen,
+  // one of them false. This says the one true thing instead, in the reader's language, and
+  // offers no retry because there is nothing a retry could change. See `api/dashboard.ts`.
+  if (result?.kind === 'no-user-record') {
+    return (
+      <div>
+        <PageTopBar title={t('dashboard.title')} />
+        <Alert variant="warning">
+          <AlertTriangle aria-hidden="true" />
+          <AlertTitle>{t('dashboard.noUserRecordTitle')}</AlertTitle>
+          <AlertDescription>{t('dashboard.noUserRecordBody')}</AlertDescription>
+        </Alert>
+      </div>
     )
   }
 
