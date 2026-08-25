@@ -135,6 +135,13 @@ public static class BenchmarkTrendStopReasons
 
     /// <summary>The chain is longer than the walk follows. What came back is its newest end.</summary>
     public const string Cap = "cap";
+
+    /// <summary>
+    /// The chain came back to a period already in it. Refused on write since #89
+    /// (<c>WouldCreateCycleAsync</c>), but a link written before that could close a loop, and
+    /// a read path that hangs on data the write path used to allow is not defensible.
+    /// </summary>
+    public const string Cycle = "cycle";
 }
 
 /// <summary>A category present in the caller's readable scope, and what is in it.</summary>

@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ClimateProject.Api.Endpoints;
 
-public static class BenchmarkEndpoints
+public static partial class BenchmarkEndpoints
 {
     public static void MapBenchmarkEndpoints(this WebApplication app)
     {
@@ -20,11 +20,19 @@ public static class BenchmarkEndpoints
         // :guid constraint, but keeping the literal route above the parameterised one is the
         // habit that stays correct if the constraint is ever loosened.
         group.MapPost("/prior-period/backfill", BackfillPriorPeriodsAsync);
+        // #90's analytical routes, implemented in BenchmarkAnalyticsEndpoints.cs (same class,
+        // second file). Literals before /{id:guid} on the same habit as above.
+        group.MapGet("/categories", ListCategoriesAsync);
+        group.MapGet("/compare", CompareAsync);
+        group.MapGet("/industry", IndustryAsync);
+        group.MapPost("/import", ImportAsync);
         group.MapGet("/{id:guid}", GetAsync);
         group.MapPut("/{id:guid}", UpdateAsync);
         group.MapPost("/{id:guid}/metrics", AddMetricAsync);
         group.MapPut("/{id:guid}/prior-period", SetPriorPeriodAsync);
         group.MapGet("/{id:guid}/prior-period/candidates", ListPriorPeriodCandidatesAsync);
+        group.MapGet("/{id:guid}/trends", TrendsAsync);
+        group.MapPost("/{id:guid}/validate", ValidateAsync);
     }
 
     /// <summary>
@@ -148,7 +156,7 @@ public static class BenchmarkEndpoints
             CreatedBy = createdBy,
             CompanyId = request.CompanyId,
             IsActive = true,
-            ValidationStatus = "pending",
+            ValidationStatus = BenchmarkValidationStatuses.Pending,
             QualityScore = 0,
             PriorPeriodBenchmarkId = request.PriorPeriodBenchmarkId,
             // Kept in step with the pointer by the ck_benchmarks_prior_period_status check

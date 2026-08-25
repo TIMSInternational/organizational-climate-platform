@@ -21,7 +21,7 @@ public class BenchmarkConfiguration : IEntityTypeConfiguration<Benchmark>
         builder.Property(b => b.CreatedBy).HasColumnName("created_by").IsRequired();
         builder.Property(b => b.CompanyId).HasColumnName("company_id");
         builder.Property(b => b.IsActive).HasColumnName("is_active").IsRequired().HasDefaultValue(true);
-        builder.Property(b => b.ValidationStatus).HasColumnName("validation_status").HasMaxLength(20).IsRequired().HasDefaultValue("pending");
+        builder.Property(b => b.ValidationStatus).HasColumnName("validation_status").HasMaxLength(20).IsRequired().HasDefaultValue(BenchmarkValidationStatuses.Pending);
         builder.Property(b => b.QualityScore).HasColumnName("quality_score").IsRequired().HasDefaultValue(0d);
         builder.Property(b => b.Metadata).HasColumnName("metadata").HasColumnType("jsonb");
         builder.Property(b => b.PriorPeriodBenchmarkId).HasColumnName("prior_period_benchmark_id");
