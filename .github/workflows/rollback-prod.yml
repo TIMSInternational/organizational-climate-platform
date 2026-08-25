@@ -1,0 +1,303 @@
+name: rollback-prod
+
+# ==================================================================================
+# THIS WORKFLOW CHANGES PRODUCTION WHEN DISPATCHED. It is new (#159) and has never
+# been run. Read docs/runbooks/rollback.md before the first dispatch.
+# ==================================================================================
+#
+# WHY IT EXISTS, and why the answer is not "just re-dispatch deploy-prod.yml at the
+# old commit":
+#
+#   1. deploy-prod.yml runs `dotnet test ClimateProject.slnx` and a full `docker
+#      build` before it touches anything. Rolling back through it therefore costs
+#      twenty-plus minutes to produce an image that ALREADY EXISTS in ECR, tagged
+#      prod-<sha>, from the deploy that built it. During an incident that is not a
+#      rollback, it is a rebuild with a rollback's name on it.
+#   2. deploy-prod.yml runs `dotnet ef database update` before the rollout. Pointing
+#      it at an older commit runs the OLDER migration set against a database that is
+#      already AHEAD of it -- a no-op that quietly reinforces the wrong belief that
+#      the schema came back too. Schema is a separate, deliberate decision, and this
+#      workflow does not touch it at all.
+#   3. deploy-prod.yml would push the older image over the `prod-latest` tag,
+#      destroying the record of what was most recently built.
+#
+# So this workflow does exactly one thing: point the App Runner service at an image
+# that is already in ECR, and prove the service is serving it. No build, no tests,
+# no migrations, no tag movement.
+#
+# WHAT IT CANNOT DO, and you must decide separately (rollback.md sections 3 and 4):
+#   - the web app. Vercel deploys on every merge to main and is not in this pipeline.
+#   - the database schema. Migrations already applied stay applied.
+#
+# The IAM role is unchanged: climate-project-github-deploy-prod already trusts the
+# `environment:production` OIDC sub, and its policy already grants
+# cloudformation:UpdateStack on climate-project-api-prod and ecr:DescribeImages.
+# No infrastructure change was needed to add this workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: >-
+          The full 40-character commit SHA to roll back TO. Its image must still be in
+          ECR as prod-<sha> (the lifecycle policy keeps the most recent 40). Read it
+          from the deploy run that built it, or from a /version response you kept.
+        required: true
+        type: string
+      confirm:
+        description: 'Type exactly: roll back production'
+        required: true
+        type: string
+      reason:
+        description: >-
+          Which trigger criterion from docs/runbooks/rollback.md was met, and who
+          decided. This goes in the job summary and is the incident record.
+        required: true
+        type: string
+
+# Shares the deploy-prod concurrency group ON PURPOSE. App Runner refuses a second
+# StartDeployment while one is in flight, so a rollback dispatched while a deploy is
+# rolling out would fail on a conflict rather than for any reason worth reading --
+# and a rollback that fails opaquely at the worst moment is the whole problem this
+# file exists to remove. cancel-in-progress: false for the same reason it is false
+# there: queue, never pre-empt. Note the consequence honestly -- if a deploy is
+# mid-flight, this waits for it. That is correct but it is not fast, and the break-
+# glass path in rollback.md section 3 exists for the case where it is not acceptable.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  BOOTSTRAP_STACK_NAME: climate-project-api-bootstrap
+  SERVICE_STACK_NAME: climate-project-api-prod
+
+jobs:
+  rollback:
+    name: Roll prod API back to a previous image
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      # Full history: the migration-delta step below resolves the target SHA as a git
+      # object and counts commits between it and main. At the default shallow depth
+      # of 1 the target commit is not present and every run would report it unknown.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Inputs are read through env rather than interpolated into the shell, so a
+      # value containing shell metacharacters is data and never code.
+      - name: Check the confirmation phrase
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          set -euo pipefail
+          if [ "$CONFIRM" != "roll back production" ]; then
+            echo "::error::confirm must be exactly 'roll back production'. Refusing." >&2
+            exit 1
+          fi
+          if ! printf '%s' "$TARGET_SHA" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "::error::target_sha must be a full 40-character commit SHA. A short SHA does not name an image tag." >&2
+            exit 1
+          fi
+          if [ -z "${REASON// /}" ]; then
+            echo "::error::reason is required. A rollback with no recorded trigger is an incident with no record." >&2
+            exit 1
+          fi
+
+      # ------------------------------------------------------------------------------
+      # The step that stops a rollback from becoming the second incident.
+      # ------------------------------------------------------------------------------
+      # Rolling the CODE back does not roll the SCHEMA back: deploy-prod.yml applies
+      # migrations before the rollout, so every migration between the target and what
+      # was deployed is still applied after this workflow finishes. That is safe when
+      # the delta is additive (old code never selects a column it does not know about)
+      # and unsafe when it is not.
+      #
+      # This step cannot read the database -- it has no connection string, deliberately
+      # -- so it reports the FILE delta and the destructive statements in it, and hands
+      # the judgement to the human. Reporting the delta is worth doing even though it
+      # cannot be conclusive: the case it catches is the one nobody remembers, which is
+      # a migration that landed three deploys ago.
+      - name: Report the migration delta this rollback does NOT undo
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          set -euo pipefail
+          if ! git cat-file -e "${TARGET_SHA}^{commit}" 2>/dev/null; then
+            echo "::error::commit $TARGET_SHA does not exist in this repository." >&2
+            exit 1
+          fi
+
+          git ls-tree -r --name-only "$TARGET_SHA" src/ClimateProject.Infrastructure/Migrations/ \
+            | grep -E '^.*/[0-9]{14}_.*\.cs$' | grep -v Designer | xargs -n1 basename | sort > /tmp/target-migrations.txt
+          git ls-tree -r --name-only HEAD src/ClimateProject.Infrastructure/Migrations/ \
+            | grep -E '^.*/[0-9]{14}_.*\.cs$' | grep -v Designer | xargs -n1 basename | sort > /tmp/head-migrations.txt
+
+          comm -13 /tmp/target-migrations.txt /tmp/head-migrations.txt > /tmp/delta.txt
+          DELTA_COUNT="$(wc -l < /tmp/delta.txt | tr -d ' ')"
+
+          {
+            echo "## Migration delta"
+            echo
+            echo "Rolling code back to \`$TARGET_SHA\`. **$DELTA_COUNT** migration(s) exist"
+            echo "between it and this branch's HEAD. If the deploy that shipped them ran,"
+            echo "the database still has them after this rollback."
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$DELTA_COUNT" -eq 0 ]; then
+            echo "No migration delta. This rollback is code-only in the strict sense." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          DESTRUCTIVE=0
+          while IFS= read -r name; do
+            path="src/ClimateProject.Infrastructure/Migrations/$name"
+            # Only the Up() half matters here. A Down() full of DropTable is normal and
+            # says nothing; what makes a migration un-rollback-over is an Up() that
+            # rewrote or removed data the older code needs.
+            if git show "HEAD:$path" | sed -n '/void Up(/,/^        }/p' \
+                 | grep -qiE '(DropTable|DropColumn|migrationBuilder\.Sql)'; then
+              echo "- \`$name\` — **Up() drops or rewrites. Read it before continuing.**" >> "$GITHUB_STEP_SUMMARY"
+              DESTRUCTIVE=1
+            else
+              echo "- \`$name\` — additive" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done < /tmp/delta.txt
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$DESTRUCTIVE" -eq 1 ]; then
+            echo "::warning::At least one migration in the delta rewrites or removes data. The rolled-back code has never seen that schema. Section 4 of docs/runbooks/rollback.md is not optional for this rollback."
+            echo "> **At least one migration in the delta rewrites or removes data.** See rollback.md section 4." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "> Every migration in the delta is additive: old code ignores what it does not know about." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/climate-project-github-deploy-prod
+
+      # Prints every parameter it is about to re-pass, and refuses if the target image
+      # has aged out of ECR -- before anything changes. The dry run costs seconds and
+      # the log it leaves is the record of what was live immediately before.
+      - name: Dry run
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          set -euo pipefail
+          ./scripts/rollback-api-image.sh \
+            --stack "$SERVICE_STACK_NAME" \
+            --bootstrap-stack "$BOOTSTRAP_STACK_NAME" \
+            --region "$AWS_REGION" \
+            --target-sha "$TARGET_SHA"
+
+      - name: Roll back
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          set -euo pipefail
+          ./scripts/rollback-api-image.sh \
+            --stack "$SERVICE_STACK_NAME" \
+            --bootstrap-stack "$BOOTSTRAP_STACK_NAME" \
+            --region "$AWS_REGION" \
+            --target-sha "$TARGET_SHA" \
+            --execute
+
+      - name: Read App Runner URL
+        id: service
+        run: |
+          set -euo pipefail
+          SERVICE_URL="$(aws cloudformation describe-stacks \
+            --stack-name "$SERVICE_STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue | [0]" \
+            --output text)"
+          if [ -z "$SERVICE_URL" ] || [ "$SERVICE_URL" = "None" ]; then
+            echo "Missing ServiceUrl output from $SERVICE_STACK_NAME" >&2
+            exit 1
+          fi
+          echo "base_url=https://$SERVICE_URL" >> "$GITHUB_OUTPUT"
+
+      # Same bar as a deploy: 20 CONSECUTIVE 200s, a failure resets the run. A rollback
+      # that lands on a half-working instance and reports success is worse than no
+      # rollback, because it consumes the one lever you had. The constants are
+      # deploy-prod.yml's and the reasoning for each is on that file's copy.
+      - name: Readiness canary
+        env:
+          REQUIRED_CONSECUTIVE: 20
+          PROBE_INTERVAL_SECONDS: 5
+          DEADLINE_SECONDS: 300
+          PROBE_TIMEOUT_SECONDS: 15
+          BASE_URL: ${{ steps.service.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          URL="${BASE_URL}/ready"
+          deadline=$(( $(date +%s) + DEADLINE_SECONDS ))
+          consecutive=0
+          best=0
+          attempt=0
+
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            attempt=$(( attempt + 1 ))
+            status=$(curl -s -o /tmp/ready_body -w "%{http_code}" \
+              --max-time "$PROBE_TIMEOUT_SECONDS" "$URL" || echo "000")
+
+            if [ "$status" = "200" ]; then
+              consecutive=$(( consecutive + 1 ))
+              [ "$consecutive" -gt "$best" ] && best=$consecutive
+              echo "probe $attempt: 200 ($consecutive/$REQUIRED_CONSECUTIVE consecutive)"
+              if [ "$consecutive" -ge "$REQUIRED_CONSECUTIVE" ]; then
+                echo "Readiness canary passed: $REQUIRED_CONSECUTIVE consecutive 200s in $attempt probes."
+                exit 0
+              fi
+            else
+              echo "probe $attempt: status $status -- run of $consecutive reset to 0"
+              consecutive=0
+            fi
+
+            sleep "$PROBE_INTERVAL_SECONDS"
+          done
+
+          echo "::error::Readiness canary failed after the rollback: needed $REQUIRED_CONSECUTIVE consecutive 200s from $URL within ${DEADLINE_SECONDS}s; longest run in $attempt probes was $best. The image you rolled back TO is not healthy against the CURRENT schema -- that is the case section 4 of rollback.md is about." >&2
+          exit 1
+
+      - name: Record the incident
+        if: always()
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+          REASON: ${{ inputs.reason }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          {
+            echo ""
+            echo "## Rollback record"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| target commit | \`$TARGET_SHA\` |"
+            echo "| dispatched by | @$ACTOR |"
+            echo "| trigger / reason | $REASON |"
+            echo "| result | ${{ job.status }} |"
+            echo ""
+            echo "**Still outstanding after this workflow, whatever it reported:**"
+            echo ""
+            echo "1. The **web app** is unchanged. Vercel ships on every merge to main, so"
+            echo "   the front end is almost certainly newer than the API you just rolled"
+            echo "   back to. See rollback.md section 3 for the \`vercel rollback\` step."
+            echo "2. The **schema** is unchanged. Run the \`__EFMigrationsHistory\` check in"
+            echo "   rollback.md section 4 and file the result with the incident notes, so"
+            echo "   the next deploy is not the second incident."
+            echo "3. **Do not author a new migration** from a branch whose Migrations/ set is"
+            echo "   behind the database. rollback.md section 4 explains what that corrupts."
+          } >> "$GITHUB_STEP_SUMMARY"

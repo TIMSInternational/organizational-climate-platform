@@ -1,228 +1,640 @@
-# Cutover rollback runbook — #159
+# Rollback runbook — #159
 
-**Status: UNTESTED.** An untested rollback plan is a document, not a capability (#159's
-own words). It becomes a capability when it is practised from the dry-run state during
-#157 and the blanks at the bottom hold measured values. Grounded in repository state at
-`origin/main` commit `1219dc6` (2026-08-15).
+**Status: MECHANISM BUILT, NOT YET REHEARSED.** Every command below is written out and
+two of them are now executable by a dispatch rather than by a person remembering
+thirteen CloudFormation parameters. None of them has been run. The blanks in
+[§8 Measurements](#8-measurements) are what a rehearsal fills, and until they hold
+numbers this is still a document rather than a capability — which is #159's own
+distinction and the reason the issue exists.
 
-Companion: [`cutover.md`](./cutover.md). The TTL lowering in its Phase B is what makes
-the DNS half of this document fast; skipping it does not break rollback, it makes
-rollback *slow* exactly when speed matters.
+Rewritten 2026-08-24 against `origin/main` at `8f0eacc`. Every claim marked **measured**
+was checked against the live system on that date and the command that checked it is
+shown. Every claim marked **guess** is a guess and says so.
+
+Companions: [`cutover.md`](./cutover.md) (largely void — see below),
+[`legacy-dependencies.md`](./legacy-dependencies.md),
+[`staging-provisioning.md`](./staging-provisioning.md), `infra/aws/README.md`.
 
 ---
 
-## What "roll back" means, layer by layer
+## 0. What this document used to say, and why it was wrong
 
-"Roll back" is four different operations with four different reversibility properties.
-Conflating them is how a rollback makes things worse.
+The previous revision described rollback as **reverting DNS to a warm legacy stack**,
+with a TTL-lowering phase in `cutover.md` as its prerequisite. That framing is dead
+twice over:
 
-| Layer | Mechanism | Reversible? |
+1. **There is no legacy stack to return to.** The Mongo→Postgres migration was dropped
+   entirely on 2026-08-19 ([`docs/decisions/no-data-migration.md`](../decisions/no-data-migration.md)):
+   the legacy database held mock data, so it was abandoned rather than migrated. The
+   new platform is not a *replacement* running beside an old one — it is the only one,
+   and it is already live and carrying real users. #157, the dry run that was meant to
+   prove the rollback, was closed **not planned** for the same reason.
+2. **Neither layer's rollback is a DNS operation.** `climate.timsint.com` resolves to
+   Vercel's anycast address (`A 76.76.21.21`, TTL 1799 — measured with
+   `dig +noall +answer climate.timsint.com @1.1.1.1`), so rolling the front end back
+   means re-pointing a Vercel *alias*, which is instant and never touches DNS. The API
+   still runs on its generated App Runner hostname with no custom domain, so rolling it
+   back is a stack update. **No resolver cache is on the critical path of any rollback
+   in this document.** The TTL phase in `cutover.md` is not wrong, it is simply not what
+   makes rollback fast here.
+
+What #159 actually asks for, in the world that exists: *when a deploy makes production
+worse, how do we get back, how long does it take, what does it cost, and which parts
+cannot be undone at all.*
+
+---
+
+## 1. Production as it stands right now (all measured 2026-08-24)
+
+Read this before deciding anything. The rollback plan is shaped by a live asymmetry.
+
+| | value | how it was read |
 |---|---|---|
-| DNS | Revert records to pre-cutover targets | **REVERSIBLE** — bounded by TTL |
-| App Runner service | Redeploy a previous image tag | **REVERSIBLE** — images persist in ECR |
-| Database schema | EF migrations history vs. checkout — check, then decide | **PARTIALLY** — additive yes, rewrites lossy |
-| Data written after the flip | Pre-decided handling (below) | **NOT REVERSIBLE** — this is the point of no return |
+| API commit serving | `fc539367156b5c98cd794c22ab590fc2fe016bed` | `curl -sS https://bhgrdkd4gt.us-east-1.awsapprunner.com/version` |
+| API image built | `2026-08-19T15:31:59Z` | same response |
+| `origin/main` | `8f0eacc`, **23 commits ahead** | `git rev-list --count fc53936..origin/main` |
+| Web production | deployed **minutes ago**, from main | `vercel list climate --prod` |
+| Web canonical URL | `https://climate.timsint.com` | `vercel projects ls` |
+| API CORS allows | `https://climate.timsint.com` (and **not** `web-one-green-86.vercel.app`) | `curl -X OPTIONS -H 'Origin: …'` |
+| Pending EF migrations | exactly **one**: `20260819200824_AddQuestionRepositories` | `git diff --name-status fc53936 origin/main -- src/ClimateProject.Infrastructure/Migrations/` |
+| `/ready` steady state | 14 of 14 probes 200, no gap > 2 s | `scripts/rollback-probe.sh <url> 8 1 2` |
 
-### 1. DNS — REVERSIBLE, speed bounded by TTL
+### The asymmetry, and it is already causing a live defect
 
-Revert every record changed in `cutover.md` D6 to the pre-cutover targets recorded in
-its Phase B1 table. Nothing on the legacy side needs to change: the legacy Vercel deploy
-and MongoDB Atlas were left running and untouched (that is why #162 forbids
-decommissioning on the day, and why #165 is a separate, later phase).
+The web ships on every merge to main through Vercel's git integration
+(`web/vercel.json`, no workflow involved). The API ships only when somebody dispatches
+`deploy-prod.yml` by hand. **Production has therefore been running a front end 23
+commits newer than its API for five days.**
 
-The revert propagates at the speed of the TTL clients cached — **nothing server-side
-can evict a resolver's cache**. With Phase B done, that is ≤ 300 seconds. If Phase B
-was skipped, clients keep hitting the new stack for up to the old TTL (potentially a
-day), during which they continue **writing to Postgres** — which widens the very data
-loss this rollback is trying to contain. That is the sense in which a long TTL quietly
-ruins the rollback.
-
-Verify: `dig +noall +answer <record> @8.8.8.8` and `@1.1.1.1` return legacy targets;
-legacy access logs show traffic returning (also the evidence #163 wants).
-
-### 2. App Runner service — REVERSIBLE
-
-Not needed to return to the *legacy* stack (it does not run on App Runner). This is for
-the adjacent case: rolling the **new** API back to a previous build without abandoning
-cutover.
-
-`deploy-prod.yml` tags every image `prod-<full-commit-sha>` and pushes it alongside
-`prod-latest` ("Build and push API image" step), so previous builds persist in ECR.
-Rollback is a stack update pointing `ImageIdentifier` at the previous SHA's tag:
+That is not theoretical. Commit `0bba08c` added `QuestionLibraryEndpoints.cs` and
+`1e9aeee` added the picker in the web app that calls it. Measured today:
 
 ```
-aws cloudformation deploy \
-  --stack-name climate-project-api-prod \
-  --template-file infra/aws/climate-project-api-prod-service.yml \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --no-fail-on-empty-changeset \
-  --parameter-overrides ServiceName=climate-project-api-prod \
-    ImageIdentifier=<ecr-uri>:prod-<previous-sha> \
-    ... (every other parameter, explicitly)
+$ curl -s -o /dev/null -w '%{http_code}\n' https://bhgrdkd4gt.us-east-1.awsapprunner.com/admin/question-library
+404
+$ curl -s -o /dev/null -w '%{http_code}\n' https://bhgrdkd4gt.us-east-1.awsapprunner.com/admin/users
+401
 ```
 
-Pass **all** parameters, exactly as the workflow does — `aws cloudformation deploy`
-reuses a parameter's previous stack value when omitted, which made deployed
-configuration a function of invisible prior state before the workflow was fixed (comment
-on the "Deploy App Runner service stack" step; `infra/aws/README.md`). Use the
-workflow's parameter list as the checklist.
+`401` is a route that exists and wants a token. `404` is a route that is not there. The
+live front end is calling an endpoint the live API does not serve.
 
-Verify: `curl -sSf "$API/version" | jq -r .commit` reports the previous SHA
-(`src/ClimateProject.Api/Program.cs:501`), then 20 consecutive `/ready` 200s (the #220
-defect alternates; one probe proves nothing — `infra/aws/README.md`).
-
-**This rolls back code only. It never rolls back schema** — which is the next section,
-and skipping it is the trap.
-
-### 3. Database schema — CHECK FIRST, every time
-
-`deploy-prod.yml` applies EF Core migrations as a workflow step ("Apply EF Core
-migrations"), **before** the service rollout. Rolling the service image back therefore
-leaves the database at the *newer* schema: schema and code versions have come apart, and
-they do not reconverge on their own.
-
-**How to check — run this before any rollback, and again before the next deploy:**
-
-```
-# 1. The migrations the commit you are rolling back TO knows about:
-git checkout <target-sha>
-git ls-files 'src/ClimateProject.Infrastructure/Migrations/*.cs' | grep -v Designer
-
-# 2. The migrations the database has applied (session pooler, port 5432 — never 6543,
-#    never db.<project-ref>.supabase.co from an IPv4-only host; both are rejected by
-#    name in deploy-prod.yml's migration step, for the reasons documented there):
-psql "$MIGRATION_CONN" -c 'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId";'
-```
-
-(The history table is EF's default `__EFMigrationsHistory` — no custom history table is
-configured anywhere in `src/ClimateProject.Infrastructure`.)
-
-Every `MigrationId` present in the database but absent from the target commit is schema
-the rolled-back code has never seen. Then decide, per migration:
-
-- **Additive** (new table, new nullable column, new index): safe to leave applied. Old
-  code does not select what it does not know. Most of this repo's migrations are in
-  this class — e.g. `20260810180421_AddSurveyDraftExpiresAtIndex`.
-- **Rewrites/renames**: not safe to leave. Example already in the tree:
-  `20260804002058_RenameOpenTextQuestionTypeToOpenEnded` rewrites
-  `microclimate_questions.type` rows to a value pre-migration code fails validation on.
-  Its `Down` exists but is **deliberately lossy** (its own comment: rows authored as
-  `open_ended` after the migration are indistinguishable from renamed ones and all map
-  back). Reverting a rewrite is a decision about data, not a mechanical step.
-
-To revert schema explicitly:
-
-```
-dotnet ef database update <LastCommonMigrationId> \
-  --project src/ClimateProject.Infrastructure \
-  --startup-project src/ClimateProject.Api
-```
-
-Run this **from the newer checkout** — the one that contains the migrations being
-reverted. The older checkout does not have their `Down` methods and cannot revert them.
-
-**The corruption trap this section exists to prevent:** suppose the history table is
-left ahead (fine so far), and someone then cuts a hotfix branch from the *older* commit
-and adds a **new** migration on it. EF scaffolds that migration against the older
-snapshot — one that does not contain the still-applied newer migrations — and computes
-"pending" as *files minus history*. The next `deploy-prod.yml` dispatch then runs
-`dotnet ef database update` (after tests, before rollout) and applies DDL generated
-against a schema that is not the one in the database. Depending on the overlap this
-fails the deploy mid-workflow or, worse, succeeds and leaves the schema wrong. **The
-rule: never author a new migration from a branch whose `Migrations/` set is behind
-`__EFMigrationsHistory`. Run the check above first, always.** A rollback that forgets an
-applied migration corrupts the *next* deploy, not the rollback itself — which is why the
-check has to be a written step and not a memory.
-
-### 4. The legacy application — REVERSIBLE while it stays warm
-
-- The legacy Vercel deploy and MongoDB Atlas are untouched by cutover: the ETL **reads**
-  Mongo and **writes** Postgres (`docs/superpowers/specs/2026-08-03-mongo-to-postgres-etl-design.md`);
-  D1's write-freeze is a config state, not a data change. Unfreezing legacy writes
-  restores the pre-cutover world exactly — *minus whatever was written to the new stack
-  after the flip* (next section).
-- Keep the legacy stack deployable and its data intact until #165 — decommissioning is
-  deliberately a separate, later phase (#159, #162).
-- **Redeploy hazard:** if a rollback requires redeploying the legacy app, deploy only
-  from the retired repo's current HEAD. Its history holds a live malware sample at
-  `40fc19a`; any checkout from before removal commit `81363af` (2026-07-29) carries a
-  `tailwind.config.js` payload that executes on build
-  (`docs/security/rotation-inventory.md`, "Related";
-  `docs/security/2026-07-30-tailwind-payload-analysis.md`).
-
-### 5. Data written after the flip — **NOT REVERSIBLE. This is the ETL cutover moment.**
-
-Up to and including `cutover.md` D5, rollback is free: DNS never moved, users never
-touched the new stack, and abandoning the loaded Postgres data costs nothing (the ETL
-is re-runnable; Mongo was never modified).
-
-**The point of no return is the first real user write to the new stack after D6.**
-From that moment, returning to legacy discards those writes — survey responses,
-action-plan updates, notifications state — unless the pre-decided handling below
-applies. There is no mechanism in either stack that ports Postgres writes back to
-Mongo; anything of that kind would be new engineering, decided and built before the
-day, never improvised during an incident.
-
-#159 requires this decided **in advance** and written down. Options:
-
-| Option | Cost | Decision |
-|---|---|---|
-| (a) Read-only window: new stack serves reads but rejects writes for the first `____` after the flip; rollback inside it loses nothing | Users cannot submit during the window | ☐ |
-| (b) Forward-port: tooling exports post-flip Postgres writes back to Mongo on rollback | Tooling that does not exist at `1219dc6`; must be built and tested before the day | ☐ |
-| (c) Accept the loss: rollback inside the watch period discards post-flip writes, announced in the maintenance comms | Real user data lost, bounded by trigger speed | ☐ |
-
-**Chosen option: `____` Decided by: `____` Date: `____`**
-
-**Formal point of no return** (past this, roll forward only — fix on the new stack, do
-not return to legacy): `____` (e.g. "T+4h after D6, or the moment option (a)'s
-read-only window is lifted, whichever comes first"). Owner who can call it: `____`
+**The operational consequence for this runbook:** the two halves must be rolled as a
+*pair*, and the pair is currently already mismatched. Rolling the API back one image
+while leaving the web at main widens the gap; rolling the web back to the deployment
+that matches the API's commit closes it. §3.1 is therefore listed first, not because it
+is less important, but because it is the faster and cheaper lever and is more often the
+right one.
 
 ---
 
-## Trigger criteria — agree BEFORE the window (#159: deciding during an incident goes badly)
+## 2. The four layers, and what "reversible" honestly means for each
 
-Rolling back is a decision made against pre-agreed thresholds by a named owner, not a
-mood. Suggested rows below are grounded in known failure modes; thresholds are blanks
-because they are the owner's call, not this document's.
-
-| Trigger | Threshold | Measured how | Roll back? | Owner |
-|---|---|---|---|---|
-| `/ready` failing post-flip | `____` consecutive non-200s | C2-style probe loop | `____` | `____` |
-| Login failure rate through the real domain | `____` | `____` (monitoring, #158) | `____` | `____` |
-| Tracking dashboards empty (silent identity failure — the #155 mode: GUID fallback in `TrackingIdentifiers.ExternalPersonaId`, no error anywhere) | any confirmed orphaned record | D4's resolution check re-run | `____` | `____` |
-| Reconciliation error discovered post-flip | any content mismatch | data-quality report / user report | `____` | `____` |
-| Error rate on writes | `____` | `____` | `____` | `____` |
-
-**Rollback decision owner (one name, reachable for the whole watch period): `____`**
-
----
-
-## The procedure, in order
-
-| # | Step | Reversible? | Measured duration |
+| Layer | Mechanism | Reversible? | Time (see §3) |
 |---|---|---|---|
-| R1 | Owner declares rollback, notes the trigger met and the time | — | `____` |
-| R2 | Stop new-stack writes (per the chosen post-flip option; mechanism `____` — e.g. maintenance flag / `aws apprunner pause-service`, **console state**, verify in the dry run) | yes | `____` |
-| R3 | Revert DNS to the Phase B1 targets | yes | `____` |
-| R4 | Unfreeze legacy writes (undo `cutover.md` D1) | yes | `____` |
-| R5 | Verify legacy serving: smoke-test login + a write through the real domain; legacy access logs showing traffic | — | `____` |
-| R6 | Revert `services/tracking-api` config if D7 had run (`ClimateProjectBaseUrl`, `ProcomerCompanyId` back to C5's recorded baseline) and redeploy it | yes | `____` |
-| R7 | Execute the post-flip-writes decision (nothing to do under (a) inside the window; run the port under (b); record the loss under (c)) | **no** | `____` |
-| R8 | Run the §3 schema check and file the result with the incident notes, so the next deploy is not the second incident | — | `____` |
-| R9 | Post-mortem before any second cutover attempt | — | — |
+| Web (Vercel) | promote a previous production deployment | **Yes, cleanly.** No rebuild, no DNS, ~20 production deployments retained | seconds |
+| API (App Runner) | point the stack at a previous ECR image | **Yes**, for the last **40** `prod-*` images | minutes (§3.2) |
+| Service config / secrets | CloudFormation parameters; Secrets Manager `AWSPREVIOUS` | **Yes**, but a secret change needs a *new rollout* to take effect | minutes |
+| Database schema + data | EF Core migrations | **NO, not in general.** §4 | — |
 
-Total measured rollback time (R1–R7): `____` — this number must comfortably fit inside
-the watch period, or the watch period is theatre.
+Everything above the line is genuinely reversible. Everything below it is where this
+document stops being reassuring, and §4 is the section that matters.
 
 ---
 
-## Practice record (#157 / #159 acceptance criteria)
+## 3. The procedure, layer by layer
 
-| | Practice 1 | Practice 2 |
+### 3.1 Web — Vercel, seconds, no rebuild
+
+**Measured:** the `climate` project retains at least 20 production deployments going
+back 5 days, all `● Ready` (`vercel list climate --prod`). Promotion re-points the
+alias at an existing build; it does not rebuild and it does not touch DNS.
+
+```bash
+# 1. See what is there. Note the age column and pick the deployment that corresponds
+#    to the API commit you intend to be running.
+vercel list climate --prod
+
+# 2. Promote a previous one. Pass the DEPLOYMENT URL, not the project name: the URL
+#    identifies the build unambiguously and does not depend on which directory the
+#    command is run from. Default timeout is 3m; -y skips the confirmation prompt.
+vercel rollback https://climate-<id>-federicos-projects-21f2ff63.vercel.app \
+  --scope federicos-projects-21f2ff63 -y
+
+# 3. Confirm it landed. This is the verification step, not the curl below.
+vercel rollback status climate --scope federicos-projects-21f2ff63
+
+# 4. Prove it from outside. There is no build stamp in the bundle (checked: no
+#    VITE_COMMIT, no VERCEL_GIT_COMMIT_SHA anywhere under web/), so the only external
+#    evidence is the asset hash changing and the broken behaviour stopping.
+curl -s https://climate.timsint.com/ | grep -o 'assets/[^"]*\.js'
+```
+
+Verified 2026-08-24 that `vercel rollback` and `vercel rollback status` exist in the
+installed CLI (50.22.1) and that the account is authenticated for scope
+`federicos-projects-21f2ff63`. **Not verified: that a rollback actually succeeds** — that
+would have changed production, which this pass did not do.
+
+> **Gap worth closing before go-live, and it is small:** the web app carries no version
+> stamp, so nothing can assert "the front end is at commit X" the way
+> `scripts/read-deployed-commit.sh` does for the API. `deploy-drift.yml` therefore
+> watches only half the system. A `VITE_COMMIT_SHA` fed from Vercel's
+> `VERCEL_GIT_COMMIT_SHA` and surfaced on the System Health page would make a web
+> rollback verifiable instead of inferred. Not built here — `web/src` belongs to another
+> lane tonight.
+
+**Auto-deploy is the hazard on the other side.** Once the web is rolled back, the *next
+merge to main* redeploys it forward again, silently, with no dispatch. If the rollback
+must hold for more than a few minutes, either freeze merges to main or disable the
+Vercel git integration for the project — a console action, and a human decision (§9).
+
+### 3.2 API — App Runner, minutes
+
+The images are already built. Every `deploy-prod.yml` run tags
+`prod-<full-40-char-sha>` alongside the mutable `prod-latest` and pushes both, and the
+ECR lifecycle policy in `infra/aws/climate-project-api-bootstrap.yml` keeps **the 40
+most recent `prod-*` images**. So:
+
+> **The rollback horizon is the last 40 production deploys.** Past that the tag is
+> expired and a "rollback" is a rebuild. Nobody has ever tested where that edge is; the
+> rehearsal in §7 is what proves the second-newest image is still pullable at all.
+
+> **Never roll back to `prod-latest`.** `ImageTagMutability: MUTABLE` and every deploy
+> moves it, so it always names the newest build. Rolling back "to latest" gets you
+> exactly what you already have, and it is the commonest way to spend five minutes
+> proving nothing.
+
+#### The path to use: dispatch `rollback-prod.yml`
+
+New in this change (see §10). Dispatch-only, gated on typing the phrase
+`roll back production`, and it requires a `reason` because a rollback with no recorded
+trigger is an incident with no record.
+
+```
+gh workflow run rollback-prod.yml \
+  --repo TIMSInternational/organizational-climate-platform \
+  --ref main \
+  -f target_sha=<40-hex> \
+  -f confirm='roll back production' \
+  -f reason='trigger T2: 5xx rate above threshold; decided by <name> at <time>'
+```
+
+It does exactly four things: report the migration delta it is **not** undoing, swap the
+image via `scripts/rollback-api-image.sh`, gate on 20 consecutive `/ready` 200s, and
+write the incident record into the job summary. It does **not** build, test, migrate, or
+move `prod-latest`.
+
+> `--ref main` is load-bearing: GitHub only offers `workflow_dispatch` workflows that
+> exist on the default branch. Until this file is merged to `main`, the workflow is not
+> dispatchable at all — which is the single most important thing to fix before relying
+> on it.
+
+#### Why not just re-dispatch `deploy-prod.yml` at the old commit
+
+Three reasons, each independently sufficient:
+
+1. It runs `dotnet test ClimateProject.slnx` and a full `docker build` first, to
+   produce an image **that already exists in ECR**. `infra/aws/README.md` records
+   19-minute deploys on the manual path; a workflow that also runs the whole test
+   suite will not beat that. That is not a rollback, it is a rebuild with a rollback's
+   name on it.
+2. It runs `dotnet ef database update` before the rollout. Pointed at an older commit
+   that applies the *older* migration set to a database already ahead of it, which is a
+   no-op — and a no-op that quietly reinforces the false belief that the schema came
+   back too.
+3. It pushes the old image over `prod-latest`, destroying the record of what was most
+   recently built.
+
+#### The break-glass path, if the workflow is unavailable
+
+Requires local credentials in account `747814092517`. Read §9 first — it is not
+established that any human has them.
+
+```bash
+# Dry run first. Prints every parameter it will re-pass and refuses if the target image
+# has aged out of ECR. Nothing changes without --execute.
+./scripts/rollback-api-image.sh --stack climate-project-api-prod --target-sha <40-hex>
+
+# Then:
+./scripts/rollback-api-image.sh --stack climate-project-api-prod --target-sha <40-hex> --execute
+```
+
+The script re-passes **the live stack's current parameters**, overriding only
+`ImageIdentifier`. That is deliberately the opposite of `deploy-prod.yml`'s rule, and
+the distinction is worth holding on to:
+
+- For a **deploy**, this repository is the source of truth. An omitted parameter makes
+  the live configuration a function of invisible prior stack state, which is why that
+  workflow passes all thirteen explicitly.
+- For a **rollback**, the thing you are getting back to is *what was running five
+  minutes ago*, not what main describes. Main may have changed a CORS origin or a
+  secret ARN since; smuggling that in mid-incident turns a one-variable change into an
+  unknown-variable change.
+
+Consequence, stated so it is not discovered: **if a bad configuration is what you are
+rolling back, this script faithfully preserves it.** Fix configuration by dispatching
+the normal deploy with the repository variable corrected.
+
+#### The path that is not a rollback
+
+`aws apprunner start-deployment` re-pulls the *same* `ImageIdentifier`. Since prod's
+identifier is an immutable `prod-<sha>` tag, it redeploys the thing you are trying to
+escape. It is the right tool for "the rollout half-failed, try again"; it is the wrong
+tool here and it looks like the right one.
+
+`aws apprunner update-service --source-configuration …` does work and is marginally
+faster to issue, but it leaves CloudFormation describing an image that is not running.
+The drift is invisible to `describe-stacks` and self-heals only on the next deploy that
+changes the parameter. If you use it, you **must** follow with an
+`aws cloudformation deploy` naming the same image so the stack matches reality.
+
+#### How long it takes
+
+Only one component of this is provable from the repository:
+
+| component | value | basis |
 |---|---|---|
-| Date | `____` | `____` |
-| From what state (post-D2 / post-D6 simulated) | `____` | `____` |
-| Total time R1–R7 | `____` | `____` |
-| What failed / surprised | `____` | `____` |
-| Legacy confirmed still deployable | `____` | `____` |
-| Doc updated | `____` | `____` |
+| health gate on the new instances | **60 s minimum** | `HealthyThreshold: 3` × `Interval: 20` in `infra/aws/climate-project-api-prod-service.yml`. A hard floor: App Runner will not call an instance healthy sooner. |
+| first-probe cold start | ~9.4 s | measured in #220 — EF model build plus the first pooled connection |
+| CloudFormation change-set + execute overhead | 30–60 s | **guess** |
+| ECR pull + container start on 0.25 vCPU / 0.5 GB | 30–90 s | **guess** |
+| **total, command issued → old image serving** | **3–7 minutes** | **GUESS.** This number exists to be replaced by §7's measurement. Do not quote it to anyone as fact. |
+
+I could not measure any of this: the AWS credentials available in this environment are
+for account `795965600143`, not the production account `747814092517`, and
+`aws apprunner list-services` returns `SubscriptionRequiredException` there. Every
+App Runner runtime claim in this section comes from the templates and the workflow
+comments, not from the live service.
+
+#### What happens to in-flight requests
+
+**Unverified, and deliberately not asserted.** App Runner documents deployments as
+zero-downtime and does not publish a connection-drain timeout, so the only honest
+answer this project can give is a measured one. `scripts/rollback-probe.sh` is the
+instrument that produces it: run it before and across a swap and it reports the longest
+consecutive failure run and the failures falling within ±15 s of the moment `/version`
+flips.
+
+It measures *availability continuity* for short requests. It does **not** see a
+long-running request severed mid-flight — a report export or a bulk import. To test
+that, start one by hand immediately before the swap and watch whether it completes.
+
+### 3.3 Service configuration and secrets
+
+CloudFormation parameters (CORS origins, CPU/memory, secret ARNs) roll back the same
+way: change the repository variable, re-run `deploy-prod.yml`. Note the
+`CorsAdditionalAllowedOrigin` trap already documented in `infra/aws/README.md` —
+omitting it *keeps* the previous value, so removing an origin requires passing it
+explicitly empty.
+
+Secrets Manager values roll back with `put-secret-value` restoring `AWSPREVIOUS` (this
+is how #220's pooler port was made reversible). **But the secret is injected into the
+container at instance start**, via `RuntimeEnvironmentSecrets`. Changing the secret
+alone changes nothing that is running: it needs a new rollout — an image swap or
+`aws apprunner start-deployment` — before any instance reads the new value. Budget the
+same minutes as §3.2.
+
+Two secrets are one-way in the sense that matters:
+
+- **`TrackingJwtSecret`** — rotating it invalidates every issued token. Every logged-in
+  user is signed out. Reversible mechanically, but the user-visible effect is not.
+- **`InternalApiKey`** — must be wired on **both** sides in the same change (#219).
+  Rolling one side back alone gives per-request `401`s on `/api/internal/*` that read
+  as an authentication bug in new code rather than a configuration coupling.
+
+### 3.4 `services/tracking-api` — there is nothing to roll back, and that is the problem
+
+Verified today:
+
+```
+$ grep -rn "services/" .github/workflows/      # no matches
+$ grep -rn "tracking" .github/workflows/*.yml  # no matches
+$ grep -n "ClimateTracking" ClimateProject.slnx # no matches
+```
+
+The tracking service has **its own solution** (`services/tracking-api/ClimateTracking.slnx`)
+which **no CI job builds**, **no Dockerfile packages** (`find . -iname 'Dockerfile*'`
+returns only the root `Dockerfile` and `Dockerfile.workers`), and **no workflow
+deploys**. `git log -S'ClimateTracking' -- .github/workflows/ci.yml` returns nothing:
+it has never been in CI.
+
+Issue #219's premise — *"`services/tracking-api/` is built and tested in CI but deployed
+nowhere"* — is half wrong and should be corrected: it is neither built in CI nor
+deployed.
+
+The Procomer `.xlsx` export merged as `fab4c40` (#386) yesterday lives in that service.
+It has no production path, so it also has no rollback: there is nothing to roll back
+*to* and nothing to roll back *from*. For a client whose acceptance criterion 7 is that
+export, "we can roll it back" is not the risk — "it cannot ship at all" is. That belongs
+in the go-live plan, not this one, but a rollback runbook that omitted it would be
+lying by silence.
+
+---
+
+## 4. The database — the section that decides whether any of the above is safe
+
+`deploy-prod.yml` applies EF Core migrations **before** the App Runner rollout. Rolling
+the image back therefore leaves the database at the **newer** schema. Schema and code
+have come apart, and they do not reconverge on their own.
+
+### 4.1 Always run this first, and again before the next deploy
+
+```bash
+# What the commit you are rolling back TO knows about:
+git ls-tree -r --name-only <target-sha> src/ClimateProject.Infrastructure/Migrations/ \
+  | grep -E '/[0-9]{14}_.*\.cs$' | grep -v Designer | xargs -n1 basename | sort
+
+# What the database has actually applied. Session pooler, port 5432 -- never 6543
+# (transaction mode breaks the session-scoped advisory lock EF takes), never
+# db.<project-ref>.supabase.co (IPv6-only, unroutable from CI).
+psql "$MIGRATION_CONN" -At \
+  -c 'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId";'
+```
+
+(EF's default history table; no custom one is configured anywhere in
+`src/ClimateProject.Infrastructure`.) `rollback-prod.yml` prints the *file* delta
+automatically — it has no database credentials, deliberately — and the staging rehearsal
+in §7 runs the full version against a real database.
+
+**Right now that delta is exactly one migration**, `20260819200824_AddQuestionRepositories`,
+and it is purely additive: 29 `CreateTable`/`CreateIndex`/`AddColumn` statements and zero
+`DROP`/`TRUNCATE` in its `Up()`. So today a code-only rollback of the API is safe with
+respect to schema. That is a fact about today, not a property of this repository.
+
+### 4.2 Three states, and only one of them is fine
+
+1. **Schema ahead, delta additive** → **safe, leave it applied.** Old code does not
+   select a column it has never heard of. Take no action.
+2. **Schema ahead, delta rewrites or removes data** → **not safe, and not mechanically
+   fixable.** The rolled-back code will read values it rejects or columns that are gone.
+   This is a per-migration judgement, made by a human, with the migration file open.
+3. **You are considering running `Down()`** → almost always wrong. §4.3.
+
+### 4.3 `Down()` is a development tool. It is not a production rollback mechanism here
+
+Every claim below is from the migration file named. This is not a general worry about
+EF; it is what these specific `Down()` methods do:
+
+| Migration | What `Down()` actually does | Verdict |
+|---|---|---|
+| `20260819200824_AddQuestionRepositories` | drops **7 tables** (`question_bank_items`, `question_library_items`, `question_categories`, four child tables) | Every question-library row authored since is destroyed |
+| `20260806003034_NormaliseDemographicsIntoTables` | drops `user_demographics` and `user_invitation_demographics`, restores the jsonb columns as **NULL** — its own comment refuses to re-encode, because "a faithful reverse would be a fiction" | **Total loss of every user's demographics** |
+| `20260806004726_MakeUserCompanyIdNullable` | backfills NULL `company_id` with `Guid.Empty`, which is not a real `companies.Id`, so the FK rejects it | **The `Down()` fails and leaves the migration half-applied.** A `Down()` that cannot run is worse than none |
+| `20260817190504_DropCommentPromptDefaults` | writes the default literal over **every** NULL prompt | **Fabricates** data rather than losing it — a deliberately-blank prompt silently becomes "Please explain your answer:" |
+| `20260804002058_RenameOpenTextQuestionTypeToOpenEnded` | maps every `open_ended` back to `open_text`, including rows never touched by `Up()` | Lossy by design, and its own comment says so |
+| `20260804200923_LockDownPostgrestRoles` | **intentionally empty**, with a comment explaining that a faithful inverse would re-grant CRUD to `anon`/`authenticated` and disable RLS — reintroducing the CRITICAL vulnerability `Up()` closed | The right call, and the honest one: this migration is **irreversible by design**. A `dotnet ef database update` to a point before it will silently leave the lockdown in place |
+
+Six of the most interesting `Down()` methods in this repository destroy data, fabricate
+data, fail outright, or decline to reverse at all. There is no seventh that quietly
+works. Note the last row's second-order effect in particular: because that `Down()` is a
+no-op, reverting *past* it succeeds while leaving the schema not actually reverted — so
+even `dotnet ef database update <old-migration>` returning `0` proves nothing about
+where the database now is.
+
+**The rule: do not run `Down()` against production.** If a schema change genuinely has
+to be undone, the correct instrument is a **new forward migration** that expresses the
+undo explicitly, reviewed like any other change, with its data effects stated.
+
+### 4.4 The corruption trap — this is the one that bites the *next* deploy
+
+Suppose the history table is left ahead (fine, per §4.2 case 1), and someone then cuts a
+hotfix branch from the older commit and adds a **new** migration on it. EF scaffolds
+that migration against the older model snapshot — one that does not contain the
+still-applied newer migrations — and computes "pending" as *files minus history*. The
+next `deploy-prod.yml` dispatch then runs `dotnet ef database update` and applies DDL
+generated against a schema that is not the one in the database. Depending on the overlap
+it fails mid-workflow or, worse, succeeds and leaves the schema wrong.
+
+> **Never author a new migration from a branch whose `Migrations/` set is behind
+> `__EFMigrationsHistory`.** Run §4.1 first, every time. A rollback that forgets an
+> applied migration corrupts the *next* deploy, not the rollback itself — which is why
+> this has to be a written step and not a memory.
+
+### 4.5 The backup that has to exist, because the recovery lever does not
+
+**Standing risk, and I could not verify it.** The claim on record is that Supabase
+point-in-time recovery is **off** with zero restorable backups. The Supabase MCP server
+available in this session is bound to project `lzhfnjfsdwdywwnlqgqq`, whose schema is the
+TIMS ATS product (`candidates`, `vacancies`, `assessment_results`, Quartz tables) — **it
+is not the climate project's database**, so nothing here could read the real project's
+backup configuration. Treating PITR as absent is the safe assumption and it is what the
+rest of this section assumes; **verifying it is a human task (§9), and it is the single
+highest-value one in this document.**
+
+If PITR is off, then:
+
+- there is no "restore the database" lever at all, at any price;
+- `Down()` is not merely unwise, it is unrecoverable;
+- and the scheduled jobs are deleting rows *right now*. `WorkerJobs.RetentionCleanup`
+  and `WorkerJobs.SurveyDraftRetention` both issue hard deletes
+  (`ExecuteDeleteAsync` / `RemoveRange` in `RetentionCleanupJob.cs` and
+  `SurveyDraftRetentionJob.cs`), on defaults of 365 days for terminal notifications and
+  90 days for unaccepted invitations. The workers were confirmed running in production
+  on 2026-08-19 (`cutover.md` gate A1).
+
+**So this is a required step, not a nice-to-have:**
+
+```bash
+# BEFORE any deploy that carries a migration. Session pooler, port 5432.
+# Logical, data-only, of the tables the migration touches. Costs one command.
+pg_dump "$MIGRATION_CONN" --data-only --no-owner --no-privileges \
+  --table=public.questions --table=public.microclimate_questions \
+  -f "pre-deploy-$(date -u +%Y%m%dT%H%M%SZ).sql"
+```
+
+For a migration whose blast radius is not obvious, dump the whole database instead of
+guessing the table list. It is a survey product for a few hundred employees; the dump is
+small and the alternative is having nothing.
+
+---
+
+## 5. Trigger criteria — agreed in advance, by a named person
+
+Deciding whether to roll back *during* an incident, without pre-agreed thresholds, goes
+badly — that is #159's own framing and it is right. The thresholds below are **proposals
+with their reasoning**; each needs a human to ratify or replace it (§9).
+
+| # | Trigger | Proposed threshold | Why this number | Measurable today? |
+|---|---|---|---|---|
+| T1 | `/ready` failing | ≥ 3 consecutive non-200 from an external prober at 10 s spacing, **and** App Runner has already replaced an instance twice in 10 minutes | The service template gives an instance ~100 s of continuous failure (`UnhealthyThreshold: 5` × `Interval: 20`) before App Runner replaces it. A human trigger faster than that fights the platform's own self-healing. This one fires only after self-healing has been given its chance and failed. | Partly — `scripts/rollback-probe.sh` does the probing; the replacement count needs App Runner console access |
+| T2 | 5xx rate | > 2 % of requests in any 5-minute window | Base rate should be ~0 for a survey tool serving a few hundred employees. 2 % is above one flaky client and below the point users start telling each other. | **NO — nothing measures this. #158 is open.** |
+| T3 | Authentication | 3 distinct users failing to log in with valid credentials inside 10 minutes | Auth is the only total-outage surface: a respondent who cannot log in can do nothing at all. Three users rules out one person's bad password. | **NO — #158** |
+| T4 | Route missing | any endpoint the deployed web bundle calls returning 404 | This is *today's* live defect (§1) and it is invisible to every health check the project has: `/ready` is 200 throughout. | Only by hand today |
+| T5 | Suspected data loss | **any** credible report of missing responses | Roll back first, investigate second. With no PITR (§4.5), every additional minute of running is more rows a delete job can take. This is the one trigger with no threshold, on purpose. | Human report only |
+| T6 | Client-visible during a demo/UAT window | decision owner's judgement | For a 16 Nov government go-live, "correct but broken in front of the client" is a different cost function than the same defect at 3am | Human |
+
+**T2 and T3 cannot be evaluated today.** That is not a gap in this runbook, it is #158
+(monitoring, open) surfacing as a hard dependency: a trigger nobody can measure is a
+trigger nobody will pull. Along with #156 (§7), that makes two open issues on the
+critical path of #159.
+
+**Decision owner (one name, reachable for the whole watch period): `____`**
+**Backup owner, and the hours each covers: `____`**
+No rollback is executed without one of them saying so, and `rollback-prod.yml`'s
+`reason` input is where that decision gets recorded.
+
+---
+
+## 6. The point of no return
+
+The old framing — one moment, past which you cannot return to the legacy stack — does
+not apply: there is no legacy stack. In the world that exists there are **three
+independent one-way doors**, and each closes on its own schedule.
+
+| # | The door | Closes when | Can a rollback reopen it? |
+|---|---|---|---|
+| PONR-1 | **A non-additive migration commits.** A rewrite, a narrowed nullability, a dropped column. | the moment `dotnet ef database update` finishes that statement | **No.** §4.3 shows why `Down()` is not the answer. Recovery is the §4.5 dump or nothing |
+| PONR-2 | **A hard-deleting job runs on the new code.** `retention-cleanup`, `survey-draft-retention`, GDPR `SubjectErasure`; and `survey-lifecycle` mutates live survey statuses | the moment the job's tick commits | **No.** Rolling the image back does not resurrect a deleted row |
+| PONR-3 | **An email leaves the process.** Invitations and reminders — and since #368 `sent` is recorded only after a provider accepts the message, so a recorded send really left | the moment the provider accepts | **No.** You cannot unsend an invitation carrying a token an older API will reject |
+
+For an **additive** migration, PONR-1 never arrives: the old image simply never touches
+the new objects, and the rows written into them survive a code rollback intact and are
+waiting when you roll forward again. **That is the property that makes a code rollback
+cheap, and it is a property of the migration, not of the platform.**
+
+Which gives the rule that should govern every deploy between now and 16 November:
+
+> **No migration goes to production non-additively unless the team has explicitly
+> decided to give up the ability to roll code back across it, and written that down.**
+
+Expand/contract, in other words — deploy tolerant code first, migrate second — and
+`deploy-prod.yml`'s `confirm_destructive_migration` gate is already the place where that
+decision is forced into the open. Treat a `yes` there as *"we are closing PONR-1
+today"*, not as a checkbox.
+
+---
+
+## 7. The rehearsal — what a human actually executes
+
+An untested rollback plan is a document. This is the part that makes it a capability.
+
+### 7.1 Against staging — the safe version. **BLOCKED ON #156.**
+
+There is no staging environment as of 2026-08-24: #156 is open, the `staging` GitHub
+environment does not exist, and neither do `climate-project-api-staging-bootstrap` or
+`climate-project-api-staging`. `docs/runbooks/staging-provisioning.md` is the procedure.
+
+Once it exists:
+
+```
+gh workflow run rollback-rehearsal-staging.yml --ref main
+```
+
+It refuses with a readable message if staging is absent, so the dependency is executable
+rather than a footnote. A green run **proves** — and this list is the acceptance
+criterion, not a description:
+
+1. The previous image is still pullable from ECR (the 40-image horizon, never tested).
+2. **The operator's credentials can actually perform the stack update.** See §9 — this
+   is the claim most likely to be false.
+3. How long the swap takes, measured.
+4. What it costs in failed requests, measured, against a measured 60-second baseline.
+5. That the `__EFMigrationsHistory` check runs and reports a real answer, against a real
+   database with real credentials.
+6. That the environment comes back afterwards (it rolls forward again by default).
+
+Two consecutive clean runs before #159 is closed. The second one is what catches the
+step that only worked because someone had a terminal open.
+
+### 7.2 Rehearsing without staging — a human decision, not a default
+
+If 16 November arrives with #156 still open, the choice is between an unrehearsed
+rollback plan and a rehearsal against production. Neither is good. If production is
+chosen:
+
+- pick a genuinely quiet window and announce it;
+- take the §4.5 dump first, even though a code-only rollback should not need it;
+- roll `fc53936` → the previous `prod-<sha>` → back to `fc53936`, with
+  `scripts/rollback-probe.sh` running across both swaps;
+- expect two full swaps' worth of exposure, so budget twice the §3.2 estimate.
+
+**This is Federico's call and nobody else's.** It is written down so the option is
+visible, not because it is recommended.
+
+### 7.3 The five-minute version, runnable today, against nothing
+
+Cheap and worth doing this week, because it catches the failures that are about people
+and access rather than about AWS:
+
+```bash
+# Does the person who would run this have credentials in 747814092517 at all?
+aws sts get-caller-identity
+
+# Can they see the stack and the images?
+aws cloudformation describe-stacks --stack-name climate-project-api-prod --region us-east-1 --query 'Stacks[0].StackStatus'
+aws ecr describe-images --repository-name climate-project-api --region us-east-1 \
+  --query 'reverse(sort_by(imageDetails,&imagePushedAt))[:5].{pushed:imagePushedAt,tags:imageTags}' --output table
+
+# The dry run. Changes nothing, and fails loudly if the target image has expired.
+./scripts/rollback-api-image.sh --stack climate-project-api-prod --target-sha <previous-40-hex>
+```
+
+If the first command fails, stop reading and go to §9 — everything downstream of it is
+hypothetical.
+
+---
+
+## 8. Measurements
+
+Fill from §7. Until these hold numbers, §3.2's timings are guesses and are labelled as
+such throughout.
+
+| | Rehearsal 1 | Rehearsal 2 |
+|---|---|---|
+| Date / environment | `____` | `____` |
+| Who executed it | `____` | `____` |
+| Rolled back from → to | `____` | `____` |
+| **Command issued → old image serving** | `____` s | `____` s |
+| Steady-state baseline: requests / non-200 | `____` | `____` |
+| Across the swap: requests / non-200 | `____` | `____` |
+| Longest consecutive failure run | `____` s | `____` s |
+| Long-running request severed? (§3.2) | `____` | `____` |
+| Roll-forward wall clock | `____` s | `____` s |
+| Migration delta the check reported | `____` | `____` |
+| What surprised us | `____` | `____` |
+| Runbook updated in the same change | `____` | `____` |
+
+---
+
+## 9. What only a human can decide or supply
+
+Ordered by how much of this document collapses without it.
+
+| # | The thing | Why it blocks | Owner |
+|---|---|---|---|
+| H1 | **Does any human hold credentials in AWS account `747814092517` that can update `climate-project-api-prod`?** The only principal proven to have `cloudformation:UpdateStack` on it is the GitHub OIDC role `climate-project-github-deploy-prod`, assumable only from Actions. The credentials in this environment are for `795965600143` and cannot see App Runner at all. | If the answer is no, the break-glass path in §3.2 does not exist, and every rollback depends on GitHub Actions being available. Test it with §7.3's first command — it takes ten seconds. | `____` |
+| H2 | **Is Supabase PITR on for the climate project, and are there restorable backups?** Unverifiable from here (§4.5). | Decides whether §4.5's `pg_dump` is a belt-and-braces habit or the *only* recovery lever in existence. Also decides how frightening PONR-1 and PONR-2 are. | `____` |
+| H3 | **Merge `rollback-prod.yml` to `main`.** | `workflow_dispatch` workflows are only offered from the default branch. On a feature branch it is inert. | `____` |
+| H4 | **Ratify or replace the §5 thresholds, and name the decision owner and their backup.** | A threshold nobody agreed to will not be pulled at 3am. | `____` |
+| H5 | **#156, staging.** | §7.1's rehearsal has nowhere to run. Also blocks any future rehearsal being repeatable. | `____` |
+| H6 | **#158, monitoring.** | T2 and T3 are unmeasurable without it. Two of six triggers are decorative until it lands. | `____` |
+| H7 | **Decide what happens to `services/tracking-api` (§3.4).** No CI, no Dockerfile, no deploy. The Procomer `.xlsx` export (#386) cannot reach the client. #219's `InternalApiKey` two-sided wiring must land in the *same* change as its first deploy. | Not a rollback question — a "can it ship at all" question, seven weeks before a government go-live. | `____` |
+| H8 | **Decide the Vercel auto-deploy posture during an incident (§3.1).** Merges to main silently roll the web forward again. | A web rollback that a merge undoes is not a rollback. | `____` |
+| H9 | **Close the API/web version gap, or accept it deliberately.** Prod API is 23 commits and 5 days behind main while the web is current, and a route the web calls 404s today. | Every rollback in this document is harder while the two halves are decoupled. | `____` |
+
+---
+
+## 10. What this change added, and what it deliberately did not touch
+
+**New files:**
+
+- `scripts/rollback-api-image.sh` — the mechanism. Dry-run by default; refuses a short
+  SHA, an unknown stack name, or an image that has aged out of ECR.
+- `scripts/rollback-probe.sh` — the instrument. Measures availability across a swap and
+  the failures inside the ±15 s window around it.
+- `.github/workflows/rollback-prod.yml` — **dispatch-only, and it changes production
+  when dispatched.** It has never been run. It reuses the existing
+  `climate-project-github-deploy-prod` role and the `deploy-prod` concurrency group; no
+  IAM or infrastructure change was required.
+- `.github/workflows/rollback-rehearsal-staging.yml` — staging-only by construction:
+  every stack name is a literal and the role it assumes reaches only staging.
+
+**Deliberately unchanged:** `deploy-prod.yml`, `deploy-staging.yml`, `deploy-drift.yml`,
+`ci.yml`, the CloudFormation templates, and all application source. Nothing about what
+an existing dispatch does has been altered.
+
+Verified before commit: `actionlint` clean across all workflows, `shellcheck` clean on
+both scripts, and `scripts/verify-prod-deploy-invariants.py` still passes.
+`scripts/rollback-probe.sh` was self-tested for 8 seconds against the live API — 14 of
+14 probes returned 200 — which is the only part of this change that has been exercised
+against anything real.
