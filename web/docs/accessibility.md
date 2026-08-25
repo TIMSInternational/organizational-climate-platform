@@ -34,7 +34,10 @@ for somebody to look at a screen.
 | axe over every `ui/` primitive, in Spanish | `src/components/ui/a11y.axe.test.tsx` | an unnamed control, a mislabelled field, a broken ARIA relationship |
 | axe over the app shell, rail expanded / collapsed / group open | `src/app/shellKeyboard.test.tsx` | the same, on the chrome every page is rendered inside |
 | keyboard-only walkthrough of the shell | `src/app/shellKeyboard.test.tsx` | a destination no Tab stop reaches; a collapsed rail row with no accessible name |
+| Tab reaches and activates every interactive primitive | `src/components/ui/keyboardOperable.test.tsx` | a control out of the tab order, or one that focuses but does nothing |
+| no module suppresses the focus outline | `src/components/ui/keyboardOperable.test.tsx` | `outline-none` / `outline: none` deleting the app's only focus indicator |
 | dialog focus trap | `src/components/ui/focusTrap.test.tsx` | focus escaping a modal into the `aria-hidden` page behind it |
+| axe over the semáforo, plus its accessible names | `src/features/tracking/semaforoA11y.test.tsx` | a state announced by wire value instead of its Spanish word; an unnamed counts strip |
 | base ink × surface contrast, both themes | `src/styles/inkContrast.test.ts` | a text token repainted below 4.5:1 |
 | focus-ring contrast, both themes | `src/styles/inkContrast.test.ts` | a ring that disappears against a surface, or a 0px ring |
 | accent / badge / chip / heatmap / shell contrast | the six suites already in `src/styles/` and `src/features/` | a family-specific pairing going below AA |
@@ -140,6 +143,10 @@ three things and colour is the third:
 
 One table (`src/features/tracking/semaforo.ts`), one component
 (`SemaforoChip`), and `semaforoTable.test.ts` fails if a second icon map appears.
+The glyph is `aria-hidden` and the word is the accessible name, so a reader hears
+"Atrasado" once rather than hearing a shape described at it; `semaforoA11y.test.tsx`
+pins that, and pins the counts strip being a *named* list rather than four bare
+numbers.
 `ui/chip.tsx` makes the rule structural for every status chip in the product: `label`
 is a required `string` and there is no icon-only form, so a chip that carries colour
 alone is unspellable. A state this build has never seen renders neutral with a
