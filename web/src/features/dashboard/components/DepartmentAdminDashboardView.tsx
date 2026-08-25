@@ -1,15 +1,15 @@
 import { useCallback } from 'react'
-import { Link } from 'react-router'
-import { AlertTriangle, Target } from 'lucide-react'
+import { AlertTriangle, Info } from 'lucide-react'
 import { getDepartmentAdminDashboard } from '../api/dashboard'
 import { useDashboardData } from '../useDashboardData'
 import DashboardState from './DashboardState'
 import DashboardSurveyTable from './DashboardSurveyTable'
+import EmployeeDashboardView from './EmployeeDashboardView'
 import { KpiRow, MonoReadings, SectionHeading } from './dashboardGrammar'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { KpiTile } from '../../../components/charts'
-import { Alert, AlertDescription, AlertTitle, Button } from '../../../components/ui'
+import { Alert, AlertDescription, AlertTitle } from '../../../components/ui'
 
 /**
  * One department's overview, for the person who runs it.
@@ -67,7 +67,9 @@ export default function DepartmentAdminDashboardView() {
     () => getDepartmentAdminDashboard(baseUrl, { lang: locale }),
     [baseUrl, locale],
   )
-  const { data, loading, failed, error, reload } = useDashboardData(load)
+  const { data: result, loading, failed, error, reload } = useDashboardData(load)
+
+  const data = result?.kind === 'department' ? result.dashboard : null
 
   // Responses per 100 members, or null where there is nobody to divide by. Rounded, because
   // a rate quoted to a decimal implies a precision a headcount this small does not have.
@@ -75,6 +77,32 @@ export default function DepartmentAdminDashboardView() {
     data && data.memberCount > 0
       ? Math.round((data.completedResponseCount / data.memberCount) * 100)
       : null
+
+  // A leader or supervisor whose user row carries no department has no team dashboard —
+  // not a failed one, an absent one. This route is where every role lands after login
+  // (`resolveInitialRoute`), so before #138 that user's first screen after signing in was
+  // a red panel reading "The authenticated user is not assigned to a department", in
+  // English, inside a Spanish page, over a Retry button that could never succeed.
+  //
+  // The fallback is the employee view rather than an empty state, because it is not empty:
+  // `GET /dashboard/employee` reads no role claim and resolves the caller's own row, so it
+  // answers everyone — and a team lead with no team still has surveys of their own to
+  // answer. The notice says why they are looking at it, so a silent substitution cannot be
+  // mistaken for a bug. Same reasoning `DashboardPage` gives for defaulting an unknown role
+  // to this view, arrived at from the other direction.
+  if (result?.kind === 'no-department') {
+    return (
+      <EmployeeDashboardView
+        notice={
+          <Alert variant="info">
+            <Info aria-hidden="true" />
+            <AlertTitle>{t('dashboard.noDepartmentTitle')}</AlertTitle>
+            <AlertDescription>{t('dashboard.noDepartmentBody')}</AlertDescription>
+          </Alert>
+        }
+      />
+    )
+  }
 
   return (
     <div>
@@ -159,12 +187,24 @@ export default function DepartmentAdminDashboardView() {
                         department: data.departmentName,
                       }}
                     />
-                    <Button asChild size="sm" variant="primary" className="mt-inline w-fit">
-                      <Link to="/action-plans">
-                        <Target aria-hidden="true" />
-                        {t('navigation.actionPlans')}
-                      </Link>
-                    </Button>
+                    {/* No button, and its absence is the fix (#138).
+                        `ActionPlanEndpoints.CanAccessCompany` is `super_admin`, or a
+                        `company_admin` on their own company — there is no
+                        department-scoped read of `/action-plans` at all. This alert is
+                        rendered only for `leader` and `supervisor`, so the primary
+                        button that used to sit here linked 100% of its viewers to
+                        "Request failed: 403". Photographed as a leader before the fix.
+                        `navigation/roleCapabilities.ts` records why, and
+                        `DepartmentAdminDashboardView.test.tsx` fails if any link on this
+                        page leaves the set these two roles can load.
+
+                        A count they cannot open is still worth printing: a leader who
+                        knows their team has overdue plans can ask for them, and the
+                        server has no other way to tell them. Naming whose screen it is
+                        beats a dead end, and beats hiding the number. */}
+                    <p className="mb-0 mt-inline text-sm text-fg-secondary">
+                      {t('dashboard.overduePlansNotYours')}
+                    </p>
                   </AlertDescription>
                 </Alert>
               </section>

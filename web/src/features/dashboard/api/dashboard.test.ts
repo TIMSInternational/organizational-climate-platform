@@ -77,4 +77,42 @@ describe('dashboard api client', () => {
     )
     await expect(getCompanyAdminDashboard(baseUrl)).rejects.toThrow('companyId is required')
   })
+
+  /**
+   * The department dashboard's second legitimate answer (#138).
+   *
+   * `/dashboard` is where every role lands after login, so a `leader` or `supervisor`
+   * whose user row has no `department_id` used to have their first screen after signing in
+   * be the raw English 400 body over a Retry that could never work. It is a result here,
+   * not a throw, so the caller has to draw something for it.
+   */
+  describe('a caller with no department', () => {
+    it('is a result rather than an error', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ message: 'The authenticated user is not assigned to a department' }),
+          { status: 400 },
+        ),
+      )
+      await expect(getDepartmentAdminDashboard(baseUrl)).resolves.toEqual({ kind: 'no-department' })
+    })
+
+    it('does not swallow a 403, which would be a wiring bug rather than an empty team', async () => {
+      // A role that reached this endpoint and should not have. Folding it in would hide
+      // the dispatch being wrong behind a page that looks merely quiet.
+      vi.mocked(fetch).mockResolvedValueOnce(new Response('{}', { status: 403 }))
+      await expect(getDepartmentAdminDashboard(baseUrl)).rejects.toThrow('Request failed: 403')
+    })
+
+    it('still hands back the dashboard on a 200', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ departmentName: 'Ingeniería', memberCount: 7 }), {
+          status: 200,
+        }),
+      )
+      const result = await getDepartmentAdminDashboard(baseUrl)
+      expect(result.kind).toBe('department')
+      expect(result.kind === 'department' && result.dashboard.departmentName).toBe('Ingeniería')
+    })
+  })
 })

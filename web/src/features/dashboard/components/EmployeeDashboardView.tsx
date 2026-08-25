@@ -80,7 +80,24 @@ import { Button, Chip, EmptyState, type ChipTone } from '../../../components/ui'
  * `Survey.DescriptionEn/Es` exist on the entity but are not projected onto this DTO, so it is
  * omitted until the server sends it rather than invented here.
  */
-export default function EmployeeDashboardView() {
+export interface EmployeeDashboardViewProps {
+  /**
+   * A band drawn between the page header and the work, explaining why this page is the one
+   * being shown.
+   *
+   * Exists for exactly one caller: `DepartmentAdminDashboardView` falls back to this view
+   * when the server says the caller has no department (#138), and a leader who silently
+   * got a different page than the one their role implies would have no way to tell whether
+   * something was broken. Optional, and absent for the employee this page is named after —
+   * for them it is simply their page, and there is nothing to explain.
+   *
+   * A node rather than a string so the caller owns the shape it wants; this view only owns
+   * where it sits.
+   */
+  notice?: React.ReactNode
+}
+
+export default function EmployeeDashboardView({ notice }: EmployeeDashboardViewProps = {}) {
   const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
 
@@ -113,6 +130,11 @@ export default function EmployeeDashboardView() {
       />
 
       <div className="flex flex-col gap-section">
+        {/* Above `DashboardState`, so it is on screen while the work below is still
+            loading and stays on screen if that load fails. The reason this page is the one
+            being shown does not depend on the request succeeding. */}
+        {notice}
+
         <DashboardState loading={loading} failed={failed} error={error} onRetry={reload}>
           {data && (
             <div className="flex flex-col gap-panel-gap">

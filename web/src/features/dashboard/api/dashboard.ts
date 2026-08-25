@@ -249,22 +249,54 @@ export async function getCompanyAdminDashboard(
 }
 
 /**
+ * The answer to "what is this caller's team", which has a second legitimate shape.
+ *
+ * `no-department` is not an error and must not be rendered as one: a `leader` or
+ * `supervisor` whose user row carries no `department_id` gets a 400 from this endpoint —
+ * `"The authenticated user is not assigned to a department"` — and there is nothing they
+ * or a retry can do about it. Modelled as a result rather than thrown, so the caller has
+ * to decide what to draw instead of inheriting a network-error panel.
+ */
+export type DepartmentAdminDashboardResult =
+  | { kind: 'department'; dashboard: DepartmentAdminDashboard }
+  | { kind: 'no-department' }
+
+/**
  * `departmentId` is omitted by a leader or supervisor — the server reads their own user
  * row, because department membership moves and a token minted before a transfer would keep
  * serving the old team. It is required for the two admin roles, who have no department of
  * their own.
+ *
+ * ## Why any 400 is `no-department` rather than an error
+ *
+ * `DepartmentAdminAsync` has exactly three 400 branches, and every one of them means the
+ * same thing to this caller: *there is no department view to draw*. Two are the caller
+ * having no team (`ActingUserRequired`, and the unassigned-department message above); the
+ * third is `DepartmentIdRequired`, which only fires for an admin role that passed no
+ * `departmentId` — a call this client does not make, and which would still mean no
+ * department view if it did. Matching on the message text would be matching on English
+ * prose the server is free to reword.
+ *
+ * A 403 is deliberately **not** folded in. That would mean a role reached this endpoint
+ * that has no business calling it, which is a wiring bug worth surfacing as one rather
+ * than dressing up as an empty team.
  */
 export async function getDepartmentAdminDashboard(
   baseUrl: string,
   options: { departmentId?: string; lang?: string } = {},
-): Promise<DepartmentAdminDashboard> {
+): Promise<DepartmentAdminDashboardResult> {
   const response = await authFetch(
     withQuery(baseUrl, '/dashboard/department-admin', {
       departmentId: options.departmentId,
       lang: options.lang,
     }),
+    {},
+    { allowStatus: [400] },
   )
-  return response.json() as Promise<DepartmentAdminDashboard>
+  if (response.status === 400) {
+    return { kind: 'no-department' }
+  }
+  return { kind: 'department', dashboard: (await response.json()) as DepartmentAdminDashboard }
 }
 
 export async function getEmployeeDashboard(baseUrl: string, lang?: string): Promise<EmployeeDashboard> {
