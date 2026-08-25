@@ -171,6 +171,14 @@ public static class InvitationReminderJob
                 title,
                 row.Survey.EndDate,
                 decision.DueAt,
+
+                // The half that makes this reminder openable. EmailNotificationSender reads
+                // `surveyInvitationId` back out and resolves the token at send time; without
+                // it this job raises a reminder telling somebody to follow a link that is not
+                // in the message. THIS is the reminder path that runs in production -- Jobs.cs
+                // ticks it in the Workers host -- so a payload written only by the manual
+                // invite endpoint would leave the real path unfixed.
+                SurveyNotificationData.Serialize(row.Survey.Id, row.Invitation.Id),
                 () =>
                 {
                     row.Invitation.ReminderCount = decision.ReminderNumber;
@@ -287,6 +295,12 @@ public static class InvitationReminderJob
                 title,
                 row.Microclimate.Scheduling.EndTime,
                 decision.DueAt,
+
+                // No payload, and not an omission: `deadline_reminder` is not a link-carrying
+                // type, the row this reminds about is a microclimate_invitations row, and
+                // SurveyNotificationData names a survey_invitations id. Writing one here would
+                // be a foreign key into the wrong table.
+                Data: null,
                 () =>
                 {
                     row.Invitation.ReminderCount = decision.ReminderNumber;
@@ -359,6 +373,7 @@ public static class InvitationReminderJob
                 // The instant the reminder became due, not the instant a tick noticed it. Two
                 // instances racing compute the same value, and a late sweep records when the
                 // nudge was owed rather than when the scheduler got round to it.
+                Data = reminder.Data,
                 ScheduledFor = reminder.DueAt,
                 RetryCount = 0,
                 MaxRetries = 3,
@@ -402,6 +417,13 @@ public static class InvitationReminderJob
 
     private sealed record MicroclimateReminderRow(MicroclimateInvitation Invitation, Microclimate Microclimate);
 
+    /// <param name="Data">
+    /// The <c>notifications.data</c> payload, or null for a reminder that names no survey
+    /// invitation. Carried here rather than derived in <c>RaiseAsync</c> because only the
+    /// planning loops still hold the invitation the reminder is about -- and a reminder raised
+    /// without it is a reminder that mails no link, which is the whole defect this payload
+    /// exists to close.
+    /// </param>
     private sealed record PlannedReminder(
         Guid NotificationId,
         User Recipient,
@@ -409,6 +431,7 @@ public static class InvitationReminderJob
         string? ContentTitle,
         DateTimeOffset ClosesAt,
         DateTimeOffset DueAt,
+        string? Data,
         Action MarkInvitation);
 }
 

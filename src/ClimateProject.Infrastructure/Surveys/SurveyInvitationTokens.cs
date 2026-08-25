@@ -15,18 +15,33 @@ namespace ClimateProject.Infrastructure.Surveys;
 /// writes.
 /// </para>
 /// <para>
-/// The revocation check is a <c>WHERE</c> rather than a filter applied after loading, so a
-/// revoked token is never read out of the database into this process at all. The token is a
-/// bearer credential; the less far it travels, the fewer places it can be logged from.
+/// <b>Every predicate is in the <c>WHERE</c>, and that is load-bearing rather than tidy.</b>
+/// Ownership, tenancy and revocation are all filters, so a token belonging to anybody but this
+/// recipient is never read out of the database into this process at all -- there is no moment
+/// at which it exists in memory and a later <c>if</c> is what stands between it and an
+/// envelope. The token is a bearer credential; the less far it travels, the fewer places it
+/// can leak from.
+/// </para>
+/// <para>
+/// See <see cref="ISurveyInvitationTokens.LiveTokenAsync"/> for why the ownership and tenancy
+/// predicates exist: the invitation id is caller-controlled, so without them this method is an
+/// exfiltration primitive rather than a lookup.
 /// </para>
 /// </summary>
 public sealed class SurveyInvitationTokens(ClimateProjectDbContext db) : ISurveyInvitationTokens
 {
-    public async Task<string?> LiveTokenAsync(Guid invitationId, CancellationToken cancellationToken)
+    public async Task<string?> LiveTokenAsync(
+        Guid invitationId,
+        Guid recipientUserId,
+        Guid companyId,
+        CancellationToken cancellationToken)
     {
         var token = await db.SurveyInvitations
             .AsNoTracking()
-            .Where(i => i.Id == invitationId && i.Status != SurveyInvitationStatuses.Revoked)
+            .Where(i => i.Id == invitationId
+                        && i.UserId == recipientUserId
+                        && i.CompanyId == companyId
+                        && i.Status != SurveyInvitationStatuses.Revoked)
             .Select(i => i.InvitationToken)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);

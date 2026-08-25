@@ -4,6 +4,7 @@ using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Notifications;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ClimateProject.UnitTests.Notifications;
@@ -39,8 +40,8 @@ public class EmailNotificationSenderTests
     private static Notification Notification(string channel, string type = NotificationTypes.SurveyInvitation) => new()
     {
         Id = Guid.NewGuid(),
-        UserId = Guid.NewGuid(),
-        CompanyId = Guid.NewGuid(),
+        UserId = RecipientUserId,
+        CompanyId = CompanyId,
         Type = type,
         Channel = channel,
         Status = NotificationStatuses.Pending,
@@ -49,8 +50,13 @@ public class EmailNotificationSenderTests
         Data = SurveyNotificationData.Serialize(SurveyId, InvitationId),
     };
 
+    /// <summary>The addressee. Stable, so the scope the sender passes can be asserted.</summary>
+    private static readonly Guid RecipientUserId = Guid.NewGuid();
+
+    private static readonly Guid CompanyId = Guid.NewGuid();
+
     private static NotificationRecipient Recipient()
-        => new(Guid.NewGuid(), "ana@example.com", "Ana", ContentLanguages.Spanish);
+        => new(RecipientUserId, "ana@example.com", "Ana", ContentLanguages.Spanish);
 
     private static EmailNotificationSender Sender(RecordingTransport transport, ISurveyInvitationTokens? tokens = null)
         => new(transport, Options(), tokens ?? new RecordingTokens(Token), NullLogger<EmailNotificationSender>.Instance);
@@ -166,8 +172,10 @@ public class EmailNotificationSenderTests
         await Sender(transport, tokens).SendAsync(
             Notification(NotificationChannels.Email, type), Recipient(), CancellationToken.None);
 
-        // The lookup is keyed by the id the payload carried, not by anything invented here.
-        Assert.Equal(InvitationId, Assert.Single(tokens.Lookups));
+        // Keyed by the id the payload carried -- and scoped to the mailbox this is addressed
+        // to and to the notification's own tenant, which is what stops the caller's choice of
+        // id from being a choice of victim.
+        Assert.Equal(new Lookup(InvitationId, RecipientUserId, CompanyId), Assert.Single(tokens.Lookups));
 
         var expected = $"https://app.example.com/survey-invitations/{Token}";
         var sent = Assert.Single(transport.Sent);
@@ -287,6 +295,43 @@ public class EmailNotificationSenderTests
     }
 
     [Fact]
+    public async Task An_invitation_that_is_not_this_recipients_yields_no_link()
+    {
+        // The lookup answers null for "not yours" exactly as it does for "revoked" -- and the
+        // sender must not distinguish them. This is the sender's half of the cross-tenant
+        // defect; the scope it PASSES is asserted above, and the scope being ENFORCED is
+        // asserted against the real database in InvitationEmailLinkTests.
+        var transport = new RecordingTransport(EmailSendOutcome.Success());
+
+        var result = await Sender(transport, new RecordingTokens(token: null)).SendAsync(
+            Notification(NotificationChannels.Email), Recipient(), CancellationToken.None);
+
+        Assert.True(result.Delivered);
+        Assert.DoesNotContain("survey-invitations", Assert.Single(transport.Sent).TextBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_token_is_never_written_to_a_log()
+    {
+        // `SurveyAccessTokens` states these are never logged, and until this test nothing
+        // enforced it: logging the composed URL at Information compiled and survived the whole
+        // suite. A token in an application log is a bearer credential in a log aggregator,
+        // readable by everyone who can read operational logs and outliving the survey itself.
+        var transport = new RecordingTransport(EmailSendOutcome.Success());
+        var logger = new CapturingLogger();
+
+        await new EmailNotificationSender(transport, Options(), new RecordingTokens(Token), logger)
+            .SendAsync(Notification(NotificationChannels.Email), Recipient(), CancellationToken.None);
+
+        // The mail really did carry it -- otherwise this passes for the wrong reason.
+        Assert.Contains(Token, Assert.Single(transport.Sent).TextBody, StringComparison.Ordinal);
+
+        Assert.NotEmpty(logger.Lines);
+        Assert.DoesNotContain(logger.Lines, line => line.Contains(Token, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(logger.Lines, line => line.Contains("survey-invitations", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void A_delivery_result_is_transient_unless_it_says_otherwise()
     {
         // Permanent is an init property rather than a fourth positional parameter precisely so
@@ -302,21 +347,63 @@ public class EmailNotificationSenderTests
     /// "no link was rendered" is satisfied by a sender that queried and then discarded the
     /// answer, and that sender costs a round trip on every non-survey mail in the batch.
     /// </summary>
+    /// <summary>
+    /// One call to the lookup, recorded whole. The SCOPE is recorded, not just the id: the id
+    /// is caller-controlled, so "which invitation" is the least interesting third of the
+    /// question and "whose, in which tenant" is the part that stops it being an exfiltration
+    /// primitive.
+    /// </summary>
+    private sealed record Lookup(Guid InvitationId, Guid RecipientUserId, Guid CompanyId);
+
     private sealed class RecordingTokens(string? token) : ISurveyInvitationTokens
     {
-        public List<Guid> Lookups { get; } = [];
+        public List<Lookup> Lookups { get; } = [];
 
-        public Task<string?> LiveTokenAsync(Guid invitationId, CancellationToken cancellationToken)
+        public Task<string?> LiveTokenAsync(
+            Guid invitationId,
+            Guid recipientUserId,
+            Guid companyId,
+            CancellationToken cancellationToken)
         {
-            Lookups.Add(invitationId);
+            Lookups.Add(new Lookup(invitationId, recipientUserId, companyId));
             return Task.FromResult(token);
         }
     }
 
     private sealed class ThrowingTokens : ISurveyInvitationTokens
     {
-        public Task<string?> LiveTokenAsync(Guid invitationId, CancellationToken cancellationToken)
+        public Task<string?> LiveTokenAsync(
+            Guid invitationId,
+            Guid recipientUserId,
+            Guid companyId,
+            CancellationToken cancellationToken)
             => throw new InvalidOperationException("The database is not reachable.");
+    }
+
+    /// <summary>Every formatted log line the sender wrote, so a leak is assertable.</summary>
+    private sealed class CapturingLogger : ILogger<EmailNotificationSender>
+    {
+        public List<string> Lines { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            ArgumentNullException.ThrowIfNull(formatter);
+
+            // The formatted message AND the raw state: a structured logging sink writes the
+            // property values too, so asserting only on the rendered string would miss a token
+            // smuggled in as a named property.
+            Lines.Add(formatter(state, exception));
+            Lines.Add(state?.ToString() ?? string.Empty);
+        }
     }
 
     private sealed class RecordingTransport(EmailSendOutcome outcome) : IEmailTransport

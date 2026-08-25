@@ -7,6 +7,8 @@ using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Notifications;
+using ClimateProject.Infrastructure.Persistence;
+using ClimateProject.Infrastructure.Scheduling;
 using ClimateProject.IntegrationTests.Support;
 using ClimateProject.IntegrationTests.Surveys;
 using Microsoft.AspNetCore.Hosting;
@@ -14,6 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace ClimateProject.IntegrationTests.Notifications;
@@ -333,6 +336,247 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
         Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.TextBody, StringComparison.Ordinal);
         Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.HtmlBody, StringComparison.Ordinal);
         Assert.Contains("The platform will be briefly unavailable", message.TextBody, StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------------------------------
+    // The exfiltration primitive, and the scope that closes it
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// <b>The exploit, same tenant.</b> `POST /notifications` writes `data` verbatim, so a
+    /// CompanyAdmin may choose which invitation id the sender looks up. Named on its own that
+    /// is an exfiltration primitive: point a `survey_invitation` at a colleague's invitation,
+    /// address it to yourself, and the sender resolves THEIR token and mails it to YOU -- after
+    /// which you open their survey as them.
+    ///
+    /// <para>
+    /// This is the capability the producer-side design removed when it kept tokens out of
+    /// `data`. Re-admitting it through the lookup key would have undone the whole point, and
+    /// the class docs' claim that no payload can change the URL's host or shape is true and
+    /// beside the point: the attacker was never changing the shape, only whose token was in it.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task An_admin_cannot_have_another_employees_token_mailed_to_themselves()
+    {
+        var client = await AdminAsync();
+        var survey = await CreateActiveSurveyAsync(client);
+        var (victimId, _) = await SeedEmployeeAsync();
+        var (attackerId, attackerEmail) = await SeedEmployeeAsync();
+
+        var invited = await client.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/invitations", new CreateSurveyInvitationsRequest(UserIds: [victimId]));
+        invited.EnsureSuccessStatusCode();
+        var victimInvitationId = (await invited.Content.ReadFromJsonAsync<SurveyInvitationBatchResult>())!.InvitationIds[0];
+
+        var victimToken = await _harness.WithDbAsync(db => db.SurveyInvitations
+            .AsNoTracking().Where(i => i.Id == victimInvitationId).Select(i => i.InvitationToken).FirstAsync());
+
+        // The attack: the attacker's own user, the attacker's own company -- both of which
+        // CanAccessCompany happily authorises -- and the VICTIM's invitation id in `data`.
+        var posted = await client.PostAsJsonAsync("/notifications", new CreateNotificationRequest(
+            UserId: attackerId,
+            CompanyId: _companyId,
+            Type: NotificationTypes.SurveyInvitation,
+            Channel: NotificationChannels.Email,
+            Priority: NotificationPriorities.Default,
+            Title: "Your survey",
+            Message: "Please respond.",
+            Data: SurveyNotificationData.Serialize(survey.Id, victimInvitationId)));
+        posted.EnsureSuccessStatusCode();
+
+        // The mail is delivered -- the attack does not fail loudly, which is exactly why this
+        // needs asserting on the body rather than on a status.
+        var message = Assert.Single(_mail.Mailbox.To(attackerEmail));
+        Assert.Equal(NotificationStatuses.Sent, (await posted.Content.ReadFromJsonAsync<NotificationDetail>())!.Status);
+
+        // ...and it carries nothing the attacker can use.
+        Assert.DoesNotContain(victimToken, message.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(victimToken, message.HtmlBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.HtmlBody, StringComparison.Ordinal);
+
+        // The victim's invitation is untouched and still theirs -- the attempt neither
+        // consumed nor revoked it.
+        Assert.Equal(victimToken, await _harness.WithDbAsync(db => db.SurveyInvitations
+            .AsNoTracking().Where(i => i.Id == victimInvitationId).Select(i => i.InvitationToken).FirstAsync()));
+    }
+
+    /// <summary>
+    /// <b>The exploit, across tenants.</b> The same attack aimed at another company's
+    /// invitation. Worth its own test rather than folding into the one above: the two are
+    /// stopped by two different predicates, so a fix that scoped by user but not by company
+    /// would leave this one live, and vice versa.
+    /// </summary>
+    [Fact]
+    public async Task An_admin_cannot_have_another_TENANTS_token_mailed_to_themselves()
+    {
+        // A second tenant, with its own admin, its own survey and its own invitee.
+        var otherCompanyId = await _harness.SeedCompanyAsync("Mail Link Victim Co");
+        var otherAdmin = await _harness.ClientAsync(Roles.CompanyAdmin, otherCompanyId);
+
+        var victimId = await _harness.WithDbAsync(async db =>
+        {
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = otherCompanyId,
+                Email = $"{Guid.NewGuid():N}@victim.test",
+                Name = "Victim",
+                Role = Roles.Employee,
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            };
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
+            return user.Id;
+        });
+
+        var otherSurvey = await SurveyTestHarness.CreateSurveyAsync(
+            otherAdmin, SurveyTestHarness.MinimalRequest(otherCompanyId));
+        (await SurveyTestHarness.SetStatusAsync(otherAdmin, otherSurvey.Id, SurveyStatuses.Active))
+            .EnsureSuccessStatusCode();
+
+        var invited = await otherAdmin.PostAsJsonAsync(
+            $"/surveys/{otherSurvey.Id}/invitations", new CreateSurveyInvitationsRequest(UserIds: [victimId]));
+        invited.EnsureSuccessStatusCode();
+        var victimInvitationId = (await invited.Content.ReadFromJsonAsync<SurveyInvitationBatchResult>())!.InvitationIds[0];
+        var victimToken = await _harness.WithDbAsync(db => db.SurveyInvitations
+            .AsNoTracking().Where(i => i.Id == victimInvitationId).Select(i => i.InvitationToken).FirstAsync());
+
+        // Tenant A's admin, addressing tenant A's own employee, naming tenant B's invitation.
+        var client = await AdminAsync();
+        var (attackerId, attackerEmail) = await SeedEmployeeAsync();
+
+        var posted = await client.PostAsJsonAsync("/notifications", new CreateNotificationRequest(
+            UserId: attackerId,
+            CompanyId: _companyId,
+            Type: NotificationTypes.SurveyInvitation,
+            Channel: NotificationChannels.Email,
+            Priority: NotificationPriorities.Default,
+            Title: "Your survey",
+            Message: "Please respond.",
+            Data: SurveyNotificationData.Serialize(otherSurvey.Id, victimInvitationId)));
+        posted.EnsureSuccessStatusCode();
+
+        var message = Assert.Single(_mail.Mailbox.To(attackerEmail));
+        Assert.DoesNotContain(victimToken, message.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(victimToken, message.HtmlBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.TextBody, StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------------------------------
+    // The scheduled reminder path, and what a sweep costs
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// <b>The reminder job is the path that runs in production.</b> `Jobs.cs` ticks
+    /// `InvitationReminderJob` in the Workers host on a cadence; the manual
+    /// `POST /surveys/{id}/invitations/reminders` endpoint is not what nudges a real invitee.
+    /// The job raised `survey_reminder` rows with no `Data` at all, so every scheduled reminder
+    /// mailed a message telling somebody to follow a link it did not contain -- the original
+    /// defect, surviving in the half nobody looked at.
+    ///
+    /// <para>
+    /// Driven through the real job rather than by hand-writing a row, because hand-writing the
+    /// payload is exactly the mistake that made this invisible: a test that sets `Data` itself
+    /// proves the sender's type guard and says nothing about whether any producer writes it.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_scheduled_reminder_carries_a_link_just_as_the_invitation_did()
+    {
+        var client = await AdminAsync();
+        var survey = await CreateActiveSurveyAsync(client);
+        var (employeeId, employeeEmail) = await SeedEmployeeAsync();
+
+        var invited = await client.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/invitations", new CreateSurveyInvitationsRequest(UserIds: [employeeId]));
+        invited.EnsureSuccessStatusCode();
+
+        // Age the invitation past the reminder cadence so the job finds it due.
+        await _harness.WithDbAsync(async db =>
+        {
+            var invitation = await db.SurveyInvitations.FirstAsync(i => i.UserId == employeeId && i.SurveyId == survey.Id);
+            invitation.SentAt = DateTimeOffset.UtcNow.AddDays(-30);
+            invitation.Status = SurveyInvitationStatuses.Sent;
+            await db.SaveChangesAsync();
+        });
+
+        // The real job, in a scope of the real host.
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            // RunAsync is the entry point Jobs.cs ticks in the Workers host -- the real
+            // producer, saved by the job itself.
+            var swept = await InvitationReminderJob.RunAsync(
+                db,
+                scope.ServiceProvider.GetRequiredService<ILoggerFactory>(),
+                DateTimeOffset.UtcNow,
+                InvitationReminderJob.DefaultBatchSize,
+                CancellationToken.None);
+            Assert.True(swept.Raised >= 1, "the reminder job raised nothing, so this assertion would be vacuous");
+        }
+
+        await SweepAsync(client);
+
+        var token = await _harness.WithDbAsync(db => db.SurveyInvitations
+            .AsNoTracking().Where(i => i.SurveyId == survey.Id && i.UserId == employeeId)
+            .Select(i => i.InvitationToken).FirstAsync());
+        var expected = $"{CapturingMailHostFixture.AppBaseUrl}/survey-invitations/{token}";
+
+        // Both mails -- the invitation and the scheduled reminder -- and both parts of each.
+        var messages = _mail.Mailbox.To(employeeEmail);
+        Assert.Equal(2, messages.Count);
+        Assert.All(messages, m => Assert.Contains(expected, m.TextBody, StringComparison.Ordinal));
+        Assert.All(messages, m => Assert.Contains($"href=\"{expected}\"", m.HtmlBody, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// <b>What the link costs, pinned.</b> `NotificationDelivery` issues no per-notification
+    /// query, but the SENDER now issues exactly one per survey mail. That is a real change to
+    /// the sweep's cost and the comment there states it; this is what stops the statement from
+    /// drifting. The existing budget test cannot see it -- it dispatches
+    /// `system_notification` over `in_app`, which never reaches the lookup.
+    /// </summary>
+    [Fact]
+    public async Task A_sweep_costs_exactly_one_extra_query_per_invitation_mailed()
+    {
+        var client = await AdminAsync();
+        var survey = await CreateActiveSurveyAsync(client);
+
+        async Task<int> CostOfSweepingAsync(int invitees)
+        {
+            var ids = new List<Guid>();
+            for (var i = 0; i < invitees; i++)
+            {
+                ids.Add((await SeedEmployeeAsync()).Id);
+            }
+
+            (await client.PostAsJsonAsync(
+                $"/surveys/{survey.Id}/invitations",
+                new CreateSurveyInvitationsRequest(UserIds: ids))).EnsureSuccessStatusCode();
+
+            _factory.CommandCounter.Reset();
+            var swept = await SweepAsync(client);
+            Assert.Equal(invitees, swept.Sent);
+            return _factory.CommandCounter.Count;
+        }
+
+        var forOne = await CostOfSweepingAsync(1);
+        var forFive = await CostOfSweepingAsync(5);
+
+        Assert.True(forOne > 0, "the interceptor observed no database commands, so this assertion would be vacuous");
+
+        // Four more invitations, four more lookups, and nothing else that scales. Stated as a
+        // bound rather than an equality for the reason the bulk-dispatch budget gives: how EF
+        // packs the batch's writes into commands is a provider heuristic. A second per-mail
+        // query -- or loading the whole SurveyInvitation entity -- costs four more than this.
+        Assert.True(
+            forFive <= forOne + 4 + 1,
+            $"sweeping 1 invitation cost {forOne} command(s) and sweeping 5 cost {forFive}; "
+            + "the per-mail cost has grown beyond the single token lookup that is documented on NotificationDelivery");
     }
 
     /// <summary>
