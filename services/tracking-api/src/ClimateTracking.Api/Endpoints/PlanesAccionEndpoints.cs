@@ -128,8 +128,23 @@ public static class PlanesAccionEndpoints
     {
         var currentUser = user.GetCurrentUser();
 
-        IQueryable<PlanDeAccion> query = db.PlanesDeAccion;
+        var plans = await Visible(db.PlanesDeAccion, currentUser, nodoId, estado).ToListAsync(cancellationToken);
+        return Results.Ok(plans.Select(PlanResponse.From));
+    }
 
+    /// <summary>
+    /// The plans <paramref name="currentUser"/> is allowed to see, narrowed by the optional
+    /// nodo and estado filters.
+    /// </summary>
+    /// <remarks>
+    /// Shared with the Excel export (<see cref="TrackingSheetExportEndpoints"/>) rather than
+    /// restated there: a caller must never be able to read through a spreadsheet a row that the
+    /// list endpoint would have withheld, and the cheapest way to guarantee that is for both to
+    /// be the same predicate.
+    /// </remarks>
+    internal static IQueryable<PlanDeAccion> Visible(
+        IQueryable<PlanDeAccion> query, CurrentUser currentUser, string? nodoId, string? estado)
+    {
         if (!Roles.Admin.Contains(currentUser.Role))
         {
             // InvolucradosExternalIds is Ignore()'d in EF config (it's a read-only wrapper
@@ -151,8 +166,7 @@ public static class PlanesAccionEndpoints
             query = query.Where(p => p.EstadoSemaforo == parsedEstado);
         }
 
-        var plans = await query.ToListAsync(cancellationToken);
-        return Results.Ok(plans.Select(PlanResponse.From));
+        return query;
     }
 
     private static async Task<IResult> GetByIdAsync(
