@@ -92,6 +92,42 @@ describe('buildTrend', () => {
     expect(series[0].points[1].changeRatio).toBeNull()
   })
 
+  /**
+   * The same 1.2 s / 1200 ms case `buildComparison` already refuses, one period apart
+   * instead of side by side — and worse here, because two periods of one metric is
+   * exactly the pair a reader is there to subtract. The API withholds this delta
+   * (`BenchmarkPriorPeriod.BuildChanges`); this is the half that renders.
+   */
+  it('withholds the change when the metric changed unit between periods', () => {
+    const series = buildTrend([
+      benchmark('q2', [metric('responseTime', 1200, 'ms')]),
+      benchmark('q1', [metric('responseTime', 1.2, 's')]),
+    ])
+
+    const [older, newer] = series[0].points
+    expect(newer.value).toBe(1200)
+    // 1200 − 1.2 = 1198.8, a catastrophic regression that is the same reading twice.
+    expect(newer.delta).toBeNull()
+    expect(newer.changeRatio).toBeNull()
+    expect(newer.unitsDiffer).toBe(true)
+    // The first period has nothing before it, which is a different kind of nothing.
+    expect(older.delta).toBeNull()
+    expect(older.unitsDiffer).toBe(false)
+  })
+
+  it('starts comparing again once two periods agree on the unit', () => {
+    const series = buildTrend([
+      benchmark('q3', [metric('responseTime', 1100, 'ms')]),
+      benchmark('q2', [metric('responseTime', 1200, 'ms')]),
+      benchmark('q1', [metric('responseTime', 1.2, 's')]),
+    ])
+
+    // A unit change is not a poison pill for the rest of the series: only the step
+    // that crosses it is withheld.
+    expect(series[0].points.map((point) => point.delta)).toEqual([null, null, -100])
+    expect(series[0].points.map((point) => point.unitsDiffer)).toEqual([false, true, false])
+  })
+
   it('leaves a gap null rather than spanning two periods as one change', () => {
     const series = buildTrend([
       benchmark('q3', [metric('engagement', 90)]),

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import type { Benchmark, PriorPeriodCandidate, PriorPeriodStatus } from '../api/benchmarks'
+import type { Benchmark, BenchmarkMetricChange, PriorPeriodCandidate, PriorPeriodStatus } from '../api/benchmarks'
 import { useTranslation } from '../../../i18n'
-import { Button } from '../../../components/ui'
+import { Button, Table } from '../../../components/ui'
+import { formatMetric } from '../../../components/charts'
 
 export interface BenchmarkPriorPeriodPanelProps {
   benchmark: Benchmark
@@ -47,6 +48,19 @@ export interface BenchmarkPriorPeriodPanelProps {
  * benchmark has no period field, only `createdAt`, so an automatic match is a guess, and a
  * wrong guess produces a confidently wrong year-over-year figure that a reader has no way
  * to check. A blank column is recoverable; an invented comparison is not.
+ *
+ * ## And then it shows the numbers
+ *
+ * `priorPeriod.metrics` is the year-over-year reading itself — this period's value, the
+ * prior period's, the change and the change as a fraction — computed once on the server in
+ * `BenchmarkPriorPeriod.BuildChanges` so that the report section (#88) and the tracking
+ * module's `resultado_anio_anterior_pct` cannot come out different. It reached no screen at
+ * all until this table: the panel named the prior period and stopped, and the only figures a
+ * reader saw came from the browser's own `buildTrend`, which is a separate derivation over a
+ * chain. A feature that computes a comparison nobody can look at has not been delivered.
+ *
+ * Where the server withheld the change it says why rather than leaving a gap — a metric only
+ * one of the two periods recorded, or the same metric recorded in two different units.
  */
 export default function BenchmarkPriorPeriodPanel({
   benchmark,
@@ -54,7 +68,7 @@ export default function BenchmarkPriorPeriodPanel({
   loadCandidates,
   onSet,
 }: BenchmarkPriorPeriodPanelProps) {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const [candidates, setCandidates] = useState<PriorPeriodCandidate[] | null>(null)
   const [selected, setSelected] = useState('')
   const [busy, setBusy] = useState(false)
@@ -82,6 +96,21 @@ export default function BenchmarkPriorPeriodPanel({
       cancelled = true
     }
   }, [benchmark.id, canWrite, linked, loadCandidates])
+
+  /**
+   * One period's reading of one metric, or the fact that this period did not record it.
+   *
+   * Never `0` and never a dash for a missing value: a metric nobody measured and a metric
+   * measured at zero are different facts, and the whole table exists to be differenced.
+   */
+  function reading(value: number | null, unit: string | null) {
+    if (value === null) return <span className="text-fg-tertiary">{t('benchmarks.notRecorded')}</span>
+    return (
+      <span className="font-mono text-base font-semibold tabular-nums">
+        {`${formatMetric(value, { kind: 'number' }, locale)} ${unit ?? ''}`.trim()}
+      </span>
+    )
+  }
 
   async function apply(status: PriorPeriodStatus, priorId?: string) {
     setBusy(true)
@@ -128,9 +157,59 @@ export default function BenchmarkPriorPeriodPanel({
       )}
 
       {linked && benchmark.priorPeriod !== null && (
-        <p className="mb-0 max-w-prose text-sm text-fg-secondary">
-          {t('benchmarks.priorPeriodLinkedTo', { name: benchmark.priorPeriod.name })}
-        </p>
+        <>
+          <p className="mb-inline max-w-prose text-sm text-fg-secondary">
+            {t('benchmarks.priorPeriodLinkedTo', { name: benchmark.priorPeriod.name })}
+          </p>
+
+          {benchmark.priorPeriod.metrics.length > 0 && (
+            <div className="rounded-lg border border-line-light bg-surface-panel p-card">
+              <Table>
+                <thead>
+                  <tr>
+                    <th>{t('benchmarks.metricName')}</th>
+                    <th className="text-right">{benchmark.name}</th>
+                    <th className="text-right">{benchmark.priorPeriod.name}</th>
+                    <th className="text-right">{t('benchmarks.delta')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {benchmark.priorPeriod.metrics.map((change: BenchmarkMetricChange) => (
+                    <tr key={change.metricName}>
+                      <td>{change.metricName}</td>
+                      <td className="text-right">{reading(change.value, change.unit)}</td>
+                      <td className="text-right">{reading(change.priorValue, change.priorUnit)}</td>
+                      <td className="text-right">
+                        {change.delta === null ? (
+                          <span className="text-fg-tertiary">
+                            {/* The two periods both recorded it and disagreed about the unit
+                                is the only way a change goes missing with both values
+                                present; anything else is a metric one period did not record,
+                                and the row already shows which. */}
+                            {change.value !== null && change.priorValue !== null
+                              ? t('benchmarks.unitsDiffer')
+                              : '—'}
+                          </span>
+                        ) : (
+                          <>
+                            <span className="font-mono text-base font-semibold tabular-nums">
+                              {`${change.delta >= 0 ? '+' : '−'}${formatMetric(Math.abs(change.delta), { kind: 'number' }, locale)}`}
+                            </span>
+                            {change.changeRatio !== null && (
+                              <span className="ml-1 font-mono text-xs tabular-nums text-fg-secondary">
+                                {`${change.changeRatio >= 0 ? '+' : '−'}${formatMetric(Math.abs(change.changeRatio) * 100, { kind: 'percentage' }, locale)}`}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          )}
+        </>
       )}
 
       {canWrite && (

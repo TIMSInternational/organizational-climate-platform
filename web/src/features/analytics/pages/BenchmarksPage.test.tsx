@@ -505,6 +505,113 @@ describe('BenchmarksPage comparison and trend', () => {
   })
 
   /**
+   * The year-over-year figures, on a screen at last.
+   *
+   * `priorPeriod.metrics` is what the whole feature computes — this period against the last,
+   * differenced once on the server so that #88's report section and the tracking module's
+   * `resultado_anio_anterior_pct` cannot disagree with the page. Until this table it reached
+   * no screen at all: the panel printed the prior period's *name* and stopped, and the only
+   * numbers a reader saw came from the browser's own chain derivation.
+   *
+   * Asserted on the rendered cells, including the two shapes of missing: a metric only one
+   * period recorded, and a change the server declined to compute.
+   */
+  it('shows the year-over-year figures the API computed', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [/\/prior-period\/candidates$/, () => []],
+      [
+        /\/admin\/benchmarks\/o$/,
+        () =>
+          detail('o', 'Our 2026 baseline', OWN, {
+            priorPeriodStatus: 'linked',
+            priorPeriodBenchmarkId: 'p',
+            metrics: [{ id: 'o-m', metricName: 'engagement', value: 74, unit: '%', percentile: null, sampleSize: null }],
+            priorPeriod: {
+              id: 'p',
+              name: 'Our 2025 baseline',
+              metrics: [
+                { metricName: 'engagement', value: 74, unit: '%', priorValue: 70, priorUnit: '%', delta: 4, changeRatio: 4 / 70 },
+                // Recorded last year, not this year: the row still appears, because a
+                // measurement that stopped is itself worth seeing.
+                { metricName: 'absence', value: null, unit: null, priorValue: 3, priorUnit: 'days', delta: null, changeRatio: null },
+                // Both periods recorded it, in units that do not agree, so the server
+                // withheld the change and the cell has to say which kind of missing it is.
+                { metricName: 'responseTime', value: 1200, unit: 'ms', priorValue: 1.2, priorUnit: 's', delta: null, changeRatio: null },
+              ],
+            },
+          }),
+      ],
+      [
+        /\/admin\/benchmarks\/p$/,
+        () =>
+          detail('p', 'Our 2025 baseline', OWN, {
+            metrics: [{ id: 'p-m', metricName: 'engagement', value: 70, unit: '%', percentile: null, sampleSize: null }],
+          }),
+      ],
+      [/\/admin\/benchmarks(\?|$)/, () => [listRow('o', 'Our 2026 baseline', OWN)]],
+    ])
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Our 2026 baseline/ }))
+
+    const panel = (await screen.findByRole('heading', { name: 'Prior period', level: 2 })).closest('section')!
+    expect(within(panel).getByText('Compared against Our 2025 baseline.')).toBeTruthy()
+
+    const rows = [...panel.querySelectorAll('tbody tr')].map((row) => row.textContent)
+    // 74 % this period, 70 % last, +4, and +5.7% of what it was.
+    expect(rows[0]).toContain('70 %')
+    expect(rows[0]).toContain('+4')
+    expect(rows[0]).toContain('+5.7%')
+    // The metric this period did not record: last year's reading, and no invented zero.
+    expect(rows[1]).toContain('3 days')
+    expect(rows[1]).toContain('Not recorded')
+    // 1200 ms against 1.2 s is the same reading twice; the change must not appear at all.
+    expect(rows[2]).toContain('Units differ')
+    expect(rows[2]).not.toContain('1,198.8')
+  })
+
+  /**
+   * The delta the server refuses to compute must not turn up on the page under a different
+   * name. `buildTrend` walks the chain the browser assembles itself, so it is a second
+   * implementation of "current minus prior" — and it did the subtraction blind, printing a
+   * −69.3 collapse directly beneath an API response that had correctly withheld it.
+   */
+  it('refuses to difference the trend across a change of unit', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [/\/prior-period\/candidates$/, () => []],
+      [
+        /\/admin\/benchmarks\/q2$/,
+        () =>
+          detail('q2', 'Q2 2026', OWN, {
+            priorPeriodStatus: 'linked',
+            priorPeriodBenchmarkId: 'q1',
+            priorPeriod: { id: 'q1', name: 'Q1 2026', metrics: [] },
+            metrics: [{ id: 'q2-m', metricName: 'engagement', value: 0.74, unit: 'fraction', percentile: null, sampleSize: null }],
+          }),
+      ],
+      [
+        /\/admin\/benchmarks\/q1$/,
+        () =>
+          detail('q1', 'Q1 2026', OWN, {
+            metrics: [{ id: 'q1-m', metricName: 'engagement', value: 70, unit: 'percent', percentile: null, sampleSize: null }],
+          }),
+      ],
+      [/\/admin\/benchmarks(\?|$)/, () => [listRow('q2', 'Q2 2026', OWN)]],
+    ])
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Q2 2026/ }))
+
+    const trend = await screen.findByRole('heading', { name: 'Trend over prior periods', level: 2 })
+    const table = trend.parentElement!.querySelector('table')!
+    expect(table.textContent).toContain('Units differ')
+    // −69.3 is what a blind subtraction prints, and it is a collapse that never happened.
+    expect(table.textContent).not.toMatch(/[+−-]\s?69/)
+  })
+
+  /**
    * Linking is a human act, all the way to the button. The page offers the shortlist the
    * API suggests and sends nothing until somebody picks one — an unambiguous candidate is
    * still not applied on its own.
