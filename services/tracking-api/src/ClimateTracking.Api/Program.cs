@@ -122,6 +122,7 @@ app.MapGet("/api/whoami", (ClaimsPrincipal user) => Results.Ok(user.GetCurrentUs
     .RequireAuthorization();
 
 app.MapPlanesAccionEndpoints();
+app.MapTrackingSheetExportEndpoints();
 app.MapDashboardEndpoints();
 
 app.Run();

@@ -7,6 +7,22 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authorization" Version="10.0.0" />
     <!--
+      The first spreadsheet library in this repository, for TrackingSheetExport. MIT, and
+      chosen over writing DocumentFormat.OpenXml (also MIT, and pulled in transitively by
+      this anyway) by hand: the whole sheet is thirty lines here against a few hundred of
+      SharedStringTable, cellXfs and column-reference arithmetic there, and every one of
+      those hundreds is a place to get the client's template wrong.
+
+      Version pinned here because this repository has no Directory.Packages.props.
+
+      It is referenced from Application rather than from Api so the column contract stays
+      unit-testable without spinning up the web host, which is what the class was designed
+      for. That does put the library in ClimateTracking.Workers' output as well, which does
+      not use it; unlike the JwtBearer case noted below the cost is only disk, since
+      ClosedXML targets netstandard2.0 and carries no FrameworkReference.
+    -->
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
+    <!--
       For TrackingTokenValidation. Microsoft.IdentityModel.Tokens rather than the
       Microsoft.AspNetCore.Authentication.JwtBearer package that owns the handler: JwtBearer
       carries a FrameworkReference on Microsoft.AspNetCore.App, and this assembly is also
