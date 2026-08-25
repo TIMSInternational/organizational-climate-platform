@@ -938,6 +938,37 @@ public class BenchmarkAnalyticsEndpointsTests : IAsyncLifetime
         Assert.Empty(await db.Benchmarks.AsNoTracking().Where(b => b.Category == category).ToListAsync());
     }
 
+    /// <summary>
+    /// A field longer than its column is answered as a bad request, not as a broken server.
+    ///
+    /// <para>
+    /// This is the ordinary shape of a real vendor file: a benchmark name that runs long. Left
+    /// to the database it is a Postgres 22001 surfacing as a 500, which tells the person
+    /// holding the file that the product is broken rather than that one row needs shortening.
+    /// The status code IS the assertion here -- a 500 would also have written nothing, and
+    /// asserting only "nothing was written" would pass on the defect.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Import_answers_an_over_long_field_with_a_bad_request_not_a_server_error()
+    {
+        var client = await ClientAsync(Roles.SuperAdmin, _companyADomain);
+        var category = $"import-long-{Guid.NewGuid():N}";
+
+        var response = await client.PostAsJsonAsync("/admin/benchmarks/import", new ImportBenchmarksRequest(
+            [Item(new string('n', 201), null, category, new ImportBenchmarkMetricItem("engagement_score", 70, "percent", null, 100))],
+            ValidateOnly: null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(0, body.RootElement.GetProperty("errors")[0].GetProperty("index").GetInt32());
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.Empty(await db.Benchmarks.AsNoTracking().Where(b => b.Category == category).ToListAsync());
+    }
+
     /// <summary>An import with nothing in it is a mistake, not an empty success.</summary>
     [Fact]
     public async Task Import_refuses_an_empty_payload()

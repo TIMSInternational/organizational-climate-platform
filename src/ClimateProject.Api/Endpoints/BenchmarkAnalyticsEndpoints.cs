@@ -539,6 +539,27 @@ public static partial class BenchmarkEndpoints
     // -----------------------------------------------------------------------------------
 
     /// <summary>
+    /// The first field of <paramref name="item"/> that is longer than its column, or null.
+    /// </summary>
+    /// <remarks>
+    /// The widths are <c>BenchmarkConfiguration</c>'s. They are stated again here rather than
+    /// read from the model because the point is to answer the caller BEFORE the insert: a
+    /// length that only the database knows about can only be reported as a failed request.
+    /// </remarks>
+    private static string? TooLongField(ImportBenchmarkItem item)
+    {
+        if (item.Name?.Trim().Length > 200) return "Name must be 200 characters or fewer";
+        if (item.Description?.Trim().Length > 2000) return "Description must be 2000 characters or fewer";
+        if (item.Type?.Trim().Length > 20) return "Type must be 20 characters or fewer";
+        if (item.Category?.Trim().Length > 100) return "Category must be 100 characters or fewer";
+        if (item.Source?.Trim().Length > 200) return "Source must be 200 characters or fewer";
+        if (item.Industry?.Length > 100) return "Industry must be 100 characters or fewer";
+        if (item.CompanySize?.Length > 50) return "CompanySize must be 50 characters or fewer";
+        if (item.Region?.Length > 100) return "Region must be 100 characters or fewer";
+        return null;
+    }
+
+    /// <summary>
     /// Creates many benchmarks, with their metrics, in one transaction.
     /// </summary>
     /// <remarks>
@@ -616,11 +637,30 @@ public static partial class BenchmarkEndpoints
                 errors.Add(new ImportBenchmarkError(i, "Name, Description, Type, Category, and Source are required"));
             }
 
+            // Lengths are checked HERE and not left to the column widths. A vendor file with a
+            // three-hundred-character benchmark name is an ordinary thing to be sent, and
+            // Postgres answers it with a 22001 that surfaces as a 500 -- which tells the person
+            // holding the file that the product is broken rather than that row 47 is too long.
+            // The limits are BenchmarkConfiguration's and BenchmarkMetricConfiguration's; they
+            // are repeated because the alternative is discovering them one production error at
+            // a time.
+            var tooLong = TooLongField(item);
+            if (tooLong is not null)
+            {
+                errors.Add(new ImportBenchmarkError(i, tooLong));
+            }
+
             foreach (var metric in item.Metrics ?? [])
             {
                 if (string.IsNullOrWhiteSpace(metric.MetricName) || string.IsNullOrWhiteSpace(metric.Unit))
                 {
                     errors.Add(new ImportBenchmarkError(i, "Every metric needs a MetricName and a Unit"));
+                    break;
+                }
+
+                if (metric.MetricName.Trim().Length > 200 || metric.Unit.Trim().Length > 50)
+                {
+                    errors.Add(new ImportBenchmarkError(i, "MetricName must be 200 characters or fewer and Unit 50 or fewer"));
                     break;
                 }
 
