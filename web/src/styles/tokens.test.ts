@@ -195,7 +195,14 @@ describe('colour palette', () => {
     expect(token('--admin-border-default')).toBe('#dbe3ee')
     expect(token('--admin-font-primary')).toBe('#0d1626')
     expect(token('--admin-font-secondary')).toBe('#44536b')
-    expect(token('--admin-font-tertiary')).toBe('#78879c')
+    // Re-valued by #83, together with `--admin-font-section-label` and
+    // `--admin-font-light`: at #78879c this was 3.66:1 on white, and it is the ink
+    // on every `CardDescription`, `TableCaption` and breadcrumb in the product.
+    // `styles/inkContrast.test.ts` is what measures the new values; this line, as
+    // the block above says, only catches them changing AT ALL.
+    expect(token('--admin-font-tertiary')).toBe('#637287')
+    expect(token('--admin-font-section-label')).toBe('#637287')
+    expect(token('--admin-font-light')).toBe('#8090a7')
     // The shell frame itself. Pinned because it is the one token the redesign is
     // ABOUT: it is what "blue on the shell" means, and it is deliberately a separate
     // token from `--admin-bg-outer`, which is also the ground of the sign-in and

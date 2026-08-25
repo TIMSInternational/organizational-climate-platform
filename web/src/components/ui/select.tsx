@@ -41,7 +41,7 @@ export function SelectTrigger({
         'rounded-md border border-line-default bg-surface-input px-3 text-base text-fg-primary',
         'transition-[border-color] ease-out',
         'data-[size=default]:h-control-lg data-[size=sm]:h-control-md',
-        'data-[placeholder]:text-fg-light',
+        'data-[placeholder]:text-fg-tertiary',
         'hover:not-disabled:border-line-hover',
         'disabled:cursor-not-allowed disabled:opacity-50',
         'aria-invalid:border-accent-red',

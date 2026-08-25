@@ -96,21 +96,25 @@ function sources(): Array<[string, string]> {
  * All are text at `text-sm` (12px) or smaller inside a `Card`, so AA small-text is the
  * right threshold for every one of them. `--admin-bg-card` is what a `Card` paints.
  */
-const INK_ON_CARD = ['--admin-font-primary', '--admin-font-secondary'] as const
-
 /**
- * `--admin-font-tertiary` is deliberately absent from the list above, and that is a
- * finding rather than an omission.
+ * `--admin-font-tertiary` joined this list under #83, and the way it did is the
+ * point of writing findings down as numbers.
  *
- * Measured on `--admin-bg-card` it is **3.90:1 in light and 4.28:1 in dark** — below AA
- * 4.5:1 in *both* themes, so it is not even the usual one-theme blind spot. It was the
- * obvious token for the stat labels and the fieldset legends on this page, and this guard
- * rejected it on the first run; those now use `--admin-font-secondary`, which clears AA in
- * both. The token itself is used widely elsewhere (`TableCaption`, `TableEmpty`), so
- * repainting it is a change to a shared primitive and not this issue's to make — recorded
- * here so it is a known number rather than a surprise.
+ * It used to be excluded, with a note recording that it measured **3.90:1 in light
+ * and 4.28:1 in dark** on `--admin-bg-card` — below AA in both themes — and that
+ * "repainting it is a change to a shared primitive and not this issue's to make…
+ * recorded here so it is a known number rather than a surprise". The note ended by
+ * saying that if the token were ever repainted this file would fail and say the
+ * restriction could be lifted.
+ *
+ * #83 repainted it (`styles/tokens.css`, `styles/inkContrast.test.ts`), this file
+ * failed exactly as promised, and the restriction is lifted.
  */
-const TERTIARY_FAILS_AA = '--admin-font-tertiary'
+const INK_ON_CARD = [
+  '--admin-font-primary',
+  '--admin-font-secondary',
+  '--admin-font-tertiary',
+] as const
 
 describe('distribution components in both themes', () => {
   const { light, dark } = palettes()
@@ -124,16 +128,6 @@ describe('distribution components in both themes', () => {
   )('%s on a card clears AA in %s', (ink, _theme, palette) => {
     const ratio = contrastRatio(parseColor(palette[ink]), parseColor(palette['--admin-bg-card']))
     expect(ratio).toBeGreaterThanOrEqual(AA_SMALL_TEXT)
-  })
-
-  it.each(themes)('records that fg-tertiary would have failed on a card in %s', (_theme, palette) => {
-    // The defect this guard caught on its first run. Pinned as a number so that if the
-    // token is ever repainted, this fails and says the restriction can be lifted.
-    const ratio = contrastRatio(
-      parseColor(palette[TERTIARY_FAILS_AA]),
-      parseColor(palette['--admin-bg-card']),
-    )
-    expect(ratio).toBeLessThan(AA_SMALL_TEXT)
   })
 
   it('uses no ink on a card that has not been measured', () => {

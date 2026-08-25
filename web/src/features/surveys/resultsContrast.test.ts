@@ -109,12 +109,22 @@ const PAIRS: readonly Pair[] = [
 ]
 
 /**
- * The ink that actually shipped on the map, kept so the numbers in the docblock are
- * a measured comparison rather than a claim about nothing. `--admin-font-tertiary`
- * is #818181 in *both* palettes, which is why it failed the same way twice and why
- * checking dark did not reveal it.
+ * The vacuity control's ink: one that must genuinely FAIL AA, so a broken
+ * measurement cannot report everything as passing.
+ *
+ * This used to be `--admin-font-tertiary` — the ink that shipped on the map and
+ * could not be read on it. #83 repainted that token (`styles/tokens.css`), and it
+ * now clears 4.5:1 on both map surfaces in both themes, so it can no longer serve
+ * as the known-bad case. `--admin-font-light` took its place: it is the one ink
+ * this design system deliberately holds to 1.4.11's 3:1 instead of 1.4.3's 4.5:1,
+ * because nothing it paints is text (`styles/inkContrast.test.ts` enforces that),
+ * so it must measure BELOW 4.5 by construction.
+ *
+ * The source ban further down is kept as it was. Those three files use
+ * `--admin-font-secondary`, which is stronger than the floor either way, and
+ * relaxing another slice's guard is not this issue's to do.
  */
-const REJECTED_INK = '--admin-font-tertiary'
+const REJECTED_INK = '--admin-font-light'
 
 /** Surfaces ClimateMap is rendered on. */
 const MAP_SURFACES = ['--admin-bg-panel', '--admin-bg-icon-box'] as const
@@ -148,16 +158,9 @@ describe('the survey results screen reads in both themes', () => {
    * proving nothing about the defect it was written for.
    */
   it.each(MAP_SURFACES.flatMap((surface) => themes.map(([theme, palette]) => [theme, palette, surface] as const)))(
-    'the ink that shipped on the map does NOT clear AA in %s',
-    (theme, palette, surface) => {
+    'the non-text ink does NOT clear AA in %s',
+    (_theme, palette, surface) => {
       const ratio = contrastRatio(parseColor(palette[REJECTED_INK]), parseColor(palette[surface]))
-      // Dark on the bare panel is the one combination that scrapes past 4.5 (4.60),
-      // so it is excluded rather than asserted — the failure is real on the other
-      // three, which is what makes the swap necessary.
-      if (theme === 'dark' && surface === '--admin-bg-panel') {
-        expect(ratio).toBeGreaterThanOrEqual(AA_SMALL_TEXT)
-        return
-      }
       expect(ratio).toBeLessThan(AA_SMALL_TEXT)
     },
   )
