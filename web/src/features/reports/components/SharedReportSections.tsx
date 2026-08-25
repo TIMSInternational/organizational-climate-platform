@@ -1,8 +1,9 @@
 import { useTranslation } from '../../../i18n'
-import { Alert, AlertDescription, AlertTitle, Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui'
+import { Card, Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui'
 import KpiTile from '../../../components/charts/KpiTile'
 import { formatMetric } from '../../../components/charts/formatMetric'
 import ResultsSuppressionNotice from '../../surveys/components/ResultsSuppressionNotice'
+import { dimensionLabel } from '../../surveys/dimensionLabel'
 import type {
   ReportAIInsight,
   ReportDocument,
@@ -132,11 +133,17 @@ function SurveySection({ section }: { section: ReportSurveySection }) {
             <TableBody>
               {section.dimensions.map((dimension) => (
                 <TableRow key={dimension.dimension}>
-                  {/* The author's own category text, printed as authored. See
-                      `dimensionLabel` for why an uncatalogued category is not
-                      replaced with boilerplate — and note this surface, like the
-                      analyst's results page, prints the key verbatim. */}
-                  <TableCell>{dimension.dimension}</TableCell>
+                  {/* Through the product's own catalogue, not printed raw.
+                      `SurveyResultsPage` does print `psychological_safety` verbatim, and
+                      `dimensionLabel` says why that is right *there*: its reader is "an
+                      analyst reading a key they will filter and export by". The reader
+                      here is a board member, an auditor or a ministry contact who will
+                      never filter anything, and `enps` tells them nothing. So this takes
+                      the respondent's side of that split — the same lookup
+                      `SurveyRespondForm` heads its sections with — which also prints an
+                      uncatalogued category as its author wrote it rather than as
+                      boilerplate. */}
+                  <TableCell>{dimensionLabel(dimension.dimension, t)}</TableCell>
                   <TableCell className="font-mono tabular-nums">
                     {dimension.questionCount.toLocaleString(locale)}
                   </TableCell>
@@ -213,52 +220,69 @@ function SurveySection({ section }: { section: ReportSurveySection }) {
 /**
  * One AI insight, as a link holder reads it.
  *
- * `affectedSegments` is deliberately **not** rendered, and it is the one omission on
- * this page that is a judgement rather than a projection. It is a free list of segment
- * names written by the insight generator, and it passes through none of the aggregation
- * that applies the anonymity floor — so a small department can be named there while the
- * table above withholds its row. Naming it beside a withheld row on the most exposed
- * page in the product is the wrong side of that argument to be on. The authenticated
- * Insights page shows it (`insights.affectedSegments`) and should: its reader is inside
- * the tenant.
+ * ## `affectedSegments` is deliberately not rendered
+ *
+ * It is the one omission on this page that is a judgement rather than a projection. It
+ * is a free list of segment names written by the insight generator, and it passes
+ * through none of the aggregation that applies the anonymity floor — so a small
+ * department can be named there while the table above withholds its row, or a segment
+ * too small to appear in that table at all can be named beside a finding about it.
+ * Naming it on the most exposed page in the product is the wrong side of that argument
+ * to be on. The authenticated Insights page shows it (`insights.affectedSegments`) and
+ * should: its reader is inside the tenant.
+ *
+ * `SharedReportSections.test.tsx` pins the omission with a fixture whose segment names
+ * appear nowhere else on the page, so a renderer that printed them — in any casing —
+ * fails rather than merely differing from this paragraph.
+ *
+ * ## A card, not an `Alert`
+ *
+ * `Alert` defaults to `role="status"`, and a `status` is a live region: the reader's
+ * screen reader announces it when it appears. These cards appear when the fetch
+ * resolves, so a report with four insights announced four paragraphs of static report
+ * prose as though they were status updates. An insight is content, not an event. `Card`
+ * is what the product's other static panels use, and the title is a real `h3` under the
+ * section's `h2`, which gives a screen-reader reader something to navigate by instead.
  */
 function InsightCard({ insight }: { insight: ReportAIInsight }) {
   const { t, locale } = useTranslation()
 
   return (
-    <Alert>
-      <AlertTitle>{insight.title}</AlertTitle>
-      <AlertDescription>
-        <span className="grid gap-2">
-          <span>{insight.description}</span>
-          {/* `insights.*`, not new copy of its own: this is the same insight the
-              authenticated Insights page renders, and two catalogues for one sentence is
-              how the two surfaces come to word the same fact differently. */}
-          <span className="text-sm text-fg-secondary">
-            {t('insights.confidence')}{' '}
-            <span className="font-mono tabular-nums">
-              {t('insights.confidenceValue', {
-                // `ReportAIInsightItem.ConfidenceScore` is an integer 0-100 — #152 was a
-                // bug about reading a 0-1 confidence off the wrong model, so this is
-                // printed as the percentage points it already is and never scaled.
-                score: formatMetric(insight.confidenceScore, { kind: 'number' }, locale),
-              })}
-            </span>
+    <Card className="gap-2 px-card py-3 text-lg shadow-none">
+      {/* `mb-0` because `index.css` gives every bare heading a bottom margin, which
+          would double up with the grid gap this card already spaces its rows by. */}
+      <h3 className="mb-0 text-lg font-medium leading-normal text-fg-primary">
+        {insight.title}
+      </h3>
+      <div className="grid gap-2 text-sm text-fg-secondary">
+        <span>{insight.description}</span>
+        {/* `insights.*`, not new copy of its own: this is the same insight the
+            authenticated Insights page renders, and two catalogues for one sentence is
+            how the two surfaces come to word the same fact differently. */}
+        <span>
+          {t('insights.confidence')}{' '}
+          <span className="font-mono tabular-nums">
+            {t('insights.confidenceValue', {
+              // `ReportAIInsightItem.ConfidenceScore` is an integer 0-100 — #152 was a
+              // bug about reading a 0-1 confidence off the wrong model, so this is
+              // printed as the percentage points it already is and never scaled.
+              score: formatMetric(insight.confidenceScore, { kind: 'number' }, locale),
+            })}
           </span>
-          {insight.recommendedActions.length > 0 && (
-            <span className="grid gap-1">
-              <span className="text-sm font-semibold text-fg-primary">
-                {t('insights.recommendedActions')}
-              </span>
-              <ul className="list-disc pl-5 text-sm text-fg-secondary">
-                {insight.recommendedActions.map((action) => (
-                  <li key={action}>{action}</li>
-                ))}
-              </ul>
-            </span>
-          )}
         </span>
-      </AlertDescription>
-    </Alert>
+        {insight.recommendedActions.length > 0 && (
+          <span className="grid gap-1">
+            <span className="font-semibold text-fg-primary">
+              {t('insights.recommendedActions')}
+            </span>
+            <ul className="mb-0 list-disc pl-5">
+              {insight.recommendedActions.map((action) => (
+                <li key={action}>{action}</li>
+              ))}
+            </ul>
+          </span>
+        )}
+      </div>
+    </Card>
   )
 }

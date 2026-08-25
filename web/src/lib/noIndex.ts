@@ -23,10 +23,23 @@ const SELECTOR = 'meta[name="robots"]'
  * So the tag is added by the page that needs it and removed when that page unmounts.
  * Google renders JavaScript before deciding whether to index, and it reads a robots
  * meta tag that was injected by script exactly as it reads one that was in the served
- * HTML — which is what makes this work at all. It is still the *weaker* half of the
- * defence: the strong half is an `X-Robots-Tag: noindex` response header, which only
- * the server serving this app can set. This function is what the front end can do, not
- * the whole answer.
+ * HTML — which is what makes this work at all.
+ *
+ * ## The other half, which is not in this file
+ *
+ * This is the *weaker* half of the defence. The strong half is an `X-Robots-Tag`
+ * response header, because a crawler obeys it without executing any JavaScript at all —
+ * and unlike a meta tag it cannot be missed by a fetcher that never renders.
+ *
+ * That half is `web/vercel.json`, which is where this product sets response headers on
+ * the web origin (#367 added HSTS, `X-Frame-Options`, `X-Content-Type-Options`,
+ * `Referrer-Policy` and `Permissions-Policy` there after measuring the live response
+ * from climate.timsint.com). `/shared/reports/(.*)` carries `X-Robots-Tag: noindex,
+ * nofollow`, scoped to that path rather than applied site-wide for the same reason this
+ * function exists rather than a line in `index.html`: deindexing the whole product is a
+ * decision about the marketing surface, not one a report page gets to make.
+ * `noIndex.test.ts` asserts both halves say the same thing, since two spellings of one
+ * rule is how they come to disagree.
  *
  * ## Why the undo matters
  *

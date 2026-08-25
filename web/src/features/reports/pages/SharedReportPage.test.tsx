@@ -20,7 +20,10 @@ function reportBody(overrides: Record<string, unknown> = {}): Record<string, unk
     title: 'Informe de clima Q3',
     description: 'Cómo respondió la organización entre julio y agosto.',
     type: 'summary',
-    generatedAt: '2026-08-01T10:00:00Z',
+    // 02:00Z on the first of August. Deliberately in the small hours: the same instant
+    // is 20:00 on the *thirty-first of July* in America/Costa_Rica, so the UTC rule this
+    // page follows and a bare `toLocaleDateString` disagree about which day it is.
+    generatedAt: '2026-08-01T02:00:00Z',
     reportOutput: JSON.stringify({
       generationNote: '',
       surveys: [
@@ -165,7 +168,7 @@ describe('SharedReportPage', () => {
     expect(screen.getByRole('heading', { name: 'Encuesta de clima Q3' })).toBeTruthy()
     // The participation reading, as rendered — not the number that produced it.
     expect(screen.getByText('175')).toBeTruthy()
-    expect(screen.getByText('psychological_safety')).toBeTruthy()
+    expect(screen.getByText('Seguridad psicológica')).toBeTruthy()
     expect(screen.getByText('Revisar la distribución de turnos')).toBeTruthy()
   })
 
@@ -358,6 +361,56 @@ describe('SharedReportPage', () => {
    * not built. Printing it verbatim would put a developer sentence in front of a
    * Costa Rican reader; its *presence* is the fact worth passing on, translated.
    */
+  /**
+   * The generated day, read in UTC.
+   *
+   * `calendarDay` exists because `Report.GenerationCompletedAt` is rendered as a
+   * calendar day and `new Date(iso).toLocaleDateString()` moves it: every zone west of
+   * UTC lands on the day before, and every reader this product has is west of UTC. The
+   * locale-switch test asserts the *label* `Generated`; nothing asserted the value, so
+   * the page could go back to printing `31/7/2026` for a report generated on the first
+   * of August with the whole suite green.
+   *
+   * Both halves are pinned: the day itself, and the short human form the design writes
+   * dates in rather than the numeric one every bare `toLocaleDateString` produces.
+   */
+  it('prints the generated day in UTC, in the form the product writes dates', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(reportBody()))
+
+    renderPage()
+    await screen.findByRole('heading', { name: 'Informe de clima Q3' })
+
+    expect(screen.getByText(/^1 ago/)).toBeTruthy()
+    // Neither the day before (the zone bug) nor the numeric shape (the format drift).
+    expect(screen.queryByText(/31\/7/)).toBeNull()
+    expect(screen.queryByText(/1\/8\/2026/)).toBeNull()
+  })
+
+  /**
+   * One situation, one face.
+   *
+   * `LinkOutcome` is the product's existing end-of-a-dead-link component, and its own
+   * docblock argues that a single situation must not "have two faces depending on which
+   * route reached it" — it renders a decorative `Info` glyph in a `warning` alert with
+   * `role="alert"`. A visitor who followed a dead share link and one who followed a dead
+   * invitation are the same person having the same experience, and this notice was the
+   * only one of the two without the glyph. Measured in the PNG, not inferable from any
+   * assertion that existed.
+   */
+  it('gives a dead share link the same face as a dead survey link', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ message: 'nope' }, 404))
+
+    renderPage()
+    const notice = await screen.findByRole('alert')
+
+    const glyph = notice.querySelector('svg')
+    expect(glyph).toBeTruthy()
+    // Decorative: the sentence beside it already says everything the glyph does, and a
+    // second announcement of the same fact is noise on a page read by somebody who
+    // arrived here by accident.
+    expect(glyph?.getAttribute('aria-hidden')).toBe('true')
+  })
+
   it('reports an incomplete document without printing the English note', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       jsonResponse(

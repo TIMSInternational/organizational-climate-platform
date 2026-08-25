@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Info } from 'lucide-react'
 import { useParams } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { RespondCaption, RespondReading, RespondShell } from '../../../components/layout'
@@ -120,6 +121,15 @@ export default function SharedReportPage() {
 
         {state.status === 'unavailable' && (
           <Alert variant="warning" role="alert">
+            {/* The same glyph, variant and role `LinkOutcome` gives the dead survey
+                link, and for the reason that component states about its own two routes:
+                one situation must not have two faces depending on which link reached
+                it. A visitor who followed a dead share link and a visitor who followed
+                a dead invitation are the same person having the same experience, and
+                before this the report's version was the only one of the two with no
+                icon. `aria-hidden` because the sentence beside it says everything the
+                glyph does. */}
+            <Info aria-hidden="true" />
             <AlertTitle>{t('unavailableTitle')}</AlertTitle>
             <AlertDescription>{t('unavailableBody')}</AlertDescription>
           </Alert>
