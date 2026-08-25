@@ -81,7 +81,7 @@ server — producing a perfectly plausible PNG of a different codebase. If you p
 | `--height <px>` | `900` | Viewport height. |
 | `--scale <n>` | `2` | Device pixel ratio. `--scale 1` for a smaller file. |
 | `--role <r>` | `super_admin` | The `role` claim: `super_admin`, `company_admin`, `leader`, `supervisor`, `employee`. Drives `RoleBasedNav` and every role-dispatching page. |
-| `--name <n>` | `Ada Lovelace` | The `name` claim, shown in the sidebar user menu. |
+| `--name <n>` | `María Herrera` | The `name` claim, shown in the sidebar user menu. |
 | `--company <guid>` | `11111111-…-111111111111` | The `companyId` claim, and the stored company context. |
 | `--lang en\|es` | `en` | Sets `preferredLocale`. Use it — half the copy defects in this app only appear in Spanish. |
 | `--fixtures <file>` | `scripts/shot-fixtures/default.json` | API responses (see below). |

@@ -32,10 +32,24 @@ describe('decodeJwtPayload', () => {
   })
 
   it('handles base64url-encoded payloads (- and _ instead of + and /)', () => {
-    // Force a payload whose base64 encoding contains + and / so we can verify the
-    // -/_ substitution round-trips correctly.
-    const payload = { role: 'employee', note: '???>>>' }
-    const token = makeToken(payload)
+    // This test used to claim it forced `+` and `/` and did not: its payload encoded to
+    // `eyJyb2xlIjoiZW1wbG95ZWUiLCJub3RlIjoiPz8/Pj4+In0=`, which contains neither `-` nor
+    // `_`, so both `.replace` calls in the decoder were no-ops on it and neither was
+    // covered by any test in the suite. Dropping `.replace(/_/g, '/')` altogether left all
+    // 3214 tests green.
+    //
+    // `-` and `_` are index 62 and 63 of the base64url alphabet, which realistic claim
+    // values almost never reach -- none of the accented Spanish names elsewhere in this
+    // file produce either. So the payload below is chosen rather than realistic, and the
+    // assertion on the segment guards the fixture: if a future edit stops producing both
+    // characters, this fails here instead of silently going back to testing nothing.
+    const payload = { role: 'employee', note: 'ÿÿþ' }
+    const token = makeUtf8Token(payload)
+
+    const segment = token.split('.')[1]
+    expect(segment).toContain('-')
+    expect(segment).toContain('_')
+
     expect(decodeJwtPayload(token)).toEqual(payload)
   })
 
@@ -88,6 +102,18 @@ describe('decodeJwtPayload', () => {
     expect(decodeJwtPayload('not-a-jwt')).toBeNull()
     expect(decodeJwtPayload('a.b')).toBeNull()
     expect(decodeJwtPayload('a.b.c.d')).toBeNull()
+  })
+
+  it('rejects a token by segment count, not merely because the payload is junk', () => {
+    // The case above passes even with the `parts.length !== 3` guard deleted, because
+    // `a`, `b`, `c` and `d` are not decodable anyway and the `catch` returns null for
+    // them. So it looks like it covers the guard and does not. These use a *valid*
+    // payload segment, which is the only way the guard is the thing being tested:
+    // relax it to `< 3` and the four-segment token decodes; delete it and both do.
+    const validPayload = makeUtf8Token({ role: 'employee', name: 'María Herrera' }).split('.')[1]
+
+    expect(decodeJwtPayload(`header.${validPayload}`)).toBeNull()
+    expect(decodeJwtPayload(`header.${validPayload}.signature.extra`)).toBeNull()
   })
 
   it('returns null when the payload segment is not valid base64/JSON', () => {

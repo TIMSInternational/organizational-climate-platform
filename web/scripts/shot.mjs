@@ -86,7 +86,7 @@ const { values, positionals } = parseArgs({
     height: { type: 'string', default: '900' },
     scale: { type: 'string', default: '2' },
     role: { type: 'string', default: 'super_admin' },
-    name: { type: 'string', default: 'María Solís' },
+    name: { type: 'string', default: 'María Herrera' },
     company: { type: 'string', default: DEFAULT_COMPANY_ID },
     lang: { type: 'string', default: 'en' },
     fixtures: { type: 'string' },
