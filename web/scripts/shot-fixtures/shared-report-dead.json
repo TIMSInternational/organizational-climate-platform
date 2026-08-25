@@ -1,0 +1,5 @@
+{
+  "GET /shared/reports/* 404": {
+    "message": "Report not found"
+  }
+}

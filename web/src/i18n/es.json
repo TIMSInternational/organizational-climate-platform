@@ -2692,6 +2692,7 @@
     "dimensionsCaption": "Puntaje promedio de cada dimensión de esta encuesta",
     "dimension": "Dimensión",
     "questionCount": "Preguntas",
+    "answeredCount": "Respuestas",
     "averageScore": "Puntaje promedio",
     "departmentsCaption": "Participación de cada departamento, incluidos aquellos cuyas cifras están reservadas",
     "departmentsWithheld": "Se reservan {count} departamento(s) porque cada uno tiene menos de {minimum} personas que respondieron."

@@ -2692,6 +2692,7 @@
     "dimensionsCaption": "Average score for each dimension of this survey",
     "dimension": "Dimension",
     "questionCount": "Questions",
+    "answeredCount": "Answers",
     "averageScore": "Average score",
     "departmentsCaption": "Participation for each department, including the ones whose figures are withheld",
     "departmentsWithheld": "{count} department(s) are withheld because each has fewer than {minimum} respondents."

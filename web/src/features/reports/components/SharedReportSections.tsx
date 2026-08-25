@@ -120,7 +120,12 @@ function SurveySection({ section }: { section: ReportSurveySection }) {
               <TableRow>
                 <TableHead>{t('sharedReport.dimension')}</TableHead>
                 <TableHead>{t('sharedReport.questionCount')}</TableHead>
-                <TableHead>{t('surveyResults.answersUnit')}</TableHead>
+                {/* Not `surveyResults.answersUnit`. That key is the *unit* inside a
+                    sentence — "170 respuestas" — so it is spelled lowercase, and reusing
+                    it here put a lowercase word in a row of capitalised column headings.
+                    Caught in the PNG; no assertion in this file's tests could have seen
+                    it, because the string was present and correct for its own purpose. */}
+                <TableHead>{t('sharedReport.answeredCount')}</TableHead>
                 <TableHead>{t('sharedReport.averageScore')}</TableHead>
               </TableRow>
             </TableHeader>

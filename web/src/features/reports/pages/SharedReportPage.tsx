@@ -147,8 +147,15 @@ function ReportBody({ report, locale }: { report: SharedReport; locale: string }
         description={report.description}
       />
 
+      {/* The reading below takes the same four-across ladder the participation rows use,
+          and deliberately not `sm:auto-cols-fr`: this section holds exactly one reading,
+          and auto columns stretched it the full width of a 1440px page — a lone date tile
+          as wide as the whole report. Caught in the PNG, invisible to every assertion. */}
       {report.generatedAt !== null && (
-        <section aria-label={t('panelLabel')} className="grid gap-panel-gap sm:grid-flow-col sm:auto-cols-fr">
+        <section
+          aria-label={t('panelLabel')}
+          className="grid grid-cols-1 gap-panel-gap sm:grid-cols-2 xl:grid-cols-4"
+        >
           <RespondReading
             label={t('generatedReading')}
             // `calendarDay` for the reason it exists: it renders a day in UTC, so a
