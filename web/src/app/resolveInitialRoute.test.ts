@@ -30,13 +30,23 @@ describe('resolveInitialRoute', () => {
   })
 
   /**
-   * `resolvePostAcceptRoute` is deliberately NOT collapsed into this. It answers a
-   * different question — where to send someone who has just accepted an invitation, and
-   * whose `null` means "nowhere, show an inline message instead". Pinned so a later tidy-up
-   * that merges the two has to argue with a test first.
+   * `resolvePostAcceptRoute` is deliberately NOT collapsed into this, and the reason has
+   * narrowed rather than gone away.
+   *
+   * It used to answer a *different destination* for the same person — `/surveys/my` for an
+   * employee where this said `/dashboard` — which was two answers to one question and is
+   * what #138 removed. What still separates the two functions is the shape of the answer:
+   * only the post-accept one can say **null**, meaning "there is nowhere to send them, show
+   * an inline message instead", for a token whose claims carry no company at all. This one
+   * is a constant and has no such case.
+   *
+   * Pinned so a later tidy-up that merges the two has to argue with a test first: merging
+   * them would silently navigate a company-less user into a page scoped by a company they
+   * do not have.
    */
   it('leaves the post-accept destination alone, which still needs a null answer', () => {
     expect(resolvePostAcceptRoute('employee', undefined)).toBeNull()
-    expect(resolvePostAcceptRoute('employee', 'company-1')).toBe('/surveys/my')
+    // With a company, the two now agree — deliberately, since #138.
+    expect(resolvePostAcceptRoute('employee', 'company-1')).toBe(resolveInitialRoute())
   })
 })
