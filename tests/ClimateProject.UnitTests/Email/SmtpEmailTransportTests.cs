@@ -47,18 +47,26 @@ public class SmtpEmailTransportTests
     /// EmailNotificationSenderTests gives: the failure branches are where the detail gets
     /// added.
     /// </summary>
+    /// <param name="host">
+    /// Blank reaches the <c>InvalidOperationException</c> handler -- the transport's one branch
+    /// that actually WRITES a log while holding the composed body. The first version of this
+    /// test drove only malformed addresses, every one of which is rejected pre-flight before a
+    /// client is built, so the logging branch was never entered and a mutation that logged the
+    /// body there passed. A guard that cannot reach the code it guards is not a guard.
+    /// </param>
     [Theory]
-    [InlineData("")]
-    [InlineData("not-an-address")]
-    [InlineData("ana@example.com\r\nBcc: attacker@example.com")]
-    public async Task The_message_body_never_reaches_a_log(string address)
+    [InlineData("smtp.invalid", "")]
+    [InlineData("smtp.invalid", "not-an-address")]
+    [InlineData("smtp.invalid", "ana@example.com\r\nBcc: attacker@example.com")]
+    [InlineData("", "ana@example.com")]
+    public async Task The_message_body_never_reaches_a_log(string host, string address)
     {
         const string Token = "invitation-token-for-test-not-a-real-secret";
         var logger = new CapturingLogger();
         var options = new EmailOptions
         {
             Provider = EmailOptions.ProviderSmtp,
-            SmtpHost = "smtp.invalid",
+            SmtpHost = host,
             FromAddress = "no-reply@example.com",
             AppBaseUrl = "https://app.example.com",
         };
@@ -77,6 +85,37 @@ public class SmtpEmailTransportTests
 
         Assert.DoesNotContain(logger.Lines, line => line.Contains(Token, StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(logger.Lines, line => line.Contains("survey-invitations", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// The instrument: the blank-host row above really does enter a logging branch. Without
+    /// this, every row could be reaching nothing and the assertions would all hold vacuously --
+    /// which is exactly how the first version of this test passed a mutation that logged the
+    /// body.
+    /// </summary>
+    [Fact]
+    public async Task The_misconfigured_host_branch_really_is_reached_and_really_does_log()
+    {
+        var logger = new CapturingLogger();
+        var options = new EmailOptions
+        {
+            Provider = EmailOptions.ProviderSmtp,
+            SmtpHost = string.Empty,
+            FromAddress = "no-reply@example.com",
+            AppBaseUrl = "https://app.example.com",
+        };
+
+        var outcome = await new SmtpEmailTransport(
+                options, new EmailSendRateLimiter(options.MaxSendsPerSecond), logger)
+            .SendAsync(Message("ana@example.com"), CancellationToken.None);
+
+        // Transient, not permanent: SmtpClient wraps "the SMTP host was not specified" in an
+        // SmtpException, so this lands in Classify rather than in the InvalidOperationException
+        // handler. Classify IS the transport's real logging path -- it writes the status and
+        // the exception on every rejected submission -- which is precisely the branch the
+        // theory above needs to be entering.
+        Assert.False(outcome.Delivered);
+        Assert.Contains(logger.Lines, line => line.Contains("SMTP submission failed", StringComparison.Ordinal));
     }
 
     /// <summary>Every formatted log line the transport wrote, plus the raw state a structured sink would emit.</summary>
