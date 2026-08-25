@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildCreateInput,
+  defaultEmojiScale,
   derivedOptionValue,
+  emptyEmojiOption,
   emptyOption,
   emptyQuestion,
   emptyWizardValues,
@@ -9,6 +11,7 @@ import {
   scheduledMinutes,
   wizardStepErrors,
   type MicroclimateWizardValues,
+  type WizardEmojiOptionValues,
 } from './wizardValues'
 import type { TranslateFn } from '../../i18n'
 
@@ -185,6 +188,102 @@ describe('wizardStepErrors', () => {
     expect(wizardStepErrors(scale, t).questions).toEqual([])
   })
 
+  // #198. Each of these mirrors one refusal MicroclimateEndpoints.CreateAsync makes,
+  // so the author reads the message beside the field rather than after a 400.
+  it('requires at least two faces on an emoji_rating question', () => {
+    const scale = values({
+      questions: [
+        {
+          ...emptyQuestion('q1'),
+          textEn: 'How was the week?',
+          type: 'emoji_rating',
+          emojiOptions: [{ ...emptyEmojiOption('e1'), emoji: '\u{1F642}', labelEn: 'Good' }],
+        },
+      ],
+    })
+    expect(wizardStepErrors(scale, t).questions).toEqual([
+      'microclimates.validationEmojiOptionsMin2(1)',
+    ])
+  })
+
+  it('requires a name on every face, because the name is its accessible name', () => {
+    // The whole reason emoji_rating has its own table (#198): a face with a glyph and
+    // no word reaches a screen reader with no name a respondent can rely on.
+    const scale = values({
+      questions: [
+        {
+          ...emptyQuestion('q1'),
+          textEn: 'How was the week?',
+          type: 'emoji_rating',
+          emojiOptions: [
+            { ...emptyEmojiOption('e1'), emoji: '\u{1F622}', labelEn: 'Sad' },
+            { ...emptyEmojiOption('e2'), emoji: '\u{1F642}' },
+          ],
+        },
+      ],
+    })
+    expect(wizardStepErrors(scale, t).questions).toEqual([
+      'microclimates.validationEmojiLabel(1,2)',
+    ])
+  })
+
+  it('asks for a name in both languages on a bilingual session', () => {
+    const scale = values({
+      language: 'both',
+      titleEs: 'Pulso',
+      questions: [
+        {
+          ...emptyQuestion('q1'),
+          textEn: 'How was the week?',
+          textEs: '¿Cómo estuvo la semana?',
+          type: 'emoji_rating',
+          emojiOptions: [
+            { ...emptyEmojiOption('e1'), emoji: '\u{1F622}', labelEn: 'Sad', labelEs: 'Triste' },
+            { ...emptyEmojiOption('e2'), emoji: '\u{1F642}', labelEn: 'Good' },
+          ],
+        },
+      ],
+    })
+    expect(wizardStepErrors(scale, t).questions).toEqual([
+      'microclimates.validationEmojiLabelBoth(1,2)',
+    ])
+  })
+
+  it('accepts a named two-point scale', () => {
+    const scale = values({
+      questions: [
+        {
+          ...emptyQuestion('q1'),
+          textEn: 'How was the week?',
+          type: 'emoji_rating',
+          emojiOptions: [
+            { ...emptyEmojiOption('e1'), emoji: '\u{1F622}', labelEn: 'Sad' },
+            { ...emptyEmojiOption('e2'), emoji: '\u{1F642}', labelEn: 'Good' },
+          ],
+        },
+      ],
+    })
+    expect(wizardStepErrors(scale, t).questions).toEqual([])
+  })
+
+  it('ignores an emoji scale left behind by switching type', () => {
+    // Faces typed before the author changed the type must not block the step -- and
+    // `buildCreateInput` must not send them either, since the server REJECTS an emoji
+    // scale on a type that cannot render one rather than ignoring it.
+    const switched = values({
+      questions: [
+        {
+          ...emptyQuestion('q1'),
+          textEn: 'Anything to add?',
+          type: 'open_ended',
+          emojiOptions: [{ ...emptyEmojiOption('e1'), emoji: '\u{1F642}' }],
+        },
+      ],
+    })
+    expect(wizardStepErrors(switched, t).questions).toEqual([])
+    expect(buildCreateInput(switched, 'company-1').questions?.[0].emojiOptions).toBeUndefined()
+  })
+
   it('carries every other step onto review as a backstop', () => {
     const broken = values({ titleEn: '', targetParticipantCount: '0' })
     expect(wizardStepErrors(broken, t).review).toEqual([
@@ -262,6 +361,48 @@ describe('buildCreateInput', () => {
     expect(built.questions?.map((q) => q.order)).toEqual([1, 2])
     expect(built.questions?.[0].options).toBeUndefined()
     expect(built.questions?.[1].options).toEqual([{ label: 'Yes' }, { label: 'No' }])
+  })
+
+  it('sends the emoji scale as glyph plus label, and no client-side value', () => {
+    const built = buildCreateInput(
+      values({
+        questions: [
+          {
+            ...emptyQuestion('q1'),
+            textEn: 'How was the week?',
+            type: 'emoji_rating',
+            emojiOptions: [
+              { ...emptyEmojiOption('e1'), emoji: ' \u{1F622} ', labelEn: 'Sad' },
+              { ...emptyEmojiOption('e2'), emoji: '\u{1F642}', labelEn: 'Good' },
+              // Blank glyphs are dropped rather than sent -- the server would 400 on
+              // one, and an empty row is an author who added a face and walked away.
+              emptyEmojiOption('e3'),
+            ],
+          },
+        ],
+      }),
+      'company-1',
+    )
+
+    // No `value`: the server numbers the scale by position, which is why the wizard
+    // has no field for it. Sending one would be the client inventing stored keys.
+    expect(built.questions?.[0].emojiOptions).toEqual([
+      { emoji: '\u{1F622}', label: 'Sad' },
+      { emoji: '\u{1F642}', label: 'Good' },
+    ])
+  })
+
+  it('seeds four faces with glyphs and no names', () => {
+    let n = 0
+    const scale: WizardEmojiOptionValues[] = defaultEmojiScale(() => `k${(n += 1)}`)
+
+    expect(scale).toHaveLength(4)
+    expect(scale.every((face) => face.emoji.length > 0)).toBe(true)
+    // Names are deliberately blank: a prefilled name is a name nobody chose, on the
+    // one field whose job is to say what this face means in THIS question. (It would
+    // also be English copy in a `.ts` module, which the #217 guard rejects.)
+    expect(scale.every((face) => face.labelEn === '' && face.labelEs === '')).toBe(true)
+    expect(new Set(scale.map((face) => face.key)).size).toBe(4)
   })
 
   it('sends bilingual question text as a locale map', () => {

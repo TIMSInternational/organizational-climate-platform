@@ -7,6 +7,7 @@ import { TranslationProvider } from '../../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
+import type { CreateQuestionInput } from '../api/microclimates'
 
 function tokenFor(claims: Record<string, unknown>): string {
   const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
@@ -249,6 +250,61 @@ describe('MicroclimateCreatePage', () => {
     await press('Back')
 
     expect((screen.getByLabelText(/Title/) as HTMLInputElement).value).toBe('Team pulse')
+  })
+
+  /**
+   * #198, through the wizard rather than through `wizardValues` directly: the criterion
+   * is that an admin can author an emoji scale, and the unit test cannot show that the
+   * editor is reachable, prefilled and wired to the DTO.
+   */
+  it('authors an emoji scale and posts it as glyph plus name per face', async () => {
+    renderPage()
+
+    typeInto(/Title/, 'Team pulse')
+    await press('Next')
+    typeInto('Start Time', SCHEDULE_START)
+    typeInto('End Time', SCHEDULE_END)
+    await press('Next')
+    await press('Next')
+
+    await press('Add Question')
+    typeInto(/Question Text/, 'How was the week?')
+    // The only combobox on the questions step is the question-type select.
+    await selectOption('Emoji Rating')
+
+    // Four faces appear prefilled with glyphs, so the author is not asked how many a
+    // scale should have -- and with the names blank, because a name nobody chose is
+    // the one thing this control must not invent.
+    expect((screen.getByLabelText(/Emoji 1/) as HTMLInputElement).value.length).toBeGreaterThan(0)
+    expect((screen.getByLabelText(/Name for emoji 1/) as HTMLInputElement).value).toBe('')
+
+    // The step refuses to advance while a face is unnamed: an emoji with no name is
+    // the unusable control this whole feature exists to avoid.
+    await press('Next')
+    expect(screen.getByRole('alert').textContent).toContain('needs a name')
+
+    typeInto(/Name for emoji 1/, 'Sad')
+    typeInto(/Name for emoji 2/, 'Neutral')
+    typeInto(/Name for emoji 3/, 'Good')
+    typeInto(/Name for emoji 4/, 'Great')
+    await press('Next')
+    await press('Create microclimate')
+
+    await waitFor(() => expect(screen.getByText('Session page')).toBeTruthy())
+
+    const question = (postBody() as { questions: CreateQuestionInput[] }).questions[0]
+    expect(question.type).toBe('emoji_rating')
+    expect(question.options).toBeUndefined()
+    expect(question.emojiOptions?.map((face) => face.label)).toEqual([
+      'Sad',
+      'Neutral',
+      'Good',
+      'Great',
+    ])
+    // A glyph on every face, and no client-invented `value` -- the server numbers the
+    // scale by position.
+    expect(question.emojiOptions?.every((face) => face.emoji.length > 0)).toBe(true)
+    expect(question.emojiOptions?.every((face) => !('value' in face))).toBe(true)
   })
 
   it('demands both languages once the content language is Spanish and English', async () => {
