@@ -34,7 +34,7 @@ work anyone (or an agent) can do without touching a running system.
 | 1 | [C] | **Push the two unpushed branches.** `ops/158-monitoring-logging-alerting` (e2efa7e) and `feat/159-tested-cutover-rollback` (cea6dd4) exist only inside two local worktrees. Verified absent from `origin` today. Commands in §2.1. | Two nights of work is currently one `rm -rf` from gone. Pushing starts no workflow: neither branch adds a `push:` trigger and `ci.yml` fires only on PR-to-main and push-to-main. |
 | 2 | [H] | **Run `aws sts get-caller-identity` and find out whether any human holds credentials in AWS account `747814092517`.** Ten seconds. | It gates items 14, 16, 20 and 25 — that is, all of #158, all of #219's infrastructure, and the break-glass half of #159. Every lane last night had credentials for the **DEV** account `795965600143` only. If the answer is "nobody", say it out loud: the entire recovery story then depends on GitHub Actions being reachable, and that is a different plan. |
 | 3 | [C] | **Correct the Supabase project reference in `docs/runbooks/staging-provisioning.md`.** It names `lzhfnjfsdwdywwnlqgqq` as "the Supabase project". That ref is `tims-ats`, a different product. This platform is `uleeeziiceduvmiftgby`. See §6.1. | Decision box 2 of that runbook offers "a persistent branch on `lzhfnjfsdwdywwnlqgqq`" as an option. Following it branches another product's production database. Fix the document before anyone reads it at 09:00. |
-| 4 | [H] | **Decide the live API/web split.** The deployed API is 23 commits behind a front end that ships on every merge, and `GET /admin/question-library` returns **404 on production right now** while the live bundle calls it. Either dispatch `deploy-prod.yml` (the single pending migration is additive — `confirm_destructive_migration=no`) or roll the web back to match. §6.2. | It is a live client-visible defect that every health check reads as green, and the same decision stops tomorrow's 13:00 UTC drift run from failing. |
+| 4 | [H] | **Decide the live API/web split.** The deployed API is 23 commits behind a front end that ships on every merge, and `GET /admin/question-library` returns **404 on production right now** while the live bundle calls it. Either dispatch `deploy-prod.yml` (the single pending migration is additive — `confirm_destructive_migration=no`) or roll the web back to match. §6.2. | It is a live client-visible defect that every health check reads as green, and the same decision stops the 13:00 UTC drift run from failing from today onward. |
 | 5 | [C] | **Correct two issue bodies.** #219 says `services/tracking-api` "is built and tested in CI" — it has never been in CI. #156's finding "file a tracking-api deployment issue" is already satisfied: that issue is #219 and its branch is pushed. | Two people acting on stale issue text is how the same work gets done twice or not at all. |
 
 ### Then — the decisions, before anyone opens a console
@@ -533,9 +533,11 @@ The cause is structural, not an oversight: the web ships on every merge via Verc
 integration; the API ships only on a manual dispatch. The halves are decoupled by design
 and drift by default.
 
-The drift guard is about to notice. `deploy-drift.yml` runs at 13:00 UTC with
-`MAX_COMMITS_BEHIND: 20`. Today's run passed because production was **18** commits behind
-at the moment it ran; five more merged after it. **Tomorrow's run fails.** That is correct
+The drift guard is about to notice, and by the time you read this it may already have.
+`deploy-drift.yml` runs at 13:00 UTC with `MAX_COMMITS_BEHIND: 20`. The 2026-08-24 run
+passed because production was **18** commits behind at the moment it fired (13:52 UTC);
+five more merged after it. At 23 behind, **the next run fails** — checked at 13:22 UTC on
+2026-08-25, that run had not yet fired, so it is due within the hour. That is correct
 behaviour, and the fix is item 4, not raising the threshold — unless raising it is a
 deliberate release-cadence decision someone writes down.
 
@@ -734,12 +736,12 @@ each re-checked on 2026-08-25 from this worktree:
 | Prod API serves `fc539367…`, built 2026-08-19T15:31:59Z | `curl /version` |
 | `/admin/question-library` → 404 while `/admin/users` → 401 | two `curl`s, unauthenticated |
 | The route exists in `main` behind `RequireAuthorization()` | `QuestionLibraryEndpoints.cs:44` |
-| `main` is 23 commits ahead of the live commit; **18** at the moment today's drift run passed | `git rev-list --count`, with and without `--before` |
+| `main` is 23 commits ahead of the live commit; **18** at the moment the 2026-08-24 drift run fired | `git rev-list --count`, with and without `--before` |
 | `MAX_COMMITS_BEHIND: 20`, cron `0 13 * * *` | `deploy-drift.yml:27,43` |
 | GitHub environments are `Preview` and `production` only — **no `staging`** | `gh api …/environments` |
 | `deploy-staging.yml` has **never run** | `gh run list --workflow deploy-staging.yml` (empty) |
 | `Database__RequireSessionPooler` is hardcoded `"true"`, not a parameter | `climate-project-api-prod-service.yml:213-214` |
-| Health check `Interval: 20`, `Timeout: 5`, `HealthyThreshold: 3` → a 60 s hard floor on every rollout | same file, 285-288 |
+| Health check `Interval: 20`, `Timeout: 5`, `HealthyThreshold: 3` → a 60 s hard floor on every rollout | same file, 286-288 |
 | ECR keeps the **40** most recent tagged images | `climate-project-api-bootstrap.yml:134-135` |
 | `web/vercel.json` CSP is Report-Only and hardcodes production's App Runner host | `web/vercel.json:31-32` |
 | Only two of the four branches are on `origin` | `git ls-remote --heads origin` |
