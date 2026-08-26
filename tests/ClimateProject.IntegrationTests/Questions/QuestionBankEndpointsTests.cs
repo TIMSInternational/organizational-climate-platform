@@ -1484,10 +1484,13 @@ public class QuestionBankEndpointsTests : IAsyncLifetime
     /// failing an update.
     /// </para>
     /// <para>
-    /// Two ways in, because they fail at different depths. The first is caught by validation
-    /// and is a 400. The second is a byte Postgres itself rejects, past every check this
-    /// endpoint performs — that one is the transaction's job, and without it the row is
-    /// stripped.
+    /// Two ways in, because they fail at different depths, and the second one has to fail in
+    /// the right place to prove anything. A failure on the FIRST save is not evidence: the
+    /// deletes and the item's own UPDATE share that save, so EF's implicit transaction undoes
+    /// them together whether or not this handler opens one. The bad byte therefore goes in a
+    /// TAG, which is written by the SECOND save — the only window where the deletes are
+    /// already committed and the replacements are not yet written. That is the window the
+    /// explicit transaction exists for, and removing it makes this test fail.
     /// </para>
     /// </remarks>
     [Fact]
@@ -1527,12 +1530,15 @@ public class QuestionBankEndpointsTests : IAsyncLifetime
         await AssertIntactAsync();
 
         // 2. ...and a failure no validation could foresee is rolled back rather than half
-        // applied. A NUL byte is refused by Postgres itself.
+        // applied. A NUL byte is refused by Postgres itself, and it rides on a TAG so the
+        // refusal lands on the SECOND save -- after the delete has already happened, which is
+        // the only window an explicit transaction is there to cover.
         var rejectedByTheDatabase = await admin.PutAsJsonAsync(
             $"/admin/question-bank/{created.Id}",
             new UpdateQuestionBankItemRequest(
-                Text: "Pick one\u0000",
+                Text: "Pick one",
                 Category: "workplace",
+                Tags: ["nul\u0000tag"],
                 Options: [new QuestionBankOptionInput(null, "Remote"), new QuestionBankOptionInput(null, "Hybrid")]));
         Assert.NotEqual(HttpStatusCode.OK, rejectedByTheDatabase.StatusCode);
         await AssertIntactAsync();
@@ -1602,9 +1608,10 @@ public class QuestionBankEndpointsTests : IAsyncLifetime
     public async Task Two_options_that_would_store_the_same_answer_are_refused()
     {
         var admin = await AdminAsync();
+        var text = $"Pick one {Guid.NewGuid():N}";
 
         var response = await admin.PostAsJsonAsync("/admin/question-bank", new CreateQuestionBankItemRequest(
-            Text: "Pick one",
+            Text: text,
             Type: QuestionTypes.MultipleChoice,
             Category: "engagement",
             CompanyId: _companyId,
@@ -1617,7 +1624,7 @@ public class QuestionBankEndpointsTests : IAsyncLifetime
         // A 400 explaining it, rather than a 500 out of the unique index -- and rather than
         // two options whose answers are indistinguishable once stored.
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(0, await _harness.WithDbAsync(db => db.QuestionBankItems.CountAsync(i => i.TextEn == "Pick one")));
+        Assert.Equal(0, await _harness.WithDbAsync(db => db.QuestionBankItems.CountAsync(i => i.TextEn == text)));
     }
 
     // ------------------------------------------------------------------
@@ -1707,6 +1714,9 @@ public class QuestionBankEndpointsTests : IAsyncLifetime
 
         var copied = await _harness.WithDbAsync(db => db.Questions
             .AsNoTracking().Where(q => q.SurveyId == copy.Id).ToListAsync());
+        // Single first: Assert.All over an empty list is a pass, and "the copy has no
+        // questions at all" is exactly the shape a broken duplication would take.
+        Assert.Single(copied);
         Assert.All(copied, q => Assert.Equal(item.Id, q.SourceQuestionBankItemId));
 
         // ...and the bank sees it as a second use rather than as one.

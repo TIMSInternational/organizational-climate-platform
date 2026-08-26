@@ -52,6 +52,37 @@ namespace ClimateProject.Infrastructure.Persistence;
 /// ASKED -- so the column records where a copy came from without making the copy depend on
 /// the source, which is also why retiring a source cannot disturb a stored answer.
 /// </para>
+/// <para>
+/// <b>Two limits, written down rather than left to be discovered.</b>
+/// </para>
+/// <list type="number">
+/// <item><description>
+/// <b>No shipped client writes the column yet.</b> <c>POST /surveys</c> and
+/// <c>PUT /surveys/{id}</c> accept and store it, but the web wizard's picker reads
+/// <c>/admin/question-library</c> (#381) and the bank has no picker of its own until its
+/// admin page is built. So in production every number here is a correct count of zero. This
+/// is stated because reading this file and concluding the wizard fills it in is precisely
+/// the mistake <c>source_library_item_id</c> has been inviting since #112.
+/// </description></item>
+/// <item><description>
+/// <b><c>Question</c> is the only entity carrying it.</b> <c>TemplateQuestion</c> and
+/// <c>MicroclimateQuestion</c> have no provenance column, so a bank question that reaches
+/// respondents through a survey TEMPLATE or a microclimate reports zero usage forever.
+/// Adding it there is a schema change with its own producers to wire, so it is a separate
+/// slice, not a line to slip in here.
+/// </description></item>
+/// </list>
+/// <para>
+/// Both are gaps in the PRODUCERS, and both are an argument FOR counting rather than
+/// accumulating: a COUNT starts reporting the moment a producer appears, where a counter
+/// would have to be backfilled from data it never saw.
+/// </para>
+/// <para>
+/// <b>Cost.</b> Three set-based reads per call over the ids the caller asked for, and since
+/// the list and the detail now serve derived numbers they pay it too -- the shape
+/// <c>/effectiveness</c> has always had. It buys never serving a stale number, and it is
+/// paid on an admin page rather than on the respondent path, which is the whole design.
+/// </para>
 /// </remarks>
 public static class QuestionBankMetrics
 {
