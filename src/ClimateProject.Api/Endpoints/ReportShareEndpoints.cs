@@ -88,6 +88,27 @@ public static class ReportShareEndpoints
             .RequireRateLimiting(RateLimitPolicies.PublicLink);
     }
 
+    /// <summary>
+    /// Who may mint, list and revoke: a super admin anywhere, a company admin in their own
+    /// tenant, and nobody else.
+    /// </summary>
+    /// <remarks>
+    /// The group above carries <c>RequireAuthorization()</c> and no role policy -- the house
+    /// convention, which authorises inside the handler against an explicit <c>Can…</c> helper
+    /// rather than with <c>[Authorize(Roles=)]</c>. So the <c>Roles.CompanyAdmin</c> clause here
+    /// is the <em>whole</em> barrier between an authenticated employee of the company and a
+    /// public, unauthenticated link to its climate report, which is why
+    /// <c>A_non_administrator_of_the_owning_company_cannot_mint_list_or_revoke</c> exercises all
+    /// three routes for all three non-admin roles rather than trusting this line to be read.
+    ///
+    /// The three callers below check "does the report exist" before "may this caller reach it",
+    /// so a company admin gets 404 for an id that exists nowhere and 403 for one that exists in
+    /// another tenant, and can therefore tell the two apart. That ordering is
+    /// <c>ReportEndpoints.GetAsync</c>'s, verbatim, and every admin route in this codebase is
+    /// built the same way; changing it on these three alone would make the share routes the
+    /// odd ones out without closing anything, since the ids being probed are generated Guids.
+    /// It is written down here rather than fixed because it is a house-wide decision.
+    /// </remarks>
     private static bool CanAccessCompany(CurrentUser currentUser, Guid companyId)
         => currentUser.Role == Roles.SuperAdmin
            || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
@@ -267,6 +288,16 @@ public static class ReportShareEndpoints
 
         // Past here the link is good, and this is the only branch that touches the database or
         // reveals anything at all.
+        //
+        // Read-modify-write with no concurrency token, so two resolves that overlap can each
+        // write the same incremented value and the counter under-counts by one. That is the
+        // same shape as `report.DownloadCount += 1` in ReportEndpoints.DownloadAsync and is
+        // deliberate here rather than inherited: AccessCount is a convenience number on the
+        // admin listing, and the count that has to be right is the audit trail below, which
+        // inserts one row per read and cannot lose one. Making the counter exact would mean an
+        // ExecuteUpdate outside the SaveChanges that writes the audit row -- two statements
+        // where there is now one transaction -- to make a displayed number agree with a trail
+        // that is already authoritative.
         match.Share.AccessCount += 1;
         match.Share.LastAccessedAt = now;
 

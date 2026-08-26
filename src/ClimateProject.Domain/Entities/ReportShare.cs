@@ -46,12 +46,17 @@ public class ReportShare
     /// row; null when it cannot.
     /// </summary>
     /// <remarks>
-    /// Nullable, unlike <c>reports.created_by</c>, and deliberately: <c>ActingUserResolver</c>
-    /// answers <c>Guid.Empty</c> for a caller it cannot place, and against a RESTRICT foreign
-    /// key that turns a mint into a 500. Failing to hand an administrator their link because
-    /// the application could not name them is a worse outcome than a null here, and it is not
-    /// the only record of who did it -- the mint is a POST, so
-    /// <c>AuditWritingMiddleware</c> has already written a row naming the caller.
+    /// Nullable, unlike <c>reports.created_by</c>, and deliberately.
+    /// <c>ActingUserResolver.ResolveIdAsync</c> answers <c>Guid?</c> -- <b>null</b>, never
+    /// <c>Guid.Empty</c> -- for a caller it cannot place. What the callers do with that null is
+    /// where the two columns part: <c>reports.created_by</c> is a required FK, so
+    /// <c>ReportEndpoints.ResolveCurrentUserIdAsync</c> coerces the null to <c>Guid.Empty</c>
+    /// and the insert then fails on a foreign key to a user row that does not exist -- a 500,
+    /// which its own comment records as pre-existing behaviour left alone by #285. This column
+    /// is nullable, so the same caller costs an attribution instead. Failing to hand an
+    /// administrator their link because the application could not name them is the worse
+    /// outcome of the two, and the null is not the only record of who did it -- the mint is a
+    /// POST, so <c>AuditWritingMiddleware</c> has already written a row naming the caller.
     /// </remarks>
     public Guid? CreatedBy { get; set; }
 

@@ -235,6 +235,61 @@ public class ReportShareEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// Every resolve costs the same database round trip, whatever the token looks like.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Expired_revoked_invalid_and_foreign_tokens_are_indistinguishable"/> compares
+    /// what comes back. A short-circuit that rejected an obviously-malformed token before the
+    /// lookup -- <c>if (token.Length != 43) return NotAvailable(...)</c> -- would return
+    /// byte-identical bytes, so that test cannot see one. What it changes is the work: the
+    /// request returns without the unique-index probe, and a database round trip is the term
+    /// that dominates anything an attacker can time. That makes "malformed" measurably cheaper
+    /// than "real but dead", which is the same disclosure as a different status code, only
+    /// harder to notice.
+    ///
+    /// So this counts the commands the request actually sends -- the property the comment above
+    /// the hash in <c>ResolveAsync</c> states, one SHA-256 and one unique-index probe for every
+    /// input -- rather than a wall clock, which on a shared CI box measures the box.
+    /// </remarks>
+    [Fact]
+    public async Task Every_resolve_costs_the_same_database_probe_whatever_the_token_looks_like()
+    {
+        var client = AnonymousClient();
+
+        // The first request through the route pays for host warm-up and a connection, neither
+        // of which is what is being measured.
+        await client.GetAsync($"/shared/reports/{ReportShareTokens.NewToken()}");
+
+        async Task<int> ProbeCostAsync(string token)
+        {
+            _factory.CommandCounter.Reset();
+            var response = await client.GetAsync($"/shared/reports/{token}");
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            return _factory.CommandCounter.Count;
+        }
+
+        var wellFormed = await ProbeCostAsync(ReportShareTokens.NewToken());
+        var costs = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["well-formed but never minted"] = wellFormed,
+            ["wrong charset, far too short"] = await ProbeCostAsync("not-a-token"),
+            ["one character"] = await ProbeCostAsync("a"),
+            ["far too long"] = await ProbeCostAsync(new string('a', 400)),
+            ["digits only"] = await ProbeCostAsync("00000000"),
+        };
+
+        // One probe, not zero and not two: the resolve is a single unique-index lookup, and a
+        // rejected token writes nothing.
+        Assert.Equal(1, wellFormed);
+
+        Assert.True(
+            costs.Values.Distinct().Count() == 1,
+            "a resolve short-circuits on the token's shape, so some tokens are measurably "
+            + "cheaper to reject than others:\n"
+            + string.Join("\n", costs.Select(kv => $"  {kv.Key}: {kv.Value} database command(s)")));
+    }
+
+    /// <summary>
     /// A report that is still generating, or that failed, is not published to link holders --
     /// and is not distinguishable from a dead link either.
     /// </summary>
@@ -501,6 +556,49 @@ public class ReportShareEndpointsTests : IAsyncLifetime
             (await stranger.DeleteAsync($"/admin/reports/{reportId}/shares/{share.Id}")).StatusCode);
 
         // And the link the stranger could not revoke still works for its holder.
+        Assert.Equal(HttpStatusCode.OK, (await AnonymousClient().GetAsync(share.Path)).StatusCode);
+    }
+
+    /// <summary>
+    /// An ordinary employee of the owning company cannot mint, list or revoke a public link.
+    /// </summary>
+    /// <remarks>
+    /// The three admin routes are mapped on a group with <c>RequireAuthorization()</c> and no
+    /// role policy, so the role clause in <c>CanAccessCompany</c> --
+    /// <c>currentUser.Role == Roles.CompanyAdmin &amp;&amp;</c> -- is the entire barrier between
+    /// any authenticated employee and an unauthenticated, year-long link to the company's
+    /// climate report. Nothing else in this file varies the role:
+    /// <see cref="An_admin_of_another_company_cannot_mint_list_or_revoke"/> varies the
+    /// <em>company</em> across all three routes and would stay green with that clause deleted.
+    ///
+    /// Outcomes, not only status codes: after the refused mint the report still has exactly the
+    /// one link its administrator made, and after the refused revoke that link still resolves.
+    /// A handler that wrote the row and then answered 403 would pass a status-only test.
+    /// </remarks>
+    [Theory]
+    [InlineData(Roles.Employee)]
+    [InlineData(Roles.Leader)]
+    [InlineData(Roles.Supervisor)]
+    public async Task A_non_administrator_of_the_owning_company_cannot_mint_list_or_revoke(string role)
+    {
+        var admin = await AdminClientAsync();
+        var reportId = await CreateReportAsync(admin, _companyId);
+        var share = await MintAsync(admin, reportId);
+
+        // Same company, same report, same session mechanics. Only the role differs.
+        var insider = await AdminClientAsync(role);
+
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await insider.PostAsJsonAsync($"/admin/reports/{reportId}/share", new CreateReportShareRequest(null))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await insider.GetAsync($"/admin/reports/{reportId}/shares")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await insider.DeleteAsync($"/admin/reports/{reportId}/shares/{share.Id}")).StatusCode);
+
+        var summaries = await admin.GetFromJsonAsync<List<ReportShareSummary>>($"/admin/reports/{reportId}/shares");
+        Assert.Equal(share.Id, Assert.Single(summaries!).Id);
+        Assert.Null(Assert.Single(summaries!).RevokedAt);
         Assert.Equal(HttpStatusCode.OK, (await AnonymousClient().GetAsync(share.Path)).StatusCode);
     }
 
