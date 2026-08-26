@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using NpgsqlTypes;
@@ -13,9 +14,11 @@ using NpgsqlTypes;
 namespace ClimateProject.Infrastructure.Migrations
 {
     [DbContext(typeof(ClimateProjectDbContext))]
-    partial class ClimateProjectDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260826002812_AddBenchmarkValidationStatusCheck")]
+    partial class AddBenchmarkValidationStatusCheck
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1664,44 +1667,6 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.ToTable("microclimate_questions", (string)null);
                 });
 
-            modelBuilder.Entity("ClimateProject.Domain.Entities.MicroclimateQuestionEmojiOption", b =>
-                {
-                    b.Property<Guid>("MicroclimateQuestionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("microclimate_question_id");
-
-                    b.Property<int>("Order")
-                        .HasColumnType("integer")
-                        .HasColumnName("order");
-
-                    b.Property<string>("Emoji")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)")
-                        .HasColumnName("emoji");
-
-                    b.Property<string>("LabelEn")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("label_en");
-
-                    b.Property<string>("LabelEs")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("label_es");
-
-                    b.Property<int>("Value")
-                        .HasColumnType("integer")
-                        .HasColumnName("value");
-
-                    b.HasKey("MicroclimateQuestionId", "Order");
-
-                    b.HasIndex("MicroclimateQuestionId", "Value")
-                        .IsUnique();
-
-                    b.ToTable("microclimate_question_emoji_options", (string)null);
-                });
-
             modelBuilder.Entity("ClimateProject.Domain.Entities.MicroclimateQuestionOption", b =>
                 {
                     b.Property<Guid>("MicroclimateQuestionId")
@@ -2276,10 +2241,6 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("source_library_item_id");
 
-                    b.Property<Guid?>("SourceQuestionBankItemId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("source_question_bank_item_id");
-
                     b.Property<Guid>("SurveyId")
                         .HasColumnType("uuid")
                         .HasColumnName("survey_id");
@@ -2308,8 +2269,6 @@ namespace ClimateProject.Infrastructure.Migrations
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
 
                     b.HasIndex("SourceLibraryItemId");
-
-                    b.HasIndex("SourceQuestionBankItemId");
 
                     b.HasIndex("SurveyId");
 
@@ -5040,15 +4999,6 @@ namespace ClimateProject.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 
-            modelBuilder.Entity("ClimateProject.Domain.Entities.MicroclimateQuestionEmojiOption", b =>
-                {
-                    b.HasOne("ClimateProject.Domain.Entities.MicroclimateQuestion", null)
-                        .WithMany()
-                        .HasForeignKey("MicroclimateQuestionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("ClimateProject.Domain.Entities.MicroclimateQuestionOption", b =>
                 {
                     b.HasOne("ClimateProject.Domain.Entities.MicroclimateQuestion", null)
@@ -5234,11 +5184,6 @@ namespace ClimateProject.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("SourceLibraryItemId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("ClimateProject.Domain.Entities.QuestionBankItem", null)
-                        .WithMany()
-                        .HasForeignKey("SourceQuestionBankItemId")
-                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("ClimateProject.Domain.Entities.Survey", null)
                         .WithMany()

@@ -67,7 +67,14 @@ public class BenchmarkTests(PostgresContainerFixture postgres)
             Region = "LatAm",
             CreatedBy = user.Id,
             CompanyId = company.Id,
-            ValidationStatus = "validated",
+            // Was the bare literal "validated", which is not one of the four values
+            // BenchmarkValidationStatuses defines and which nothing in `src/` has ever
+            // written. It survived because the column had no check constraint and nothing
+            // read it -- the round trip asserted the string it had just written, so a fifth
+            // vocabulary invented in a test file round-tripped perfectly. #90's
+            // ck_benchmarks_validation_status is what found it, on its first run, which is
+            // the constraint doing the job it was added for.
+            ValidationStatus = BenchmarkValidationStatuses.Verified,
             QualityScore = 0.87,
             Metadata = """{"sample_size": 5000}""",
             PriorPeriodBenchmarkId = priorPeriod.Id,
@@ -107,7 +114,7 @@ public class BenchmarkTests(PostgresContainerFixture postgres)
         Assert.Equal(
             PriorPeriodStatuses.Unlinked,
             (await readDb.Benchmarks.SingleAsync(b => b.Id == priorPeriod.Id)).PriorPeriodStatus);
-        Assert.Equal("validated", loadedBenchmark.ValidationStatus);
+        Assert.Equal(BenchmarkValidationStatuses.Verified, loadedBenchmark.ValidationStatus);
         Assert.Equal(0.87, loadedBenchmark.QualityScore);
 
         var loadedMetric = await readDb.BenchmarkMetrics.SingleAsync(m => m.Id == metric.Id);

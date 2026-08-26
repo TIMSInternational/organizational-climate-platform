@@ -14,7 +14,7 @@ public class Benchmark
     public Guid CreatedBy { get; set; }
     public Guid? CompanyId { get; set; }
     public bool IsActive { get; set; } = true;
-    public string ValidationStatus { get; set; } = "pending";
+    public string ValidationStatus { get; set; } = BenchmarkValidationStatuses.Pending;
     public double QualityScore { get; set; }
     public string? Metadata { get; set; }
     public Guid? PriorPeriodBenchmarkId { get; set; }

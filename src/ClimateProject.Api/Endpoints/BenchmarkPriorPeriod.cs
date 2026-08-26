@@ -50,7 +50,7 @@ public static class BenchmarkPriorPeriod
     /// that actually loops; a long legitimate chain would still issue a query per period. The
     /// browser's <c>followPriorPeriodChain</c> caps at 12 for the same reason.
     /// </remarks>
-    private const int MaxChainLength = 32;
+    public const int MaxChainLength = 32;
 
     /// <summary>
     /// The benchmarks that could be <paramref name="subject"/>'s prior period.
@@ -175,7 +175,7 @@ public static class BenchmarkPriorPeriod
     /// name, so a benchmark carrying the same metric name twice would pair a different one
     /// each time and the year-over-year figure would change without the data changing.
     /// </remarks>
-    private static Task<List<BenchmarkMetricDto>> LoadMetricsAsync(
+    public static Task<List<BenchmarkMetricDto>> LoadMetricsAsync(
         ClimateProjectDbContext db, Guid benchmarkId, CancellationToken cancellationToken)
         => db.BenchmarkMetrics
             .Where(m => m.BenchmarkId == benchmarkId)
