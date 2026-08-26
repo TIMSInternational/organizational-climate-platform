@@ -22,10 +22,16 @@
  * redirected to `/login` — which is what makes it correct for the `/` case too,
  * where there may be no session at all.
  *
- * `resolvePostAcceptRoute` is deliberately left alone and still points at the list
- * pages: it answers a different question (where to send someone who has just
- * accepted an invitation and may not yet have a usable session), and it is the only
- * caller that needs a `null` "there is nowhere to send them" answer.
+ * `resolvePostAcceptRoute` **calls this function** for every role that is not one of
+ * the two administrators — it kept its own answers only for `super_admin` and
+ * `company_admin`, whose landing page is their own administration surface. Before
+ * #138 it pointed the other three at the list pages and answered `null` for a role
+ * it did not recognise, so accepting an invitation and logging in the next morning
+ * put the same person on two different screens. It still answers a different
+ * question (where to send someone who has just accepted an invitation and may not
+ * yet have a usable session), and it is still the only caller that needs a `null`
+ * "there is nowhere to send them" answer — now for one case, a user with no
+ * companyId at all.
  */
 export function resolveInitialRoute(): string {
   return '/dashboard'
