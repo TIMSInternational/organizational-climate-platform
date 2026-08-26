@@ -4,6 +4,7 @@ using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Email;
 using ClimateProject.Application.Localization;
+using ClimateProject.Application.Microclimates;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
@@ -864,5 +865,153 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
 
         Assert.IsType<EmailNotificationSender>(scope.ServiceProvider.GetRequiredService<INotificationSender>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ISurveyInvitationTokens>());
+
+        // #130's half of the same seam, and registered separately because it reads a
+        // different table. A sender constructed without it fails inside a dispatch tick.
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IMicroclimateInvitationTokens>());
+    }
+
+    // ------------------------------------------------------------------
+    // #130: the microclimate half of every guarantee above
+    // ------------------------------------------------------------------
+
+    /// <summary>An ACTIVE microclimate, so it can be distributed.</summary>
+    private Task<Guid> CreateActiveMicroclimateAsync(bool anonymous = true)
+        => _harness.WithDbAsync(async db =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var author = new User
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _companyId,
+                Email = $"{Guid.NewGuid():N}@author.{RecipientDomain}",
+                Name = "Author",
+                Role = Roles.CompanyAdmin,
+                IsActive = true,
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            db.Users.Add(author);
+
+            var microclimate = new Microclimate
+            {
+                Id = Guid.NewGuid(),
+                TitleEn = "Weekly pulse",
+                TitleEs = "Pulso semanal",
+                Language = "both",
+                CompanyId = _companyId,
+
+                // A real row: microclimates.created_by is a foreign key and Guid.Empty is refused.
+                CreatedBy = author.Id,
+                Status = MicroclimateStatuses.Active,
+                TargetParticipantCount = 10,
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            microclimate.Scheduling.StartTime = now.AddMinutes(-5);
+            microclimate.Scheduling.EndTime = now.AddHours(4);
+            microclimate.RealtimeSettings.AnonymousResponses = anonymous;
+            db.Microclimates.Add(microclimate);
+
+            await db.SaveChangesAsync();
+            return microclimate.Id;
+        });
+
+    /// <summary>
+    /// <b>The guarantee this whole slice turns on.</b> A microclimate invitee's mail carries an
+    /// absolute <c>/microclimate-invitations/{token}</c> URL built from the token on THEIR row,
+    /// and that URL is one the API actually honours.
+    ///
+    /// <para>
+    /// End to end through the real seam: the endpoint queues a <c>notifications</c> row with
+    /// <c>MicroclimateNotificationData</c> in its <c>data</c> column, the sweep picks it up,
+    /// <c>EmailNotificationSender</c> branches on the type, <c>MicroclimateInvitationTokens</c>
+    /// resolves the token out of <c>microclimate_invitations</c>, and the composer renders it.
+    /// Five components, four of them new, and the failure mode if any one of them names the
+    /// survey side instead is <b>silent</b>: a null token, a link-less mail, a green build, and
+    /// every invitee holding an email they cannot act on. Which is why the last block here
+    /// resolves the mailed link against the live route rather than comparing strings.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_microclimate_invitation_email_carries_a_link_the_microclimate_route_honours()
+    {
+        var client = await AdminAsync();
+        var microclimateId = await CreateActiveMicroclimateAsync();
+        var (employeeId, employeeEmail) = await SeedEmployeeAsync();
+
+        var invited = await client.PostAsJsonAsync(
+            $"/microclimates/{microclimateId}/invitations",
+            new CreateMicroclimateInvitationsRequest(UserIds: [employeeId]));
+        Assert.Equal(HttpStatusCode.Created, invited.StatusCode);
+
+        var sweep = await SweepAsync(client);
+        Assert.Equal(1, sweep.Sent);
+
+        // Read AFTER the send, from the row itself: predicting the token would prove only that
+        // this test can do base64.
+        var token = await _harness.WithDbAsync(db => db.MicroclimateInvitations
+            .AsNoTracking().Where(i => i.MicroclimateId == microclimateId && i.UserId == employeeId)
+            .Select(i => i.InvitationToken).FirstAsync());
+
+        var expected = $"{CapturingMailHostFixture.AppBaseUrl}/microclimate-invitations/{token}";
+        var message = Assert.Single(_mail.Mailbox.To(employeeEmail));
+
+        // Both parts. A call to action present only in the HTML is a dead end for every
+        // plain-text reader.
+        Assert.Contains(expected, message.TextBody, StringComparison.Ordinal);
+        Assert.Contains($"href=\"{expected}\"", message.HtmlBody, StringComparison.Ordinal);
+
+        // And NOT the survey route. This is the wrong-table mix-up, asserted at the one place
+        // it would actually be seen: in the envelope.
+        Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("/respond", message.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(microclimateId.ToString(), message.TextBody, StringComparison.Ordinal);
+
+        // The link the mail carries is the link the API honours. No string comparison can fake
+        // this: the unauthenticated token route resolves it to this microclimate.
+        using var anonymous = _factory.CreateClient();
+        var opened = await anonymous.GetAsync($"/microclimate-invitations/{token}");
+        opened.EnsureSuccessStatusCode();
+        var detail = await opened.Content.ReadFromJsonAsync<MicroclimateInvitationTokenDetail>();
+        Assert.Equal(microclimateId, detail!.MicroclimateId);
+    }
+
+    /// <summary>
+    /// Revocation between queueing and the sweep is real, not eventual. The row is queued with
+    /// the invitation's id and not its token precisely so this can be true -- the sender makes
+    /// the trip to the database at SEND time, and finds nothing.
+    ///
+    /// <para>The mail still goes out. A recipient whose invitation an administrator withdrew
+    /// gets the message minus its button, never a row marked <c>failed</c> burning three
+    /// retries on a condition no retry can change.</para>
+    /// </summary>
+    [Fact]
+    public async Task An_invitation_revoked_before_the_sweep_is_mailed_without_a_link()
+    {
+        var client = await AdminAsync();
+        var microclimateId = await CreateActiveMicroclimateAsync();
+        var (employeeId, employeeEmail) = await SeedEmployeeAsync();
+
+        var invited = await client.PostAsJsonAsync(
+            $"/microclimates/{microclimateId}/invitations",
+            new CreateMicroclimateInvitationsRequest(UserIds: [employeeId]));
+        var invitationId = Assert.Single(
+            (await invited.Content.ReadFromJsonAsync<MicroclimateInvitationBatchResult>())!.InvitationIds);
+
+        // The window this design exists to close: queued, then withdrawn, then swept.
+        (await client.PostAsync(
+            $"/microclimates/{microclimateId}/invitations/{invitationId}/revoke", null))
+            .EnsureSuccessStatusCode();
+
+        var sweep = await SweepAsync(client);
+        Assert.Equal(1, sweep.Sent);
+
+        var message = Assert.Single(_mail.Mailbox.To(employeeEmail));
+        Assert.DoesNotContain("/microclimate-invitations/", message.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("/microclimate-invitations/", message.HtmlBody, StringComparison.Ordinal);
+
+        // And nothing that looks like a button with nothing behind it.
+        Assert.DoesNotContain("href=\"\"", message.HtmlBody, StringComparison.Ordinal);
     }
 }
