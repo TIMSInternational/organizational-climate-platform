@@ -743,9 +743,16 @@ public class MicroclimateInvitationEndpointsTests : IAsyncLifetime
         Assert.Equal(1, listing.Summary.Revoked);
         Assert.Equal(0, listing.Summary.Completed);
 
-        // Expired counts the revoked row -- revocation expires it too -- and that overlap is
-        // deliberate: expiry is derived, not a status, so it cannot be mutually exclusive with
-        // one.
+        // Zero, and this is the interesting one. Revoking ALSO sets expires_at to now (belt
+        // and braces, so a future path that forgets the status check still fails closed), so
+        // a naive expiry count would report that row as expired and an admin would read a
+        // deliberate withdrawal as a deadline passing. SummariseAsync excludes revoked rows
+        // from the expiry bucket for exactly that reason -- the same exclusion ToDetail's
+        // IsExpired makes, and the same order LoadByTokenAsync checks in.
+        //
+        // Expiry does still overlap the OTHER buckets on purpose: an invitation is both
+        // 'sent' and expired, because expiry is derived from a column rather than stored as a
+        // status, which is what keeps it true without a sweep having run.
         Assert.Equal(0, listing.Summary.Expired);
 
         Assert.True(listing.Anonymity.Anonymous);
