@@ -273,6 +273,15 @@ public class SurveyExportEndpointsTests : IAsyncLifetime
         Assert.Equal(
             ["surveys.export.csv.export", "surveys.export.export", "surveys.export.pdf.export"],
             rows.Select(r => r.Action).Order(StringComparer.Ordinal));
+
+        // The SCOPE half of #122's "audit-logged with actor and scope". Without it the trail
+        // answers "somebody exported a survey" and not "somebody exported THIS survey", which
+        // is the only version of the answer worth having after an incident. It is derived by
+        // the middleware from the route's Guid rather than set by the handler -- which is
+        // exactly why it needs asserting here: nothing in SurveyExportEndpoints would look
+        // wrong if the derivation stopped working.
+        Assert.All(rows, row => Assert.Equal(survey.Id.ToString(), row.ResourceId));
+        Assert.All(rows, row => Assert.Equal(_companyAId, row.CompanyId));
     }
 
     [Fact]
