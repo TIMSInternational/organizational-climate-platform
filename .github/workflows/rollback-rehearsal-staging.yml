@@ -1,0 +1,294 @@
+name: rollback-rehearsal-staging
+
+# ==================================================================================
+# THE REHEARSAL (#159). STAGING ONLY. It cannot name the production stack: every
+# stack name below is a literal, the role it assumes is
+# climate-project-github-deploy-staging (whose policy reaches only the staging
+# stack), and there is no environment input to get wrong.
+# ==================================================================================
+#
+# #159's title is "tested not just written", and this is the difference. It rolls
+# the staging API back one image, measures what that costs, rolls it forward again
+# so staging is left where it was found, and runs the database check that a real
+# rollback would need -- against a real database, with real credentials, by the same
+# scripts a human would run.
+#
+# What a green run PROVES, item by item. This list is the point of the file; if a
+# step is removed, one of these claims silently stops being true:
+#
+#   1. The previous image is still pullable from ECR. (The ECR lifecycle keeps only
+#      the most recent 40 tagged images -- a rollback horizon nobody has ever tested.)
+#   2. The operator's credentials can actually perform the stack update. Today the
+#      ONLY principal with cloudformation:UpdateStack on these stacks is a GitHub
+#      OIDC role; whether any human has an equivalent path is unverified, and if the
+#      answer is no then a "documented" rollback is one nobody can execute.
+#   3. How long the swap takes, measured rather than estimated.
+#   4. What it costs in failed requests, measured rather than taken from AWS's
+#      "zero-downtime" claim.
+#   5. That the __EFMigrationsHistory check runs and reports a real answer.
+#   6. That the environment comes back afterwards.
+#
+# HARD DEPENDENCY: #156. There is no staging environment as of 2026-08-24 -- no
+# `staging` GitHub environment, no staging stacks. The first step below fails with
+# that message rather than a CloudFormation 400, so the dependency is executable
+# rather than a footnote.
+
+on:
+  workflow_dispatch:
+    inputs:
+      leave_rolled_back:
+        description: >-
+          "yes" to STOP after the rollback instead of rolling forward again. For
+          rehearsing the part after the rollback (the schema decision, the comms)
+          without racing a clock. Default "no" leaves staging where it was found.
+        required: false
+        default: "no"
+        type: string
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  BOOTSTRAP_STACK_NAME: climate-project-api-staging-bootstrap
+  SERVICE_STACK_NAME: climate-project-api-staging
+
+jobs:
+  rehearse:
+    name: Rehearse a rollback against staging
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/climate-project-github-deploy-staging
+
+      # #156's gate, made executable.
+      - name: Require that staging exists
+        run: |
+          set -euo pipefail
+          if ! aws cloudformation describe-stacks --stack-name "$SERVICE_STACK_NAME" >/dev/null 2>&1; then
+            echo "::error::Stack $SERVICE_STACK_NAME does not exist. The rollback rehearsal (#159) cannot run until staging is provisioned (#156) -- see docs/runbooks/staging-provisioning.md. Rehearsing against production is a separate, human decision; see docs/runbooks/rollback.md, 'Rehearsing without staging'." >&2
+            exit 1
+          fi
+          echo "Staging stack present."
+
+      # ------------------------------------------------------------------------------
+      # Pick the target: the second-newest staging-<sha> image in ECR.
+      # ------------------------------------------------------------------------------
+      # Deliberately NOT "the previous commit on main". The question a rehearsal must
+      # answer is "can I get back to something that was actually deployed", and only
+      # ECR knows what was actually deployed. Anything else rehearses a rollback to an
+      # image that may never have existed.
+      - name: Choose the rollback target from ECR
+        id: target
+        run: |
+          set -euo pipefail
+          REPO_URI="$(aws cloudformation describe-stacks --stack-name "$BOOTSTRAP_STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='EcrRepositoryUri'].OutputValue | [0]" --output text)"
+          REPO_NAME="${REPO_URI##*/}"
+
+          aws ecr describe-images --repository-name "$REPO_NAME" --output json > /tmp/images.json
+
+          # Newest first, keeping only images carrying an immutable staging-<40hex>
+          # tag. staging-latest is excluded on purpose: it is MUTABLE and always names
+          # the newest build, so it is not a rollback anchor and reaching for it is the
+          # commonest way to "roll back" to exactly what you already have.
+          jq -r '
+            [ .imageDetails[]
+              | . as $d
+              | ($d.imageTags // [])[]
+              | select(test("^staging-[0-9a-f]{40}$"))
+              | {tag: ., pushed: $d.imagePushedAt}
+            ] | sort_by(.pushed) | reverse | .[] | "\(.pushed) \(.tag)"
+          ' /tmp/images.json > /tmp/tags.txt
+
+          COUNT="$(wc -l < /tmp/tags.txt | tr -d ' ')"
+          echo "Immutable staging images available: $COUNT"
+          cat /tmp/tags.txt
+
+          if [ "$COUNT" -lt 2 ]; then
+            echo "::error::Need at least two staging images to rehearse a rollback; found $COUNT. Dispatch deploy-staging.yml twice first." >&2
+            exit 1
+          fi
+
+          CURRENT_TAG="$(sed -n '1p' /tmp/tags.txt | awk '{print $2}')"
+          TARGET_TAG="$(sed -n '2p' /tmp/tags.txt | awk '{print $2}')"
+          {
+            echo "current_sha=${CURRENT_TAG#staging-}"
+            echo "target_sha=${TARGET_TAG#staging-}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Read App Runner URL
+        id: service
+        run: |
+          set -euo pipefail
+          SERVICE_URL="$(aws cloudformation describe-stacks --stack-name "$SERVICE_STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue | [0]" --output text)"
+          echo "base_url=https://$SERVICE_URL" >> "$GITHUB_OUTPUT"
+
+      # Baseline first. A rollback that costs four failed requests means nothing until
+      # you know what steady state costs, and this environment's steady state has never
+      # been measured. 60 seconds is enough to distinguish "zero" from "not zero"; it
+      # is not enough to characterise a rare fault, and it does not claim to.
+      - name: Measure the steady-state baseline
+        env:
+          BASE_URL: ${{ steps.service.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          ./scripts/rollback-probe.sh "$BASE_URL" 60 0.5 4 /tmp/probe-baseline | tee /tmp/baseline.txt
+
+      # The probe runs in the background across the swap. 900s is a ceiling, not an
+      # expectation: it must outlast the rollback so the swap lands inside the window,
+      # and the summary reports where in the window it landed.
+      - name: Start the probe
+        env:
+          BASE_URL: ${{ steps.service.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          nohup ./scripts/rollback-probe.sh "$BASE_URL" 900 0.5 4 /tmp/probe-rollback > /tmp/probe-rollback.log 2>&1 &
+          echo "$!" > /tmp/probe.pid
+          sleep 10
+
+      - name: Roll staging back
+        env:
+          TARGET_SHA: ${{ steps.target.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          START="$(date -u +%s)"
+          ./scripts/rollback-api-image.sh \
+            --stack "$SERVICE_STACK_NAME" \
+            --bootstrap-stack "$BOOTSTRAP_STACK_NAME" \
+            --region "$AWS_REGION" \
+            --target-sha "$TARGET_SHA" \
+            --execute
+          echo "ROLLBACK_SECONDS=$(( $(date -u +%s) - START ))" >> "$GITHUB_ENV"
+
+      # ------------------------------------------------------------------------------
+      # The schema check, run for real.
+      # ------------------------------------------------------------------------------
+      # This is the step most worth rehearsing, because it is the one a human will skip
+      # under pressure and the one whose omission corrupts the NEXT deploy rather than
+      # this one. Same two guards as the deploy workflows -- transaction pooler and the
+      # IPv6-only direct host -- because a rehearsal that fails on a connection-string
+      # shape has rehearsed the connection string, not the rollback.
+      - name: Run the __EFMigrationsHistory check
+        env:
+          MIGRATION_CONN: ${{ secrets.MIGRATION_DATABASE_CONNECTION_STRING }}
+          TARGET_SHA: ${{ steps.target.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          if printf '%s' "$MIGRATION_CONN" | grep -qE '(^|[^0-9])6543([^0-9]|$)'; then
+            echo "::error::MIGRATION_DATABASE_CONNECTION_STRING points at port 6543 (transaction pooler). Use the session pooler on 5432." >&2
+            exit 1
+          fi
+          if printf '%s' "$MIGRATION_CONN" | grep -qE 'db\.[a-z0-9-]+\.supabase\.co'; then
+            echo "::error::MIGRATION_DATABASE_CONNECTION_STRING points at the IPv6-only direct host, unreachable from Actions. Use the session pooler." >&2
+            exit 1
+          fi
+
+          psql "$MIGRATION_CONN" -At \
+            -c 'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId";' \
+            | sed 's/$/.cs/' | sort > /tmp/db-migrations.txt
+
+          git ls-tree -r --name-only "$TARGET_SHA" src/ClimateProject.Infrastructure/Migrations/ \
+            | grep -E '/[0-9]{14}_.*\.cs$' | grep -v Designer | xargs -n1 basename | sort > /tmp/code-migrations.txt
+
+          {
+            echo "## Schema vs. rolled-back code"
+            echo ""
+            echo "Applied in the database: $(wc -l < /tmp/db-migrations.txt | tr -d ' ')"
+            echo "Known to \`$TARGET_SHA\`: $(wc -l < /tmp/code-migrations.txt | tr -d ' ')"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          comm -23 /tmp/db-migrations.txt /tmp/code-migrations.txt > /tmp/schema-delta.txt
+          if [ -s /tmp/schema-delta.txt ]; then
+            {
+              echo "### Applied but unknown to the rolled-back code"
+              sed -e 's/^/- /' /tmp/schema-delta.txt
+              echo ""
+              echo "**Do not author a new migration from this commit** while that is true -- see rollback.md section 4."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No delta: the database is exactly at the rolled-back code's schema." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Roll staging forward again
+        if: ${{ inputs.leave_rolled_back != 'yes' }}
+        env:
+          CURRENT_SHA: ${{ steps.target.outputs.current_sha }}
+        run: |
+          set -euo pipefail
+          START="$(date -u +%s)"
+          ./scripts/rollback-api-image.sh \
+            --stack "$SERVICE_STACK_NAME" \
+            --bootstrap-stack "$BOOTSTRAP_STACK_NAME" \
+            --region "$AWS_REGION" \
+            --target-sha "$CURRENT_SHA" \
+            --execute
+          echo "ROLLFORWARD_SECONDS=$(( $(date -u +%s) - START ))" >> "$GITHUB_ENV"
+
+      - name: Collect the measurements
+        if: always()
+        env:
+          CURRENT_SHA: ${{ steps.target.outputs.current_sha }}
+          TARGET_SHA: ${{ steps.target.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          # The probe self-terminates at its own deadline; killing it here just stops
+          # the job waiting on it. Its CSVs are already on disk either way.
+          if [ -f /tmp/probe.pid ]; then kill "$(cat /tmp/probe.pid)" 2>/dev/null || true; fi
+          sleep 2
+
+          {
+            echo ""
+            echo "## Rehearsal measurements"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| rolled back from | \`$CURRENT_SHA\` |"
+            echo "| rolled back to | \`$TARGET_SHA\` |"
+            echo "| rollback wall clock | ${ROLLBACK_SECONDS:-not reached} s |"
+            echo "| roll-forward wall clock | ${ROLLFORWARD_SECONDS:-skipped} s |"
+            echo ""
+            echo "### Steady-state baseline (60s, before anything changed)"
+            echo '```'
+            sed -n '/=== rollback probe summary ===/,$p' /tmp/baseline.txt 2>/dev/null || echo "not captured"
+            echo '```'
+            echo ""
+            echo "### Across the swap"
+            echo '```'
+            tail -40 /tmp/probe-rollback.log 2>/dev/null || echo "not captured"
+            echo '```'
+            echo ""
+            echo "Transcribe these into the measurement table in \`docs/runbooks/rollback.md\`"
+            echo "in the same change that closes #159. A rehearsal whose numbers are only in"
+            echo "a workflow log has not updated the runbook, and the runbook is the artifact."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the raw probe data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollback-rehearsal-probe
+          path: |
+            /tmp/probe-baseline
+            /tmp/probe-rollback
+            /tmp/probe-rollback.log
+            /tmp/baseline.txt
+          if-no-files-found: warn
+          retention-days: 365

@@ -15,10 +15,21 @@ gone stale before.
 > phrased as though a migration were coming is stale; treat
 > [`docs/decisions/no-data-migration.md`](../decisions/no-data-migration.md) as authoritative.
 
+> **Amended again 2026-08-24 (#159).** [`rollback.md`](./rollback.md) has been rewritten
+> from scratch and no longer agrees with this file in two places. (1) **Rollback is not a
+> DNS operation.** The web is on Vercel's anycast address, so rolling it back re-points a
+> Vercel alias, not a DNS record; the API has no custom domain at all. **Phase B's TTL
+> lowering below is therefore not a rollback prerequisite** and should not be allowed to
+> gate a date. (2) The **point of no return is not one moment** — there are three
+> independent one-way doors (a non-additive migration, a hard-deleting job tick, an email
+> leaving), each closing on its own schedule. Where this file and `rollback.md` disagree,
+> `rollback.md` is the later document.
+
 Companions:
 
-- [`rollback.md`](./rollback.md) — what "roll back" means per layer, and the one moment
-  that is not reversible. Read it **before** the window opens, not during an incident.
+- [`rollback.md`](./rollback.md) — what "roll back" means per layer, which layers are
+  genuinely reversible, and the three one-way doors. Read it **before** the window opens,
+  not during an incident.
 - [`legacy-dependencies.md`](./legacy-dependencies.md) — everything still pointing at the
   legacy stack, row by row, with what replaces it.
 
