@@ -188,33 +188,73 @@ than rotate a credential for a database nothing should use again.
 verification. **Rollback:** none needed for decommission (that is the point); for rotation,
 roll forward.
 
-## C. `InternalApiKey`
+## C. `InternalApiKey` — **two-sided: rotate the secret, redeploy BOTH, never one**
 
-*~15 minutes. During the mismatch window `/api/internal/*` returns 401 per request
-(fail-closed); user traffic is unaffected.*
+*~45 minutes once both services are deployed, of which ~20 is a bounded mismatch
+window. During that window `/api/internal/*` returns 401 per request (fail-closed);
+**user traffic is unaffected**.*
 
-Names: Secrets Manager `climate-project-api/prod/InternalApiKey` → climate API env
-`InternalApiKey`; the only caller is climate-tracking, which holds the same value as
-`ClimateProjectInternalApiKey` (its API **and** Workers).
+**THIS IS A TWO-SIDED ROTATION (#219).** One Secrets Manager entry,
+`climate-project-api/prod/InternalApiKey`, read by **two** services under **two
+different configuration key names** — which is exactly why it is easy to half-do:
 
-0. **Confirm whether the tracking services run in production at all.** Their source lives in
-   this repo (`services/tracking-api`) but no deploy pipeline for them exists here, and the
-   frontend's direct client to them is documented as not production-usable (README, #56). If
-   they are not deployed, steps 4–5 shrink to "record the new value wherever tracking's
-   config will live". *(Unverifiable from this machine on 2026-08-15.)*
+| service | configuration key | how it gets there |
+|---|---|---|
+| climate-project-api | `InternalApiKey` | App Runner `RuntimeEnvironmentSecrets`, from `InternalApiKeySecretArn` |
+| climate-tracking-api (API **and** Workers) | `ClimateProjectInternalApiKey` | App Runner `RuntimeEnvironmentSecrets`, from the **same ARN** |
+
+**The mechanism that decides the ordering, and the one people get wrong:** App Runner
+resolves those ARNs at **instance start**, not at deploy time. `put-secret-value` on
+its own therefore changes nothing — each service keeps serving the old value until
+its instances are replaced. **Writing the secret is not a rotation; the two redeploys
+are.** It also means the mismatch window is bounded by those two redeploys rather
+than by the write, which is what makes step 3→4 predictable instead of open-ended.
+
+0. **Is the tracking service deployed?** As of **2026-08-24 it is not** — no stack, no
+   image, no database (see the correction at the head of section C of
+   `rotation-inventory.md`). While that holds, steps 4–5 are a **no-op**, this is a
+   one-sided rotation, and nothing downstream can break. The deploy path now exists as
+   files and has never been dispatched
+   (`.github/workflows/deploy-tracking-prod.yml`,
+   [`docs/runbooks/tracking-service-provisioning.md`](../runbooks/tracking-service-provisioning.md)).
+   Re-check with
+   `aws cloudformation describe-stacks --stack-name climate-tracking-api-prod --region us-east-1`
+   — a `does not exist` error means steps 4–5 are still a no-op.
 1. Generate: `openssl rand -hex 32`.
-2. SECRET-UPDATE `climate-project-api/prod/InternalApiKey`.
-3. REDEPLOY; PROBE-READY. A blank/failed write fails loudly — the host validates the key at
-   startup (`ValidateOnStart`, #189), so a bad value means the deploy itself fails; that is
-   the probe for it.
-4. Set the same value as `ClimateProjectInternalApiKey` in the tracking deployment's config
-   (API and Workers both) and redeploy them.
+2. SECRET-UPDATE `climate-project-api/prod/InternalApiKey`. **One secret, not two.** Both
+   services read this ARN; there is deliberately no `climate-tracking/prod/...` copy,
+   because a copy is a thing that can be updated on one side only, and that is the
+   failure this section exists to prevent. `deploy-tracking-prod.yml` reads the ARN back
+   off the live `climate-project-api-prod` stack and refuses to deploy if it differs, so
+   the second-copy mistake cannot be made silently.
+3. **Redeploy climate-project.** `gh workflow run deploy-prod.yml --ref main`, ~21 minutes
+   (measured across five successful runs). PROBE-READY. A blank or failed write fails
+   loudly — the host validates the key at startup (`ValidateOnStart`, #189), so a bad
+   value fails the deploy itself; that is the probe for it.
+4. **Redeploy climate-tracking.** `gh workflow run deploy-tracking-prod.yml --ref main`,
+   ~20 minutes. Its API and its Workers are the **same process** under the deployment
+   #219 chose (the API image is the scheduler, mirroring #275), so this is one dispatch,
+   not two.
 5. **Verify:** exercise one tracking→climate call and see 200 — or watch the climate App
    Runner application log for the **absence** of repeated
-   `401 "Invalid or missing internal API key."`. Mismatch is per-request 401, fail-closed —
-   tolerable for the minutes between 3 and 4.
+   `401 "Invalid or missing internal API key."`.
 
-**Rollback:** roll forward.
+**Do not stop after step 3.** A rotation that redeploys one side and not the other
+leaves the system in the failure #219 describes: not a 500 and not a startup crash, but
+a **per-request 401 that reads like an authentication bug in new code**, surfacing at
+whatever moment the first cross-service call happens rather than at deploy time.
+
+**Which side goes first does not matter for correctness** — either order produces the
+same symmetric mismatch window — but **both must happen, and nothing else should be
+dispatched in between**. What the ~20-minute window actually costs, concretely:
+`CacheSyncWorker` logs one error per entity type per 15-minute tick and syncs nothing
+(at most two missed ticks; the cache self-heals on the next good one), and plan
+creation still works because the hallazgo lookup swallows client failures (`ca7c9fd`).
+Nothing a user does fails.
+
+**Rollback:** roll forward. Secrets Manager retains the previous value as `AWSPREVIOUS`,
+so if step 4 cannot be completed, restoring the old value and redeploying
+climate-project alone returns the pair to a consistent state.
 
 ## D1. Google OAuth client secret — legacy only
 

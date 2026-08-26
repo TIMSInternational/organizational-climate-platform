@@ -2,6 +2,26 @@
 
 This directory holds the CloudFormation templates that stand up `climate-project-api` in AWS. This README is the runbook for deploying it — read it before touching production.
 
+> **There is a SECOND service in this directory as of #219, and it is not this one.**
+> `climate-tracking-api-bootstrap.yml` and `climate-tracking-api-prod-service.yml` stand up
+> `services/tracking-api` (climate-tracking), deployed by
+> `.github/workflows/deploy-tracking-prod.yml`. Same two-stack shape, same `/ready` health
+> check, same 20-consecutive canary — a second *file set*, not a second *pattern*, and the
+> reasons it is separate files rather than more parameters on these ones are written at the
+> top of the tracking bootstrap template.
+>
+> **Nothing of it has been deployed.** No stack, no ECR repository, no image, no database.
+> The provisioning sequence, the values only a human can supply, and the ordering constraint
+> that matters most (the Vercel variable goes **last**, because setting it swaps Action Plans
+> out of the client's nav) are in
+> [`docs/runbooks/tracking-service-provisioning.md`](../../docs/runbooks/tracking-service-provisioning.md).
+>
+> Three differences from this service worth knowing before reading either template: the
+> tracking service pins **MaxSize 1** because its background workers have no distributed
+> lease; it has **no wildcard CORS support**, so Vercel previews cannot call it; and it has
+> **no `DatabaseConnectionStringPolicy`**, so its pool bound has to live in the connection
+> string itself.
+
 ## Architecture overview
 
 Deployment is split into two CloudFormation stacks. `climate-project-api-bootstrap.yml` provisions the long-lived, rarely-changed foundation: an ECR repository for API images, the `AppRunnerEcrAccessRole` App Runner uses to pull those images, and the `GitHubDeployRole` that GitHub Actions assumes via OIDC to run deploys. `climate-project-api-prod-service.yml` provisions the App Runner service itself and is deployed on every release, taking the image URI and the ECR access role ARN (both read from the bootstrap stack's outputs) as parameters. In steady state: bootstrap stack once (or whenever the deploy role's permissions change), service stack on every deploy.

@@ -1,0 +1,496 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  App Runner service for climate-tracking-api (services/tracking-api). Same shape
+  as climate-project-api-prod-service.yml -- one template for every environment,
+  every environment-specific value a parameter, defaults are production's -- with
+  three deliberate differences argued in the comment block at the top of the
+  source and at each resource. PREREQUISITE: this service does not serve /ready
+  yet, and HealthCheckPath defaults to /ready. Read that comment block before
+  deploying. Refs #219.
+
+# THE THREE DIFFERENCES FROM climate-project-api-prod-service.yml:
+#
+#   1. An EXPLICIT AWS::AppRunner::AutoScalingConfiguration pinned to ONE
+#      instance, because this image co-hosts two background workers that have no
+#      distributed lease. climate-project-api leaves autoscaling implicit and
+#      gets App Runner's default MaxSize of 25; that is safe there only because
+#      PostgresAdvisoryJobLease exists, and it does not exist here. Full argument
+#      on the resource itself.
+#   2. No wildcard CORS origins. climate-tracking's host binds
+#      `Cors:AllowedOrigins` and nothing else -- there is no
+#      Cors:AllowedWildcardOrigins and no CorsOriginMatcher in this service -- so
+#      Vercel PREVIEW deployments cannot reach it. A real limitation, not an
+#      omission; see CorsAllowedOrigin.
+#   3. Two plain (non-secret) runtime variables climate-project has no equivalent
+#      of: ClimateProjectBaseUrl and ProcomerCompanyId. Both fail the host at
+#      startup if absent or blank, so both are required parameters with no
+#      default.
+#
+# PREREQUISITE, AND THIS TEMPLATE CANNOT BE DEPLOYED WITHOUT IT.
+# HealthCheckPath defaults to /ready, and services/tracking-api DOES NOT SERVE
+# /ready today -- its Program.cs maps `/`, `/health`, `/version`, `/api/whoami`
+# and the three endpoint groups, and `/health` is a static literal that opens no
+# database connection. A deploy against today's source fails its App Runner
+# health check and rolls back. Do NOT "fix" that by pointing this at /health:
+# that is precisely the configuration #221 removed from climate-project, for the
+# reason written on HealthCheckPath below. Add /ready to the tracking host first
+# (docs/runbooks/tracking-service-provisioning.md, step 1).
+
+Parameters:
+  ServiceName:
+    Type: String
+    Default: climate-tracking-api-prod
+    AllowedPattern: "[A-Za-z0-9][A-Za-z0-9-_]{3,39}"
+    Description: App Runner service name.
+  EnvironmentName:
+    Type: String
+    Default: production
+    AllowedValues:
+      - production
+      - staging
+    Description: >-
+      Lowercase environment name, used for the Environment resource tags. Travels
+      with AspNetCoreEnvironment (production/Production, staging/Staging); two
+      parameters rather than one because CloudFormation cannot change a string's
+      case without a Mappings lookup.
+  AspNetCoreEnvironment:
+    Type: String
+    Default: Production
+    AllowedValues:
+      - Production
+      - Staging
+    Description: >-
+      Value for ASPNETCORE_ENVIRONMENT. The tracking host keys no behaviour on it —
+      there is no appsettings.Staging.json in services/tracking-api — but /version
+      reports it, so an honest value is what makes a staging instance identify
+      itself as staging rather than masquerade as production.
+  ImageIdentifier:
+    Type: String
+    Description: Full ECR image identifier, including tag.
+  EcrAccessRoleArn:
+    Type: String
+    Description: IAM role ARN that App Runner uses to pull the private ECR image.
+  HealthCheckPath:
+    Type: String
+    Default: /ready
+    Description: >-
+      App Runner HTTP health check path. /ready, NOT /health, and the argument is
+      the one #221 settled for climate-project rather than a new one: /health is a
+      static literal that opens no database connection, so an instance that has
+      lost Postgres passes it FOREVER and is never replaced or drained. The deploy
+      canary catches a broken rollout once, at rollout; nothing catches an instance
+      that degrades afterwards.
+
+      The counter-argument — that a database-dependent probe lets a Postgres blip
+      tear down a healthy container — is answered by the THRESHOLDS below, not by
+      the path. See HealthCheckConfiguration.
+
+      This service does not serve /ready yet. That is a prerequisite, not a reason
+      to change this default; see the Description at the top of this file.
+  Cpu:
+    Type: String
+    Default: 0.25 vCPU
+    AllowedValues:
+      - 0.25 vCPU
+      - 0.5 vCPU
+      - 1 vCPU
+      - 2 vCPU
+      - 4 vCPU
+    Description: >-
+      App Runner CPU allocation. 0.25 vCPU matches climate-project-api. Note this
+      instance also runs the two background workers, so if the daily semaforo pass
+      over every open plan starts taking minutes rather than seconds, this is the
+      knob — not the instance count, which is pinned at 1 on purpose.
+  Memory:
+    Type: String
+    Default: 0.5 GB
+    AllowedValues:
+      - 0.5 GB
+      - 1 GB
+      - 2 GB
+      - 3 GB
+      - 4 GB
+      - 6 GB
+      - 8 GB
+      - 10 GB
+      - 12 GB
+    Description: >-
+      App Runner memory allocation. 0.5 GB matches climate-project-api. The one
+      workload here that is not obviously small is the .xlsx export (#386), which
+      builds the whole workbook in memory before returning it; at Procomer's plan
+      counts that is kilobytes, but it is the thing that would make this number
+      wrong first.
+  CorsAllowedOrigin:
+    Type: String
+    Description: >-
+      Exact production frontend origin allowed by CORS — today
+      https://climate.timsint.com, the value the `production` GitHub environment
+      already holds as CORS_ALLOWED_ORIGIN for climate-project-api (read back
+      2026-08-24).
+
+      THERE IS NO WILDCARD COUNTERPART, unlike climate-project-api's template.
+      services/tracking-api/src/ClimateTracking.Api/Program.cs binds
+      `Cors:AllowedOrigins` as a plain string array and calls
+      `policy.WithOrigins(allowedOrigins)`; it has no
+      Cors:AllowedWildcardOrigins section and no pattern matcher. So a Vercel
+      PREVIEW deployment (https://climate-*-....vercel.app) cannot call this
+      service, and a preview build that has VITE_TRACKING_API_BASE_URL set will
+      fail every tracking request at the preflight. Keep that variable on Vercel's
+      Production scope only until the tracking host grows wildcard support.
+  CorsAdditionalAllowedOrigin:
+    Type: String
+    Default: ""
+    Description: >-
+      Optional SECOND exact frontend origin, same purpose and same
+      empty-means-absent rule as climate-project's (#160): an empty string here
+      removes the index-1 variable entirely rather than binding "" as an origin.
+      Passing it explicitly empty is also the only way to REMOVE an origin, because
+      `aws cloudformation deploy` reuses a parameter's previous stack value when it
+      is omitted.
+  TrackingJwtSecretArn:
+    Type: String
+    Description: >-
+      Secrets Manager ARN holding the JWT signing key. MUST BE THE SAME ARN
+      climate-project-api-prod is deployed with
+      (climate-project-api/prod/tracking-jwt-secret). This is not a preference:
+      climate-project MINTS the tokens (JwtTokenService) and this service VALIDATES
+      them off the same HMAC-SHA256 key via TrackingTokenValidation. A different
+      value here is not a degraded state, it is total — every token from the web app
+      fails signature validation and every authenticated route 401s.
+
+      deploy-tracking-prod.yml reads the live climate-project stack's
+      TrackingJwtSecretArn parameter and refuses to deploy if this does not match
+      it, so the requirement is enforced rather than documented.
+  DatabaseConnectionStringSecretArn:
+    Type: String
+    Description: >-
+      Secrets Manager ARN holding climate-tracking's OWN Postgres connection
+      string, bound to ConnectionStrings__ClimateTracking. A DIFFERENT database
+      from climate-project's: this service owns eight tables of its own
+      (planes_de_accion, bitacora_entries, notificaciones, semaforo_threshold_config
+      and four *_cache tables) and its own __EFMigrationsHistory.
+
+      Two requirements on the VALUE, neither of which anything in this repository
+      can check, because the runtime string goes straight from Secrets Manager to
+      App Runner and never passes through the deploy workflow:
+
+        1. SESSION POOLER, PORT 5432 — not 6543. Supavisor's transaction mode hands
+           a different backend to each statement and Npgsql holds pooled connections
+           open across statements; that mismatch is #220, which cost climate-project
+           ~50% of its /ready probes. climate-project now refuses to boot on 6543
+           (Database__RequireSessionPooler); THIS SERVICE HAS NO SUCH GUARD, so here
+           the wrong port degrades silently exactly the way it used to there.
+        2. `Maximum Pool Size=10` MUST BE IN THE STRING. ClimateTrackingDbContext is
+           registered with a bare `options.UseNpgsql(connectionString)` — there is no
+           DatabaseConnectionStringPolicy in this service — so Npgsql takes its
+           driver default of 100 connections per process. Npgsql honours a
+           `Maximum Pool Size` written into the connection string, so this is
+           fixable in the secret with no code change, and it is the only place it
+           can be fixed today. At one instance (see the autoscaling note) that turns
+           a 100-connection ceiling into a 10-connection one.
+  InternalApiKeySecretArn:
+    Type: String
+    Description: >-
+      Secrets Manager ARN holding InternalApiKey — bound here to the configuration
+      key ClimateProjectInternalApiKey, which is the name THIS service reads
+      (ClimateTracking.Api/Program.cs and ClimateTracking.Workers/Program.cs both
+      `?? throw` on it) for the value climate-project-api reads as InternalApiKey.
+      One secret, two configuration key names, and #219 exists because that is
+      invisible from either side alone.
+
+      MUST BE THE SAME ARN climate-project-api-prod is deployed with
+      (climate-project-api/prod/InternalApiKey), never a separately-managed copy —
+      one source of truth is what makes a rotation unable to desynchronise them.
+      Two failure modes, and the second is the dangerous one:
+
+        absent  -> this service throws at startup, fails its health check, and the
+                   deploy is rejected. Loud and total.
+        stale   -> every /api/internal/* call returns 401 "Invalid or missing
+                   internal API key.", per request, failing closed. It reads as an
+                   authentication bug in new code rather than a configuration
+                   coupling, and it surfaces at whatever moment the first
+                   cross-service call happens rather than at deploy time.
+
+      deploy-tracking-prod.yml refuses to deploy unless this equals the live
+      climate-project stack's InternalApiKeySecretArn.
+  ClimateProjectBaseUrl:
+    Type: String
+    Description: >-
+      Base URL of climate-project-api, e.g.
+      https://bhgrdkd4gt.us-east-1.awsapprunner.com. Required, no default: the host
+      `?? throw`s on it and `new Uri(value)` then throws on a blank one, so a
+      missing value fails startup twice over.
+
+      Point it at the API's OWN origin, not at the web app's. This is a
+      server-to-server call authenticated with InternalApiKey; it never passes
+      through the browser and is not subject to the CORS allowlist.
+  ProcomerCompanyId:
+    Type: String
+    AllowedPattern: "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    Description: >-
+      The climate-project `Company` GUID this tracking deployment serves. Not a
+      secret — it is a tenant identifier, and it is pattern-constrained here because
+      the two ways of getting it wrong are both silent-ish:
+
+        blank      -> the host refuses to start (IsNullOrWhiteSpace, #153). That
+                      check exists because appsettings.json ships this as "", so the
+                      earlier `?? throw` never fired and MatchingTenantRequirement
+                      was built comparing every caller against "" — which
+                      climate-project's company-less super_admins MATCH, since they
+                      carry a blank companyId claim. A blank tenant handed every one
+                      of them this tenant's whole API.
+        non-GUID   -> the host starts, and every /api/internal/{nodos,personas} call
+                      400s because those routes validate company_id as a GUID. The
+                      cache never fills, so the plans list and the .xlsx export show
+                      rows with no nodo and no persona names.
+
+      The AllowedPattern catches the second at deploy time. The first cannot be
+      caught here (CloudFormation cannot express "non-empty AND matching") but the
+      pattern rejects "" as a side effect, which is the same outcome.
+  CacheSyncIntervalMinutes:
+    Type: String
+    Default: "15"
+    AllowedPattern: "[0-9]+"
+    Description: >-
+      Minutes between CacheSyncWorker passes over /api/internal/nodos, /personas
+      and /ciclos-encuesta. 15 is the application default
+      (ClimateTracking.Workers/Program.cs) and is passed explicitly here for the
+      same reason every other parameter is: `aws cloudformation deploy` reuses a
+      parameter's previous stack value when omitted, so an unpassed parameter makes
+      the deployed configuration a function of invisible prior stack state.
+
+      This is a CACHE of an org chart, not a transaction feed. 15 minutes means a
+      department renamed in climate-project takes up to 15 minutes to appear in a
+      tracking dropdown. Lowering it costs one round trip per entity type per tick
+      against climate-project's /api/internal rate-limit partition; raising it costs
+      staleness. Do not lower it below 5 without checking that partition's ceiling.
+
+Conditions:
+  # An optional list element cannot be expressed by passing an empty value: the app
+  # binds Cors:AllowedOrigins straight from the numbered environment variables, so
+  # Cors__AllowedOrigins__1="" binds a literal empty-string origin. The Fn::If below
+  # resolves to AWS::NoValue, which drops the whole list ENTRY -- the only way to
+  # make an index genuinely absent rather than present-and-empty.
+  HasAdditionalAllowedOrigin: !Not [!Equals [!Ref CorsAdditionalAllowedOrigin, ""]]
+
+Resources:
+  AppRunnerInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ServiceName}-instance
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: tasks.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: read-runtime-secrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Two of these three secrets are OWNED by the climate-project side
+              # (climate-project-api/prod/tracking-jwt-secret and
+              # climate-project-api/prod/InternalApiKey). Granting this role read on
+              # them is what "one source of truth" costs and is the correct trade:
+              # the alternative is a second copy of each value in a
+              # climate-tracking/prod/... secret, which is exactly the drift #219
+              # was filed to prevent.
+              #
+              # Resource-scoped to the three ARNs, so this role can read those two
+              # secrets and nothing else in the account.
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref TrackingJwtSecretArn
+                  - !Ref DatabaseConnectionStringSecretArn
+                  - !Ref InternalApiKeySecretArn
+      Tags:
+        - Key: Project
+          Value: climate-tracking-api
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ONE INSTANCE, PINNED. The single most consequential line in this file.
+  #
+  # climate-project-api sets no AutoScalingConfigurationArn and therefore runs on App
+  # Runner's DEFAULT configuration: MinSize 1, MaxSize 25. That is safe there because
+  # its scheduled jobs take a Postgres advisory lease (PostgresAdvisoryJobLease), so
+  # only one of the 25 ever executes a job.
+  #
+  # THIS SERVICE HAS NO LEASE. CacheSyncWorker and DailySemaforoWorker are plain
+  # BackgroundServices on PeriodicTimers with no coordination of any kind. On N
+  # instances:
+  #   - CacheSyncWorker runs N times per interval. Wasteful but harmless; the syncs
+  #     are upserts.
+  #   - DailySemaforoWorker runs N times per day, and it SENDS NOTIFICATIONS. Its
+  #     idempotency is "has this trigger already been recorded Enviado for this plan",
+  #     read-then-write with no lock, so two instances ticking together can both read
+  #     "not sent" and both send. The client gets duplicate 30-day and 15-day
+  #     reminders about their own action plans. That is a visible defect in front of
+  #     a government client, not an internal inefficiency.
+  #
+  # MaxSize 1 removes the failure without a code change. The costs, stated honestly:
+  #   - No horizontal scale. For one tenant with tens of users this is not the
+  #     binding constraint; if it becomes one, the fix is a lease in the workers (or
+  #     moving them out of the request host), NOT raising this number.
+  #   - It also bounds the Postgres connection budget: 1 instance x the pool size in
+  #     the connection string. See DatabaseConnectionStringSecretArn -- with
+  #     `Maximum Pool Size=10` the ceiling is 10, against the ~250 climate-project
+  #     already draws from the same Supabase organisation.
+  #
+  # UNVERIFIED, and it needs measuring on the first deploy: whether App Runner
+  # temporarily exceeds MaxSize during a rolling deployment, or briefly drops to zero
+  # healthy instances instead. If it is the latter, every tracking deploy is a short
+  # outage rather than a rollover. Watch the service's request metrics across the
+  # first deploy and record the answer here.
+  #
+  # ALSO UNVERIFIED, and more important: App Runner throttles an instance's CPU when
+  # it is not processing requests. A 15-minute and a 24-hour PeriodicTimer inside an
+  # idle instance may therefore fire late, or not at all, on a service nobody is using
+  # at 03:00. climate-project already bets on this (#275 co-hosted its scheduler the
+  # same way) and has never verified it either. The measurement is in the runbook:
+  # after deploy, leave it idle overnight and check that nodos_cache rows advance and
+  # that the daily semaforo pass ran. If they do not, the answer is EventBridge
+  # Scheduler calling an authenticated job route, not a bigger instance.
+  #
+  # UpdateReplacePolicy/DeletionPolicy Retain: App Runner autoscaling configurations
+  # are immutable and versioned -- changing MinSize/MaxSize creates a new revision and
+  # CloudFormation replaces the resource, then deletes the old one. App Runner refuses
+  # to delete a revision a service still references, and the delete can race the
+  # service update. Retain trades a handful of orphaned (free) revisions for a stack
+  # update that cannot fail during cleanup.
+  AppRunnerAutoScalingConfiguration:
+    Type: AWS::AppRunner::AutoScalingConfiguration
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AutoScalingConfigurationName: !Sub ${ServiceName}-single
+      MinSize: 1
+      MaxSize: 1
+      # App Runner's own default. Requests beyond this queue rather than being
+      # rejected, and with MaxSize 1 there is nowhere to scale to anyway, so this is
+      # the depth of the queue in front of one instance. Left at the default because
+      # nothing here has measured the real concurrency.
+      MaxConcurrency: 100
+      Tags:
+        - Key: Project
+          Value: climate-tracking-api
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  AppRunnerService:
+    Type: AWS::AppRunner::Service
+    Properties:
+      ServiceName: !Ref ServiceName
+      AutoScalingConfigurationArn: !GetAtt AppRunnerAutoScalingConfiguration.AutoScalingConfigurationArn
+      SourceConfiguration:
+        AuthenticationConfiguration:
+          AccessRoleArn: !Ref EcrAccessRoleArn
+        AutoDeploymentsEnabled: false
+        ImageRepository:
+          ImageIdentifier: !Ref ImageIdentifier
+          ImageRepositoryType: ECR
+          ImageConfiguration:
+            Port: "8080"
+            RuntimeEnvironmentVariables:
+              - Name: ASPNETCORE_ENVIRONMENT
+                Value: !Ref AspNetCoreEnvironment
+              - Name: ASPNETCORE_URLS
+                Value: http://+:8080
+              - Name: Cors__AllowedOrigins__0
+                Value: !Ref CorsAllowedOrigin
+              - !If
+                - HasAdditionalAllowedOrigin
+                - Name: Cors__AllowedOrigins__1
+                  Value: !Ref CorsAdditionalAllowedOrigin
+                - !Ref AWS::NoValue
+              - Name: ClimateProjectBaseUrl
+                Value: !Ref ClimateProjectBaseUrl
+              - Name: ProcomerCompanyId
+                Value: !Ref ProcomerCompanyId
+              - Name: CacheSyncIntervalMinutes
+                Value: !Ref CacheSyncIntervalMinutes
+            RuntimeEnvironmentSecrets:
+              # App Runner resolves these ARNs at INSTANCE START, not at deploy time.
+              # Two consequences that decide the rotation ordering in
+              # docs/security/rotation-runbook.md section C:
+              #   - Writing a new secret version changes nothing until the instances
+              #     are replaced, so `put-secret-value` alone is never a rotation.
+              #   - The mismatch window is bounded by the two redeploys, not by the
+              #     secret write, and during it /api/internal/* 401s fail closed.
+              - Name: TrackingJwtSecret
+                Value: !Ref TrackingJwtSecretArn
+              - Name: ConnectionStrings__ClimateTracking
+                Value: !Ref DatabaseConnectionStringSecretArn
+              # The #219 line. Configuration key ClimateProjectInternalApiKey on this
+              # side, InternalApiKey on climate-project's, ONE Secrets Manager entry
+              # behind both.
+              - Name: ClimateProjectInternalApiKey
+                Value: !Ref InternalApiKeySecretArn
+      InstanceConfiguration:
+        Cpu: !Ref Cpu
+        Memory: !Ref Memory
+        InstanceRoleArn: !GetAtt AppRunnerInstanceRole.Arn
+      # Copied from climate-project-api-prod-service.yml deliberately, number for
+      # number, so both services are replaced on the same evidence. The reasoning
+      # transfers because the probe is the same kind of probe -- a real Postgres
+      # round trip -- and the thing to hold on to is the same: REPLACING AN INSTANCE
+      # DOES NOT FIX A DATABASE OUTAGE. A fresh instance fails the same probe, so
+      # thresholds tight enough to react to a blip convert a slow database into a
+      # replacement loop.
+      #
+      # Timeout 5 / Interval 20 / UnhealthyThreshold 5 gives ~100 seconds of
+      # CONTINUOUS failure before replacement. HealthyThreshold 3 (not 1) because one
+      # green probe proves nothing against an intermittent fault -- that was #220's
+      # signature and #300's lesson -- and not 20 like the deploy canary, because
+      # HealthyThreshold x Interval is added to EVERY rollout: 3 costs 60s, 20 would
+      # cost 400s.
+      #
+      # ONE NUMBER IS INHERITED RATHER THAN MEASURED. Timeout 5 was justified on
+      # climate-project against a 0.37s median and a 9.4s cold start (EF model build
+      # plus first pooled connection). This service's EF model is far smaller -- 6
+      # entity types against climate-project's several dozen -- so its cold start
+      # should be lower, not higher, which is the safe direction for an inherited
+      # number. Measure it on the first deploy and correct this comment rather than
+      # leaving a borrowed figure standing as if it were local evidence.
+      HealthCheckConfiguration:
+        Protocol: HTTP
+        Path: !Ref HealthCheckPath
+        Interval: 20
+        Timeout: 5
+        HealthyThreshold: 3
+        UnhealthyThreshold: 5
+      NetworkConfiguration:
+        IngressConfiguration:
+          IsPubliclyAccessible: true
+        EgressConfiguration:
+          EgressType: DEFAULT
+        IpAddressType: IPV4
+      Tags:
+        - Key: Project
+          Value: climate-tracking-api
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+Outputs:
+  ServiceArn:
+    Description: App Runner service ARN.
+    Value: !GetAtt AppRunnerService.ServiceArn
+  ServiceId:
+    Description: App Runner service ID.
+    Value: !GetAtt AppRunnerService.ServiceId
+  ServiceUrl:
+    Description: >-
+      App Runner generated service URL, without protocol. This is the value that
+      goes into Vercel as VITE_TRACKING_API_BASE_URL (prefixed with https://) —
+      AFTER the service is verified healthy, never before. See the ordering section
+      of docs/runbooks/tracking-service-provisioning.md.
+    Value: !GetAtt AppRunnerService.ServiceUrl
+  InstanceRoleArn:
+    Description: Runtime instance role ARN.
+    Value: !GetAtt AppRunnerInstanceRole.Arn
+  AutoScalingConfigurationArn:
+    Description: The pinned single-instance autoscaling configuration.
+    Value: !GetAtt AppRunnerAutoScalingConfiguration.AutoScalingConfigurationArn

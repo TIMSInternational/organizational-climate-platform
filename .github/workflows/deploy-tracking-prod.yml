@@ -1,0 +1,718 @@
+name: deploy-tracking-prod
+
+# Deploys services/tracking-api (climate-tracking) to PRODUCTION. Refs #219.
+#
+# Modeled on deploy-prod.yml step for step: same credential-free preflight, same
+# EF migration guards, same destructive-migration refusal, the same 20-consecutive
+# readiness canary and the same deployed-commit assertion. The "Readiness canary"
+# and "Verify deployed commit matches this run" steps are VERBATIM copies of
+# deploy-prod.yml's env and run blocks, for the reason deploy-staging.yml states:
+# a second deploy path with a lower bar is rehearsing a different play.
+#
+# ---------------------------------------------------------------------------------
+# THIS WORKFLOW HAS NEVER RUN, AND IT CANNOT SUCCEED YET.
+#
+# Three things must land before a dispatch can get past the canary, all of them in
+# services/tracking-api source, none of them in this file:
+#
+#   1. GET /ready that round-trips Postgres. App Runner's health check probes it
+#      (climate-tracking-api-prod-service.yml, HealthCheckPath), and today the
+#      tracking host serves only a static /health. Without it the rollout fails its
+#      health check and is rejected.
+#   2. GET /version reporting a 40-hex `commit`. scripts/read-deployed-commit.sh --
+#      the same reader deploy-prod.yml uses -- requires that field, and the
+#      tracking /version returns {service, runtime, environment}. The Dockerfile
+#      already passes /p:CommitSha, so this is a source-side BuildInfo away.
+#   3. ClimateTracking.Api referencing ClimateTracking.Workers and registering
+#      CacheSyncWorker + DailySemaforoWorker. Without it the service deploys,
+#      serves, and syncs nothing: the cache tables stay empty and every nodo and
+#      persona name in the plans list and the .xlsx export renders blank.
+#
+# Full sequence, with the exact code for each, in
+# docs/runbooks/tracking-service-provisioning.md.
+# ---------------------------------------------------------------------------------
+#
+# REQUIRED CONFIGURATION -- on the `production` GitHub environment, DELIBERATELY
+# THE SAME ENVIRONMENT deploy-prod.yml uses. That is not laziness: it makes
+# INTERNAL_API_KEY_SECRET_ARN and TRACKING_JWT_SECRET_ARN literally the same
+# variable objects both workflows read, so the two services cannot be pointed at
+# different secrets by editing one of two copies. #219's first acceptance criterion
+# is "one source of truth"; sharing the environment is that criterion at the
+# configuration layer, and the identity preflight below is the same criterion
+# enforced again against the LIVE stack at deploy time.
+#
+# | Name | Kind | Value |
+# |---|---|---|
+# | AWS_ACCOUNT_ID | variable | Already set: 747814092517 (repository variable). |
+# | INTERNAL_API_KEY_SECRET_ARN | variable | ALREADY SET, SHARED, DO NOT DUPLICATE.
+# |   | | climate-project-api/prod/InternalApiKey. |
+# | TRACKING_JWT_SECRET_ARN | variable | ALREADY SET, SHARED, DO NOT DUPLICATE.
+# |   | | climate-project-api/prod/tracking-jwt-secret. |
+# | TRACKING_CORS_ALLOWED_ORIGIN | variable | NEW. Exact frontend origin,
+# |   | | https://climate.timsint.com. No wildcard counterpart exists: the
+# |   | | tracking host has no wildcard origin support, so Vercel PREVIEW
+# |   | | deployments cannot call it. |
+# | TRACKING_CORS_ADDITIONAL_ALLOWED_ORIGIN | variable, optional | NEW. Second
+# |   | | exact origin; unset/empty means the template drops the slot entirely. |
+# | CLIMATE_PROJECT_BASE_URL | variable | NEW. The climate-project API's own
+# |   | | origin, https://bhgrdkd4gt.us-east-1.awsapprunner.com -- NOT the web
+# |   | | app's. This is a server-to-server call. |
+# | PROCOMER_COMPANY_ID | variable | NEW. The climate-project Company GUID this
+# |   | | deployment serves. Nobody in this repository knows it; it must be read
+# |   | | out of the production database. See the runbook. |
+# | TRACKING_DATABASE_CONNECTION_STRING_SECRET_ARN | variable | NEW. Secrets
+# |   | | Manager ARN for climate-tracking's OWN Postgres. Session pooler, port
+# |   | | 5432, and the value must carry `Maximum Pool Size=10` -- the tracking
+# |   | | host has no DatabaseConnectionStringPolicy, so Npgsql would otherwise
+# |   | | take its default of 100 per process. |
+# | TRACKING_MIGRATION_DATABASE_CONNECTION_STRING | SECRET | NEW. The tracking
+# |   | | database's session-pooler string: port 5432, username
+# |   | | postgres.<project-ref>, never db.<ref>.supabase.co (IPv6-only, and
+# |   | | GitHub runners are IPv4-only). Guarded three ways below, including
+# |   | | against being climate-project's string by mistake. |
+#
+# The IAM role this workflow assumes, climate-tracking-github-deploy-prod, is
+# created by infra/aws/climate-tracking-api-bootstrap.yml. Its permissions reach
+# the climate-tracking-api-prod stack, service and instance role, plus ONE
+# read-only DescribeStacks on climate-project-api-prod for the identity preflight.
+# It cannot modify anything in climate-project.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destructive_migration:
+        description: >-
+          Type "yes" only if a pending migration is MEANT to drop a table or column, or
+          truncate. The deploy refuses one otherwise. THE FIRST EVER DISPATCH NEEDS THIS:
+          20260801125946_DropHallazgosCache drops hallazgos_cache, which 20260729142701_InitialCreate
+          created 116 lines earlier in the same script. Read the migration-sql artifact first.
+        required: false
+        default: "no"
+        type: string
+
+# One tracking deployment at a time, for the same two hazards deploy-prod.yml
+# records: App Runner refuses a second StartDeployment while one is in flight, so
+# the loser fails on a conflict rather than for any reason worth reading; and both
+# runs apply EF Core migrations, which is harmless with none pending and genuinely
+# dangerous with one.
+#
+# A SEPARATE GROUP from `deploy-prod`, on purpose. The two services deploy to
+# different stacks and different databases, so serialising them against each other
+# would buy nothing and would make a rotation -- which must redeploy BOTH -- take
+# twice as long for no safety gained.
+#
+# `cancel-in-progress: false` for deploy-prod.yml's reason: cancelling a
+# half-finished production deployment leaves App Runner mid-transition with no
+# workflow watching it. Queue, never pre-empt.
+concurrency:
+  group: deploy-tracking-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  BOOTSTRAP_STACK_NAME: climate-tracking-api-bootstrap
+  SERVICE_STACK_NAME: climate-tracking-api-prod
+  SERVICE_NAME: climate-tracking-api-prod
+  # The climate-project service stack this deploy reads its secret ARNs back from.
+  # See "Verify both services are wired to the same secrets" below -- this is the
+  # mechanised form of #219's first acceptance criterion.
+  PEER_API_STACK_NAME: climate-project-api-prod
+  # /ready, NOT /health, for the reason argued at length in deploy-prod.yml and
+  # infra/aws/README.md (#221): /health is a static literal that opens no database
+  # connection, so an instance that has lost Postgres passes it forever and is
+  # never replaced. Must stay equal to deploy-prod.yml's value.
+  #
+  # services/tracking-api DOES NOT SERVE /ready YET. That is a prerequisite (see
+  # the block at the top of this file), not a reason to lower this to /health.
+  HEALTH_CHECK_PATH: /ready
+  SERVICE_CPU: 0.25 vCPU
+  SERVICE_MEMORY: 0.5 GB
+
+jobs:
+  deploy:
+    name: Deploy prod tracking API
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Fails in seconds, before any image is built or pushed, if the deploy is
+      # missing configuration -- the same preflight deploy-prod.yml opens with, and
+      # for the same reason: a missing value otherwise surfaces either as an opaque
+      # CloudFormation "parameter not supplied" error ten minutes in, or -- worse --
+      # not at all, because `aws cloudformation deploy` silently reuses the previous
+      # value on an update.
+      #
+      # This is #219's SECOND acceptance criterion ("a preflight that refuses to
+      # deploy with the value empty, mirroring deploy-prod.yml's existing
+      # configuration check"), plus a shape check the prod one does not have. An
+      # emptiness check passes a pasted secret NAME, a pasted secret VALUE, or an
+      # ARN from the wrong account -- all of which then fail at instance start with
+      # an App Runner error that names none of them.
+      - name: Verify deploy configuration is present
+        env:
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          TRACKING_CORS_ALLOWED_ORIGIN: ${{ vars.TRACKING_CORS_ALLOWED_ORIGIN }}
+          CLIMATE_PROJECT_BASE_URL: ${{ vars.CLIMATE_PROJECT_BASE_URL }}
+          PROCOMER_COMPANY_ID: ${{ vars.PROCOMER_COMPANY_ID }}
+          TRACKING_JWT_SECRET_ARN: ${{ vars.TRACKING_JWT_SECRET_ARN }}
+          TRACKING_DATABASE_CONNECTION_STRING_SECRET_ARN: ${{ vars.TRACKING_DATABASE_CONNECTION_STRING_SECRET_ARN }}
+          INTERNAL_API_KEY_SECRET_ARN: ${{ vars.INTERNAL_API_KEY_SECRET_ARN }}
+          TRACKING_MIGRATION_DATABASE_CONNECTION_STRING: ${{ secrets.TRACKING_MIGRATION_DATABASE_CONNECTION_STRING }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in \
+            AWS_ACCOUNT_ID \
+            TRACKING_CORS_ALLOWED_ORIGIN \
+            CLIMATE_PROJECT_BASE_URL \
+            PROCOMER_COMPANY_ID \
+            TRACKING_JWT_SECRET_ARN \
+            TRACKING_DATABASE_CONNECTION_STRING_SECRET_ARN \
+            INTERNAL_API_KEY_SECRET_ARN \
+            TRACKING_MIGRATION_DATABASE_CONNECTION_STRING; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is empty. Set it on the 'production' environment (repository variable, or secret for TRACKING_MIGRATION_DATABASE_CONNECTION_STRING) -- see docs/runbooks/tracking-service-provisioning.md -- before dispatching this workflow."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Refusing to deploy with incomplete configuration." >&2
+            exit 1
+          fi
+
+          # Shape, not just presence. Each of these is a value someone will
+          # plausibly get wrong in a way an emptiness check cannot see.
+          for name in \
+            TRACKING_JWT_SECRET_ARN \
+            TRACKING_DATABASE_CONNECTION_STRING_SECRET_ARN \
+            INTERNAL_API_KEY_SECRET_ARN; do
+            value="${!name}"
+            if ! printf '%s' "$value" | grep -qE "^arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:"; then
+              echo "::error::$name is not a Secrets Manager ARN in ${AWS_REGION} account ${AWS_ACCOUNT_ID}. App Runner needs the full ARN, not the secret NAME and not the secret value. Read it back with: aws secretsmanager describe-secret --secret-id <name> --query ARN --output text" >&2
+              missing=1
+            fi
+          done
+
+          # ProcomerCompanyId is a climate-project Company GUID. A non-GUID here
+          # boots fine and then 400s every /api/internal/{nodos,personas} call --
+          # those routes validate company_id as a GUID -- so the cache silently
+          # never fills and the plans list and the .xlsx export render every nodo
+          # and persona name blank. The template's AllowedPattern catches this too;
+          # catching it HERE means it fails in seconds instead of after the image
+          # build.
+          if ! printf '%s' "$PROCOMER_COMPANY_ID" | grep -qiE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
+            echo "::error::PROCOMER_COMPANY_ID is not a GUID. It must be the climate-project Company GUID (Companies.Id) this deployment serves." >&2
+            missing=1
+          fi
+
+          # The base URL is the API's own origin. Pointing it at the web app is a
+          # plausible mistake that produces 404s from an HTML page, i.e. a JSON
+          # parse error in CacheSyncWorker rather than anything that names the URL.
+          if ! printf '%s' "$CLIMATE_PROJECT_BASE_URL" | grep -qE '^https://[^/]+$'; then
+            echo "::error::CLIMATE_PROJECT_BASE_URL must be an https origin with no trailing path or slash, e.g. https://bhgrdkd4gt.us-east-1.awsapprunner.com. ClimateProjectClient sets it as HttpClient.BaseAddress and appends /api/internal/... to it." >&2
+            missing=1
+          fi
+
+          if [ "$missing" -ne 0 ]; then
+            echo "Refusing to deploy with malformed configuration." >&2
+            exit 1
+          fi
+          echo "All required deploy configuration is present and well-formed."
+
+      # THE GUARD THAT MATTERS MOST IN THIS FILE, and the one with no counterpart
+      # in deploy-prod.yml because climate-project has only one database.
+      #
+      # climate-tracking has its OWN Postgres with its OWN __EFMigrationsHistory.
+      # If TRACKING_MIGRATION_DATABASE_CONNECTION_STRING is filled in with
+      # climate-project's string -- an easy paste, the two secrets sit next to each
+      # other on the same GitHub environment and differ by one word -- then the
+      # step below runs climate-tracking's InitialCreate against the LIVE
+      # climate-project database: eight CREATE TABLEs, one INSERT and one
+      # DROP TABLE, in a database whose Supabase project has PITR DISABLED and zero
+      # listed backups (measured 2026-08-24: `supabase backups list --project-ref
+      # uleeeziiceduvmiftgby` returns pitr_enabled false, backups []). There is no
+      # undo for that.
+      #
+      # Two comparisons, neither of which ever prints a secret:
+      #   - sha256 equality catches an exact paste.
+      #   - the `postgres.<project-ref>` username catches the same PROJECT with a
+      #     different password, which sha256 would miss and which is just as fatal.
+      - name: Refuse a tracking migration pointed at climate-project's database
+        env:
+          TRACKING_MIGRATION_DATABASE_CONNECTION_STRING: ${{ secrets.TRACKING_MIGRATION_DATABASE_CONNECTION_STRING }}
+          CLIMATE_PROJECT_MIGRATION_DATABASE_CONNECTION_STRING: ${{ secrets.MIGRATION_DATABASE_CONNECTION_STRING }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CLIMATE_PROJECT_MIGRATION_DATABASE_CONNECTION_STRING:-}" ]; then
+            echo "::warning::MIGRATION_DATABASE_CONNECTION_STRING (climate-project's) is not set on this environment, so the same-database check below cannot run. That is a weaker deploy, not a safe one -- set it, or accept that a mis-pasted tracking connection string will not be caught here."
+            exit 0
+          fi
+
+          tracking_hash="$(printf '%s' "$TRACKING_MIGRATION_DATABASE_CONNECTION_STRING" | sha256sum | cut -d' ' -f1)"
+          peer_hash="$(printf '%s' "$CLIMATE_PROJECT_MIGRATION_DATABASE_CONNECTION_STRING" | sha256sum | cut -d' ' -f1)"
+          if [ "$tracking_hash" = "$peer_hash" ]; then
+            echo "::error::TRACKING_MIGRATION_DATABASE_CONNECTION_STRING is byte-identical to climate-project's MIGRATION_DATABASE_CONNECTION_STRING. Running climate-tracking's migrations against the climate-project database would create eight tables in it and drop one, and that database has no point-in-time recovery. Point this secret at climate-tracking's OWN database." >&2
+            exit 1
+          fi
+
+          tracking_ref="$(printf '%s' "$TRACKING_MIGRATION_DATABASE_CONNECTION_STRING" | grep -oiE 'postgres\.[a-z0-9]+' | head -1 || true)"
+          peer_ref="$(printf '%s' "$CLIMATE_PROJECT_MIGRATION_DATABASE_CONNECTION_STRING" | grep -oiE 'postgres\.[a-z0-9]+' | head -1 || true)"
+          if [ -n "$tracking_ref" ] && [ "$tracking_ref" = "$peer_ref" ]; then
+            echo "::error::TRACKING_MIGRATION_DATABASE_CONNECTION_STRING names the same Supabase project as climate-project's migration string (same postgres.<project-ref> username). Same project, different password is the same database. Point this secret at climate-tracking's OWN project." >&2
+            exit 1
+          fi
+
+          echo "The tracking migration string points at a different database from climate-project's."
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: services/tracking-api/global.json
+
+      # The tracking solution is NOT built or tested by .github/workflows/ci.yml --
+      # that workflow restores, builds and tests ClimateProject.slnx only, and
+      # `grep -rn tracking-api .github/workflows/*.yml` returned nothing before this
+      # file existed. So as things stand this is the FIRST and ONLY automated run of
+      # this suite, which means a red suite is discovered here, in a production
+      # deploy, rather than on the pull request that broke it.
+      #
+      # Fix that by adding a tracking job to ci.yml (the exact YAML is in
+      # docs/runbooks/tracking-service-provisioning.md, step 0). Keep this step
+      # regardless: deploy-prod.yml tests before it deploys for the same reason, and
+      # a deploy that trusts a green CI run from a different commit is not the same
+      # guarantee.
+      #
+      # The integration suite uses Testcontainers (PostgresFixture spins
+      # postgres:16-alpine), so this needs the runner's Docker daemon. ubuntu-latest
+      # has one; ClimateProject.IntegrationTests already relies on the same thing.
+      - name: Test tracking API
+        run: dotnet test services/tracking-api/ClimateTracking.slnx --configuration Release
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/climate-tracking-github-deploy-prod
+
+      # #219's FIRST acceptance criterion, mechanised.
+      #
+      # "The tracking service's deploy reads ClimateProjectInternalApiKey from the
+      # SAME Secrets Manager secret climate-project uses, not a separately-managed
+      # copy -- one source of truth means a rotation cannot desynchronise them."
+      #
+      # The emptiness and shape checks above cannot see this failure: a
+      # separately-managed copy is a perfectly well-formed ARN. Both services would
+      # boot fine, and then every /api/internal/* call would return 401 "Invalid or
+      # missing internal API key." at whatever moment the first cross-service call
+      # happened -- reading as an authentication bug in new code rather than as a
+      # configuration coupling.
+      #
+      # So this reads the ARNs back off the LIVE climate-project service stack and
+      # requires string equality. DescribeStacks returns parameter VALUES, and every
+      # parameter on that stack is a name or an ARN; App Runner resolves Secrets
+      # Manager ARNs at instance start and CloudFormation never sees plaintext, so
+      # this reads identifiers, not credentials.
+      #
+      # TrackingJwtSecretArn gets the same treatment for the same class of failure:
+      # climate-project MINTS the tokens and this service VALIDATES them off the
+      # same HMAC key, so a second copy of that secret is not a degraded state, it
+      # is every authenticated tracking route returning 401 forever.
+      #
+      # Placed AFTER credentials and BEFORE the image build, so it still fails in
+      # under a minute rather than after a twenty-minute build.
+      - name: Verify both services are wired to the same secrets
+        env:
+          INTERNAL_API_KEY_SECRET_ARN: ${{ vars.INTERNAL_API_KEY_SECRET_ARN }}
+          TRACKING_JWT_SECRET_ARN: ${{ vars.TRACKING_JWT_SECRET_ARN }}
+        run: |
+          set -euo pipefail
+
+          read_peer_parameter() {
+            aws cloudformation describe-stacks \
+              --stack-name "$PEER_API_STACK_NAME" \
+              --query "Stacks[0].Parameters[?ParameterKey=='$1'].ParameterValue | [0]" \
+              --output text
+          }
+
+          PEER_INTERNAL_ARN="$(read_peer_parameter InternalApiKeySecretArn)"
+          PEER_JWT_ARN="$(read_peer_parameter TrackingJwtSecretArn)"
+
+          # `aws --output text` prints the string None for a null result. A stack
+          # that does not carry the parameter at all is a finding, not a mismatch:
+          # it means PEER_API_STACK_NAME is pointing at the wrong stack, or that
+          # climate-project was deployed before the parameter existed.
+          for pair in "InternalApiKeySecretArn=$PEER_INTERNAL_ARN" "TrackingJwtSecretArn=$PEER_JWT_ARN"; do
+            key="${pair%%=*}"
+            value="${pair#*=}"
+            if [ -z "$value" ] || [ "$value" = "None" ]; then
+              echo "::error::Stack $PEER_API_STACK_NAME reports no $key. Either it is not the climate-project service stack, or that stack predates the parameter. Refusing to deploy: this check is the only thing standing between a deploy and a silently separate copy of the shared key (#219)." >&2
+              exit 1
+            fi
+          done
+
+          if [ "$INTERNAL_API_KEY_SECRET_ARN" != "$PEER_INTERNAL_ARN" ]; then
+            echo "::error::INTERNAL_API_KEY_SECRET_ARN does not match what $PEER_API_STACK_NAME is running with." >&2
+            echo "::error::  this workflow would deploy: $INTERNAL_API_KEY_SECRET_ARN" >&2
+            echo "::error::  climate-project is live on:  $PEER_INTERNAL_ARN" >&2
+            echo "::error::Two ARNs mean two secrets, and two secrets desynchronise on the first rotation. Every /api/internal/* call would then return 401 'Invalid or missing internal API key.' per request, failing closed, at whatever moment the first cross-service call happens. Point BOTH at climate-project-api/prod/InternalApiKey (#219)." >&2
+            exit 1
+          fi
+
+          if [ "$TRACKING_JWT_SECRET_ARN" != "$PEER_JWT_ARN" ]; then
+            echo "::error::TRACKING_JWT_SECRET_ARN does not match what $PEER_API_STACK_NAME is running with." >&2
+            echo "::error::  this workflow would deploy: $TRACKING_JWT_SECRET_ARN" >&2
+            echo "::error::  climate-project is live on:  $PEER_JWT_ARN" >&2
+            echo "::error::climate-project MINTS the tokens this service VALIDATES, off the same HMAC-SHA256 key. A different secret here is not degradation, it is every authenticated tracking route returning 401 forever." >&2
+            exit 1
+          fi
+
+          echo "Both services are wired to the same InternalApiKey and TrackingJwtSecret secrets."
+
+      - name: Read bootstrap outputs
+        id: bootstrap
+        run: |
+          set -euo pipefail
+          ECR_REPOSITORY_URI="$(aws cloudformation describe-stacks \
+            --stack-name "$BOOTSTRAP_STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='EcrRepositoryUri'].OutputValue | [0]" \
+            --output text)"
+          ECR_ACCESS_ROLE_ARN="$(aws cloudformation describe-stacks \
+            --stack-name "$BOOTSTRAP_STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='AppRunnerEcrAccessRoleArn'].OutputValue | [0]" \
+            --output text)"
+          if [ -z "$ECR_REPOSITORY_URI" ] || [ "$ECR_REPOSITORY_URI" = "None" ]; then
+            echo "Missing EcrRepositoryUri output from $BOOTSTRAP_STACK_NAME" >&2
+            exit 1
+          fi
+          if [ -z "$ECR_ACCESS_ROLE_ARN" ] || [ "$ECR_ACCESS_ROLE_ARN" = "None" ]; then
+            echo "Missing AppRunnerEcrAccessRoleArn output from $BOOTSTRAP_STACK_NAME" >&2
+            exit 1
+          fi
+          ECR_REGISTRY="${ECR_REPOSITORY_URI%/*}"
+          {
+            echo "ecr_repository_uri=$ECR_REPOSITORY_URI"
+            echo "ecr_registry=$ECR_REGISTRY"
+            echo "ecr_access_role_arn=$ECR_ACCESS_ROLE_ARN"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Login to ECR
+        run: |
+          set -euo pipefail
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "${{ steps.bootstrap.outputs.ecr_registry }}"
+
+      # Build context is services/tracking-api, not the repository root: the
+      # Dockerfile restores ClimateTracking.slnx, which needs that solution, that
+      # Directory.Build.props and that global.json at WORKDIR.
+      #
+      # --platform linux/amd64 is not optional. App Runner runs linux/amd64 only,
+      # and an arm64 image pushes and deploys "successfully" before failing to
+      # start. That cost climate-project two 19-minute failed deploys.
+      - name: Build and push tracking API image
+        id: image
+        run: |
+          set -euo pipefail
+          IMAGE_TAG="prod-${GITHUB_SHA}"
+          IMAGE_URI="${{ steps.bootstrap.outputs.ecr_repository_uri }}:${IMAGE_TAG}"
+          BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          docker build --platform linux/amd64 \
+            --build-arg "COMMIT_SHA=${GITHUB_SHA}" \
+            --build-arg "BUILD_TIMESTAMP=${BUILD_TIMESTAMP}" \
+            -f services/tracking-api/Dockerfile \
+            -t "$IMAGE_URI" \
+            services/tracking-api
+          docker tag "$IMAGE_URI" "${{ steps.bootstrap.outputs.ecr_repository_uri }}:prod-latest"
+          docker push "$IMAGE_URI"
+          docker push "${{ steps.bootstrap.outputs.ecr_repository_uri }}:prod-latest"
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      # Applied *before* the new image is deployed, so the schema is never behind
+      # the code that expects it -- same position and same accepted window as
+      # deploy-prod.yml, whose long comment argues it and is not repeated here so
+      # the two cannot drift.
+      #
+      # ONE DESIGN-TIME FACT THAT IS NOT OBVIOUS AND WAS MEASURED, NOT ASSUMED.
+      # ClimateTracking.Api's Program.cs reads five configuration values BEFORE
+      # builder.Build(), and EF Core's design-time host resolution executes
+      # everything up to that point. Four of the five are satisfied by
+      # appsettings.json shipping non-null placeholders ("" passes a `?? throw`);
+      # ProcomerCompanyId is not, because #153 replaced its null check with
+      # IsNullOrWhiteSpace. Measured 2026-08-24 with no environment set:
+      #
+      #   $ dotnet dotnet-ef migrations list --project .../Infrastructure \
+      #       --startup-project .../Api --no-build --no-connect
+      #   An error occurred while accessing the Microsoft.Extensions.Hosting
+      #   services. ... Error: Missing ProcomerCompanyId configuration.
+      #   Unable to create a 'DbContext' of type 'ClimateTrackingDbContext'.
+      #
+      # With ProcomerCompanyId set to any non-blank value the same command lists
+      # both migrations. So the placeholder below is load-bearing, and it is a
+      # zeroed GUID rather than the real tenant because nothing at design time
+      # reads it -- EF needs the host to construct, not to be correct.
+      #
+      # The durable fix is an IDesignTimeDbContextFactory<ClimateTrackingDbContext>
+      # in ClimateTracking.Infrastructure, which EF prefers and which never builds
+      # the host. This env var is harmless once that exists.
+      - name: Apply EF Core migrations
+        env:
+          # The tracking database's SESSION pooler: port 5432 (session mode), not
+          # 6543 (transaction mode), with the username in the
+          # `postgres.<project-ref>` form the pooler wants. Both wrong shapes are
+          # rejected below, for the two unrelated reasons deploy-prod.yml documents:
+          # 6543 breaks the session-scoped advisory lock EF takes to serialise
+          # migrations, and db.<project-ref>.supabase.co publishes an AAAA record
+          # and no A record, so it is unroutable from IPv4-only GitHub runners.
+          ConnectionStrings__ClimateTracking: ${{ secrets.TRACKING_MIGRATION_DATABASE_CONNECTION_STRING }}
+          # See the long comment above. Design-time only; not the tenant.
+          ProcomerCompanyId: "00000000-0000-0000-0000-000000000000"
+        run: |
+          set -euo pipefail
+
+          # Guard 1: reject transaction mode (wrong semantics for EF migrations).
+          if printf '%s' "$ConnectionStrings__ClimateTracking" | grep -qE '(^|[^0-9])6543([^0-9]|$)'; then
+            echo "::error::TRACKING_MIGRATION_DATABASE_CONNECTION_STRING points at port 6543 (the Supabase transaction-mode pooler). EF Core migrations need session mode: the same host on port 5432, username postgres.<project-ref>." >&2
+            exit 1
+          fi
+
+          # Guard 2: reject the IPv6-only direct host. Fails in seconds with a
+          # reason instead of hanging until the TCP connect times out.
+          if printf '%s' "$ConnectionStrings__ClimateTracking" | grep -qE 'db\.[a-z0-9-]+\.supabase\.co'; then
+            echo "::error::TRACKING_MIGRATION_DATABASE_CONNECTION_STRING points at db.<project-ref>.supabase.co (the Supabase 'direct connection'). That host is IPv6-only -- it publishes an AAAA record and no A record -- and GitHub Actions runners are IPv4-only, so it can never be reached from this workflow. Use the session pooler instead: the same host as the runtime connection string, port 5432 (not 6543), username postgres.<project-ref>." >&2
+            exit 1
+          fi
+
+          # `dotnet tool restore` from the repository root: .config/dotnet-tools.json
+          # is isRoot and pins dotnet-ef 10.0.10. There is no second manifest under
+          # services/tracking-api, on purpose -- one pinned EF tool for both
+          # solutions.
+          dotnet tool restore
+
+          # Guard 3: SEE THE SQL BEFORE IT RUNS, and refuse a silent
+          # data-destroying one. Same guard as deploy-prod.yml, and it matters at
+          # least as much here: this database will also be a Supabase project, and
+          # the sibling project's PITR is disabled with zero listed backups
+          # (measured 2026-08-24). "Our migrations are additive" is not a property
+          # this repository has.
+          #
+          # KNOWN, AND IT WILL TRIP ON THE FIRST DISPATCH. Scripted from 0 the
+          # tracking history is 141 lines containing exactly one destructive
+          # statement: `DROP TABLE hallazgos_cache;` at line 135, dropping a table
+          # `CREATE TABLE hallazgos_cache` created at line 19 of the SAME script.
+          # It is 20260801125946_DropHallazgosCache undoing part of
+          # 20260729142701_InitialCreate, and on a virgin database it destroys
+          # nothing that ever held a row. The first dispatch therefore needs
+          # confirm_destructive_migration=yes -- read the artifact and confirm those
+          # are still the only two lines before typing it.
+          dotnet dotnet-ef migrations script --idempotent \
+            --project services/tracking-api/src/ClimateTracking.Infrastructure \
+            --startup-project services/tracking-api/src/ClimateTracking.Api \
+            --configuration Release \
+            --output tracking-migration-full.sql
+
+          # Only the PENDING migrations are scanned. The idempotent script above
+          # carries the whole history, including that drop, so scanning it would
+          # fail every deploy forever once the database is past it.
+          dotnet dotnet-ef migrations list \
+            --project services/tracking-api/src/ClimateTracking.Infrastructure \
+            --startup-project services/tracking-api/src/ClimateTracking.Api \
+            --configuration Release --no-build > tracking-migrations.txt || true
+
+          PENDING="$(grep -c '(Pending)' tracking-migrations.txt || true)"
+          echo "Pending migrations: ${PENDING:-0}"
+
+          if [ "${PENDING:-0}" -gt 0 ]; then
+            # The last migration NOT marked pending is where the delta starts. Empty
+            # means a virgin database, and EF spells that `0`.
+            FROM="$(grep -v '(Pending)' tracking-migrations.txt | grep -E '^[0-9]{14}_' | tail -1 || true)"
+            FROM="${FROM:-0}"
+            echo "Scripting the delta from ${FROM}"
+            dotnet dotnet-ef migrations script "$FROM" \
+              --project services/tracking-api/src/ClimateTracking.Infrastructure \
+              --startup-project services/tracking-api/src/ClimateTracking.Api \
+              --configuration Release \
+              --output tracking-migration-pending.sql
+
+            # DROP TABLE / DROP COLUMN / TRUNCATE destroy data that cannot be
+            # recovered without a backup. A dropped CONSTRAINT or INDEX is not on
+            # this list: it loses a guarantee, not a row.
+            if grep -inE '(DROP[[:space:]]+TABLE|DROP[[:space:]]+COLUMN|TRUNCATE)' tracking-migration-pending.sql > tracking-destructive.txt; then
+              echo "::group::Destructive statements found"
+              cat tracking-destructive.txt
+              echo "::endgroup::"
+              if [ "${{ inputs.confirm_destructive_migration }}" != "yes" ]; then
+                echo "::error::A pending migration drops a table or column, or truncates. Download the tracking-migration-sql artifact, read it, and re-run this workflow with confirm_destructive_migration=yes if it is intended. On the FIRST EVER dispatch the expected content is exactly one line -- DROP TABLE hallazgos_cache -- against a table created earlier in the same script; anything else is a finding." >&2
+                exit 1
+              fi
+              echo "::warning::Applying a destructive migration because confirm_destructive_migration=yes was supplied."
+            fi
+          fi
+
+          dotnet dotnet-ef database update \
+            --project services/tracking-api/src/ClimateTracking.Infrastructure \
+            --startup-project services/tracking-api/src/ClimateTracking.Api \
+            --configuration Release
+
+      # `always()`, because the run that most needs this artifact is the one the
+      # guard above just stopped: you cannot decide whether a drop is intended
+      # without reading the statement. Retained a year -- this is the record of
+      # every schema change ever applied to the tracking database, and it costs
+      # kilobytes.
+      - name: Upload the migration SQL
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tracking-migration-sql
+          path: |
+            tracking-migration-full.sql
+            tracking-migration-pending.sql
+          if-no-files-found: ignore
+          retention-days: 365
+
+      # Every parameter passed explicitly, including the ones with template
+      # defaults. `aws cloudformation deploy` reuses a parameter's PREVIOUS STACK
+      # VALUE when it is omitted -- it does not fall back to the template default --
+      # so omitting parameters makes the deployed configuration a function of
+      # invisible prior stack state rather than of this repository.
+      #
+      # TrackingCorsAdditionalAllowedOrigin is deliberately NOT in the preflight
+      # above: it is optional, and an unset repository variable expands to an empty
+      # string, which the template's condition reads as "no second origin" and drops
+      # the entry entirely. Passing it unconditionally is what makes CLEARING one
+      # work.
+      - name: Deploy App Runner service stack
+        run: |
+          set -euo pipefail
+          aws cloudformation deploy \
+            --stack-name "$SERVICE_STACK_NAME" \
+            --template-file infra/aws/climate-tracking-api-prod-service.yml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              ServiceName="$SERVICE_NAME" \
+              EnvironmentName=production \
+              AspNetCoreEnvironment=Production \
+              ImageIdentifier="${{ steps.image.outputs.image_uri }}" \
+              EcrAccessRoleArn="${{ steps.bootstrap.outputs.ecr_access_role_arn }}" \
+              HealthCheckPath="$HEALTH_CHECK_PATH" \
+              Cpu="$SERVICE_CPU" \
+              Memory="$SERVICE_MEMORY" \
+              CorsAllowedOrigin="${{ vars.TRACKING_CORS_ALLOWED_ORIGIN }}" \
+              CorsAdditionalAllowedOrigin="${{ vars.TRACKING_CORS_ADDITIONAL_ALLOWED_ORIGIN }}" \
+              ClimateProjectBaseUrl="${{ vars.CLIMATE_PROJECT_BASE_URL }}" \
+              ProcomerCompanyId="${{ vars.PROCOMER_COMPANY_ID }}" \
+              CacheSyncIntervalMinutes="15" \
+              TrackingJwtSecretArn="${{ vars.TRACKING_JWT_SECRET_ARN }}" \
+              DatabaseConnectionStringSecretArn="${{ vars.TRACKING_DATABASE_CONNECTION_STRING_SECRET_ARN }}" \
+              InternalApiKeySecretArn="${{ vars.INTERNAL_API_KEY_SECRET_ARN }}"
+
+      - name: Read App Runner URL
+        id: service
+        run: |
+          set -euo pipefail
+          SERVICE_URL="$(aws cloudformation describe-stacks \
+            --stack-name "$SERVICE_STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue | [0]" \
+            --output text)"
+          if [ -z "$SERVICE_URL" ] || [ "$SERVICE_URL" = "None" ]; then
+            echo "Missing ServiceUrl output from $SERVICE_STACK_NAME" >&2
+            exit 1
+          fi
+          echo "base_url=https://$SERVICE_URL" >> "$GITHUB_OUTPUT"
+          {
+            echo "## climate-tracking-api"
+            echo
+            echo "Service URL: \`https://$SERVICE_URL\`"
+            echo
+            echo "This is the value that goes into Vercel as \`VITE_TRACKING_API_BASE_URL\` --"
+            echo "**after** the canary below is green, never before. Setting it swaps"
+            echo "\`/action-plans\` out of the nav for the tracking rows, so pointing it at a"
+            echo "service that is not serving takes a working screen away from the client."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # VERBATIM copy of deploy-prod.yml's canary -- env and run, byte for byte --
+      # so a future check can pin the two together the way
+      # scripts/verify-prod-deploy-invariants.py already pins staging's. The full
+      # reasoning for every constant (20 consecutive, the reset-on-failure, the
+      # wall-clock deadline, the 15s probe timeout) lives on the prod copy and in
+      # infra/aws/README.md (#220, #300).
+      #
+      # THIS STEP IS WHAT FAILS TODAY. /ready does not exist on the tracking host,
+      # so every probe returns 404, the run never accumulates, and the job fails at
+      # the 300s deadline with best=0. That is the correct outcome for a service
+      # that cannot prove it can reach its database -- not a reason to relax the
+      # gate.
+      - name: Readiness canary
+        env:
+          # 20 from infra/aws/README.md's acceptance criterion for #220. Against the
+          # alternating-50% signature, 20 consecutive is a 1-in-a-million pass.
+          REQUIRED_CONSECUTIVE: 20
+          PROBE_INTERVAL_SECONDS: 5
+          # A wall clock, not an attempt count: because a failure resets the run, an
+          # attempt budget bounds attempts but not time. 20 probes at 5s spacing needs
+          # ~105s, so 300s absorbs a couple of resets and still fails the job in five
+          # minutes rather than grinding toward the six-hour ceiling.
+          DEADLINE_SECONDS: 300
+          # Above the 9.4s cold-start probe measured post-deploy in #220 (EF model
+          # build plus first pooled connection), below the 30s hang that was #220's
+          # signature. A probe slower than this is a failure for canary purposes --
+          # and since a failure only resets the run, a slow warm-up costs time, not
+          # the deploy.
+          PROBE_TIMEOUT_SECONDS: 15
+        run: |
+          set -euo pipefail
+          URL="${{ steps.service.outputs.base_url }}/ready"
+          deadline=$(( $(date +%s) + DEADLINE_SECONDS ))
+          consecutive=0
+          best=0
+          attempt=0
+
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            attempt=$(( attempt + 1 ))
+            status=$(curl -s -o /tmp/ready_body -w "%{http_code}" \
+              --max-time "$PROBE_TIMEOUT_SECONDS" "$URL" || echo "000")
+
+            if [ "$status" = "200" ]; then
+              consecutive=$(( consecutive + 1 ))
+              [ "$consecutive" -gt "$best" ] && best=$consecutive
+              echo "probe $attempt: 200 ($consecutive/$REQUIRED_CONSECUTIVE consecutive)"
+              if [ "$consecutive" -ge "$REQUIRED_CONSECUTIVE" ]; then
+                echo "Readiness canary passed: $REQUIRED_CONSECUTIVE consecutive 200s in $attempt probes."
+                cat /tmp/ready_body
+                exit 0
+              fi
+            else
+              echo "probe $attempt: status $status -- run of $consecutive reset to 0"
+              [ -s /tmp/ready_body ] && cat /tmp/ready_body
+              consecutive=0
+            fi
+
+            sleep "$PROBE_INTERVAL_SECONDS"
+          done
+
+          echo "::error::Readiness canary failed: needed $REQUIRED_CONSECUTIVE consecutive 200s from $URL within ${DEADLINE_SECONDS}s, and the longest run in $attempt probes was $best. A run that keeps resetting is the #220 signature -- an intermittently-failing database connection, not a cold start." >&2
+          exit 1
+
+      # VERBATIM copy of deploy-prod.yml's assertion, same guard against "pushed an
+      # image but the rollout never took" (#158) -- the failure that let
+      # climate-project sit 156 commits behind main while every signal stayed green.
+      #
+      # Requires the tracking /version to report a 40-hex `commit`, which it does
+      # not yet. The Dockerfile already passes /p:CommitSha, so this starts working
+      # the moment the source side lands.
+      - name: Verify deployed commit matches this run
+        run: |
+          set -euo pipefail
+          DEPLOYED_COMMIT="$(scripts/read-deployed-commit.sh "${{ steps.service.outputs.base_url }}")"
+          if [ "$DEPLOYED_COMMIT" != "$GITHUB_SHA" ]; then
+            echo "::error::Live service reports commit '$DEPLOYED_COMMIT' but this run deployed '$GITHUB_SHA'. The rollout did not take effect." >&2
+            exit 1
+          fi
+          echo "Live service is running the expected commit: $GITHUB_SHA"

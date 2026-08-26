@@ -1,0 +1,29 @@
+# Build context hygiene for services/tracking-api/Dockerfile.
+#
+# The Dockerfile does `COPY . .` and then `dotnet restore`, so without this every
+# bin/ and obj/ from a local `dotnet build` is copied into the image build. That is
+# not merely slow: obj/ carries absolute host paths and a project.assets.json
+# pinned to the host's NuGet layout, so a restore inside the container can pick up
+# stale state and fail, or worse, succeed against the wrong assets. CI never sees
+# it (a fresh checkout has no bin/obj), which is exactly why it bites locally and
+# nowhere else.
+#
+# There is no equivalent file for the root Dockerfile. That is an existing gap with
+# the same cause, not an intentional difference -- worth closing separately rather
+# than in a deploy-path change.
+**/bin/
+**/obj/
+
+# Nothing in the image needs these, and excluding them keeps the context small
+# enough that `docker build` does not spend its first seconds uploading history.
+.git/
+.gitignore
+.vs/
+.vscode/
+*.user
+*.suo
+
+# The image publishes ClimateTracking.Api only; the test projects are restored by
+# ClimateTracking.slnx during the build stage and never reach the runtime layer.
+# They are kept in the context on purpose -- `dotnet restore ClimateTracking.slnx`
+# resolves every project in the solution and fails if one is missing.

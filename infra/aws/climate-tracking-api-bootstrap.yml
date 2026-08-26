@@ -1,0 +1,386 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Bootstrap resources for a climate-TRACKING-api deployment environment: ECR
+  repository, the App Runner ECR access role, and the GitHub OIDC deploy role.
+  Sibling of climate-project-api-bootstrap.yml -- same two-stack shape, same
+  four-sub OIDC trust policy, same lifecycle rules. A second FILE, not a second
+  pattern; the reasons it is a separate file rather than more parameters on the
+  existing one are in the comment block at the top of the source. Refs #219.
+
+# WHY A SEPARATE FILE RATHER THAN MORE PARAMETERS ON THE EXISTING BOOTSTRAP.
+# Three reasons, in order of how expensive getting them wrong is:
+#
+#   1. The existing template's IAM role names are `!Sub`-built from a
+#      ResourceNameSuffix whose AllowedValues are `prod` and `staging` only, and
+#      those roles are LIVE (`climate-project-github-deploy-prod` is what every
+#      production deploy assumes). Widening that parameter to admit a tracking
+#      value, then deploying the stack with it, RENAMES live IAM roles --
+#      CloudFormation replaces a named role rather than renaming it -- and
+#      orphans the deployed climate-project stacks. infra/aws/README.md says this
+#      explicitly ("renaming them orphans the deployed stacks").
+#   2. `scripts/verify-oidc-trust-subs.py` runs in CI's `deploy-path-lint` job
+#      and asserts that climate-project-api-bootstrap.yml renders EXACTLY the
+#      four subs the live prod role trusts. Any edit to that file's trust policy
+#      has to be re-agreed against the live account first.
+#   3. Blast radius, the same argument #156 made for staging: this stack's deploy
+#      role can reach the tracking stack, the tracking service and the tracking
+#      instance role, and NOTHING in climate-project. A tracking deploy that goes
+#      wrong cannot touch the API that is live for the client.
+#
+# The one deliberate exception to (3) is ReadPeerApiStackParameters below: a
+# READ-ONLY DescribeStacks on the climate-project service stack, so the tracking
+# deploy can prove it is about to wire the SAME InternalApiKey secret
+# climate-project is actually running with, rather than a copy. That check is the
+# whole of #219 and it cannot be made without that read.
+
+Parameters:
+  RepositoryName:
+    Type: String
+    Default: climate-tracking-api
+    Description: >-
+      ECR repository name for climate-tracking-api images. Distinct from
+      climate-project-api's repository on purpose: the lifecycle rule below keeps
+      the most recent 40 images of ONE service, and two services sharing a
+      repository would evict each other's history at unrelated moments.
+  EnvironmentName:
+    Type: String
+    Default: production
+    AllowedValues:
+      - production
+      - staging
+    Description: >-
+      The GitHub *environment* name whose OIDC tokens may assume the deploy role
+      (it appears verbatim in the `sub` claim as `environment:<name>`), and the
+      Environment tag value.
+
+      DELIBERATELY `production`, i.e. the SAME GitHub environment
+      deploy-prod.yml uses, not a `tracking-production` of its own. That is what
+      makes `vars.INTERNAL_API_KEY_SECRET_ARN` and `vars.TRACKING_JWT_SECRET_ARN`
+      literally the same variable objects both deploy workflows read, so the two
+      services cannot be pointed at different secrets by editing one of two
+      copies. #219's first acceptance criterion is "one source of truth"; sharing
+      the environment is that criterion enforced at the configuration layer, and
+      the identity preflight in deploy-tracking-prod.yml is the same criterion
+      enforced again at deploy time.
+  ResourceNameSuffix:
+    Type: String
+    Default: prod
+    AllowedValues:
+      - prod
+      - staging
+    Description: >-
+      Short suffix in every named resource this stack creates or scopes to:
+      climate-tracking-github-deploy-<suffix>,
+      climate-tracking-apprunner-ecr-access-<suffix>, and the service-stack and
+      instance-role ARNs the deploy policy is limited to
+      (climate-tracking-api-<suffix>, climate-tracking-api-<suffix>-instance).
+      Must agree with the service stack's ServiceName or the deploy role cannot
+      manage the stack it deploys.
+  ImageTagPrefix:
+    Type: String
+    Default: prod-
+    AllowedValues:
+      - prod-
+      - staging-
+    Description: >-
+      Image tag prefix the ECR lifecycle policy retains (most recent 40). Must
+      match what the environment's deploy workflow tags — deploy-tracking-prod.yml
+      pushes prod-<sha>/prod-latest. A mismatch does not fail anything loudly; it
+      silently exempts every deployed image from the 40-image cap, so the
+      repository grows without bound.
+  PeerApiStackName:
+    Type: String
+    Default: climate-project-api-prod
+    Description: >-
+      The climate-project service stack whose parameters the tracking deploy reads
+      to prove the two services are wired to the SAME secrets. Read-only, one
+      DescribeStacks call, in the preflight before anything is built. Pair with
+      EnvironmentName: production -> climate-project-api-prod, staging ->
+      climate-project-api-staging.
+  GitHubRepository:
+    Type: String
+    Default: TIMSInternational/organizational-climate-platform
+    AllowedPattern: ^[^/]+/[^/]+$
+    Description: GitHub owner/repository allowed to assume the deploy role.
+  GitHubBranch:
+    Type: String
+    Default: main
+    Description: GitHub branch allowed to assume the deploy role.
+  GitHubOwnerId:
+    Type: String
+    Default: "305569681"
+    AllowedPattern: ^[0-9]+$
+    Description: >-
+      Immutable numeric GitHub account ID of the repository owner
+      (TIMSInternational). GitHub embeds this in the OIDC subject claim, and
+      unlike the owner *name* it never changes. Re-derive with
+      `gh api /repos/TIMSInternational/organizational-climate-platform --jq .owner.id`.
+  GitHubRepositoryId:
+    Type: String
+    Default: "1317724282"
+    AllowedPattern: ^[0-9]+$
+    Description: >-
+      Immutable numeric GitHub repository ID. Same story as GitHubOwnerId: it
+      survives repository renames, which the name-based form does not.
+
+Resources:
+  ClimateTrackingApiRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref RepositoryName
+      ImageTagMutability: MUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: !Sub |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Expire untagged images after 7 days",
+                "selection": {
+                  "tagStatus": "untagged",
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": 7
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 2,
+                "description": "Keep the most recent 40 ${ImageTagPrefix}* images",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPrefixList": ["${ImageTagPrefix}"],
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 40
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: climate-tracking-api
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  AppRunnerEcrAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub climate-tracking-apprunner-ecr-access-${ResourceNameSuffix}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: build.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
+      Tags:
+        - Key: Project
+          Value: climate-tracking-api
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub climate-tracking-github-deploy-${ResourceNameSuffix}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                # ---------------------------------------------------------------
+                # FOUR subs, deliberately. DO NOT delete the ID-qualified pair.
+                # ---------------------------------------------------------------
+                # GitHub issues OIDC tokens whose `sub` claim follows this
+                # repository's configured sub_claim_prefix, and that prefix is the
+                # ID-qualified form:
+                #
+                #   repo:OWNER@<ownerId>/REPO@<repoId>:ref:refs/heads/main
+                #
+                # not the bare `repo:OWNER/REPO:...` form AWS's own documentation
+                # still shows. A policy carrying only the name-based pair can
+                # never match any token this repository presents -- that is what
+                # failed climate-project's FIRST production deploy at
+                # sts:AssumeRoleWithWebIdentity, with a denial that reads like a
+                # credentials problem. Measured 2026-08-05 and recorded in
+                # infra/aws/README.md: `use_default: true`, so the ID-qualified
+                # prefix is GitHub's default and cannot be turned off here.
+                #
+                # The name-based pair is kept too, so the role keeps working if
+                # GitHub ever reverts to the unqualified prefix. Both forms are
+                # scoped to the same repo, branch and environment, so trusting
+                # both grants nothing extra.
+                token.actions.githubusercontent.com:sub:
+                  - !Sub
+                    - repo:${Owner}@${GitHubOwnerId}/${Repo}@${GitHubRepositoryId}:ref:refs/heads/${GitHubBranch}
+                    - Owner: !Select [0, !Split ["/", !Ref GitHubRepository]]
+                      Repo: !Select [1, !Split ["/", !Ref GitHubRepository]]
+                  - !Sub
+                    - repo:${Owner}@${GitHubOwnerId}/${Repo}@${GitHubRepositoryId}:environment:${EnvironmentName}
+                    - Owner: !Select [0, !Split ["/", !Ref GitHubRepository]]
+                      Repo: !Select [1, !Split ["/", !Ref GitHubRepository]]
+                  - !Sub repo:${GitHubRepository}:ref:refs/heads/${GitHubBranch}
+                  - !Sub repo:${GitHubRepository}:environment:${EnvironmentName}
+      Policies:
+        - PolicyName: climate-tracking-api-deploy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadBootstrapOutputs
+                Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:GetTemplate
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*
+
+              # THE #219 CHECK, and the only permission this role holds outside
+              # its own service. DescribeStacks ONLY -- no update, no changeset,
+              # no template read -- against the climate-project service stack, so
+              # the tracking deploy can compare the InternalApiKeySecretArn and
+              # TrackingJwtSecretArn it is about to pass against the ones the LIVE
+              # climate-project stack is running with, and refuse to deploy if
+              # they differ.
+              #
+              # Without this the tracking deploy could only assert that its own
+              # variable is non-empty, which is the check that does not catch the
+              # failure #219 is about: a plausible ARN pointing at a second,
+              # separately-managed copy of the key. Both services would then boot
+              # fine and every /api/internal/* call would 401 at whatever moment
+              # the first cross-service call happened.
+              #
+              # DescribeStacks returns parameter VALUES, and every parameter on
+              # that stack is a name or an ARN, never a secret value -- App Runner
+              # resolves Secrets Manager ARNs at instance start and CloudFormation
+              # never sees the plaintext. So this grant reads identifiers, not
+              # credentials.
+              - Sid: ReadPeerApiStackParameters
+                Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${PeerApiStackName}/*
+
+              - Sid: ManageServiceStack
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:CreateStack
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStacks
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:GetTemplate
+                  - cloudformation:GetTemplateSummary
+                  - cloudformation:UpdateStack
+                  - cloudformation:ValidateTemplate
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/climate-tracking-api-${ResourceNameSuffix}/*
+
+              - Sid: PushApiImages
+                Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:CompleteLayerUpload
+                  - ecr:DescribeImages
+                  - ecr:DescribeRepositories
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                Resource: !GetAtt ClimateTrackingApiRepository.Arn
+
+              - Sid: GetEcrAuthorizationToken
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: "*"
+
+              # The autoscaling actions are the difference from climate-project's
+              # deploy policy. The tracking service template pins MinSize=MaxSize=1
+              # with an explicit AWS::AppRunner::AutoScalingConfiguration (see the
+              # long note there: the background workers are co-hosted and have NO
+              # distributed lease, so a second instance means a second daily
+              # notification run). Managing that resource needs these five
+              # actions, and without them the stack fails at create with an
+              # AccessDenied that names the autoscaling API rather than the role.
+              - Sid: ManageAppRunnerService
+                Effect: Allow
+                Action:
+                  - apprunner:CreateAutoScalingConfiguration
+                  - apprunner:CreateService
+                  - apprunner:DeleteAutoScalingConfiguration
+                  - apprunner:DeleteService
+                  - apprunner:DescribeAutoScalingConfiguration
+                  - apprunner:DescribeService
+                  - apprunner:ListAutoScalingConfigurations
+                  - apprunner:ListOperations
+                  - apprunner:ListTagsForResource
+                  - apprunner:StartDeployment
+                  - apprunner:TagResource
+                  - apprunner:UntagResource
+                  - apprunner:UpdateService
+                Resource: "*"
+
+              - Sid: ManageAppRunnerInstanceRole
+                Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                  - iam:GetRole
+                  - iam:GetRolePolicy
+                  - iam:ListRolePolicies
+                  - iam:PutRolePolicy
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:UpdateAssumeRolePolicy
+                Resource:
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/climate-tracking-api-${ResourceNameSuffix}-instance
+
+              - Sid: PassAppRunnerRoles
+                Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt AppRunnerEcrAccessRole.Arn
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/climate-tracking-api-${ResourceNameSuffix}-instance
+      Tags:
+        - Key: Project
+          Value: climate-tracking-api
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+Outputs:
+  EcrRepositoryName:
+    Description: ECR repository name.
+    Value: !Ref ClimateTrackingApiRepository
+  EcrRepositoryUri:
+    Description: ECR repository URI.
+    Value: !GetAtt ClimateTrackingApiRepository.RepositoryUri
+  AppRunnerEcrAccessRoleArn:
+    Description: Role App Runner uses to pull private ECR images.
+    Value: !GetAtt AppRunnerEcrAccessRole.Arn
+  GitHubDeployRoleArn:
+    Description: Role GitHub Actions assumes through OIDC for tracking deploys.
+    Value: !GetAtt GitHubDeployRole.Arn
