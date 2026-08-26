@@ -17,7 +17,19 @@
  * contract test in `questionTypes.test.ts` pins this list so a change here is
  * deliberate rather than incidental.
  */
-export const QUESTION_TYPES = ['likert', 'multiple_choice', 'open_ended', 'yes_no', 'rating'] as const
+export const QUESTION_TYPES = [
+  'likert',
+  'multiple_choice',
+  'open_ended',
+  'yes_no',
+  'rating',
+  // #198. Deliberately last: it is the newest, and it is the one type whose meaning
+  // lives entirely in a per-question emoji set (`question.emojiOptions`) rather than
+  // in the type name. A question of this type with no set is unanswerable, which is
+  // why the backend refuses to create one and `MicroclimateRespondPage` says so
+  // rather than drawing an empty group.
+  'emoji_rating',
+] as const
 
 export type QuestionType = (typeof QUESTION_TYPES)[number]
 

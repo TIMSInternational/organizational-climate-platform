@@ -12,9 +12,12 @@ import {
 import { QUESTION_TYPES } from '../questionTypes'
 import { questionTypeLabel } from '../microclimateVocabulary'
 import {
+  defaultEmojiScale,
+  emptyEmojiOption,
   emptyOption,
   needsBothLanguages,
   type ContentLanguage,
+  type WizardEmojiOptionValues,
   type WizardOptionValues,
   type WizardQuestionValues,
 } from '../wizardValues'
@@ -56,6 +59,15 @@ interface MicroclimateQuestionEditorProps {
  * `likert` and `rating` fall back to a 1-5 scale server side and `yes_no` and
  * `open_ended` need nothing, so an option list on those would collect input that is
  * never stored. `MicroclimateRespondPage` renders exactly this split.
+ *
+ * ## `emoji_rating` gets a different editor, not the same one (#198)
+ *
+ * Its faces are stored in their own table with the glyph and the label in separate
+ * columns, because a face's label is the accessible name a screen reader announces —
+ * an emoji-only option has none. So the row here is **two fields per face**, and the
+ * label is marked required rather than optional the way a multiple-choice label is.
+ * Reusing the option editor and asking authors to type the emoji into the label field
+ * is precisely the shape #198 rejected.
  */
 export default function MicroclimateQuestionEditor({
   question,
@@ -69,12 +81,22 @@ export default function MicroclimateQuestionEditor({
   const { t } = useTranslation()
   const bilingual = needsBothLanguages(language)
   const showsOptions = question.type === 'multiple_choice'
+  const showsEmojiScale = question.type === 'emoji_rating'
 
   function updateOption(key: string, patch: Partial<WizardOptionValues>): void {
     onChange({
       ...question,
       options: question.options.map((option) =>
         option.key === key ? { ...option, ...patch } : option,
+      ),
+    })
+  }
+
+  function updateEmojiOption(key: string, patch: Partial<WizardEmojiOptionValues>): void {
+    onChange({
+      ...question,
+      emojiOptions: question.emojiOptions.map((face) =>
+        face.key === key ? { ...face, ...patch } : face,
       ),
     })
   }
@@ -136,6 +158,14 @@ export default function MicroclimateQuestionEditor({
                   type === 'multiple_choice' && question.options.length === 0
                     ? [emptyOption(nextKey()), emptyOption(nextKey())]
                     : question.options,
+                // Four faces, glyphs seeded and names blank. The glyphs are a
+                // starting point an author can overwrite; the names are the one
+                // thing nobody else can supply, so they are left empty and the
+                // step refuses to advance until they are filled.
+                emojiOptions:
+                  type === 'emoji_rating' && question.emojiOptions.length === 0
+                    ? defaultEmojiScale(nextKey)
+                    : question.emojiOptions,
               })
             }
             options={QUESTION_TYPES.map((type) => ({
@@ -202,6 +232,99 @@ export default function MicroclimateQuestionEditor({
                 disabled={disabled}
               >
                 {t('microclimates.addOption')}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {showsEmojiScale && (
+          <div className="flex flex-col gap-inline">
+            {/* Said once, above the rows, rather than as help text on every label: the
+                author needs to know WHY a face has to be named before they meet four
+                required fields, and repeating it four times is noise. */}
+            <p className="text-sm text-fg-secondary">{t('microclimates.emojiScaleHint')}</p>
+            {question.emojiOptions.map((face, index) => (
+              <div key={face.key} className="flex flex-wrap items-end gap-inline">
+                <div className="grid min-w-0 flex-1 gap-panel-gap md:grid-cols-3">
+                  <TextField
+                    label={t('microclimates.emojiGlyph', { number: index + 1 })}
+                    value={face.emoji}
+                    onChange={(value) => updateEmojiOption(face.key, { emoji: value })}
+                    disabled={disabled}
+                    required
+                  />
+                  {bilingual ? (
+                    <>
+                      <TextField
+                        label={t('microclimates.emojiLabelEn', { number: index + 1 })}
+                        value={face.labelEn}
+                        onChange={(value) => updateEmojiOption(face.key, { labelEn: value })}
+                        disabled={disabled}
+                        required
+                      />
+                      <TextField
+                        label={t('microclimates.emojiLabelEs', { number: index + 1 })}
+                        value={face.labelEs}
+                        onChange={(value) => updateEmojiOption(face.key, { labelEs: value })}
+                        disabled={disabled}
+                        required
+                      />
+                    </>
+                  ) : (
+                    // Bound to the column the CONTENT LANGUAGE actually writes, the way
+                    // the question-text field above does it -- not always to `labelEn`.
+                    // The plain option rows below still bind to `labelEn` unconditionally
+                    // while `localizedFor` reads `labelEs` for a Spanish microclimate;
+                    // that mismatch is a pre-existing defect on the multiple-choice path
+                    // and is deliberately not copied here.
+                    <TextField
+                      label={t('microclimates.emojiLabel', { number: index + 1 })}
+                      value={language === 'es' ? face.labelEs : face.labelEn}
+                      onChange={(value) =>
+                        updateEmojiOption(
+                          face.key,
+                          language === 'es' ? { labelEs: value } : { labelEn: value },
+                        )
+                      }
+                      disabled={disabled}
+                      // Required whichever language it is: this is the option's
+                      // accessible name, and the server refuses a face without one
+                      // rather than storing an unnamed emoji.
+                      required
+                      className="md:col-span-2"
+                    />
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() =>
+                    onChange({
+                      ...question,
+                      emojiOptions: question.emojiOptions.filter(
+                        (candidate) => candidate.key !== face.key,
+                      ),
+                    })
+                  }
+                  disabled={disabled}
+                >
+                  {t('microclimates.removeEmojiOption', { number: index + 1 })}
+                </Button>
+              </div>
+            ))}
+            <div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  onChange({
+                    ...question,
+                    emojiOptions: [...question.emojiOptions, emptyEmojiOption(nextKey())],
+                  })
+                }
+                disabled={disabled}
+              >
+                {t('microclimates.addEmojiOption')}
               </Button>
             </div>
           </div>

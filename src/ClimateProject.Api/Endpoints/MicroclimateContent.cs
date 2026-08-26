@@ -53,6 +53,70 @@ internal static class MicroclimateContent
             .ToDictionary(g => g.Key, g => g.ToList());
     }
 
+    /// <summary>
+    /// The emoji-scale rows for a set of questions, ordered, as a lookup (#198). One
+    /// query for the whole page, exactly like <see cref="LoadOptionsAsync"/> -- and a
+    /// second query rather than a join, because only <c>emoji_rating</c> questions have
+    /// any of these rows and most pages have none at all.
+    /// </summary>
+    public static async Task<Dictionary<Guid, List<MicroclimateQuestionEmojiOption>>> LoadEmojiOptionsAsync(
+        ClimateProjectDbContext db,
+        IReadOnlyCollection<Guid> questionIds,
+        CancellationToken cancellationToken)
+    {
+        if (questionIds.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = await db.MicroclimateQuestionEmojiOptions
+            .Where(o => questionIds.Contains(o.MicroclimateQuestionId))
+            .OrderBy(o => o.Order)
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(o => o.MicroclimateQuestionId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+    }
+
+    /// <summary>
+    /// The emoji scale as a respondent's client receives it: glyph, stable value, and
+    /// the resolved label that is the option's accessible name.
+    /// </summary>
+    /// <remarks>
+    /// A label that had to fall back to the other language self-reports through
+    /// <paramref name="fallbackFields"/> like every other localized field. It matters
+    /// more here than elsewhere: the label is not decoration on this control, it is the
+    /// only thing a screen reader has to go on, so a silent substitution would hand a
+    /// respondent an English word on a Spanish scale with nothing saying so.
+    /// </remarks>
+    public static List<QuestionEmojiOptionDto>? ToEmojiOptionDtos(
+        List<MicroclimateQuestionEmojiOption>? options,
+        string locale,
+        string contentLanguage,
+        string fieldPathPrefix,
+        List<string> fallbackFields)
+    {
+        if (options is null || options.Count == 0)
+        {
+            return null;
+        }
+
+        var dtos = new List<QuestionEmojiOptionDto>(options.Count);
+        foreach (var option in options)
+        {
+            var label = LocalizedContent.Resolve(option.LabelEn, option.LabelEs, locale, contentLanguage);
+            if (label.IsFallback)
+            {
+                fallbackFields.Add($"{fieldPathPrefix}.emojiOptions[{option.Order}].label");
+            }
+
+            dtos.Add(new QuestionEmojiOptionDto(option.Order, option.Emoji, option.Value, label.Text));
+        }
+
+        return dtos;
+    }
+
     public static List<QuestionOptionDto>? ToOptionDtos(
         List<MicroclimateQuestionOption>? options,
         string locale,
@@ -106,10 +170,18 @@ internal static class MicroclimateContent
     /// are included: an unlabelled option is an unanswerable question, and it is
     /// exactly the kind of gap a read-time fallback would paper over.
     /// </summary>
+    /// <param name="emojiOptionsByQuestion">
+    /// The emoji scales (#198). Their labels are gated on exactly the same footing as
+    /// the plain option labels, and for a stronger reason: on an emoji control the
+    /// label is the only accessible name there is, so an untranslated one is not a
+    /// cosmetic gap but a scale a Spanish respondent using a screen reader cannot
+    /// answer.
+    /// </param>
     public static IReadOnlyList<LocalizedFieldValue> GateFields(
         Microclimate microclimate,
         IReadOnlyList<MicroclimateQuestion> questions,
-        IReadOnlyDictionary<Guid, List<MicroclimateQuestionOption>> optionsByQuestion)
+        IReadOnlyDictionary<Guid, List<MicroclimateQuestionOption>> optionsByQuestion,
+        IReadOnlyDictionary<Guid, List<MicroclimateQuestionEmojiOption>>? emojiOptionsByQuestion = null)
     {
         var fields = new List<LocalizedFieldValue>
         {
@@ -121,18 +193,29 @@ internal static class MicroclimateContent
         {
             fields.Add(new LocalizedFieldValue($"questions[{question.Order}].text", question.TextEn, question.TextEs, Required: true));
 
-            if (!optionsByQuestion.TryGetValue(question.Id, out var options))
+            if (optionsByQuestion.TryGetValue(question.Id, out var options))
             {
-                continue;
+                foreach (var option in options)
+                {
+                    fields.Add(new LocalizedFieldValue(
+                        $"questions[{question.Order}].options[{option.Order}].label",
+                        option.LabelEn,
+                        option.LabelEs,
+                        Required: true));
+                }
             }
 
-            foreach (var option in options)
+            if (emojiOptionsByQuestion is not null
+                && emojiOptionsByQuestion.TryGetValue(question.Id, out var emojiOptions))
             {
-                fields.Add(new LocalizedFieldValue(
-                    $"questions[{question.Order}].options[{option.Order}].label",
-                    option.LabelEn,
-                    option.LabelEs,
-                    Required: true));
+                foreach (var option in emojiOptions)
+                {
+                    fields.Add(new LocalizedFieldValue(
+                        $"questions[{question.Order}].emojiOptions[{option.Order}].label",
+                        option.LabelEn,
+                        option.LabelEs,
+                        Required: true));
+                }
             }
         }
 

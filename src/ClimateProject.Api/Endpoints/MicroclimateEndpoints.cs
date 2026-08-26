@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using ClimateProject.Api.Infrastructure;
@@ -165,20 +166,23 @@ public static class MicroclimateEndpoints
             .OrderBy(q => q.Order)
             .ToListAsync(cancellationToken);
 
-        var optionsByQuestion = await MicroclimateContent.LoadOptionsAsync(
-            db, questions.Select(q => q.Id).ToList(), cancellationToken);
+        var questionIds = questions.Select(q => q.Id).ToList();
+        var optionsByQuestion = await MicroclimateContent.LoadOptionsAsync(db, questionIds, cancellationToken);
+        var emojiOptionsByQuestion = await MicroclimateContent.LoadEmojiOptionsAsync(db, questionIds, cancellationToken);
 
         return questions.Select(q =>
         {
             var path = $"questions[{q.Order}]";
             optionsByQuestion.TryGetValue(q.Id, out var options);
+            emojiOptionsByQuestion.TryGetValue(q.Id, out var emojiOptions);
             return new QuestionDto(
                 q.Id,
                 MicroclimateContent.Resolve(q.TextEn, q.TextEs, locale, m.Language, $"{path}.text", fallbackFields),
                 q.Type,
                 MicroclimateContent.ToOptionDtos(options, locale, m.Language, path, fallbackFields),
                 q.Required,
-                q.Order);
+                q.Order,
+                MicroclimateContent.ToEmojiOptionDtos(emojiOptions, locale, m.Language, path, fallbackFields));
         }).ToList();
     }
 
@@ -225,7 +229,61 @@ public static class MicroclimateEndpoints
         CreateQuestionInput Input,
         string? TextEn,
         string? TextEs,
-        List<MicroclimateQuestionOption> Options);
+        List<MicroclimateQuestionOption> Options,
+        List<MicroclimateQuestionEmojiOption> EmojiOptions);
+
+    /// <summary>
+    /// The longest glyph <c>microclimate_question_emoji_options.emoji</c> can hold.
+    /// Checked here so an over-long emoji is a 400 naming the limit rather than a
+    /// DbUpdateException surfacing as an opaque 500.
+    /// </summary>
+    /// <remarks>
+    /// Counted in CHARACTERS -- code points -- because that is what a Postgres
+    /// <c>varchar(16)</c> counts, and on the one input this column exists for the two
+    /// units differ by nearly a factor of two: a family ZWJ sequence is 7 code points
+    /// but 11 UTF-16 units, and a kiss sequence with skin tones is 10 and 15. A
+    /// <see cref="string.Length"/> check would refuse glyphs the column can hold and
+    /// name a limit the database does not use.
+    /// </remarks>
+    private const int MaxEmojiLength = 16;
+
+    /// <summary>
+    /// The longest accessible name <c>label_en</c>/<c>label_es</c> can hold, in the same
+    /// unit and for the same reason as <see cref="MaxEmojiLength"/>.
+    /// </summary>
+    /// <remarks>
+    /// Guarding the glyph and not the name was the gap: the name is a phrase a human
+    /// types, so it is by far the likelier of the two to run past its column, and
+    /// without this check a long one reached <c>varchar(100)</c> as a DbUpdateException
+    /// and surfaced to the author as an opaque 500 on the one field this whole feature
+    /// exists for.
+    /// </remarks>
+    private const int MaxEmojiLabelLength = 100;
+
+    /// <summary>
+    /// The length Postgres will measure: <c>varchar(n)</c> counts characters, i.e. code
+    /// points, while <see cref="string.Length"/> counts UTF-16 units.
+    /// </summary>
+    private static int CharacterCount(string value)
+    {
+        var count = 0;
+        foreach (var _ in value.EnumerateRunes())
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>An emoji scale needs at least this many points to be a scale.</summary>
+    /// <remarks>
+    /// Same number and same argument as the <c>multiple_choice</c> minimum below it: a
+    /// single-point scale has nothing to choose between, so it is an unanswerable
+    /// question, and rejecting it at creation is cheaper than discovering it when a
+    /// respondent opens the link. This is the check #198 named as the thing that has to
+    /// exist before <c>emoji_rating</c> could join the vocabulary at all.
+    /// </remarks>
+    private const int MinEmojiOptions = 2;
 
     private static async Task<IResult> CreateAsync(
         CreateMicroclimateRequest request,
@@ -352,7 +410,102 @@ public static class MicroclimateEndpoints
                 return Results.Json(new { message = "multiple_choice questions require at least 2 options" }, statusCode: 400);
             }
 
-            preparedQuestions.Add(new PreparedQuestion(question, questionTextEn, questionTextEs, options));
+            // The emoji scale (#198). Prepared in the same pass and by the same rules as the
+            // plain options above -- validated before anything reaches the change tracker, so
+            // a bad scale on question 5 does not leave questions 1-4 half-built.
+            var emojiOptions = new List<MicroclimateQuestionEmojiOption>();
+            var emojiOrder = 0;
+            foreach (var emojiInput in question.EmojiOptions ?? [])
+            {
+                // Refused rather than ignored. Every other type either renders its plain
+                // options or falls back to a 1-5 scale; none of them reads this field, so
+                // accepting it would take an author's authored scale and drop it silently.
+                if (question.Type != QuestionTypes.EmojiRating)
+                {
+                    return Results.Json(new { message = $"Question {question.Order} is '{question.Type}', which has no emoji scale. emojiOptions is only valid on an {QuestionTypes.EmojiRating} question." }, statusCode: 400);
+                }
+
+                var emoji = emojiInput.Emoji?.Trim();
+                if (string.IsNullOrEmpty(emoji))
+                {
+                    return Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} needs an emoji" }, statusCode: 400);
+                }
+
+                if (CharacterCount(emoji) > MaxEmojiLength)
+                {
+                    return Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} is longer than {MaxEmojiLength} characters" }, statusCode: 400);
+                }
+
+                string? emojiLabelEn = null;
+                string? emojiLabelEs = null;
+                if (emojiInput.Label is not null
+                    && !emojiInput.Label.TryResolve(language, $"questions[{question.Order}].emojiOptions[{emojiOrder}].label", out emojiLabelEn, out emojiLabelEs, out var emojiLabelError))
+                {
+                    return Results.Json(new { message = emojiLabelError }, statusCode: 400);
+                }
+
+                // The load-bearing rule of this whole feature. An emoji carries no name of
+                // its own that a screen reader can be relied on to speak in the respondent's
+                // language, so a scale point without a label is exactly the unusable control
+                // that reusing the plain Options array was rejected for (#198). Refused at
+                // creation, not papered over at render.
+                if (string.IsNullOrWhiteSpace(emojiLabelEn) && string.IsNullOrWhiteSpace(emojiLabelEs))
+                {
+                    return Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} needs a label -- it is the option's accessible name" }, statusCode: 400);
+                }
+
+                // ...and a name the column cannot hold is refused here for the same reason the
+                // glyph above it is: the alternative is a DbUpdateException the author reads as
+                // "An unexpected error occurred."
+                var emojiLabelTooLong = new[] { emojiLabelEn?.Trim(), emojiLabelEs?.Trim() }
+                    .FirstOrDefault(label => label is not null && CharacterCount(label) > MaxEmojiLabelLength);
+                if (emojiLabelTooLong is not null)
+                {
+                    return Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} has a label longer than {MaxEmojiLabelLength} characters" }, statusCode: 400);
+                }
+
+                // Position on the scale when the author did not say. Listing five faces then
+                // gets 1..5, which is the numbering a reader of the export expects and the
+                // one the plain 1-5 scale already uses.
+                var emojiValue = emojiInput.Value ?? emojiOrder + 1;
+                if (emojiOptions.Any(o => o.Value == emojiValue))
+                {
+                    // Caught here rather than by the unique index, for the reason the plain
+                    // duplicate check above gives: a duplicate value makes a submission
+                    // ambiguous -- two faces accepting the same string, with nothing to say
+                    // which one was meant -- and a 400 naming the option beats an opaque
+                    // DbUpdateException.
+                    return Results.Json(new { message = $"Question {question.Order} has duplicate emoji option value '{emojiValue}'" }, statusCode: 400);
+                }
+
+                emojiOptions.Add(new MicroclimateQuestionEmojiOption
+                {
+                    Order = emojiOrder,
+                    Emoji = emoji,
+                    Value = emojiValue,
+                    LabelEn = emojiLabelEn?.Trim(),
+                    LabelEs = emojiLabelEs?.Trim(),
+                });
+                emojiOrder++;
+            }
+
+            if (question.Type == QuestionTypes.EmojiRating)
+            {
+                if (emojiOptions.Count < MinEmojiOptions)
+                {
+                    return Results.Json(new { message = $"{QuestionTypes.EmojiRating} questions require at least {MinEmojiOptions} emoji options" }, statusCode: 400);
+                }
+
+                // Same "never silently drop input" rule as above, the other way round: the
+                // respond page renders the emoji scale for this type and nothing else, so
+                // plain options here would be collected and never shown.
+                if (options.Count > 0)
+                {
+                    return Results.Json(new { message = $"Question {question.Order} is '{QuestionTypes.EmojiRating}', which is answered on its emoji scale. Use emojiOptions rather than options." }, statusCode: 400);
+                }
+            }
+
+            preparedQuestions.Add(new PreparedQuestion(question, questionTextEn, questionTextEs, options, emojiOptions));
         }
 
         // TemplateId has a real FK to microclimate_templates (see MicroclimateConfiguration).
@@ -424,6 +577,12 @@ public static class MicroclimateEndpoints
             {
                 option.MicroclimateQuestionId = questionId;
                 db.MicroclimateQuestionOptions.Add(option);
+            }
+
+            foreach (var emojiOption in prepared.EmojiOptions)
+            {
+                emojiOption.MicroclimateQuestionId = questionId;
+                db.MicroclimateQuestionEmojiOptions.Add(emojiOption);
             }
         }
 
@@ -641,12 +800,34 @@ public static class MicroclimateEndpoints
             var gateQuestions = await db.MicroclimateQuestions
                 .Where(q => q.MicroclimateId == microclimate.Id)
                 .ToListAsync(cancellationToken);
-            var gateOptions = await MicroclimateContent.LoadOptionsAsync(
-                db, gateQuestions.Select(q => q.Id).ToList(), cancellationToken);
+            var gateQuestionIds = gateQuestions.Select(q => q.Id).ToList();
+            var gateOptions = await MicroclimateContent.LoadOptionsAsync(db, gateQuestionIds, cancellationToken);
+            var gateEmojiOptions = await MicroclimateContent.LoadEmojiOptionsAsync(db, gateQuestionIds, cancellationToken);
+
+            // An emoji_rating question with no scale is the unanswerable question #198
+            // exists to prevent, one step from a respondent: MicroclimateRespondPage has no
+            // control to draw for it and SubmitResponseAsync rejects every answer to it.
+            // CreateAsync refuses to build one, but it is not the only endpoint that writes
+            // microclimate questions -- MicroclimateTemplateEndpoints does too -- and this
+            // gate is the last point before the link goes out, so it is the guard that
+            // covers a row which reached the table any other way.
+            var scaleless = gateQuestions
+                .Where(q => q.Type == QuestionTypes.EmojiRating)
+                .Where(q => !gateEmojiOptions.TryGetValue(q.Id, out var faces) || faces.Count < MinEmojiOptions)
+                .OrderBy(q => q.Order)
+                .ToList();
+            if (scaleless.Count > 0)
+            {
+                var unanswerable = $"Cannot publish: {string.Join(", ", scaleless.Select(q => $"questions[{q.Order}]"))} "
+                    + $"{(scaleless.Count == 1 ? "is" : "are")} '{QuestionTypes.EmojiRating}' with fewer than {MinEmojiOptions} emoji options, which a respondent cannot answer.";
+                return new StatusChangeFailure(
+                    Results.Json(new { message = unanswerable, unanswerableQuestions = scaleless.Select(q => q.Order).ToList() }, statusCode: 400),
+                    unanswerable);
+            }
 
             var missing = ContentPublishValidation.FindMissing(
                 microclimate.Language,
-                MicroclimateContent.GateFields(microclimate, gateQuestions, gateOptions));
+                MicroclimateContent.GateFields(microclimate, gateQuestions, gateOptions, gateEmojiOptions));
 
             if (missing.Count > 0)
             {
@@ -1097,6 +1278,13 @@ public static class MicroclimateEndpoints
         var optionValues = await MicroclimateContent.LoadOptionsAsync(
             db, questions.Select(q => q.Id).ToList(), cancellationToken);
 
+        // The emoji scale's allowed answers (#198), on exactly the same footing: the
+        // stable VALUE, never the glyph and never the label. Loaded whatever the question
+        // types are, because a microclimate with no emoji_rating question simply gets an
+        // empty lookup and the extra query costs nothing on a page with no scales.
+        var emojiOptionValues = await MicroclimateContent.LoadEmojiOptionsAsync(
+            db, questions.Select(q => q.Id).ToList(), cancellationToken);
+
         // Constrained question types (multiple_choice, likert, rating, yes_no) must not accept arbitrary
         // freeform text -- validate each submitted answer against the question's own allowed
         // values so an invalid choice/rating never gets counted as a "real" response.
@@ -1139,6 +1327,19 @@ public static class MicroclimateEndpoints
                             ? null
                             : $"must be one of: {string.Join(", ", choices.Select(o => o.Value))}"
                         : "this question has no configured options to answer",
+                // emoji_rating is validated against its OWN configured values and nothing
+                // else -- there is no 1-5 fallback here, unlike likert/rating. A scale whose
+                // author chose the values -2..2, or 1..4, must reject 5; and an emoji_rating
+                // question with no scale at all (which CreateAsync now refuses to make, but
+                // which a template instantiation could still produce) has no valid answer,
+                // so it is rejected rather than silently counted. Compared as the value's
+                // decimal string because answers travel as text.
+                QuestionTypes.EmojiRating
+                    => emojiOptionValues.TryGetValue(question.Id, out var faces) && faces.Count > 0
+                        ? faces.Any(o => o.Value.ToString(CultureInfo.InvariantCulture) == answer)
+                            ? null
+                            : $"must be one of: {string.Join(", ", faces.Select(o => o.Value.ToString(CultureInfo.InvariantCulture)))}"
+                        : "this question has no configured emoji options to answer",
                 _ => null,
             };
 

@@ -41,10 +41,16 @@ public class QuestionRepositoryTypesTests
     }
 
     [Fact]
-    public void Emoji_rating_is_excluded_because_neither_wizard_accepts_it_today()
+    public void Emoji_rating_is_excluded_because_only_microclimates_accept_it()
     {
-        // #198 is the issue that would change this. Until it lands, an emoji_rating library item
-        // would be uninstantiable anywhere, which is worse than not being authorable.
+        // Was "because neither wizard accepts it today". #198 gave the microclimate side an
+        // emoji-option table and added the type to ForMicroclimate, so half of that is no longer
+        // true -- and the intersection is still the right answer for the other half: an
+        // emoji_rating library item would be uninstantiable into a SURVEY, which is exactly the
+        // pick-time failure this vocabulary exists to prevent. The assertion is unchanged
+        // precisely because the set is derived; only the reason moved.
+        Assert.Contains(QuestionTypes.EmojiRating, QuestionTypes.ForMicroclimate);
+        Assert.DoesNotContain(QuestionTypes.EmojiRating, QuestionTypes.ForSurvey);
         Assert.False(QuestionRepositoryTypes.IsSupported(QuestionTypes.EmojiRating));
     }
 

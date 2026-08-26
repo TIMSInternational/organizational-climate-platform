@@ -15,27 +15,65 @@ namespace ClimateProject.Application.Microclimates;
 public sealed record QuestionOptionDto(int Order, string Value, string? Label);
 
 /// <summary>
+/// One point on an <c>emoji_rating</c> question's scale (#198).
+/// </summary>
+/// <param name="Emoji">
+/// The glyph, for the eye only. A client must render it with the accessible name
+/// hidden from it (<c>aria-hidden</c>) and name the control with
+/// <paramref name="Label"/> instead: an emoji-only radio is announced by whatever the
+/// reader's own emoji dictionary calls the character, in whatever language that
+/// dictionary happens to be in.
+/// </param>
+/// <param name="Value">
+/// The stable key. This is what must be submitted -- as its decimal string, since
+/// answers travel as text -- and what the submission is validated against, for
+/// exactly the reason <see cref="QuestionOptionDto.Value"/> gives. Validated, not
+/// stored: a microclimate keeps no per-response row, only a count and a word cloud.
+/// </param>
+/// <param name="Label">
+/// The option's accessible name, already resolved for the request's locale.
+/// </param>
+public sealed record QuestionEmojiOptionDto(int Order, string Emoji, int Value, string? Label);
+
+/// <summary>
 /// Read shape. Note there is no <c>textEn</c>/<c>textEs</c>: <see cref="Text"/> is
 /// already resolved for the requested locale. Adding a third language changes nothing
 /// here, which is the entire reason #195 chose paired columns over a translation
 /// table.
 /// </summary>
+/// <param name="EmojiOptions">
+/// The scale of an <c>emoji_rating</c> question, and null on every other type -- a
+/// separate field from <paramref name="Options"/> rather than a reuse of it, because
+/// the glyph and the name it is announced by are two values, not one (#198).
+/// </param>
 public sealed record QuestionDto(
     Guid Id,
     string? Text,
     string Type,
     List<QuestionOptionDto>? Options,
     bool Required,
-    int Order);
+    int Order,
+    List<QuestionEmojiOptionDto>? EmojiOptions = null);
 
 public sealed record CreateQuestionOptionInput(string? Value, LocalizedInput? Label);
+
+/// <param name="Value">
+/// Optional. Defaults to the option's 1-based position on the scale, so an author who
+/// simply lists five faces gets 1..5 without having to say so.
+/// </param>
+/// <param name="Label">
+/// Required in practice: it is the option's accessible name, and a scale point with no
+/// name is rejected rather than stored. Localized like every other authored string.
+/// </param>
+public sealed record CreateQuestionEmojiOptionInput(string? Emoji, int? Value, LocalizedInput? Label);
 
 public sealed record CreateQuestionInput(
     LocalizedInput? Text,
     string Type,
     List<CreateQuestionOptionInput>? Options,
     bool Required,
-    int Order);
+    int Order,
+    List<CreateQuestionEmojiOptionInput>? EmojiOptions = null);
 
 public sealed record MicroclimateListItem(
     Guid Id,

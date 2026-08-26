@@ -95,8 +95,7 @@ public static class QuestionTypes
     /// <c>emoji_rating</c>. The target had <c>multiple_choice</c>, <c>open_text</c>,
     /// <c>rating</c> and <c>yes_no</c>.
     ///
-    /// This is the union minus <see cref="EmojiRating"/>. Rationale for each
-    /// difference from legacy:
+    /// This is the union. Rationale for each difference from legacy:
     /// <list type="bullet">
     /// <item><see cref="Likert"/> restored -- legacy microclimates' primary type, and
     /// without it legacy rows cannot be imported.</item>
@@ -104,12 +103,17 @@ public static class QuestionTypes
     /// microclimates never had them: the target already implements answer validation
     /// and respondent rendering for both, and removing working functionality to match
     /// legacy would be a regression, not parity.</item>
-    /// <item><see cref="EmojiRating"/> **not** added despite legacy support. A
-    /// microclimate question has no place to store an emoji set -- QuestionEmojiOption
-    /// is keyed to survey QuestionId, and MicroclimateQuestion has only a flat
-    /// Options array. Accepting the type without somewhere to put its emoji would
-    /// create unanswerable questions, which is the exact failure the multiple_choice
-    /// minimum-option check exists to prevent. Needs storage design first.</item>
+    /// <item><see cref="EmojiRating"/> added by #198. It was excluded when this set
+    /// was first written, for a reason that was true then and is not now: a
+    /// microclimate question had nowhere to store an emoji set, so accepting the type
+    /// would have created unanswerable questions. It now has one --
+    /// <c>microclimate_question_emoji_options</c>, a child table carrying the glyph,
+    /// its accessible name per locale and the stable value an answer is validated
+    /// against (a microclimate persists no answer rows at all -- only a count and a
+    /// word cloud -- so "stored" would be the wrong word).
+    /// The storage came first and the vocabulary followed, which is the order this
+    /// class's whole argument depends on: a type listed here is a claim that the
+    /// product can store, validate and render it.</item>
     /// <item><c>ranking</c> not added -- no legacy microclimate used it, and neither
     /// answer validation nor rendering exists for ordered responses.</item>
     /// </list>
@@ -121,6 +125,7 @@ public static class QuestionTypes
         OpenEnded,
         YesNo,
         Rating,
+        EmojiRating,
     ];
 
     /// <summary>

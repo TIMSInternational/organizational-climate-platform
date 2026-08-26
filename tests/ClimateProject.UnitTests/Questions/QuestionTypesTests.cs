@@ -36,10 +36,10 @@ public class QuestionTypesTests
     }
 
     [Fact]
-    public void Microclimate_set_is_exactly_the_five_supported_types()
+    public void Microclimate_set_is_exactly_the_six_supported_types()
     {
         Assert.Equal(
-            ["likert", "multiple_choice", "open_ended", "yes_no", "rating"],
+            ["likert", "multiple_choice", "open_ended", "yes_no", "rating", "emoji_rating"],
             QuestionTypes.ForMicroclimate);
     }
 
@@ -66,15 +66,28 @@ public class QuestionTypesTests
         Assert.DoesNotContain("open_text", MicroclimateValidation.ValidQuestionTypes);
     }
 
-    // emoji_rating is canonical but deliberately not valid on a microclimate: a
-    // MicroclimateQuestion has nowhere to store an emoji set (QuestionEmojiOption is
-    // keyed to survey QuestionId), so accepting it would create unanswerable
-    // questions. This test pins that as intentional rather than forgotten.
+    // The opposite of the assertion that used to stand here (#198). emoji_rating was
+    // excluded from ForMicroclimate because a MicroclimateQuestion had nowhere to store
+    // an emoji set, and that pin existed so the exclusion read as deliberate. The
+    // storage now exists -- microclimate_question_emoji_options -- so the pin is turned
+    // around rather than deleted: it is still the test that fails if someone changes
+    // this set without looking at what backs it.
     [Fact]
-    public void Emoji_rating_is_canonical_but_not_yet_valid_on_a_microclimate()
+    public void Emoji_rating_is_valid_on_a_microclimate_now_that_its_scale_has_storage()
     {
         Assert.Contains("emoji_rating", QuestionTypes.All);
-        Assert.DoesNotContain("emoji_rating", QuestionTypes.ForMicroclimate);
+        Assert.Contains("emoji_rating", QuestionTypes.ForMicroclimate);
+        Assert.Contains("emoji_rating", MicroclimateValidation.ValidQuestionTypes);
+    }
+
+    // Still NOT a survey type. emoji_rating is canonical and legacy Survey.ts never
+    // allowed it, and #198 added storage for the microclimate side only -- there is no
+    // survey write path to add it to. Pinned so a "while we're here" edit to ForSurvey
+    // fails rather than claiming a type surveys cannot store.
+    [Fact]
+    public void Emoji_rating_is_still_not_a_survey_type()
+    {
+        Assert.DoesNotContain("emoji_rating", QuestionTypes.ForSurvey);
     }
 
     // Nothing in the schema can represent a matrix question -- no row/column

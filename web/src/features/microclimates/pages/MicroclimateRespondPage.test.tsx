@@ -437,3 +437,207 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
     expect(alert.textContent).toContain('Microclimate not found')
   })
 })
+
+/**
+ * `emoji_rating` (#198).
+ *
+ * The type was refused on microclimates until the server had somewhere to store an
+ * emoji set, and the reason the plain option rows were rejected as that storage is the
+ * one thing these cases have to prove: **an emoji is not an accessible name.** So the
+ * assertions are about the ACCESSIBLE NAME the browser computes for each radio, not
+ * about the text rendered next to it — those coincide only if the glyph is correctly
+ * hidden from assistive technology, which is exactly what could regress.
+ */
+describe('MicroclimateRespondPage emoji scale', () => {
+  function emojiMicroclimate(): PublicMicroclimateDetail {
+    return {
+      id: 'm1',
+      title: 'Pulso semanal',
+      status: 'active',
+      language: 'both',
+      resolvedLocale: 'es',
+      fallbackFields: [],
+      questions: [
+        {
+          id: 'q1',
+          text: '¿Cómo estuvo tu semana?',
+          type: 'emoji_rating',
+          required: true,
+          order: 0,
+          options: null,
+          emojiOptions: [
+            { order: 0, emoji: '\u{1F622}', value: 1, label: 'Triste' },
+            { order: 1, emoji: '\u{1F610}', value: 2, label: 'Normal' },
+            { order: 2, emoji: '\u{1F642}', value: 3, label: 'Bien' },
+          ],
+        },
+      ],
+    }
+  }
+
+  beforeEach(() => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    cleanup()
+    window.localStorage.clear()
+    vi.unstubAllGlobals()
+  })
+
+  it('gives every face an accessible name that is the authored word, not the glyph', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(emojiMicroclimate()), { status: 200 }),
+    )
+    renderPage()
+
+    const faces = await screen.findAllByRole('radio')
+    expect(faces).toHaveLength(3)
+
+    // `getByRole(..., { name })` matches the COMPUTED accessible name exactly, so this
+    // fails both if the word is missing and if the glyph leaks into the name.
+    for (const name of ['Triste', 'Normal', 'Bien']) {
+      expect(screen.getByRole('radio', { name })).toBeTruthy()
+    }
+
+    // The glyph itself is hidden, which is what makes the name above exactly the word.
+    for (const glyph of ['\u{1F622}', '\u{1F610}', '\u{1F642}']) {
+      expect(screen.getByText(glyph).getAttribute('aria-hidden')).toBe('true')
+    }
+  })
+
+  it('keeps the word visible as well as announced', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(emojiMicroclimate()), { status: 200 }),
+    )
+    renderPage()
+
+    // `sr-only` would satisfy the assertion above and still leave a sighted respondent
+    // guessing whether 🙂 means "fine" or "not bad". The word is on the screen.
+    const word = await screen.findByText('Triste')
+    expect(word.className).not.toContain('sr-only')
+  })
+
+  it('submits the stable value as a string, never the glyph or the word', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify(emojiMicroclimate()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 201 }))
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Bien' }))
+    await userEvent.click(screen.getByRole('button', { name: /enviar|submit/i }))
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+    const body = JSON.parse(
+      String((vi.mocked(fetch).mock.calls[1][1] as RequestInit).body),
+    ) as { answers: Record<string, string> }
+
+    // '3' -- what MicroclimateEndpoints validates against the question's emoji values.
+    expect(body.answers.q1).toBe('3')
+  })
+
+  it('says so rather than drawing an empty group when a question has no scale', async () => {
+    const detail = emojiMicroclimate()
+    detail.questions[0].emojiOptions = []
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(detail), { status: 200 }))
+    renderPage()
+
+    // There is no 1-5 fallback for this type: the server rejects every answer to a
+    // scale-less emoji question, so a rendered control would be one whose every answer
+    // is a 400.
+    expect(
+      await screen.findByText(
+        'Esta pregunta no tiene opciones configuradas y no se puede responder.',
+      ),
+    ).toBeTruthy()
+    expect(screen.queryByRole('radio')).toBeNull()
+  })
+
+  it('names the group with the question, so a reader announces what is being asked', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(emojiMicroclimate()), { status: 200 }),
+    )
+    renderPage()
+
+    // Without a name on the group, a screen reader announces "radio group" and the
+    // respondent hears three faces with nothing saying what they are answering.
+    const group = await screen.findByRole('radiogroup', { name: '¿Cómo estuvo tu semana?' })
+    expect(within(group).getAllByRole('radio')).toHaveLength(3)
+  })
+
+  it('carries the question’s required flag onto the faces, and only when it is set', async () => {
+    const detail = emojiMicroclimate()
+    detail.questions.push({
+      id: 'q2',
+      text: '¿Y la semana pasada?',
+      type: 'emoji_rating',
+      required: false,
+      order: 1,
+      options: null,
+      emojiOptions: [
+        { order: 0, emoji: '\u{1F622}', value: 1, label: 'Mal' },
+        { order: 1, emoji: '\u{1F929}', value: 2, label: 'Genial' },
+      ],
+    })
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(detail), { status: 200 }))
+    renderPage()
+
+    expect((await screen.findByRole('radio', { name: 'Triste' })).getAttribute('required')).not.toBeNull()
+    // Asserted in both directions: an attribute that is always present proves nothing
+    // about whether the question's own flag is what put it there.
+    expect(screen.getByRole('radio', { name: 'Mal' }).getAttribute('required')).toBeNull()
+  })
+
+  it('gives each emoji question its own radio group, keyed to that question', async () => {
+    const detail = emojiMicroclimate()
+    detail.questions.push({
+      id: 'q2',
+      text: '¿Y la semana pasada?',
+      type: 'emoji_rating',
+      required: true,
+      order: 1,
+      options: null,
+      emojiOptions: [
+        { order: 0, emoji: '\u{1F622}', value: 1, label: 'Mal' },
+        { order: 1, emoji: '\u{1F929}', value: 2, label: 'Genial' },
+      ],
+    })
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 201 }))
+    renderPage()
+
+    // Two emoji_rating questions on one microclimate is a shape the server creates
+    // happily. `name` is what makes them TWO native radio groups rather than one:
+    // shared, arrow keys walk out of one question into the next, a reader announces
+    // "2 of 5" for a three-face scale, and one answer satisfies `required` for both.
+    //
+    // Asserted on the attribute, deliberately. None of those three consequences is
+    // reproducible here: happy-dom implements no radio-group keyboard semantics and no
+    // native form validation, and React restores `checked` on a controlled input, so a
+    // shared name produces an IDENTICAL rendered result on every other assertion this
+    // file can make. The attribute is the mechanism, so the attribute is the assertion —
+    // and it is asserted as two distinct group names, each its own question's, rather
+    // than as one literal string.
+    const [first, second] = await screen.findAllByRole('radiogroup')
+    const namesOf = (group: HTMLElement) =>
+      new Set(within(group).getAllByRole('radio').map((radio) => radio.getAttribute('name')))
+
+    expect(namesOf(first)).toEqual(new Set(['q1']))
+    expect(namesOf(second)).toEqual(new Set(['q2']))
+
+    // And both answers survive to the request, each against its own question.
+    await userEvent.click(screen.getByRole('radio', { name: 'Bien' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Genial' }))
+
+    await userEvent.click(screen.getByRole('button', { name: /enviar|submit/i }))
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+    const body = JSON.parse(
+      String((vi.mocked(fetch).mock.calls[1][1] as RequestInit).body),
+    ) as { answers: Record<string, string> }
+
+    // Both answers reach the server, each against its own question.
+    expect(body.answers).toEqual({ q1: '3', q2: '2' })
+  })
+})
