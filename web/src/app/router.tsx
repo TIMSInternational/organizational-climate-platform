@@ -247,10 +247,12 @@ export const router = createBrowserRouter([
       //
       // `/shared/reports/` is the legacy path (`src/app/shared/reports/[token]/page.tsx`
       // over `api/shared/reports/[token]`), kept literal for the same reason `/s/:token`
-      // is: links already in circulation are the contract. Nothing in this repository
-      // mints one yet — `GET /shared/reports/{token}` is not mapped by the API — so today
-      // every token here resolves to the page's single "not available" state, which is
-      // also what an expired or revoked one will resolve to. See SharedReportPage.tsx.
+      // is: links already in circulation are the contract. The API half landed with #139:
+      // `POST /admin/reports/{id}/share` mints a token and `GET /shared/reports/{token}`
+      // resolves one, so a live token now renders the report here. A dead one — expired,
+      // revoked, or never real — resolves to the page's single "not available" state, and
+      // the three are indistinguishable by construction on both sides of the wire. See
+      // SharedReportPage.tsx and `ReportShareEndpoints.cs`.
       { path: '/shared/reports/:token', element: <SharedReportPage /> },
       ...devOnlyRoutes,
       {

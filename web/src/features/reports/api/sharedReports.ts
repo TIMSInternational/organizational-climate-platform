@@ -4,19 +4,19 @@ import { parseReportDocument, type ReportDocument } from '../reportDocument'
  * The public consumption side of a report share link (#139) —
  * `GET {baseUrl}/shared/reports/{token}`.
  *
- * ## This endpoint does not exist yet, and this module is written that way on purpose
+ * ## The endpoint this calls now exists
  *
- * #91 shipped the report surface it shipped: `ReportEndpoints.cs` maps exactly four
- * routes, all under `app.MapGroup("/admin/reports").RequireAuthorization()`, and none of
- * them is token-addressed. Grepped, not assumed: nothing in `src/ClimateProject.Api`
- * contains the string `shared/reports`, `Report` carries no share-token column, and
- * `Report.SharedWith` is a `List<string>` that `SubjectDataMap` itself describes as
- * something "nothing populates yet".
+ * This module was written before it did, deliberately, against the path the legacy system
+ * used (`api/shared/reports/[token]`) so that links already in circulation would keep
+ * working when the API half landed. It landed: `ReportShareEndpoints.cs` maps
+ * `GET /shared/reports/{token}` outside every authorization boundary, and
+ * `POST /admin/reports/{id}/share` mints the tokens it resolves. Tokens are stored as
+ * SHA-256 hashes in `report_shares`, carry a finite expiry, and can be revoked.
  *
- * So today every call from here answers 404, and `SharedReportPage` renders its one
- * "not available" state — which is the correct and safe behaviour for a link nobody has
- * minted. The path is the legacy one the issue names (`api/shared/reports/[token]`), so
- * links printed by the system this replaces keep working when the endpoint lands.
+ * Nothing about this module changed when it landed, which was the point of writing it this
+ * way: a token that is dead — expired, revoked, or never real — still produces the same
+ * 404 the endpoint answers to every failing case, and `SharedReportPage` still renders its
+ * one "not available" state.
  *
  * ## Why this is `fetch` and not `authFetch`
  *
