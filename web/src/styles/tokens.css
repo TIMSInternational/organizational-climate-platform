@@ -330,11 +330,17 @@
   /* The one NON-text tier. It is held to 1.4.11's 3:1 rather than 1.4.3's
      4.5:1, and that is only defensible because nothing it paints is body text:
      the inactive sort glyph in `ui/table.tsx` (a graphic that says "this column
-     sorts") and `ui/calendar.tsx`'s outside-month days (a disabled control,
-     which 1.4.3 exempts by name). Placeholders used to wear it and no longer
-     do — a placeholder is text, so `ui/{input,textarea,select,date-picker}`
-     were moved to `--admin-font-tertiary` under #83. `inkContrast.test.ts`
-     fails if a new `text-fg-light` appears outside that allowlist. */
+     sorts"), `ui/calendar.tsx`'s outside-month days, and the `:disabled` rules
+     for `button` and `input`/`select`/`textarea` in `index.css` — all three of
+     the latter being disabled controls, which 1.4.3 exempts by name.
+     Placeholders used to wear it and no longer do — a placeholder is text, so
+     `ui/{input,textarea,select,date-picker}` were moved to
+     `--admin-font-tertiary` under #83, and `.nav-section-title` (the rail's
+     section headings AND the command palette's group headings, at 3.25:1 on the
+     white panel) was moved to `--admin-font-section-label` when the guard below
+     learned to read stylesheets. `inkContrast.test.ts` fails if a new
+     `text-fg-light` appears outside the component allowlist, or if any CSS rule
+     paints text with this token from a selector that is not `:disabled`. */
   --admin-font-light: #8090a7;
   --admin-font-section-label: #637287;
   /* Text on a solid accent fill — the selected nav row in the legacy

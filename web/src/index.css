@@ -474,13 +474,30 @@
   }
 
   /* Legacy navigation/RoleBasedNav.tsx section heading:
-     `pt-2 pb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.06em]`
-     with `color: var(--admin-font-light)`. */
+     `pt-2 pb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.06em]`,
+     ported with `color: var(--admin-font-light)`.
+
+     That ink is the ONE tier held to 1.4.11's 3:1 instead of 1.4.3's 4.5:1, and
+     tokens.css defends the exemption with "nothing it paints is body text". This
+     rule was the counter-example, and it did not only paint the rail: inside
+     `.on-shell` the token is re-pointed at the navy palette, but `CommandPalette`
+     renders the palette's GROUP HEADINGS with this same class on the page's white
+     panel, where it resolved to #8090a7 — **3.25:1** at 10px in light, 3.94:1 in
+     dark, measured live in Chromium with the palette open. They were the palest
+     text on that screen.
+
+     `--admin-font-section-label` is the 10px-uppercase-eyebrow tier and is held
+     to 4.5:1 (4.90:1 on white, 5.92:1 on the dark panel), which is what this
+     class has always been. The rail is unchanged: `.on-shell` re-points
+     `--admin-font-section-label` at `--admin-shell-font-label`, the same value it
+     re-points `--admin-font-light` to. `styles/inkContrast.test.ts` now sweeps
+     stylesheets as well as components, and allows the non-text ink to paint text
+     only from a `:disabled` rule. */
   .nav-section-title {
     padding: var(--admin-space-8) var(--admin-space-8) var(--admin-space-6);
     font-size: var(--admin-text-2xs);
     font-weight: var(--admin-weight-semibold);
-    color: var(--admin-font-light);
+    color: var(--admin-font-section-label);
     letter-spacing: var(--admin-tracking-label);
     text-transform: uppercase;
   }

@@ -359,7 +359,25 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
                 maxHeight: '80vh',
                 overflowY: 'auto',
                 padding: 'var(--admin-space-4)',
-                background: 'var(--admin-bg-panel)',
+                // `--admin-bg-overlay`, NOT `--admin-bg-panel`. This panel is a
+                // popover hanging out of the rail, so it renders inside
+                // `.on-shell` and inherits the chrome's ink — and `.on-shell`
+                // re-points `--admin-bg-overlay` at `--admin-shell-bg-raised`
+                // precisely for a popover in that position (`SidebarUserMenu`
+                // is the other one), while `--admin-bg-panel` stays the page's
+                // white card. Painted from the panel token this printed
+                // `--admin-shell-font` #c8d8ec on #ffffff — **1.45:1** for the
+                // child links and 2.15:1 for the group heading, measured live in
+                // Chromium at /dashboard, light, rail collapsed. That is the same
+                // defect, one component away, as the 1.12:1 company switcher:
+                // a ground `.on-shell` did not re-point, under ink it did. And it
+                // is the collapsed rail's ONLY route to a group's children, which
+                // is what #83's last scope line asks be operable. On the raised
+                // navy the same two tones are 8.05:1 and 5.43:1 in light, 9.18:1
+                // and 5.13:1 in dark — measured by `shellInkContrast.test.ts`,
+                // which already holds every shell ink against that ground, and
+                // reached from here by `inkContrast.test.ts`'s shell-ground guard.
+                background: 'var(--admin-bg-overlay)',
                 border: '1px solid var(--admin-border-light)',
                 borderRadius: 'var(--admin-radius-xl)',
                 boxShadow: 'var(--admin-shadow-lg)',

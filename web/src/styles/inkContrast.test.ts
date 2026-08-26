@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { AA_NON_TEXT_CONTRAST, AA_TEXT_CONTRAST } from '../test/a11y'
 
@@ -297,5 +297,215 @@ describe('base ink contrast', () => {
     // be unfalsifiable, and the next `text-fg-light` would slip past a green test.
     expect(users.length, 'the sweep matched no file — is the class still spelled text-fg-light?').toBeGreaterThan(0)
     expect(users.sort()).toEqual([...ALLOWED.keys()].sort())
+  })
+
+  /**
+   * The same exemption, on the other side of the wall.
+   *
+   * The sweep above reads `.ts`/`.tsx` for the Tailwind class. It cannot see a
+   * hand-written stylesheet, and that is exactly where the exemption was being
+   * broken: `.nav-section-title` in `index.css` set `color: var(--admin-font-light)`
+   * and `components/layout/CommandPalette.tsx` renders the palette's group headings
+   * with that class — on the page's white panel, outside `.on-shell`, so it
+   * resolved to the page value. Measured live in Chromium with the palette open:
+   * **3.25:1** at 10px in light, 3.94:1 in dark. Both below 4.5:1, and both
+   * invisible to a guard that only greps components.
+   *
+   * The rule is derived rather than listed, so it also covers rules nobody has
+   * written yet: this ink may paint text **only from a `:disabled` selector**,
+   * which is the one category 1.4.3 exempts by name. That leaves `button:disabled`
+   * and `input, select, textarea :disabled` legal and everything else red.
+   *
+   * A `--admin-font-light: …` declaration is a re-pointing of the token, not a
+   * paint (`.on-shell` does exactly that), so only `color:` declarations count.
+   */
+  it('no stylesheet paints text with the non-text ink outside a :disabled rule', () => {
+    const NON_TEXT_INK = '--admin-font-light'
+
+    function stylesheets(dir: string, prefix = ''): [string, string][] {
+      const found: [string, string][] = []
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = `${prefix}${entry.name}`
+        if (entry.isDirectory()) found.push(...stylesheets(join(dir, entry.name), `${path}/`))
+        else if (entry.name.endsWith('.css'))
+          found.push([path, readFileSync(join(dir, entry.name), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')])
+      }
+      return found
+    }
+
+    // `selector { … }` for every rule in the file. Nested at-rules (`@layer`,
+    // `@media`) are stripped of their own braces first so the selectors inside
+    // them are seen — every rule in `index.css` lives inside an `@layer`.
+    function rules(css: string): [string, string][] {
+      const found: [string, string][] = []
+      const open: string[] = []
+      let buffer = ''
+      for (const character of css) {
+        if (character === '{') {
+          open.push(buffer.trim())
+          buffer = ''
+        } else if (character === '}') {
+          const prelude = open.pop() ?? ''
+          // `@layer`/`@media` carry rules, they do not paint. Only the selector
+          // that actually holds the declaration is judged.
+          if (prelude && !prelude.startsWith('@')) found.push([prelude, buffer])
+          buffer = ''
+        } else buffer += character
+      }
+      return found
+    }
+
+    const files = stylesheets(join(process.cwd(), 'src'))
+    expect(files.length, 'the stylesheet sweep found no .css files').toBeGreaterThan(1)
+
+    const offenders: string[] = []
+    for (const [path, css] of files) {
+      for (const [selector, body] of rules(css)) {
+        if (!new RegExp(`color:\\s*var\\(${NON_TEXT_INK}\\)`).test(body)) continue
+        if (!selector.includes(':disabled')) offenders.push(`${path}  ${selector}`)
+      }
+    }
+    expect(offenders).toEqual([])
+
+    // The vacuity control, in both directions: the parse must actually find the
+    // two legal `:disabled` paints (or the sweep above passed over nothing), and
+    // the rule must reject the spelling that was wrong.
+    const legal = files.flatMap(([path, css]) =>
+      rules(css)
+        .filter(([, body]) => new RegExp(`color:\\s*var\\(${NON_TEXT_INK}\\)`).test(body))
+        .map(([selector]) => `${path}  ${selector}`),
+    )
+    expect(legal.length, 'no stylesheet paints with the non-text ink at all — is the token renamed?').toBeGreaterThanOrEqual(2)
+    expect(
+      rules(`.nav-section-title { color: var(${NON_TEXT_INK}); }`).filter(
+        ([selector]) => !selector.includes(':disabled'),
+      ),
+    ).toHaveLength(1)
+  })
+
+  /**
+   * Every ground a chrome component paints must be one `.on-shell` re-points.
+   *
+   * The rule re-points the ink tokens for its whole subtree, so a ground it does
+   * NOT re-point is a page colour under chrome ink. #83 found that twice, one
+   * component apart, and both were invisible to the whole suite:
+   *
+   * - `CompanyContextSwitcher`, the SuperAdmin's `<select>`, on `--admin-bg-input`:
+   *   **1.12:1**. Fixed by re-pointing that token; the test above pins it.
+   * - `RoleBasedNav`'s collapsed-rail flyout — the only route to a group's
+   *   children while the rail is collapsed — on `--admin-bg-panel`: **1.45:1** for
+   *   the links and 2.15:1 for the heading, measured live in Chromium at
+   *   /dashboard, light. Fixed by painting it from `--admin-bg-overlay`, the token
+   *   `.on-shell` already re-points for a popover hanging out of the rail.
+   *
+   * So this measures the class of defect rather than the two instances. The
+   * chrome's components are *derived* from `AdminLayout`: whatever it renders
+   * inside an element carrying `on-shell` is chrome, so a component added to the
+   * rail tomorrow is swept without anybody remembering to list it here. Every
+   * `--admin-bg-*` token those files name must appear on the left of a re-pointing
+   * in `.on-shell`, and every re-pointing must land on a `--admin-shell-*` value
+   * that `shellInkContrast.test.ts` already measures the shell inks against.
+   *
+   * This is also what makes the `--admin-bg-overlay` re-pointing load-bearing
+   * rather than decorative: delete that line and `SidebarUserMenu`'s popover — a
+   * light overlay hanging out of a dark rail — goes back to printing shell ink on
+   * a page ground, and this test says so by name.
+   */
+  it('every ground a chrome component paints is re-pointed by .on-shell', () => {
+    const index = readFileSync(join(process.cwd(), 'src', 'index.css'), 'utf8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      '',
+    )
+    const onShell = /\.on-shell\s*\{([^}]*)\}/.exec(index)
+    expect(onShell, 'index.css no longer has an .on-shell rule').not.toBeNull()
+    const remaps = Object.fromEntries(
+      [...onShell![1].matchAll(/(--admin-bg-[\w-]+):\s*var\((--admin-shell-[\w-]+)\)/g)].map((m) => [
+        m[1],
+        m[2],
+      ]),
+    )
+
+    // Which components are chrome, read out of AdminLayout rather than listed.
+    const layoutPath = join(process.cwd(), 'src', 'app', 'AdminLayout.tsx')
+    const layout = readFileSync(layoutPath, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const jsx = layout.replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+    const shellTags = new Set<string>()
+    for (const open of jsx.matchAll(/<(\w+)[^>]*className="[^"]*\bon-shell\b/g)) {
+      // From the opening tag to its matching close, by counting the tag itself.
+      const from = open.index!
+      const tag = open[1]
+      let depth = 0
+      let at = from
+      const step = new RegExp(`<(/?)${tag}[\\s>/]`, 'g')
+      step.lastIndex = from
+      for (let m = step.exec(jsx); m; m = step.exec(jsx)) {
+        depth += m[1] === '/' ? -1 : 1
+        at = m.index
+        if (depth === 0) break
+      }
+      for (const child of jsx.slice(from, at).matchAll(/<([A-Z]\w+)/g)) shellTags.add(child[1])
+    }
+    expect(shellTags.size, 'no chrome components were found inside an .on-shell element').toBeGreaterThanOrEqual(4)
+
+    // …and where those components live, resolved through AdminLayout's own
+    // imports. Most of the chrome arrives through the `components/layout` barrel,
+    // so a name that lands on a directory is followed one more hop through that
+    // directory's `index.ts` — otherwise the sweep would read the barrel, which
+    // paints nothing, and pass over every component in it.
+    function moduleFor(name: string, from: string, specifier: string): string | null {
+      const base = join(from, specifier)
+      for (const candidate of [`${base}.tsx`, `${base}.ts`]) {
+        if (existsSync(candidate)) return candidate
+      }
+      const barrel = join(base, 'index.ts')
+      if (!existsSync(barrel)) return null
+      const source = readFileSync(barrel, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+      for (const re of [
+        new RegExp(`export\\s+\\{[^}]*\\b${name}\\b[^}]*\\}\\s+from\\s+'(\\.[^']+)'`),
+        new RegExp(`export\\s+\\{\\s*default\\s+as\\s+${name}\\s*\\}\\s+from\\s+'(\\.[^']+)'`),
+      ]) {
+        const hit = re.exec(source)
+        if (hit) return moduleFor(name, base, hit[1])
+      }
+      return null
+    }
+
+    const appDir = join(process.cwd(), 'src', 'app')
+    const files: string[] = []
+    for (const imported of layout.matchAll(
+      /import\s+(?:(\w+)|\{([^}]*)\})\s+from\s+'(\.[^']+)'/g,
+    )) {
+      const names = imported[1] ? [imported[1]] : imported[2].split(',').map((n) => n.trim())
+      for (const name of names) {
+        if (!shellTags.has(name)) continue
+        const file = moduleFor(name, appDir, imported[3])
+        expect(file, `${name} is rendered inside .on-shell but resolves to no module`).not.toBeNull()
+        files.push(file!)
+      }
+    }
+    expect(
+      files.length,
+      'none of the chrome components resolved to a module',
+    ).toBeGreaterThanOrEqual(5)
+
+    const painted = new Set<string>()
+    for (const file of files) {
+      const source = readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+      for (const token of source.matchAll(/var\((--admin-bg-[\w-]+)\)/g)) painted.add(token[1])
+    }
+    expect(painted.size, 'no chrome component paints any ground — did the sweep break?').toBeGreaterThan(0)
+
+    const unmapped = [...painted].filter((token) => !remaps[token]).sort()
+    expect(
+      unmapped,
+      'a chrome component paints a ground .on-shell does not re-point, so it keeps the page colour under the chrome ink',
+    ).toEqual([])
+
+    // Every re-pointing must land somewhere the shell inks are already measured.
+    for (const token of painted) {
+      expect(light[remaps[token]], `${remaps[token]} is not a colour in tokens.css`).toBeDefined()
+    }
   })
 })
