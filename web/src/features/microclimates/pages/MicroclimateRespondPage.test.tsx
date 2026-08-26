@@ -589,7 +589,7 @@ describe('MicroclimateRespondPage emoji scale', () => {
     expect(screen.getByRole('radio', { name: 'Mal' }).getAttribute('required')).toBeNull()
   })
 
-  it('keeps two emoji questions in separate groups, so answering one does not clear the other', async () => {
+  it('gives each emoji question its own radio group, keyed to that question', async () => {
     const detail = emojiMicroclimate()
     detail.questions.push({
       id: 'q2',
@@ -609,15 +609,27 @@ describe('MicroclimateRespondPage emoji scale', () => {
     renderPage()
 
     // Two emoji_rating questions on one microclimate is a shape the server creates
-    // happily. Sharing one native radio `name` across them would make them ONE group:
-    // arrow keys would walk from one question into the next, "2 of 5" would be
-    // announced for a three-face scale, and the second answer would silently erase the
-    // first — which is what this asserts, because it is the failure a respondent meets.
-    await userEvent.click(await screen.findByRole('radio', { name: 'Bien' }))
-    await userEvent.click(screen.getByRole('radio', { name: 'Genial' }))
+    // happily. `name` is what makes them TWO native radio groups rather than one:
+    // shared, arrow keys walk out of one question into the next, a reader announces
+    // "2 of 5" for a three-face scale, and one answer satisfies `required` for both.
+    //
+    // Asserted on the attribute, deliberately. None of those three consequences is
+    // reproducible here: happy-dom implements no radio-group keyboard semantics and no
+    // native form validation, and React restores `checked` on a controlled input, so a
+    // shared name produces an IDENTICAL rendered result on every other assertion this
+    // file can make. The attribute is the mechanism, so the attribute is the assertion —
+    // and it is asserted as two distinct group names, each its own question's, rather
+    // than as one literal string.
+    const [first, second] = await screen.findAllByRole('radiogroup')
+    const namesOf = (group: HTMLElement) =>
+      new Set(within(group).getAllByRole('radio').map((radio) => radio.getAttribute('name')))
 
-    expect((screen.getByRole('radio', { name: 'Bien' }) as HTMLInputElement).checked).toBe(true)
-    expect((screen.getByRole('radio', { name: 'Genial' }) as HTMLInputElement).checked).toBe(true)
+    expect(namesOf(first)).toEqual(new Set(['q1']))
+    expect(namesOf(second)).toEqual(new Set(['q2']))
+
+    // And both answers survive to the request, each against its own question.
+    await userEvent.click(screen.getByRole('radio', { name: 'Bien' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Genial' }))
 
     await userEvent.click(screen.getByRole('button', { name: /enviar|submit/i }))
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
