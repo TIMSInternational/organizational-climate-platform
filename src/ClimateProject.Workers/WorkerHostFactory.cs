@@ -1,7 +1,9 @@
 using ClimateProject.Application.Email;
+using ClimateProject.Application.Microclimates;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Infrastructure.Email;
+using ClimateProject.Infrastructure.Microclimates;
 using ClimateProject.Infrastructure.Notifications;
 using ClimateProject.Infrastructure.Persistence;
 using ClimateProject.Infrastructure.Surveys;
@@ -108,6 +110,10 @@ public static class WorkerHostFactory
         // receives is composed by the sender this line feeds. Registered in only one of the two
         // hosts, the link would appear in every test and in no production email.
         builder.Services.AddScoped<ISurveyInvitationTokens, SurveyInvitationTokens>();
+
+        // And the microclimate half of the same seam (#130), for exactly the same reason:
+        // this host composes the mail an invitee actually receives.
+        builder.Services.AddScoped<IMicroclimateInvitationTokens, MicroclimateInvitationTokens>();
 
         builder.Services.AddScoped<INotificationSender>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
             ? ActivatorUtilities.CreateInstance<EmailNotificationSender>(sp)

@@ -1,5 +1,6 @@
 using ClimateProject.Application.Email;
 using ClimateProject.Application.Localization;
+using ClimateProject.Application.Microclimates;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
@@ -37,6 +38,19 @@ public class EmailNotificationSenderTests
     /// </summary>
     private const string Token = "invitation-token-for-test-not-a-real-secret";
 
+    /// <summary>
+    /// The microclimate equivalent, and deliberately a DIFFERENT string from
+    /// <see cref="Token"/>. Sharing one fixture would make "the sender mailed the right table's
+    /// token" unassertable -- both branches would produce the same characters and the test
+    /// could not tell which resolver had run.
+    /// </summary>
+    private const string MicroclimateToken = "microclimate-token-for-test-not-a-real-sec";
+
+    /// <summary>The microclimate and invitation a microclimate notification here names.</summary>
+    private static readonly Guid MicroclimateId = Guid.NewGuid();
+
+    private static readonly Guid MicroclimateInvitationId = Guid.NewGuid();
+
     private static Notification Notification(string channel, string type = NotificationTypes.SurveyInvitation) => new()
     {
         Id = Guid.NewGuid(),
@@ -71,8 +85,16 @@ public class EmailNotificationSenderTests
     private static NotificationRecipient Recipient(string email = DeliverableAddress)
         => new(RecipientUserId, email, "Ana", ContentLanguages.Spanish);
 
-    private static EmailNotificationSender Sender(RecordingTransport transport, ISurveyInvitationTokens? tokens = null)
-        => new(transport, Options(), tokens ?? new RecordingTokens(Token), NullLogger<EmailNotificationSender>.Instance);
+    private static EmailNotificationSender Sender(
+        RecordingTransport transport,
+        ISurveyInvitationTokens? tokens = null,
+        IMicroclimateInvitationTokens? microclimateTokens = null)
+        => new(
+            transport,
+            Options(),
+            tokens ?? new RecordingTokens(Token),
+            microclimateTokens ?? new RecordingMicroclimateTokens(MicroclimateToken),
+            NullLogger<EmailNotificationSender>.Instance);
 
     [Fact]
     public async Task An_email_notification_is_handed_to_the_transport_and_reported_sent()
@@ -344,7 +366,12 @@ public class EmailNotificationSenderTests
         var transport = new RecordingTransport(outcome);
         var logger = new CapturingLogger();
 
-        await new EmailNotificationSender(transport, Options(), new RecordingTokens(Token), logger)
+        await new EmailNotificationSender(
+                transport,
+                Options(),
+                new RecordingTokens(Token),
+                new RecordingMicroclimateTokens(MicroclimateToken),
+                logger)
             .SendAsync(Notification(NotificationChannels.Email), Recipient(), CancellationToken.None);
 
         // The mail really did carry it -- otherwise this passes for the wrong reason.
@@ -370,7 +397,11 @@ public class EmailNotificationSenderTests
         var logger = new CapturingLogger();
 
         await new EmailNotificationSender(
-                new RecordingTransport(EmailSendOutcome.Success()), Options(), new RecordingTokens(Token), logger)
+                new RecordingTransport(EmailSendOutcome.Success()),
+                Options(),
+                new RecordingTokens(Token),
+                new RecordingMicroclimateTokens(MicroclimateToken),
+                logger)
             .SendAsync(Notification(NotificationChannels.Email), Recipient(), CancellationToken.None);
 
         Assert.Contains(logger.Lines, line => line.Contains("Delivered notification", StringComparison.Ordinal));
@@ -433,7 +464,11 @@ public class EmailNotificationSenderTests
         var logger = new CapturingLogger();
 
         var result = await new EmailNotificationSender(
-                new RecordingTransport(EmailSendOutcome.Success()), Options(), new RecordingTokens(Token), logger)
+                new RecordingTransport(EmailSendOutcome.Success()),
+                Options(),
+                new RecordingTokens(Token),
+                new RecordingMicroclimateTokens(MicroclimateToken),
+                logger)
             .SendAsync(
                 Notification(NotificationChannels.Email),
                 Recipient("ana.gomez@demo.test"),
@@ -496,6 +531,27 @@ public class EmailNotificationSenderTests
     private sealed record Lookup(Guid InvitationId, Guid RecipientUserId, Guid CompanyId);
 
     private sealed class RecordingTokens(string? token) : ISurveyInvitationTokens
+    {
+        public List<Lookup> Lookups { get; } = [];
+
+        public Task<string?> LiveTokenAsync(
+            Guid invitationId,
+            Guid recipientUserId,
+            Guid companyId,
+            CancellationToken cancellationToken)
+        {
+            Lookups.Add(new Lookup(invitationId, recipientUserId, companyId));
+            return Task.FromResult(token);
+        }
+    }
+
+    /// <summary>
+    /// The microclimate half of the same seam (#130), and a separate fake on purpose: it
+    /// implements a DIFFERENT interface, so a test that hands the sender the wrong one does
+    /// not compile. That is the whole reason the production code takes two interfaces rather
+    /// than one with two methods.
+    /// </summary>
+    private sealed class RecordingMicroclimateTokens(string? token) : IMicroclimateInvitationTokens
     {
         public List<Lookup> Lookups { get; } = [];
 

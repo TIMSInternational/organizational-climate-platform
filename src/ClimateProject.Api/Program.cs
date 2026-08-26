@@ -6,12 +6,14 @@ using ClimateProject.Api.Scheduling;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Cors;
 using ClimateProject.Application.Email;
+using ClimateProject.Application.Microclimates;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Scheduling;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Infrastructure.Auth;
 using ClimateProject.Infrastructure.Email;
+using ClimateProject.Infrastructure.Microclimates;
 using ClimateProject.Infrastructure.Notifications;
 using ClimateProject.Infrastructure.OrgStructure;
 using ClimateProject.Infrastructure.Persistence;
@@ -383,6 +385,12 @@ builder.Services.AddScoped<IInvitationEmailSender>(sp => sp.GetRequiredService<E
 // registration nobody exercises until mail is armed in production.
 builder.Services.AddScoped<ISurveyInvitationTokens, SurveyInvitationTokens>();
 
+// The same thing for a microclimate invitation, against microclimate_invitations (#130).
+// A second registration and not a second method on the first interface: the two read
+// different tables, and a microclimate id looked up in survey_invitations finds nothing,
+// throws nothing, and mails a linkless invitation to everybody.
+builder.Services.AddScoped<IMicroclimateInvitationTokens, MicroclimateInvitationTokens>();
+
 builder.Services.AddScoped<INotificationSender>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
     ? ActivatorUtilities.CreateInstance<EmailNotificationSender>(sp)
     : ActivatorUtilities.CreateInstance<LoggingNotificationSender>(sp));
@@ -602,6 +610,7 @@ app.MapSurveyResultsEndpoints();
 app.MapSurveyHistoryEndpoints();
 app.MapSurveyTemplateEndpoints();
 app.MapMicroclimateEndpoints();
+app.MapMicroclimateInvitationEndpoints();
 app.MapMicroclimateTemplateEndpoints();
 app.MapReportEndpoints();
 app.MapBenchmarkEndpoints();
