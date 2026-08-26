@@ -58,7 +58,10 @@ export function TabsContent({
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
-      // #83: `outline-hidden` used to be here. Radix gives the panel
+      // #83: Tailwind v4's ring-killer used to be here (the utility
+      // `keyboardOperable.test.tsx` blocks by name — it is not spelled out in a
+      // scanned source file, because Tailwind reads comments too and would
+      // compile the class into the bundle). Radix gives the panel
       // `tabIndex={0}`, so Tab from the trigger lands on it — and this deleted
       // the only thing that said so. The app has ONE focus indicator (the
       // `:focus-visible` outline in `index.css`), and a primitive does not get

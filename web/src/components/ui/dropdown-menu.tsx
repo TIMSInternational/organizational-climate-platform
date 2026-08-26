@@ -36,7 +36,10 @@ const surfaceClasses = cn(
 
 const itemClasses = cn(
   'relative flex cursor-default select-none items-center gap-inline rounded-md',
-  // #83: `outline-hidden` was here. Radix gives a menu item real DOM focus as
+  // #83: Tailwind v4's ring-killer was here — blocked by name in
+  // `keyboardOperable.test.tsx`, and deliberately not spelled in a scanned source
+  // file, because Tailwind reads comments and would ship the class as a real rule.
+  // Radix gives a menu item real DOM focus as
   // you arrow through, so the app's one `:focus-visible` ring is what marks the
   // item you are on; the `data-highlighted` tint below is 1.09:1 against the
   // panel and cannot carry that on its own. Pointer-driven focus does not match
