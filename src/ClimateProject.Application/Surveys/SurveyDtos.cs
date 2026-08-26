@@ -158,6 +158,13 @@ public sealed record CreateSurveyQuestionInput(
     // survey that has already been asked. It is what makes bank usage and effectiveness a
     // COUNT over existing rows instead of a counter incremented on the respondent's own
     // transaction -- see QuestionBankMetrics.
+    //
+    // NO SHIPPED CLIENT SENDS IT YET. The web wizard's picker reads /admin/question-library
+    // (#381), not the bank, and the bank has no picker of its own until its admin page is
+    // built. So this is a contract the API honours and nothing currently exercises: until a
+    // producer exists, every bank usage number is a correct count of zero. Said plainly here
+    // because the alternative -- reading the metrics code and concluding the wizard fills
+    // this in -- is exactly the mistake source_library_item_id has been inviting since #112.
     Guid? SourceQuestionBankItemId = null);
 
 /// <summary>
