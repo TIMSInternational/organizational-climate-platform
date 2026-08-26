@@ -308,7 +308,10 @@ describe('nothing in the app deletes the focus ring', () => {
       ['outline-2', 'ClimateMap: the 2px ring on the selected cell — 1.4.11 at 3:1, not a focus ring'],
       ['outline-offset-2', 'ClimateMap: that ring, held off the cell edge'],
       ['outline-fg-primary', 'ClimateMap: that ring, in the ink that clears 3:1 on every heat step'],
-      ['outline-offset-[-2px]', 'CommandPalette: the search field draws the ring inside its own rounded edge'],
+      [
+        'outline-offset-[-2px]',
+        'CommandPalette, DropdownMenuItem and SelectItem: a full-width control draws the ring INSIDE its own edge — at the default +2px offset the ring\u2019s vertical edges land under the panel border and only two horizontal lines survive (photographed)',
+      ],
     ])
 
     const used = new Map<string, string[]>()

@@ -120,7 +120,7 @@ export function SelectItem({
         'relative flex w-full cursor-default select-none items-center gap-inline',
         // #83: `outline-hidden` was here — see `ui/dropdown-menu.tsx` for why a
         // highlighted row's tint is not a focus indicator on its own.
-        'rounded-md py-1.5 pr-8 pl-2 text-base',
+        'rounded-md py-1.5 pr-8 pl-2 text-base focus-visible:outline-offset-[-2px]',
         'data-highlighted:bg-state-hover data-highlighted:text-fg-primary',
         'data-[state=checked]:font-medium',
         'data-disabled:pointer-events-none data-disabled:opacity-50',
