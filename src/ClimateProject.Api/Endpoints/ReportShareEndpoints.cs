@@ -74,7 +74,18 @@ public static class ReportShareEndpoints
         // key), and a marker that produces a warning instead of a row would be a coverage claim
         // this endpoint does not honour. It writes its own row instead -- see ResolveAsync,
         // which knows the tenant because it just loaded the report.
-        app.MapGet("/shared/reports/{token}", ResolveAsync);
+        //
+        // PublicLink, not PublicToken, for the reason RateLimitPolicies spells out on
+        // /survey-links/{token}: one share token is held by everyone the report was forwarded
+        // to, so bucketing by the token would make a department of readers compete for one
+        // bucket while an enumerator with a fresh guess each time got a fresh bucket every
+        // request -- exactly backwards. Keyed by the caller, a token-guessing flood costs the
+        // flooder their own bucket and nobody else's, which is the bound enumeration needs.
+        //
+        // A 429 is not a disclosure here: the limiter's decision is made from the caller's
+        // address before the token is looked at, so it carries no information about the token.
+        app.MapGet("/shared/reports/{token}", ResolveAsync)
+            .RequireRateLimiting(RateLimitPolicies.PublicLink);
     }
 
     private static bool CanAccessCompany(CurrentUser currentUser, Guid companyId)

@@ -564,6 +564,10 @@ public class RateLimitingTests : IClassFixture<WebApplicationFactory<Program>>
         ("/survey-invitations/{token}/started", RateLimitPolicies.PublicToken),
         ("/survey-invitations/{token}/completed", RateLimitPolicies.PublicToken),
         ("/survey-links/{token}", RateLimitPolicies.PublicLink),
+        // #139. Same shape as /survey-links/{token} -- one token, many holders -- so the same
+        // caller-keyed policy, and for the same reason: keying a shared secret by the secret
+        // gives an enumerator a fresh bucket per guess.
+        ("/shared/reports/{token}", RateLimitPolicies.PublicLink),
         ("/microclimates/{id:guid}/responses", MicroclimateEndpoints.ResponseSubmissionRateLimiterPolicy),
         ("/surveys/{id:guid}/responses", SurveyResponseEndpoints.ResponseSubmissionRateLimiterPolicy),
         ("/surveys/{id:guid}/respond", SurveyResponseEndpoints.ResponseSubmissionRateLimiterPolicy),
