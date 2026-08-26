@@ -237,7 +237,43 @@ public static class MicroclimateEndpoints
     /// Checked here so an over-long emoji is a 400 naming the limit rather than a
     /// DbUpdateException surfacing as an opaque 500.
     /// </summary>
+    /// <remarks>
+    /// Counted in CHARACTERS -- code points -- because that is what a Postgres
+    /// <c>varchar(16)</c> counts, and on the one input this column exists for the two
+    /// units differ by nearly a factor of two: a family ZWJ sequence is 7 code points
+    /// but 11 UTF-16 units, and a kiss sequence with skin tones is 10 and 15. A
+    /// <see cref="string.Length"/> check would refuse glyphs the column can hold and
+    /// name a limit the database does not use.
+    /// </remarks>
     private const int MaxEmojiLength = 16;
+
+    /// <summary>
+    /// The longest accessible name <c>label_en</c>/<c>label_es</c> can hold, in the same
+    /// unit and for the same reason as <see cref="MaxEmojiLength"/>.
+    /// </summary>
+    /// <remarks>
+    /// Guarding the glyph and not the name was the gap: the name is a phrase a human
+    /// types, so it is by far the likelier of the two to run past its column, and
+    /// without this check a long one reached <c>varchar(100)</c> as a DbUpdateException
+    /// and surfaced to the author as an opaque 500 on the one field this whole feature
+    /// exists for.
+    /// </remarks>
+    private const int MaxEmojiLabelLength = 100;
+
+    /// <summary>
+    /// The length Postgres will measure: <c>varchar(n)</c> counts characters, i.e. code
+    /// points, while <see cref="string.Length"/> counts UTF-16 units.
+    /// </summary>
+    private static int CharacterCount(string value)
+    {
+        var count = 0;
+        foreach (var _ in value.EnumerateRunes())
+        {
+            count++;
+        }
+
+        return count;
+    }
 
     /// <summary>An emoji scale needs at least this many points to be a scale.</summary>
     /// <remarks>
@@ -395,7 +431,7 @@ public static class MicroclimateEndpoints
                     return Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} needs an emoji" }, statusCode: 400);
                 }
 
-                if (emoji.Length > MaxEmojiLength)
+                if (CharacterCount(emoji) > MaxEmojiLength)
                 {
                     return Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} is longer than {MaxEmojiLength} characters" }, statusCode: 400);
                 }
@@ -416,6 +452,16 @@ public static class MicroclimateEndpoints
                 if (string.IsNullOrWhiteSpace(emojiLabelEn) && string.IsNullOrWhiteSpace(emojiLabelEs))
                 {
                     return Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} needs a label -- it is the option's accessible name" }, statusCode: 400);
+                }
+
+                // ...and a name the column cannot hold is refused here for the same reason the
+                // glyph above it is: the alternative is a DbUpdateException the author reads as
+                // "An unexpected error occurred."
+                var emojiLabelTooLong = new[] { emojiLabelEn?.Trim(), emojiLabelEs?.Trim() }
+                    .FirstOrDefault(label => label is not null && CharacterCount(label) > MaxEmojiLabelLength);
+                if (emojiLabelTooLong is not null)
+                {
+                    return Results.Json(new { message = $"Emoji option {emojiOrder} of question {question.Order} has a label longer than {MaxEmojiLabelLength} characters" }, statusCode: 400);
                 }
 
                 // Position on the scale when the author did not say. Listing five faces then
@@ -755,6 +801,27 @@ public static class MicroclimateEndpoints
             var gateQuestionIds = gateQuestions.Select(q => q.Id).ToList();
             var gateOptions = await MicroclimateContent.LoadOptionsAsync(db, gateQuestionIds, cancellationToken);
             var gateEmojiOptions = await MicroclimateContent.LoadEmojiOptionsAsync(db, gateQuestionIds, cancellationToken);
+
+            // An emoji_rating question with no scale is the unanswerable question #198
+            // exists to prevent, one step from a respondent: MicroclimateRespondPage has no
+            // control to draw for it and SubmitResponseAsync rejects every answer to it.
+            // CreateAsync refuses to build one, but it is not the only endpoint that writes
+            // microclimate questions -- MicroclimateTemplateEndpoints does too -- and this
+            // gate is the last point before the link goes out, so it is the guard that
+            // covers a row which reached the table any other way.
+            var scaleless = gateQuestions
+                .Where(q => q.Type == QuestionTypes.EmojiRating)
+                .Where(q => !gateEmojiOptions.TryGetValue(q.Id, out var faces) || faces.Count < MinEmojiOptions)
+                .OrderBy(q => q.Order)
+                .ToList();
+            if (scaleless.Count > 0)
+            {
+                var unanswerable = $"Cannot publish: {string.Join(", ", scaleless.Select(q => $"questions[{q.Order}]"))} "
+                    + $"{(scaleless.Count == 1 ? "is" : "are")} '{QuestionTypes.EmojiRating}' with fewer than {MinEmojiOptions} emoji options, which a respondent cannot answer.";
+                return new StatusChangeFailure(
+                    Results.Json(new { message = unanswerable, unanswerableQuestions = scaleless.Select(q => q.Order).ToList() }, statusCode: 400),
+                    unanswerable);
+            }
 
             var missing = ContentPublishValidation.FindMissing(
                 microclimate.Language,

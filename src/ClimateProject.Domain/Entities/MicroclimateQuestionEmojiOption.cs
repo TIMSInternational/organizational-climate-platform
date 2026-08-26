@@ -2,7 +2,7 @@ namespace ClimateProject.Domain.Entities;
 
 /// <summary>
 /// One point on a microclimate question's emoji scale: the glyph, the word that names
-/// it, and the stable numeric value a respondent's answer is stored as.
+/// it, and the stable numeric value a respondent's answer is validated against.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -50,5 +50,14 @@ public class MicroclimateQuestionEmojiOption
     /// <see cref="MicroclimateQuestionOption.Value"/> exists: two respondents picking the
     /// same face in different languages must count as the same answer.
     /// </summary>
+    /// <remarks>
+    /// Validated against, and NOT stored: a microclimate keeps no per-response row at all.
+    /// <c>SubmitResponseAsync</c> checks each answer, then increments
+    /// <c>ResponseCount</c> and folds open text into the word cloud -- the individual
+    /// answer is discarded, which is what the <c>SubjectDataMap</c> entry for this table
+    /// means when it says no row here can be tied back to who chose which face. The value
+    /// is therefore the key that makes two submissions COMPARABLE while they are being
+    /// counted, not a key that survives them.
+    /// </remarks>
     public int Value { get; set; }
 }

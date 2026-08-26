@@ -2,6 +2,7 @@ using System.Security.Claims;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Microclimates;
+using ClimateProject.Application.Questions;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -194,6 +195,26 @@ public static class MicroclimateTemplateEndpoints
         var options = await db.MicroclimateTemplateQuestionOptions
             .Where(o => questionIds.Contains(o.MicroclimateTemplateQuestionId))
             .ToListAsync(cancellationToken);
+
+        // This is the SECOND endpoint that creates microclimate questions, and #198's whole
+        // argument is that the vocabulary must not claim what the product can store. There
+        // is no microclimate_template_question_emoji_options table, so a template cannot
+        // carry an emoji scale -- and Instantiate copies Type verbatim, so a template
+        // question typed emoji_rating would become a live question with no scale, no control
+        // to draw and no answer SubmitResponseAsync can accept. Refused here rather than
+        // retyped or dropped, the same way CreateAsync refuses the shapes it cannot store:
+        // silently changing an author's question type is worse than saying no.
+        var unstorable = questions.FirstOrDefault(q => q.Type == QuestionTypes.EmojiRating);
+        if (unstorable is not null)
+        {
+            return Results.Json(
+                new
+                {
+                    message = $"Template question {unstorable.Order} is '{QuestionTypes.EmojiRating}', which a microclimate template cannot carry: "
+                        + "there is nowhere to store its emoji scale, so the question would reach respondents unanswerable.",
+                },
+                statusCode: 400);
+        }
 
         // The template's OWN authored language comes before the company's default. An
         // English-only template instantiated into a Spanish company would otherwise produce a
