@@ -130,7 +130,12 @@ public class CoHostedWorkerTests : IClassFixture<PostgresFixture>, IAsyncLifetim
         using var innerScope = _factory.Services.CreateScope();
         var outerLease = outerScope.ServiceProvider.GetRequiredService<IJobLease>();
         var innerLease = innerScope.ServiceProvider.GetRequiredService<IJobLease>();
-        var key = JobLockKey.For(TrackingJobs.DailySemaforo);
+        // A key of this test's own, NOT TrackingJobs.CacheSync or TrackingJobs.DailySemaforo.
+        // This host runs both jobs for real, so the live workers contend on those two keys and
+        // an assertion against one of them measures the worker's timing rather than the lease --
+        // which is how the first draft of this file failed. That the real keys are taken by the
+        // real workers is the mechanism under test; borrowing one to test it is not.
+        var key = JobLockKey.For("integration-test-mutual-exclusion");
 
         var innerRan = true;
         var outerRan = await outerLease.TryRunExclusivelyAsync(
@@ -157,7 +162,10 @@ public class CoHostedWorkerTests : IClassFixture<PostgresFixture>, IAsyncLifetim
         // pooled connection.
         using var scope = _factory.Services.CreateScope();
         var lease = scope.ServiceProvider.GetRequiredService<IJobLease>();
-        var key = JobLockKey.For(TrackingJobs.CacheSync);
+        // This test's own key, for the reason given above: the live CacheSyncWorker in this host
+        // takes TrackingJobs.CacheSync every three seconds, so asserting on that key here fails
+        // whenever the worker happens to hold it -- which it did, on the first run of this file.
+        var key = JobLockKey.For("integration-test-lease-release");
 
         var first = await lease.TryRunExclusivelyAsync(key, _ => Task.CompletedTask, CancellationToken.None);
         var second = await lease.TryRunExclusivelyAsync(key, _ => Task.CompletedTask, CancellationToken.None);
