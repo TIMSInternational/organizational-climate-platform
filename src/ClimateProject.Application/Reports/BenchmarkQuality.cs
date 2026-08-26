@@ -97,7 +97,12 @@ public static class BenchmarkQuality
     public static BenchmarkQualityAssessment Assess(
         IReadOnlyList<BenchmarkMetricDto> metrics, string? industry, string? companySize, string? region)
     {
-        var metricCount = metrics.Count;
+        // READINGS, not metrics. `metrics` is one row per stored BenchmarkMetric, and one
+        // metric may be stored several times -- the ordinary shape is a single metric recorded
+        // at p25, p50 and p75, which is three readings of one thing. Only the two per-reading
+        // components below are scored against this count; see ComponentMetrics for the
+        // distinction and why it matters.
+        var readingCount = metrics.Count;
 
         var withSample = metrics.Count(m => m.SampleSize.HasValue && m.SampleSize.Value >= ReportableSampleSize);
         var withPercentile = metrics.Count(m => m.Percentile.HasValue);
@@ -117,9 +122,19 @@ public static class BenchmarkQuality
 
         var components = new List<BenchmarkQualityComponent>
         {
-            Component(ComponentMetrics, WeightMetrics, Math.Min(metricCount, FullMetricCount), FullMetricCount),
-            Component(ComponentSampleSize, WeightSampleSize, withSample, metricCount),
-            Component(ComponentDistribution, WeightDistribution, withPercentile, metricCount),
+            // DISTINCT names, not readings -- the rule this component publishes, in
+            // FullMetricCount's own summary and in the decision record's table. A benchmark
+            // holding one metric at p25/p50/p75 is a benchmark of one thing measured three
+            // ways, and scoring it 3/3 here says it is a profile of three. That is a fifth of
+            // the whole score, enough on its own to move a client-facing badge, so the two
+            // readings of the rule are not interchangeable.
+            Component(ComponentMetrics, WeightMetrics, Math.Min(distinctNames, FullMetricCount), FullMetricCount),
+            // These two ARE per reading, and deliberately: every stored reading has to state
+            // its own sample and its own percentile. A benchmark that gives p50 a sample size
+            // and leaves p25 and p75 without one has two thirds of its readings unsourced, and
+            // scoring it per distinct name would hide that behind the one that was answered.
+            Component(ComponentSampleSize, WeightSampleSize, withSample, readingCount),
+            Component(ComponentDistribution, WeightDistribution, withPercentile, readingCount),
             Component(ComponentAttribution, WeightAttribution, attributionPresent, 3),
             Component(ComponentUnitConsistency, WeightUnitConsistency, distinctNames - conflictingNames, distinctNames),
         };
@@ -127,9 +142,9 @@ public static class BenchmarkQuality
         // A benchmark with no metrics measures nothing. Attribution and unit consistency are
         // both vacuously perfect on an empty metric list, which would carry it to 30 -- above
         // FailedThreshold with nothing behind it -- so the short circuit is not a nicety.
-        var score = metricCount == 0 ? 0d : Math.Round(components.Sum(c => c.WeightedScore) * 100d, 1);
+        var score = readingCount == 0 ? 0d : Math.Round(components.Sum(c => c.WeightedScore) * 100d, 1);
 
-        var status = metricCount == 0 || score < FailedThreshold
+        var status = readingCount == 0 || score < FailedThreshold
             ? BenchmarkValidationStatuses.Failed
             : score < VerifiedThreshold
                 ? BenchmarkValidationStatuses.NeedsReview

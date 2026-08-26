@@ -143,6 +143,16 @@ export interface BenchmarkIndustryReading {
   benchmarkCount: number
   subject: BenchmarkComparisonMember | null
   metrics: BenchmarkIndustryMetric[]
+  /**
+   * The subject's own readings, present whether or not the sector has anything in it — empty
+   * only when no `benchmarkId` was asked for.
+   *
+   * This is what separates "you are the first company in this sector" from "there is no data
+   * here": both answer `benchmarkCount: 0` with an empty `metrics`, and only this field tells
+   * a screen it still has a number to show. Every tenant starts in the first state, including
+   * the demo one.
+   */
+  subjectMetrics: BenchmarkMetric[]
 }
 
 /** A category in the caller's readable scope — `BenchmarkCategorySummary`. */

@@ -224,9 +224,19 @@ public static partial class BenchmarkEndpoints
             }
 
             var prior = await db.Benchmarks.FirstOrDefaultAsync(b => b.Id == priorId, cancellationToken);
-            // A missing row and an unreadable one are one answer on purpose. Telling them
-            // apart would confirm that a benchmark with that id exists in a tenant the caller
-            // cannot see, which is the oracle #89 closed on the detail route.
+            // A missing row and an unreadable one are one answer here, and this is a shape
+            // choice rather than a security property. An earlier version of this comment
+            // claimed the collapse was "the oracle #89 closed on the detail route"; that is
+            // not true and has been removed. #89 collapsed the two on ValidateLinkTarget, the
+            // WRITE path, and never on GetAsync -- which answers 404 for an unknown id and 403
+            // for another tenant's, exactly as compare, industry, trends and validate all do.
+            // So this walk discloses nothing the pre-existing GET /{id} does not, and hiding
+            // the distinction here buys no protection.
+            //
+            // What it does buy is an honest stop reason: `withheld` is one word for "the chain
+            // does not continue for you", and splitting it into "gone" and "not yours" would
+            // put a claim about another tenant's data in a payload whose subject is this
+            // caller's benchmark. The id is not returned either way.
             if (prior is null || !CanReadBenchmark(currentUser, prior.CompanyId))
             {
                 stopReason = BenchmarkTrendStopReasons.Withheld;
@@ -338,6 +348,17 @@ public static partial class BenchmarkEndpoints
         var currentUser = principal.GetCurrentUser();
         if (!Roles.Admin.Contains(currentUser.Role)) return Results.Forbid();
 
+        // Normalised BEFORE the defaulting below, not after. `?benchmarkId=X&industry=` is what
+        // a form submits when the user clears the industry box, and with the trimming after the
+        // `??=` an empty string beat the default: it is not null, so the subject's industry was
+        // never applied, and it is then blanked to null, so no filter was applied either. The
+        // sector silently widened to every industry at the moment a user narrowed it.
+        industry = Blank(industry);
+        companySize = Blank(companySize);
+        region = Blank(region);
+        category = Blank(category);
+        type = Blank(type);
+
         Benchmark? subject = null;
         if (benchmarkId.HasValue)
         {
@@ -345,20 +366,28 @@ public static partial class BenchmarkEndpoints
             if (subject is null) return Results.Json(new { message = "Benchmark not found" }, statusCode: 404);
             if (!CanReadBenchmark(currentUser, subject.CompanyId)) return Results.Forbid();
 
-            industry ??= subject.Industry;
-            category ??= subject.Category;
+            industry ??= Blank(subject.Industry);
+            category ??= Blank(subject.Category);
         }
 
-        industry = Blank(industry);
-        companySize = Blank(companySize);
-        region = Blank(region);
-        category = Blank(category);
-        type = Blank(type);
+        // A sector is made of INDUSTRY rows. Not defaulted from the subject -- the decision
+        // record is explicit that doing so would compare a company only against other
+        // companies' internal numbers -- but defaulted all the same, because applying no filter
+        // at all had precisely the effect the record forbids, one door further along: a
+        // company's own internal targets, and any global row somebody typed "internal" into,
+        // were averaged into the industry mean. "No filter" is not the neutral choice here; it
+        // is the choice that puts a company's own target in the sector it is being measured
+        // against. A caller who wants a different slice names it.
+        type ??= BenchmarkTypes.Industry;
 
         var scope = db.Benchmarks.Where(b => b.IsActive);
         if (currentUser.Role != Roles.SuperAdmin)
         {
-            var ownCompanyId = Guid.Parse(currentUser.CompanyId);
+            // CompanyScope.OwnCompanyId, not Guid.Parse: a CompanyAdmin whose company_id is
+            // null since #191 carries a blank claim, and Guid.Parse answers that with a 500.
+            // Null here narrows the scope to global rows, which is what CanReadBenchmark
+            // grants such a user on the detail route -- the two agree by construction.
+            var ownCompanyId = CompanyScope.OwnCompanyId(currentUser);
             scope = scope.Where(b => b.CompanyId == null || b.CompanyId == ownCompanyId);
         }
 
@@ -410,11 +439,22 @@ public static partial class BenchmarkEndpoints
                 ? 100d * perBenchmark.Count(v => v < subjectValue.Value) / perBenchmark.Count
                 : null;
 
+            // One benchmark, one sample -- the same rule the mean above is computed under. Two
+            // readings of one metric inside one benchmark are one population measured twice
+            // (the ordinary case is p25/p50/p75 of the same survey), so summing every reading
+            // would report three times the evidence there is and contradict the one-vote rule
+            // stated in this method's own remarks. The largest of a benchmark's readings is
+            // taken rather than their mean: it is the population that benchmark claims, not an
+            // average of one number written down repeatedly.
+            var sampleSize = group
+                .GroupBy(r => r.BenchmarkId)
+                .Sum(g => g.Max(r => r.SampleSize ?? 0));
+
             aggregates.Add(new BenchmarkIndustryMetric(
                 MetricName: group.Key.MetricName,
                 Unit: group.Key.Unit,
                 BenchmarkCount: perBenchmark.Count,
-                TotalSampleSize: group.Sum(r => r.SampleSize ?? 0),
+                TotalSampleSize: sampleSize,
                 Mean: mean,
                 Median: median,
                 Min: perBenchmark[0],
@@ -429,7 +469,14 @@ public static partial class BenchmarkEndpoints
             new BenchmarkIndustryFilters(industry, companySize, region, category, type),
             peerIds.Count,
             subject is null ? null : Member(subject),
-            aggregates));
+            aggregates,
+            // The subject's own readings, whether or not the sector has anything in it. Without
+            // them a company that is the first in its sector -- and every tenant on a fresh
+            // database, including the demo one -- got `benchmarkCount: 0, metrics: []` back and
+            // its own number appeared nowhere in the response, making "we are first here" and
+            // "this feature has no data" the same payload. They are different things to put on
+            // a page, and only one of them is worth showing a client.
+            subjectMetrics));
     }
 
     /// <summary>The middle value, or the mean of the middle two. <paramref name="sorted"/> must already be sorted and non-empty.</summary>
@@ -468,7 +515,10 @@ public static partial class BenchmarkEndpoints
         var query = db.Benchmarks.AsQueryable();
         if (currentUser.Role != Roles.SuperAdmin)
         {
-            var ownCompanyId = Guid.Parse(currentUser.CompanyId);
+            // CompanyScope.OwnCompanyId for the reason given on the sector route: since #191 a
+            // CompanyAdmin's company_id may be null, and a bare Guid.Parse turns that into a
+            // 500 on a list endpoint.
+            var ownCompanyId = CompanyScope.OwnCompanyId(currentUser);
             query = query.Where(b => b.CompanyId == null || b.CompanyId == ownCompanyId);
         }
 
@@ -546,6 +596,51 @@ public static partial class BenchmarkEndpoints
     /// read from the model because the point is to answer the caller BEFORE the insert: a
     /// length that only the database knows about can only be reported as a failed request.
     /// </remarks>
+    /// <summary>
+    /// What is wrong with one incoming metric, or null when nothing is.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Every door a metric enters has to run this.</b> There are two -- <c>import</c> and
+    /// <c>POST /admin/benchmarks/{id}/metrics</c> -- and a guard on one of them is not a guard.
+    /// </para>
+    /// <para>
+    /// <b>Why the finite check covers <c>Percentile</c> and not only <c>Value</c>.</b> Both are
+    /// doubles read straight off the request body, and <c>1e400</c> is well-formed JSON that
+    /// <c>System.Text.Json</c> deserialises to <c>+Infinity</c> without complaint -- measured,
+    /// not assumed. Postgres stores it happily. On the way back out, serialising an infinity
+    /// throws, so the benchmark's detail route, its comparisons and any sector it appears in
+    /// answer 500 from then on. There is no <c>MapDelete</c> anywhere on benchmarks or their
+    /// metrics, so the product cannot remove the row that did it; with <c>companyId: null</c>
+    /// it is a global row and every tenant reads the failure. One field left unguarded is
+    /// therefore not a smaller version of the same bug -- it is the whole bug.
+    /// </para>
+    /// </remarks>
+    private static string? MetricProblem(string? metricName, string? unit, double value, double? percentile)
+    {
+        if (string.IsNullOrWhiteSpace(metricName) || string.IsNullOrWhiteSpace(unit))
+        {
+            return "Every metric needs a MetricName and a Unit";
+        }
+
+        if (metricName.Trim().Length > 200 || unit.Trim().Length > 50)
+        {
+            return "MetricName must be 200 characters or fewer and Unit 50 or fewer";
+        }
+
+        if (double.IsNaN(value) || double.IsInfinity(value))
+        {
+            return "A metric value must be a finite number";
+        }
+
+        if (percentile.HasValue && (double.IsNaN(percentile.Value) || double.IsInfinity(percentile.Value)))
+        {
+            return "A metric percentile must be a finite number";
+        }
+
+        return null;
+    }
+
     private static string? TooLongField(ImportBenchmarkItem item)
     {
         if (item.Name?.Trim().Length > 200) return "Name must be 200 characters or fewer";
@@ -605,6 +700,13 @@ public static partial class BenchmarkEndpoints
         var refused = new List<ImportBenchmarkError>();
         for (var i = 0; i < items.Count; i++)
         {
+            // A null row carries no companyId, so there is nothing here to authorize; it is
+            // rejected as malformed by the validation pass below. Skipped rather than
+            // dereferenced because `[null]` is well-formed JSON that binds to a null element,
+            // and a vendor file with a stray comma answering 500 "An unexpected error
+            // occurred" is the exact failure this route was written to close.
+            if (items[i] is null) continue;
+
             if (!CanWriteBenchmark(currentUser, items[i].CompanyId))
             {
                 refused.Add(new ImportBenchmarkError(
@@ -630,6 +732,12 @@ public static partial class BenchmarkEndpoints
         for (var i = 0; i < items.Count; i++)
         {
             var item = items[i];
+            if (item is null)
+            {
+                errors.Add(new ImportBenchmarkError(i, "This row is empty"));
+                continue;
+            }
+
             if (string.IsNullOrWhiteSpace(item.Name) || string.IsNullOrWhiteSpace(item.Description)
                 || string.IsNullOrWhiteSpace(item.Type) || string.IsNullOrWhiteSpace(item.Category)
                 || string.IsNullOrWhiteSpace(item.Source))
@@ -652,24 +760,21 @@ public static partial class BenchmarkEndpoints
 
             foreach (var metric in item.Metrics ?? [])
             {
-                if (string.IsNullOrWhiteSpace(metric.MetricName) || string.IsNullOrWhiteSpace(metric.Unit))
+                // Same null hazard as a null row, one level down: `"metrics": [null]` binds a
+                // null element, and the dereference that follows would be a 500.
+                if (metric is null)
                 {
-                    errors.Add(new ImportBenchmarkError(i, "Every metric needs a MetricName and a Unit"));
+                    errors.Add(new ImportBenchmarkError(i, "This row has an empty metric"));
                     break;
                 }
 
-                if (metric.MetricName.Trim().Length > 200 || metric.Unit.Trim().Length > 50)
+                // One guard, shared with POST /{id}/metrics -- see MetricProblem. Both the
+                // value and the percentile are checked for finiteness there, and both have to
+                // be: an infinity in either one is a row this product has no way to delete.
+                var problem = MetricProblem(metric.MetricName, metric.Unit, metric.Value, metric.Percentile);
+                if (problem is not null)
                 {
-                    errors.Add(new ImportBenchmarkError(i, "MetricName must be 200 characters or fewer and Unit 50 or fewer"));
-                    break;
-                }
-
-                if (double.IsNaN(metric.Value) || double.IsInfinity(metric.Value))
-                {
-                    // Not pedantry: these serialise as `NaN`/`Infinity`, which is not JSON, so
-                    // one imported row would make every later read of that benchmark fail to
-                    // parse in the browser.
-                    errors.Add(new ImportBenchmarkError(i, "A metric value must be a finite number"));
+                    errors.Add(new ImportBenchmarkError(i, problem));
                     break;
                 }
             }

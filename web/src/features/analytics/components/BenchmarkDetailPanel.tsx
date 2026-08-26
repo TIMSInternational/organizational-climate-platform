@@ -79,6 +79,36 @@ export default function BenchmarkDetailPanel({ benchmark, canWrite, onUpdate, on
     setEditing(false)
   }
 
+  /**
+   * The validation status as a sentence in the reader's language.
+   *
+   * The column holds `pending` | `verified` | `needs-review` | `failed`, and until now the
+   * panel printed the stored token straight onto the page: an English hyphenated slug in the
+   * middle of a Spanish screen, under a translated label. The status is also the one field
+   * here a client argues about — it is the badge the quality rule exists to produce — so it
+   * is the last one that should read as a database value.
+   *
+   * An unrecognised value falls back to the token rather than to an empty cell. A status
+   * this build has no word for is still a fact about the row, and a blank tells the reader
+   * nothing at all. The four cases are written out rather than assembled into
+   * `` t(`benchmarks.validationStatus${status}`) `` so that `keysExist.test.ts`, which skips
+   * computed keys by design, can still see every key this component asks for.
+   */
+  function validationStatusLabel(status: string) {
+    switch (status) {
+      case 'pending':
+        return t('benchmarks.validationStatusPending')
+      case 'verified':
+        return t('benchmarks.validationStatusVerified')
+      case 'needs-review':
+        return t('benchmarks.validationStatusNeedsReview')
+      case 'failed':
+        return t('benchmarks.validationStatusFailed')
+      default:
+        return status
+    }
+  }
+
   /** Label over value. The label is a caption; the value is the record. */
   function attribute(label: string, value: string, reading = false) {
     return (
@@ -124,7 +154,7 @@ export default function BenchmarkDetailPanel({ benchmark, canWrite, onUpdate, on
         {attribute(t('common.type'), benchmark.type)}
         {attribute(t('benchmarks.category'), benchmark.category)}
         {attribute(t('benchmarks.source'), benchmark.source)}
-        {attribute(t('benchmarks.validationStatus'), benchmark.validationStatus)}
+        {attribute(t('benchmarks.validationStatus'), validationStatusLabel(benchmark.validationStatus))}
         {attribute(t('benchmarks.industry'), benchmark.industry ?? t('benchmarks.notRecorded'))}
         {attribute(
           t('benchmarks.companySize'),

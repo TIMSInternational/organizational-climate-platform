@@ -46,6 +46,18 @@ public class BenchmarkConfiguration : IEntityTypeConfiguration<Benchmark>
             "prior_period_status IN ('unlinked', 'linked', 'none') AND "
             + "((prior_period_status = 'linked') = (prior_period_benchmark_id IS NOT NULL))"));
 
+        // The same guarantee prior_period_status has had since #89, and for the same reason:
+        // validation_status is a four-value enumeration held in a varchar, three writers put
+        // values into it (create, validate, import), and the benchmarks page branches on the
+        // exact strings. Until #90 nothing wrote anything but 'pending', so the column's
+        // vocabulary had never been tested by a second writer; #90 adds two. Written from
+        // BenchmarkValidationStatuses.All rather than a literal list so the constraint and the
+        // constants cannot drift -- a fifth status added to one and not the other is a failed
+        // insert on a route that looks correct.
+        builder.ToTable(t => t.HasCheckConstraint(
+            "ck_benchmarks_validation_status",
+            $"validation_status IN ({string.Join(", ", BenchmarkValidationStatuses.All.Select(s => $"'{s}'"))})"));
+
         builder.HasIndex(b => new { b.Type, b.Category });
         builder.HasIndex(b => new { b.CompanyId, b.IsActive });
         builder.HasIndex(b => new { b.Industry, b.CompanySize });

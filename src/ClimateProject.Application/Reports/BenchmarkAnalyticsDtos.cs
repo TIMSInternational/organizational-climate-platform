@@ -201,11 +201,20 @@ public sealed record BenchmarkIndustryMetric(
 /// to see that a "sector" of one is not a sector, and a subject counted into its own mean
 /// pulls the mean toward itself and shrinks the very gap the reading is about.
 /// </param>
+/// <param name="SubjectMetrics">
+/// The subject's own readings, empty when no <c>benchmarkId</c> was supplied. Present even
+/// when <paramref name="Metrics"/> is empty, and that is the point of the field: a company
+/// first in its sector has no peers, so every aggregate is empty, and without this the
+/// response could not be told apart from one for a benchmark that records nothing at all. The
+/// first case is worth a page saying "nothing to compare against yet, here is your reading";
+/// the second is not.
+/// </param>
 public sealed record BenchmarkIndustryResult(
     BenchmarkIndustryFilters Filters,
     int BenchmarkCount,
     BenchmarkComparisonMember? Subject,
-    IReadOnlyList<BenchmarkIndustryMetric> Metrics);
+    IReadOnlyList<BenchmarkIndustryMetric> Metrics,
+    IReadOnlyList<BenchmarkMetricDto> SubjectMetrics);
 
 /// <summary>One metric of one benchmark being imported.</summary>
 public sealed record ImportBenchmarkMetricItem(

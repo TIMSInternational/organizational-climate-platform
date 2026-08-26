@@ -208,6 +208,16 @@ public static partial class BenchmarkEndpoints
         return Results.Ok(await LoadDetailAsync(db, id, currentUser, cancellationToken));
     }
 
+    /// <summary>
+    /// Adds one reading to a benchmark.
+    /// </summary>
+    /// <remarks>
+    /// The second door a metric enters by, and it used to validate nothing at all: an
+    /// over-long name reached Postgres as a 22001 surfaced as a 500, and a non-finite value or
+    /// percentile was stored and then made every later read of the benchmark throw on the way
+    /// out. It runs the same <c>MetricProblem</c> the import path runs, because a rule enforced
+    /// on one of two doors is not enforced.
+    /// </remarks>
     private static async Task<IResult> AddMetricAsync(Guid id, AddBenchmarkMetricRequest request, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
@@ -215,13 +225,16 @@ public static partial class BenchmarkEndpoints
         if (benchmark is null) return Results.Json(new { message = "Benchmark not found" }, statusCode: 404);
         if (!CanWriteBenchmark(currentUser, benchmark.CompanyId)) return Results.Forbid();
 
+        var problem = MetricProblem(request?.MetricName, request?.Unit, request?.Value ?? 0d, request?.Percentile);
+        if (problem is not null) return Results.Json(new { message = problem }, statusCode: 400);
+
         var metric = new BenchmarkMetric
         {
             Id = Guid.NewGuid(),
             BenchmarkId = id,
-            MetricName = request.MetricName,
+            MetricName = request!.MetricName.Trim(),
             Value = request.Value,
-            Unit = request.Unit,
+            Unit = request.Unit.Trim(),
             Percentile = request.Percentile,
             SampleSize = request.SampleSize,
         };
