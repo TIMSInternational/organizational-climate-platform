@@ -782,6 +782,30 @@ public class MicroclimateEmojiRatingTests : IAsyncLifetime
                 Required = true,
                 Order = 2,
             });
+
+            // ...and one with a SINGLE face, which is the case the threshold decides. It
+            // is named, so the translation half of the gate has nothing to say about it:
+            // the only thing wrong with this question is that a scale of one has nothing
+            // to choose between, which is the same argument the minimum-two check makes
+            // at creation.
+            var oneFace = new MicroclimateQuestion
+            {
+                Id = Guid.NewGuid(),
+                MicroclimateId = created.Id,
+                TextEn = "And the week before?",
+                Type = "emoji_rating",
+                Required = true,
+                Order = 3,
+            };
+            db.MicroclimateQuestions.Add(oneFace);
+            db.MicroclimateQuestionEmojiOptions.Add(new MicroclimateQuestionEmojiOption
+            {
+                MicroclimateQuestionId = oneFace.Id,
+                Order = 0,
+                Emoji = "\U0001F642",
+                Value = 1,
+                LabelEn = "Good",
+            });
             await db.SaveChangesAsync();
         }
 
@@ -790,6 +814,7 @@ public class MicroclimateEmojiRatingTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, activate.StatusCode);
         var body = await activate.Content.ReadAsStringAsync();
         Assert.Contains("questions[2]", body, StringComparison.Ordinal);
+        Assert.Contains("questions[3]", body, StringComparison.Ordinal);
         Assert.Contains("fewer than 2 emoji options", body, StringComparison.Ordinal);
 
         using (var scope = _factory.Services.CreateScope())
