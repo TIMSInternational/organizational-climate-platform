@@ -55,8 +55,21 @@ public class EmailNotificationSenderTests
 
     private static readonly Guid CompanyId = Guid.NewGuid();
 
-    private static NotificationRecipient Recipient()
-        => new(RecipientUserId, "ana@example.com", "Ana", ContentLanguages.Spanish);
+    /// <summary>
+    /// A recipient domain that is NOT reserved.
+    ///
+    /// It used to be <c>example.com</c>, and that is now precisely the wrong fixture:
+    /// <c>UndeliverableAddresses</c> refuses <c>example.com</c> along with <c>.test</c> and
+    /// <c>.invalid</c>, because those names are reserved by RFC 2606/6761 so that no mailbox
+    /// can exist behind them. A test that asserts mail IS handed to the transport therefore
+    /// cannot use one -- it would pass for the wrong reason the day the guard broke, or fail
+    /// for the right one today. This is a subdomain of a domain TIMS owns, so it is a fixture
+    /// nobody else's mail server can ever be surprised by, and nothing here sends.
+    /// </summary>
+    private const string DeliverableAddress = "ana@fixtures.timsint.com";
+
+    private static NotificationRecipient Recipient(string email = DeliverableAddress)
+        => new(RecipientUserId, email, "Ana", ContentLanguages.Spanish);
 
     private static EmailNotificationSender Sender(RecordingTransport transport, ISurveyInvitationTokens? tokens = null)
         => new(transport, Options(), tokens ?? new RecordingTokens(Token), NullLogger<EmailNotificationSender>.Instance);
@@ -71,7 +84,7 @@ public class EmailNotificationSenderTests
 
         Assert.True(result.Delivered);
         var sent = Assert.Single(transport.Sent);
-        Assert.Equal("ana@example.com", sent.ToAddress);
+        Assert.Equal(DeliverableAddress, sent.ToAddress);
 
         // Composed in the recipient's language, resolved at delivery time.
         Assert.Contains("Hola Ana", sent.TextBody, StringComparison.Ordinal);

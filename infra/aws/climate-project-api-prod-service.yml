@@ -279,6 +279,19 @@ Resources:
               # the web origin, NOT the App Runner hostname: a recipient opens it in a browser.
               - Name: Email__AppBaseUrl
                 Value: "https://climate.timsint.com"
+              # SES configuration set. The AWS account behind this SMTP endpoint is shared
+              # with tims-marketing, formmaps, pca, alto and tims-suite, and SES scores bounce
+              # and complaint rate against the ACCOUNT -- so without this header a bounce
+              # caused here degrades a reputation none of those products can attribute or
+              # defend, and a bad enough day pauses sending for all six. Naming the set makes
+              # this product's sends separately measurable and is what SES publishes
+              # bounce/complaint events through. The set 'tims-transactional' already exists on
+              # the account; this only tells the app to stamp it on outbound mail. Optional in
+              # EmailOptions -- blank emits no header at all, which is what local MailHog and
+              # CI need -- so removing this line degrades to today's behaviour rather than
+              # breaking the boot.
+              - Name: Email__SesConfigurationSet
+                Value: "tims-transactional"
             RuntimeEnvironmentSecrets:
               - Name: TrackingJwtSecret
                 Value: !Ref TrackingJwtSecretArn

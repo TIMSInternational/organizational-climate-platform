@@ -34,6 +34,14 @@ public class SmtpEmailTransportTests
             NullLogger<SmtpEmailTransport>.Instance);
     }
 
+    /// <summary>
+    /// The deliverable recipient fixture. Deliberately not <c>example.com</c> any more: the
+    /// transport now refuses RFC 2606/6761 reserved domains outright, so an <c>example.com</c>
+    /// recipient would take a rejection branch that has nothing to do with what the test is
+    /// asserting. A subdomain of a domain TIMS owns, and nothing here connects to anything.
+    /// </summary>
+    private const string DeliverableAddress = "ana@fixtures.timsint.com";
+
     private static EmailMessage Message(string to, string subject = "Subject")
         => new(to, "Ana", subject, "text", "<p>html</p>");
 
@@ -57,8 +65,8 @@ public class SmtpEmailTransportTests
     [Theory]
     [InlineData("smtp.invalid", "")]
     [InlineData("smtp.invalid", "not-an-address")]
-    [InlineData("smtp.invalid", "ana@example.com\r\nBcc: attacker@example.com")]
-    [InlineData("", "ana@example.com")]
+    [InlineData("smtp.invalid", "ana@fixtures.timsint.com\r\nBcc: attacker@example.com")]
+    [InlineData("", "ana@fixtures.timsint.com")]
     public async Task The_message_body_never_reaches_a_log(string host, string address)
     {
         const string Token = "invitation-token-for-test-not-a-real-secret";
@@ -107,7 +115,7 @@ public class SmtpEmailTransportTests
 
         var outcome = await new SmtpEmailTransport(
                 options, new EmailSendRateLimiter(options.MaxSendsPerSecond), logger)
-            .SendAsync(Message("ana@example.com"), CancellationToken.None);
+            .SendAsync(Message("ana@fixtures.timsint.com"), CancellationToken.None);
 
         // Transient, not permanent: SmtpClient wraps "the SMTP host was not specified" in an
         // SmtpException, so this lands in Classify rather than in the InvalidOperationException
@@ -159,7 +167,7 @@ public class SmtpEmailTransportTests
     public async Task An_address_containing_a_line_break_is_rejected()
     {
         var outcome = await Transport().SendAsync(
-            Message("ana@example.com\r\nBcc: attacker@example.com"), CancellationToken.None);
+            Message("ana@fixtures.timsint.com\r\nBcc: attacker@example.com"), CancellationToken.None);
 
         Assert.True(outcome.Permanent);
     }
@@ -170,7 +178,7 @@ public class SmtpEmailTransportTests
         // Unreachable through the composers, which collapse line breaks -- kept as a
         // fail-closed backstop because the failure mode is header injection.
         var outcome = await Transport().SendAsync(
-            Message("ana@example.com", "Subject\r\nBcc: attacker@example.com"), CancellationToken.None);
+            Message("ana@fixtures.timsint.com", "Subject\r\nBcc: attacker@example.com"), CancellationToken.None);
 
         Assert.False(outcome.Delivered);
         Assert.True(outcome.Permanent);
