@@ -34,9 +34,10 @@ public partial class PdfDocumentTests
         Assert.StartsWith("xref", text[startxref..], StringComparison.Ordinal);
 
         // The free entry, the catalog, the page tree, the two fonts, then a page dictionary
-        // and a content stream each. Derived from the document rather than written down, so
-        // this stays a statement about the numbering rule and not about today's fixture.
-        Assert.Equal(5 + (2 * document.PageCount), offsets.Length);
+        // and a content stream each, and the document information dictionary last. Derived
+        // from the document rather than written down, so this stays a statement about the
+        // numbering rule and not about today's fixture.
+        Assert.Equal(6 + (2 * document.PageCount), offsets.Length);
 
         for (var number = 1; number < offsets.Length; number++)
         {
@@ -175,6 +176,63 @@ public partial class PdfDocumentTests
     }
 
     /// <summary>A document long enough to paginate, with the shapes a survey export uses.</summary>
+    [Fact]
+    public void Every_content_stream_declares_the_length_a_reader_uses_to_find_endstream()
+    {
+        // /Length is how a reader knows where the stream ends: it seeks past "stream\n", takes
+        // exactly that many bytes, and expects "endstream" next. One byte out and a strict
+        // reader either truncates the last drawing operator or swallows "endstream" and gives
+        // up on the page. Nothing else in this class reads it -- the xref tests locate objects,
+        // not the bytes inside them -- so a wrong /Length produces a file that passes every
+        // other structural assertion here and renders blank pages.
+        var text = Latin1(Sample().ToBytes());
+
+        var matches = ContentStreamPattern().Matches(text);
+        Assert.True(matches.Count > 1, $"expected a stream per page, found {matches.Count}");
+
+        foreach (Match match in matches)
+        {
+            var declared = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+
+            // Measured from the file, not from the value that wrote it: the bytes between
+            // "stream\n" and the "\nendstream" that closes it.
+            var start = match.Index + match.Length;
+            var end = text.IndexOf("\nendstream", start, StringComparison.Ordinal);
+            Assert.True(end > start, "a content stream never closed");
+
+            Assert.Equal(end - start, declared);
+        }
+    }
+
+    [Fact]
+    public void The_information_dictionary_is_an_indirect_reference_the_xref_can_find()
+    {
+        // ISO 32000-1:2008 Table 15: /Info "shall be an indirect reference". An inline
+        // dictionary in the trailer opens in most viewers -- they read /Info only for a title
+        // bar -- and is rejected by strict parsers and by every PDF/A validator, which is the
+        // kind of defect that surfaces only once a client feeds an export to an archiver.
+        var text = Latin1(Sample().ToBytes());
+        var (_, offsets) = ReadCrossReferenceTable(text);
+
+        var reference = InfoReferencePattern().Match(text);
+        Assert.True(reference.Success, "the trailer does not reference /Info indirectly");
+
+        var number = int.Parse(reference.Groups[1].Value, CultureInfo.InvariantCulture);
+        Assert.InRange(number, 1, offsets.Length - 1);
+
+        // And the object it names really is the information dictionary, at the offset the
+        // cross-reference table gives for it.
+        var body = text[(int)offsets[number]..];
+        Assert.StartsWith($"{number.ToString(CultureInfo.InvariantCulture)} 0 obj", body, StringComparison.Ordinal);
+        Assert.Contains("/Title (", body[..body.IndexOf("endobj", StringComparison.Ordinal)], StringComparison.Ordinal);
+    }
+
+    [GeneratedRegex(@"/Length (\d+) >>\nstream\n")]
+    private static partial Regex ContentStreamPattern();
+
+    [GeneratedRegex(@"/Info (\d+) 0 R")]
+    private static partial Regex InfoReferencePattern();
+
     private static PdfDocument Sample()
     {
         var document = new PdfDocument("Clima Q3");

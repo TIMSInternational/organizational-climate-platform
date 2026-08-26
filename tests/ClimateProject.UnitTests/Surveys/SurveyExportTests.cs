@@ -81,43 +81,188 @@ public class SurveyExportTests
     }
 
     /// <summary>
-    /// A department below <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/> gets no
-    /// answers in the file.
+    /// A department below <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/> is
+    /// neither answered for NOR named.
     /// </summary>
     /// <remarks>
-    /// The demographic breakdown is the other half of the export risk the issue names: a survey
-    /// can clear its own floor while a slice of it does not, and the slice is what identifies
-    /// people. Engineering has six respondents here and Direction has three, so one segment must
-    /// carry per-question rows and the other must carry none.
+    /// A segment is the real disclosure surface: a survey can clear its own floor while a slice
+    /// of it does not, and the slice is what identifies people. Engineering has six respondents
+    /// here and Direction has three.
+    ///
+    /// <para>
+    /// The CSV used to emit a full row for Direction -- name, a zeroed count, is_suppressed=true
+    /// -- on the argument that a machine surface has to reconcile. It does not need the name to
+    /// do that: the breakdown's own counters below carry the reconciliation, and with exactly
+    /// one withheld segment in a breakdown a named row makes that group's size a subtraction.
+    /// The PDF has always refused to name one. Now both do.
+    /// </para>
     /// </remarks>
     [Fact]
-    public async Task A_segment_below_the_floor_contributes_no_answers_to_the_file()
+    public async Task A_segment_below_the_floor_is_neither_answered_for_nor_named()
     {
-        var rows = await CsvRowsAsync(Context(Aggregate(
+        var context = Context(Aggregate(
             respondentCount: 9,
-            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)])));
+            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)]));
 
+        var rows = await CsvRowsAsync(context);
         var engineering = $"department:{Engineering}";
         var direction = $"department:{Direction}";
 
+        // The disclosed group is disclosed in full -- including its LABEL, which is the field
+        // a filter over segments is most likely to drop silently.
+        Assert.Equal("Ingeniería", SegmentMetric(rows, engineering, "label"));
+        Assert.Equal("6", SegmentMetric(rows, engineering, "respondent_count"));
         Assert.Equal("false", SegmentMetric(rows, engineering, "is_suppressed"));
-        Assert.Equal("true", SegmentMetric(rows, direction, "is_suppressed"));
-
-        // The one that matters: no per-question row for the small group, in any metric.
         Assert.Contains(rows, r => r.Section == SurveyExport.SegmentQuestionSection && r.Group == engineering);
+
+        // The withheld one contributes no row at all, under any metric.
+        Assert.DoesNotContain(rows, r => r.Section == SurveyExport.SegmentSection && r.Group == direction);
         Assert.DoesNotContain(rows, r => r.Section == SurveyExport.SegmentQuestionSection && r.Group == direction);
 
-        // Nor its participation rate, which with a headcount beside it is a respondent count
-        // by another name.
-        Assert.Equal(string.Empty, SegmentMetric(rows, direction, "participation_rate"));
-        Assert.Equal(string.Empty, SegmentMetric(rows, direction, "headcount"));
-        Assert.Equal("0", SegmentMetric(rows, direction, "respondent_count"));
+        // And its name is nowhere in the bytes -- not in a label, not in a key, not in a
+        // column this test did not think to check. Asserted over the whole file rather than
+        // over parsed rows, because the parse is what a future column could escape.
+        var text = Encoding.UTF8.GetString((await CsvBytesAsync(context)).AsSpan(3));
+        Assert.DoesNotContain("Dirección", text, StringComparison.Ordinal);
+        Assert.Contains("Ingeniería", text, StringComparison.Ordinal);
 
         // Withheld visibly, so a reader can tell a suppressed group from an absent one and the
         // totals still reconcile against completed_count.
         var breakdown = rows.Where(r => r.Section == SurveyExport.BreakdownSection && r.Group == "department").ToList();
         Assert.Equal("1", breakdown.Single(r => r.Metric == "suppressed_segment_count").Value);
         Assert.Equal("3", breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value);
+    }
+
+    /// <summary>
+    /// The demographic path, which is the one <see cref="SurveyResultsPrivacy"/> singles out as
+    /// the real disclosure surface -- and the one where a withheld segment's KEY is the value
+    /// the respondent typed.
+    /// </summary>
+    /// <remarks>
+    /// A department segment is keyed by a GUID and names itself only in its label. A demographic
+    /// segment has no label at all: its key IS the raw value, so the group column would read
+    /// <c>nationality:Venezolana</c> for the two people who wrote it. Nothing reached this
+    /// branch before -- both export fixtures seeded departments only -- so every proof of the
+    /// anonymity criterion landed on the path where the name is a GUID.
+    /// </remarks>
+    [Fact]
+    public async Task A_demographic_value_below_the_floor_never_reaches_the_file()
+    {
+        var context = Context(Aggregate(
+            respondentCount: 12,
+            demographics:
+            [
+                ("nationality", "Costarricense", 10),
+                ("nationality", "Venezolana", 2),
+            ]));
+
+        var rows = await CsvRowsAsync(context);
+
+        // The group above the floor is exported, keyed by field and value.
+        Assert.Equal("10", SegmentMetric(rows, "nationality:Costarricense", "respondent_count"));
+        Assert.Contains(
+            rows,
+            r => r.Section == SurveyExport.SegmentQuestionSection && r.Group == "nationality:Costarricense");
+
+        // The one below it contributes nothing, and the value itself is absent from the bytes.
+        Assert.DoesNotContain(rows, r => r.Group.Contains("Venezolana", StringComparison.Ordinal));
+
+        var text = Encoding.UTF8.GetString((await CsvBytesAsync(context)).AsSpan(3));
+        Assert.DoesNotContain("Venezolana", text, StringComparison.Ordinal);
+        Assert.Contains("Costarricense", text, StringComparison.Ordinal);
+
+        // Counted, though -- two people are accounted for without being described.
+        var breakdown = rows.Where(r => r.Section == SurveyExport.BreakdownSection && r.Group == "nationality").ToList();
+        Assert.Equal("1", breakdown.Single(r => r.Metric == "suppressed_segment_count").Value);
+        Assert.Equal("2", breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value);
+    }
+
+    /// <summary>
+    /// The three counters that let a reader balance a breakdown against
+    /// <c>completed_count</c> -- now that the withheld rows themselves are gone, these are the
+    /// whole of the reconciliation.
+    /// </summary>
+    /// <remarks>
+    /// Twelve respondents: six in Engineering, three in Direction, and three in no department
+    /// at all. 6 disclosed + 3 withheld + 3 unsegmented = 12, and each of those three numbers
+    /// comes from a different line of the exporter.
+    /// </remarks>
+    [Fact]
+    public async Task A_breakdown_accounts_for_every_respondent_including_the_unsegmented_ones()
+    {
+        var rows = await CsvRowsAsync(Context(Aggregate(
+            respondentCount: 12,
+            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)])));
+
+        var breakdown = rows.Where(r => r.Section == SurveyExport.BreakdownSection && r.Group == "department").ToList();
+
+        var disclosed = int.Parse(SegmentMetric(rows, $"department:{Engineering}", "respondent_count"), CultureInfo.InvariantCulture);
+        var withheld = int.Parse(breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value, CultureInfo.InvariantCulture);
+        var unsegmented = int.Parse(breakdown.Single(r => r.Metric == "unsegmented_respondent_count").Value, CultureInfo.InvariantCulture);
+
+        Assert.Equal(6, disclosed);
+        Assert.Equal(3, withheld);
+        Assert.Equal(3, unsegmented);
+
+        // The property, not the three literals: the file has to account for everyone.
+        Assert.Equal(
+            Summary(rows, "completed_count"),
+            (disclosed + withheld + unsegmented).ToString(CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// A bucket's share is a computed figure, not a restatement of its count.
+    /// </summary>
+    /// <remarks>
+    /// Five of eight choose remote and three choose office, so the shares are 62.5 and 37.5 --
+    /// fractional on purpose. A whole-number share over a whole-number count is the one fixture
+    /// where "the percentage column actually holds the count" is invisible.
+    /// </remarks>
+    [Fact]
+    public async Task An_option_bucket_reports_its_share_and_not_a_second_copy_of_its_count()
+    {
+        var rows = await CsvRowsAsync(Context(Aggregate(respondentCount: 8, officeCount: 3)));
+
+        Assert.Equal("5", OptionMetric(rows, "remote", "count"));
+        Assert.Equal("62.5", OptionMetric(rows, "remote", "percentage"));
+        Assert.Equal("3", OptionMetric(rows, "office", "count"));
+        Assert.Equal("37.5", OptionMetric(rows, "office", "percentage"));
+    }
+
+    /// <summary>
+    /// A segment's per-question rows carry the position of the question they are about.
+    /// </summary>
+    /// <remarks>
+    /// The <c>question</c> column is a one-based position looked up from the aggregate. Two
+    /// questions, so the two rows of one segment must read 1 and 2: with a single-question
+    /// fixture every position is 1 and a lookup replaced by a constant is indistinguishable
+    /// from a working one.
+    /// </remarks>
+    [Fact]
+    public async Task A_segments_per_question_rows_name_which_question_they_are_about()
+    {
+        var rows = await CsvRowsAsync(Context(Aggregate(
+            respondentCount: 9,
+            departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)],
+            openText: true)));
+
+        var engineering = $"department:{Engineering}";
+        var positions = rows
+            .Where(r => r.Section == SurveyExport.SegmentQuestionSection
+                && r.Group == engineering
+                && r.Metric == "answered_count")
+            .Select(r => r.Question)
+            .ToList();
+
+        Assert.Equal(["1", "2"], positions);
+
+        // The same positions the question section prints, so a reader can join the two.
+        var questionPositions = rows
+            .Where(r => r.Section == SurveyExport.QuestionSection && r.Metric == "text")
+            .Select(r => r.Question)
+            .ToList();
+
+        Assert.Equal(questionPositions, positions);
     }
 
     [Fact]
@@ -209,9 +354,9 @@ public class SurveyExportTests
     [Fact]
     public void The_pdf_never_names_a_withheld_group()
     {
-        // Stricter than the CSV on purpose: the CSV carries the suppressed segment's row with
-        // is_suppressed=true because the machine surface has to reconcile, while the PDF is
-        // read by a human who would take a named row with a blank rate as a data-entry gap.
+        // The same rule the CSV applies, in the other format: one flag, one filter, two
+        // documents. Held separately from the CSV's test because a filter dropped from either
+        // projection has to fail on its own.
         var document = SurveyExport.BuildPdf(Context(Aggregate(
             respondentCount: 9,
             departments: [(Engineering, "Ingeniería", 20, 6), (Direction, "Dirección", 4, 3)])));
@@ -295,7 +440,9 @@ public class SurveyExportTests
         int respondentCount,
         IReadOnlyList<(Guid Id, string Name, int Headcount, int Respondents)>? departments = null,
         bool openText = false,
-        int invited = 12)
+        int invited = 12,
+        IReadOnlyList<(string Field, string Value, int Respondents)>? demographics = null,
+        int officeCount = 0)
     {
         var questions = new List<AggregationQuestion>
         {
@@ -330,6 +477,30 @@ public class SurveyExportTests
             }
         }
 
+        // Demographics the way the loader hands them over, which is NOT the way they read.
+        // `ResponseDemographic.Value` is a jsonb column written with JsonSerializer.Serialize,
+        // and SurveyAggregateLoader passes that raw payload straight into Compute, which
+        // decodes it. A fixture that put a bare `Venezolana` in the dictionary would exercise
+        // a shape no producer writes -- and would still pass, because the decoder tolerates
+        // it, which is exactly what makes the shortcut invisible.
+        var demographicAssignment = new List<Dictionary<string, string>>();
+        for (var i = 0; i < respondentCount; i++)
+        {
+            demographicAssignment.Add(new Dictionary<string, string>(StringComparer.Ordinal));
+        }
+
+        var cursorByField = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var (field, value, count) in demographics ?? [])
+        {
+            var cursor = cursorByField.GetValueOrDefault(field);
+            for (var i = 0; i < count && cursor < respondentCount; i++, cursor++)
+            {
+                demographicAssignment[cursor][field] = JsonSerializer.Serialize(value);
+            }
+
+            cursorByField[field] = cursor;
+        }
+
         for (var i = 0; i < respondentCount; i++)
         {
             var id = Guid.Parse($"aaaaaaaa-0000-0000-0000-{i:D12}");
@@ -341,9 +512,10 @@ public class SurveyExportTests
                 new DateTimeOffset(2026, 8, 1, 9, 0, 0, TimeSpan.Zero),
                 new DateTimeOffset(2026, 8, 1, 9, 5, 0, TimeSpan.Zero),
                 300,
-                new Dictionary<string, string>(StringComparer.Ordinal)));
+                demographicAssignment[i]));
 
-            answers.Add(new AggregationAnswer(id, QuestionId, JsonSerializer.Serialize("remote"), null));
+            answers.Add(new AggregationAnswer(
+                id, QuestionId, JsonSerializer.Serialize(i < officeCount ? "office" : "remote"), null));
 
             if (openText)
             {
@@ -415,6 +587,9 @@ public class SurveyExportTests
 
     private static string SegmentMetric(IReadOnlyList<CsvRow> rows, string key, string metric)
         => rows.Single(r => r.Section == SurveyExport.SegmentSection && r.Group == key && r.Metric == metric).Value;
+
+    private static string OptionMetric(IReadOnlyList<CsvRow> rows, string value, string metric)
+        => rows.Single(r => r.Section == SurveyExport.OptionSection && r.Group == value && r.Metric == metric).Value;
 
     /// <summary>Everything the document actually draws, as it appears in the content streams.</summary>
     private static string DrawnText(PdfDocument document)

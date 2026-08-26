@@ -246,10 +246,12 @@ public sealed class PdfDocument
     public byte[] ToBytes()
     {
         // Object numbering: 1 catalog, 2 pages, 3 Helvetica, 4 Helvetica-Bold, then two
-        // objects per page (the page dictionary and its content stream). Fixed rather than
-        // allocated on demand, so the /Kids array can be written before the pages are.
+        // objects per page (the page dictionary and its content stream), and last the
+        // document information dictionary. Fixed rather than allocated on demand, so the
+        // /Kids array can be written before the pages are.
         var pageCount = _pages.Count;
-        var offsets = new long[5 + (2 * pageCount)];
+        var infoNumber = 5 + (2 * pageCount);
+        var offsets = new long[infoNumber + 1];
 
         using var buffer = new MemoryStream();
         void Write(string ascii) => buffer.Write(Encoding.ASCII.GetBytes(ascii));
@@ -299,6 +301,13 @@ public sealed class PdfDocument
             Write("\nendstream\nendobj\n");
         }
 
+        // ISO 32000-1:2008 Table 15: /Info "shall be an indirect reference". Writing the
+        // dictionary inline in the trailer produces a file that most viewers still render --
+        // they read /Info only for the title bar -- but that a strict parser and every PDF/A
+        // validator rejects. It costs one object to be correct.
+        BeginObject(infoNumber);
+        Write($"<< /Title {LiteralString(_title)} >>\nendobj\n");
+
         var xrefOffset = buffer.Position;
         Write($"xref\n0 {offsets.Length.ToString(CultureInfo.InvariantCulture)}\n");
         Write("0000000000 65535 f \n");
@@ -307,7 +316,9 @@ public sealed class PdfDocument
             Write($"{offsets[i].ToString("D10", CultureInfo.InvariantCulture)} 00000 n \n");
         }
 
-        Write($"trailer\n<< /Size {offsets.Length.ToString(CultureInfo.InvariantCulture)} /Root 1 0 R /Info << /Title {LiteralString(_title)} >> >>\n");
+        Write(
+            $"trailer\n<< /Size {offsets.Length.ToString(CultureInfo.InvariantCulture)} "
+            + $"/Root 1 0 R /Info {infoNumber.ToString(CultureInfo.InvariantCulture)} 0 R >>\n");
         Write($"startxref\n{xrefOffset.ToString(CultureInfo.InvariantCulture)}\n%%EOF\n");
 
         return buffer.ToArray();

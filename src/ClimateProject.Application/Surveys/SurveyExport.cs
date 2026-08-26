@@ -54,6 +54,26 @@ public sealed record SurveyExportContext(
 /// it does instead is *report* the suppression: withheld counts and reason codes are part of
 /// both documents, so a reader can tell "nobody answered" from "this was withheld".
 ///
+/// ## A withheld group is counted and never named -- in BOTH formats
+///
+/// Reporting the suppression means reporting the COUNTS, never the identities. Neither
+/// document emits a row for a segment whose <c>IsSuppressed</c> is set: the CSV filters them
+/// out of its segment loop and the PDF filters them out of its table, from the same flag, for
+/// the same reason.
+///
+/// The two formats used to disagree here -- the CSV named every withheld group on the argument
+/// that a machine surface has to reconcile -- and that argument does not survive being checked.
+/// Reconciliation is carried entirely by the per-breakdown counters
+/// (<c>suppressed_segment_count</c>, <c>suppressed_respondent_count</c>,
+/// <c>unsegmented_respondent_count</c>), which are emitted whether or not a group is named; the
+/// name adds nothing a reader can balance and everything a reader can identify. Where a
+/// breakdown has exactly one withheld segment, a named row makes that group's exact size a
+/// subtraction. Worse, a demographic segment's key IS the value the respondent typed, so the
+/// row would print <c>nationality:Venezolana</c> for the one person who wrote it.
+///
+/// A format-dependent disclosure rule is also a rule that will drift. One flag, one filter,
+/// two documents.
+///
 /// ## What is deliberately NOT exported: per-respondent rows
 ///
 /// #122's scope says "CSV of raw responses". This class exports the aggregate instead, and the
@@ -261,7 +281,19 @@ public static class SurveyExport
             await Row(BreakdownSection, null, breakdown.Dimension, null, "suppressed_respondent_count", Number(breakdown.SuppressedRespondentCount)).ConfigureAwait(false);
             await Row(BreakdownSection, null, breakdown.Dimension, null, "unsegmented_respondent_count", Number(breakdown.UnsegmentedRespondentCount)).ConfigureAwait(false);
 
-            foreach (var segment in breakdown.Segments)
+            // Withheld groups are counted by the three rows above and never named -- the same
+            // rule BuildPdf applies, applied here in the format that is actually forwarded.
+            //
+            // The reconciliation a machine surface needs is already complete without them:
+            // suppressed_segment_count says how many groups were withheld,
+            // suppressed_respondent_count how many people they hold, and
+            // unsegmented_respondent_count the rest -- so a reader can still balance every
+            // segment row against completed_count. What a named row would add on top of that
+            // is the one thing the floor exists to withhold: WHICH group is small. With a
+            // single suppressed segment in a breakdown its exact size is then a subtraction,
+            // and for a demographic breakdown the group key IS the respondent-supplied value
+            // ("nationality:Venezolana"), so the row names the value as well as the count.
+            foreach (var segment in breakdown.Segments.Where(s => !s.IsSuppressed))
             {
                 var key = $"{breakdown.Dimension}:{segment.Key}";
 
@@ -269,11 +301,15 @@ public static class SurveyExport
                 await Row(SegmentSection, null, key, null, "respondent_count", Number(segment.RespondentCount)).ConfigureAwait(false);
                 await Row(SegmentSection, null, key, null, "participation_rate", Optional(segment.ParticipationRate)).ConfigureAwait(false);
                 await Row(SegmentSection, null, key, null, "headcount", Optional(segment.Headcount)).ConfigureAwait(false);
+                // Always false, by construction of the loop above -- and kept for exactly that
+                // reason. A reader who sees three segment rows beside a
+                // suppressed_segment_count of 1 has to be able to tell that the three are the
+                // disclosed groups rather than all of them.
                 await Row(SegmentSection, null, key, null, "is_suppressed", Boolean(segment.IsSuppressed)).ConfigureAwait(false);
 
-                // Empty for a suppressed segment, because the aggregation left it empty. This
-                // is the one loop where a missing floor would leak a small group's answers, and
-                // it is the one loop with no floor in it.
+                // The aggregation already emptied this for a withheld segment; the filter
+                // above means we never reach one. Two independent reasons the small group's
+                // answers cannot appear here, which is the intent.
                 foreach (var segmentQuestion in segment.Questions)
                 {
                     var order = Number(orderByQuestion.GetValueOrDefault(segmentQuestion.QuestionId) + 1);
