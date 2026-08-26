@@ -458,18 +458,32 @@ public static class QuestionBankEndpoints
         return Results.Ok(new QuestionBankCategoriesResponse(categories));
     }
 
-    private static Task<List<QuestionBankCategoryCount>> CategoryCountsAsync(
+    /// <remarks>
+    /// Grouped and counted in SQL; ordered in memory. Sorting a projection whose elements are
+    /// a record rather than an anonymous type is not something the provider can translate, and
+    /// the row count here is the number of distinct (category, subcategory) pairs in one
+    /// tenant's corpus -- tens, not a page that has to be ordered server-side.
+    /// </remarks>
+    private static async Task<List<QuestionBankCategoryCount>> CategoryCountsAsync(
         IQueryable<QuestionBankItem> scope, CancellationToken cancellationToken)
-        => scope
+    {
+        var rows = await scope
             .GroupBy(i => new { i.Category, i.Subcategory })
-            .Select(g => new QuestionBankCategoryCount(
+            .Select(g => new
+            {
                 g.Key.Category,
                 g.Key.Subcategory,
-                g.Count(),
-                g.Count(i => i.IsActive)))
-            .OrderBy(c => c.Category)
-            .ThenBy(c => c.Subcategory)
+                Total = g.Count(),
+                Active = g.Sum(i => i.IsActive ? 1 : 0),
+            })
             .ToListAsync(cancellationToken);
+
+        return rows
+            .OrderBy(r => r.Category, StringComparer.Ordinal)
+            .ThenBy(r => r.Subcategory, StringComparer.Ordinal)
+            .Select(r => new QuestionBankCategoryCount(r.Category, r.Subcategory, r.Total, r.Active))
+            .ToList();
+    }
 
     // ------------------------------------------------------------------
     // question-bank/analytics
@@ -483,22 +497,22 @@ public static class QuestionBankEndpoints
 
         var scope = ReadableScope(db, currentUser, companyId);
 
-        var totals = await scope
-            .GroupBy(_ => 1)
-            .Select(g => new
-            {
-                Total = g.Count(),
-                Active = g.Count(i => i.IsActive),
-                Global = g.Count(i => i.CompanyId == null),
-                Ai = g.Count(i => i.IsAiGenerated),
-            })
-            .FirstOrDefaultAsync(cancellationToken);
+        // Four counts rather than one grouped projection: a GroupBy(_ => 1) over the whole
+        // corpus is a scan either way, and this form is translatable without depending on the
+        // provider's support for a conditional aggregate.
+        var total = await scope.CountAsync(cancellationToken);
+        var active = await scope.CountAsync(i => i.IsActive, cancellationToken);
+        var global = await scope.CountAsync(i => i.CompanyId == null, cancellationToken);
+        var aiGenerated = await scope.CountAsync(i => i.IsAiGenerated, cancellationToken);
 
-        var byType = await scope
+        var typeRows = await scope
             .GroupBy(i => i.Type)
-            .Select(g => new QuestionBankTypeCount(g.Key, g.Count()))
-            .OrderByDescending(t => t.ItemCount).ThenBy(t => t.Type)
+            .Select(g => new { Type = g.Key, Count = g.Count() })
             .ToListAsync(cancellationToken);
+        var byType = typeRows
+            .OrderByDescending(t => t.Count).ThenBy(t => t.Type, StringComparer.Ordinal)
+            .Select(t => new QuestionBankTypeCount(t.Type, t.Count))
+            .ToList();
 
         var byCategory = await CategoryCountsAsync(scope, cancellationToken);
 
@@ -516,11 +530,11 @@ public static class QuestionBankEndpoints
         var used = metrics.Values.Where(m => m.TimesAsked > 0).ToList();
 
         return Results.Ok(new QuestionBankAnalyticsResponse(
-            TotalItems: totals?.Total ?? 0,
-            ActiveItems: totals?.Active ?? 0,
-            RetiredItems: (totals?.Total ?? 0) - (totals?.Active ?? 0),
-            GlobalItems: totals?.Global ?? 0,
-            AiGeneratedItems: totals?.Ai ?? 0,
+            TotalItems: total,
+            ActiveItems: active,
+            RetiredItems: total - active,
+            GlobalItems: global,
+            AiGeneratedItems: aiGenerated,
             ItemsWithVariations: withVariations,
             ItemsEverUsed: metrics.Values.Count(m => m.QuestionsCreated > 0),
             // Averaged over the questions that were actually asked. Including the never-asked
