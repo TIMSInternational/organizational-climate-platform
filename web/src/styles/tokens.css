@@ -321,12 +321,22 @@
      under every heading in the product.
 
      The new values are the LIGHTEST hue- and chroma-matched greys that clear
-     4.5:1 against the darkest ground they print on (`--admin-bg-icon-box`), so
-     the ramp moves as little as it can: 4.90 / 4.72 / 4.55:1 across white,
-     card-hover and icon-box. */
+     4.5:1 against the darkest ground they print on — and that ground is not an
+     opaque token. `ui/table.tsx` puts `hover:bg-state-hover
+     data-[state=selected]:bg-state-active` on EVERY row, `index.css` hovers
+     `tbody tr` as well, and a highlighted `DropdownMenuItem`, a `SelectItem` and
+     the command palette's selected row all paint the same tints. Those tints are
+     `rgba()` over a panel or a card, and the composite is exactly computable, so
+     `inkContrast.test.ts` computes it: `--admin-bg-active` over white is #ebebeb,
+     which is where these greys are measured. At #637287 the tier read 4.11:1
+     there — below AA on any row a reader had selected — and 4.49:1 on the hover
+     tint, which the ⌘K palette's ESC chip and every hovered row's description
+     print on. Photographed and measured live in Chromium at /admin/companies.
+
+     4.55:1 on the darkest composite, 5.42:1 on white. */
   --admin-font-primary: #0d1626;
   --admin-font-secondary: #44536b;
-  --admin-font-tertiary: #637287;
+  --admin-font-tertiary: #5d6b7f;
   /* The one NON-text tier. It is held to 1.4.11's 3:1 rather than 1.4.3's
      4.5:1, and that is only defensible because nothing it paints is body text:
      the inactive sort glyph in `ui/table.tsx` (a graphic that says "this column
@@ -340,9 +350,12 @@
      white panel) was moved to `--admin-font-section-label` when the guard below
      learned to read stylesheets. `inkContrast.test.ts` fails if a new
      `text-fg-light` appears outside the component allowlist, or if any CSS rule
-     paints text with this token from a selector that is not `:disabled`. */
-  --admin-font-light: #8090a7;
-  --admin-font-section-label: #637287;
+     paints text with this token from a selector that is not `:disabled`. It is
+     measured on the state-layer composites too: the inactive sort glyph sits in
+     a `<th>`, and a `<thead>`'s row is a `TableRow` like any other, so it prints
+     on the hover tint. 3.02:1 on the darkest composite. */
+  --admin-font-light: #79889e;
+  --admin-font-section-label: #5d6b7f;
   /* Text on a solid accent fill — the selected nav row in the legacy
      RoleBasedNav is `color: '#fff'` on `--admin-accent-blue`.
      ONLY ever place this on `--admin-accent-blue-fill`, never on
@@ -674,15 +687,20 @@
   --admin-border-panel: #26313f;
 
   /* The same #83 re-valuation, in the other direction: dark ink lightens where
-     light ink darkened. The binding ground here is `--admin-bg-card-hover`
-     (#223045), the LIGHTEST surface a dark-theme ink prints on — #74839a
-     measured 3.46:1 on it and #5d6b80 measured 2.46:1. The new values clear
-     4.51:1 and 3.01:1 there respectively, and more on every other surface. */
+     light ink darkened. The binding ground is the LIGHTEST thing a dark-theme
+     ink prints on, and that is not `--admin-bg-card-hover` (#223045) but the
+     selected-row tint over a card: `--admin-bg-active` is rgba(255,255,255,.1),
+     which over `--admin-bg-card` composites to #343d49. Four files render a
+     `<Table>` inside a `<Card>` (`ConsentRecordPanel`, `ProfileActivityList`,
+     `DataAccessPanel`, `QuestionResultCard`), so this is a ground the product
+     really prints on. #8b97ab measured 3.72:1 there and 4.26:1 on the hover
+     tint; #697990 measured 2.48:1. The new values clear 4.51:1 and 3.00:1 on
+     that composite, and more on every other surface. */
   --admin-font-primary: #eef3f9;
   --admin-font-secondary: #a8b6c9;
-  --admin-font-tertiary: #8b97ab;
-  --admin-font-light: #697990;
-  --admin-font-section-label: #8b97ab;
+  --admin-font-tertiary: #99a7bd;
+  --admin-font-light: #7587a0;
+  --admin-font-section-label: #99a7bd;
   --admin-font-on-accent: #ffffff;
 
   --admin-accent-green: #10b981;

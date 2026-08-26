@@ -88,10 +88,7 @@ function contrast(a: string, b: string): number {
  *
  * Deliberately not `--admin-bg-shell` or `--admin-shell-*`: the chrome re-points
  * these tokens at a different palette inside `.on-shell`, and
- * `shellInkContrast.test.ts` measures that palette on those grounds. Nor
- * `--admin-bg-overlay` / `--admin-bg-hover` / `--admin-bg-active`, which are
- * `rgba()` tints — a translucent fill has no fixed colour of its own, which is
- * the same reason `chipVariants.ts` refuses to pair ink with one.
+ * `shellInkContrast.test.ts` measures that palette on those grounds.
  */
 const SURFACES = [
   '--admin-bg-outer',
@@ -101,6 +98,55 @@ const SURFACES = [
   '--admin-bg-input',
   '--admin-bg-icon-box',
 ] as const
+
+/**
+ * …and every ground the design system's own state layers make out of them.
+ *
+ * This matrix used to stop at the opaque tokens, on the grounds that "a
+ * translucent fill has no fixed colour of its own". That is true of the token and
+ * false of the pixel: the alpha and the surfaces it composites over are all
+ * constants in the same file, so the resulting colour is exactly computable — and
+ * it is what a reader actually looks at, because the state layers are on the rows
+ * that carry the most text in the product:
+ *
+ * - `ui/table.tsx` puts `hover:bg-state-hover data-[state=selected]:bg-state-active`
+ *   on EVERY `TableRow`, and `index.css` hovers `tbody tr` in the base layer too.
+ * - `ui/dropdown-menu.tsx` and `ui/select.tsx` tint the highlighted item.
+ * - `CommandPalette` tints the selected row and its ESC chip.
+ *
+ * The bases are the two surfaces those components sit on: a panel (measured live
+ * — the companies table's hovered row composites over `--admin-bg-panel`) and a
+ * card (four files render a `<Table>` inside a `<Card>`). At the values this
+ * branch shipped, `--admin-font-tertiary` measured **4.11:1** on
+ * `--admin-bg-active` over white and **3.72:1** on the same tint over the dark
+ * card — a repair that had cleared the opaque matrix by ~1% and then lost it to
+ * the row underneath. Both tiers were re-valued again; see `tokens.css`.
+ */
+const STATE_LAYERS = ['--admin-bg-hover', '--admin-bg-active'] as const
+const STATE_LAYER_BASES = ['--admin-bg-panel', '--admin-bg-card'] as const
+
+/** `rgba(r, g, b, a)` over an opaque hex, as the hex a screen would show. */
+function composite(tint: string, base: string): string {
+  const parts = /rgba?\(([^)]+)\)/.exec(tint)
+  expect(parts, `expected an rgba() tint, got ${JSON.stringify(tint)}`).not.toBeNull()
+  const [r, g, b, a = 1] = parts![1].split(/[\s,/]+/).filter(Boolean).map(Number)
+  const under = rgb(base)
+  return `#${[r, g, b]
+    .map((channel, index) => Math.round(a * channel + (1 - a) * under[index]))
+    .map((channel) => channel.toString(16).padStart(2, '0'))
+    .join('')}`
+}
+
+/** Every ground an ink can land on in one theme: the opaque ones, then the tints. */
+function grounds(palette: Record<string, string>): [string, string][] {
+  const opaque = SURFACES.map((surface) => [surface, palette[surface]] as [string, string])
+  const tinted = STATE_LAYERS.flatMap((layer) =>
+    STATE_LAYER_BASES.map(
+      (base) => [`${layer} over ${base}`, composite(palette[layer], palette[base])] as [string, string],
+    ),
+  )
+  return [...opaque, ...tinted]
+}
 
 interface InkRole {
   token: string
@@ -146,6 +192,20 @@ describe('base ink contrast', () => {
       for (const surface of SURFACES) {
         expect(palette[surface], `${name} palette has no ${surface}`).toMatch(/^#[0-9a-f]{6}$/i)
       }
+      // The state layers must really be translucent tints, and each composite
+      // must really differ from the surface under it — a tint parsed as opaque,
+      // or an alpha that rounded to nothing, would add four grounds that measure
+      // exactly what the four opaque ones already did.
+      for (const layer of STATE_LAYERS) {
+        expect(palette[layer], `${name} palette has no ${layer}`).toMatch(/^rgba\(/)
+      }
+      for (const [surface, value] of grounds(palette).slice(SURFACES.length)) {
+        expect(value, `${name}: ${surface} did not composite`).toMatch(/^#[0-9a-f]{6}$/i)
+        expect(
+          STATE_LAYER_BASES.map((base) => palette[base]),
+          `${name}: ${surface} composited to its own base`,
+        ).not.toContain(value)
+      }
     }
     // And the two palettes must actually differ, or "both themes" is one theme
     // measured twice.
@@ -156,10 +216,12 @@ describe('base ink contrast', () => {
     describe(theme, () => {
       for (const ink of INKS) {
         it(`${ink.token} clears ${THRESHOLD[ink.role]}:1 on every surface — ${ink.carries}`, () => {
-          const failures = SURFACES.map((surface) => ({
-            surface,
-            ratio: contrast(palette[ink.token], palette[surface]),
-          })).filter(({ ratio }) => ratio < THRESHOLD[ink.role])
+          const failures = grounds(palette)
+            .map(([surface, value]) => ({
+              surface,
+              ratio: contrast(palette[ink.token], value),
+            }))
+            .filter(({ ratio }) => ratio < THRESHOLD[ink.role])
 
           expect(
             failures.map((f) => `${f.surface} ${f.ratio.toFixed(2)}:1`),
@@ -195,9 +257,9 @@ describe('base ink contrast', () => {
 
     for (const [theme, palette] of [['light', light], ['dark', dark]] as const) {
       const ring = palette[palette[colourToken].startsWith('#') ? colourToken : '--admin-accent-blue']
-      for (const surface of SURFACES) {
+      for (const [surface, value] of grounds(palette)) {
         expect(
-          contrast(ring, palette[surface]),
+          contrast(ring, value),
           `${colourToken} (${ring}) on ${surface} in ${theme}`,
         ).toBeGreaterThanOrEqual(AA_NON_TEXT_CONTRAST)
       }

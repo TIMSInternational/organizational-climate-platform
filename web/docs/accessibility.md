@@ -59,8 +59,15 @@ Two rules are deliberately **not** enforced by axe here:
 ## Token contrast, measured
 
 Read off `src/styles/tokens.css` on 2026-08-25. Every ink is measured against every
-opaque surface it can print on. The binding case is shown — the worst ratio across
-`--admin-bg-{outer,panel,card,card-hover,input,icon-box}`.
+ground it can print on, and the binding case is shown. The grounds are the six opaque
+surfaces `--admin-bg-{outer,panel,card,card-hover,input,icon-box}` **plus the four the
+design system's own state layers make out of them**: `--admin-bg-hover` and
+`--admin-bg-active` are `rgba()` tints, and `ui/table.tsx` paints them on every
+`TableRow`, `ui/dropdown-menu.tsx` and `ui/select.tsx` on the highlighted item, and
+`CommandPalette` on the selected row. A tint has no colour of its own but the pixel
+does — the alpha and the surface under it are constants in the same file — so
+`inkContrast.test.ts` composites them and measures there too. That is where the
+binding case now is for every ink in the table.
 
 ### Text inks — WCAG 1.4.3, 4.5:1
 
@@ -69,10 +76,10 @@ Every string in this product is under 18.66px (the shell body is 13px, an eyebro
 
 | Token | Light | worst | Dark | worst | Carries |
 |---|---|---|---|---|---|
-| `--admin-font-primary` | `#0d1626` | 16.82:1 | `#eef3f9` | 11.94:1 | headings, table cells, a filled input |
-| `--admin-font-secondary` | `#44536b` | 7.24:1 | `#a8b6c9` | 6.47:1 | body copy, nav row labels |
-| `--admin-font-tertiary` | `#637287` | 4.55:1 | `#8b97ab` | 4.51:1 | card/dialog descriptions, captions, breadcrumbs, placeholders |
-| `--admin-font-section-label` | `#637287` | 4.55:1 | `#8b97ab` | 4.51:1 | 10px uppercase eyebrows |
+| `--admin-font-primary` | `#0d1626` | 15.19:1 | `#eef3f9` | 9.86:1 | headings, table cells, a filled input |
+| `--admin-font-secondary` | `#44536b` | 6.54:1 | `#a8b6c9` | 5.34:1 | body copy, nav row labels |
+| `--admin-font-tertiary` | `#5d6b7f` | 4.55:1 | `#99a7bd` | 4.51:1 | card/dialog descriptions, captions, breadcrumbs, placeholders |
+| `--admin-font-section-label` | `#5d6b7f` | 4.55:1 | `#99a7bd` | 4.51:1 | 10px uppercase eyebrows, rail and ⌘K palette group headings |
 | `--admin-font-on-accent` | `#ffffff` | 5.47:1 | `#ffffff` | 5.47:1 | text on `--admin-accent-blue-fill` only (see `accentContrast.test.ts`) |
 
 The last three rows are **repairs made under #83**, and they are the reason the issue
@@ -85,6 +92,22 @@ says a token that fails contrast fails everywhere at once:
 | `--admin-font-section-label` (light) | `#9aa7b9` | **2.44:1** on white | `#637287` | 14 |
 | `--admin-font-section-label` (dark) | `#5d6b80` | **2.46:1** on `bg-card-hover` | `#8b97ab` | 14 |
 
+…and then a second time, when the matrix learned to composite the state layers and the
+first repair turned out to have cleared the opaque grounds by about 1% and lost it on
+the row underneath:
+
+| Token | was | measured | now |
+|---|---|---|---|
+| `--admin-font-tertiary` (light) | `#637287` | **4.11:1** on `bg-active` over white (#ebebeb), 4.49:1 on `bg-hover` (#f5f5f5) | `#5d6b7f` |
+| `--admin-font-tertiary` (dark) | `#8b97ab` | **3.72:1** on `bg-active` over `bg-card` (#343d49) | `#99a7bd` |
+| `--admin-font-light` (light) | `#8090a7` | **2.72:1** on `bg-active` over white | `#79889e` |
+| `--admin-font-light` (dark) | `#697990` | **2.48:1** on `bg-active` over `bg-card` | `#7587a0` |
+
+The 4.49:1 case is not hypothetical: it was measured live in Chromium on the ⌘K
+palette's ESC chip and on the description line of the selected row. The dark case is
+reachable because four files render a `<Table>` inside a `<Card>`
+(`ConsentRecordPanel`, `ProfileActivityList`, `DataAccessPanel`, `QuestionResultCard`).
+
 The new values are the lightest hue- and chroma-matched greys that clear 4.5:1 on the
 darkest ground they print on, so the ramp moves as little as it can.
 
@@ -92,22 +115,40 @@ darkest ground they print on, so the ramp moves as little as it can.
 
 | Token | Light | worst | Dark | worst | Carries |
 |---|---|---|---|---|---|
-| `--admin-font-light` | `#8090a7` | 3.02:1 | `#697990` | 3.01:1 | the inactive sort glyph; the calendar's outside-month (disabled) days |
+| `--admin-font-light` | `#79889e` | 3.02:1 | `#7587a0` | 3.00:1 | the inactive sort glyph; the calendar's outside-month (disabled) days; the two `:disabled` rules in `index.css` |
 
 This is the only ink held to 3:1, and it is defensible only while nothing it paints is
 text. `inkContrast.test.ts` sweeps `src/` and fails if `text-fg-light` appears outside
-those two files. Placeholders used to wear it — a placeholder *is* text — and were
+those two files — **and sweeps the stylesheets too**, where it allows the token to
+paint text only from a `:disabled` selector, the one category 1.4.3 exempts by name.
+That second sweep is there because the first one could not see `index.css`:
+`.nav-section-title` painted with this ink, and `CommandPalette` renders the ⌘K
+palette's group headings with that class outside `.on-shell`, so they printed at
+**3.25:1** in light and 3.94:1 in dark — the palest text on the screen. The class now
+uses `--admin-font-section-label`. Placeholders used to wear it — a placeholder *is* text — and were
 moved to `--admin-font-tertiary` under #83, along with the notification timestamp and
 the ⌘K hint.
 
 ### Focus indicator — WCAG 1.4.11 and 2.4.7
 
 `--admin-focus-ring` is `--admin-accent-blue` `#0d9488`, drawn 2px solid with a 2px
-offset by the single `:focus-visible` rule in `src/index.css`. Worst case 3.48:1 in
-light (on `--admin-bg-icon-box`) and 3.56:1 in dark (on `--admin-bg-card-hover`) —
-above the 3:1 floor on every surface, in both themes. No primitive sets
-`outline-none`; `buttonVariants.ts` and the per-primitive tests say why, and
-`CommandPalette`'s search field was the last one and was repaired under #83.
+offset by the single `:focus-visible` rule in `src/index.css`. Worst case 3.14:1 in
+light and 4.42:1 in dark, both on `--admin-bg-active` over a surface — above the 3:1
+floor on every ground, in both themes.
+
+Nothing suppresses that ring, and this is checked three ways, because one was not
+enough. `keyboardOperable.test.tsx` blocks `outline-none` / `outline-0` /
+`outline: none` **and `outline-hidden`, which is Tailwind v4's spelling of the same
+thing** — this project is on v4, and four primitives (`tabs`, `popover`,
+`dropdown-menu`, `select`) were shipping it while the sweep was green. It then
+enumerates every `outline-*` utility in the app against a four-entry reviewed
+allowlist, so the next rename does not need the blocklist to have heard of it. And it
+sweeps the stylesheets, which the component walk never read — a rule in
+`@layer components` outranks `:focus-visible` in `@layer base`, so three lines of CSS
+could take the ring off every button and link in the product.
+
+`CommandPalette`'s search field carried the last `outline-none` and was repaired under
+#83; the four `outline-hidden` primitives were repaired in the same issue.
 
 ### One pairing that is not a token pair
 
@@ -121,6 +162,18 @@ printed `#eef3f9` on `#ffffff` in the light theme: **1.12:1**. It is now on
 `inkContrast.test.ts` reads the rule rather than the tokens so the guard cannot go
 stale.
 
+The collapsed rail's flyout was the same defect one component away, and the reason the
+guard is no longer a single named pairing. `RoleBasedNav` paints the flyout — the ONLY
+route to a group's children while the rail is collapsed — and it painted itself with
+`--admin-bg-panel`, a ground `.on-shell` does not re-point. In light theme it printed
+`--admin-shell-font` `#c8d8ec` on `#ffffff`: **1.45:1** for the links and 2.15:1 for
+the heading, measured live in Chromium at /dashboard. It now paints
+`--admin-bg-overlay`, which `.on-shell` re-points to the raised navy (8.05:1 / 5.43:1
+in light, 9.18:1 / 5.13:1 in dark). `inkContrast.test.ts` now reads the chrome's
+components out of `AdminLayout` — whatever it renders inside an element carrying
+`on-shell` — and requires every `--admin-bg-*` token they paint to be re-pointed by
+that rule, so the class of defect is covered rather than the two instances.
+
 ### Deliberately out of scope
 
 `--admin-chart-axis` (`#9aa7b9` light, `#74839a` dark) is 2.44:1 and 3.46:1 against
@@ -129,6 +182,16 @@ value they scale is separately labelled, which it is in every chart here — the
 diverging and sequential ramps carry their own paired inks, measured in
 `divInkContrast.test.ts` and `seqInkContrast.test.ts`. Recorded so it is a known
 number rather than an oversight.
+
+`--admin-accent-blue` set as a **link** is the other one, and it is a real gap rather
+than a decorative exemption. `index.css` gives every bare `<a>` `color:
+var(--admin-accent-blue)`, which measures **3.74:1** on white and 3.43:1 on a hovered
+row (measured live in Chromium at /admin/companies, where each company name is such a
+link); dark is fine at 7.02:1. The token clears the 3:1 its identity role asks, and
+the house pattern for an accent set as text is the separate `--admin-accent-*-ink`
+step — there is no `--admin-accent-blue-ink` yet, and adding one touches 83
+`text-accent-*` call sites plus the base `a` rule, which is a slice of its own. It is
+recorded here with its number so the next person starts from a measurement.
 
 ## Colour is never the only signal
 
