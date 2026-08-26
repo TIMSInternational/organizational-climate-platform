@@ -102,7 +102,41 @@ public static class QuestionBankEndpoints
         return rowCompanyId is not null && currentUser.CompanyId == rowCompanyId.Value.ToString();
     }
 
-    /// <summary>Everything the caller may READ, optionally narrowed to one tenant by a SuperAdmin.</summary>
+    /// <summary>
+    /// The tenant whose SURVEYS the caller may be told about, which is a different question
+    /// from which bank rows they may read.
+    /// </summary>
+    /// <remarks>
+    /// A global row is readable by every tenant, so scoping only the item leaves the usage of
+    /// that item unscoped — and its usage is another tenant's surveys, their titles and the
+    /// count of the responses they collected. Every derived number on this surface is
+    /// therefore computed inside one tenant's surveys; only a SuperAdmin, who may read every
+    /// tenant already, gets the cross-tenant total.
+    /// </remarks>
+    private static Guid? MetricsScope(CurrentUser currentUser)
+        => currentUser.Role == Roles.SuperAdmin ? null : Guid.Parse(currentUser.CompanyId);
+
+    /// <summary>
+    /// True when a non-SuperAdmin named a <c>companyId</c> that is not their own.
+    /// </summary>
+    /// <remarks>
+    /// Refused rather than ignored. Silently answering a filter for somebody else's tenant
+    /// with the caller's OWN rows is worse than either a 403 or an empty set: the caller reads
+    /// the response as another company's corpus, and every count on the page is then attributed
+    /// to the wrong tenant.
+    /// </remarks>
+    private static bool ForeignCompanyFilter(CurrentUser currentUser, Guid? companyId)
+        => companyId.HasValue
+           && currentUser.Role != Roles.SuperAdmin
+           && !string.Equals(currentUser.CompanyId, companyId.Value.ToString(), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Everything the caller may READ, optionally narrowed to one tenant.</summary>
+    /// <remarks>
+    /// For a CompanyAdmin the default scope is "mine plus the global corpus"; naming their own
+    /// <c>companyId</c> narrows it to "mine only", which is the only other set they can mean.
+    /// Any other <c>companyId</c> never reaches here — <see cref="ForeignCompanyFilter"/>
+    /// refuses it at the route.
+    /// </remarks>
     private static IQueryable<QuestionBankItem> ReadableScope(
         ClimateProjectDbContext db, CurrentUser currentUser, Guid? companyId)
     {
@@ -110,7 +144,9 @@ public static class QuestionBankEndpoints
         if (currentUser.Role != Roles.SuperAdmin)
         {
             var own = Guid.Parse(currentUser.CompanyId);
-            return query.Where(i => i.CompanyId == null || i.CompanyId == own);
+            return companyId.HasValue
+                ? query.Where(i => i.CompanyId == own)
+                : query.Where(i => i.CompanyId == null || i.CompanyId == own);
         }
 
         return companyId.HasValue ? query.Where(i => i.CompanyId == companyId.Value) : query;
@@ -158,6 +194,7 @@ public static class QuestionBankEndpoints
     {
         var currentUser = principal.GetCurrentUser();
         if (!Roles.Admin.Contains(currentUser.Role)) return Results.Forbid();
+        if (ForeignCompanyFilter(currentUser, companyId)) return Results.Forbid();
 
         var query = ReadableScope(db, currentUser, companyId);
 
@@ -183,7 +220,8 @@ public static class QuestionBankEndpoints
                 || (i.TextEs != null && EF.Functions.ILike(i.TextEs, pattern)));
         }
 
-        var items = await ProjectListAsync(db, query.OrderBy(i => i.Category).ThenBy(i => i.Subcategory), cancellationToken);
+        var items = await ProjectListAsync(
+            db, query.OrderBy(i => i.Category).ThenBy(i => i.Subcategory), MetricsScope(currentUser), cancellationToken);
         return Results.Ok(new QuestionBankListResponse(items, items.Count));
     }
 
@@ -198,6 +236,9 @@ public static class QuestionBankEndpoints
         var currentUser = principal.GetCurrentUser();
         if (!CanWrite(currentUser, request.CompanyId)) return Results.Forbid();
 
+        var unknownCompany = await UnknownCompanyAsync(db, [request.CompanyId], cancellationToken);
+        if (unknownCompany is not null) return unknownCompany;
+
         var actingUserId = await ActingUserResolver.ResolveIdAsync(currentUser, db, cancellationToken);
         if (actingUserId is null) return ActingUserRequired();
 
@@ -207,7 +248,7 @@ public static class QuestionBankEndpoints
         var id = Write(db, prepared!, actingUserId.Value, parentId: null);
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Json(await LoadDetailAsync(db, id, cancellationToken), statusCode: 201);
+        return Results.Json(await LoadDetailAsync(db, id, MetricsScope(currentUser), cancellationToken), statusCode: 201);
     }
 
     // ------------------------------------------------------------------
@@ -228,7 +269,7 @@ public static class QuestionBankEndpoints
         if (item is null) return NotFound();
         if (!CanRead(currentUser, item.CompanyId)) return Results.Forbid();
 
-        return Results.Ok(await LoadDetailAsync(db, id, cancellationToken));
+        return Results.Ok(await LoadDetailAsync(db, id, MetricsScope(currentUser), cancellationToken));
     }
 
     private static async Task<IResult> UpdateAsync(
@@ -265,6 +306,18 @@ public static class QuestionBankEndpoints
             return BadRequest("ScaleMin must be less than ScaleMax");
         }
 
+        var lengthError = LengthError(
+            text,
+            category,
+            request.Subcategory?.Trim(),
+            request.Industry?.Trim(),
+            request.CompanySize?.Trim(),
+            request.ScaleLabelMin?.Trim(),
+            request.ScaleLabelMax?.Trim(),
+            request.Tags,
+            options);
+        if (lengthError is not null) return BadRequest(lengthError);
+
         // The text goes back into the column the row's own language names. Language is not
         // in the update shape at all -- moving text between columns without changing the
         // label on it is how a row comes to claim a translation it does not have.
@@ -283,6 +336,16 @@ public static class QuestionBankEndpoints
         // Replaced wholesale rather than diffed: the option set is one value, and a partial
         // update would let a caller silently keep an option they had removed from their own
         // payload.
+        //
+        // TWO SaveChanges, so ONE transaction. The delete and the insert cannot share a
+        // SaveChanges -- the option key is (item, order), so re-adding order 0 while order 0
+        // is still tracked as deleted is a tracking conflict -- and without the transaction
+        // the delete COMMITS on its own. Any failure of the second save then leaves the item
+        // stripped of the options and tags it had: an update that was refused, and destroyed
+        // the row's children on its way out. A multiple_choice item with zero options is a
+        // state NormaliseOptions refuses to create, and it was reachable by failing an update.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
         db.QuestionBankItemOptions.RemoveRange(db.QuestionBankItemOptions.Where(o => o.QuestionBankItemId == id));
         db.QuestionBankItemTags.RemoveRange(db.QuestionBankItemTags.Where(t => t.QuestionBankItemId == id));
         await db.SaveChangesAsync(cancellationToken);
@@ -290,7 +353,9 @@ public static class QuestionBankEndpoints
         WriteChildren(db, id, options, request.Tags, item.Language);
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(await LoadDetailAsync(db, id, cancellationToken));
+        await transaction.CommitAsync(cancellationToken);
+
+        return Results.Ok(await LoadDetailAsync(db, id, MetricsScope(currentUser), cancellationToken));
     }
 
     /// <summary>
@@ -359,7 +424,7 @@ public static class QuestionBankEndpoints
         if (item is null) return NotFound();
         if (!CanRead(currentUser, item.CompanyId)) return Results.Forbid();
 
-        var metrics = await QuestionBankMetrics.ComputeAsync(db, [id], cancellationToken);
+        var metrics = await QuestionBankMetrics.ComputeAsync(db, [id], MetricsScope(currentUser), cancellationToken);
         return Results.Ok(metrics[id]);
     }
 
@@ -378,6 +443,7 @@ public static class QuestionBankEndpoints
         var variations = await ProjectListAsync(
             db,
             db.QuestionBankItems.Where(i => i.ParentQuestionBankItemId == id).OrderBy(i => i.CreatedAt),
+            MetricsScope(currentUser),
             cancellationToken);
 
         return Results.Ok(new QuestionBankVariationsResponse(id, variations));
@@ -436,7 +502,8 @@ public static class QuestionBankEndpoints
         var newId = Write(db, prepared!, actingUserId.Value, parentId: parent.Id);
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Json(await LoadDetailAsync(db, newId, cancellationToken), statusCode: 201);
+        return Results.Json(
+            await LoadDetailAsync(db, newId, MetricsScope(currentUser), cancellationToken), statusCode: 201);
     }
 
     // ------------------------------------------------------------------
@@ -453,6 +520,7 @@ public static class QuestionBankEndpoints
     {
         var currentUser = principal.GetCurrentUser();
         if (!Roles.Admin.Contains(currentUser.Role)) return Results.Forbid();
+        if (ForeignCompanyFilter(currentUser, companyId)) return Results.Forbid();
 
         var categories = await CategoryCountsAsync(ReadableScope(db, currentUser, companyId), cancellationToken);
         return Results.Ok(new QuestionBankCategoriesResponse(categories));
@@ -494,6 +562,7 @@ public static class QuestionBankEndpoints
     {
         var currentUser = principal.GetCurrentUser();
         if (!Roles.Admin.Contains(currentUser.Role)) return Results.Forbid();
+        if (ForeignCompanyFilter(currentUser, companyId)) return Results.Forbid();
 
         var scope = ReadableScope(db, currentUser, companyId);
 
@@ -526,7 +595,7 @@ public static class QuestionBankEndpoints
         // Derived, like every other number on this surface. The stored response_rate column
         // is a published snapshot; reporting it here would let the corpus average drift away
         // from the per-item numbers the same page shows.
-        var metrics = await QuestionBankMetrics.ComputeAsync(db, scopedIds, cancellationToken);
+        var metrics = await QuestionBankMetrics.ComputeAsync(db, scopedIds, MetricsScope(currentUser), cancellationToken);
         var used = metrics.Values.Where(m => m.TimesAsked > 0).ToList();
 
         return Results.Ok(new QuestionBankAnalyticsResponse(
@@ -565,12 +634,13 @@ public static class QuestionBankEndpoints
     {
         var currentUser = principal.GetCurrentUser();
         if (!Roles.Admin.Contains(currentUser.Role)) return Results.Forbid();
+        if (ForeignCompanyFilter(currentUser, companyId)) return Results.Forbid();
 
         var scope = ReadableScope(db, currentUser, companyId);
         if (includeRetired != true) scope = scope.Where(i => i.IsActive);
         if (!string.IsNullOrWhiteSpace(category)) scope = scope.Where(i => i.Category == category);
 
-        var items = await ProjectEffectivenessAsync(db, scope, cancellationToken);
+        var items = await ProjectEffectivenessAsync(db, scope, MetricsScope(currentUser), cancellationToken);
         var floor = Math.Max(0, minimumTimesAsked ?? 0);
 
         var ranked = items
@@ -614,6 +684,7 @@ public static class QuestionBankEndpoints
     {
         var currentUser = principal.GetCurrentUser();
         if (!Roles.Admin.Contains(currentUser.Role)) return Results.Forbid();
+        if (ForeignCompanyFilter(currentUser, request?.CompanyId)) return Results.Forbid();
 
         var scope = WritableScope(db, currentUser, request?.CompanyId);
         if (request?.ItemIds is { Count: > 0 } requested)
@@ -633,7 +704,8 @@ public static class QuestionBankEndpoints
         }
 
         var items = await scope.ToListAsync(cancellationToken);
-        var metrics = await QuestionBankMetrics.ComputeAsync(db, items.Select(i => i.Id).ToList(), cancellationToken);
+        var metrics = await QuestionBankMetrics.ComputeAsync(
+            db, items.Select(i => i.Id).ToList(), MetricsScope(currentUser), cancellationToken);
 
         var measuredAt = DateTimeOffset.UtcNow;
         var refreshed = 0;
@@ -684,6 +756,7 @@ public static class QuestionBankEndpoints
     {
         var currentUser = principal.GetCurrentUser();
         if (!Roles.Admin.Contains(currentUser.Role)) return Results.Forbid();
+        if (ForeignCompanyFilter(currentUser, companyId)) return Results.Forbid();
 
         var scope = ReadableScope(db, currentUser, companyId);
         if (itemId.HasValue) scope = scope.Where(i => i.Id == itemId.Value);
@@ -696,16 +769,25 @@ public static class QuestionBankEndpoints
         if (items.Count == 0) return Results.Ok(new QuestionBankUsageResponse([]));
 
         var ids = items.Select(i => i.Id).ToList();
+        var metricsScope = MetricsScope(currentUser);
+
+        // The tenant predicate goes on the SURVEY, and it is the whole difference between
+        // this route and a cross-tenant disclosure. Scoping only the bank item is not enough:
+        // a global item is readable by every tenant on purpose, so without this a caller asks
+        // "where is this global question used" and is answered with another company's survey
+        // titles, statuses and dates -- for every global item at once when no itemId is given.
         var usages = await db.Questions
             .Where(q => q.SourceQuestionBankItemId != null && ids.Contains(q.SourceQuestionBankItemId.Value))
-            .Join(db.Surveys, q => q.SurveyId, s => s.Id, (q, s) => new
+            .Join(db.Surveys, q => q.SurveyId, s => s.Id, (q, s) => new { Question = q, Survey = s })
+            .Where(x => metricsScope == null || x.Survey.CompanyId == metricsScope)
+            .Select(x => new
             {
-                ItemId = q.SourceQuestionBankItemId!.Value,
-                QuestionId = q.Id,
-                SurveyId = s.Id,
-                Title = s.TitleEn ?? s.TitleEs,
-                s.Status,
-                s.CreatedAt,
+                ItemId = x.Question.SourceQuestionBankItemId!.Value,
+                QuestionId = x.Question.Id,
+                SurveyId = x.Survey.Id,
+                Title = x.Survey.TitleEn ?? x.Survey.TitleEs,
+                x.Survey.Status,
+                x.Survey.CreatedAt,
             })
             .ToListAsync(cancellationToken);
 
@@ -799,6 +881,9 @@ public static class QuestionBankEndpoints
             }
         }
 
+        var unknownCompany = await UnknownCompanyAsync(db, rows.Select(r => r?.CompanyId), cancellationToken);
+        if (unknownCompany is not null) return unknownCompany;
+
         var actingUserId = await ActingUserResolver.ResolveIdAsync(currentUser, db, cancellationToken);
         if (actingUserId is null) return ActingUserRequired();
 
@@ -818,18 +903,27 @@ public static class QuestionBankEndpoints
 
         var skipped = new List<int>();
         var written = new List<Guid>();
-        var seenInBatch = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenInBatch = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var (index, item) in prepared)
         {
             if (deduplicate)
             {
-                var key = $"{item.CompanyId}|{item.Type}|{item.Category}|{item.Text}";
+                // The two halves of the duplicate check have to agree about case, or the same
+                // file behaves differently depending on how it is split: "Trust" and "trust"
+                // in ONE file collapsed to a single row while the same two texts imported in
+                // separate runs both landed. The text is compared case-insensitively in both
+                // halves -- it is a sentence a human typed -- and the scope keys (company,
+                // type, category) case-sensitively in both, matching how they are stored and
+                // how every filter on this surface matches them.
+                var lowered = item.Text.ToLowerInvariant();
+                var key = $"{item.CompanyId}|{item.Type}|{item.Category}|{lowered}";
                 var alreadyStored = await db.QuestionBankItems.AnyAsync(
                     i => i.CompanyId == item.CompanyId
                          && i.Type == item.Type
                          && i.Category == item.Category
-                         && (i.TextEn == item.Text || i.TextEs == item.Text),
+                         && ((i.TextEn != null && i.TextEn.ToLower() == lowered)
+                             || (i.TextEs != null && i.TextEs.ToLower() == lowered)),
                     cancellationToken);
 
                 // Within the batch as well as against the table: a file listing the same
@@ -848,7 +942,10 @@ public static class QuestionBankEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         var items = await ProjectListAsync(
-            db, db.QuestionBankItems.Where(i => written.Contains(i.Id)).OrderBy(i => i.Category), cancellationToken);
+            db,
+            db.QuestionBankItems.Where(i => written.Contains(i.Id)).OrderBy(i => i.Category),
+            MetricsScope(currentUser),
+            cancellationToken);
 
         return Results.Json(
             new QuestionBankWriteResultResponse(written.Count, skipped, items),
@@ -970,6 +1067,18 @@ public static class QuestionBankEndpoints
         var (options, optionError) = NormaliseOptions(request.Options, request.Type);
         if (optionError is not null) return (null, optionError);
 
+        var lengthError = LengthError(
+            text,
+            category,
+            request.Subcategory?.Trim(),
+            request.Industry?.Trim(),
+            request.CompanySize?.Trim(),
+            request.ScaleLabelMin?.Trim(),
+            request.ScaleLabelMax?.Trim(),
+            request.Tags,
+            options);
+        if (lengthError is not null) return (null, lengthError);
+
         return (new PreparedItem(
             request.CompanyId,
             text,
@@ -1059,6 +1168,92 @@ public static class QuestionBankEndpoints
         {
             db.QuestionBankItemTags.Add(new QuestionBankItemTag { QuestionBankItemId = id, Tag = tag! });
         }
+    }
+
+    /// <summary>
+    /// The column widths, checked before the insert rather than discovered by it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every string below lands in a <c>varchar</c>, so without this a caller who pastes a
+    /// paragraph into a 500-character column gets a 500 with an opaque message. That is bad
+    /// on a create and destructive on an update: the option and tag rows are deleted before
+    /// the replacements are written, so the failure used to leave the item with neither.
+    /// </para>
+    /// <para>
+    /// The numbers are the configurations' own (<c>QuestionBankItemConfiguration</c>,
+    /// <c>...TagConfiguration</c>, <c>...OptionConfiguration</c>) and must move with them.
+    /// Type is absent on purpose — it is already validated against
+    /// <see cref="QuestionTypes.ForSurvey"/>, whose longest member is far inside its column.
+    /// </para>
+    /// </remarks>
+    private static string? LengthError(
+        string text,
+        string category,
+        string? subcategory,
+        string? industry,
+        string? companySize,
+        string? scaleLabelMin,
+        string? scaleLabelMax,
+        IReadOnlyList<string>? tags,
+        IReadOnlyList<QuestionBankOptionDto> options)
+    {
+        (string Field, string? Value, int Max)[] fields =
+        [
+            ("Text", text, 500),
+            ("Category", category, 100),
+            ("Subcategory", subcategory, 100),
+            ("Industry", industry, 100),
+            ("CompanySize", companySize, 50),
+            ("ScaleLabelMin", scaleLabelMin, 200),
+            ("ScaleLabelMax", scaleLabelMax, 200),
+        ];
+
+        foreach (var (field, value, max) in fields)
+        {
+            if (value is not null && value.Length > max)
+            {
+                return $"{field} must be at most {max} characters";
+            }
+        }
+
+        foreach (var tag in tags ?? [])
+        {
+            if (tag?.Trim().Length > 50) return "Each tag must be at most 50 characters";
+        }
+
+        foreach (var option in options)
+        {
+            if (option.Value.Length > 500) return "Each option value must be at most 500 characters";
+            if (option.Label?.Length > 500) return "Each option label must be at most 500 characters";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Refuses a <c>CompanyId</c> that names no company, with a 400 instead of the 500 the
+    /// foreign key would produce.
+    /// </summary>
+    /// <remarks>
+    /// The same reason <c>SurveyEndpoints</c> pre-loads the company on its own create path:
+    /// an unknown CompanyId would otherwise surface as an opaque 500 from the foreign key
+    /// instead of a message naming the id. One query for the whole batch, and it runs after
+    /// the authorization loop so an unauthorised caller learns nothing about which company
+    /// ids exist.
+    /// </remarks>
+    private static async Task<IResult?> UnknownCompanyAsync(
+        ClimateProjectDbContext db, IEnumerable<Guid?> companyIds, CancellationToken cancellationToken)
+    {
+        var ids = companyIds.Where(c => c.HasValue).Select(c => c!.Value).Distinct().ToList();
+        if (ids.Count == 0) return null;
+
+        var known = await db.Companies.Where(c => ids.Contains(c.Id)).Select(c => c.Id).ToListAsync(cancellationToken);
+        var unknown = ids.Except(known).ToList();
+
+        return unknown.Count == 0
+            ? null
+            : BadRequest($"CompanyId does not name a company: {string.Join(", ", unknown)}");
     }
 
     /// <summary>
@@ -1162,39 +1357,91 @@ public static class QuestionBankEndpoints
     // Shared read plumbing
     // ------------------------------------------------------------------
 
+    /// <summary>
+    /// The list shape, with <c>UsageCount</c>, <c>ResponseRate</c> and <c>LastUsedAt</c>
+    /// DERIVED rather than read from the row.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the route the admin <c>/question-bank</c> page is built on, and it used to
+    /// project the stored snapshot columns — so the one surface that claimed never to serve a
+    /// stale number served it on its main list and its detail, reporting zero for a question
+    /// three people had just answered while <c>/{id}/metrics</c> reported three. The stored
+    /// columns keep their job (a published snapshot for consumers reading the table directly)
+    /// and no read route reports them.
+    /// </para>
+    /// <para>
+    /// <c>InsightScore</c> is the exception and stays the stored value: nothing derives it
+    /// yet. It is the AI-scored number #111 will produce, so there is no COUNT to replace it
+    /// with, and reporting a zero it does not have would be its own lie.
+    /// </para>
+    /// </remarks>
     private static async Task<List<QuestionBankListItem>> ProjectListAsync(
-        ClimateProjectDbContext db, IQueryable<QuestionBankItem> query, CancellationToken cancellationToken)
-        => await query
-            .Select(i => new QuestionBankListItem(
+        ClimateProjectDbContext db,
+        IQueryable<QuestionBankItem> query,
+        Guid? metricsScope,
+        CancellationToken cancellationToken)
+    {
+        var rows = await query
+            .Select(i => new
+            {
                 i.Id,
                 i.CompanyId,
-                i.Language == ContentLanguages.Spanish ? i.TextEs : i.TextEn,
+                Text = i.Language == ContentLanguages.Spanish ? i.TextEs : i.TextEn,
                 i.Language,
                 i.Type,
                 i.Category,
                 i.Subcategory,
                 i.Industry,
                 i.CompanySize,
-                i.UsageCount,
-                i.ResponseRate,
                 i.InsightScore,
-                i.LastUsedAt,
                 i.IsActive,
                 i.IsAiGenerated,
                 i.Version,
                 i.ParentQuestionBankItemId,
-                db.QuestionBankItemTags.Where(t => t.QuestionBankItemId == i.Id)
-                    .OrderBy(t => t.Tag).Select(t => t.Tag).ToList()))
+                Tags = db.QuestionBankItemTags.Where(t => t.QuestionBankItemId == i.Id)
+                    .OrderBy(t => t.Tag).Select(t => t.Tag).ToList(),
+            })
             .ToListAsync(cancellationToken);
 
+        var metrics = await QuestionBankMetrics.ComputeAsync(
+            db, rows.Select(r => r.Id).ToList(), metricsScope, cancellationToken);
+
+        return rows
+            .Select(r => new QuestionBankListItem(
+                r.Id,
+                r.CompanyId,
+                r.Text,
+                r.Language,
+                r.Type,
+                r.Category,
+                r.Subcategory,
+                r.Industry,
+                r.CompanySize,
+                metrics[r.Id].QuestionsCreated,
+                metrics[r.Id].ResponseRate,
+                r.InsightScore,
+                metrics[r.Id].LastUsedAt,
+                r.IsActive,
+                r.IsAiGenerated,
+                r.Version,
+                r.ParentQuestionBankItemId,
+                r.Tags))
+            .ToList();
+    }
+
     private static async Task<List<QuestionBankEffectivenessItem>> ProjectEffectivenessAsync(
-        ClimateProjectDbContext db, IQueryable<QuestionBankItem> query, CancellationToken cancellationToken)
+        ClimateProjectDbContext db,
+        IQueryable<QuestionBankItem> query,
+        Guid? metricsScope,
+        CancellationToken cancellationToken)
     {
         var rows = await query
             .Select(i => new { i.Id, i.TextEn, i.TextEs, i.Language, i.Category, i.Subcategory, i.IsActive })
             .ToListAsync(cancellationToken);
 
-        var metrics = await QuestionBankMetrics.ComputeAsync(db, rows.Select(r => r.Id).ToList(), cancellationToken);
+        var metrics = await QuestionBankMetrics.ComputeAsync(
+            db, rows.Select(r => r.Id).ToList(), metricsScope, cancellationToken);
 
         return rows
             .Select(r => new QuestionBankEffectivenessItem(
@@ -1208,11 +1455,16 @@ public static class QuestionBankEndpoints
             .ToList();
     }
 
+    /// <summary>
+    /// The detail shape. Derived numbers for the same reason <see cref="ProjectListAsync"/>
+    /// serves them: these two routes are the admin page.
+    /// </summary>
     private static async Task<QuestionBankItemDetail> LoadDetailAsync(
-        ClimateProjectDbContext db, Guid id, CancellationToken cancellationToken)
+        ClimateProjectDbContext db, Guid id, Guid? metricsScope, CancellationToken cancellationToken)
     {
         var i = await db.QuestionBankItems.AsNoTracking().FirstAsync(x => x.Id == id, cancellationToken);
         var isSpanish = i.Language == ContentLanguages.Spanish;
+        var metrics = (await QuestionBankMetrics.ComputeAsync(db, [id], metricsScope, cancellationToken))[id];
 
         var options = await db.QuestionBankItemOptions.Where(o => o.QuestionBankItemId == id)
             .OrderBy(o => o.Order)
@@ -1236,10 +1488,10 @@ public static class QuestionBankEndpoints
             isSpanish ? i.ScaleLabelMaxEs : i.ScaleLabelMaxEn,
             i.Industry,
             i.CompanySize,
-            i.UsageCount,
-            i.ResponseRate,
+            metrics.QuestionsCreated,
+            metrics.ResponseRate,
             i.InsightScore,
-            i.LastUsedAt,
+            metrics.LastUsedAt,
             i.IsActive,
             i.IsAiGenerated,
             i.Version,

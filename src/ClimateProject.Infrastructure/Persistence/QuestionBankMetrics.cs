@@ -31,8 +31,19 @@ namespace ClimateProject.Infrastructure.Persistence;
 /// and one route writes them: <c>POST /admin/question-bank/effectiveness-measurement</c>,
 /// which is an admin action over an admin-sized batch. They are a published SNAPSHOT for
 /// consumers that read the table directly (exports, and #111 when the AI work lands), never
-/// the source of truth -- every read route below reports the derived value, so a stale
-/// snapshot cannot be served as a live number.
+/// the source of truth -- every read route on the surface reports the value computed here,
+/// including the list and the detail, so a stale snapshot cannot be served as a live number.
+/// That was claimed before it was true: <c>ProjectListAsync</c> and <c>LoadDetailAsync</c>
+/// projected the stored columns, which meant the two routes the admin page is built on were
+/// the two serving the snapshot. They now overlay the derived numbers like everything else.
+/// </para>
+/// <para>
+/// <b>Scoped to one tenant's surveys, always.</b> A global bank row (<c>company_id</c> null)
+/// is readable by every tenant by design, so an unscoped COUNT over <c>questions</c> hands
+/// company B the number of completed responses company A collected -- and
+/// <c>/usage-tracking</c> hands over A's survey titles with it. <paramref name="viewerCompanyId"/>
+/// is therefore not optional decoration: it is the tenant boundary, and only a SuperAdmin
+/// (who may read every tenant already) passes null.
 /// </para>
 /// <para>
 /// <b>Provenance is the join.</b> <c>questions.source_question_bank_item_id</c> is what
@@ -49,9 +60,15 @@ public static class QuestionBankMetrics
     /// back as zeroes rather than missing -- an author comparing candidates needs to see
     /// that a question has never been asked, and an absent key reads as an error).
     /// </summary>
+    /// <param name="viewerCompanyId">
+    /// The only tenant whose surveys may be counted. <c>null</c> means every tenant and is
+    /// for a SuperAdmin alone -- see the remarks: a global row is readable by everyone, so
+    /// counting it unscoped reports one tenant's response volume to another.
+    /// </param>
     public static async Task<Dictionary<Guid, QuestionBankMetricsDto>> ComputeAsync(
         ClimateProjectDbContext db,
         IReadOnlyCollection<Guid> itemIds,
+        Guid? viewerCompanyId,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(db);
@@ -65,11 +82,16 @@ public static class QuestionBankMetrics
 
         var ids = itemIds.ToList();
 
-        // Every copy of every requested item, with the survey it was copied into.
+        // Every copy of every requested item, with the survey it was copied into -- and
+        // never a survey the caller's tenant does not own. The predicate belongs on the
+        // JOINED survey rather than on the bank item: it is the item that is global, and the
+        // usage of a global item is exactly what must not cross the boundary.
         var copies = await db.Questions
             .Where(q => q.SourceQuestionBankItemId != null && ids.Contains(q.SourceQuestionBankItemId.Value))
-            .Join(db.Surveys, q => q.SurveyId, s => s.Id, (q, s) => new QuestionCopy(
-                q.SourceQuestionBankItemId!.Value, q.Id, q.SurveyId, s.CreatedAt))
+            .Join(db.Surveys, q => q.SurveyId, s => s.Id, (q, s) => new { Question = q, Survey = s })
+            .Where(x => viewerCompanyId == null || x.Survey.CompanyId == viewerCompanyId)
+            .Select(x => new QuestionCopy(
+                x.Question.SourceQuestionBankItemId!.Value, x.Question.Id, x.Question.SurveyId, x.Survey.CreatedAt))
             .ToListAsync(cancellationToken);
 
         if (copies.Count == 0)
