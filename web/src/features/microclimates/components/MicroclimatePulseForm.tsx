@@ -395,6 +395,14 @@ function toPageError(err: unknown): PageError {
  * description of the request, not a promise about the server, and the copy says
  * exactly that much.
  *
+ * That statement stays exactly as true on the invitation route, and it is worth being
+ * precise about why. `/microclimate-invitations/:token` does hold a per-person token —
+ * but it is never attached to the SUBMISSION. It travels on the separate ladder calls,
+ * which for an anonymous session the server refuses to record past `opened`
+ * (`MicroclimateInvitationStatuses.AnonymityCeiling`). So the sentence below describes
+ * the request that carries the answers, and the invitation page's own landing card
+ * carries the fuller version — what is recorded about the person, before they start.
+ *
  * ## Submitting is unchanged, and there is no receipt to build
  *
  * `POST /microclimates/{id}/responses` returns an empty 201 and individual responses
