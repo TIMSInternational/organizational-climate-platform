@@ -107,7 +107,13 @@ public class MicroclimateInvitationEndpointsTests : IAsyncLifetime
         bool anonymous = true,
         string status = MicroclimateStatuses.Active,
         DateTimeOffset? endTime = null)
-        => await _harness.WithDbAsync(async db =>
+    {
+        // `microclimates.created_by` is a real foreign key into `users`. Guid.Empty parses,
+        // reads like an "unknown author" sentinel, and is refused by the database -- which is
+        // the honest behaviour and the reason the author is a seeded row here.
+        var author = await SeedEmployeeAsync(companyId);
+
+        return await _harness.WithDbAsync(async db =>
         {
             var now = DateTimeOffset.UtcNow;
             var microclimate = new Microclimate
@@ -119,7 +125,7 @@ public class MicroclimateInvitationEndpointsTests : IAsyncLifetime
                 DescriptionEs = "Cómo se siente el equipo",
                 Language = "both",
                 CompanyId = companyId,
-                CreatedBy = Guid.Empty,
+                CreatedBy = author,
                 Status = status,
                 TargetParticipantCount = 10,
             };
@@ -132,6 +138,7 @@ public class MicroclimateInvitationEndpointsTests : IAsyncLifetime
             await db.SaveChangesAsync();
             return microclimate.Id;
         });
+    }
 
     private async Task<Guid> InviteAsync(HttpClient admin, Guid microclimateId, Guid userId)
     {
@@ -618,7 +625,12 @@ public class MicroclimateInvitationEndpointsTests : IAsyncLifetime
     public async Task An_invitation_expires_no_later_than_the_session_it_opens()
     {
         var admin = await AdminAAsync();
-        var endTime = DateTimeOffset.UtcNow.AddHours(2);
+
+        // Five days, deliberately longer than the one-day ask below. A pulse whose whole
+        // window is two hours clamps EVERY request, including the short one, so the
+        // "a shorter ask is honoured" half would pass against a handler that ignored
+        // ExpiresInDays entirely -- the exact vacuous pass this branch has to avoid.
+        var endTime = DateTimeOffset.UtcNow.AddDays(5);
         var microclimateId = await SeedMicroclimateAsync(_companyAId, endTime: endTime);
 
         // A ludicrous ask, clamped to the session's own deadline.
@@ -633,7 +645,9 @@ public class MicroclimateInvitationEndpointsTests : IAsyncLifetime
             $"/microclimates/{microclimateId}/invitations",
             new CreateMicroclimateInvitationsRequest(UserIds: [await SeedEmployeeAsync(_companyAId)], ExpiresInDays: 1));
         var nearId = Assert.Single((await near.Content.ReadFromJsonAsync<MicroclimateInvitationBatchResult>())!.InvitationIds);
-        Assert.True((await RowAsync(nearId)).ExpiresAt < endTime);
+        var nearExpiry = (await RowAsync(nearId)).ExpiresAt;
+        Assert.True(nearExpiry < endTime, $"{nearExpiry:o} should be inside the session's {endTime:o}");
+        Assert.Equal(DateTimeOffset.UtcNow.AddDays(1), nearExpiry, TimeSpan.FromMinutes(1));
 
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync(
             $"/microclimates/{microclimateId}/invitations",
