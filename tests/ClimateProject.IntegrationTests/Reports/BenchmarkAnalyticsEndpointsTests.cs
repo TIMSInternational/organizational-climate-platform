@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
@@ -1001,5 +1002,675 @@ public class BenchmarkAnalyticsEndpointsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync($"/admin/benchmarks/{one.Id}/validate", null)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/admin/benchmarks/import", new ImportBenchmarksRequest(
             [Item("Attempt", _companyAId, category)], null))).StatusCode);
+    }
+
+    // ===================================================================================
+    // metrics that cannot be serialised, and payloads that are not shaped like payloads
+    //
+    // Everything below goes through raw JSON rather than the typed request records, and it
+    // has to: `1e400` and `null` are the whole subject, and neither can be expressed by
+    // constructing an ImportBenchmarkMetricItem -- System.Text.Json refuses to WRITE an
+    // infinity, which is the second half of the bug being pinned.
+    // ===================================================================================
+
+    private static StringContent Json(string body) => new(body, Encoding.UTF8, "application/json");
+
+    /// <summary>
+    /// A metric percentile of <c>1e400</c> is refused, and the benchmark stays readable.
+    ///
+    /// <para>
+    /// <c>1e400</c> is well-formed JSON and <c>System.Text.Json</c> deserialises it to
+    /// <c>+Infinity</c> without complaint. Postgres stores an infinity in a
+    /// <c>double precision</c> column happily. Serialising one back out throws, so the row
+    /// would make this benchmark's detail route -- and every comparison naming it, and every
+    /// sector containing it -- answer 500 from then on. There is no <c>MapDelete</c> anywhere
+    /// on benchmarks or their metrics, so nothing in the product could undo it.
+    /// </para>
+    /// <para>
+    /// The second half of the test is the half that matters. Asserting only the 400 would pass
+    /// on a version that returned 400 for the wrong reason; reading the benchmark back
+    /// afterwards asserts what the 400 was FOR, which is that this benchmark can still be
+    /// read. <c>value</c> was guarded before this and <c>percentile</c> was not, and one
+    /// unguarded double is not a smaller version of the same bug -- it is the whole bug.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Adding_a_metric_whose_percentile_is_not_a_finite_number_leaves_the_benchmark_readable()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var subject = await CreateAsync(client, "Poisonable", _companyAId, category: $"nonfinite-{Guid.NewGuid():N}");
+        await AddMetricAsync(client, subject.Id, "engagement_score", 70, "percent", percentile: 50, sampleSize: 100);
+
+        var response = await client.PostAsync(
+            $"/admin/benchmarks/{subject.Id}/metrics",
+            Json("""{"metricName":"absence_rate","value":3.2,"unit":"percent","percentile":1e400,"sampleSize":100}"""));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var detail = await client.GetAsync($"/admin/benchmarks/{subject.Id}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        var body = (await detail.Content.ReadFromJsonAsync<BenchmarkDetail>())!;
+        Assert.Equal("engagement_score", Assert.Single(body.Metrics).MetricName);
+    }
+
+    /// <summary>The same for the value, through the same door, which guarded neither.</summary>
+    [Fact]
+    public async Task Adding_a_metric_whose_value_is_not_a_finite_number_leaves_the_benchmark_readable()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var subject = await CreateAsync(client, "Poisonable by value", _companyAId, category: $"nonfinite-{Guid.NewGuid():N}");
+
+        var response = await client.PostAsync(
+            $"/admin/benchmarks/{subject.Id}/metrics",
+            Json("""{"metricName":"absence_rate","value":-1e400,"unit":"percent","percentile":null,"sampleSize":100}"""));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/admin/benchmarks/{subject.Id}")).StatusCode);
+    }
+
+    /// <summary>
+    /// <c>POST /{id}/metrics</c> validates the fields the import path validates.
+    ///
+    /// <para>
+    /// It used to validate nothing at all: an over-long metric name reached Postgres as a
+    /// 22001 and surfaced as a 500. The two doors run one shared rule now, so this asserts the
+    /// door that was never asserted.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("""{"metricName":"","value":1,"unit":"percent","percentile":null,"sampleSize":null}""")]
+    [InlineData("""{"metricName":"engagement_score","value":1,"unit":"","percentile":null,"sampleSize":null}""")]
+    public async Task Adding_a_metric_without_a_name_or_a_unit_is_a_bad_request(string body)
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var subject = await CreateAsync(client, "Strict", _companyAId, category: $"metric-strict-{Guid.NewGuid():N}");
+
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            (await client.PostAsync($"/admin/benchmarks/{subject.Id}/metrics", Json(body))).StatusCode);
+    }
+
+    /// <summary>An over-long metric name is answered before the insert, not by Postgres.</summary>
+    [Fact]
+    public async Task Adding_a_metric_with_an_over_long_name_is_a_bad_request_not_a_server_error()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var subject = await CreateAsync(client, "Long metric", _companyAId, category: $"metric-long-{Guid.NewGuid():N}");
+
+        var response = await client.PostAsJsonAsync(
+            $"/admin/benchmarks/{subject.Id}/metrics",
+            new AddBenchmarkMetricRequest(new string('m', 201), 1, "percent", null, null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>The import path refuses the same infinity, naming the row it came from.</summary>
+    [Fact]
+    public async Task Import_refuses_a_metric_percentile_that_is_not_a_finite_number()
+    {
+        var client = await ClientAsync(Roles.SuperAdmin, _companyADomain);
+        var category = $"import-nonfinite-{Guid.NewGuid():N}";
+
+        var response = await client.PostAsync("/admin/benchmarks/import", Json($$"""
+            {"benchmarks":[
+              {"name":"Fine row","description":"d","type":"industry","category":"{{category}}","source":"vendor file",
+               "industry":"manufacturing","companySize":null,"region":null,"companyId":null,
+               "metrics":[{"metricName":"engagement_score","value":70,"unit":"percent","percentile":50,"sampleSize":100}]},
+              {"name":"Poisoned row","description":"d","type":"industry","category":"{{category}}","source":"vendor file",
+               "industry":"manufacturing","companySize":null,"region":null,"companyId":null,
+               "metrics":[{"metricName":"absence_rate","value":3.2,"unit":"percent","percentile":1e400,"sampleSize":100}]}
+            ]}
+            """));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(1, body.RootElement.GetProperty("errors")[0].GetProperty("index").GetInt32());
+
+        // All or nothing: the good row above it did not land either.
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.Empty(await db.Benchmarks.AsNoTracking().Where(b => b.Category == category).ToListAsync());
+    }
+
+    /// <summary>
+    /// A null row and a null metric are bad requests naming the row, not 500s.
+    ///
+    /// <para>
+    /// <c>[null]</c> and <c>"metrics":[null]</c> are both well-formed JSON that bind to null
+    /// elements, and the handler dereferenced them. This is the same class of failure the
+    /// over-long-field check was written to close: a malformed vendor file has to come back as
+    /// a bad request naming the row, because "An unexpected error occurred" tells the person
+    /// holding the file that the product is broken rather than that row two needs looking at.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Import_answers_a_null_row_with_a_bad_request_naming_it()
+    {
+        var client = await ClientAsync(Roles.SuperAdmin, _companyADomain);
+        var category = $"import-nullrow-{Guid.NewGuid():N}";
+
+        var response = await client.PostAsync("/admin/benchmarks/import", Json($$"""
+            {"benchmarks":[
+              {"name":"Fine row","description":"d","type":"industry","category":"{{category}}","source":"vendor file",
+               "industry":"manufacturing","companySize":null,"region":null,"companyId":null,
+               "metrics":[{"metricName":"engagement_score","value":70,"unit":"percent","percentile":50,"sampleSize":100}]},
+              null
+            ]}
+            """));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(1, body.RootElement.GetProperty("errors")[0].GetProperty("index").GetInt32());
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.Empty(await db.Benchmarks.AsNoTracking().Where(b => b.Category == category).ToListAsync());
+    }
+
+    /// <summary>The same one level down, inside a row's metric list.</summary>
+    [Fact]
+    public async Task Import_answers_a_null_metric_with_a_bad_request_naming_its_row()
+    {
+        var client = await ClientAsync(Roles.SuperAdmin, _companyADomain);
+        var category = $"import-nullmetric-{Guid.NewGuid():N}";
+
+        var response = await client.PostAsync("/admin/benchmarks/import", Json($$"""
+            {"benchmarks":[
+              {"name":"Row with a hole in it","description":"d","type":"industry","category":"{{category}}","source":"vendor file",
+               "industry":"manufacturing","companySize":null,"region":null,"companyId":null,
+               "metrics":[null]}
+            ]}
+            """));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(0, body.RootElement.GetProperty("errors")[0].GetProperty("index").GetInt32());
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.Empty(await db.Benchmarks.AsNoTracking().Where(b => b.Category == category).ToListAsync());
+    }
+
+    /// <summary>
+    /// EVERY over-long field is answered at the door, not only <c>Name</c>.
+    ///
+    /// <para>
+    /// There are eight length checks and one of them was asserted. Relaxing any of the other
+    /// seven by a factor of a thousand left the whole suite green, which means seven of the
+    /// eight limits were decoration: a vendor file with a long <c>description</c> or a long
+    /// <c>region</c> would have reached Postgres and come back as a 500 exactly as before the
+    /// check was written. One case per field, each named by the message so a relaxed limit
+    /// fails on its own field rather than on a neighbour's.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("Name", 201)]
+    [InlineData("Description", 2001)]
+    [InlineData("Type", 21)]
+    [InlineData("Category", 101)]
+    [InlineData("Source", 201)]
+    [InlineData("Industry", 101)]
+    [InlineData("CompanySize", 51)]
+    [InlineData("Region", 101)]
+    public async Task Import_answers_any_over_long_field_with_a_bad_request_naming_the_field(string field, int length)
+    {
+        var client = await ClientAsync(Roles.SuperAdmin, _companyADomain);
+        var category = $"long-{field}-{Guid.NewGuid():N}";
+        var tooLong = new string('x', length);
+
+        // One item, well-formed apart from the single field under test. `category` doubles as
+        // this test's isolation token, so the Category case gets its own long value and the
+        // "nothing was written" assertion below then matches on the name instead.
+        var name = $"Long {field} {Guid.NewGuid():N}";
+        var item = new ImportBenchmarkItem(
+            Name: field == "Name" ? tooLong : name,
+            Description: field == "Description" ? tooLong : "d",
+            Type: field == "Type" ? tooLong : "industry",
+            Category: field == "Category" ? tooLong : category,
+            Source: field == "Source" ? tooLong : "vendor file",
+            Industry: field == "Industry" ? tooLong : "manufacturing",
+            CompanySize: field == "CompanySize" ? tooLong : null,
+            Region: field == "Region" ? tooLong : null,
+            CompanyId: null,
+            Metrics: [new ImportBenchmarkMetricItem("engagement_score", 70, "percent", 50, 100)]);
+
+        var response = await client.PostAsJsonAsync(
+            "/admin/benchmarks/import", new ImportBenchmarksRequest([item], ValidateOnly: null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var error = body.RootElement.GetProperty("errors")[0];
+        Assert.Equal(0, error.GetProperty("index").GetInt32());
+        // The message names the field. Without this the theory would pass on any 400 at all --
+        // including one produced by a different field's limit -- and seven of the eight cases
+        // would assert nothing about their own field.
+        Assert.StartsWith(field, error.GetProperty("message").GetString());
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.Empty(await db.Benchmarks.AsNoTracking().Where(b => b.Name == name || b.Category == category).ToListAsync());
+    }
+
+    // ===================================================================================
+    // the quality rule's two counting rules
+    // ===================================================================================
+
+    /// <summary>
+    /// One metric recorded at three percentiles is ONE metric, not three.
+    ///
+    /// <para>
+    /// This is the ordinary shape of a real benchmark -- a single measure reported at p25, p50
+    /// and p75 -- and it is the fixture that separates the rule the code runs from the rule the
+    /// code publishes. <c>FullMetricCount</c>'s own summary, the decision record's table and
+    /// #90 all say DISTINCT metrics; the handler counted readings, so this benchmark scored
+    /// 3/3 on a component worth a fifth of the total and came out at 86.7, <c>verified</c>.
+    /// Counting distinct names it is 1/3, 66.7, <c>needs-review</c> -- a badge a client sees,
+    /// moved by which of two readings of one sentence the code took.
+    /// </para>
+    /// <para>
+    /// The other two per-reading components are asserted in the same breath, because the fix
+    /// is not "count distinct everywhere": every stored reading still has to state its own
+    /// sample and its own percentile, and scoring those per distinct name would let one
+    /// answered reading cover for two unanswered ones.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Validate_counts_one_metric_at_three_percentiles_as_one_metric()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var subject = await CreateAsync(
+            client, "Three percentiles of one thing", _companyAId,
+            category: $"validate-distinct-{Guid.NewGuid():N}", industry: "manufacturing");
+
+        foreach (var (percentile, value) in new[] { (25d, 61d), (50d, 70d), (75d, 79d) })
+        {
+            await AddMetricAsync(client, subject.Id, "engagement_score", value, "percent", percentile: percentile, sampleSize: 500);
+        }
+
+        var result = (await (await client.PostAsync($"/admin/benchmarks/{subject.Id}/validate", null))
+            .Content.ReadFromJsonAsync<BenchmarkValidationResult>())!;
+
+        var metrics = result.Components.Single(c => c.Name == BenchmarkQuality.ComponentMetrics);
+        Assert.Equal(1, metrics.Satisfied);
+        Assert.Equal(BenchmarkQuality.FullMetricCount, metrics.Total);
+
+        // Per READING, and there are three of them.
+        Assert.Equal(3, result.Components.Single(c => c.Name == BenchmarkQuality.ComponentSampleSize).Satisfied);
+        Assert.Equal(3, result.Components.Single(c => c.Name == BenchmarkQuality.ComponentSampleSize).Total);
+        Assert.Equal(3, result.Components.Single(c => c.Name == BenchmarkQuality.ComponentDistribution).Satisfied);
+
+        // 0.10 + 0.25 + 0.15 + 0.066667 + 0.10, times 100. Counting readings it is 86.7.
+        Assert.Equal(66.7d, result.QualityScore, 10);
+        Assert.Equal(BenchmarkValidationStatuses.NeedsReview, result.Status);
+        Assert.Equal(result.QualityScore, Math.Round(result.Components.Sum(c => c.WeightedScore) * 100d, 1), 10);
+    }
+
+    /// <summary>
+    /// The reportable-sample floor is thirty, and twenty-nine is below it.
+    ///
+    /// <para>
+    /// The floor was asserted only against an absent sample size, so any floor at all -- one
+    /// included -- satisfied the suite, and "a benchmark built from six responses ends up
+    /// labelled verified" was the failure the constant exists to prevent. Both sides of the
+    /// boundary are exercised: twenty-nine counts for nothing, thirty counts.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Validate_does_not_credit_a_sample_below_the_reportable_floor()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var token = Guid.NewGuid().ToString("N");
+
+        var thin = await CreateAsync(client, "Twenty-nine", _companyAId, category: $"floor-under-{token}", industry: "manufacturing");
+        await AddMetricAsync(client, thin.Id, "engagement_score", 74, "percent", percentile: 60, sampleSize: BenchmarkQuality.ReportableSampleSize - 1);
+        await AddMetricAsync(client, thin.Id, "absence_rate", 3.2, "percent", percentile: 40, sampleSize: BenchmarkQuality.ReportableSampleSize - 1);
+
+        var under = (await (await client.PostAsync($"/admin/benchmarks/{thin.Id}/validate", null))
+            .Content.ReadFromJsonAsync<BenchmarkValidationResult>())!;
+
+        Assert.Equal(0, under.Components.Single(c => c.Name == BenchmarkQuality.ComponentSampleSize).Satisfied);
+        // 0.20 + 0 + 0.15 + 0.066667 + 0.10. With the floor at one it is 76.7 and `verified`.
+        Assert.Equal(51.7d, under.QualityScore, 10);
+        Assert.Equal(BenchmarkValidationStatuses.NeedsReview, under.Status);
+
+        var atFloor = await CreateAsync(client, "Exactly thirty", _companyAId, category: $"floor-at-{token}", industry: "manufacturing");
+        await AddMetricAsync(client, atFloor.Id, "engagement_score", 74, "percent", percentile: 60, sampleSize: BenchmarkQuality.ReportableSampleSize);
+        await AddMetricAsync(client, atFloor.Id, "absence_rate", 3.2, "percent", percentile: 40, sampleSize: BenchmarkQuality.ReportableSampleSize);
+
+        var at = (await (await client.PostAsync($"/admin/benchmarks/{atFloor.Id}/validate", null))
+            .Content.ReadFromJsonAsync<BenchmarkValidationResult>())!;
+
+        Assert.Equal(2, at.Components.Single(c => c.Name == BenchmarkQuality.ComponentSampleSize).Satisfied);
+        Assert.Equal(76.7d, at.QualityScore, 10);
+    }
+
+    // ===================================================================================
+    // the sector, past the one fixture shape every earlier test used
+    // ===================================================================================
+
+    /// <summary>
+    /// A sector is made of industry benchmarks. A company's own internal targets are not in it.
+    ///
+    /// <para>
+    /// The decision record is explicit that <c>type</c> must not be defaulted from the subject,
+    /// because an internal benchmark's sector is made of industry rows. Applying no filter at
+    /// all had the same effect the record forbids, one door along: this company's own internal
+    /// target -- a number it set for itself -- was averaged into the industry mean it is being
+    /// measured against, dragging the sector toward the company and shrinking the gap the
+    /// reading exists to show.
+    /// </para>
+    /// <para>
+    /// Every fixture in this suite before now used <c>type: "industry"</c>, so no test could
+    /// see it. The internal row here reads 10 against a sector of 70s: if it were counted the
+    /// mean would be 50.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Industry_does_not_average_an_internal_benchmark_into_the_sector()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var token = Guid.NewGuid().ToString("N");
+        var industry = $"typed-{token}";
+        var category = $"typed-{token}";
+
+        var superAdmin = await ClientAsync(Roles.SuperAdmin, _companyADomain);
+        foreach (var value in new[] { 60d, 80d })
+        {
+            var peer = await CreateAsync(superAdmin, $"Sector {value}", null, category: category, type: BenchmarkTypes.Industry, industry: industry);
+            await AddMetricAsync(superAdmin, peer.Id, "engagement_score", value, "percent", sampleSize: 100);
+        }
+
+        var ourTarget = await CreateAsync(client, "Our internal target", _companyAId, category: category, type: BenchmarkTypes.Internal, industry: industry);
+        await AddMetricAsync(client, ourTarget.Id, "engagement_score", 10, "percent", sampleSize: 100);
+
+        var result = (await (await client.GetAsync($"/admin/benchmarks/industry?industry={industry}&category={category}"))
+            .Content.ReadFromJsonAsync<BenchmarkIndustryResult>())!;
+
+        Assert.Equal(BenchmarkTypes.Industry, result.Filters.Type);
+        Assert.Equal(2, result.BenchmarkCount);
+        var metric = Assert.Single(result.Metrics);
+        Assert.Equal(2, metric.BenchmarkCount);
+        Assert.Equal(70d, metric.Mean, 10);
+        Assert.Equal(60d, metric.Min, 10);
+        Assert.Equal(80d, metric.Max, 10);
+
+        // And it is still reachable when asked for by name -- the default narrows, it does not
+        // hide the rows.
+        var internalOnly = (await (await client.GetAsync(
+                $"/admin/benchmarks/industry?industry={industry}&category={category}&type={BenchmarkTypes.Internal}"))
+            .Content.ReadFromJsonAsync<BenchmarkIndustryResult>())!;
+        Assert.Equal(1, internalOnly.BenchmarkCount);
+        Assert.Equal(10d, Assert.Single(internalOnly.Metrics).Mean, 10);
+    }
+
+    /// <summary>
+    /// A deactivated benchmark is not in the sector.
+    ///
+    /// <para>
+    /// <b>Named exception.</b> This test writes <c>is_active = false</c> through the DbContext
+    /// because no route deactivates a benchmark -- the decision record says so and left the
+    /// behaviour untested for that reason. Leaving it untested is what let the filter be
+    /// deleted outright with the suite still green, and the behaviour is real: the sector query
+    /// carries <c>Where(b =&gt; b.IsActive)</c> and every other benchmark route respects the
+    /// column. The row this writes is one the product's own default already produces -- the
+    /// column exists, is indexed, and is written <c>true</c> on every create -- so this is a
+    /// state the schema holds rather than a payload invented to satisfy an assertion.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Industry_leaves_a_deactivated_benchmark_out_of_the_sector()
+    {
+        var client = await ClientAsync(Roles.SuperAdmin, _companyADomain);
+        var token = Guid.NewGuid().ToString("N");
+        var industry = $"inactive-{token}";
+        var category = $"inactive-{token}";
+
+        foreach (var value in new[] { 60d, 80d })
+        {
+            var peer = await CreateAsync(client, $"Active {value}", null, category: category, industry: industry);
+            await AddMetricAsync(client, peer.Id, "engagement_score", value, "percent", sampleSize: 100);
+        }
+
+        var retired = await CreateAsync(client, "Retired", null, category: category, industry: industry);
+        await AddMetricAsync(client, retired.Id, "engagement_score", 10, "percent", sampleSize: 100);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var row = await db.Benchmarks.FirstAsync(b => b.Id == retired.Id);
+            row.IsActive = false;
+            await db.SaveChangesAsync();
+        }
+
+        var result = (await (await client.GetAsync($"/admin/benchmarks/industry?industry={industry}&category={category}"))
+            .Content.ReadFromJsonAsync<BenchmarkIndustryResult>())!;
+
+        Assert.Equal(2, result.BenchmarkCount);
+        // 70, not 50. The retired row's 10 is not in the mean.
+        Assert.Equal(70d, Assert.Single(result.Metrics).Mean, 10);
+    }
+
+    /// <summary>
+    /// The median of an even-sized sector is the mean of the middle two, not the upper one.
+    ///
+    /// <para>
+    /// Every sector fixture in this suite had an odd number of peers, so the even branch was
+    /// never taken. The values are chosen so all three candidate answers differ: the median is
+    /// 25, the upper middle is 30, and the mean is 40.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Industry_takes_the_median_of_an_even_sector_from_both_middle_values()
+    {
+        var client = await ClientAsync(Roles.SuperAdmin, _companyADomain);
+        var token = Guid.NewGuid().ToString("N");
+        var industry = $"even-{token}";
+        var category = $"even-{token}";
+
+        foreach (var value in new[] { 10d, 20d, 30d, 100d })
+        {
+            var peer = await CreateAsync(client, $"Even {value}", null, category: category, industry: industry);
+            await AddMetricAsync(client, peer.Id, "engagement_score", value, "percent", sampleSize: 100);
+        }
+
+        var result = (await (await client.GetAsync($"/admin/benchmarks/industry?industry={industry}&category={category}"))
+            .Content.ReadFromJsonAsync<BenchmarkIndustryResult>())!;
+
+        var metric = Assert.Single(result.Metrics);
+        Assert.Equal(4, metric.BenchmarkCount);
+        Assert.Equal(25d, metric.Median, 10);
+        Assert.Equal(40d, metric.Mean, 10);
+    }
+
+    /// <summary>
+    /// A peer reading exactly what the subject reads is not below it.
+    ///
+    /// <para>
+    /// The percentile rank is documented as "the share of peers reading STRICTLY below the
+    /// subject". The boundary -- a peer equal to the subject -- had no fixture, so counting
+    /// equals as below was indistinguishable. With peers at 60, 75 and 80 and a subject at 75,
+    /// strictly-below is one in three; counting the equal peer makes it two in three, which
+    /// moves a company from the bottom third of its sector to the top.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Industry_does_not_count_a_peer_equal_to_the_subject_as_below_it()
+    {
+        var client = await ClientAsync(Roles.SuperAdmin, _companyADomain);
+        var token = Guid.NewGuid().ToString("N");
+        var industry = $"tie-{token}";
+        var category = $"tie-{token}";
+
+        foreach (var value in new[] { 60d, 75d, 80d })
+        {
+            var peer = await CreateAsync(client, $"Tie {value}", null, category: category, industry: industry);
+            await AddMetricAsync(client, peer.Id, "engagement_score", value, "percent", sampleSize: 100);
+        }
+
+        var subject = await CreateAsync(client, "Us, level with a peer", _companyAId, category: category, industry: industry);
+        await AddMetricAsync(client, subject.Id, "engagement_score", 75, "percent", sampleSize: 100);
+
+        var result = (await (await client.GetAsync($"/admin/benchmarks/industry?benchmarkId={subject.Id}"))
+            .Content.ReadFromJsonAsync<BenchmarkIndustryResult>())!;
+
+        var metric = Assert.Single(result.Metrics);
+        Assert.Equal(3, metric.BenchmarkCount);
+        Assert.Equal(100d / 3d, metric.SubjectPercentileRank!.Value, 10);
+    }
+
+    /// <summary>
+    /// One benchmark contributes one sample, not one per reading.
+    ///
+    /// <para>
+    /// The mean beside it already counts a benchmark once however many times it records a
+    /// metric -- that is the "one benchmark, one vote" rule the route's own remarks state --
+    /// while <c>totalSampleSize</c> summed every reading. A benchmark reporting one metric at
+    /// p25, p50 and p75 off a survey of a hundred people therefore claimed three hundred
+    /// people, and <c>totalSampleSize</c> is the field a reader uses to decide whether to
+    /// believe the mean.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Industry_counts_one_benchmarks_sample_once_however_many_readings_it_has()
+    {
+        var client = await ClientAsync(Roles.SuperAdmin, _companyADomain);
+        var token = Guid.NewGuid().ToString("N");
+        var industry = $"sample-{token}";
+        var category = $"sample-{token}";
+
+        var peer = await CreateAsync(client, "One survey, three percentiles", null, category: category, industry: industry);
+        foreach (var (percentile, value) in new[] { (25d, 70d), (50d, 75d), (75d, 80d) })
+        {
+            await AddMetricAsync(client, peer.Id, "engagement_score", value, "percent", percentile: percentile, sampleSize: 100);
+        }
+
+        var result = (await (await client.GetAsync($"/admin/benchmarks/industry?industry={industry}&category={category}"))
+            .Content.ReadFromJsonAsync<BenchmarkIndustryResult>())!;
+
+        var metric = Assert.Single(result.Metrics);
+        Assert.Equal(1, metric.BenchmarkCount);
+        Assert.Equal(75d, metric.Mean, 10);
+        // A hundred people were asked, once. Summing the readings claims three hundred.
+        Assert.Equal(100, metric.TotalSampleSize);
+    }
+
+    /// <summary>
+    /// A cleared industry box is an absent filter, not an empty one, and the subject still
+    /// supplies the default.
+    ///
+    /// <para>
+    /// <c>?benchmarkId=X&amp;industry=</c> is what a form submits for a field the user cleared.
+    /// The empty string is not null, so it beat the <c>??=</c> default and the subject's own
+    /// industry was never applied; it was then blanked to null, so no filter was applied
+    /// either. The sector silently widened to every industry at the exact moment a user tried
+    /// to narrow it. The peer here is in a different industry: if it is counted, the sector is
+    /// two.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Industry_treats_a_cleared_industry_box_as_absent_and_still_defaults_from_the_subject()
+    {
+        var client = await ClientAsync(Roles.SuperAdmin, _companyADomain);
+        var token = Guid.NewGuid().ToString("N");
+        var ours = $"ours-{token}";
+        var theirs = $"theirs-{token}";
+        var category = $"cleared-{token}";
+
+        var peer = await CreateAsync(client, "Same industry peer", null, category: category, industry: ours);
+        await AddMetricAsync(client, peer.Id, "engagement_score", 60, "percent", sampleSize: 100);
+        var stranger = await CreateAsync(client, "Another industry entirely", null, category: category, industry: theirs);
+        await AddMetricAsync(client, stranger.Id, "engagement_score", 90, "percent", sampleSize: 100);
+
+        var subject = await CreateAsync(client, "Us", _companyAId, category: category, industry: ours);
+        await AddMetricAsync(client, subject.Id, "engagement_score", 70, "percent", sampleSize: 100);
+
+        var result = (await (await client.GetAsync($"/admin/benchmarks/industry?benchmarkId={subject.Id}&industry="))
+            .Content.ReadFromJsonAsync<BenchmarkIndustryResult>())!;
+
+        Assert.Equal(ours, result.Filters.Industry);
+        Assert.Equal(1, result.BenchmarkCount);
+        Assert.Equal(60d, Assert.Single(result.Metrics).Mean, 10);
+    }
+
+    /// <summary>
+    /// The first company in its sector still gets its own reading back.
+    ///
+    /// <para>
+    /// With no peers every aggregate is empty, and the response was
+    /// <c>benchmarkCount: 0, metrics: []</c> -- identical to the response for a benchmark that
+    /// records nothing at all. "You are the first company here, and this is your number" and
+    /// "there is no data" are different things to put in front of a client, and every tenant
+    /// begins in the first state, the demo one included.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Industry_returns_the_subjects_own_reading_when_it_has_no_peers()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var token = Guid.NewGuid().ToString("N");
+
+        var subject = await CreateAsync(client, "First in our sector", _companyAId, category: $"lonely-{token}", industry: $"lonely-{token}");
+        await AddMetricAsync(client, subject.Id, "engagement_score", 72, "percent", percentile: 50, sampleSize: 240);
+
+        var result = (await (await client.GetAsync($"/admin/benchmarks/industry?benchmarkId={subject.Id}"))
+            .Content.ReadFromJsonAsync<BenchmarkIndustryResult>())!;
+
+        Assert.Equal(0, result.BenchmarkCount);
+        Assert.Empty(result.Metrics);
+        Assert.Equal(subject.Id, result.Subject!.Id);
+
+        var own = Assert.Single(result.SubjectMetrics);
+        Assert.Equal("engagement_score", own.MetricName);
+        Assert.Equal(72d, own.Value, 10);
+        Assert.Equal("percent", own.Unit);
+        Assert.Equal(240, own.SampleSize);
+    }
+
+    /// <summary>
+    /// A category summary reports how many of its benchmarks are active and what they average.
+    ///
+    /// <para>
+    /// <c>averageQualityScore</c> is the field the whole quality rule exists to feed -- the
+    /// benchmarks page charts it per category, and before #90 it was a chart of a constant
+    /// zero. Neither it nor <c>activeCount</c> was asserted anywhere, so both could return any
+    /// number at all. The fixture is built through <c>import</c>, which scores on the way in,
+    /// and the two scores are chosen to make the mean exact and unlike the row count: a fully
+    /// described, well-sampled three-metric row is 100, and the same row with neither sample
+    /// sizes nor percentiles is 60, so the average is 80.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Categories_reports_the_active_count_and_the_average_quality_score()
+    {
+        var client = await ClientAsync(Roles.SuperAdmin, _companyADomain);
+        var category = $"cat-quality-{Guid.NewGuid():N}";
+
+        ImportBenchmarkItem Row(string name, double? percentile, int? sampleSize) => new(
+            name, "d", BenchmarkTypes.Industry, category, "vendor file",
+            "manufacturing", "201-500", "Costa Rica", null,
+            [
+                new ImportBenchmarkMetricItem("engagement_score", 70, "percent", percentile, sampleSize),
+                new ImportBenchmarkMetricItem("absence_rate", 3.4, "percent", percentile, sampleSize),
+                new ImportBenchmarkMetricItem("turnover_rate", 11.2, "percent", percentile, sampleSize),
+            ]);
+
+        var imported = await client.PostAsJsonAsync("/admin/benchmarks/import", new ImportBenchmarksRequest(
+            [Row("Fully described", 50, 900), Row("Unsourced and unplaced", null, null)], ValidateOnly: null));
+        Assert.Equal(HttpStatusCode.Created, imported.StatusCode);
+
+        var scores = (await imported.Content.ReadFromJsonAsync<ImportBenchmarksResult>())!.Created;
+        Assert.Equal(100d, scores.Single(s => s.Name == "Fully described").QualityScore, 10);
+        Assert.Equal(60d, scores.Single(s => s.Name == "Unsourced and unplaced").QualityScore, 10);
+
+        var summary = (await (await client.GetAsync("/admin/benchmarks/categories"))
+            .Content.ReadFromJsonAsync<List<BenchmarkCategorySummary>>())!
+            .Single(s => s.Category == category);
+
+        Assert.Equal(2, summary.BenchmarkCount);
+        Assert.Equal(2, summary.ActiveCount);
+        Assert.Equal(2, summary.GlobalCount);
+        // 80, which is neither of the two scores and not the number of rows.
+        Assert.Equal(80d, summary.AverageQualityScore, 10);
     }
 }
