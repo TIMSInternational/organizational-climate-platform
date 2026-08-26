@@ -328,6 +328,76 @@ describe('MicroclimateInvitationPage', () => {
   })
 
   /**
+   * The one case where an invitee DOES need an account, named before they hit it.
+   *
+   * A non-anonymous session refuses an unauthenticated respondent -- `GET /microclimates/{id}`
+   * serves an anonymous caller only when the session is both anonymous and active. Without the
+   * note, pressing the button produces "this microclimate is not currently available": a
+   * sentence about the session, for a problem about the browser, which reads as the link being
+   * broken.
+   */
+  it('warns an identified session\'s invitee that they will be asked to sign in', async () => {
+    serve({
+      resolve: () =>
+        new Response(
+          JSON.stringify(
+            invitation({
+              anonymity: {
+                anonymous: false,
+                highestRecordableState: 'completed',
+                suppressedStates: [],
+                guarantee: 'The full lifecycle is recorded.',
+              },
+            }),
+          ),
+          { status: 200 },
+        ),
+    })
+    renderPage()
+
+    await screen.findByRole('heading', { name: 'Pulso semanal' })
+    expect(
+      screen.getByText(/se le pedirá iniciar sesión en su cuenta antes de responder/),
+    ).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Iniciar sesión' }).getAttribute('href')).toBe('/login')
+
+    // The button is still offered: the server is the authority on what this browser may do,
+    // and a session in another tab is a real case.
+    expect(screen.getByRole('button', { name: 'Participar' })).toBeTruthy()
+  })
+
+  /**
+   * And it is advice for the people who need it, not a banner everyone reads. Two ways it must
+   * stay quiet: a signed-in reader, and an anonymous session where no account is wanted at all.
+   */
+  it.each([
+    ['a reader who already holds a session', true, false],
+    ['an anonymous session, where no account is needed', false, true],
+  ])('says nothing about signing in for %s', async (_what, signedIn, anonymous) => {
+    if (signedIn) setToken('a-real-looking-jwt')
+    serve({
+      resolve: () =>
+        new Response(
+          JSON.stringify(
+            invitation({
+              anonymity: {
+                anonymous,
+                highestRecordableState: anonymous ? 'opened' : 'completed',
+                suppressedStates: anonymous ? ['started', 'completed'] : [],
+                guarantee: 'x',
+              },
+            }),
+          ),
+          { status: 200 },
+        ),
+    })
+    renderPage()
+
+    await screen.findByRole('heading', { name: 'Pulso semanal' })
+    expect(screen.queryByRole('link', { name: 'Iniciar sesión' })).toBeNull()
+  })
+
+  /**
    * A token can outlive the session it opens: an invitation minted at 09:00 for a pulse that
    * ends at 17:00 still resolves at 16:59 and is useless at 17:01. The lifecycle job closes
    * the session; the invitation row knows nothing about it. Saying so on the card beats

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { EyeOff, Info, ShieldCheck } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { RespondCaption, RespondReading, RespondShell } from '../../../components/layout'
 import { Alert, AlertDescription, AlertTitle, Button } from '../../../components/ui'
 import { calendarDay } from '../../../lib/calendarDay'
+import { getToken } from '../../../auth/token'
 import MicroclimatePulseForm from '../components/MicroclimatePulseForm'
 import { microclimateInvitationFailureCopy } from '../microclimateLinkFailure'
 import {
@@ -203,12 +204,25 @@ type InvitationState =
  * session. Showing only one of them would leave whichever respondent the other applied to
  * with a wrong deadline.
  *
- * There is no "you will need to sign in" note here, unlike the survey invitation card. A
- * microclimate that is not anonymous requires authentication to answer, and this page cannot
- * offer a useful next step for that case: the survey card can point at `/login` because a
- * survey invitee is a user of the product, whereas a non-anonymous microclimate's invitee is
- * being asked to answer inside a session their own account already reaches. The form itself
- * reports the 401 in the words the server used.
+ * ## The sign-in note, and why it is not optional
+ *
+ * A microclimate that is not anonymous refuses an unauthenticated respondent — `GET
+ * /microclimates/{id}` serves an anonymous caller only when the session is BOTH anonymous and
+ * active, and `POST .../responses` answers 401 on the same rule. Without the note below, an
+ * invitee following a mail link to an identified session presses the button and meets "this
+ * microclimate is not currently available": a sentence about the session's availability, for
+ * a problem that is about their browser. They would reasonably read it as the link being
+ * broken and stop.
+ *
+ * So the case is named before it happens, with the one action that resolves it. The button is
+ * still offered — the server is the authority on what this browser may do, and a session in
+ * another tab is a real case — and the note is drawn only when there is no stored token at
+ * all, so a signed-in reader is not told to sign in.
+ *
+ * An earlier version of this file argued the note did not belong here because a microclimate
+ * invitee is answering inside a session their account already reaches. That was backwards: it
+ * is precisely BECAUSE they have an account that /login is a useful destination, and the
+ * survey card had it right.
  */
 function Landing({
   detail,
@@ -225,6 +239,11 @@ function Landing({
   // at 09:31. Saying so here beats letting them press the button and meet a bare "not
   // currently available".
   const closed = detail.microclimateStatus !== 'active'
+
+  // The other half of the same check, and the same server rule: an identified session refuses
+  // an anonymous caller outright. `getToken() === null` and not "is the token valid" — this
+  // page has no way to ask, and the note is advice rather than a gate.
+  const willNeedSignIn = !detail.anonymity.anonymous && getToken() === null
 
   return (
     <>
@@ -252,6 +271,12 @@ function Landing({
       </section>
 
       <AnonymityNotice anonymous={detail.anonymity.anonymous} />
+
+      {willNeedSignIn && !closed && (
+        <p className="max-w-prose text-sm text-fg-secondary">
+          {t('invitationSignInNote')} <Link to="/login">{t('invitationSignIn')}</Link>
+        </p>
+      )}
 
       {closed ? (
         <Alert variant="warning" role="status">

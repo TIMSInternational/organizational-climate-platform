@@ -1251,7 +1251,9 @@
     "invitationExpiredBody": "Invitations stop working after a set time so that old links cannot be reused. Ask whoever invited you to send a new one.",
     "invitationAlreadyCompletedTitle": "You have already taken part",
     "invitationAlreadyCompletedBody": "Your answers were received. There is nothing else to do, and answering again would not replace them.",
-    "invitationLoadFailedTitle": "This invitation could not be opened"
+    "invitationLoadFailedTitle": "This invitation could not be opened",
+    "invitationSignInNote": "This session records who takes part, so you will be asked to sign in to your account before you can answer.",
+    "invitationSignIn": "Sign in"
   },
   "navigation": {
     "sectionAdministration": "Administration",
