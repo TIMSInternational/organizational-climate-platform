@@ -58,7 +58,13 @@ export function TabsContent({
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
-      className={cn('outline-hidden', className)}
+      // #83: `outline-hidden` used to be here. Radix gives the panel
+      // `tabIndex={0}`, so Tab from the trigger lands on it — and this deleted
+      // the only thing that said so. The app has ONE focus indicator (the
+      // `:focus-visible` outline in `index.css`), and a primitive does not get
+      // to opt out of it; `keyboardOperable.test.tsx` now sweeps for the v4
+      // spelling as well as the v3 one.
+      className={className}
       {...props}
     />
   )

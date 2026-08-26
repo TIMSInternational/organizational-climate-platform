@@ -29,7 +29,10 @@ export function PopoverContent({
         sideOffset={sideOffset}
         className={cn(
           'z-50 w-72 rounded-xl border border-line-panel bg-surface-panel p-card',
-          'text-fg-primary shadow-md outline-hidden',
+          // #83: `outline-hidden` was in this list. Radix moves focus to the
+          // panel when the popover opens, and killing the ring there means a
+          // keyboard user who opened it has no idea where they are.
+          'text-fg-primary shadow-md',
           'data-[state=open]:animate-scale-in',
           className,
         )}
