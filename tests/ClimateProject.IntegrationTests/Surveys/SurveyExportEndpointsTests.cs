@@ -189,14 +189,123 @@ public class SurveyExportEndpointsTests : IAsyncLifetime
         var direction = $"department:{_directionId}";
 
         Assert.Equal("false", SegmentMetric(rows, engineering, "is_suppressed"));
-        Assert.Equal("true", SegmentMetric(rows, direction, "is_suppressed"));
+        Assert.Equal("6", SegmentMetric(rows, engineering, "respondent_count"));
         Assert.Contains(rows, r => r.Section == SurveyExport.SegmentQuestionSection && r.Group == engineering);
+
+        // The withheld department contributes no row, in either section.
+        Assert.DoesNotContain(rows, r => r.Section == SurveyExport.SegmentSection && r.Group == direction);
         Assert.DoesNotContain(rows, r => r.Section == SurveyExport.SegmentQuestionSection && r.Group == direction);
 
-        // The PDF is stricter still: a withheld group is counted, never named.
+        // Counted, so a reader can tell a withheld group from an absent one.
+        var breakdown = rows.Where(r => r.Section == SurveyExport.BreakdownSection && r.Group == "department").ToList();
+        Assert.Equal("1", breakdown.Single(r => r.Metric == "suppressed_segment_count").Value);
+        Assert.Equal("3", breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value);
+
+        // And its NAME is in neither file. The department name reaches the aggregate on a
+        // suppressed segment -- SurveyAggregation keeps it -- so this is a property of the
+        // exporters, not of the data they are handed.
+        var csv = Encoding.UTF8.GetString(await client.GetByteArrayAsync($"/surveys/{survey.Id}/export/csv"));
+        Assert.Contains("Ingeniería", csv, StringComparison.Ordinal);
+        Assert.DoesNotContain("Dirección", csv, StringComparison.Ordinal);
+
         var pdf = Encoding.Latin1.GetString(await client.GetByteArrayAsync($"/surveys/{survey.Id}/export/pdf"));
         Assert.Contains(@"Ingenier\355a", pdf, StringComparison.Ordinal);
         Assert.DoesNotContain(@"Direcci\363n", pdf, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The demographic breakdown, through the real <c>response_demographics</c> jsonb column.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="SurveyResultsPrivacy"/> calls this the real disclosure surface, and it behaves
+    /// unlike the department path in the way that matters here: a demographic segment carries no
+    /// label, so its KEY is the value the respondent supplied. A withheld group would be named
+    /// by the group column itself -- <c>nationality:Venezolana</c> -- rather than by a field an
+    /// exporter could choose not to print.
+    ///
+    /// <para>
+    /// Neither export test file reached this branch before: both seeded departments only, so
+    /// every proof of the anonymity criterion landed on the path whose key is a GUID.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_demographic_group_below_the_floor_is_named_in_neither_file()
+    {
+        var survey = await SeedSurveyAsync(
+            completedResponses: 0,
+            byDemographic: [("nationality", "Costarricense", 6), ("nationality", "Venezolana", 2)]);
+
+        var client = await AdminAAsync();
+        var rows = Rows(await client.GetByteArrayAsync($"/surveys/{survey.Id}/export/csv"));
+
+        Assert.Equal("false", Summary(rows, "is_suppressed"));
+        Assert.Equal("6", SegmentMetric(rows, "nationality:Costarricense", "respondent_count"));
+
+        Assert.DoesNotContain(rows, r => r.Group.Contains("Venezolana", StringComparison.Ordinal));
+
+        var breakdown = rows.Where(r => r.Section == SurveyExport.BreakdownSection && r.Group == "nationality").ToList();
+        Assert.Equal("1", breakdown.Single(r => r.Metric == "suppressed_segment_count").Value);
+        Assert.Equal("2", breakdown.Single(r => r.Metric == "suppressed_respondent_count").Value);
+
+        var csv = Encoding.UTF8.GetString(await client.GetByteArrayAsync($"/surveys/{survey.Id}/export/csv"));
+        Assert.Contains("Costarricense", csv, StringComparison.Ordinal);
+        Assert.DoesNotContain("Venezolana", csv, StringComparison.Ordinal);
+
+        var pdf = Encoding.Latin1.GetString(await client.GetByteArrayAsync($"/surveys/{survey.Id}/export/pdf"));
+        Assert.Contains("Costarricense", pdf, StringComparison.Ordinal);
+        Assert.DoesNotContain("Venezolana", pdf, StringComparison.Ordinal);
+    }
+
+    // ==================================================================
+    // The locale the reader asked for
+    // ==================================================================
+
+    /// <summary>
+    /// <c>?lang=</c> reaches the document, not just the handler signature.
+    /// </summary>
+    /// <remarks>
+    /// The web client sends <c>?lang=&lt;locale&gt;</c> on every PDF download
+    /// (<c>web/src/features/surveys/api/surveyExport.ts</c>) and asserts the URL it built. The
+    /// server end was untested: no integration test sent the parameter at all, and the unit
+    /// tests construct a <c>SurveyExportContext</c> directly, so they start downstream of the
+    /// wire that carries it. Dropping <c>lang</c> on the way into the loader left every suite
+    /// green while handing a Spanish admin an English document.
+    ///
+    /// <para>
+    /// This survey is bilingual, so nothing but the parameter decides the answer: with
+    /// <c>ContentLanguages.Both</c> there is no single content locale to fall back to and the
+    /// default is English.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_requested_locale_reaches_both_documents()
+    {
+        var survey = await SeedSurveyAsync(completedResponses: 6);
+        var client = await AdminAAsync();
+
+        var spanishRows = Rows(await client.GetByteArrayAsync($"/surveys/{survey.Id}/export/csv?lang=es"));
+        var englishRows = Rows(await client.GetByteArrayAsync($"/surveys/{survey.Id}/export/csv?lang=en"));
+
+        Assert.Equal(ContentLanguages.Spanish, Summary(spanishRows, "resolved_locale"));
+        Assert.Equal(ContentLanguages.English, Summary(englishRows, "resolved_locale"));
+
+        // The resolved title follows it, so this is the content and not only a label.
+        Assert.Equal("Clima Q3", Summary(spanishRows, "title"));
+        Assert.Equal("Q3 Climate", Summary(englishRows, "title"));
+
+        // And the PDF chrome, which is what an admin forwards to a director.
+        var spanishPdf = Encoding.Latin1.GetString(
+            await client.GetByteArrayAsync($"/surveys/{survey.Id}/export/pdf?lang=es"));
+        var englishPdf = Encoding.Latin1.GetString(
+            await client.GetByteArrayAsync($"/surveys/{survey.Id}/export/pdf?lang=en"));
+
+        Assert.Contains(@"Participaci\363n", spanishPdf, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"Participaci\363n", englishPdf, StringComparison.Ordinal);
+        Assert.Contains("Participation", englishPdf, StringComparison.Ordinal);
+
+        // The legacy route carries it too -- it is the one the old surface's links point at.
+        var legacy = Rows(await client.GetByteArrayAsync($"/surveys/{survey.Id}/export?format=csv&lang=es"));
+        Assert.Equal(ContentLanguages.Spanish, Summary(legacy, "resolved_locale"));
     }
 
     // ==================================================================
@@ -327,13 +436,21 @@ public class SurveyExportEndpointsTests : IAsyncLifetime
         Assert.True(bytes.Length > 8192, $"the fixture was too small to cross a buffer boundary: {bytes.Length} bytes");
         Assert.Equal("250", Summary(rows, "completed_count"));
 
-        // Twelve questions each with their own distribution row: the tail of the document, not
-        // the head, so a truncated response fails here.
         Assert.Equal(12, rows.Count(r => r.Section == SurveyExport.QuestionSection && r.Metric == "text"));
-        Assert.Equal(
-            SurveyExport.SummarySection,
-            rows[0].Section);
-        Assert.Equal("generated_at", rows.Last(r => r.Section == SurveyExport.SummarySection).Group);
+        Assert.Equal(SurveyExport.SummarySection, rows[0].Section);
+
+        // THE tail. The section order is summary, language, question, dimension, breakdown, so
+        // the last row written is the department breakdown's unsegmented count -- and with 250
+        // department-less responses it is 250, a value no earlier row carries.
+        //
+        // The assertions above are the head and the middle. A response truncated on a CRLF
+        // boundary anywhere after the question section leaves every remaining line well formed,
+        // so the parser succeeds and all of them pass: exactly the streamed-download failure
+        // this test is named for, invisible to the test that named it.
+        var last = rows[^1];
+        Assert.Equal(SurveyExport.BreakdownSection, last.Section);
+        Assert.Equal("unsegmented_respondent_count", last.Metric);
+        Assert.Equal("250", last.Value);
     }
 
     // ------------------------------------------------------------------
@@ -375,10 +492,16 @@ public class SurveyExportEndpointsTests : IAsyncLifetime
     /// path, and this fixture is about what the AGGREGATION does with a department that is
     /// already on the row.
     /// </param>
+    /// <param name="byDemographic">
+    /// Additional responses carrying a demographic answer, written to
+    /// <c>response_demographics</c> the way the submit path writes it -- the value
+    /// JSON-encoded, because the column is jsonb and the aggregation decodes it back.
+    /// </param>
     private async Task<SurveyDetail> SeedSurveyAsync(
         int completedResponses,
         int questionCount = 1,
-        IReadOnlyList<(Guid DepartmentId, int Count)>? byDepartment = null)
+        IReadOnlyList<(Guid DepartmentId, int Count)>? byDepartment = null,
+        IReadOnlyList<(string Field, string Value, int Count)>? byDemographic = null)
     {
         var client = await AdminAAsync();
         var survey = await SurveyTestHarness.CreateSurveyAsync(client, SurveyTestHarness.MinimalRequest(
@@ -415,10 +538,22 @@ public class SurveyExportEndpointsTests : IAsyncLifetime
             }
         }
 
+        foreach (var (field, value, count) in byDemographic ?? [])
+        {
+            for (var i = 0; i < count; i++)
+            {
+                await SeedResponseAsync(survey.Id, questionIds, null, (field, value));
+            }
+        }
+
         return survey;
     }
 
-    private Task SeedResponseAsync(Guid surveyId, IReadOnlyList<Guid> questionIds, Guid? departmentId)
+    private Task SeedResponseAsync(
+        Guid surveyId,
+        IReadOnlyList<Guid> questionIds,
+        Guid? departmentId,
+        (string Field, string Value)? demographic = null)
         => _harness.WithDbAsync(async db =>
         {
             var responseId = Guid.NewGuid();
@@ -450,6 +585,19 @@ public class SurveyExportEndpointsTests : IAsyncLifetime
                     QuestionId = questionId,
                     ResponseValue = JsonSerializer.Serialize("remote"),
                     ResponseText = null,
+                });
+            }
+
+            if (demographic is { } answered)
+            {
+                // Serialized exactly as SurveyResponseEndpoints stores it. The aggregation
+                // decodes the payload before grouping, so a bare string here would group on
+                // text no producer writes and would still pass -- the decoder tolerates it.
+                db.ResponseDemographics.Add(new ResponseDemographic
+                {
+                    ResponseId = responseId,
+                    Field = answered.Field,
+                    Value = JsonSerializer.Serialize(answered.Value),
                 });
             }
 

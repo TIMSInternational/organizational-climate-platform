@@ -55,6 +55,26 @@ like this fails in exactly one way — it emits something a reader cannot follow
 that checked "did we append the string we meant to" would go green on every one of those
 failures.
 
+Two structural numbers a reader depends on are measured back out of the file rather than
+trusted from the value that wrote them:
+
+- **`/Length` on every content stream**, checked against the actual byte distance between
+  `stream\n` and the `\nendstream` that closes it. It is how a reader finds the end of a
+  page's drawing operators, and one byte out renders a blank page in a file whose
+  cross-reference table is perfect.
+- **`/Info` is an indirect reference**, as ISO 32000-1:2008 §7.5.5 Table 15 requires
+  ("shall be an indirect reference"). It was written inline in the trailer at first. Most
+  viewers still render such a file — they read `/Info` only for a title bar — so the defect
+  is invisible until a strict parser or a PDF/A validator sees it, which for this product
+  means the first time a client feeds an export to an archiver.
+
+The width tables carry their own completeness gate. A WinAnsi code with no entry is charged
+the width of `?` — positive and plausible — while the viewer goes on drawing the glyph the
+code really names, so a test over the widths alone can only assert that they are positive,
+which is exactly what the omission satisfies. `PdfStandardFontMetrics.HasOwnWidth` exists to
+make that difference observable, and the sweep over the whole BMP fails on any character the
+encoder can emit but the tables cannot measure.
+
 Externally validated once during development by rendering a generated document through macOS
 CoreGraphics (`qlmanage -t`), which produced a correct thumbnail; that is a manual check, not
 a gate, because it is not available in CI.
