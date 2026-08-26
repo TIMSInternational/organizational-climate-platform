@@ -118,9 +118,15 @@ public static class MicroclimateInvitationStatuses
     /// <para>
     /// What this does NOT defend against, stated plainly rather than left implied: an
     /// anonymous microclimate with a single invitee is de-anonymised by its own response
-    /// count, and no per-invitation rule can fix that.
-    /// <c>MicroclimateRealtimeSettings.ParticipationThreshold</c> is where a minimum-audience
-    /// floor belongs, not here.
+    /// count, and no per-invitation rule can fix that. The minimum-audience floor is a
+    /// separate guard and it already exists -- <c>MicroclimateExportProjection</c> withholds
+    /// the whole export below <c>SurveyResultsPrivacy.MinimumRespondents</c> (5) and
+    /// individual words below <c>MinimumWordRespondents</c> (2).
+    /// <para>
+    /// Note it is NOT <c>MicroclimateRealtimeSettings.ParticipationThreshold</c>, which is a
+    /// stored column defaulting to 3 that no code path in this repository reads. Naming that
+    /// one here would send the next reader to a setting that enforces nothing.
+    /// </para>
     /// </para>
     /// </summary>
     public const string AnonymityCeiling = Opened;

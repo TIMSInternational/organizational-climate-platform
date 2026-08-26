@@ -106,9 +106,16 @@ Two properties, both load-bearing:
 **Not guaranteed, stated plainly rather than left implied:**
 
 1. **An anonymous microclimate with one invitee is de-anonymised by its own response
-   count**, and no per-invitation rule can fix that. The floor belongs to whatever publishes
-   the aggregate — `MicroclimateRealtimeSettings.ParticipationThreshold` is where such a
-   floor lives — not here.
+   count**, and no per-invitation rule can fix that. That floor is a separate guard and it
+   already exists: `MicroclimateExportProjection` withholds the whole export below
+   `SurveyResultsPrivacy.MinimumRespondents` (5) and individual words below
+   `MinimumWordRespondents` (2).
+
+   It is **not** `MicroclimateRealtimeSettings.ParticipationThreshold`. That is a stored
+   column defaulting to 3 that nothing in this repository reads — checked, not assumed. It
+   is named here only so the next reader does not go looking to it for a guarantee it does
+   not provide. Note also that the live-results route is *not* covered by the export's
+   floor, which is a gap outside this issue's scope and worth its own.
 2. **`opened_at` is still a fact about a named person.** It says they read their mail. It is
    kept because response-rate diagnosis is impossible without it ("nobody opened it" and
    "everybody opened it and nobody answered" are different problems with different fixes),
