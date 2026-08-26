@@ -285,6 +285,35 @@ public static class MicroclimateEndpoints
     /// </remarks>
     private const int MinEmojiOptions = 2;
 
+    /// <summary>
+    /// The refusal every route that writes a microclimate window sends back. One string so a
+    /// client cannot tell <c>POST /microclimates</c> apart from
+    /// <c>POST /microclimate-templates/{id}/use</c>, which has always refused this.
+    /// </summary>
+    internal const string WindowOutOfOrderMessage = "StartTime must be before EndTime";
+
+    /// <summary>
+    /// Refused because activating this would hand it straight to the lifecycle sweep.
+    /// Formatted with the deadline, because "already passed" is not actionable without it.
+    /// </summary>
+    internal static string WindowAlreadyOverMessage(DateTimeOffset endTime)
+        => $"Cannot activate a microclimate whose end time ({endTime:O}) has already passed. "
+           + "The lifecycle sweep would close it within minutes, and 'closed' is terminal. "
+           + "Give it an end time in the future first.";
+
+    /// <summary>
+    /// The refusal a respondent gets from a session that is not open. One constant because
+    /// <c>SubmitResponseAsync</c> now sends it from two places -- the gate on the way in, and
+    /// again after an optimistic-concurrency re-read -- and a respondent must not be able to
+    /// tell those apart: from where they are standing both mean "you answered after it ended".
+    /// </summary>
+    internal const string NotAcceptingResponsesMessage = "This microclimate is not currently accepting responses";
+
+    /// <summary>The refusal for editing the window of a session that is already over.</summary>
+    internal const string ClosedWindowEditMessage =
+        "This microclimate is closed, so its end time can no longer be changed. A closed microclimate "
+        + "cannot be reopened; run a new one instead.";
+
     private static async Task<IResult> CreateAsync(
         CreateMicroclimateRequest request,
         string? lang,
@@ -296,6 +325,23 @@ public static class MicroclimateEndpoints
         if (!Roles.Admin.Contains(currentUser.Role) || !CanAccessCompany(currentUser, request.CompanyId))
         {
             return Results.Forbid();
+        }
+
+        // The window is validated here for the same reason SurveyEndpoints validates
+        // StartDate/EndDate and MicroclimateTemplateEndpoints.UseAsync already validates this
+        // exact pair: a window whose end precedes its start describes no session at all. This
+        // route was the only one of the three that took it.
+        //
+        // It stopped being merely untidy when the lifecycle sweep landed. Before that a nonsense
+        // window was inert -- nothing on the server read StartTime or EndTime -- so a session
+        // created with `endTime` omitted (the field is non-nullable, so an absent one is
+        // 0001-01-01) or with the two transposed still ran normally once somebody activated it.
+        // Now the first tick after it is activated closes it, and `closed` has no outgoing edges:
+        // no route back to active, none back to draft, no duplicate route. A 400 here is the
+        // difference between a typo and an unrunnable microclimate.
+        if (request.StartTime >= request.EndTime)
+        {
+            return Results.Json(new { message = WindowOutOfOrderMessage }, statusCode: 400);
         }
 
         // The content language defaults to the company's own, so a single-language
@@ -643,7 +689,18 @@ public static class MicroclimateEndpoints
             publicFallbacks));
     }
 
-    private static async Task<IResult> UpdateAsync(
+    private static Task<IResult> UpdateAsync(
+        Guid id,
+        UpdateMicroclimateRequest request,
+        string? lang,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+        => WithConcurrencyRetryAsync(
+            db,
+            () => UpdateCoreAsync(id, request, lang, principal, db, cancellationToken));
+
+    private static async Task<IResult> UpdateCoreAsync(
         Guid id,
         UpdateMicroclimateRequest request,
         string? lang,
@@ -699,7 +756,29 @@ public static class MicroclimateEndpoints
             if (descriptionEs is not null) microclimate.DescriptionEs = descriptionEs;
         }
 
-        if (request.EndTime.HasValue) microclimate.Scheduling.EndTime = request.EndTime.Value;
+        if (request.EndTime.HasValue)
+        {
+            // A closed session's window is history. Refusing the edit is not pedantry: this is
+            // where an administrator racing the lifecycle sweep lands. They read a live session,
+            // typed a later deadline, and between their read and their write the sweep closed it
+            // on the deadline they were replacing. Applying the new end time there would answer
+            // 200 to a request that changed nothing anybody can act on -- `closed` has no
+            // outgoing edges, so the session they were extending can never run again -- and the
+            // admin would go on believing the extension took.
+            if (string.Equals(microclimate.Status, MicroclimateStatuses.Closed, StringComparison.Ordinal))
+            {
+                return Results.Json(new { message = ClosedWindowEditMessage }, statusCode: 409);
+            }
+
+            // Same rule as CreateAsync, on the other route that writes this column. Without it
+            // the window check on create is a formality: PUT could transpose the pair afterwards.
+            if (microclimate.Scheduling.StartTime >= request.EndTime.Value)
+            {
+                return Results.Json(new { message = WindowOutOfOrderMessage }, statusCode: 400);
+            }
+
+            microclimate.Scheduling.EndTime = request.EndTime.Value;
+        }
 
         if (!string.IsNullOrWhiteSpace(request.Status))
         {
@@ -737,6 +816,68 @@ public static class MicroclimateEndpoints
     /// by the translation gate on a legal transition.
     /// </remarks>
     private sealed record StatusChangeFailure(IResult Result, string Message);
+
+    /// <summary>
+    /// How many times a microclimate write re-reads and re-decides after losing an optimistic
+    /// concurrency check. Three, not twenty: unlike <c>SubmitResponseAsync</c> -- whose conflicts
+    /// come from respondents answering at once and are expected in bulk -- an administrative
+    /// write conflicts only with another administrator or with the lifecycle sweep, which touches
+    /// a given microclimate exactly once in its life.
+    /// </summary>
+    private const int MaxConcurrencyAttempts = 3;
+
+    /// <summary>
+    /// Runs an administrative write, and on a lost optimistic-concurrency check re-runs it from
+    /// a clean change tracker so the decision is made again against what is actually stored.
+    ///
+    /// <para><b>Why this is needed at all, and why it appeared with #376.</b>
+    /// <c>Microclimate</c> is the only entity in this schema with a concurrency token --
+    /// <c>MicroclimateConfiguration</c> maps a shadow <c>RowVersion</c> onto PostgreSQL's
+    /// <c>xmin</c> -- so every tracked write here carries <c>WHERE xmin = @asRead</c> and EF
+    /// throws <see cref="DbUpdateConcurrencyException"/> rather than clobbering a row somebody
+    /// else changed. That is the right behaviour and it was unreachable in practice while the
+    /// only other writers were people. <c>MicroclimateLifecycleJob</c> made it routine: it writes
+    /// <c>microclimates.status</c> with <c>ExecuteUpdateAsync</c>, which bypasses the change
+    /// tracker but still bumps <c>xmin</c>, on a five-minute timer, unattended.</para>
+    ///
+    /// <para><b>What it fixes.</b> The job's compare-and-swap covers one interleaving -- a
+    /// human's write landing before the sweep's UPDATE, where the sweep stands down. The mirror
+    /// image, the sweep committing between a human's read and their write, is the same window and
+    /// the exception was uncaught: <c>Program.cs</c>'s last-resort handler special-cases only a
+    /// unique-index violation, so an administrator extending a deadline seconds before it lapsed
+    /// got a bare <c>500</c> and no way to tell whether their edit had landed.</para>
+    ///
+    /// <para><b>Why re-run the whole handler rather than just re-save.</b> Reapplying the same
+    /// mutation to the re-read row is what <c>SubmitResponseAsync</c> does, and it is right there
+    /// because a response count is commutative. A status or a deadline is not: by the time the
+    /// sweep has closed a session, "extend it to Friday" and "activate it" have different correct
+    /// answers than they did a moment earlier, and both are refusals. Re-running the handler is
+    /// what makes the caller receive that refusal -- the transition map's 409, or the closed-window
+    /// 409 above -- instead of a 500 or, worse, a 200 that changed nothing.</para>
+    ///
+    /// <para>The last attempt is deliberately not caught: an exception there reaches the pipeline
+    /// handler, which answers 409. A write that loses three re-decisions in a row is contention no
+    /// retry count will fix, and a bounded loop is what keeps this from becoming one.</para>
+    /// </summary>
+    private static async Task<IResult> WithConcurrencyRetryAsync(
+        ClimateProjectDbContext db,
+        Func<Task<IResult>> attempt)
+    {
+        for (var i = 1; ; i++)
+        {
+            try
+            {
+                return await attempt();
+            }
+            catch (DbUpdateConcurrencyException) when (i < MaxConcurrencyAttempts)
+            {
+                // The failed entity is still tracked, and still carries the version that lost.
+                // Without this the next attempt re-reads nothing -- EF hands back the identical
+                // stale instance from the identity map -- and fails the same way for ever.
+                db.ChangeTracker.Clear();
+            }
+        }
+    }
 
     /// <summary>
     /// The whole lifecycle rule, in one place so <c>POST /activate</c>, <c>PUT /status</c>,
@@ -797,6 +938,28 @@ public static class MicroclimateEndpoints
         // abandoned draft away is a gate that blocks cleanup and protects no respondent.
         if (MicroclimateStatuses.IsPublish(microclimate.Status, target))
         {
+            // The window gate, alongside the translation gate and for the same kind of reason:
+            // this is the moment content becomes respondent-visible, and it is the last moment
+            // anyone can stop a session being published into a window that is already over.
+            //
+            // Before MicroclimateLifecycleJob existed, activating a session whose EndTime was in
+            // the past merely produced one that collected answers forever -- which is the defect
+            // #376 is about. Now it produces one the very next tick closes, terminally: `closed`
+            // has no outgoing edges, so nobody can reopen it, re-date it or return it to draft,
+            // and there is no duplicate route. Refusing here is what keeps the sweep from being
+            // the thing that destroys a microclimate an admin had just published.
+            //
+            // Deliberately only on the publish edge. draft -> closed (filing an abandoned draft
+            // away) must stay open however long its window has been over, and an already-active
+            // session is never re-litigated: a human put it in front of respondents.
+            if (microclimate.Scheduling.EndTime <= DateTimeOffset.UtcNow)
+            {
+                var elapsed = WindowAlreadyOverMessage(microclimate.Scheduling.EndTime);
+                return new StatusChangeFailure(
+                    Results.Json(new { message = elapsed }, statusCode: 400),
+                    elapsed);
+            }
+
             var gateQuestions = await db.MicroclimateQuestions
                 .Where(q => q.MicroclimateId == microclimate.Id)
                 .ToListAsync(cancellationToken);
@@ -914,7 +1077,18 @@ public static class MicroclimateEndpoints
         CancellationToken cancellationToken)
         => await TransitionAsync(id, request?.Status, lang, principal, db, cancellationToken);
 
-    private static async Task<IResult> TransitionAsync(
+    private static Task<IResult> TransitionAsync(
+        Guid id,
+        string? target,
+        string? lang,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+        => WithConcurrencyRetryAsync(
+            db,
+            () => TransitionCoreAsync(id, target, lang, principal, db, cancellationToken));
+
+    private static async Task<IResult> TransitionCoreAsync(
         Guid id,
         string? target,
         string? lang,
@@ -942,7 +1116,16 @@ public static class MicroclimateEndpoints
     // Bulk
     // ------------------------------------------------------------------
 
-    private static async Task<IResult> BulkAsync(
+    private static Task<IResult> BulkAsync(
+        BulkMicroclimateActionRequest request,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+        => WithConcurrencyRetryAsync(
+            db,
+            () => BulkCoreAsync(request, principal, db, cancellationToken));
+
+    private static async Task<IResult> BulkCoreAsync(
         BulkMicroclimateActionRequest request,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
@@ -1251,7 +1434,7 @@ public static class MicroclimateEndpoints
 
         if (!MicroclimateStatuses.AcceptsResponses(microclimate.Status))
         {
-            return Results.Json(new { message = "This microclimate is not currently accepting responses" }, statusCode: 400);
+            return Results.Json(new { message = NotAcceptingResponsesMessage }, statusCode: 400);
         }
 
         // The respondent's own locale, recorded rather than guessed from their words.
@@ -1408,6 +1591,27 @@ public static class MicroclimateEndpoints
                 // submission's word counts/increment on top of it.
                 db.ChangeTracker.Clear();
                 microclimate = await db.Microclimates.FirstAsync(m => m.Id == id, cancellationToken);
+
+                // ...but re-read the STATUS too, not just the aggregate, and stand down if the
+                // session shut while this submission was in flight.
+                //
+                // The gate above ran against the row as it was when this request started. That
+                // was sufficient while every other writer of this row was another respondent --
+                // a conflict meant "somebody else answered first", never "the session ended".
+                // MicroclimateLifecycleJob is now a routine writer of microclimates.status, on a
+                // timer, and its close lands precisely when respondents are finishing. Without
+                // this the whole point of #376 is lost on the one path it was about: the
+                // increment would be reapplied on top of a row that says `closed`, the answer
+                // counted after the deadline, and 201 returned -- and unlike a survey there is no
+                // per-response row to identify it by afterwards, so it could never be unpicked.
+                //
+                // The message is the pre-check's, deliberately: from the respondent's side these
+                // are the same event -- they answered after the session ended -- and the
+                // difference is milliseconds of server timing they cannot see or act on.
+                if (!MicroclimateStatuses.AcceptsResponses(microclimate.Status))
+                {
+                    return Results.Json(new { message = NotAcceptingResponsesMessage }, statusCode: 400);
+                }
             }
         }
 

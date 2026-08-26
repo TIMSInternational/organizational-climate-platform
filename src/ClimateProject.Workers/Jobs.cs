@@ -368,3 +368,62 @@ public sealed class SurveyLifecycleWorker(
         }
     }
 }
+
+/// <summary>
+/// Closes a microclimate on its end time. See <see cref="MicroclimateLifecycleJob"/> for the one
+/// transition it makes and, at greater length, for the one it refuses.
+///
+/// <para><b>The second job here that writes a status, and the one whose write cannot be
+/// undone.</b> <c>closed</c> is terminal in <c>MicroclimateStatuses</c> -- no outgoing edges at
+/// all -- so unlike a survey, which can be duplicated and re-run, a microclimate closed in error
+/// is finished. The conservatism therefore lives in
+/// <see cref="ClimateProject.Application.Microclimates.MicroclimateLifecycleSchedule"/> rather
+/// than here: this class does nothing but hand the sweep a clock and a cap, exactly like its
+/// siblings.</para>
+///
+/// <para><b>Cross-tenant, like every job here.</b> No company id: a scheduler that advanced one
+/// tenant's microclimates would leave every other company's sessions collecting answers past
+/// their deadline with nothing reporting a problem. The four HTTP routes that change a
+/// microclimate's status are all a human moving one session they administer; this is the
+/// platform honouring a deadline that was already agreed.</para>
+/// </summary>
+public sealed class MicroclimateLifecycleWorker(
+    IServiceScopeFactory scopeFactory,
+    WorkerHeartbeats heartbeats,
+    IOptions<WorkerSchedulingOptions> options,
+    ILogger<MicroclimateLifecycleWorker> logger)
+    : ScheduledJobWorker(
+        WorkerJobs.MicroclimateLifecycle,
+        options.Value.MicroclimateLifecycleInterval,
+        options.Value.Enabled,
+        scopeFactory,
+        heartbeats,
+        logger)
+{
+    private readonly int _batchSize = options.Value.MicroclimateLifecycleBatchSize;
+
+    protected override async Task RunOnceAsync(
+        IServiceProvider services,
+        DateTimeOffset nowUtc,
+        CancellationToken cancellationToken)
+    {
+        var db = services.GetRequiredService<ClimateProjectDbContext>();
+        var loggerFactory = services.GetRequiredService<ILoggerFactory>();
+
+        var result = await MicroclimateLifecycleJob.RunAsync(
+            db, loggerFactory, nowUtc, _batchSize, cancellationToken);
+
+        if (result.MoreRemaining)
+        {
+            // Only worth a line when the cap actually bit, and here that means microclimates are
+            // accepting answers past their deadline for another five minutes -- answers that
+            // cannot be unpicked afterwards. Expected exactly once, on the first tick after this
+            // job is deployed, working through every session that has been past its end time
+            // since before anything closed one.
+            logger.LogInformation(
+                "Microclimate lifecycle sweep took its full batch (closed {Closed}); more sessions are due to " +
+                "close on the next tick.",
+                result.Closed);
+        }
+    }
+}

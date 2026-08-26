@@ -448,13 +448,39 @@ app.UseExceptionHandler(errorApp =>
     errorApp.Run(async context =>
     {
         var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+
+        // Checked BEFORE the unique-violation test, and it has to be:
+        // DbUpdateConcurrencyException derives from DbUpdateException, so an `is
+        // DbUpdateException` arm placed first would swallow it.
+        //
+        // A lost optimistic-concurrency check is a conflict with the CURRENT state of the
+        // resource, which is what 409 means -- it is never an internal error, and answering 500
+        // told the caller their request had crashed when in fact it had been correctly refused
+        // because somebody else got there first. Only one entity in this schema carries a
+        // concurrency token (Microclimate, via PostgreSQL's xmin -- see
+        // MicroclimateConfiguration), and it became reachable in normal operation when
+        // MicroclimateLifecycleJob started writing microclimates.status on a timer (#376). The
+        // routes that can do something better than this -- re-read and re-decide -- already do;
+        // this is the floor beneath them, so no path can regress to a bodiless 500.
+        //
+        // DISCLOSED: this arm is not independently killable. Precisely because the microclimate
+        // routes now re-decide, no request reaches here with a concurrency conflict unless it
+        // loses three re-decisions in a row, which no test can arrange deterministically. It is
+        // declared rather than left to be discovered: the routes are what is tested, this is the
+        // net under them, and the day a fourth writer of a token-carrying entity is added it is
+        // the difference between a 409 and a crash.
+        var isConcurrencyConflict = exception is DbUpdateConcurrencyException;
         var isUniqueViolation = exception is DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } };
 
         context.Response.ContentType = "application/json";
-        context.Response.StatusCode = isUniqueViolation ? StatusCodes.Status409Conflict : StatusCodes.Status500InternalServerError;
-        var message = isUniqueViolation
-            ? "The request conflicts with existing data."
-            : "An unexpected error occurred.";
+        context.Response.StatusCode = isUniqueViolation || isConcurrencyConflict
+            ? StatusCodes.Status409Conflict
+            : StatusCodes.Status500InternalServerError;
+        var message = isConcurrencyConflict
+            ? "This record was changed by someone else while your request was in flight. Reload it and try again."
+            : isUniqueViolation
+                ? "The request conflicts with existing data."
+                : "An unexpected error occurred.";
         await context.Response.WriteAsJsonAsync(new { message });
     });
 });

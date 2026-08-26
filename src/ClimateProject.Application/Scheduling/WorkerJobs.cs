@@ -61,6 +61,16 @@ public static class WorkerJobs
     /// </summary>
     public const string SurveyLifecycle = "survey-lifecycle";
 
+    /// <summary>
+    /// Closes a microclimate when its own <c>EndTime</c> passes. The same defect
+    /// <see cref="SurveyLifecycle"/> fixed, on the surface where it costs more: a microclimate
+    /// folds every answer straight into <c>ResponseCount</c> and <c>LiveResults</c> with no
+    /// per-response row, so a response accepted past the deadline cannot be identified or
+    /// unpicked afterwards. Opening on <c>StartTime</c> is deliberately NOT part of it -- see
+    /// <c>MicroclimateLifecycleJob</c>.
+    /// </summary>
+    public const string MicroclimateLifecycle = "microclimate-lifecycle";
+
     public static readonly string[] All =
     [
         NotificationDispatch,
@@ -70,5 +80,6 @@ public static class WorkerJobs
         SurveyDraftRetention,
         RetentionCleanup,
         SurveyLifecycle,
+        MicroclimateLifecycle,
     ];
 }
