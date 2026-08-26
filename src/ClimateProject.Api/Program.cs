@@ -580,6 +580,7 @@ app.MapMicroclimateTemplateEndpoints();
 app.MapReportEndpoints();
 app.MapBenchmarkEndpoints();
 app.MapQuestionLibraryEndpoints();
+app.MapQuestionBankEndpoints();
 app.MapAnalyticsInsightEndpoints();
 app.MapAIInsightEndpoints();
 app.MapNotificationEndpoints();

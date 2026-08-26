@@ -38,6 +38,21 @@ public class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.Property(q => q.SourceLibraryItemId).HasColumnName("source_library_item_id");
         builder.HasOne<QuestionLibraryItem>().WithMany().HasForeignKey(q => q.SourceLibraryItemId).OnDelete(DeleteBehavior.SetNull);
 
+        // Provenance for a question copied out of the BANK (#110). Restrict, not SetNull,
+        // and the difference from the line above is deliberate. The library link is a
+        // convenience -- losing it loses a breadcrumb. The bank link is what every usage and
+        // effectiveness number is computed from, so severing it silently would not break a
+        // survey, it would make an item that had been asked ten thousand times report zero,
+        // with no error and with row counts that reconcile exactly. Restrict turns "delete a
+        // question people have answered" into a refusal at the database, underneath the
+        // endpoint's own 409, so a future write path that forgets the check still cannot do
+        // it. Retirement, not deletion, is how a bank item leaves the corpus.
+        builder.Property(q => q.SourceQuestionBankItemId).HasColumnName("source_question_bank_item_id");
+        builder.HasOne<QuestionBankItem>().WithMany().HasForeignKey(q => q.SourceQuestionBankItemId).OnDelete(DeleteBehavior.Restrict);
+        // The metrics join reads questions BY source id across the whole corpus; without
+        // this it is a sequential scan of every question ever authored.
+        builder.HasIndex(q => q.SourceQuestionBankItemId);
+
         builder.HasOne<Survey>().WithMany().HasForeignKey(q => q.SurveyId);
     }
 }

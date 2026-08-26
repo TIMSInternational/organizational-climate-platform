@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using NpgsqlTypes;
@@ -13,9 +14,11 @@ using NpgsqlTypes;
 namespace ClimateProject.Infrastructure.Migrations
 {
     [DbContext(typeof(ClimateProjectDbContext))]
-    partial class ClimateProjectDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260826020342_AddQuestionBankProvenance")]
+    partial class AddQuestionBankProvenance
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -847,14 +850,6 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("prior_period_benchmark_id");
 
-                    b.Property<string>("PriorPeriodStatus")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("unlinked")
-                        .HasColumnName("prior_period_status");
-
                     b.Property<double>("QualityScore")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("double precision")
@@ -904,12 +899,7 @@ namespace ClimateProject.Infrastructure.Migrations
 
                     b.HasIndex("Type", "Category");
 
-                    b.HasIndex("CompanyId", "Category", "Type");
-
-                    b.ToTable("benchmarks", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_benchmarks_prior_period_status", "prior_period_status IN ('unlinked', 'linked', 'none') AND ((prior_period_status = 'linked') = (prior_period_benchmark_id IS NOT NULL))");
-                        });
+                    b.ToTable("benchmarks", (string)null);
                 });
 
             modelBuilder.Entity("ClimateProject.Domain.Entities.BenchmarkMetric", b =>
