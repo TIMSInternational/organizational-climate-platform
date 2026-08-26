@@ -108,7 +108,9 @@ public static class QuestionTypes
     /// microclimate question had nowhere to store an emoji set, so accepting the type
     /// would have created unanswerable questions. It now has one --
     /// <c>microclimate_question_emoji_options</c>, a child table carrying the glyph,
-    /// its accessible name per locale and the stable value an answer is stored as.
+    /// its accessible name per locale and the stable value an answer is validated
+    /// against (a microclimate persists no answer rows at all -- only a count and a
+    /// word cloud -- so "stored" would be the wrong word).
     /// The storage came first and the vocabulary followed, which is the order this
     /// class's whole argument depends on: a type listed here is a claim that the
     /// product can store, validate and render it.</item>
