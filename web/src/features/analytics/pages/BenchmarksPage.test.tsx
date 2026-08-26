@@ -17,7 +17,7 @@ const OWN = 'company-1'
 const OTHER = 'company-2'
 
 function listRow(id: string, name: string, companyId: string | null): BenchmarkListItem {
-  return { id, name, type: 'industry', category: 'engagement', companyId, isActive: true, qualityScore: 0.9 }
+  return { id, name, type: 'industry', category: 'engagement', companyId, isActive: true, qualityScore: 0.9, priorPeriodStatus: 'unlinked' }
 }
 
 function detail(id: string, name: string, companyId: string | null, overrides: Partial<Benchmark> = {}): Benchmark {
@@ -37,6 +37,8 @@ function detail(id: string, name: string, companyId: string | null, overrides: P
     qualityScore: 0.9,
     priorPeriodBenchmarkId: null,
     metrics: [{ id: `${id}-m`, metricName: 'engagement', value: 72, unit: '%', percentile: null, sampleSize: null }],
+    priorPeriodStatus: 'unlinked',
+    priorPeriod: null,
     ...overrides,
   }
 }
@@ -443,17 +445,216 @@ describe('BenchmarksPage comparison and trend', () => {
     expect(comparison.textContent).not.toContain('1,198.8')
   })
 
-  it('says so plainly when a benchmark has no prior period', async () => {
+  /**
+   * The criterion #89 turns on: a first-year company and a data-entry backlog are not the
+   * same claim, and the page must not print one over the other.
+   *
+   * Both benchmarks below have `priorPeriodBenchmarkId: null` — which is the whole of what
+   * this page used to have to go on, and why both used to render "This benchmark does not
+   * link to a prior period." The assertion is on the two rendered sentences and on their
+   * being different from each other, not on a status attribute, because the status arriving
+   * and the reader being told apart are separate claims.
+   */
+  it('distinguishes a benchmark with no prior period from one nobody has linked yet', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [/\/admin\/benchmarks\/o$/, () => detail('o', 'Our 2026 baseline', OWN)],
+      [/\/prior-period\/candidates$/, () => []],
+      [/\/admin\/benchmarks\/first$/, () => detail('first', 'Our first measurement', OWN, { priorPeriodStatus: 'none' })],
+      [/\/admin\/benchmarks\/backlog$/, () => detail('backlog', 'Our 2026 baseline', OWN)],
+      [
+        /\/admin\/benchmarks(\?|$)/,
+        () => [listRow('first', 'Our first measurement', OWN), listRow('backlog', 'Our 2026 baseline', OWN)],
+      ],
+    ])
+
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Our first measurement/ }))
+    const none = await screen.findByText(/There is no prior period\./)
+    expect(none.textContent).toContain('first measurement')
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Our first measurement/ }))
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Our 2026 baseline/ }))
+    const unlinked = await screen.findByText(/No prior period has been chosen yet\./)
+
+    expect(unlinked.textContent).not.toEqual(none.textContent)
+  })
+
+  /**
+   * `linked` with no comparison attached is a fourth state, not a loading one: the link
+   * points at a row this caller may not read, and `LoadPriorPeriodAsync` omits the numbers
+   * rather than handing them over. Falling back to "not linked" here would be a lie about
+   * the data.
+   */
+  it('says a prior period exists but is unreadable rather than calling it unlinked', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [/\/prior-period\/candidates$/, () => []],
+      [
+        /\/admin\/benchmarks\/o$/,
+        () => detail('o', 'Our 2026 baseline', OWN, { priorPeriodStatus: 'linked', priorPeriodBenchmarkId: 'hidden', priorPeriod: null }),
+      ],
       [/\/admin\/benchmarks(\?|$)/, () => [listRow('o', 'Our 2026 baseline', OWN)]],
     ])
 
     renderPage()
     await userEvent.click(await screen.findByRole('checkbox', { name: /Our 2026 baseline/ }))
 
-    expect(await screen.findByText('This benchmark does not link to a prior period.')).toBeTruthy()
+    expect(await screen.findByText(/not allowed to read/)).toBeTruthy()
+    expect(screen.queryByText(/No prior period has been chosen yet\./)).toBeNull()
+  })
+
+  /**
+   * The year-over-year figures, on a screen at last.
+   *
+   * `priorPeriod.metrics` is what the whole feature computes — this period against the last,
+   * differenced once on the server so that #88's report section and the tracking module's
+   * `resultado_anio_anterior_pct` cannot disagree with the page. Until this table it reached
+   * no screen at all: the panel printed the prior period's *name* and stopped, and the only
+   * numbers a reader saw came from the browser's own chain derivation.
+   *
+   * Asserted on the rendered cells, including the two shapes of missing: a metric only one
+   * period recorded, and a change the server declined to compute.
+   */
+  it('shows the year-over-year figures the API computed', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [/\/prior-period\/candidates$/, () => []],
+      [
+        /\/admin\/benchmarks\/o$/,
+        () =>
+          detail('o', 'Our 2026 baseline', OWN, {
+            priorPeriodStatus: 'linked',
+            priorPeriodBenchmarkId: 'p',
+            metrics: [{ id: 'o-m', metricName: 'engagement', value: 74, unit: '%', percentile: null, sampleSize: null }],
+            priorPeriod: {
+              id: 'p',
+              name: 'Our 2025 baseline',
+              metrics: [
+                { metricName: 'engagement', value: 74, unit: '%', priorValue: 70, priorUnit: '%', delta: 4, changeRatio: 4 / 70 },
+                // Recorded last year, not this year: the row still appears, because a
+                // measurement that stopped is itself worth seeing.
+                { metricName: 'absence', value: null, unit: null, priorValue: 3, priorUnit: 'days', delta: null, changeRatio: null },
+                // Both periods recorded it, in units that do not agree, so the server
+                // withheld the change and the cell has to say which kind of missing it is.
+                { metricName: 'responseTime', value: 1200, unit: 'ms', priorValue: 1.2, priorUnit: 's', delta: null, changeRatio: null },
+              ],
+            },
+          }),
+      ],
+      [
+        /\/admin\/benchmarks\/p$/,
+        () =>
+          detail('p', 'Our 2025 baseline', OWN, {
+            metrics: [{ id: 'p-m', metricName: 'engagement', value: 70, unit: '%', percentile: null, sampleSize: null }],
+          }),
+      ],
+      [/\/admin\/benchmarks(\?|$)/, () => [listRow('o', 'Our 2026 baseline', OWN)]],
+    ])
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Our 2026 baseline/ }))
+
+    const panel = (await screen.findByRole('heading', { name: 'Prior period', level: 2 })).closest('section')!
+    expect(within(panel).getByText('Compared against Our 2025 baseline.')).toBeTruthy()
+
+    const rows = [...panel.querySelectorAll('tbody tr')].map((row) => row.textContent)
+    // 74 % this period, 70 % last, +4, and +5.7% of what it was.
+    expect(rows[0]).toContain('70 %')
+    expect(rows[0]).toContain('+4')
+    expect(rows[0]).toContain('+5.7%')
+    // The metric this period did not record: last year's reading, and no invented zero.
+    expect(rows[1]).toContain('3 days')
+    expect(rows[1]).toContain('Not recorded')
+    // 1200 ms against 1.2 s is the same reading twice; the change must not appear at all.
+    expect(rows[2]).toContain('Units differ')
+    expect(rows[2]).not.toContain('1,198.8')
+  })
+
+  /**
+   * The delta the server refuses to compute must not turn up on the page under a different
+   * name. `buildTrend` walks the chain the browser assembles itself, so it is a second
+   * implementation of "current minus prior" — and it did the subtraction blind, printing a
+   * −69.3 collapse directly beneath an API response that had correctly withheld it.
+   */
+  it('refuses to difference the trend across a change of unit', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [/\/prior-period\/candidates$/, () => []],
+      [
+        /\/admin\/benchmarks\/q2$/,
+        () =>
+          detail('q2', 'Q2 2026', OWN, {
+            priorPeriodStatus: 'linked',
+            priorPeriodBenchmarkId: 'q1',
+            priorPeriod: { id: 'q1', name: 'Q1 2026', metrics: [] },
+            metrics: [{ id: 'q2-m', metricName: 'engagement', value: 0.74, unit: 'fraction', percentile: null, sampleSize: null }],
+          }),
+      ],
+      [
+        /\/admin\/benchmarks\/q1$/,
+        () =>
+          detail('q1', 'Q1 2026', OWN, {
+            metrics: [{ id: 'q1-m', metricName: 'engagement', value: 70, unit: 'percent', percentile: null, sampleSize: null }],
+          }),
+      ],
+      [/\/admin\/benchmarks(\?|$)/, () => [listRow('q2', 'Q2 2026', OWN)]],
+    ])
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Q2 2026/ }))
+
+    const trend = await screen.findByRole('heading', { name: 'Trend over prior periods', level: 2 })
+    const table = trend.parentElement!.querySelector('table')!
+    expect(table.textContent).toContain('Units differ')
+    // −69.3 is what a blind subtraction prints, and it is a collapse that never happened.
+    expect(table.textContent).not.toMatch(/[+−-]\s?69/)
+  })
+
+  /**
+   * Linking is a human act, all the way to the button. The page offers the shortlist the
+   * API suggests and sends nothing until somebody picks one — an unambiguous candidate is
+   * still not applied on its own.
+   */
+  it('links a prior period only once an administrator picks one', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    const sent: Array<{ url: string; body: unknown }> = []
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (init?.method === 'PUT' && /\/prior-period$/.test(url)) {
+        sent.push({ url, body: JSON.parse(String(init.body)) })
+        return Promise.resolve(
+          new Response(JSON.stringify(detail('o', 'Our 2026 baseline', OWN, { priorPeriodStatus: 'linked', priorPeriodBenchmarkId: 'p' })), { status: 200 }),
+        )
+      }
+      if (/\/prior-period\/candidates$/.test(url)) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([
+              { id: 'p', name: 'Our 2025 baseline', category: 'engagement', type: 'industry', createdAt: '2025-01-01T00:00:00Z', metricCount: 1, unambiguous: true },
+            ]),
+            { status: 200 },
+          ),
+        )
+      }
+      if (/\/admin\/benchmarks\/o$/.test(url)) {
+        return Promise.resolve(new Response(JSON.stringify(detail('o', 'Our 2026 baseline', OWN)), { status: 200 }))
+      }
+      return Promise.resolve(new Response(JSON.stringify([listRow('o', 'Our 2026 baseline', OWN)]), { status: 200 }))
+    })
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Our 2026 baseline/ }))
+    await screen.findByRole('option', { name: 'Our 2025 baseline' })
+
+    // Nothing sent yet, even though the one candidate is unambiguous.
+    expect(sent).toHaveLength(0)
+
+    await userEvent.selectOptions(screen.getByLabelText('Prior period'), 'p')
+    await userEvent.click(screen.getByRole('button', { name: 'Link prior period' }))
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0].body).toEqual({ status: 'linked', priorPeriodBenchmarkId: 'p' })
   })
 })
 

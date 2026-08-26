@@ -16,7 +16,7 @@ import type { BenchmarkListItem } from './api/benchmarks'
  */
 
 function row(id: string, companyId: string | null): BenchmarkListItem {
-  return { id, name: id, type: 'industry', category: 'engagement', companyId, isActive: true, qualityScore: 0 }
+  return { id, name: id, type: 'industry', category: 'engagement', companyId, isActive: true, qualityScore: 0, priorPeriodStatus: 'unlinked' }
 }
 
 const OWN = 'company-1'

@@ -5,10 +5,13 @@ import {
   createBenchmark,
   getBenchmark,
   listBenchmarks,
+  listPriorPeriodCandidates,
+  setPriorPeriod,
   updateBenchmark,
   type AddBenchmarkMetricInput,
   type Benchmark,
   type BenchmarkListItem,
+  type PriorPeriodStatus,
   type UpdateBenchmarkInput,
 } from '../api/benchmarks'
 import { followPriorPeriodChain } from '../benchmarkAnalysis'
@@ -23,6 +26,7 @@ import BenchmarkList from '../components/BenchmarkList'
 import BenchmarkComparison from '../components/BenchmarkComparison'
 import BenchmarkDetailPanel from '../components/BenchmarkDetailPanel'
 import BenchmarkForm, { type BenchmarkFormValues } from '../components/BenchmarkForm'
+import BenchmarkPriorPeriodPanel from '../components/BenchmarkPriorPeriodPanel'
 import BenchmarkTrend from '../components/BenchmarkTrend'
 import { getToken } from '../../../auth/token'
 import { decodeJwtPayload } from '../../../auth/jwt'
@@ -114,6 +118,13 @@ export default function BenchmarksPage() {
     void reload()
   }, [reload])
 
+  // Stable across renders because the panel fetches inside an effect keyed on it; an inline
+  // arrow would re-run that fetch on every keystroke anywhere on the page.
+  const loadCandidates = useCallback(
+    (id: string) => listPriorPeriodCandidates(baseUrl, id),
+    [baseUrl],
+  )
+
   // Load the detail for anything selected that is not cached yet. Selection is a
   // small set (an admin ticks two or three rows), so this stays a handful of
   // requests rather than needing a batch endpoint.
@@ -196,6 +207,13 @@ export default function BenchmarksPage() {
   async function handleAddMetric(id: string, input: AddBenchmarkMetricInput) {
     await addBenchmarkMetric(baseUrl, id, input)
     await refreshDetail(id)
+  }
+
+  // Both the detail and the list row change: `priorPeriodStatus` is on the list projection
+  // too, so a catalogue that was not reloaded would keep claiming the row is unlinked.
+  async function handleSetPriorPeriod(id: string, status: PriorPeriodStatus, priorId?: string) {
+    await setPriorPeriod(baseUrl, id, status, priorId)
+    await Promise.all([refreshDetail(id), reload()])
   }
 
   if (error) {
@@ -293,18 +311,25 @@ export default function BenchmarksPage() {
             </div>
           )}
 
+          {/* Always rendered, in every one of the four states -- see
+              `BenchmarkPriorPeriodPanel`. It replaces a single sentence that used
+              to stand in for the trend whenever the chain was short, and which
+              said the same thing about a first-year company as about a benchmark
+              nobody had linked yet. */}
           {single && (
             <div className="mt-section">
-              {chain.length > 1 ? (
-                <BenchmarkTrend chain={chain} />
-              ) : (
-                // Panelled like the trend it stands in for. A bare sentence on
-                // the page ground next to a carded detail panel reads as a
-                // rendering accident rather than as an answer.
-                <p className="mb-0 rounded-lg border border-line-light bg-surface-icon-box p-panel text-sm text-fg-tertiary">
-                  {t('benchmarks.noPriorPeriods')}
-                </p>
-              )}
+              <BenchmarkPriorPeriodPanel
+                benchmark={single}
+                canWrite={canWriteBenchmark(scope, single.companyId)}
+                loadCandidates={loadCandidates}
+                onSet={(status, priorId) => handleSetPriorPeriod(single.id, status, priorId)}
+              />
+            </div>
+          )}
+
+          {single && chain.length > 1 && (
+            <div className="mt-section">
+              <BenchmarkTrend chain={chain} />
             </div>
           )}
         </>

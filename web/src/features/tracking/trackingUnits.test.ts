@@ -86,8 +86,16 @@ describe('formatPercentOrUnavailable', () => {
   /**
    * #125's fourth acceptance criterion, and its mirror.
    *
-   * `resultado_anio_anterior_pct` is null until #89 lands, so the honest rendering
-   * is "not available" — a zero would assert a year-on-year result nobody measured.
+   * `resultado_anio_anterior_pct` is null, so the honest rendering is "not
+   * available" — a zero would assert a year-on-year result nobody measured.
+   *
+   * #89 has landed and it is still null here, which is not the same as it having
+   * done nothing: #89 built the prior-period linkage the figure resolves FROM
+   * (`docs/decisions/prior-period-benchmark-linkage.md`), and the field itself is
+   * emitted by `GET /api/internal/hallazgos`, which is an unconditional stub
+   * returning an empty list. #385 tracks that stub; replacing it is #51's work.
+   * So this rendering stays correct either way, which is why it is asserted
+   * against the absent case rather than against a promised date.
    */
   it('says unavailable when there is no prior-year value', () => {
     expect(formatPercentOrUnavailable(null, UNAVAILABLE, 'es')).toBe(UNAVAILABLE)

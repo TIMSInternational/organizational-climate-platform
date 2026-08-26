@@ -33,6 +33,23 @@ import { formatMetric } from '../../../components/charts'
  * `BenchmarkComparison` makes the same call on the same data for the same reason.
  * It sits on its own line under the value rather than beside it, so the value
  * column stays a column of like readings that line up.
+ *
+ * ## Where the change is missing, the cell says which kind of missing
+ *
+ * A period that changed the metric's unit gets "Units differ" in place of the
+ * delta, not a blank. `buildTrend` withholds the subtraction there (1.2 s against
+ * 1200 ms is the same reading twice, and differencing it invents a collapse), and
+ * a blank would read as "unchanged" in a column where every other row carries a
+ * signed number.
+ *
+ * ## No eyebrow of its own
+ *
+ * `BenchmarkPriorPeriodPanel` renders immediately above this and leads with the
+ * "Prior periods" eyebrow. Since #89 the two are always on screen together — the
+ * panel used to be a single sentence that stood in for this table rather than
+ * sitting above it — so repeating the eyebrow produced two consecutive cards
+ * labelled identically. The eyebrow belongs to the section; this is its second
+ * card, and its own heading already says what it is.
  */
 export default function BenchmarkTrend({ chain }: { chain: Benchmark[] }) {
   const { t, locale } = useTranslation()
@@ -41,10 +58,7 @@ export default function BenchmarkTrend({ chain }: { chain: Benchmark[] }) {
 
   return (
     <section className="rounded-lg border border-line-light bg-surface-icon-box p-panel">
-      <p className="mb-0 text-2xs font-bold uppercase tracking-eyebrow text-fg-label">
-        {t('benchmarks.priorPeriods')}
-      </p>
-      <h2 className="mt-1 mb-inline text-xl">{t('benchmarks.trend')}</h2>
+      <h2 className="mb-inline text-xl">{t('benchmarks.trend')}</h2>
 
       <div className="rounded-lg border border-line-light bg-surface-panel p-card">
         <Table>
@@ -75,6 +89,9 @@ export default function BenchmarkTrend({ chain }: { chain: Benchmark[] }) {
                           <div className="font-mono text-xs tabular-nums text-fg-secondary">
                             {`${point.delta >= 0 ? '+' : '−'}${formatMetric(Math.abs(point.delta), { kind: 'number' }, locale)}`}
                           </div>
+                        )}
+                        {point.unitsDiffer && (
+                          <div className="text-xs text-fg-tertiary">{t('benchmarks.unitsDiffer')}</div>
                         )}
                       </>
                     )}

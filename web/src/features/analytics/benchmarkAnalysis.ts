@@ -67,10 +67,28 @@ export interface TrendPoint {
   benchmarkName: string
   value: number | null
   unit: string | null
-  /** Change from the previous period, or `null` for the first period or a gap. */
+  /**
+   * Change from the previous period, or `null` for the first period, a gap, or a
+   * change of unit.
+   */
   delta: number | null
   /** `delta` as a fraction of the previous value, or `null` when that value is 0 or missing. */
   changeRatio: number | null
+  /**
+   * True when this period and the one before it both recorded the metric but did
+   * not agree about its unit — so `delta` is withheld and there is something to say
+   * about why.
+   *
+   * The same fact {@link ComparisonRow.unitsDiffer} carries for the comparison
+   * matrix, and it belongs here for a harder reason. Two benchmarks side by side in
+   * different units at least *look* odd; two periods of the same metric are the
+   * case a reader is specifically there to subtract by eye, and the row is labelled
+   * with the years. `engagement_score` recorded as `70 percent` one year and `0.74
+   * fraction` the next differenced to −69.26 — a catastrophe that never happened,
+   * printed directly under an API response that had correctly declined to compute
+   * it (`BenchmarkPriorPeriod.BuildChanges`).
+   */
+  unitsDiffer: boolean
 }
 
 export interface TrendSeries {
@@ -83,10 +101,21 @@ export interface TrendSeries {
  *
  * `chain` arrives **newest first**, the order {@link followPriorPeriodChain}
  * produces it in, and comes back oldest first so a reader gets left-to-right
- * chronology. `delta` compares against the previous *period*, not the previous
- * non-null point: if a metric is absent from an intervening benchmark the delta
- * is `null` rather than silently spanning the gap, because a two-period jump
- * presented as a one-period change is the failure mode worth avoiding here.
+ * chronology.
+ *
+ * Two things stop a delta from being computed, and both are cases where a number
+ * would be *plausible* rather than obviously broken:
+ *
+ * - **A gap.** `delta` compares against the previous *period*, not the previous
+ *   non-null point: if a metric is absent from an intervening benchmark the delta
+ *   is `null` rather than silently spanning the gap, because a two-period jump
+ *   presented as a one-period change is the failure mode worth avoiding here.
+ * - **A change of unit.** `BenchmarkMetric.unit` is a free string and nothing
+ *   upstream makes two periods agree about it. This is the same rule the server
+ *   applies to the one-step comparison in `BenchmarkPriorPeriod.BuildChanges`, and
+ *   it did not hold here: the API withheld the delta and the table a few hundred
+ *   pixels below printed it anyway. Nothing made that reachable until prior periods
+ *   could be linked after the fact (#89), which is what turned this table on.
  */
 export function buildTrend(chain: Benchmark[]): TrendSeries[] {
   const chronological = [...chain].reverse()
@@ -99,19 +128,29 @@ export function buildTrend(chain: Benchmark[]): TrendSeries[] {
 
   return metricNames.map((metricName) => {
     let previous: number | null = null
+    let previousUnit: string | null = null
     const points = chronological.map((benchmark): TrendPoint => {
       const metric = benchmark.metrics.find((candidate) => candidate.metricName === metricName)
       const value = metric ? metric.value : null
-      const delta = value !== null && previous !== null ? value - previous : null
+      const unit = metric ? metric.unit : null
+      // Exact string comparison, matching `buildComparison` and the server. A unit is
+      // whatever an administrator typed, so `%` and `percent` count as different —
+      // withholding a delta a reader could have had is recoverable, and inventing one is
+      // not.
+      const sameUnit = unit === previousUnit
+      const delta = value !== null && previous !== null && sameUnit ? value - previous : null
       const changeRatio = delta !== null && previous !== null && previous !== 0 ? delta / previous : null
+      const unitsDiffer = value !== null && previous !== null && !sameUnit
       previous = value
+      previousUnit = unit
       return {
         benchmarkId: benchmark.id,
         benchmarkName: benchmark.name,
         value,
-        unit: metric ? metric.unit : null,
+        unit,
         delta,
         changeRatio,
+        unitsDiffer,
       }
     })
     return { metricName, points }

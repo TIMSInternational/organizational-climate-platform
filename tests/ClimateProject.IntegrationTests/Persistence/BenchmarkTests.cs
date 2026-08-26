@@ -71,6 +71,12 @@ public class BenchmarkTests(PostgresContainerFixture postgres)
             QualityScore = 0.87,
             Metadata = """{"sample_size": 5000}""",
             PriorPeriodBenchmarkId = priorPeriod.Id,
+            // Not optional beside the pointer: ck_benchmarks_prior_period_status (#89) makes
+            // the two one fact, so the row this test used to write -- a pointer with the
+            // default `unlinked` status -- is now rejected outright. That is the constraint
+            // doing its job on the exact shape it exists for, a writer that sets the id and
+            // leaves the status behind.
+            PriorPeriodStatus = PriorPeriodStatuses.Linked,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
         };
@@ -95,6 +101,12 @@ public class BenchmarkTests(PostgresContainerFixture postgres)
         await using var readDb = CreateContext();
         var loadedBenchmark = await readDb.Benchmarks.SingleAsync(b => b.Id == current.Id);
         Assert.Equal(priorPeriod.Id, loadedBenchmark.PriorPeriodBenchmarkId);
+        Assert.Equal(PriorPeriodStatuses.Linked, loadedBenchmark.PriorPeriodStatus);
+        // The prior period itself took the column default, which is the pre-#89 state of
+        // every row that already existed: nobody has said whether IT has a predecessor.
+        Assert.Equal(
+            PriorPeriodStatuses.Unlinked,
+            (await readDb.Benchmarks.SingleAsync(b => b.Id == priorPeriod.Id)).PriorPeriodStatus);
         Assert.Equal("validated", loadedBenchmark.ValidationStatus);
         Assert.Equal(0.87, loadedBenchmark.QualityScore);
 
