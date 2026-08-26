@@ -2316,6 +2316,7 @@
     "noSegmentsDescription": "Ninguna respuesta tiene departamento ni valor demográfico, así que no hay nada que desglosar.",
     "exportQuestions": "Exportar preguntas (CSV)",
     "exportBreakdown": "Exportar desglose (CSV)",
+    "exportPdf": "Exportar informe (PDF)",
     "csvQuestionOrder": "Número de pregunta",
     "csvQuestionText": "Pregunta",
     "csvQuestionType": "Tipo de pregunta",
