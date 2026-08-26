@@ -80,6 +80,36 @@ public sealed class EmailOptions
 
     public string? SmtpPassword { get; set; }
 
+    /// <summary>
+    /// Amazon SES configuration set to attribute this product's sends to, or null/blank for
+    /// none. Emitted as the <c>X-SES-CONFIGURATION-SET</c> header on every outbound message.
+    ///
+    /// <para>
+    /// **What it buys.** SES scores bounce and complaint rates against the AWS ACCOUNT, and
+    /// this account is shared with five other TIMS products. Without a configuration set,
+    /// a bounce caused here is indistinguishable from one caused by any of them: it degrades
+    /// a reputation nobody can attribute and nobody can defend. Naming a configuration set
+    /// makes this product's sends separately measurable, and is the hook SES publishes
+    /// bounce/complaint events through.
+    /// </para>
+    /// <para>
+    /// **Optional on purpose, and absent must keep working.** Local development against
+    /// MailHog, CI, the integration suite and any non-SES provider have no configuration set
+    /// and must not acquire a meaningless header. So this is the one Email setting that stays
+    /// optional even when <see cref="Provider"/> is <see cref="ProviderSmtp"/> -- unlike
+    /// <see cref="SmtpHost"/> or <see cref="FromAddress"/>, mail sent without it is still
+    /// correctly delivered mail. What IS validated is that a value, if given, is a legal
+    /// header value; see <see cref="Validate"/>.
+    /// </para>
+    /// <para>
+    /// Named for SES rather than generically because the header is: SendGrid, Postmark and
+    /// Mailgun each have their own, differently-shaped equivalent, and a setting called
+    /// "ConfigurationSet" that silently does nothing on four of the five providers this
+    /// transport supports would be worse than one that says which provider it is for.
+    /// </para>
+    /// </summary>
+    public string? SesConfigurationSet { get; set; }
+
     public int MaxSendsPerSecond { get; set; } = DefaultMaxSendsPerSecond;
 
     public int TimeoutSeconds { get; set; } = DefaultTimeoutSeconds;
@@ -158,6 +188,16 @@ public sealed class EmailOptions
         if (TimeoutSeconds < 1)
         {
             return $"Email:TimeoutSeconds must be at least 1 (got {TimeoutSeconds}).";
+        }
+
+        // Config, not user input -- but it is written verbatim into a MIME header, and the
+        // one thing a header value must not contain is a line break. An operator who pastes a
+        // value with a stray newline would otherwise be injecting headers into every message
+        // this service sends, from the deploy template. Caught at startup, where a bad deploy
+        // is meant to fail, rather than per message.
+        if (!string.IsNullOrWhiteSpace(SesConfigurationSet) && EmailMessage.HasHeaderInjection(SesConfigurationSet))
+        {
+            return "Email:SesConfigurationSet must not contain a line break.";
         }
 
         // A username with no password (or the reverse) is a half-entered secret, not a

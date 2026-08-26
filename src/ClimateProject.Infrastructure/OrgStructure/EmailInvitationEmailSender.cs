@@ -39,6 +39,26 @@ public sealed class EmailInvitationEmailSender(
     {
         ArgumentNullException.ThrowIfNull(invitation);
 
+        // Refused before the accept link is even built. `.test`, `.invalid` and `example.com`
+        // are reserved by RFC precisely so that no mailbox exists behind them, so SES's only
+        // possible answer is a hard bounce -- and this platform's bounce rate is scored against
+        // an AWS account shared with five other TIMS products. The seeded demo tenant is full
+        // of exactly these addresses.
+        //
+        // Permanent, so the endpoint leaves the row `pending` and POST /invitations/{id}/resend
+        // stays available once someone fixes the address. Composing first would also mint a
+        // live invitation token into a message with nowhere to go.
+        if (UndeliverableAddresses.ReservedDomainOf(invitation.Email) is { } reservedDomain)
+        {
+            logger.LogError(
+                "Invitation {InvitationId} is addressed to the reserved domain {ReservedDomain}, which can never receive "
+                + "mail; no send was attempted. The invitation row is committed and remains redeemable through its link.",
+                invitation.Id,
+                reservedDomain);
+
+            return EmailSendOutcome.PermanentFailure(UndeliverableAddresses.ReasonFor(invitation.Email));
+        }
+
         var acceptUrl = options.LinkTo(string.Format(
             CultureInfo.InvariantCulture,
             InvitationEmailComposer.AcceptPathTemplate,
