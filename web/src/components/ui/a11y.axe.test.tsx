@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { readdirSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   Accordion,
@@ -603,7 +603,7 @@ describe('every ui/ primitive passes axe at WCAG 2.1 AA', () => {
   /**
    * The vacuity control, in two halves.
    *
-   * **The harness can fail.** A sweep of 45 specimens that reports nothing is the
+   * **The harness can fail.** A sweep of this many specimens that reports nothing is the
    * same shape whether every primitive is correct or `axeViolations` silently
    * returns `[]` — a wrong `runOnly` tag, a detached container, an axe that never
    * ran. This renders markup with three unambiguous WCAG A failures and requires
@@ -623,17 +623,73 @@ describe('every ui/ primitive passes axe at WCAG 2.1 AA', () => {
 
   /**
    * **The sweep can go hollow.** Deleting specimens is the cheapest way to make
-   * this file green, and nothing else would notice. So the count is read off the
-   * barrel: every `*.tsx` in `ui/` that is not a test is a primitive module, and
-   * the sweep must carry at least one specimen per two of them (several modules —
-   * `card`, `table`, `breadcrumb`, `pagination` — export a whole family that one
-   * specimen composes, which is why the ratio is not 1:1).
+   * this file green, and nothing else would notice.
+   *
+   * A count was not enough. This control used to ask for one specimen per two
+   * modules, so 24 of the 46 specimens could be deleted — including all nine
+   * overlays, which are the hardest ones to get right and the only ones that
+   * exercise a portal — and it stayed green.
+   *
+   * So coverage is measured per MODULE, and derived rather than declared: the
+   * specimen table's own source is read, every `<Component` it renders is mapped
+   * through the `ui` barrel to the file that exports it, and every module in the
+   * directory must be reached. A module is also covered when a covered module
+   * imports it — `TextField` renders `form.tsx`'s `FormItem`/`FormLabel` and
+   * `select.tsx`'s `Select` — because that markup really is what axe measured.
+   *
+   * Deleting the Dialog specimen now fails by name, and adding a duplicate
+   * specimen does not pay for it.
    */
   it('covers the primitives that exist — the coverage control', () => {
-    const modules = readdirSync(join(process.cwd(), 'src', 'components', 'ui')).filter(
+    const UI = join(process.cwd(), 'src', 'components', 'ui')
+    const modules = readdirSync(UI).filter(
       (file) => file.endsWith('.tsx') && !file.endsWith('.test.tsx'),
     )
     expect(modules.length).toBeGreaterThan(40)
-    expect(SPECIMENS.length).toBeGreaterThanOrEqual(modules.length / 2)
+
+    /** Exported name → the module that exports it, read off the barrel. */
+    const barrel = readFileSync(join(UI, 'index.ts'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+    const owner = new Map<string, string>()
+    for (const group of barrel.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}\s+from\s+'\.\/([\w.-]+)'/g)) {
+      for (const entry of group[1].split(',')) {
+        const name = entry.trim().split(/\s+as\s+/).pop()?.trim()
+        if (name) owner.set(name, `${group[2]}.tsx`)
+      }
+    }
+    expect(owner.size, 'the ui barrel yielded no exports').toBeGreaterThan(100)
+
+    // The specimens' own source, so the mapping is of what they RENDER.
+    const source = readFileSync(join(UI, 'a11y.axe.test.tsx'), 'utf8')
+    const table = source.slice(source.indexOf('const SPECIMENS'), source.indexOf('describe('))
+    expect(table.length, 'the specimen table was not found in this file').toBeGreaterThan(1000)
+
+    const covered = new Set<string>()
+    for (const element of table.matchAll(/<([A-Z]\w*)/g)) {
+      const module = owner.get(element[1])
+      if (module) covered.add(module)
+    }
+    // One hop: what a covered module imports from the same directory is rendered
+    // by it, and was therefore measured.
+    for (const module of [...covered]) {
+      const imports = readFileSync(join(UI, module), 'utf8')
+      for (const relative of imports.matchAll(/from\s+'\.\/([\w.-]+)'/g)) {
+        if (modules.includes(`${relative[1]}.tsx`)) covered.add(`${relative[1]}.tsx`)
+      }
+    }
+
+    const EXEMPT = new Map([
+      [
+        'toast.tsx',
+        'Toaster mounts sonner’s own portal and renders nothing until a toast fires; ' +
+          'ui/toast.test.tsx covers it, and a specimen here would measure an empty region',
+      ],
+    ])
+
+    const uncovered = modules.filter((module) => !covered.has(module) && !EXEMPT.has(module))
+    expect(uncovered, 'these ui/ modules have no specimen in the sweep').toEqual([])
+    // The exemption stays honest: a file that no longer exists cannot be exempt.
+    for (const module of EXEMPT.keys()) expect(modules).toContain(module)
   })
 })

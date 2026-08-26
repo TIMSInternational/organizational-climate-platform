@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import axe from 'axe-core'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -100,6 +101,57 @@ describe('the harness itself', () => {
 
     target.remove()
     sibling.remove()
+  })
+
+  /**
+   * The harness hands back everything axe found, at every impact.
+   *
+   * Every vacuity control in this baseline is built from `button-name`,
+   * `image-alt` and `label` — and all three are `critical`. So a harness that
+   * returned only critical violations would keep every one of those controls
+   * green while going blind to every `serious` and `moderate` failure in the
+   * whole sweep: `link-name` is serious, and a link with no accessible name in
+   * the collapsed rail is precisely the failure #83 names in its scope.
+   *
+   * Rather than assert a list of impacts, this runs axe directly over the same
+   * node with the same target and requires the harness to return *the same
+   * findings*. That is the property — the harness may configure axe, it may not
+   * quietly drop what axe reports — and it holds against a filter on impact, on
+   * rule id, or on anything else somebody thinks of later.
+   */
+  it('hands back every violation axe found, at every impact', async () => {
+    const node = document.createElement('div')
+    // Two critical failures and two serious ones, so the comparison below is not
+    // vacuous in either direction.
+    node.innerHTML =
+      '<button type="button"></button>' +
+      '<img src="/logo.png">' +
+      '<a href="/empresas"></a>' +
+      '<ul><div>Elemento suelto</div></ul>'
+    document.body.append(node)
+
+    const fromHarness = (await axeViolations(node)).map((v) => `${v.impact} ${v.id}`).sort()
+    const direct = await axe.run(
+      { include: [node] },
+      {
+        runOnly: { type: 'tag', values: [...A11Y_TARGET.tags] },
+        // The one rule the harness disables, disabled here too — otherwise this
+        // would be measuring that exclusion rather than the filtering.
+        rules: Object.fromEntries(
+          AXE_RULES_MEASURED_ELSEWHERE.map((id) => [id, { enabled: false } as const]),
+        ),
+        resultTypes: ['violations'],
+      },
+    )
+
+    expect(fromHarness).toEqual(direct.violations.map((v) => `${v.impact} ${v.id}`).sort())
+    // …and the specimen really does carry both tiers, or "the same findings"
+    // would be a comparison of two identical short lists of critical rules.
+    expect(fromHarness.filter((found) => found.startsWith('critical')).length).toBeGreaterThan(0)
+    expect(fromHarness.filter((found) => found.startsWith('serious')).length).toBeGreaterThan(0)
+    expect(fromHarness.map((found) => found.split(' ')[1])).toContain('link-name')
+
+    node.remove()
   })
 
   it('finds nothing in markup that is correct — the false-positive control', async () => {
