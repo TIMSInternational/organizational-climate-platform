@@ -14,26 +14,35 @@ namespace ClimateTracking.Workers;
 /// (Notificacion.EstadoEnvio == Enviado), not "sent today", so a Fallido day is retried on
 /// every subsequent run until it succeeds (a same-day-only check would permanently lose
 /// Alerta15Dias/Recordatorio30Dias, which each only match one specific day).
+///
+/// <para><b>This is the worker the lease exists for.</b> "Has this trigger already been
+/// recorded Enviado for this plan" is a read followed by a write with nothing between them,
+/// so two instances ticking together both read "not sent" and both send. Since #219 the API
+/// image hosts this worker on every instance, so that is no longer hypothetical: it is
+/// duplicate 30-day and 15-day emails about the client's own action plans, in front of a
+/// government client. <see cref="LeasedScheduledWorker"/> takes a Postgres advisory lock for
+/// the whole run, so only one instance is ever inside it.</para>
 /// </summary>
 public class DailySemaforoWorker(
     IServiceScopeFactory scopeFactory,
     IClimateProjectClient client,
-    ILogger<DailySemaforoWorker> logger) : BackgroundService
+    ILogger<DailySemaforoWorker> logger,
+    bool enabled = true)
+    : LeasedScheduledWorker(TrackingJobs.DailySemaforo, TimeSpan.FromHours(24), enabled, scopeFactory, logger)
 {
-    private static readonly TimeSpan TickInterval = TimeSpan.FromHours(24);
+    protected override Task RunTickAsync(CancellationToken cancellationToken) =>
+        RunOnceAsync(DateOnly.FromDateTime(DateTime.UtcNow), cancellationToken);
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        using var timer = new PeriodicTimer(TickInterval);
-        do
-        {
-            await RunOnceAsync(DateOnly.FromDateTime(DateTime.UtcNow), stoppingToken);
-        } while (await timer.WaitForNextTickAsync(stoppingToken));
-    }
-
+    /// <summary>
+    /// One daily pass, for the given date.
+    ///
+    /// <para>Public and callable outside a lease so the tests can drive a run against a
+    /// simulated "today". In the host it is only ever reached through
+    /// <see cref="LeasedScheduledWorker.TickAsync"/>, which holds the lease around it.</para>
+    /// </summary>
     public async Task RunOnceAsync(DateOnly today, CancellationToken cancellationToken)
     {
-        using var scope = scopeFactory.CreateScope();
+        using var scope = ScopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateTrackingDbContext>();
         var config = await db.SemaforoThresholdConfigs.SingleAsync(
             c => c.Id == SemaforoThresholdConfig.DefaultConfigId, cancellationToken);

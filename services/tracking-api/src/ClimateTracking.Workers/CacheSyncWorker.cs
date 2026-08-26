@@ -14,27 +14,39 @@ namespace ClimateTracking.Workers;
 /// IClimateProjectClient.GetHallazgoByIdAsync in PlanesAccionEndpoints.CreateAsync
 /// instead of cached, since they're only needed at plan-creation time for a single
 /// hallazgo, not queried in bulk like nodos/personas/ciclos.
+///
+/// <para>Ticks under the service-wide advisory lease (see <see cref="LeasedScheduledWorker"/>).
+/// The syncs are upserts, so N instances syncing at once is wasteful rather than wrong -- but
+/// they are upserts that read-then-write the same rows, and the API image now hosts this
+/// worker on every instance, so "wasteful rather than wrong" is not a property worth relying
+/// on when the lease that <c>DailySemaforoWorker</c> genuinely needs is one line away.</para>
 /// </summary>
 public class CacheSyncWorker(
     IServiceScopeFactory scopeFactory,
     IClimateProjectClient client,
     ILogger<CacheSyncWorker> logger,
-    TimeSpan? syncInterval = null) : BackgroundService
+    TimeSpan? syncInterval = null,
+    bool enabled = true)
+    : LeasedScheduledWorker(
+        TrackingJobs.CacheSync,
+        syncInterval ?? TimeSpan.FromMinutes(15),
+        enabled,
+        scopeFactory,
+        logger)
 {
-    private readonly TimeSpan _syncInterval = syncInterval ?? TimeSpan.FromMinutes(15);
+    protected override Task RunTickAsync(CancellationToken cancellationToken) =>
+        SyncOnceAsync(cancellationToken);
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        using var timer = new PeriodicTimer(_syncInterval);
-        do
-        {
-            await SyncOnceAsync(stoppingToken);
-        } while (await timer.WaitForNextTickAsync(stoppingToken));
-    }
-
+    /// <summary>
+    /// One pass over all three entity types.
+    ///
+    /// <para>Public and callable outside a lease so the tests can drive a sync directly. In
+    /// the host it is only ever reached through <see cref="LeasedScheduledWorker.TickAsync"/>,
+    /// which holds the lease around it.</para>
+    /// </summary>
     public async Task SyncOnceAsync(CancellationToken cancellationToken)
     {
-        using var scope = scopeFactory.CreateScope();
+        using var scope = ScopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateTrackingDbContext>();
 
         await SyncEntityTypeAsync("nodos", () => SyncNodosAsync(db, cancellationToken));
