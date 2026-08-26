@@ -42,6 +42,56 @@ public class SmtpEmailTransportTests
     /// </summary>
     private const string DeliverableAddress = "ana@fixtures.timsint.com";
 
+    /// <summary>
+    /// The backstop guarantee, asserted as "the provider was never contacted".
+    ///
+    /// <para>
+    /// Both senders refuse a reserved domain before they reach this class, which is where the
+    /// useful log line belongs. This check exists so the guarantee survives a third sender
+    /// written by someone who does not know the rule -- and it is the last code that runs
+    /// before an SMTP connection to SES would be opened.
+    /// </para>
+    /// <para>
+    /// A returned <c>Permanent</c> flag cannot state this on its own: a transport that
+    /// dialled, was rejected with a 550, and reported a permanent failure returns exactly what
+    /// a transport that refused pre-flight returns. Only one of the two put a hard bounce on
+    /// an SES account shared with five other TIMS products. So the assertion is that a live
+    /// server on the other end saw no connection at all.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("someone@demo.test", "demo.test")]
+    [InlineData("someone@example.com", "example.com")]
+    [InlineData("someone@company.invalid", "company.invalid")]
+    public async Task A_reserved_domain_is_refused_without_contacting_the_provider(
+        string address,
+        string expectedDomain)
+    {
+        using var server = new CapturingSmtpServer();
+
+        var options = new EmailOptions
+        {
+            Provider = EmailOptions.ProviderSmtp,
+            SmtpHost = "127.0.0.1",
+            SmtpPort = server.Port,
+            SmtpUseStartTls = false,
+            FromAddress = "no-reply@example.com",
+            AppBaseUrl = "https://app.example.invalid",
+            TimeoutSeconds = 10,
+        };
+        var transport = new SmtpEmailTransport(
+            options,
+            new EmailSendRateLimiter(options.MaxSendsPerSecond),
+            NullLogger<SmtpEmailTransport>.Instance);
+
+        var outcome = await transport.SendAsync(Message(address), CancellationToken.None);
+
+        Assert.False(await server.WasContactedAsync(TimeSpan.FromSeconds(1)));
+        Assert.False(outcome.Delivered);
+        Assert.True(outcome.Permanent);
+        Assert.Contains(expectedDomain, outcome.FailureReason, StringComparison.Ordinal);
+    }
+
     private static EmailMessage Message(string to, string subject = "Subject")
         => new(to, "Ana", subject, "text", "<p>html</p>");
 
