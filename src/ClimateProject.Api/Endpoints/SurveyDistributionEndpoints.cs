@@ -721,6 +721,21 @@ public static class SurveyDistributionEndpoints
     /// notification, and a second revoke is the only thing an administrator can do about it.
     /// Idempotent in effect, not merely in status.</para>
     ///
+    /// <para><b>What this does not close, stated rather than implied.</b> Cancelling at the
+    /// revoke stops every message queued before it and can, by construction, do nothing about one
+    /// queued after -- and both reminder producers read their candidates well before they insert.
+    /// <c>InvitationReminderJob.RunAsync</c> reads the survey sweep's candidates, then runs the
+    /// microclimate sweep, then saves; <c>SendRemindersAsync</c> reads and then saves inside one
+    /// request. Neither read sees a revoke that commits afterwards, and <c>survey_invitations</c>
+    /// carries no concurrency token, so the insert is not aborted by one either. A revoke landing
+    /// inside that window therefore leaves a <c>survey_reminder</c> queued for an invitation that
+    /// is already revoked, and the next delivery sweep mails it without a link. The window is one
+    /// sweep wide and needs the revoke to land inside it; the remedy is the paragraph above --
+    /// revoke again, which is why the cancellation runs on an already-revoked invitation. Closing
+    /// it outright means re-deriving the decision at send time, which is the design rejected for
+    /// the four reasons above; this is the price of that trade, named here so that "cancelled in
+    /// the same transaction" is not read as "no queued message can outlive a revoke".</para>
+    ///
     /// <para><b>The distribution link's own revoke is deliberately untouched.</b>
     /// <see cref="RevokeLinkAsync"/> kills <c>survey_distributions.public_url</c>, which this
     /// product never mails: the only URL any notification carries is

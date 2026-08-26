@@ -534,13 +534,17 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
             .Select(n => new { n.UserId, n.Data, n.Status })
             .ToListAsync());
         Assert.Equal(3, statuses.Count);
-        Assert.All(
-            statuses,
-            row => Assert.Equal(
-                SurveyNotificationData.InvitationIdOrNull(row.Data) == revokedInvitationId
-                    ? NotificationStatuses.Cancelled
-                    : NotificationStatuses.Sent,
-                row.Status));
+
+        // Exactly one row was cancelled, it belongs to the person whose invitation was revoked,
+        // and its payload names that invitation. Matched as text rather than through
+        // `SurveyNotificationData.InvitationIdOrNull` -- the function `UnsentMailForAsync` uses to
+        // decide -- so a break in that reader cannot move the expectation and the outcome
+        // together and leave this green.
+        var cancelled = Assert.Single(statuses, row => row.Status == NotificationStatuses.Cancelled);
+        Assert.Equal(employeeId, cancelled.UserId);
+        Assert.Contains(
+            revokedInvitationId.ToString(), cancelled.Data ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(2, statuses.Count(row => row.Status == NotificationStatuses.Sent));
     }
 
     /// <summary>
@@ -596,6 +600,7 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
             .Select(i => new { i.Id, i.UserId })
             .ToListAsync());
 
+        var revokedAt = DateTimeOffset.UtcNow;
         foreach (var invitation in invitationIds)
         {
             (await client.PostAsync(
@@ -610,6 +615,13 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
         // Retries left, so the sweep would have come back for it: cancelled.
         Assert.Equal(NotificationStatuses.Cancelled, rows[retryableId].Status);
 
+        // ...and it keeps the timestamp of the failure it really had. A cancellation is a
+        // decision, not a failure, so the revoke neither rewrites that timestamp nor invents one.
+        Assert.NotNull(rows[retryableId].FailedAt);
+        Assert.True(
+            rows[retryableId].FailedAt < revokedAt,
+            $"failed_at was rewritten by the revoke: {rows[retryableId].FailedAt:O}");
+
         // Out of budget, so it was never going anywhere: left as the failure it was, reason and
         // all.
         Assert.Equal(NotificationStatuses.Failed, rows[deadLetterId].Status);
@@ -621,6 +633,404 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
         Assert.Equal(0, sweep.Sent);
         Assert.Empty(_mail.Mailbox.To(retryableEmail));
         Assert.Empty(_mail.Mailbox.To(deadLetterEmail));
+    }
+
+    /// <summary>
+    /// <b>#383, the other type named in the issue's own sentence.</b> "Cancel the still-<c>pending</c>
+    /// <c>survey_invitation</c> / <c>survey_reminder</c> notifications" -- and the reminder is the
+    /// row most likely to be outstanding when somebody revokes, because it is raised days after
+    /// the invitation went out, by a worker, at a moment no administrator chose.
+    ///
+    /// <para>
+    /// Narrowing the candidate filter to <c>survey_invitation</c> alone leaves every other test in
+    /// this class green: they all queue their rows through <c>POST /surveys/{id}/invitations</c>,
+    /// which only ever produces that one type. This is the test that fails instead.
+    /// </para>
+    /// <para>
+    /// The reminder is raised by <c>InvitationReminderJob.RunAsync</c> -- the producer
+    /// <c>Jobs.cs</c> ticks in the Workers host -- and never hand-written: the type filter is what
+    /// is under test, and a row this test typed out itself would prove only that the filter
+    /// matches a string this test chose.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_revoke_cancels_the_reminder_a_worker_queued_and_not_just_the_invitation()
+    {
+        var client = await AdminAsync();
+        var survey = await CreateActiveSurveyAsync(client);
+        var (employeeId, employeeEmail) = await SeedEmployeeAsync();
+
+        var invited = await client.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/invitations", new CreateSurveyInvitationsRequest(UserIds: [employeeId]));
+        invited.EnsureSuccessStatusCode();
+        var invitationId = (await invited.Content.ReadFromJsonAsync<SurveyInvitationBatchResult>())!.InvitationIds[0];
+
+        // The invitation itself goes out first, exactly as it would have. This test is about the
+        // message queued AFTERWARDS, so from here on the mailbox count is the whole assertion.
+        Assert.Equal(1, (await SweepAsync(client)).Sent);
+        Assert.Single(_mail.Mailbox.To(employeeEmail));
+
+        // Age the contact past the reminder cadence so the worker finds this invitation due.
+        await _harness.WithDbAsync(async db =>
+        {
+            var invitation = await db.SurveyInvitations.FirstAsync(i => i.Id == invitationId);
+            invitation.SentAt = DateTimeOffset.UtcNow.AddDays(-30);
+            invitation.Status = SurveyInvitationStatuses.Sent;
+            await db.SaveChangesAsync();
+        });
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var raised = await InvitationReminderJob.RunAsync(
+                scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>(),
+                scope.ServiceProvider.GetRequiredService<ILoggerFactory>(),
+                DateTimeOffset.UtcNow,
+                InvitationReminderJob.DefaultBatchSize,
+                CancellationToken.None);
+            Assert.True(raised.Raised >= 1, "the reminder job raised nothing, so this test would be vacuous");
+        }
+
+        var queued = await _harness.WithDbAsync(db => db.Notifications
+            .AsNoTracking()
+            .FirstAsync(n => n.UserId == employeeId && n.Type == NotificationTypes.SurveyReminder));
+        Assert.Equal(NotificationStatuses.Pending, queued.Status);
+
+        // The producer's own payload names this invitation. Asserted as text rather than through
+        // the reader the endpoint uses, so this precondition cannot agree with the code under test
+        // by sharing its bug.
+        Assert.Contains(invitationId.ToString(), queued.Data ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+
+        (await client.PostAsync(
+            $"/surveys/{survey.Id}/invitations/{invitationId}/revoke", null)).EnsureSuccessStatusCode();
+
+        var afterRevoke = await SweepAsync(client);
+        Assert.Equal(0, afterRevoke.Sent);
+
+        // Still exactly one message: the invitation that went before the revoke. The reminder
+        // never reached a transport.
+        Assert.Single(_mail.Mailbox.To(employeeEmail));
+
+        var reminder = await _harness.WithDbAsync(db => db.Notifications
+            .AsNoTracking()
+            .FirstAsync(n => n.UserId == employeeId && n.Type == NotificationTypes.SurveyReminder));
+        Assert.Equal(NotificationStatuses.Cancelled, reminder.Status);
+        Assert.Null(reminder.SentAt);
+    }
+
+    /// <summary>
+    /// <b>#383, the rows this change arrives too late for.</b> Every invitation revoked before
+    /// this behaviour existed still sits beside a live <c>pending</c> notification, and there is
+    /// no data migration here: revoking again is the entire remedy. So the cancellation has to
+    /// run on an invitation that is <i>already</i> revoked -- the branch where the status flip is
+    /// a no-op and the cancellation is the only thing left to do, and the one branch every other
+    /// test in this class skips because it always revokes something live.
+    ///
+    /// <para>
+    /// The same remedy is the only one available for the race named on
+    /// <c>RevokeInvitationAsync</c>, where the reminder worker reads an invitation moments before
+    /// it is revoked and inserts the reminder moments after. That window cannot be driven
+    /// deterministically from a test; the state it leaves behind is exactly the state below.
+    /// </para>
+    /// <para>
+    /// Produced the way production produced it. The notification is the real endpoint's; the
+    /// revoke that left it behind is replayed as the old code performed it -- status, expiry and
+    /// stamp, and not a word said to the notifications table.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Revoking_an_already_revoked_invitation_cancels_mail_the_first_revoke_left_behind()
+    {
+        var client = await AdminAsync();
+        var survey = await CreateActiveSurveyAsync(client);
+        var (employeeId, employeeEmail) = await SeedEmployeeAsync();
+
+        var invited = await client.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/invitations", new CreateSurveyInvitationsRequest(UserIds: [employeeId]));
+        invited.EnsureSuccessStatusCode();
+        var invitationId = (await invited.Content.ReadFromJsonAsync<SurveyInvitationBatchResult>())!.InvitationIds[0];
+
+        // The revoke as it behaved before this fix: the invitation is closed and the queued mail
+        // is not mentioned.
+        var revokedAt = DateTimeOffset.UtcNow;
+        await _harness.WithDbAsync(async db =>
+        {
+            var invitation = await db.SurveyInvitations.FirstAsync(i => i.Id == invitationId);
+            invitation.Status = SurveyInvitationStatuses.Revoked;
+            invitation.ExpiresAt = revokedAt;
+            invitation.UpdatedAt = revokedAt;
+            await db.SaveChangesAsync();
+        });
+
+        // The state an upgrade inherits, stated rather than assumed: revoked, and still going to
+        // be mailed.
+        Assert.Equal(
+            NotificationStatuses.Pending,
+            await _harness.WithDbAsync(db => db.Notifications
+                .AsNoTracking().Where(n => n.UserId == employeeId).Select(n => n.Status).FirstAsync()));
+
+        // The only move an administrator has: revoke it again.
+        var again = await client.PostAsync($"/surveys/{survey.Id}/invitations/{invitationId}/revoke", null);
+        again.EnsureSuccessStatusCode();
+
+        // It is still revoked -- and now its mail is cancelled too.
+        var detail = (await again.Content.ReadFromJsonAsync<SurveyInvitationDetail>())!;
+        Assert.Equal(SurveyInvitationStatuses.Revoked, detail.Status);
+
+        var repaired = await _harness.WithDbAsync(db => db.Notifications
+            .AsNoTracking().FirstAsync(n => n.UserId == employeeId));
+        Assert.Equal(NotificationStatuses.Cancelled, repaired.Status);
+
+        // The assertion that matters: the sweep that would have mailed it does not.
+        Assert.Equal(0, (await SweepAsync(client)).Sent);
+        Assert.Empty(_mail.Mailbox.To(employeeEmail));
+    }
+
+    /// <summary>
+    /// <b>#383, the limit of what a revoke may cancel.</b> A <c>survey_invitation</c> notification
+    /// whose <c>data</c> names no invitation is a message this product still sends -- it degrades
+    /// to the link-less mail, which <see cref="SurveyNotificationData"/> documents and
+    /// <c>A_notification_that_is_not_about_a_survey_gets_no_link</c> pins. Nothing about it is
+    /// about the invitation being revoked, so a revoke must leave it exactly where it is.
+    ///
+    /// <para>
+    /// Widening the payload match to "or names nothing" is a one-token change that no other test
+    /// in this class can see, and it would silently suppress an unrelated message every time an
+    /// administrator revoked anything for the same person.
+    /// </para>
+    /// <para>
+    /// The row is written by <c>POST /notifications</c>, which is the product's real path for a
+    /// hand-addressed message and is named on <see cref="SurveyNotificationData"/> as the reason
+    /// payload-less survey mail exists at all. Dated forward so it is still queued when the revoke
+    /// lands, then delivered by the real sweep at the moment it comes due.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_revoke_leaves_survey_mail_that_names_no_invitation_alone()
+    {
+        var client = await AdminAsync();
+        var survey = await CreateActiveSurveyAsync(client);
+        var (employeeId, employeeEmail) = await SeedEmployeeAsync();
+
+        var invited = await client.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/invitations", new CreateSurveyInvitationsRequest(UserIds: [employeeId]));
+        invited.EnsureSuccessStatusCode();
+        var invitationId = (await invited.Content.ReadFromJsonAsync<SurveyInvitationBatchResult>())!.InvitationIds[0];
+
+        var dueAt = DateTimeOffset.UtcNow.AddDays(2);
+        var posted = await client.PostAsJsonAsync("/notifications", new CreateNotificationRequest(
+            UserId: employeeId,
+            CompanyId: _companyId,
+            Type: NotificationTypes.SurveyInvitation,
+            Channel: NotificationChannels.Email,
+            Priority: NotificationPriorities.Default,
+            Title: "A word about the survey programme",
+            Message: "No link, and nothing to do with any one invitation.",
+            Data: null,
+            ScheduledFor: dueAt));
+        posted.EnsureSuccessStatusCode();
+        var hand = (await posted.Content.ReadFromJsonAsync<NotificationDetail>())!;
+        Assert.Equal(NotificationStatuses.Pending, hand.Status);
+        Assert.Null(hand.Data);
+
+        (await client.PostAsync(
+            $"/surveys/{survey.Id}/invitations/{invitationId}/revoke", null)).EnsureSuccessStatusCode();
+
+        // The invitation's own mail is cancelled; the message that named no invitation is not.
+        var rows = await _harness.WithDbAsync(db => db.Notifications
+            .AsNoTracking().Where(n => n.UserId == employeeId).ToDictionaryAsync(n => n.Id));
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(NotificationStatuses.Pending, rows[hand.Id].Status);
+        Assert.Single(rows.Values, n => n.Status == NotificationStatuses.Cancelled);
+
+        // ...and it is still delivered when it comes due, which is the part a status alone does
+        // not prove.
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var swept = await NotificationDelivery.ProcessDueAsync(
+                scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>(),
+                scope.ServiceProvider.GetRequiredService<INotificationSender>(),
+                scope.ServiceProvider.GetRequiredService<ILoggerFactory>(),
+                _companyId,
+                dueAt.AddMinutes(1),
+                NotificationDelivery.DefaultBatchSize,
+                CancellationToken.None);
+
+            Assert.Equal(1, swept.Attempted);
+            Assert.Equal(1, swept.Sent);
+        }
+
+        var message = Assert.Single(_mail.Mailbox.To(employeeEmail));
+        Assert.Contains("No link, and nothing to do with any one invitation.", message.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.TextBody, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>#383, across a tenant boundary.</b> The candidate query is scoped to the invitation's
+    /// company as well as its recipient, and only a re-homed employee can tell the two apart: an
+    /// invitation minted by a former employer keeps that employer's <c>company_id</c>, while the
+    /// same person now receives mail under their new one.
+    ///
+    /// <para>
+    /// Delete the tenancy clause and every other test in this class stays green, because every
+    /// other test lives in one company. What changes is this: the former employer's revoke reaches
+    /// into the new employer's queue and cancels a message that company composed, about a survey
+    /// the revoking administrator cannot see. One tenant's click, another tenant's row.
+    /// </para>
+    /// <para>
+    /// The re-homing itself is a direct write for the reason
+    /// <c>A_re_homed_employees_previous_tenant_token_is_not_mailed_by_their_new_tenant</c> gives:
+    /// nothing in <c>src/</c> moves a user between companies yet. Both notifications are written
+    /// by real endpoints, and the mail that is allowed through carries no token -- so letting it
+    /// go is not a disclosure, it is this tenant's message being left to this tenant.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_revoke_does_not_cancel_the_same_persons_queued_mail_in_another_tenant()
+    {
+        var formerCompanyId = await _harness.SeedCompanyAsync("Mail Link Prior Co");
+        var formerAdmin = await _harness.ClientAsync(Roles.CompanyAdmin, formerCompanyId);
+
+        var employeeId = await _harness.WithDbAsync(async db =>
+        {
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = formerCompanyId,
+                Email = $"{Guid.NewGuid():N}@rehomed-revoke.test",
+                Name = "Rehomed",
+                Role = Roles.Employee,
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            };
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
+            return user.Id;
+        });
+
+        var formerSurvey = await SurveyTestHarness.CreateSurveyAsync(
+            formerAdmin, SurveyTestHarness.MinimalRequest(formerCompanyId));
+        (await SurveyTestHarness.SetStatusAsync(formerAdmin, formerSurvey.Id, SurveyStatuses.Active))
+            .EnsureSuccessStatusCode();
+
+        var invited = await formerAdmin.PostAsJsonAsync(
+            $"/surveys/{formerSurvey.Id}/invitations", new CreateSurveyInvitationsRequest(UserIds: [employeeId]));
+        invited.EnsureSuccessStatusCode();
+        var oldInvitationId = (await invited.Content.ReadFromJsonAsync<SurveyInvitationBatchResult>())!.InvitationIds[0];
+
+        // The employee moves here. The old invitation row is untouched: its user_id still names
+        // them, its company_id still names their former employer.
+        var employeeEmail = await _harness.WithDbAsync(async db =>
+        {
+            var user = await db.Users.FirstAsync(u => u.Id == employeeId);
+            user.CompanyId = _companyId;
+            user.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+            return user.Email;
+        });
+
+        // Their new employer queues survey mail for them that names the old invitation -- the one
+        // shape of row that passes every predicate except tenancy.
+        var dueAt = DateTimeOffset.UtcNow.AddDays(2);
+        var posted = await (await AdminAsync()).PostAsJsonAsync("/notifications", new CreateNotificationRequest(
+            UserId: employeeId,
+            CompanyId: _companyId,
+            Type: NotificationTypes.SurveyInvitation,
+            Channel: NotificationChannels.Email,
+            Priority: NotificationPriorities.Default,
+            Title: "Your survey",
+            Message: "Please respond.",
+            Data: SurveyNotificationData.Serialize(formerSurvey.Id, oldInvitationId),
+            ScheduledFor: dueAt));
+        posted.EnsureSuccessStatusCode();
+        var newTenantRowId = (await posted.Content.ReadFromJsonAsync<NotificationDetail>())!.Id;
+
+        // The FORMER employer revokes their own invitation.
+        (await formerAdmin.PostAsync(
+            $"/surveys/{formerSurvey.Id}/invitations/{oldInvitationId}/revoke", null)).EnsureSuccessStatusCode();
+
+        var rows = await _harness.WithDbAsync(db => db.Notifications
+            .AsNoTracking().Where(n => n.UserId == employeeId).ToDictionaryAsync(n => n.Id));
+        Assert.Equal(2, rows.Count);
+
+        // Their former tenant's queued mail: cancelled, which is the whole point of the fix.
+        Assert.Equal(
+            NotificationStatuses.Cancelled,
+            Assert.Single(rows.Values, n => n.CompanyId == formerCompanyId).Status);
+
+        // The other tenant's: untouched, and still delivered when it comes due.
+        Assert.Equal(NotificationStatuses.Pending, rows[newTenantRowId].Status);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var swept = await NotificationDelivery.ProcessDueAsync(
+                scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>(),
+                scope.ServiceProvider.GetRequiredService<INotificationSender>(),
+                scope.ServiceProvider.GetRequiredService<ILoggerFactory>(),
+                _companyId,
+                dueAt.AddMinutes(1),
+                NotificationDelivery.DefaultBatchSize,
+                CancellationToken.None);
+
+            Assert.Equal(1, swept.Sent);
+        }
+
+        // Delivered, and carrying nothing: the revoked invitation has no live token to resolve,
+        // which is what makes leaving this row alone safe rather than merely correct.
+        var message = Assert.Single(_mail.Mailbox.To(employeeEmail));
+        Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(SurveyAccessTokens.InvitationLinkPrefix, message.HtmlBody, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>#383, what the cancelled row says about itself.</b> <c>cancelled</c> means a decision was
+    /// taken, not that anything went wrong, and <c>GET /notifications</c> is where a human reads
+    /// the difference. So the row acquires a reason and a fresh stamp, and it does <b>not</b>
+    /// acquire a <c>failedAt</c>: a message that never failed must not appear in an operator's
+    /// console as one that did.
+    ///
+    /// <para>
+    /// Both halves are one-token changes to <c>CancelUnsentMail</c> that nothing else here can
+    /// see -- no other test in this class reads either timestamp on a cancelled row -- and the
+    /// <c>failedAt</c> half is visible to every administrator through the list endpoint, which is
+    /// why that half is asserted on the rendered response rather than on the row.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_cancelled_message_is_stamped_as_a_decision_and_not_as_a_failure()
+    {
+        var client = await AdminAsync();
+        var survey = await CreateActiveSurveyAsync(client);
+        var (employeeId, _) = await SeedEmployeeAsync();
+
+        var invited = await client.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/invitations", new CreateSurveyInvitationsRequest(UserIds: [employeeId]));
+        invited.EnsureSuccessStatusCode();
+        var invitationId = (await invited.Content.ReadFromJsonAsync<SurveyInvitationBatchResult>())!.InvitationIds[0];
+
+        var queued = await _harness.WithDbAsync(db => db.Notifications
+            .AsNoTracking().FirstAsync(n => n.UserId == employeeId));
+        Assert.Null(queued.FailedAt);
+
+        (await client.PostAsync(
+            $"/surveys/{survey.Id}/invitations/{invitationId}/revoke", null)).EnsureSuccessStatusCode();
+
+        var cancelled = await _harness.WithDbAsync(db => db.Notifications
+            .AsNoTracking().FirstAsync(n => n.UserId == employeeId));
+        Assert.Equal(NotificationStatuses.Cancelled, cancelled.Status);
+
+        // The revoke moved the row, and the row records when.
+        Assert.True(
+            cancelled.UpdatedAt > queued.UpdatedAt,
+            $"updated_at did not move: still {cancelled.UpdatedAt:O}");
+
+        // What the administrator sees. Not a failure, and it says why.
+        var listed = await client.GetFromJsonAsync<NotificationListResponse>(
+            $"/notifications?companyId={_companyId}");
+        var detail = Assert.Single(listed!.Notifications, n => n.Id == cancelled.Id);
+        Assert.Equal(NotificationStatuses.Cancelled, detail.Status);
+        Assert.Null(detail.FailedAt);
+        Assert.False(string.IsNullOrWhiteSpace(detail.FailureReason));
     }
 
     /// <summary>
