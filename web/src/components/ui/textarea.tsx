@@ -17,7 +17,7 @@ export function Textarea({ className, ...props }: TextareaProps) {
       className={cn(
         'field-sizing-content h-auto min-h-16 w-full py-2',
         'rounded-md border border-line-default bg-surface-input text-base text-fg-primary',
-        'placeholder:text-fg-light',
+        'placeholder:text-fg-tertiary',
         'hover:not-disabled:border-line-hover',
         'disabled:cursor-not-allowed disabled:opacity-50',
         'aria-invalid:border-accent-red',

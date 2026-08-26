@@ -107,7 +107,7 @@ export function NotificationDropdown({
                   <span className="text-sm text-fg-tertiary">{notification.description}</span>
                 )}
                 {notification.timestamp && (
-                  <span className="text-2xs text-fg-light">{notification.timestamp}</span>
+                  <span className="text-2xs text-fg-tertiary">{notification.timestamp}</span>
                 )}
               </DropdownMenuItem>
             ))}

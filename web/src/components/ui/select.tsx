@@ -41,7 +41,7 @@ export function SelectTrigger({
         'rounded-md border border-line-default bg-surface-input px-3 text-base text-fg-primary',
         'transition-[border-color] ease-out',
         'data-[size=default]:h-control-lg data-[size=sm]:h-control-md',
-        'data-[placeholder]:text-fg-light',
+        'data-[placeholder]:text-fg-tertiary',
         'hover:not-disabled:border-line-hover',
         'disabled:cursor-not-allowed disabled:opacity-50',
         'aria-invalid:border-accent-red',
@@ -118,7 +118,9 @@ export function SelectItem({
       data-slot="select-item"
       className={cn(
         'relative flex w-full cursor-default select-none items-center gap-inline',
-        'rounded-md py-1.5 pr-8 pl-2 text-base outline-hidden',
+        // #83: Tailwind v4's ring-killer was here — see `ui/dropdown-menu.tsx` for why a
+        // highlighted row's tint is not a focus indicator on its own.
+        'rounded-md py-1.5 pr-8 pl-2 text-base focus-visible:outline-offset-[-2px]',
         'data-highlighted:bg-state-hover data-highlighted:text-fg-primary',
         'data-[state=checked]:font-medium',
         'data-disabled:pointer-events-none data-disabled:opacity-50',

@@ -109,12 +109,29 @@ const PAIRS: readonly Pair[] = [
 ]
 
 /**
- * The ink that actually shipped on the map, kept so the numbers in the docblock are
- * a measured comparison rather than a claim about nothing. `--admin-font-tertiary`
- * is #818181 in *both* palettes, which is why it failed the same way twice and why
- * checking dark did not reveal it.
+ * The vacuity control's ink: one that must genuinely FAIL AA, so a broken
+ * measurement cannot report everything as passing.
+ *
+ * It is a LITERAL, not a token, and that is the whole lesson of this line. It was
+ * `--admin-font-tertiary` until #83 repaired that token; it was then
+ * `--admin-font-light` until #83 repaired that one too (the state-layer matrix in
+ * `styles/inkContrast.test.ts` pushed it from #8090a7 to #79889e, which clears 4.5
+ * on the dark panel and so stopped being a known-bad case). A control whose
+ * known-bad value is a shipped token goes green the moment somebody fixes the
+ * product, which is precisely when you want it to still be watching.
+ *
+ * Light is the value this screen ACTUALLY shipped and could not be read in:
+ * #78879c was `--admin-font-tertiary` when the map's labels were unreadable on
+ * it (3.66:1 on the panel, 3.40:1 on a tile). Dark is one step below the
+ * matching historical value — #74839a failed on a tile (4.21:1) but cleared the
+ * dark panel at 4.54:1, and a control that only fails on one of the two surfaces
+ * it is looped over is not a control. It is constructed, and says so.
+ *
+ * The source ban further down is kept as it was. Those three files use
+ * `--admin-font-secondary`, which is stronger than the floor either way, and
+ * relaxing another slice's guard is not this issue's to do.
  */
-const REJECTED_INK = '--admin-font-tertiary'
+const REJECTED_INK = { light: '#78879c', dark: '#738298' } as const
 
 /** Surfaces ClimateMap is rendered on. */
 const MAP_SURFACES = ['--admin-bg-panel', '--admin-bg-icon-box'] as const
@@ -148,19 +165,19 @@ describe('the survey results screen reads in both themes', () => {
    * proving nothing about the defect it was written for.
    */
   it.each(MAP_SURFACES.flatMap((surface) => themes.map(([theme, palette]) => [theme, palette, surface] as const)))(
-    'the ink that shipped on the map does NOT clear AA in %s',
+    'the ink this screen shipped and could not be read in does NOT clear AA in %s',
     (theme, palette, surface) => {
-      const ratio = contrastRatio(parseColor(palette[REJECTED_INK]), parseColor(palette[surface]))
-      // Dark on the bare panel is the one combination that scrapes past 4.5 (4.60),
-      // so it is excluded rather than asserted — the failure is real on the other
-      // three, which is what makes the swap necessary.
-      if (theme === 'dark' && surface === '--admin-bg-panel') {
-        expect(ratio).toBeGreaterThanOrEqual(AA_SMALL_TEXT)
-        return
-      }
+      const ratio = contrastRatio(parseColor(REJECTED_INK[theme]), parseColor(palette[surface]))
       expect(ratio).toBeLessThan(AA_SMALL_TEXT)
     },
   )
+
+  it('the measurement itself is not stuck — the vacuity control', () => {
+    // The two extremes, hand-computable: if `contrastRatio` ever returned a
+    // constant, every assertion in this file would agree with it.
+    expect(contrastRatio(parseColor('#ffffff'), parseColor('#000000'))).toBeCloseTo(21, 1)
+    expect(contrastRatio(parseColor('#ffffff'), parseColor('#ffffff'))).toBeCloseTo(1, 5)
+  })
 
   it.each([
     ['components/charts/KpiTile.tsx', KPI_TILE],

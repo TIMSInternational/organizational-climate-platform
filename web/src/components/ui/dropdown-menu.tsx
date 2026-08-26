@@ -36,7 +36,15 @@ const surfaceClasses = cn(
 
 const itemClasses = cn(
   'relative flex cursor-default select-none items-center gap-inline rounded-md',
-  'px-2 py-1.5 text-base outline-hidden',
+  // #83: Tailwind v4's ring-killer was here — blocked by name in
+  // `keyboardOperable.test.tsx`, and deliberately not spelled in a scanned source
+  // file, because Tailwind reads comments and would ship the class as a real rule.
+  // Radix gives a menu item real DOM focus as
+  // you arrow through, so the app's one `:focus-visible` ring is what marks the
+  // item you are on; the `data-highlighted` tint below is 1.09:1 against the
+  // panel and cannot carry that on its own. Pointer-driven focus does not match
+  // `:focus-visible`, so the ring is keyboard-only, which is where 2.4.7 lives.
+  'px-2 py-1.5 text-base focus-visible:outline-offset-[-2px]',
   'data-highlighted:bg-state-hover data-highlighted:text-fg-primary',
   'data-disabled:pointer-events-none data-disabled:opacity-50',
   '[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-icon',

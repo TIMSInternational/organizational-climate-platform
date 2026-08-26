@@ -66,7 +66,7 @@ export function DatePicker({
             'hover:not-disabled:border-line-hover',
             'disabled:cursor-not-allowed disabled:opacity-50',
             'aria-invalid:border-accent-red',
-            value ? 'text-fg-primary' : 'text-fg-light',
+            value ? 'text-fg-primary' : 'text-fg-tertiary',
             className,
           )}
         >

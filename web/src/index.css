@@ -443,6 +443,19 @@
    * `background: var(--admin-bg-overlay)`, which in light is a translucent white --
    * a light popover hanging out of a dark rail, printing light ink on itself. It
    * lifts to `--admin-shell-bg-raised` instead.
+   *
+   * `--admin-bg-input` is remapped for the SAME reason, and #83 found it the hard
+   * way: the base element layer gives every `input`/`select`/`textarea`
+   * `color: var(--admin-font-primary); background: var(--admin-bg-input)`, and this
+   * rule re-points the ink but used not to re-point the ground. The one form
+   * control that lives in the chrome -- `CompanyContextSwitcher`, the SuperAdmin's
+   * native `<select>` in the top strip -- therefore printed
+   * `--admin-shell-font-strong` (#eef3f9) on `--admin-bg-input` (#ffffff in light).
+   * That is **1.12:1**: the name of the tenant whose data the whole product is
+   * scoped to, effectively invisible. Photographed at /dashboard, light, 1440x900;
+   * tsc, oxlint and 3286 tests were all green over it, because every one of them
+   * measures a token pairing that this rule silently did not use. On the raised
+   * navy it is 10.46:1 in light and 11.93:1 in dark.
    * ------------------------------------------------------------------------- */
   .on-shell {
     --admin-font-primary: var(--admin-shell-font-strong);
@@ -453,6 +466,7 @@
     --admin-bg-hover: var(--admin-shell-bg-hover);
     --admin-bg-active: var(--admin-shell-bg-active);
     --admin-bg-overlay: var(--admin-shell-bg-raised);
+    --admin-bg-input: var(--admin-shell-bg-raised);
     --admin-border-light: var(--admin-shell-border);
     --admin-border-hover: var(--admin-shell-border);
     --admin-border-default: var(--admin-shell-border);
@@ -460,13 +474,30 @@
   }
 
   /* Legacy navigation/RoleBasedNav.tsx section heading:
-     `pt-2 pb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.06em]`
-     with `color: var(--admin-font-light)`. */
+     `pt-2 pb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.06em]`,
+     ported with `color: var(--admin-font-light)`.
+
+     That ink is the ONE tier held to 1.4.11's 3:1 instead of 1.4.3's 4.5:1, and
+     tokens.css defends the exemption with "nothing it paints is body text". This
+     rule was the counter-example, and it did not only paint the rail: inside
+     `.on-shell` the token is re-pointed at the navy palette, but `CommandPalette`
+     renders the palette's GROUP HEADINGS with this same class on the page's white
+     panel, where it resolved to #8090a7 — **3.25:1** at 10px in light, 3.94:1 in
+     dark, measured live in Chromium with the palette open. They were the palest
+     text on that screen.
+
+     `--admin-font-section-label` is the 10px-uppercase-eyebrow tier and is held
+     to 4.5:1 (4.90:1 on white, 5.92:1 on the dark panel), which is what this
+     class has always been. The rail is unchanged: `.on-shell` re-points
+     `--admin-font-section-label` at `--admin-shell-font-label`, the same value it
+     re-points `--admin-font-light` to. `styles/inkContrast.test.ts` now sweeps
+     stylesheets as well as components, and allows the non-text ink to paint text
+     only from a `:disabled` rule. */
   .nav-section-title {
     padding: var(--admin-space-8) var(--admin-space-8) var(--admin-space-6);
     font-size: var(--admin-text-2xs);
     font-weight: var(--admin-weight-semibold);
-    color: var(--admin-font-light);
+    color: var(--admin-font-section-label);
     letter-spacing: var(--admin-tracking-label);
     text-transform: uppercase;
   }

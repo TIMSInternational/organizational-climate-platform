@@ -129,6 +129,10 @@ export {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
+  // #83: this was the one member of the family the barrel had never listed, so a
+  // menu could be assembled from `ui` imports and then not opened. Every caller
+  // had reached past the barrel into `ui/dropdown-menu` for it.
+  DropdownMenuTrigger,
 } from './dropdown-menu'
 export { Toaster, type ToasterProps } from './toast'
 // Re-exported from sonner directly: `toast` is an imperative function, and
