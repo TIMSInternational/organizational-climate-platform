@@ -35,6 +35,10 @@ public class JwtAuthenticationTests : IClassFixture<PostgresFixture>, IAsyncLife
             builder.UseSetting("ProcomerCompanyId", ProcomerCompanyId);
             builder.UseSetting("ClimateProjectBaseUrl", "http://climate-project.test");
             builder.UseSetting("ClimateProjectInternalApiKey", "test-internal-key");
+            // The API host co-hosts CacheSyncWorker and DailySemaforoWorker (#219). Idle here:
+            // a test host that swept its own database and dialled a nonexistent
+            // climate-project on every boot would be racing the test it is hosting.
+            builder.UseSetting("Workers:Enabled", "false");
         });
 
         using var scope = _factory.Services.CreateScope();
