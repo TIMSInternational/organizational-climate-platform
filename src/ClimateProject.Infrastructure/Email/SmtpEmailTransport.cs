@@ -33,6 +33,9 @@ public sealed class SmtpEmailTransport(
     EmailSendRateLimiter rateLimiter,
     ILogger<SmtpEmailTransport> logger) : IEmailTransport
 {
+    /// <summary>The SMTP header SES reads a configuration set name from.</summary>
+    public const string SesConfigurationSetHeader = "X-SES-CONFIGURATION-SET";
+
     /// <summary>
     /// SMTP reply codes that mean "this address will never accept mail from us". Retrying
     /// any of these is how a sending domain's reputation is burned -- see
@@ -215,9 +218,6 @@ public sealed class SmtpEmailTransport(
 
         headers.Add(SesConfigurationSetHeader, configurationSet);
     }
-
-    /// <summary>The SMTP header SES reads a configuration set name from.</summary>
-    public const string SesConfigurationSetHeader = "X-SES-CONFIGURATION-SET";
 
     private MailAddress BuildFromAddress()
         => string.IsNullOrWhiteSpace(options.FromName)
