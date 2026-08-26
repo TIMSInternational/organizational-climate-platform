@@ -64,11 +64,22 @@ public static class SurveyResultsEndpoints
 
         // Audited as a sensitive read (#143). This route is the one that returns the
         // per-question answer breakdown for a survey of confidential employee opinion, so
-        // "who read this" has an answer. The three aggregates below are not marked: they are
-        // polled by dashboards and return counts, not content.
+        // "who read this" has an answer.
         group.MapGet("/{id:guid}/results", GetResultsAsync)
             .WithMetadata(new AuditSensitiveReadAttribute(AuditVerbs.Read));
 
+        // KNOWN GAP, and NOT what the previous comment here claimed. It said these three
+        // "are polled by dashboards and return counts, not content"; that is true only of
+        // /real-time-stats. /statistics returns Aggregate.Breakdowns and /analytics returns
+        // Aggregate.Questions AND Aggregate.Breakdowns -- between them the whole content of
+        // the #122 CSV export, unaudited, one route over from a /results that is audited for
+        // returning exactly that. So "who exported this data" can be answered while "who took
+        // an untraced copy of the same data" cannot.
+        //
+        // Deliberately left as it is rather than fixed here: which read surfaces are audited
+        // is #143's decision and it has to be made once, with the retention and volume
+        // consequences in view, not appended by whichever slice noticed. #122 records the
+        // limitation instead of narrowing it by half.
         group.MapGet("/{id:guid}/statistics", GetStatisticsAsync);
         group.MapGet("/{id:guid}/analytics", GetAnalyticsAsync);
         group.MapGet("/{id:guid}/real-time-stats", GetRealTimeStatsAsync);
