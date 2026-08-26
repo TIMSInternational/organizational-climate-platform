@@ -807,7 +807,9 @@ public static class SurveyDistributionEndpoints
     /// that, and a hand-written containment predicate would be a second, differently-behaved
     /// answer to it (a <c>Guid</c> written in braces or upper case parses there and would not
     /// match there). The candidate set is one invitee's undelivered survey mail, and a revoke
-    /// is an administrator's click rather than a hot path.</para>
+    /// is an administrator's click rather than a hot path -- and it is not a scan either: the
+    /// <c>(user_id, status, created_at)</c> index on <c>notifications</c> covers the two
+    /// columns this narrows on hardest.</para>
     /// </summary>
     private static async Task<List<Notification>> UnsentMailForAsync(
         SurveyInvitation invitation,
