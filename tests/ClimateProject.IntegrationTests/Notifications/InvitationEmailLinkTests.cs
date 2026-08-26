@@ -624,6 +624,65 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
     }
 
     /// <summary>
+    /// <b>#383, decision 2.</b> Revoking the <i>distribution link</i> is a different operation
+    /// on a different row, and it cancels nothing.
+    ///
+    /// <para>
+    /// The share link lives on <c>survey_distributions.public_url</c> and this product never
+    /// mails it: the only URL any notification carries is <c>/survey-invitations/{token}</c>,
+    /// resolved from the <c>survey_invitations</c> row that <c>notifications.data</c> names. So
+    /// there is no queued message that becomes wrong when the link dies -- and cancelling a
+    /// whole survey's invitation mail because its public link was withdrawn would un-invite
+    /// everybody over an unrelated decision.
+    /// </para>
+    /// <para>
+    /// Pinned rather than reasoned about, because "revoke" appearing in both route names is
+    /// exactly the resemblance that invites somebody to make the two behave alike.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Revoking_the_public_distribution_link_does_not_cancel_anybodys_invitation_mail()
+    {
+        var client = await AdminAsync();
+        var survey = await CreateActiveSurveyAsync(client);
+        var (employeeId, employeeEmail) = await SeedEmployeeAsync();
+
+        var distribution = await client.PutAsJsonAsync(
+            $"/surveys/{survey.Id}/distribution",
+            new UpsertSurveyDistributionRequest(AccessType: SurveyAccessTypes.Public));
+        distribution.EnsureSuccessStatusCode();
+        Assert.NotNull((await distribution.Content.ReadFromJsonAsync<SurveyDistributionDetail>())!.PublicLink);
+
+        (await client.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/invitations",
+            new CreateSurveyInvitationsRequest(UserIds: [employeeId]))).EnsureSuccessStatusCode();
+
+        var killed = await client.PostAsync($"/surveys/{survey.Id}/distribution/link/revoke", null);
+        killed.EnsureSuccessStatusCode();
+        Assert.Null((await killed.Content.ReadFromJsonAsync<SurveyDistributionDetail>())!.PublicLink);
+
+        // The invitation still goes out, and it still carries this invitee's own token -- which
+        // is not the link that was revoked and never was.
+        Assert.Equal(1, (await SweepAsync(client)).Sent);
+
+        var token = await _harness.WithDbAsync(db => db.SurveyInvitations
+            .AsNoTracking()
+            .Where(i => i.SurveyId == survey.Id && i.UserId == employeeId)
+            .Select(i => i.InvitationToken)
+            .FirstAsync());
+        var message = Assert.Single(_mail.Mailbox.To(employeeEmail));
+        Assert.Contains(
+            $"{CapturingMailHostFixture.AppBaseUrl}/survey-invitations/{token}",
+            message.TextBody,
+            StringComparison.Ordinal);
+
+        Assert.Equal(
+            NotificationStatuses.Sent,
+            await _harness.WithDbAsync(db => db.Notifications
+                .AsNoTracking().Where(n => n.UserId == employeeId).Select(n => n.Status).FirstAsync()));
+    }
+
+    /// <summary>
     /// <b>G4.</b> A notification that is not about a survey is unchanged: no link, and the
     /// composer's other output identical to what it always produced.
     /// </summary>
