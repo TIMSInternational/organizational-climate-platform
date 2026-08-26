@@ -686,6 +686,50 @@ public static class SurveyDistributionEndpoints
         return Results.Ok(ToInvitationDetail(invitation, now));
     }
 
+    /// <summary>
+    /// Revoke one invitation -- and with it the mail that has not gone out yet.
+    ///
+    /// <para><b>Why the notification is cancelled here rather than skipped by the sweep.</b>
+    /// Both would stop the mail. Cancelling here was chosen for four reasons.</para>
+    /// <list type="number">
+    /// <item>It is one decision at one moment. The revoke is the event; "and therefore this
+    /// queued message must not go" is its consequence, recorded in the same transaction as
+    /// the status flip. A sweep-side skip re-derives that consequence on every tick from state
+    /// that has to be re-read each time, and leaves the row <c>pending</c> in the meantime --
+    /// so <c>GET /notifications?status=pending</c> keeps listing a message nobody will ever
+    /// receive.</item>
+    /// <item>It keeps the cost where it belongs. <c>NotificationDelivery.ProcessDueAsync</c>
+    /// documents that it issues no per-notification query; teaching it revocation would mean
+    /// either a join onto <c>survey_invitations</c> for every sweep of every type, or a
+    /// per-row lookup, to catch a condition that arises when an administrator clicks revoke.
+    /// One query per revoke is strictly cheaper than one per swept row forever.</item>
+    /// <item>The sender <i>cannot</i> express it without widening a seam that exists to stay
+    /// narrow. <c>ISurveyInvitationTokens.LiveTokenAsync</c> returns null for four different
+    /// facts -- revoked, deleted, not this recipient's, no token -- deliberately collapsed
+    /// because from the recipient's side they are one fact. Only one of the four should
+    /// suppress the message; separating them again means either a second lookup or a
+    /// survey-shaped result type on the channel-agnostic <c>INotificationSender</c> contract.</item>
+    /// <item><c>cancelled</c> is already the vocabulary for exactly this. The dispatch path
+    /// uses it for "nothing broke, this must not go" when a recipient has opted out, and it
+    /// is not in <see cref="NotificationStatuses.Retryable"/>, so no sweep -- this tick, the
+    /// next one, or another instance -- picks the row up again.</item>
+    /// </list>
+    ///
+    /// <para><b>The cancellation runs even when the invitation was already revoked.</b> The
+    /// status flip is idempotent and skipping the sweep on a repeat call would be free, but a
+    /// row revoked before this behaviour existed still has its live <c>pending</c>
+    /// notification, and a second revoke is the only thing an administrator can do about it.
+    /// Idempotent in effect, not merely in status.</para>
+    ///
+    /// <para><b>The distribution link's own revoke is deliberately untouched.</b>
+    /// <see cref="RevokeLinkAsync"/> kills <c>survey_distributions.public_url</c>, which this
+    /// product never mails: the only URL any notification carries is
+    /// <c>/survey-invitations/{token}</c>, built by <c>EmailNotificationSender</c> from a
+    /// <c>survey_invitations</c> row named by <see cref="SurveyNotificationData"/>. There is no
+    /// queued message that becomes wrong when the share link dies, so there is nothing to
+    /// cancel -- and cancelling a whole survey's invitation mail because its public link was
+    /// withdrawn would un-invite everybody over an unrelated decision.</para>
+    /// </summary>
     private static async Task<IResult> RevokeInvitationAsync(
         Guid surveyId,
         Guid invitationId,
@@ -707,7 +751,8 @@ public static class SurveyDistributionEndpoints
         }
 
         var now = UtcNow();
-        if (invitation.Status != SurveyInvitationStatuses.Revoked)
+        var wasLive = invitation.Status != SurveyInvitationStatuses.Revoked;
+        if (wasLive)
         {
             invitation.Status = SurveyInvitationStatuses.Revoked;
 
@@ -717,11 +762,96 @@ public static class SurveyDistributionEndpoints
             // still fails closed rather than honouring a revoked token.
             invitation.ExpiresAt = now;
             invitation.UpdatedAt = now;
+        }
+
+        var cancelled = CancelUnsentMail(
+            await UnsentMailForAsync(invitation, db, cancellationToken), now);
+
+        if (wasLive || cancelled > 0)
+        {
+            // One SaveChanges, so one transaction: an invitation is never left revoked with
+            // its mail still deliverable, and mail is never cancelled for an invitation whose
+            // revoke did not land.
             await db.SaveChangesAsync(cancellationToken);
         }
 
         return Results.Ok(ToInvitationDetail(invitation, now));
     }
+
+    /// <summary>
+    /// Every notification queued about <paramref name="invitation"/> that a delivery sweep
+    /// could still mail.
+    ///
+    /// <para><b>Which rows the database is asked for.</b> The recipient and the tenant are the
+    /// same pair <c>ISurveyInvitationTokens.LiveTokenAsync</c> scopes on, and for the same
+    /// reason -- a notification about this invitation is by construction addressed to its
+    /// invitee inside its own company, so anything else is not this invitation's mail whatever
+    /// its payload claims. The type filter is
+    /// <see cref="SurveyNotificationData.LinkCarryingTypes"/> rather than a pair of literals,
+    /// so it cannot drift from the set the sender resolves a link for.</para>
+    ///
+    /// <para><b>Which rows are excluded, and why each is deliberate.</b> <c>sent</c>,
+    /// <c>delivered</c> and <c>opened</c> have gone -- the message is in somebody's mailbox and
+    /// no status written afterwards recalls it, so rewriting the row would only make the record
+    /// disagree with what happened. <c>cancelled</c> is already the target state. A
+    /// <c>failed</c> row that has exhausted its retries is a dead letter: it will never be
+    /// attempted again, so cancelling it stops nothing and would quietly drop it out of
+    /// <c>GET /notifications?status=failed</c>, erasing the fact that delivery was tried and
+    /// did not work. A <c>failed</c> row with budget left is the one that matters and is
+    /// included: the sweep WILL come back for it.</para>
+    ///
+    /// <para><b>Why the payload is matched in memory.</b> <c>data</c> is jsonb holding a string
+    /// id, and the question this has to answer is not "does this blob contain these bytes" but
+    /// "would the sender resolve this row to this invitation" --
+    /// <see cref="SurveyNotificationData.InvitationIdOrNull"/> is the function that decides
+    /// that, and a hand-written containment predicate would be a second, differently-behaved
+    /// answer to it (a <c>Guid</c> written in braces or upper case parses there and would not
+    /// match there). The candidate set is one invitee's undelivered survey mail, and a revoke
+    /// is an administrator's click rather than a hot path.</para>
+    /// </summary>
+    private static async Task<List<Notification>> UnsentMailForAsync(
+        SurveyInvitation invitation,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var candidates = await db.Notifications
+            .Where(n => n.UserId == invitation.UserId
+                        && n.CompanyId == invitation.CompanyId
+                        && SurveyNotificationData.LinkCarryingTypes.Contains(n.Type)
+                        && (n.Status == NotificationStatuses.Pending
+                            || (n.Status == NotificationStatuses.Failed && n.RetryCount < n.MaxRetries)))
+            .ToListAsync(cancellationToken);
+
+        return [.. candidates.Where(n => SurveyNotificationData.InvitationIdOrNull(n.Data) == invitation.Id)];
+    }
+
+    /// <summary>
+    /// Mark queued mail as deliberately not going. Tracked entities, mutated but not saved:
+    /// the caller owns the transaction.
+    /// </summary>
+    private static int CancelUnsentMail(List<Notification> unsent, DateTimeOffset now)
+    {
+        foreach (var notification in unsent)
+        {
+            // "cancelled", never "failed" -- the same distinction NotificationDelivery draws
+            // when a recipient has opted out. Nothing broke; a decision was taken. FailedAt is
+            // deliberately left alone: a row that failed once on its way here keeps the
+            // timestamp of that failure, and a row that never failed does not acquire one.
+            notification.Status = NotificationStatuses.Cancelled;
+            notification.FailureReason = RevokedSuppressionReason;
+            notification.UpdatedAt = now;
+        }
+
+        return unsent.Count;
+    }
+
+    /// <summary>
+    /// What <c>failure_reason</c> says on a message cancelled by a revoke. Read by a human
+    /// through <c>GET /notifications</c>, so it explains rather than names a code -- and it is
+    /// well inside the column's width, so nothing here truncates.
+    /// </summary>
+    private const string RevokedSuppressionReason =
+        "The survey invitation this message was about was revoked before it was sent.";
 
     // ------------------------------------------------------------------
     // Invitations -- by token, unauthenticated
