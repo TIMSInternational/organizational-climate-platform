@@ -148,6 +148,17 @@ public sealed class CapturedMailbox
 [Collection("Postgres")]
 public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingMailHostFixture>
 {
+    /// <summary>
+    /// The domain every seeded recipient in this class sits in.
+    ///
+    /// It used to be <c>.test</c>, which is now exactly what this suite must not use here:
+    /// <c>EmailNotificationSender</c> refuses RFC 2606/6761 reserved domains before the
+    /// transport is called, so a <c>.test</c> recipient would never reach the capturing
+    /// transport and every assertion below about what a recipient READS would be asserting
+    /// nothing. A subdomain of a domain TIMS owns, and no mail is sent by any test here.
+    /// </summary>
+    private const string RecipientDomain = "fixtures.timsint.com";
+
     private readonly CapturingMailHostFixture _mail;
     private readonly AuthWebApplicationFactory _factory;
     private readonly SurveyTestHarness _harness;
@@ -174,7 +185,7 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
             {
                 Id = Guid.NewGuid(),
                 CompanyId = _companyId,
-                Email = $"{Guid.NewGuid():N}@invitee.test",
+                Email = $"{Guid.NewGuid():N}@invitee.{RecipientDomain}",
                 Name = "Invitee",
                 Role = Roles.Employee,
                 IsActive = true,
@@ -435,7 +446,7 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
             {
                 Id = Guid.NewGuid(),
                 CompanyId = otherCompanyId,
-                Email = $"{Guid.NewGuid():N}@victim.test",
+                Email = $"{Guid.NewGuid():N}@victim.{RecipientDomain}",
                 Name = "Victim",
                 Role = Roles.Employee,
                 IsActive = true,
@@ -516,7 +527,7 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
             {
                 Id = Guid.NewGuid(),
                 CompanyId = formerCompanyId,
-                Email = $"{Guid.NewGuid():N}@rehomed.test",
+                Email = $"{Guid.NewGuid():N}@rehomed.{RecipientDomain}",
                 Name = "Rehomed",
                 Role = Roles.Employee,
                 IsActive = true,

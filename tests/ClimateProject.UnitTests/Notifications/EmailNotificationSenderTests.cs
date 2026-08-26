@@ -55,8 +55,21 @@ public class EmailNotificationSenderTests
 
     private static readonly Guid CompanyId = Guid.NewGuid();
 
-    private static NotificationRecipient Recipient()
-        => new(RecipientUserId, "ana@example.com", "Ana", ContentLanguages.Spanish);
+    /// <summary>
+    /// A recipient domain that is NOT reserved.
+    ///
+    /// It used to be <c>example.com</c>, and that is now precisely the wrong fixture:
+    /// <c>UndeliverableAddresses</c> refuses <c>example.com</c> along with <c>.test</c> and
+    /// <c>.invalid</c>, because those names are reserved by RFC 2606/6761 so that no mailbox
+    /// can exist behind them. A test that asserts mail IS handed to the transport therefore
+    /// cannot use one -- it would pass for the wrong reason the day the guard broke, or fail
+    /// for the right one today. This is a subdomain of a domain TIMS owns, so it is a fixture
+    /// nobody else's mail server can ever be surprised by, and nothing here sends.
+    /// </summary>
+    private const string DeliverableAddress = "ana@fixtures.timsint.com";
+
+    private static NotificationRecipient Recipient(string email = DeliverableAddress)
+        => new(RecipientUserId, email, "Ana", ContentLanguages.Spanish);
 
     private static EmailNotificationSender Sender(RecordingTransport transport, ISurveyInvitationTokens? tokens = null)
         => new(transport, Options(), tokens ?? new RecordingTokens(Token), NullLogger<EmailNotificationSender>.Instance);
@@ -71,7 +84,7 @@ public class EmailNotificationSenderTests
 
         Assert.True(result.Delivered);
         var sent = Assert.Single(transport.Sent);
-        Assert.Equal("ana@example.com", sent.ToAddress);
+        Assert.Equal(DeliverableAddress, sent.ToAddress);
 
         // Composed in the recipient's language, resolved at delivery time.
         Assert.Contains("Hola Ana", sent.TextBody, StringComparison.Ordinal);
@@ -361,6 +374,93 @@ public class EmailNotificationSenderTests
             .SendAsync(Notification(NotificationChannels.Email), Recipient(), CancellationToken.None);
 
         Assert.Contains(logger.Lines, line => line.Contains("Delivered notification", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The guard that matters most now that production mail is armed: a recipient in an RFC
+    /// 2606/6761 reserved domain is never offered to the provider at all.
+    ///
+    /// <para>
+    /// The assertion is <c>transport.Sent</c> being EMPTY, not the returned flag. A sender
+    /// that submitted the mail to SES and then reported a permanent failure would satisfy
+    /// every assertion about the result and would still have put a hard bounce on an SES
+    /// account shared with five other TIMS products, which is the entire thing this guard
+    /// exists to prevent. What was or was not handed to the transport is the guarantee.
+    /// </para>
+    /// <para>
+    /// The token lookup is asserted empty for a second reason: the guard sits before the trip
+    /// to <c>survey_invitations</c>, so a batch of demo-tenant invitations costs no query
+    /// either -- and, more to the point, no live invitation token is resolved into a message
+    /// that was never going anywhere.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("ana@demo.test", "demo.test")]
+    [InlineData("ana@example.com", "example.com")]
+    [InlineData("ana@company.invalid", "company.invalid")]
+    [InlineData("ana@localhost", "localhost")]
+    public async Task A_recipient_in_a_reserved_domain_is_never_handed_to_the_transport(
+        string address,
+        string expectedDomain)
+    {
+        var transport = new RecordingTransport(EmailSendOutcome.Success());
+        var tokens = new RecordingTokens(Token);
+
+        var result = await Sender(transport, tokens).SendAsync(
+            Notification(NotificationChannels.Email), Recipient(address), CancellationToken.None);
+
+        Assert.Empty(transport.Sent);
+        Assert.Empty(tokens.Lookups);
+
+        // Permanent, so NotificationDelivery retires the row instead of spending three more
+        // attempts on an address that will never exist.
+        Assert.False(result.Delivered);
+        Assert.True(result.Permanent);
+
+        // And the reason names the address as the cause, so the admin reading the failed row
+        // does not read it as "the mail system is down".
+        Assert.Contains(expectedDomain, result.FailureReason, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The refusal is logged, and the log line carries the domain and not the mailbox. This
+    /// class's own rule -- ids and never user-authored content -- applies to the address too:
+    /// the local part names a person.
+    /// </summary>
+    [Fact]
+    public async Task A_refusal_logs_the_domain_and_not_the_mailbox()
+    {
+        var logger = new CapturingLogger();
+
+        var result = await new EmailNotificationSender(
+                new RecordingTransport(EmailSendOutcome.Success()), Options(), new RecordingTokens(Token), logger)
+            .SendAsync(
+                Notification(NotificationChannels.Email),
+                Recipient("ana.gomez@demo.test"),
+                CancellationToken.None);
+
+        Assert.True(result.Permanent);
+        Assert.Contains(logger.Lines, line => line.Contains("demo.test", StringComparison.Ordinal));
+        Assert.DoesNotContain(logger.Lines, line => line.Contains("ana.gomez", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The counterweight, and the reason this guard can be a refusal rather than a warning: a
+    /// recipient in an ordinary domain is unaffected. Without this, a guard that refused
+    /// everything would pass every assertion above.
+    /// </summary>
+    [Fact]
+    public async Task A_recipient_in_an_ordinary_domain_is_still_delivered()
+    {
+        var transport = new RecordingTransport(EmailSendOutcome.Success());
+
+        var result = await Sender(transport).SendAsync(
+            Notification(NotificationChannels.Email),
+            Recipient("ana@procomer.go.cr"),
+            CancellationToken.None);
+
+        Assert.True(result.Delivered);
+        Assert.Equal("ana@procomer.go.cr", Assert.Single(transport.Sent).ToAddress);
     }
 
     public static TheoryData<EmailSendOutcome> EveryTransportOutcome() =>

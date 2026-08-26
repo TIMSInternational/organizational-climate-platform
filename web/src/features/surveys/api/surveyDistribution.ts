@@ -176,6 +176,14 @@ export interface SurveyInvitationBatchResult {
   skippedUserIds: string[]
   /** Rows added to `notifications`, **not** mails delivered. Delivery is the sweep's job. */
   notificationsQueued: number
+  /**
+   * How many of the invitations just created are addressed to a domain that can never receive
+   * mail -- the RFC 2606/6761 reserved names (`.test`, `.invalid`, `example.com`, ...). The
+   * send path refuses those outright, so these rows will show as failed. Reported, never
+   * enforced: the invitations exist and their links are still distributable by hand. `note`
+   * carries the same warning in prose.
+   */
+  undeliverableRecipients: number
   note: string | null
 }
 

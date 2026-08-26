@@ -81,6 +81,29 @@ public sealed class EmailNotificationSender(
                 $"No delivery provider is configured for the '{notification.Channel}' channel.");
         }
 
+        // The same shape as the branch above, for the same reason. A `.test`, `.invalid` or
+        // `example.com` recipient is not a message we might deliver later -- those domains are
+        // reserved by RFC so that no mailbox can exist behind them, so the provider's only
+        // possible answer is a hard bounce. Recording `sent` for one would be the lie
+        // NotificationChannels.Dispatchable was written to prevent; handing it to SES would
+        // spend this platform's bounce rate, and SES scores that per ACCOUNT, shared with five
+        // other TIMS products. So it is refused HERE, before the transport, rather than
+        // discovered there.
+        //
+        // Permanent, because the address will never work: a retry is three more bounces.
+        if (UndeliverableAddresses.ReservedDomainOf(recipient.EmailAddress) is { } reservedDomain)
+        {
+            // The domain, never the address -- the local part names a person and this line is
+            // read by anyone with the recipient's user id, not only by the recipient.
+            logger.LogWarning(
+                "Notification {NotificationId} is addressed to the reserved domain {ReservedDomain}, which can never "
+                + "receive mail. Recording a permanent failure rather than sending a guaranteed bounce.",
+                notification.Id,
+                reservedDomain);
+
+            return NotificationDeliveryResult.PermanentFailure(UndeliverableAddresses.ReasonFor(recipient.EmailAddress));
+        }
+
         var message = NotificationEmailComposer.Compose(
             notification,
             recipient,

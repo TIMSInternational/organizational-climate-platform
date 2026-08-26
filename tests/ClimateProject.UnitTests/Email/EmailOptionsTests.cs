@@ -152,6 +152,42 @@ public class EmailOptionsTests
         Assert.Contains("Email:TimeoutSeconds", options.Validate());
     }
 
+    /// <summary>
+    /// The SES configuration set stays optional even with a provider configured, unlike every
+    /// other SMTP setting. Mail sent without one is still correctly delivered mail; MailHog,
+    /// CI and the integration suite have no configuration set to name, and requiring one
+    /// would stop them booting.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("tims-transactional")]
+    public void A_configuration_set_is_optional_with_a_provider_configured(string? configurationSet)
+    {
+        var options = Smtp();
+        options.SesConfigurationSet = configurationSet;
+
+        Assert.Null(options.Validate());
+    }
+
+    /// <summary>
+    /// A value with a line break in it is refused at startup rather than emitted.
+    ///
+    /// This setting is written verbatim into a MIME header, so a pasted deploy value carrying
+    /// a newline would be header injection into every message this service sends -- from the
+    /// deploy template. A bad deploy is meant to fail at boot.
+    /// </summary>
+    [Theory]
+    [InlineData("tims-transactional\r\nBcc: attacker@example.com")]
+    [InlineData("tims-transactional\nBcc: attacker@example.com")]
+    public void A_configuration_set_containing_a_line_break_fails(string configurationSet)
+    {
+        var options = Smtp();
+        options.SesConfigurationSet = configurationSet;
+
+        Assert.Contains("Email:SesConfigurationSet", options.Validate());
+    }
+
     [Fact]
     public void A_username_without_a_password_fails_and_so_does_the_reverse()
     {

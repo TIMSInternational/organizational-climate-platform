@@ -162,12 +162,20 @@ public sealed record SurveyPublicLinkDetail(
 /// Rows added to <c>notifications</c>, not mails delivered. Delivery is the notification
 /// sweep's job -- see the seam note on <c>SurveyDistributionEndpoints</c>.
 /// </param>
+/// <param name="UndeliverableRecipients">
+/// How many of the invitations just created are addressed to a domain that can never receive
+/// mail -- the RFC 2606 / RFC 6761 reserved names. Reported, never enforced: the send path
+/// refuses these outright (see <c>UndeliverableAddresses</c>), and this number exists so the
+/// admin learns it here, at the click, rather than by opening 500 rows one at a time
+/// afterwards and finding them failed. Zero on a healthy tenant.
+/// </param>
 public sealed record SurveyInvitationBatchResult(
     int Requested,
     int Created,
     IReadOnlyList<Guid> InvitationIds,
     IReadOnlyList<Guid> SkippedUserIds,
     int NotificationsQueued,
+    int UndeliverableRecipients,
     string? Note);
 
 /// <param name="Eligible">Outstanding invitations whose reminder cadence had elapsed.</param>

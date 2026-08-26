@@ -63,7 +63,12 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
     private HttpClient Anonymous() => _factory.CreateClient();
 
     /// <summary>An employee row to invite. Seeded directly: these never authenticate, they only receive.</summary>
-    private Task<Guid> SeedEmployeeAsync(Guid companyId, Guid? departmentId = null, string language = "en", bool isActive = true)
+    private Task<Guid> SeedEmployeeAsync(
+        Guid companyId,
+        Guid? departmentId = null,
+        string language = "en",
+        bool isActive = true,
+        string? email = null)
         => _harness.WithDbAsync(async db =>
         {
             var user = new User
@@ -71,7 +76,7 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
                 Id = Guid.NewGuid(),
                 CompanyId = companyId,
                 DepartmentId = departmentId,
-                Email = $"{Guid.NewGuid():N}@invitee.test",
+                Email = email ?? $"{Guid.NewGuid():N}@invitee.test",
                 Name = "Invitee",
                 Role = Roles.Employee,
                 IsActive = isActive,
@@ -587,6 +592,58 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         var invitation = await InvitationRowAsync(result.InvitationIds[0]);
         Assert.True(invitation.ExpiresAt < survey.EndDate);
         Assert.True(invitation.ExpiresAt > DateTimeOffset.UtcNow.AddDays(1));
+    }
+
+    /// <summary>
+    /// The creation-time half of the undeliverable-address guard, and the deliberate choice
+    /// it encodes: the batch is REPORTED on, never refused.
+    ///
+    /// <para>
+    /// Refusing would be wrong here. The invitation row is the artefact -- its link is
+    /// distributable by hand, and this endpoint already supports a tenant with
+    /// <c>notificationSendInvitations</c> off that mails nothing at all -- so a 400 would make
+    /// the seeded demo tenant undistributable by any route, over a condition the send path
+    /// already handles correctly. What an admin queueing 500 rows cannot do is find out
+    /// afterwards, one failed row at a time, so the count comes back with the response.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_batch_reports_recipients_whose_address_can_never_receive_mail()
+    {
+        var client = await AdminAAsync();
+        var survey = await CreateActiveSurveyAsync(client);
+        var reserved = await SeedEmployeeAsync(_companyAId, email: $"{Guid.NewGuid():N}@demo.test");
+        var deliverable = await SeedEmployeeAsync(_companyAId, email: $"{Guid.NewGuid():N}@procomer.go.cr");
+
+        var result = await InviteAsync(
+            client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [reserved, deliverable]));
+
+        // Reported...
+        Assert.Equal(1, result.UndeliverableRecipients);
+        Assert.NotNull(result.Note);
+        Assert.Contains("reserved domain", result.Note, StringComparison.Ordinal);
+
+        // ...and not enforced. Both invitations exist, and both notifications were queued.
+        Assert.Equal(2, result.Created);
+        Assert.Equal(2, result.NotificationsQueued);
+    }
+
+    /// <summary>
+    /// The counterweight: a batch of ordinary addresses reports nothing and says nothing.
+    /// Without this, an advisory that fired on every batch would satisfy the test above and
+    /// would train an admin to ignore it.
+    /// </summary>
+    [Fact]
+    public async Task A_batch_of_ordinary_addresses_reports_no_warning()
+    {
+        var client = await AdminAAsync();
+        var survey = await CreateActiveSurveyAsync(client);
+        var employee = await SeedEmployeeAsync(_companyAId, email: $"{Guid.NewGuid():N}@procomer.go.cr");
+
+        var result = await InviteAsync(client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [employee]));
+
+        Assert.Equal(0, result.UndeliverableRecipients);
+        Assert.Null(result.Note);
     }
 
     [Fact]

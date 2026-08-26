@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Email;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Surveys;
@@ -468,6 +469,7 @@ public static class SurveyDistributionEndpoints
 
         var created = new List<SurveyInvitation>();
         var notificationsQueued = 0;
+        var undeliverable = 0;
         var queueInvitations = survey.Settings.NotificationSendInvitations;
 
         foreach (var recipient in recipients.Where(u => !alreadyInvitedSet.Contains(u.Id)))
@@ -487,6 +489,21 @@ public static class SurveyDistributionEndpoints
             };
             created.Add(invitation);
             db.SurveyInvitations.Add(invitation);
+
+            // Counted, not refused. The address cannot receive mail -- .test, .invalid and
+            // example.com are reserved by RFC so that no mailbox exists behind them -- and the
+            // send path refuses it for that reason. Minting the invitation anyway is
+            // deliberate: the row IS the artefact, its link is distributable by hand, and this
+            // endpoint already supports a tenant with notificationSendInvitations off that
+            // never mails anything. Rejecting the batch would make the seeded demo tenant
+            // undistributable by any route.
+            //
+            // But an admin who queues 500 rows and gets 40 silent permanent failures minutes
+            // later has been told nothing, so the count comes back with the response.
+            if (UndeliverableAddresses.IsUndeliverable(invitation.Email))
+            {
+                undeliverable++;
+            }
 
             if (queueInvitations)
             {
@@ -510,6 +527,15 @@ public static class SurveyDistributionEndpoints
             ? null
             : "This survey has notificationSendInvitations turned off, so invitations were minted but no notification was queued. Turn it on and use the resend route, or distribute the links another way.";
 
+        if (undeliverable > 0)
+        {
+            var warning = $"{undeliverable} of the {created.Count} invitations just created are addressed to a reserved "
+                + "domain (.test, .invalid, .example, .localhost, example.com/.net/.org) that can never receive mail. "
+                + "No mail will be sent to those addresses and they will show as failed; fix the addresses on those "
+                + "accounts and use the resend route.";
+            note = note is null ? warning : $"{note} {warning}";
+        }
+
         return Results.Json(
             new SurveyInvitationBatchResult(
                 userIds.Count,
@@ -517,6 +543,7 @@ public static class SurveyDistributionEndpoints
                 created.Select(i => i.Id).ToList(),
                 alreadyInvited,
                 notificationsQueued,
+                undeliverable,
                 note),
             statusCode: 201);
     }

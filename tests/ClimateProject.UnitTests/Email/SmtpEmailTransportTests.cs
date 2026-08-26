@@ -34,6 +34,64 @@ public class SmtpEmailTransportTests
             NullLogger<SmtpEmailTransport>.Instance);
     }
 
+    /// <summary>
+    /// The deliverable recipient fixture. Deliberately not <c>example.com</c> any more: the
+    /// transport now refuses RFC 2606/6761 reserved domains outright, so an <c>example.com</c>
+    /// recipient would take a rejection branch that has nothing to do with what the test is
+    /// asserting. A subdomain of a domain TIMS owns, and nothing here connects to anything.
+    /// </summary>
+    private const string DeliverableAddress = "ana@fixtures.timsint.com";
+
+    /// <summary>
+    /// The backstop guarantee, asserted as "the provider was never contacted".
+    ///
+    /// <para>
+    /// Both senders refuse a reserved domain before they reach this class, which is where the
+    /// useful log line belongs. This check exists so the guarantee survives a third sender
+    /// written by someone who does not know the rule -- and it is the last code that runs
+    /// before an SMTP connection to SES would be opened.
+    /// </para>
+    /// <para>
+    /// A returned <c>Permanent</c> flag cannot state this on its own: a transport that
+    /// dialled, was rejected with a 550, and reported a permanent failure returns exactly what
+    /// a transport that refused pre-flight returns. Only one of the two put a hard bounce on
+    /// an SES account shared with five other TIMS products. So the assertion is that a live
+    /// server on the other end saw no connection at all.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("someone@demo.test", "demo.test")]
+    [InlineData("someone@example.com", "example.com")]
+    [InlineData("someone@company.invalid", "company.invalid")]
+    public async Task A_reserved_domain_is_refused_without_contacting_the_provider(
+        string address,
+        string expectedDomain)
+    {
+        using var server = new CapturingSmtpServer();
+
+        var options = new EmailOptions
+        {
+            Provider = EmailOptions.ProviderSmtp,
+            SmtpHost = "127.0.0.1",
+            SmtpPort = server.Port,
+            SmtpUseStartTls = false,
+            FromAddress = "no-reply@example.com",
+            AppBaseUrl = "https://app.example.invalid",
+            TimeoutSeconds = 10,
+        };
+        var transport = new SmtpEmailTransport(
+            options,
+            new EmailSendRateLimiter(options.MaxSendsPerSecond),
+            NullLogger<SmtpEmailTransport>.Instance);
+
+        var outcome = await transport.SendAsync(Message(address), CancellationToken.None);
+
+        Assert.False(await server.WasContactedAsync(TimeSpan.FromSeconds(1)));
+        Assert.False(outcome.Delivered);
+        Assert.True(outcome.Permanent);
+        Assert.Contains(expectedDomain, outcome.FailureReason, StringComparison.Ordinal);
+    }
+
     private static EmailMessage Message(string to, string subject = "Subject")
         => new(to, "Ana", subject, "text", "<p>html</p>");
 
@@ -57,8 +115,8 @@ public class SmtpEmailTransportTests
     [Theory]
     [InlineData("smtp.invalid", "")]
     [InlineData("smtp.invalid", "not-an-address")]
-    [InlineData("smtp.invalid", "ana@example.com\r\nBcc: attacker@example.com")]
-    [InlineData("", "ana@example.com")]
+    [InlineData("smtp.invalid", "ana@fixtures.timsint.com\r\nBcc: attacker@example.com")]
+    [InlineData("", "ana@fixtures.timsint.com")]
     public async Task The_message_body_never_reaches_a_log(string host, string address)
     {
         const string Token = "invitation-token-for-test-not-a-real-secret";
@@ -107,7 +165,7 @@ public class SmtpEmailTransportTests
 
         var outcome = await new SmtpEmailTransport(
                 options, new EmailSendRateLimiter(options.MaxSendsPerSecond), logger)
-            .SendAsync(Message("ana@example.com"), CancellationToken.None);
+            .SendAsync(Message("ana@fixtures.timsint.com"), CancellationToken.None);
 
         // Transient, not permanent: SmtpClient wraps "the SMTP host was not specified" in an
         // SmtpException, so this lands in Classify rather than in the InvalidOperationException
@@ -159,7 +217,7 @@ public class SmtpEmailTransportTests
     public async Task An_address_containing_a_line_break_is_rejected()
     {
         var outcome = await Transport().SendAsync(
-            Message("ana@example.com\r\nBcc: attacker@example.com"), CancellationToken.None);
+            Message("ana@fixtures.timsint.com\r\nBcc: attacker@example.com"), CancellationToken.None);
 
         Assert.True(outcome.Permanent);
     }
@@ -170,7 +228,7 @@ public class SmtpEmailTransportTests
         // Unreachable through the composers, which collapse line breaks -- kept as a
         // fail-closed backstop because the failure mode is header injection.
         var outcome = await Transport().SendAsync(
-            Message("ana@example.com", "Subject\r\nBcc: attacker@example.com"), CancellationToken.None);
+            Message("ana@fixtures.timsint.com", "Subject\r\nBcc: attacker@example.com"), CancellationToken.None);
 
         Assert.False(outcome.Delivered);
         Assert.True(outcome.Permanent);
