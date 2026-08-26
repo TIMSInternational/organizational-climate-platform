@@ -50,6 +50,13 @@ describe('router', () => {
     expect(paths).toContain('/s/:token')
     expect(paths).toContain('/survey-invitations/:token')
 
+    // #139's public consumption page. Registered here for the same reason the two token
+    // routes above are — a route the product hands out and the router does not declare
+    // reaches the error boundary — and the path is the legacy one
+    // (`src/app/shared/reports/[token]/page.tsx`), kept literal so links already in
+    // circulation keep resolving.
+    expect(paths).toContain('/shared/reports/:token')
+
     // #81's auth states. Each is a state the app is in BECAUSE there is no usable
     // session, so putting any of them behind RequireAuth would redirect it to
     // /login and lose the reason it exists. /auth/inactive is the subtle one --
@@ -111,6 +118,26 @@ describe('router', () => {
   })
 
   /**
+   * #139, and the structural half of its first acceptance criterion.
+   *
+   * The public shared report is read by people the product has no user row for — a board
+   * member, an auditor, a ministry contact — so `RequireAuth` here would be worse than a
+   * gate. It renders `<Navigate to="/login" replace />` with no `state.from` and no
+   * `?next=`, so it does not defer the destination, it **destroys** it: the visitor could
+   * not reach the report even after signing in, and the token in the URL would be gone.
+   *
+   * Structural rather than "the path exists", because the page's own tests render it
+   * directly and would pass with it nested anywhere at all.
+   */
+  it('keeps the public shared report outside RequireAuth structurally', () => {
+    const topLevel = (router.routes[0].children ?? []).flatMap((route) =>
+      route.path ? [route.path] : [],
+    )
+
+    expect(topLevel).toContain('/shared/reports/:token')
+  })
+
+  /**
    * All three respond routes sit outside `AdminLayout`.
    *
    * `/surveys/:id/respond` is the one that has to be asserted structurally, because
@@ -153,6 +180,14 @@ describe('router', () => {
       '/microclimates/:id/respond',
       '/s/:token',
       '/survey-invitations/:token',
+      // #139 is not a respond route, but it belongs in this list for a stronger reason
+      // than any of them: `AdminLayout` is a role-aware rail built from JWT claims, a
+      // company-context switcher, a notification bell and a sign-out control. Around an
+      // unauthenticated page it would render from whatever token happens to be in the
+      // browser — so an administrator checking a share link would see a different page
+      // from the board member it was sent to, and every piece of that shell is a way for
+      // a company's structure to leak onto the most exposed URL in the product.
+      '/shared/reports/:token',
     ]) {
       expect(directPaths(shellChildren ?? [])).not.toContain(respondRoute)
     }

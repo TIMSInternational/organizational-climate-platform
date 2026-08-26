@@ -38,6 +38,7 @@ import SurveyDistributionPage from '../features/surveys/pages/SurveyDistribution
 import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
 import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
 import ReportsListPage from '../features/reports/pages/ReportsListPage'
+import SharedReportPage from '../features/reports/pages/SharedReportPage'
 import SurveyResultsPage from '../features/surveys/pages/SurveyResultsPage'
 import SurveysListPage from '../features/surveys/pages/SurveysListPage'
 import SurveyCreatePage from '../features/surveys/pages/SurveyCreatePage'
@@ -235,6 +236,22 @@ export const router = createBrowserRouter([
       // notice, so it moves only in lockstep with that constant.
       { path: '/s/:token', element: <PublicSurveyLinkPage /> },
       { path: '/survey-invitations/:token', element: <SurveyInvitationPage /> },
+      // #139, and out here for a reason the two routes above only half share.
+      //
+      // They are public because their visitor has no account. This one is public because
+      // it is the *consumption side of a share link*: a report sent to a board member, an
+      // auditor, a ministry contact — people the product has no user row for and never
+      // will. `RequireAuth` renders `<Navigate to="/login" replace />` with no `state.from`
+      // and no `?next=`, so it does not defer the destination, it destroys it: a visitor
+      // sent to sign in could not return to the report even if they had credentials.
+      //
+      // `/shared/reports/` is the legacy path (`src/app/shared/reports/[token]/page.tsx`
+      // over `api/shared/reports/[token]`), kept literal for the same reason `/s/:token`
+      // is: links already in circulation are the contract. Nothing in this repository
+      // mints one yet — `GET /shared/reports/{token}` is not mapped by the API — so today
+      // every token here resolves to the page's single "not available" state, which is
+      // also what an expired or revoked one will resolve to. See SharedReportPage.tsx.
+      { path: '/shared/reports/:token', element: <SharedReportPage /> },
       ...devOnlyRoutes,
       {
         element: <RequireAuth />,

@@ -2686,5 +2686,26 @@
     "scaleEnds": "Extremos de la escala: {min} … {max}",
     "usageCount": "Usada {count} vez/veces",
     "companyItem": "Tu biblioteca"
+  },
+  "sharedReport": {
+    "skipToReport": "Ir al informe",
+    "eyebrow": "Informe compartido",
+    "untitledReport": "Informe sin título",
+    "unavailableTitle": "Este informe no está disponible",
+    "unavailableBody": "Es posible que el enlace haya vencido, se haya retirado o se haya copiado de forma incompleta. Pida un enlace nuevo a la persona que se lo compartió.",
+    "panelLabel": "Datos del informe",
+    "generatedReading": "Generado",
+    "noDocument": "Este informe todavía no tiene contenido.",
+    "incompleteTitle": "Este informe no está completo",
+    "incompleteBody": "Algunas secciones aún no se han generado, así que lo que se muestra aquí es una parte del informe y no la totalidad.",
+    "noSurveys": "Este informe no incluye ninguna encuesta.",
+    "insightsHeading": "Hallazgos",
+    "dimensionsCaption": "Puntaje promedio de cada dimensión de esta encuesta",
+    "dimension": "Dimensión",
+    "questionCount": "Preguntas",
+    "answeredCount": "Respuestas",
+    "averageScore": "Puntaje promedio",
+    "departmentsCaption": "Participación de cada departamento, incluidos aquellos cuyas cifras están reservadas",
+    "departmentsWithheld": "Se reservan {count} departamento(s) porque cada uno tiene menos de {minimum} personas que respondieron."
   }
 }
