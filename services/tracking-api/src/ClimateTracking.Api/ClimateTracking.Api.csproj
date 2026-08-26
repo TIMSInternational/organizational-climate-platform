@@ -3,6 +3,18 @@
   <ItemGroup>
     <ProjectReference Include="..\ClimateTracking.Application\ClimateTracking.Application.csproj" />
     <ProjectReference Include="..\ClimateTracking.Infrastructure\ClimateTracking.Infrastructure.csproj" />
+    <!--
+      ONE PROCESS, TWO JOBS. The API image IS the scheduler: Program.cs calls
+      AddClimateTrackingWorkers, so CacheSyncWorker and DailySemaforoWorker deploy with
+      the API and ClimateTracking.Workers' own Program.cs (its standalone host) is kept
+      unbuilt as the documented opt-out. Same shape #275 chose for climate-project.
+
+      Not a preference: App Runner requires the container to listen on the configured
+      port and pass a health check, and ClimateTracking.Workers is a Host, not a
+      WebApplication, so it never binds a port. A second App Runner service running the
+      Workers image is not an option that was rejected; it is not available.
+    -->
+    <ProjectReference Include="..\ClimateTracking.Workers\ClimateTracking.Workers.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -20,5 +32,29 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+
+  <!--
+    Build provenance for GET /version, read back through BuildInfo.cs.
+
+    The SDK turns each AssemblyMetadata item into an AssemblyMetadataAttribute on the
+    output assembly, so a value passed as `/p:CommitSha=<sha>` is readable at runtime
+    with no generated file and no source change. services/tracking-api/Dockerfile
+    already threads COMMIT_SHA and BUILD_TIMESTAMP through to exactly these two
+    properties; deploy-tracking-prod.yml passes the real commit and build time.
+
+    The "unknown" defaults are what make a provenance-less build distinguishable rather
+    than merely blank: scripts/read-deployed-commit.sh exits 1 on "unknown" with a
+    message saying an image built outside the CI path is serving traffic. An empty
+    default would be handed on as though it were a commit.
+  -->
+  <PropertyGroup>
+    <CommitSha Condition="'$(CommitSha)' == ''">unknown</CommitSha>
+    <BuildTimestamp Condition="'$(BuildTimestamp)' == ''">unknown</BuildTimestamp>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="CommitSha" Value="$(CommitSha)" />
+    <AssemblyMetadata Include="BuildTimestamp" Value="$(BuildTimestamp)" />
+  </ItemGroup>
 
 </Project>

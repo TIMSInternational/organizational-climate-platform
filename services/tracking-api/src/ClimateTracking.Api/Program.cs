@@ -1,8 +1,10 @@
 using System.Security.Claims;
+using ClimateTracking.Api;
 using ClimateTracking.Api.Endpoints;
 using ClimateTracking.Application.Auth;
 using ClimateTracking.Infrastructure.ExternalApi;
 using ClimateTracking.Infrastructure.Persistence;
+using ClimateTracking.Workers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -52,6 +54,26 @@ builder.Services
         options.MapInboundClaims = TrackingTokenValidation.MapInboundClaims;
         options.TokenValidationParameters = TrackingTokenValidation.CreateParameters(trackingJwtSecret);
     });
+
+// ONE PROCESS, TWO JOBS (#219). This host IS the scheduler: CacheSyncWorker and
+// DailySemaforoWorker run inside the API image, the deployment #275 chose for climate-project,
+// and ClimateTracking.Workers' own Program.cs is kept unbuilt as the documented opt-out.
+//
+// Not a preference. App Runner requires the container to bind the configured port and pass a
+// health check, and ClimateTracking.Workers is a Host, not a WebApplication, so it never binds
+// one -- a second App Runner service running the Workers image is not an option that was
+// rejected, it is not available. Without this line the tracking service deploys, serves HTTP
+// and syncs nothing: the *_cache tables stay empty, so every nodo and persona NAME in the
+// plans list and in the .xlsx export renders blank, and no 30-day/15-day/vencimiento
+// notification is ever sent.
+//
+// Safe at any instance count: both jobs tick under a Postgres transaction-scoped advisory
+// lease (see IJobLease), so N API instances are exactly one scheduler. That matters most for
+// DailySemaforoWorker, whose "already sent?" check is a read followed by a write -- two
+// instances without the lease both read "not sent" and the client gets duplicate reminders.
+// Workers:Enabled (default true) is read at host start, which is what lets the integration
+// suite run every test host with the jobs idle.
+builder.Services.AddClimateTrackingWorkers(builder.Configuration);
 
 builder.Services.AddOpenApi();
 
@@ -107,16 +129,74 @@ app.MapOpenApi();
 
 app.MapGet("/", () => Results.Redirect("/health"));
 
+// LIVENESS. Deliberately touches nothing: it answers "is this process up", and it must keep
+// answering 200 while the database is unreachable, because that divergence from /ready below is
+// how a lost-Postgres instance is told apart from a dead one. Do NOT point the App Runner
+// health check at this -- that is the configuration #221 removed from climate-project, and the
+// reason is that an instance which has lost Postgres passes it forever and is never replaced.
 app.MapGet("/health", () => Results.Ok(new
 {
     service = "climate-tracking-api",
     status = "ok"
 }));
 
+// READINESS. What App Runner probes (HealthCheckPath in
+// infra/aws/climate-tracking-api-prod-service.yml) and what deploy-tracking-prod.yml's
+// 20-consecutive-200s canary polls. Mirrors src/ClimateProject.Api/Program.cs rather than
+// inventing a second shape, down to the response field names, because the same eyes read both
+// during an incident.
+//
+// It executes a query. A probe that merely checks a connection object exists cannot fail, and
+// a probe that cannot fail lets a dead instance serve errors indefinitely -- that is the
+// finding recorded in deploy-prod.yml and the whole reason this endpoint is not /health.
+//
+// No authorization: App Runner sends no bearer token.
+app.MapGet("/ready", async (
+    ClimateTrackingDbContext dbContext,
+    ILoggerFactory loggerFactory,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        await dbContext.Database.ExecuteSqlRawAsync("SELECT 1", cancellationToken);
+
+        return Results.Ok(new ReadinessResponse(
+            Service: "climate-tracking-api",
+            Status: "ready",
+            Database: "ok"));
+    }
+    catch (Exception exception)
+    {
+        // Logged in full, reported as two fixed words. Npgsql's failure messages carry the
+        // host, database name and username of whatever it tried to reach, and this endpoint is
+        // unauthenticated -- echoing the exception would hand an anonymous caller a
+        // description of the production database.
+        loggerFactory
+            .CreateLogger("ClimateTracking.Api.Readiness")
+            .LogError(exception, "Readiness probe failed: database round-trip did not succeed.");
+
+        return Results.Json(
+            new ReadinessResponse(
+                Service: "climate-tracking-api",
+                Status: "not-ready",
+                Database: "unreachable"),
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+// Commit and BuiltAt are what make this endpoint able to answer "is what's running actually
+// what we shipped?". Without them /version was invariant across code changes and could not
+// distinguish a successful deploy from one that silently no-op'd -- the failure that let
+// climate-project's production sit 156 commits behind main with every signal green.
+// scripts/read-deployed-commit.sh, which both deploy workflows use, requires `commit` to be
+// 40 hex characters and treats the sentinel "unknown" as a finding rather than a mismatch.
+// See BuildInfo.cs.
 app.MapGet("/version", () => Results.Ok(new VersionResponse(
     Service: "climate-tracking-api",
     Runtime: Environment.Version.ToString(),
-    Environment: app.Environment.EnvironmentName)));
+    Environment: app.Environment.EnvironmentName,
+    Commit: BuildInfo.CommitSha,
+    BuiltAt: BuildInfo.BuildTimestamp)));
 
 app.MapGet("/api/whoami", (ClaimsPrincipal user) => Results.Ok(user.GetCurrentUser()))
     .RequireAuthorization();
@@ -130,6 +210,15 @@ app.Run();
 internal sealed record VersionResponse(
     string Service,
     string Runtime,
-    string Environment);
+    string Environment,
+    string Commit,
+    string BuiltAt);
+
+/// <summary>
+/// <c>GET /ready</c>'s body. Same three fields, same values, as climate-project's -- the canary
+/// in deploy-tracking-prod.yml prints this body on failure and the two services should not
+/// print it differently.
+/// </summary>
+internal sealed record ReadinessResponse(string Service, string Status, string Database);
 
 public partial class Program;

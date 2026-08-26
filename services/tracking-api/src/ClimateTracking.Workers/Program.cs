@@ -1,4 +1,3 @@
-using ClimateTracking.Application.ExternalApi;
 using ClimateTracking.Infrastructure.ExternalApi;
 using ClimateTracking.Infrastructure.Persistence;
 using ClimateTracking.Workers;
@@ -33,13 +32,12 @@ builder.Services.AddClimateProjectClient(new ClimateProjectClientOptions
     ProcomerCompanyId = procomerCompanyId,
 });
 
-var cacheSyncIntervalMinutes = builder.Configuration.GetValue<double?>("CacheSyncIntervalMinutes") ?? 15;
-builder.Services.AddSingleton<IHostedService>(sp => new CacheSyncWorker(
-    sp.GetRequiredService<IServiceScopeFactory>(),
-    sp.GetRequiredService<IClimateProjectClient>(),
-    sp.GetRequiredService<ILogger<CacheSyncWorker>>(),
-    TimeSpan.FromMinutes(cacheSyncIntervalMinutes)));
-builder.Services.AddHostedService<DailySemaforoWorker>();
+// The same one call the API host makes (#219). This host is the documented opt-out -- nothing
+// builds or deploys it, because App Runner cannot run a Host that never binds a port -- and it
+// stays here so the jobs can be moved to a dedicated instance without rewriting their wiring.
+// Sharing the registration is what stops the two hosts drifting; the drift that mattered was
+// the API host having no registration at all, so a deployed tracking service synced nothing.
+builder.Services.AddClimateTrackingWorkers(builder.Configuration);
 
 var host = builder.Build();
 host.Run();
