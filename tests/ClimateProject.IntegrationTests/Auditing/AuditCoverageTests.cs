@@ -81,6 +81,9 @@ public class AuditCoverageTests : IAsyncLifetime
     [
         "GET /admin/reports/{id:guid}",
         "GET /audit/export",
+        "GET /surveys/{id:guid}/export",
+        "GET /surveys/{id:guid}/export/csv",
+        "GET /surveys/{id:guid}/export/pdf",
         "GET /surveys/{id:guid}/results",
     ];
 
