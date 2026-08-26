@@ -77,6 +77,32 @@ namespace ClimateProject.Api.Endpoints;
 /// so an invitee who opts out between being invited and the sweep running is honoured. And
 /// the notification row does NOT carry the token -- see
 /// <see cref="MicroclimateNotificationData"/>.</para>
+///
+/// <para><b>Reminders are somebody else's, they already existed, and they currently mail no
+/// link. Written down here because this file is what made them reachable.</b>
+/// <c>InvitationReminderJob.SweepMicroclimatesAsync</c> has swept
+/// <c>microclimate_invitations</c> since #376 -- against a table nothing was writing rows to,
+/// so it has never had a candidate. It does now. It queues a <c>deadline_reminder</c> with
+/// <c>Data: null</c>, and its own comment says why: at the time, the only payload class in
+/// the repository was <c>SurveyNotificationData</c>, which names a <c>survey_invitations</c>
+/// id, and "writing one here would be a foreign key into the wrong table". That was exactly
+/// right and it is the same trap this file was built around.
+/// <para>
+/// The consequence, stated plainly rather than left to be discovered: <b>a microclimate
+/// invitee's reminder arrives without a way back to the pulse.</b> They have to find the
+/// original invitation mail. That is a real defect and it is the microclimate twin of the one
+/// #387 fixed for surveys.
+/// </para>
+/// <para>
+/// It is NOT fixed here, deliberately, and the fix is now unblocked rather than unknown:
+/// <see cref="MicroclimateNotificationData"/> is the payload class that did not exist when
+/// that comment was written. What it needs is a decision this slice should not take alone --
+/// <c>deadline_reminder</c> is a shared type (action plans raise it too), so either it joins
+/// <see cref="MicroclimateNotificationData.LinkCarryingTypes"/> and every action-plan reminder
+/// starts parsing a payload it does not have, or the sender grows a payload-driven branch,
+/// which is the thing <c>EmailNotificationSender</c>'s type-check-first rule exists to avoid.
+/// Both are defensible; picking one belongs with whoever owns the reminder cadence.
+/// </para></para>
 /// </summary>
 public static class MicroclimateInvitationEndpoints
 {
