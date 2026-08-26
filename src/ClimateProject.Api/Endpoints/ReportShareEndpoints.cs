@@ -230,7 +230,7 @@ public static class ReportShareEndpoints
 
         var now = DateTimeOffset.UtcNow;
 
-        // The four ways this can fail, collapsed into one answer. They are written out
+        // Every way this can fail, collapsed into one answer. They are written out
         // separately rather than as one boolean so that the reason survives for the reader --
         // and then every one of them returns the identical response.
         if (match is null)
