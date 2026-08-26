@@ -94,7 +94,13 @@ public static partial class BenchmarkEndpoints
         var query = db.Benchmarks.AsQueryable();
         if (currentUser.Role != Roles.SuperAdmin)
         {
-            var ownCompanyId = Guid.Parse(currentUser.CompanyId);
+            // The third and last of these. #90's two analytical routes copied this line
+            // verbatim, so the fix belongs here too rather than leaving one bare Guid.Parse
+            // as the pattern the next route copies. Since #191 a CompanyAdmin's company_id
+            // may be null, which reaches the handler as a blank claim; Guid.Parse answers
+            // that with a 500 on the benchmarks list. Null narrows the scope to global rows,
+            // which is exactly what CanReadBenchmark grants such a user one route over.
+            var ownCompanyId = CompanyScope.OwnCompanyId(currentUser);
             query = query.Where(b => b.CompanyId == null || b.CompanyId == ownCompanyId);
         }
         else if (companyId.HasValue)
@@ -400,6 +406,23 @@ public static partial class BenchmarkEndpoints
         var currentUser = principal.GetCurrentUser();
         if (!Roles.Admin.Contains(currentUser.Role)) return Results.Forbid();
 
+        // Resolved BEFORE the lock, with the other authorization, on the rule the single-link
+        // route states: a caller who may not write should not queue behind anybody.
+        //
+        // A null own company is REFUSED here, and this is the one place in this file where
+        // that matters. The scope below is `CompanyId == ownCompanyId` with no `|| == null`
+        // beside it, because a CompanyAdmin may not write global rows. Feed a null into that
+        // and EF renders `company_id IS NULL` -- which selects exactly the global benchmarks
+        // this branch exists to exclude, and hands a whole-platform backfill to a CompanyAdmin.
+        // So null cannot be a filter here; it has to be a refusal, which is also what
+        // CanWriteBenchmark answers such a caller everywhere else.
+        Guid? ownCompanyId = null;
+        if (currentUser.Role != Roles.SuperAdmin)
+        {
+            if (CompanyScope.OwnCompanyId(currentUser) is not Guid resolved) return Results.Forbid();
+            ownCompanyId = resolved;
+        }
+
         // The same lock the single-link route takes, for the same reason and against the same
         // hazard: this run reads every candidate graph it is about to write into. A dry run
         // takes it too -- it is reporting what it WOULD write, and a report computed against a
@@ -419,9 +442,9 @@ public static partial class BenchmarkEndpoints
             // A CompanyAdmin's own company only -- never the global rows they can read.
             // CanWriteBenchmark says a CompanyAdmin may not write a benchmark with a null
             // company, and a bulk path that quietly widened that is the exact hole #84
-            // closed on create.
-            var ownCompanyId = Guid.Parse(currentUser.CompanyId);
-            scope = scope.Where(b => b.CompanyId == ownCompanyId);
+            // closed on create. `ownCompanyId` is non-null here: the branch above refused the
+            // caller outright rather than letting a null reach this comparison.
+            scope = scope.Where(b => b.CompanyId == ownCompanyId!.Value);
         }
 
         var subjects = await scope
