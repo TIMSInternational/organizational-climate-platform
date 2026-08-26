@@ -155,6 +155,13 @@ public static class SurveyExport
         var summary = aggregate.Summary;
         var locale = context.ResolvedLocale;
 
+        // Built once. A segment's per-question rows are keyed by question id, and the
+        // document's `question` column is a position -- so without this the segment loop is a
+        // linear scan of every question for every question of every segment, which on a
+        // 40-question instrument across 20 departments is 32,000 comparisons to print a
+        // number the aggregate already knows.
+        var orderByQuestion = aggregate.Questions.ToDictionary(q => q.QuestionId, q => q.Order);
+
         await csv.WriteHeaderAsync(cancellationToken).ConfigureAwait(false);
 
         Task Row(string section, string? question, string? group, string? language, string metric, string? value)
@@ -205,6 +212,9 @@ public static class SurveyExport
         // the sixth section.
         foreach (var question in aggregate.Questions)
         {
+            // One-based. `questions.order` is stored zero-based, and the authoring screen
+            // already prints `question.order + 1` (SurveyQuestionList.tsx) -- so a file that
+            // numbered the first question 0 would not line up with the survey an admin edited.
             var order = Number(question.Order + 1);
             var id = question.QuestionId.ToString();
 
@@ -266,7 +276,7 @@ public static class SurveyExport
                 // it is the one loop with no floor in it.
                 foreach (var segmentQuestion in segment.Questions)
                 {
-                    var order = Number(OrderOf(aggregate, segmentQuestion.QuestionId) + 1);
+                    var order = Number(orderByQuestion.GetValueOrDefault(segmentQuestion.QuestionId) + 1);
                     await Row(SegmentQuestionSection, order, key, null, "answered_count", Number(segmentQuestion.AnsweredCount)).ConfigureAwait(false);
                     await Row(SegmentQuestionSection, order, key, null, "average", Optional(segmentQuestion.Average)).ConfigureAwait(false);
                 }
@@ -448,9 +458,6 @@ public static class SurveyExport
 
         return document;
     }
-
-    private static int OrderOf(SurveyAggregate aggregate, Guid questionId)
-        => aggregate.Questions.FirstOrDefault(q => q.QuestionId == questionId)?.Order ?? 0;
 
     private static string Number(int value) => CsvField.Number(value);
 
