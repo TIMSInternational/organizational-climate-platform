@@ -115,6 +115,11 @@ public static class SurveyDuplication
                 Required = question.Required,
                 Order = question.Order,
                 Category = question.Category,
+                // Provenance travels with the copy. A duplicated survey really is another
+                // use of the source question, so dropping these here would make the bank
+                // under-report exactly the questions that are reused most (#110).
+                SourceLibraryItemId = question.SourceLibraryItemId,
+                SourceQuestionBankItemId = question.SourceQuestionBankItemId,
             });
         }
 

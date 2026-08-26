@@ -151,7 +151,14 @@ public sealed record CreateSurveyQuestionInput(
     bool CommentRequired = true,
     LocalizedInput? CommentPrompt = null,
     int Order = 0,
-    string? Category = null);
+    string? Category = null,
+    // Provenance, not a reference (#110). Set it when the author picked this question out
+    // of the question bank; the text below is still what gets stored and still what the
+    // answer belongs to, so a later edit or retirement of the bank item cannot reach a
+    // survey that has already been asked. It is what makes bank usage and effectiveness a
+    // COUNT over existing rows instead of a counter incremented on the respondent's own
+    // transaction -- see QuestionBankMetrics.
+    Guid? SourceQuestionBankItemId = null);
 
 /// <summary>
 /// Every member is nullable and means "leave this alone" when omitted, so a partial

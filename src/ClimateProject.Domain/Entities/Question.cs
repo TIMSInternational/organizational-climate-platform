@@ -37,6 +37,29 @@ public class Question
     /// and "where is this question used" be answered without making content depend on it.</para>
     /// </summary>
     public Guid? SourceLibraryItemId { get; set; }
+
+    /// <summary>
+    /// The question BANK item this question was copied from, or null if it came from
+    /// anywhere else (#110).
+    ///
+    /// <para>The bank's twin of <see cref="SourceLibraryItemId"/>, and separate from it
+    /// because the two repositories are separate and must not be merged (#58): a question
+    /// can be picked out of the authoring library or out of the curation bank, and
+    /// collapsing the two columns would make "where did this come from" unanswerable the
+    /// moment both are populated.</para>
+    ///
+    /// <para><b>This column is the only thing that makes bank usage and effectiveness
+    /// computable.</b> Without it, "how often is this question answered" can only be a
+    /// counter someone remembers to increment on the respondent's own transaction -- the
+    /// hot row #110 exists to refuse. With it, every number is a COUNT over rows that
+    /// already exist, taken when an admin asks rather than when a respondent submits. See
+    /// <c>QuestionBankMetrics</c>.</para>
+    ///
+    /// <para>Provenance only, exactly like its sibling: instantiation is a COPY, so a
+    /// retired or re-worded bank item cannot change the meaning of an answer already
+    /// stored. That is what lets retirement be a state change rather than a deletion.</para>
+    /// </summary>
+    public Guid? SourceQuestionBankItemId { get; set; }
 }
 
 /// <summary>

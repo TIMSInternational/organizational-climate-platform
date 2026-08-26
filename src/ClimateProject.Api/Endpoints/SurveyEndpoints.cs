@@ -389,6 +389,12 @@ public static class SurveyEndpoints
             return Results.Json(new { message = $"Two questions share order {duplicateOrder.Key}" }, statusCode: 400);
         }
 
+        var sourceError = await ValidateQuestionBankSourcesAsync(db, request.CompanyId, prepared, cancellationToken);
+        if (sourceError is not null)
+        {
+            return sourceError;
+        }
+
         var actor = await SurveyAuditTrail.ResolveActorAsync(currentUser, http, db, cancellationToken);
         if (actor is null)
         {
@@ -669,6 +675,12 @@ public static class SurveyEndpoints
             if (duplicateOrder is not null)
             {
                 return Results.Json(new { message = $"Two questions share order {duplicateOrder.Key}" }, statusCode: 400);
+            }
+
+            var sourceError = await ValidateQuestionBankSourcesAsync(db, survey.CompanyId, prepared, cancellationToken);
+            if (sourceError is not null)
+            {
+                return sourceError;
             }
 
             // Replace wholesale. Safe only because we have already established the survey
@@ -1238,6 +1250,57 @@ public static class SurveyEndpoints
             commentPromptEn, commentPromptEs, options), null);
     }
 
+    /// <summary>
+    /// Refuses a question whose bank provenance points at nothing this tenant may use (#110).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Checked here rather than left to the foreign key so the caller gets a 400 naming the
+    /// id instead of an opaque DbUpdateException, and -- the part a FK cannot do at all --
+    /// so a tenant cannot record provenance against another tenant's private bank item. The
+    /// FK would happily accept that: it only knows the row exists.
+    /// </para>
+    /// <para>
+    /// Readability, NOT activity. A retired bank item stays a valid source: the survey holds
+    /// its own copy of the wording, so nothing about the reference is stale, and refusing it
+    /// would mean that re-saving an untouched draft starts failing the day somebody retires
+    /// a question it was built from.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult?> ValidateQuestionBankSourcesAsync(
+        ClimateProjectDbContext db,
+        Guid companyId,
+        IReadOnlyList<PreparedQuestion> prepared,
+        CancellationToken cancellationToken)
+    {
+        var sourceIds = prepared
+            .Select(p => p.Input.SourceQuestionBankItemId)
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+
+        if (sourceIds.Count == 0)
+        {
+            return null;
+        }
+
+        var usable = await db.QuestionBankItems
+            .Where(i => sourceIds.Contains(i.Id) && (i.CompanyId == null || i.CompanyId == companyId))
+            .Select(i => i.Id)
+            .ToListAsync(cancellationToken);
+
+        var unusable = sourceIds.Except(usable).ToList();
+        if (unusable.Count == 0)
+        {
+            return null;
+        }
+
+        return Results.Json(
+            new { message = $"SourceQuestionBankItemId does not reference a question bank item this company may use: {string.Join(", ", unusable)}" },
+            statusCode: 400);
+    }
+
     private static void AddQuestions(ClimateProjectDbContext db, Guid surveyId, IReadOnlyList<PreparedQuestion> prepared)
     {
         foreach (var item in prepared)
@@ -1260,6 +1323,8 @@ public static class SurveyEndpoints
                 Required = item.Input.Required,
                 Order = item.Input.Order,
                 Category = item.Input.Category,
+                // Recorded, never dereferenced. See CreateSurveyQuestionInput and #110.
+                SourceQuestionBankItemId = item.Input.SourceQuestionBankItemId,
             };
 
             // A prompt exists only when the caller wrote one; omitting it leaves the
