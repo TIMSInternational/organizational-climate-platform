@@ -76,6 +76,37 @@ public static class MicroclimateInvitationStatuses
 
     public static readonly string[] All = [.. Progression, Revoked];
 
+    // ------------------------------------------------------------------
+    // What the legacy vocabulary had and this one does not, and why
+    //
+    // The archived legacy model lists the lifecycle as
+    // "pending -> sent -> opened -> started -> participated, plus expired/bounced"
+    // (docs/legacy-issues/climate-project-issues.md). Three differences, all deliberate,
+    // all matching the choices SurveyInvitationStatuses already made -- which is what
+    // "shape reusable by #116" requires.
+    //
+    // * `participated` is spelled `completed` here. The column decides it: the table has
+    //   `completed_at` and no `participated_at`. The legacy word survives as a route alias
+    //   onto the same handler, so a legacy link still lands somewhere, and exactly one word
+    //   is ever written to a row. See Completed.
+    //
+    // * `expired` is DERIVED from `expires_at`, never stored. A stored "expired" needs a
+    //   sweep to become true, and an invitation whose expiry depends on a cron job having
+    //   run is an invitation that is still live when the cron job is down. Every read path
+    //   compares the column against the clock instead -- LoadByTokenAsync, ToDetail's
+    //   IsExpired, and SummariseAsync's Expired count.
+    //
+    // * `bounced` is not an invitation state in this architecture, because the invitation
+    //   is not what bounces. A `notifications` row is, and one invitation can have several
+    //   of them -- the invite plus every reminder -- each of which can be delivered or
+    //   permanently fail independently. So a bounce is recorded where it happens:
+    //   NotificationStatuses.Failed with the provider's reason in `failure_reason`, set by
+    //   EmailNotificationSender (and refused before the provider entirely for RFC-reserved
+    //   domains, see UndeliverableAddresses). Copying it onto the invitation would give one
+    //   row a single flag standing for several independent outcomes, and would have to be
+    //   kept in sync by something.
+    // ------------------------------------------------------------------
+
     /// <summary>
     /// The last state an invitation to an anonymous microclimate may record.
     ///
