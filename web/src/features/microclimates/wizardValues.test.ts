@@ -418,4 +418,35 @@ describe('buildCreateInput', () => {
     expect(built.title).toEqual({ en: 'Team pulse', es: 'Pulso' })
     expect(built.questions?.[0].text).toEqual({ en: 'One', es: 'Uno' })
   })
+
+  it('sends a bilingual emoji name as a locale map too, never a bare string', () => {
+    // The counterpart of the option-label case above, and the one that costs most if
+    // it regresses: `TryResolve` REJECTS a bare string on `both`-language content, so
+    // sending `face.labelEn` here 400s every bilingual emoji scale at create time —
+    // and the name is the only accessible name the face has.
+    const built = buildCreateInput(
+      values({
+        language: 'both',
+        titleEs: 'Pulso',
+        questions: [
+          {
+            ...emptyQuestion('q1'),
+            textEn: 'How was the week?',
+            textEs: '¿Cómo estuvo la semana?',
+            type: 'emoji_rating',
+            emojiOptions: [
+              { ...emptyEmojiOption('e1'), emoji: '\u{1F622}', labelEn: 'Sad', labelEs: 'Triste' },
+              { ...emptyEmojiOption('e2'), emoji: '\u{1F642}', labelEn: 'Good', labelEs: 'Bien' },
+            ],
+          },
+        ],
+      }),
+      'company-1',
+    )
+
+    expect(built.questions?.[0].emojiOptions).toEqual([
+      { emoji: '\u{1F622}', label: { en: 'Sad', es: 'Triste' } },
+      { emoji: '\u{1F642}', label: { en: 'Good', es: 'Bien' } },
+    ])
+  })
 })

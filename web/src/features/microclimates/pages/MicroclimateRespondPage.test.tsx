@@ -553,4 +553,79 @@ describe('MicroclimateRespondPage emoji scale', () => {
     ).toBeTruthy()
     expect(screen.queryByRole('radio')).toBeNull()
   })
+
+  it('names the group with the question, so a reader announces what is being asked', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(emojiMicroclimate()), { status: 200 }),
+    )
+    renderPage()
+
+    // Without a name on the group, a screen reader announces "radio group" and the
+    // respondent hears three faces with nothing saying what they are answering.
+    const group = await screen.findByRole('radiogroup', { name: '¿Cómo estuvo tu semana?' })
+    expect(within(group).getAllByRole('radio')).toHaveLength(3)
+  })
+
+  it('carries the question’s required flag onto the faces, and only when it is set', async () => {
+    const detail = emojiMicroclimate()
+    detail.questions.push({
+      id: 'q2',
+      text: '¿Y la semana pasada?',
+      type: 'emoji_rating',
+      required: false,
+      order: 1,
+      options: null,
+      emojiOptions: [
+        { order: 0, emoji: '\u{1F622}', value: 1, label: 'Mal' },
+        { order: 1, emoji: '\u{1F929}', value: 2, label: 'Genial' },
+      ],
+    })
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(detail), { status: 200 }))
+    renderPage()
+
+    expect((await screen.findByRole('radio', { name: 'Triste' })).getAttribute('required')).not.toBeNull()
+    // Asserted in both directions: an attribute that is always present proves nothing
+    // about whether the question's own flag is what put it there.
+    expect(screen.getByRole('radio', { name: 'Mal' }).getAttribute('required')).toBeNull()
+  })
+
+  it('keeps two emoji questions in separate groups, so answering one does not clear the other', async () => {
+    const detail = emojiMicroclimate()
+    detail.questions.push({
+      id: 'q2',
+      text: '¿Y la semana pasada?',
+      type: 'emoji_rating',
+      required: true,
+      order: 1,
+      options: null,
+      emojiOptions: [
+        { order: 0, emoji: '\u{1F622}', value: 1, label: 'Mal' },
+        { order: 1, emoji: '\u{1F929}', value: 2, label: 'Genial' },
+      ],
+    })
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 201 }))
+    renderPage()
+
+    // Two emoji_rating questions on one microclimate is a shape the server creates
+    // happily. Sharing one native radio `name` across them would make them ONE group:
+    // arrow keys would walk from one question into the next, "2 of 5" would be
+    // announced for a three-face scale, and the second answer would silently erase the
+    // first — which is what this asserts, because it is the failure a respondent meets.
+    await userEvent.click(await screen.findByRole('radio', { name: 'Bien' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Genial' }))
+
+    expect((screen.getByRole('radio', { name: 'Bien' }) as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByRole('radio', { name: 'Genial' }) as HTMLInputElement).checked).toBe(true)
+
+    await userEvent.click(screen.getByRole('button', { name: /enviar|submit/i }))
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+    const body = JSON.parse(
+      String((vi.mocked(fetch).mock.calls[1][1] as RequestInit).body),
+    ) as { answers: Record<string, string> }
+
+    // Both answers reach the server, each against its own question.
+    expect(body.answers).toEqual({ q1: '3', q2: '2' })
+  })
 })
