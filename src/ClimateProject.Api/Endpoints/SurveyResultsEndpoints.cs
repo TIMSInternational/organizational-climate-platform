@@ -294,20 +294,30 @@ public static class SurveyResultsEndpoints
     // Loading
     // ------------------------------------------------------------------
 
-    private sealed record ResultsContext(
+    internal sealed record ResultsContext(
         Survey Survey,
         string? Title,
         string ResolvedLocale,
         IReadOnlyList<string> FallbackFields,
         SurveyAggregate Aggregate);
 
-    private sealed record LoadOutcome(IResult? Failure, ResultsContext? Context);
+    internal sealed record LoadOutcome(IResult? Failure, ResultsContext? Context);
 
     /// <summary>
-    /// Loads and aggregates once, for the three heavy routes. They differ only in which
-    /// half of the <see cref="SurveyAggregate"/> they serialise.
+    /// Loads and aggregates once, for the three heavy routes -- and, since #122, for the two
+    /// export routes as well. They differ only in which half of the
+    /// <see cref="SurveyAggregate"/> they serialise.
     /// </summary>
-    private static async Task<LoadOutcome> LoadAsync(
+    /// <remarks>
+    /// <b>Internal rather than private, on purpose.</b> <see cref="SurveyExportEndpoints"/>
+    /// has to resolve the survey, authorize the caller, resolve the locale and aggregate in
+    /// exactly the way the results screen does, because an export that loaded the same survey
+    /// even slightly differently is an export that can disagree with the screen it was taken
+    /// from -- including about a suppression decision. Sharing the loader is the same boundary
+    /// #88 drew when report generation started calling
+    /// <see cref="SurveyAggregateLoader.ComputeAsync"/>: one loader, several presentations.
+    /// </remarks>
+    internal static async Task<LoadOutcome> LoadAsync(
         Guid id,
         string? lang,
         ClaimsPrincipal principal,
@@ -349,6 +359,6 @@ public static class SurveyResultsEndpoints
         return new LoadOutcome(null, new ResultsContext(survey, title, resolvedLocale, fallbackFields, aggregate));
     }
 
-    private static IResult SurveyNotFound()
+    internal static IResult SurveyNotFound()
         => Results.Json(new { message = "Survey not found" }, statusCode: 404);
 }
