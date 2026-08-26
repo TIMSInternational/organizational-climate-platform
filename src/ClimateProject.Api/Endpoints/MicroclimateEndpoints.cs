@@ -471,8 +471,10 @@ public static class MicroclimateEndpoints
                 if (emojiOptions.Any(o => o.Value == emojiValue))
                 {
                     // Caught here rather than by the unique index, for the reason the plain
-                    // duplicate check above gives: a duplicate value makes a stored answer
-                    // ambiguous, and a 400 naming the option beats an opaque DbUpdateException.
+                    // duplicate check above gives: a duplicate value makes a submission
+                    // ambiguous -- two faces accepting the same string, with nothing to say
+                    // which one was meant -- and a 400 naming the option beats an opaque
+                    // DbUpdateException.
                     return Results.Json(new { message = $"Question {question.Order} has duplicate emoji option value '{emojiValue}'" }, statusCode: 400);
                 }
 

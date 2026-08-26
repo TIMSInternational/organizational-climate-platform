@@ -26,8 +26,9 @@ public sealed record QuestionOptionDto(int Order, string Value, string? Label);
 /// </param>
 /// <param name="Value">
 /// The stable key. This is what must be submitted -- as its decimal string, since
-/// answers travel as text -- and what lands in the stored answer, for exactly the
-/// reason <see cref="QuestionOptionDto.Value"/> gives.
+/// answers travel as text -- and what the submission is validated against, for
+/// exactly the reason <see cref="QuestionOptionDto.Value"/> gives. Validated, not
+/// stored: a microclimate keeps no per-response row, only a count and a word cloud.
 /// </param>
 /// <param name="Label">
 /// The option's accessible name, already resolved for the request's locale.

@@ -40,7 +40,9 @@ public class MicroclimateQuestionEmojiOptionConfiguration : IEntityTypeConfigura
         builder.Property(o => o.Value).HasColumnName("value").IsRequired();
 
         // Two points of one scale must not share a value: the value is what a submitted
-        // answer is matched against, so a duplicate makes the stored answer ambiguous.
+        // answer is matched against, so a duplicate makes a submission ambiguous -- two
+        // faces would accept the same string and there would be no way to say which one
+        // the respondent meant.
         // question_emoji_options has no such index and should; this one is written the
         // way microclimate_question_options was, which added it deliberately.
         builder.HasIndex(o => new { o.MicroclimateQuestionId, o.Value }).IsUnique();
