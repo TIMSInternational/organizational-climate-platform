@@ -111,6 +111,21 @@ Parameters:
   DatabaseConnectionStringSecretArn:
     Type: String
     Description: Secrets Manager ARN holding the Supabase Postgres connection string.
+  EmailSmtpUsernameSecretArn:
+    Type: String
+    Description: >-
+      Secrets Manager ARN holding the SES SMTP username (the IAM access key id of the
+      climate-project-smtp user). Paired with EmailSmtpPasswordSecretArn -- BOTH must be set
+      or neither: EmailOptions.ValidationError() refuses to start the host once
+      Email__Provider is 'smtp' and a required setting is missing, so a half-configuration
+      fails at boot rather than silently recording every notification as failed.
+  EmailSmtpPasswordSecretArn:
+    Type: String
+    Description: >-
+      Secrets Manager ARN holding the SES SMTP password. This is NOT the IAM secret access
+      key: it is that key run through the SigV4 derivation SES requires (region us-east-1,
+      service 'ses', terminal 'aws4_request', message 'SendRawEmail', 0x04 version prefix).
+      Regenerating the access key invalidates it, so rotate both secrets together.
   InternalApiKeySecretArn:
     Type: String
     Description: >-
@@ -154,6 +169,8 @@ Resources:
                   - !Ref TrackingJwtSecretArn
                   - !Ref DatabaseConnectionStringSecretArn
                   - !Ref InternalApiKeySecretArn
+                  - !Ref EmailSmtpUsernameSecretArn
+                  - !Ref EmailSmtpPasswordSecretArn
       Tags:
         - Key: Project
           Value: climate-project-api
@@ -240,6 +257,28 @@ Resources:
               # HTTPS-only, so the header is accurate.
               - Name: Security__EnableHsts
                 Value: "true"
+              # Mail (#100). Until this block existed the service ran with Email:Provider
+              # defaulting to 'none', so EVERY email notification was recorded as failed --
+              # not because SES refused it, but because the app was never told SES exists.
+              # SES itself was already production-enabled and timsint.com already verified
+              # with DKIM; only this wiring was missing.
+              - Name: Email__Provider
+                Value: "smtp"
+              - Name: Email__SmtpHost
+                Value: "email-smtp.us-east-1.amazonaws.com"
+              - Name: Email__SmtpPort
+                Value: "587"
+              - Name: Email__SmtpUseStartTls
+                Value: "true"
+              - Name: Email__FromAddress
+                Value: "no-reply@timsint.com"
+              - Name: Email__FromName
+                Value: "TIMS Clima Organizacional"
+              # Every link in outbound mail is built from this, including the
+              # /survey-invitations/{token} address that starts the whole respond loop. It is
+              # the web origin, NOT the App Runner hostname: a recipient opens it in a browser.
+              - Name: Email__AppBaseUrl
+                Value: "https://climate.timsint.com"
             RuntimeEnvironmentSecrets:
               - Name: TrackingJwtSecret
                 Value: !Ref TrackingJwtSecretArn
@@ -247,6 +286,10 @@ Resources:
                 Value: !Ref DatabaseConnectionStringSecretArn
               - Name: InternalApiKey
                 Value: !Ref InternalApiKeySecretArn
+              - Name: Email__SmtpUsername
+                Value: !Ref EmailSmtpUsernameSecretArn
+              - Name: Email__SmtpPassword
+                Value: !Ref EmailSmtpPasswordSecretArn
       InstanceConfiguration:
         Cpu: !Ref Cpu
         Memory: !Ref Memory

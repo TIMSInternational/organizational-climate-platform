@@ -86,6 +86,8 @@ jobs:
           TRACKING_JWT_SECRET_ARN: ${{ vars.TRACKING_JWT_SECRET_ARN }}
           DATABASE_CONNECTION_STRING_SECRET_ARN: ${{ vars.DATABASE_CONNECTION_STRING_SECRET_ARN }}
           INTERNAL_API_KEY_SECRET_ARN: ${{ vars.INTERNAL_API_KEY_SECRET_ARN }}
+          EMAIL_SMTP_USERNAME_SECRET_ARN: ${{ vars.EMAIL_SMTP_USERNAME_SECRET_ARN }}
+          EMAIL_SMTP_PASSWORD_SECRET_ARN: ${{ vars.EMAIL_SMTP_PASSWORD_SECRET_ARN }}
           MIGRATION_DATABASE_CONNECTION_STRING: ${{ secrets.MIGRATION_DATABASE_CONNECTION_STRING }}
         run: |
           set -euo pipefail
@@ -97,6 +99,8 @@ jobs:
             TRACKING_JWT_SECRET_ARN \
             DATABASE_CONNECTION_STRING_SECRET_ARN \
             INTERNAL_API_KEY_SECRET_ARN \
+            EMAIL_SMTP_USERNAME_SECRET_ARN \
+            EMAIL_SMTP_PASSWORD_SECRET_ARN \
             MIGRATION_DATABASE_CONNECTION_STRING; do
             if [ -z "${!name:-}" ]; then
               echo "::error::$name is empty. Set it on the 'production' environment (repository variable, or secret for MIGRATION_DATABASE_CONNECTION_STRING) before dispatching this workflow."
@@ -357,7 +361,9 @@ jobs:
               CorsAdditionalAllowedWildcardOrigin="${{ vars.CORS_ADDITIONAL_ALLOWED_WILDCARD_ORIGIN }}" \
               TrackingJwtSecretArn="${{ vars.TRACKING_JWT_SECRET_ARN }}" \
               DatabaseConnectionStringSecretArn="${{ vars.DATABASE_CONNECTION_STRING_SECRET_ARN }}" \
-              InternalApiKeySecretArn="${{ vars.INTERNAL_API_KEY_SECRET_ARN }}"
+              InternalApiKeySecretArn="${{ vars.INTERNAL_API_KEY_SECRET_ARN }}" \
+              EmailSmtpUsernameSecretArn="${{ vars.EMAIL_SMTP_USERNAME_SECRET_ARN }}" \
+              EmailSmtpPasswordSecretArn="${{ vars.EMAIL_SMTP_PASSWORD_SECRET_ARN }}"
 
       - name: Read App Runner URL
         id: service
