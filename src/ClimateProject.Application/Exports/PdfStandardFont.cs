@@ -244,11 +244,48 @@ public static class PdfStandardFontMetrics
     /// <summary>The advance width of one character, in 1/1000 em.</summary>
     public static short CharacterWidth(char value, PdfStandardFont font)
     {
-        var code = (int)Encode(value);
+        TryMeasure(Encode(value), font, out var width);
+        return width;
+    }
 
+    /// <summary>
+    /// Whether <paramref name="winAnsiCode"/> has a width of its own, or is charged the
+    /// replacement character's.
+    /// </summary>
+    /// <remarks>
+    /// <b>The completeness of the width tables is otherwise unobservable</b>, which is the only
+    /// reason this is public. A code with no entry is charged the width of <c>'?'</c> -- a real,
+    /// plausible number in the middle of the range -- while the viewer goes on drawing the
+    /// glyph the code actually names. So <see cref="CharacterWidth"/> cannot tell "556 because
+    /// that is the glyph" from "556 because nothing knew", and a test over the widths alone can
+    /// only assert that they are positive, which is exactly what a missing entry satisfies.
+    ///
+    /// <para>
+    /// This is a different thing from a character the ENCODER cannot name. That one is replaced
+    /// with a literal <c>'?'</c> before it reaches the tables, so it is drawn as a question mark
+    /// and charged a question mark's width -- correct, if lossy. The failure this predicate
+    /// exists for is the silent one: a code that draws its own glyph while being measured as
+    /// something else, which mis-wraps every line containing it.
+    /// </para>
+    ///
+    /// <para>
+    /// It takes a code rather than a <see cref="char"/> so that the unassigned WinAnsi slots
+    /// (0x81, 0x8D, 0x8F, 0x90, 0x9D) are reachable from a test. Nothing the encoder emits
+    /// lands on them, which is the guarantee -- and a predicate whose false case no caller can
+    /// construct is a predicate no test can prove is not a constant.
+    /// </para>
+    /// </remarks>
+    public static bool HasOwnWidth(int winAnsiCode) => TryMeasure(winAnsiCode, PdfStandardFont.Regular, out _);
+
+    /// <summary>
+    /// The advance width of one WinAnsi code, and whether it was actually known.
+    /// </summary>
+    private static bool TryMeasure(int code, PdfStandardFont font, out short width)
+    {
         if (SymbolWidths.TryGetValue(code, out var symbol))
         {
-            return font == PdfStandardFont.Bold ? symbol.Bold : symbol.Regular;
+            width = font == PdfStandardFont.Bold ? symbol.Bold : symbol.Regular;
+            return true;
         }
 
         if (AccentFold.TryGetValue(code, out var folded))
@@ -256,15 +293,17 @@ public static class PdfStandardFontMetrics
             code = folded;
         }
 
-        if (code is < 32 or > 126)
+        // Anything still unaccounted for is charged '?' 's width rather than zero, so a line
+        // of them still wraps.
+        var measured = code is >= 32 and <= 126;
+        if (!measured)
         {
-            // Anything still unaccounted for was replaced with '?'; charge it '?' 's width
-            // rather than zero, so a line of them still wraps.
             code = Replacement;
         }
 
         var table = font == PdfStandardFont.Bold ? BoldAscii : RegularAscii;
-        return table[code - 32];
+        width = table[code - 32];
+        return measured;
     }
 
     /// <summary>The advance width of a string at <paramref name="fontSize"/>, in points.</summary>

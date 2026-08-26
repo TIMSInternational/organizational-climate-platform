@@ -92,23 +92,90 @@ public class PdfStandardFontMetricsTests
         Assert.Equal((byte)' ', PdfStandardFontMetrics.Encode('\t'));
     }
 
+    /// <summary>
+    /// Every character the encoder can emit is MEASURED -- not merely given a positive number.
+    /// </summary>
+    /// <remarks>
+    /// This assertion used to read <c>CharacterWidth(...) > 0</c>, which is satisfied by
+    /// precisely the failure it was hunting: a code with no entry is charged the width of
+    /// <c>'?'</c>, which is positive, while the viewer goes on drawing the glyph the code really
+    /// names. The test could not distinguish a hand-entered width from a guess, so it closed the
+    /// question without answering it.
+    ///
+    /// <para>
+    /// The sweep runs over the whole BMP rather than 0x20..0xFF, because <c>Encode</c> also
+    /// folds characters from far outside Latin-1 -- the curly quotes, dashes and ellipsis a word
+    /// processor substitutes without being asked -- into WinAnsi codes. Those are the entries
+    /// most likely to be added without a width beside them.
+    /// </para>
+    /// </remarks>
     [Fact]
-    public void Every_win_ansi_code_the_encoder_can_produce_has_a_width()
+    public void Every_character_the_encoder_can_emit_is_measured_rather_than_guessed()
     {
-        // The table is hand-entered, so the failure mode is an omission rather than a wrong
-        // number: a missing entry would fall through to the '?' width and quietly mis-wrap
-        // every line containing that character. This sweeps the whole reachable range.
-        for (var value = 0x20; value <= 0xFF; value++)
+        var swept = new HashSet<int>();
+
+        for (var value = 0x20; value <= 0xFFFF; value++)
         {
             var character = (char)value;
-            if (PdfStandardFontMetrics.Encode(character) == PdfStandardFontMetrics.Replacement && character != '?')
+            var code = PdfStandardFontMetrics.Encode(character);
+            if (code == PdfStandardFontMetrics.Replacement && character != '?')
             {
-                continue; // outside the encoding; charged the replacement's width by design
+                continue; // the encoder cannot name it; drawn as '?' and measured as one
             }
 
-            Assert.True(PdfStandardFontMetrics.CharacterWidth(character, PdfStandardFont.Regular) > 0, $"no regular width for U+{value:X4}");
-            Assert.True(PdfStandardFontMetrics.CharacterWidth(character, PdfStandardFont.Bold) > 0, $"no bold width for U+{value:X4}");
+            Assert.True(
+                PdfStandardFontMetrics.HasOwnWidth(code),
+                $"U+{value:X4} is drawn as WinAnsi 0x{code:X2} but charged the replacement's width");
+
+            swept.Add(code);
         }
+
+        // The sweep has to have reached past ASCII, or a fold that stopped working would empty
+        // the interesting half of the loop and every assertion in it.
+        Assert.True(swept.Count > 200, $"the sweep only reached {swept.Count} codes");
+        Assert.Contains(0xAB, swept);  // guillemotleft, Spanish quotation
+        Assert.Contains(0xB7, swept);  // periodcentered, the separator SurveyExport draws
+        Assert.Contains(0x92, swept);  // quoteright, reached only through the high fold
+    }
+
+    [Fact]
+    public void The_unassigned_win_ansi_slots_are_unmeasured_and_nothing_encodes_to_them()
+    {
+        // The control on the sweep above, and the reason the assertion can no longer be `> 0`.
+        // These five byte values name no glyph in WinAnsiEncoding, so they have no width -- and
+        // a predicate whose false case nothing could reach would be indistinguishable from a
+        // constant `true`, which is the failure mode the sweep is supposed to be immune to.
+        int[] unassigned = [0x81, 0x8D, 0x8F, 0x90, 0x9D];
+
+        foreach (var code in unassigned)
+        {
+            Assert.False(PdfStandardFontMetrics.HasOwnWidth(code), $"0x{code:X2} claims a width");
+
+            // Charged the replacement's width, positive and plausible -- exactly what made the
+            // old assertion unable to see it.
+            Assert.True(PdfStandardFontMetrics.CharacterWidth('?', PdfStandardFont.Regular) > 0);
+        }
+
+        // And the encoder never produces one, which is what makes the gap harmless in practice
+        // rather than merely undetected. Collected in one pass and compared as sets, because
+        // 65,536 individual assertions cost nine seconds of a three-second suite.
+        var produced = new HashSet<int>();
+        for (var value = 0; value <= 0xFFFF; value++)
+        {
+            produced.Add(PdfStandardFontMetrics.Encode((char)value));
+        }
+
+        Assert.Empty(produced.Intersect(unassigned));
+    }
+
+    [Fact]
+    public void A_measured_character_reports_so()
+    {
+        // The other half of the control: the predicate is not a constant `false` either.
+        Assert.True(PdfStandardFontMetrics.HasOwnWidth(PdfStandardFontMetrics.Encode('«')));
+        Assert.True(PdfStandardFontMetrics.HasOwnWidth(PdfStandardFontMetrics.Encode('·')));
+        Assert.True(PdfStandardFontMetrics.HasOwnWidth(PdfStandardFontMetrics.Encode('ñ')));
+        Assert.True(PdfStandardFontMetrics.HasOwnWidth(PdfStandardFontMetrics.Encode('A')));
     }
 
     [Fact]
