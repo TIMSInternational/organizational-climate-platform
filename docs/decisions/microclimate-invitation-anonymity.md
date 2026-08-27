@@ -124,6 +124,30 @@ Two properties, both load-bearing:
    the rate limiter still buckets by one. What is claimed is about what is *stored*.
 4. **An administrator with database access can read `microclimate_invitations` directly.**
    The guarantee is that there is nothing there to read, not that reading is prevented.
+5. **An anonymous microclimate reminds people who have already answered, and it cannot stop
+   doing so.** This is the ceiling's direct cost and it is worth stating because it is the one
+   place the guarantee is felt as a defect rather than as a protection.
+
+   `InvitationReminderJob.SweepMicroclimatesAsync` selects candidates on `CompletedAt == null`
+   and `ReminderSchedule.Evaluate` skips on `CompletedAt is not null` and on a status outside
+   `{pending, sent, opened, started}`. For an anonymous microclimate **neither ever changes** —
+   that is exactly what the ceiling forbids — so every invitee stays a candidate whether or not
+   they answered, up to `ReminderSchedule.DefaultMaxReminders` (3) at
+   `InvitationReminderJob.MicroclimateReminderFrequencyDays` (3). It bites on any window longer
+   than three days, which an administrator sets freely.
+
+   **It cannot be fixed without breaking the guarantee**, and that is the point: suppressing
+   the reminder requires knowing this person answered, and knowing that is precisely what is
+   not recorded. The three honest ways out — remind nobody on an anonymous microclimate; let
+   the recipient opt out per session; or spend the response count on a cruder rule ("stop
+   reminding anyone once the count reaches the invitee count") — are all product decisions
+   about reminder cadence rather than about this boundary, and belong with whoever owns it.
+   None of them recovers per-person suppression.
+
+   (Separately, and not this: a microclimate reminder currently carries **no link at all**,
+   because `deadline_reminder` is a shared notification type whose payload predates
+   `MicroclimateNotificationData`. That defect and its two candidate fixes are written up in
+   the class remarks on `MicroclimateInvitationEndpoints`.)
 
 ---
 

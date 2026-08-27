@@ -1,22 +1,16 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { EyeOff, Info } from "lucide-react";
+import { useEffect, useState, type FormEvent } from 'react'
+import { EyeOff, Info } from 'lucide-react'
 import {
   getMicroclimatePublic,
   submitResponse,
   type PublicMicroclimateDetail,
   type Question,
-} from "../api/microclimates";
-import { useTranslation } from "../../../i18n";
-import { detectLocale } from "../../../i18n/locale";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-  Button,
-  Textarea,
-} from "../../../components/ui";
-import { SegmentedScale } from "../../../components/ui/SegmentedScale";
-import MicroclimateContentNotice from "./MicroclimateContentNotice";
+} from '../api/microclimates'
+import { useTranslation } from '../../../i18n'
+import { detectLocale } from '../../../i18n/locale'
+import { Alert, AlertDescription, AlertTitle, Button, Textarea } from '../../../components/ui'
+import { SegmentedScale } from '../../../components/ui/SegmentedScale'
+import MicroclimateContentNotice from './MicroclimateContentNotice'
 
 /**
  * The scale a likert or rating question is answered on when it configures no
@@ -24,12 +18,12 @@ import MicroclimateContentNotice from "./MicroclimateContentNotice";
  * submitted answer against (`int.TryParse(answer, …) && rating is >= 1 and <= 5`).
  * Named here so the control and the server's contract cannot drift apart silently.
  */
-const SCALE_MIN = 1;
-const SCALE_MAX = 5;
+const SCALE_MIN = 1
+const SCALE_MAX = 5
 
 /** The `<legend>` that names one question's group of controls. */
 function questionLegendId(questionId: string): string {
-  return `microclimate-question-${questionId}`;
+  return `microclimate-question-${questionId}`
 }
 
 function QuestionInput({
@@ -38,13 +32,13 @@ function QuestionInput({
   value,
   onChange,
 }: {
-  question: Question;
+  question: Question
   /** Id of the `<legend>` holding the question, for controls that need naming. */
-  legendId: string;
-  value: string;
-  onChange: (value: string) => void;
+  legendId: string
+  value: string
+  onChange: (value: string) => void
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation()
 
   switch (question.type) {
     // An emoji scale is answered on the values ITS AUTHOR configured, so unlike
@@ -52,18 +46,16 @@ function QuestionInput({
     // `MicroclimateEndpoints` refuses to create such a question and rejects any answer
     // to one that reached the database another way, so drawing a scale here would be
     // offering a control whose every answer is a 400.
-    case "emoji_rating":
+    case 'emoji_rating':
       if (!question.emojiOptions || question.emojiOptions.length === 0) {
         return (
           <p role="alert" className="text-sm text-fg-secondary">
-            {t("microclimates.questionHasNoOptions")}
+            {t('microclimates.questionHasNoOptions')}
           </p>
-        );
+        )
       }
-      return (
-        <EmojiScale question={question} value={value} onChange={onChange} />
-      );
-    case "multiple_choice":
+      return <EmojiScale question={question} value={value} onChange={onChange} />
+    case 'multiple_choice':
       // The backend now rejects multiple_choice questions with fewer than 2 options at
       // creation time, but this stays defensive against any question created before that
       // validation existed -- an empty radiogroup with no message is indistinguishable from
@@ -71,9 +63,9 @@ function QuestionInput({
       if (!question.options || question.options.length === 0) {
         return (
           <p role="alert" className="text-sm text-fg-secondary">
-            {t("microclimates.questionHasNoOptions")}
+            {t('microclimates.questionHasNoOptions')}
           </p>
-        );
+        )
       }
       return (
         <ChoiceList
@@ -88,12 +80,12 @@ function QuestionInput({
           onChange={onChange}
           stacked
         />
-      );
+      )
     // likert and rating render identically -- a 1-5 scale unless the question
     // configures its own option set. They stay distinct types because they mean
     // different things (agreement vs quality), not because they look different.
-    case "likert":
-    case "rating":
+    case 'likert':
+    case 'rating':
       // An AUTHORED option set is not a numeric scale: its values are words
       // (`strongly_agree`), and `SegmentedScale` draws the points of an inclusive
       // integer run and emits `String(point)`. Those questions keep the choice list
@@ -111,7 +103,7 @@ function QuestionInput({
             value={value}
             onChange={onChange}
           />
-        );
+        )
       }
       return (
         <SegmentedScale
@@ -121,29 +113,29 @@ function QuestionInput({
           // microclimate question carries no anchor words, only a `text` -- so the
           // generic pair is used rather than inventing an anchor the author never
           // wrote. An authored scale states its own ends, and takes the branch above.
-          minLabel={t("charts.levelLow")}
-          maxLabel={t("charts.levelHigh")}
+          minLabel={t('charts.levelLow')}
+          maxLabel={t('charts.levelHigh')}
           // '' means unanswered, which is not a point on the scale.
-          value={value === "" ? null : value}
+          value={value === '' ? null : value}
           onChange={onChange}
           // The group's name, exactly as `ChoiceList` names its radiogroup.
           label={question.text ?? undefined}
           required={question.required}
         />
-      );
-    case "yes_no":
+      )
+    case 'yes_no':
       return (
         <ChoiceList
           choices={[
-            { value: "yes", label: t("common.yes") },
-            { value: "no", label: t("common.no") },
+            { value: 'yes', label: t('common.yes') },
+            { value: 'no', label: t('common.no') },
           ]}
           question={question}
           value={value}
           onChange={onChange}
         />
-      );
-    case "open_ended":
+      )
+    case 'open_ended':
     default:
       // A `<textarea>`, not the single-line `<input type="text">` this used to be:
       // the design draws free text as the box under the scale ("Anything you want to
@@ -160,7 +152,7 @@ function QuestionInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
         />
-      );
+      )
   }
 }
 
@@ -182,23 +174,21 @@ function ChoiceList({
   onChange,
   stacked = false,
 }: {
-  choices: { value: string; label: string }[];
-  question: Question;
-  value: string;
-  onChange: (value: string) => void;
+  choices: { value: string; label: string }[]
+  question: Question
+  value: string
+  onChange: (value: string) => void
   /** One per line, for authored options that can be long. Scales wrap in a row. */
-  stacked?: boolean;
+  stacked?: boolean
 }) {
   return (
     <div
       role="radiogroup"
       aria-label={question.text ?? undefined}
-      className={
-        stacked ? "grid gap-1" : "flex flex-wrap gap-x-section gap-y-1"
-      }
+      className={stacked ? 'grid gap-1' : 'flex flex-wrap gap-x-section gap-y-1'}
     >
       {choices.map((choice) => {
-        const inputId = `${question.id}-${choice.value}`;
+        const inputId = `${question.id}-${choice.value}`
         return (
           <span key={choice.value} className="flex items-center gap-inline">
             <input
@@ -217,10 +207,10 @@ function ChoiceList({
               {choice.label}
             </label>
           </span>
-        );
+        )
       })}
     </div>
-  );
+  )
 }
 
 /**
@@ -258,11 +248,11 @@ function EmojiScale({
   value,
   onChange,
 }: {
-  question: Question;
-  value: string;
-  onChange: (value: string) => void;
+  question: Question
+  value: string
+  onChange: (value: string) => void
 }) {
-  const options = question.emojiOptions ?? [];
+  const options = question.emojiOptions ?? []
 
   return (
     <div
@@ -271,8 +261,8 @@ function EmojiScale({
       className="flex flex-wrap gap-x-section gap-y-1"
     >
       {options.map((option) => {
-        const submitted = String(option.value);
-        const inputId = `${question.id}-emoji-${option.order}`;
+        const submitted = String(option.value)
+        const inputId = `${question.id}-emoji-${option.order}`
         return (
           <span key={option.order} className="flex items-center gap-inline">
             <input
@@ -292,15 +282,13 @@ function EmojiScale({
               <span aria-hidden="true" className="text-2xl leading-none">
                 {option.emoji}
               </span>
-              <span className="text-sm">
-                {option.label ?? String(option.value)}
-              </span>
+              <span className="text-sm">{option.label ?? String(option.value)}</span>
             </label>
           </span>
-        );
+        )
       })}
     </div>
-  );
+  )
 }
 
 /**
@@ -311,11 +299,11 @@ function EmojiScale({
  * out of the fetch effect's dependency array.
  */
 interface PageError {
-  message: string | null;
+  message: string | null
 }
 
 function toPageError(err: unknown): PageError {
-  return { message: err instanceof Error ? err.message : null };
+  return { message: err instanceof Error ? err.message : null }
 }
 
 /**
@@ -415,7 +403,7 @@ export default function MicroclimatePulseForm({
   onSubmitted,
 }: {
   /** The session to load and answer. Undefined while a route parameter is missing. */
-  microclimateId: string | undefined;
+  microclimateId: string | undefined
   /**
    * Called once, after the server has accepted the answers.
    *
@@ -424,15 +412,14 @@ export default function MicroclimatePulseForm({
    * counter moved is not a precondition for a respondent finishing, and nothing here
    * waits on it or reports its failure.
    */
-  onSubmitted?: () => void;
+  onSubmitted?: () => void
 }) {
-  const { t } = useTranslation();
-  const id = microclimateId;
-  const baseUrl = import.meta.env.VITE_API_BASE_URL as string;
-  const [microclimate, setMicroclimate] =
-    useState<PublicMicroclimateDetail | null>(null);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [error, setError] = useState<PageError | null>(null);
+  const { t } = useTranslation()
+  const id = microclimateId
+  const baseUrl = import.meta.env.VITE_API_BASE_URL as string
+  const [microclimate, setMicroclimate] = useState<PublicMicroclimateDetail | null>(null)
+  const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [error, setError] = useState<PageError | null>(null)
 
   // Kept apart from `error`, and the separation is the respondent's answers.
   //
@@ -443,36 +430,31 @@ export default function MicroclimatePulseForm({
   // announced it under "this session could not be loaded" -- a sentence about a fetch that
   // succeeded. `respondSubmitFailedTitle` has been sitting in both catalogues unused; this
   // is the case it was written for.
-  const [submitError, setSubmitError] = useState<PageError | null>(null);
-  const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<PageError | null>(null)
+  const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   // An invited respondent has no stored preference and no authenticated locale, so
   // the language they are served has to come from the request itself -- exactly the
   // `?lang=` parameter web/src/i18n/README.md anticipated for this one public route.
-  const locale = detectLocale();
+  const locale = detectLocale()
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) return
     getMicroclimatePublic(baseUrl, id, locale)
       .then(setMicroclimate)
-      .catch((err) => setError(toPageError(err)));
-  }, [id, baseUrl, locale]);
+      .catch((err) => setError(toPageError(err)))
+  }, [id, baseUrl, locale])
 
   async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    if (!id) return;
-    setSubmitError(null);
-    setSubmitting(true);
+    event.preventDefault()
+    if (!id) return
+    setSubmitError(null)
+    setSubmitting(true)
     try {
       // Send the locale actually rendered, not the browser's current preference:
       // they are the same here, but the server records what the respondent saw.
-      await submitResponse(
-        baseUrl,
-        id,
-        answers,
-        microclimate?.resolvedLocale ?? locale,
-      );
+      await submitResponse(baseUrl, id, answers, microclimate?.resolvedLocale ?? locale)
       // Both of these are strictly AFTER the await, and both have to be.
       //
       // `onSubmitted` is what records `completed` on the invitation ladder, and on a
@@ -480,55 +462,46 @@ export default function MicroclimatePulseForm({
       // `already_completed` from then on, and only an admin reinstating the invitation can
       // undo it. Reporting it for a submission the server refused would close somebody's
       // invitation over answers that were never stored.
-      setSubmitted(true);
-      onSubmitted?.();
+      setSubmitted(true)
+      onSubmitted?.()
     } catch (err) {
-      setSubmitError(toPageError(err));
+      setSubmitError(toPageError(err))
     } finally {
-      setSubmitting(false);
+      setSubmitting(false)
     }
   }
 
-  const questions = microclimate?.questions ?? [];
-  const total = questions.length;
+  const questions = microclimate?.questions ?? []
+  const total = questions.length
 
   return (
     <Surface>
       {error ? (
         <Alert variant="warning" role="alert">
           <Info aria-hidden="true" />
-          <AlertTitle>{t("microclimates.respondLoadFailedTitle")}</AlertTitle>
-          <AlertDescription>
-            {error.message ?? t("errors.generic")}
-          </AlertDescription>
+          <AlertTitle>{t('microclimates.respondLoadFailedTitle')}</AlertTitle>
+          <AlertDescription>{error.message ?? t('errors.generic')}</AlertDescription>
         </Alert>
       ) : submitted ? (
         <Alert variant="success" role="status">
           <EyeOff aria-hidden="true" />
-          <AlertTitle>{t("microclimates.respondThanksTitle")}</AlertTitle>
-          <AlertDescription>
-            {t("microclimates.thankYouForResponse")}
-          </AlertDescription>
+          <AlertTitle>{t('microclimates.respondThanksTitle')}</AlertTitle>
+          <AlertDescription>{t('microclimates.thankYouForResponse')}</AlertDescription>
         </Alert>
       ) : !microclimate ? (
-        <p className="text-base text-fg-secondary">{t("common.loading")}</p>
-      ) : microclimate.status !== "active" ? (
+        <p className="text-base text-fg-secondary">{t('common.loading')}</p>
+      ) : microclimate.status !== 'active' ? (
         <Alert variant="warning" role="status">
           <Info aria-hidden="true" />
-          <AlertTitle>{t("microclimates.respondClosedTitle")}</AlertTitle>
-          <AlertDescription>
-            {t("microclimates.notAcceptingResponses")}
-          </AlertDescription>
+          <AlertTitle>{t('microclimates.respondClosedTitle')}</AlertTitle>
+          <AlertDescription>{t('microclimates.notAcceptingResponses')}</AlertDescription>
         </Alert>
       ) : (
         /* The whole screen: one column, capped at the prose measure and centred.
          No grid, no rail, no bar — every part of the pulse is in reading order
          down this one box, which is also why nothing on this page has to stick
          to stay in view. */
-        <div
-          data-slot="pulse-column"
-          className="mx-auto grid w-full max-w-measure gap-panel-gap"
-        >
+        <div data-slot="pulse-column" className="mx-auto grid w-full max-w-measure gap-panel-gap">
           {/* The design's pulse heads the column with a small line naming the kind
             of thing, then goes straight to the ask. So the eyebrow keeps the
             shell's eyebrow treatment and the session's own name is set at
@@ -536,10 +509,10 @@ export default function MicroclimatePulseForm({
             than the 20px question below it. */}
           <header className="grid gap-1">
             <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
-              {t("microclimates.respondEyebrow")}
+              {t('microclimates.respondEyebrow')}
             </span>
             <h1 className="text-lg font-semibold tracking-tight text-fg-primary">
-              {microclimate.title ?? t("microclimates.respondUntitled")}
+              {microclimate.title ?? t('microclimates.respondUntitled')}
             </h1>
           </header>
 
@@ -555,18 +528,14 @@ export default function MicroclimatePulseForm({
           {submitError ? (
             <Alert variant="warning" role="alert">
               <Info aria-hidden="true" />
-              <AlertTitle>
-                {t("microclimates.respondSubmitFailedTitle")}
-              </AlertTitle>
-              <AlertDescription>
-                {submitError.message ?? t("errors.generic")}
-              </AlertDescription>
+              <AlertTitle>{t('microclimates.respondSubmitFailedTitle')}</AlertTitle>
+              <AlertDescription>{submitError.message ?? t('errors.generic')}</AlertDescription>
             </Alert>
           ) : null}
 
           <form onSubmit={handleSubmit} className="grid gap-section">
             {questions.map((question, index) => {
-              const legendId = questionLegendId(question.id);
+              const legendId = questionLegendId(question.id)
               return (
                 <fieldset
                   key={question.id}
@@ -602,7 +571,7 @@ export default function MicroclimatePulseForm({
                           {`${index + 1}/${total}`}
                         </span>
                         <span className="sr-only">
-                          {t("microclimates.respondQuestionPosition", {
+                          {t('microclimates.respondQuestionPosition', {
                             position: index + 1,
                             total,
                           })}
@@ -621,35 +590,28 @@ export default function MicroclimatePulseForm({
                       now: at 20px an inline marker read as part of the ask. */}
                     <span className="mt-1 block text-sm font-normal text-fg-secondary">
                       {question.required
-                        ? t("microclimates.respondRequiredMarker")
-                        : t("microclimates.respondOptionalMarker")}
+                        ? t('microclimates.respondRequiredMarker')
+                        : t('microclimates.respondOptionalMarker')}
                     </span>
                   </legend>
                   <div className="clear-both mt-panel-gap">
                     <QuestionInput
                       question={question}
                       legendId={legendId}
-                      value={answers[question.id] ?? ""}
-                      onChange={(value) =>
-                        setAnswers({ ...answers, [question.id]: value })
-                      }
+                      value={answers[question.id] ?? ''}
+                      onChange={(value) => setAnswers({ ...answers, [question.id]: value })}
                     />
                   </div>
                 </fieldset>
-              );
+              )
             })}
 
             {/* One action. The design draws a single Send and no second control:
               there is no draft to save on a session whose responses are not
               persisted against a respondent. */}
             <div className="flex flex-wrap gap-inline">
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                disabled={submitting}
-              >
-                {submitting ? t("common.submitting") : t("common.submit")}
+              <Button type="submit" variant="primary" size="lg" disabled={submitting}>
+                {submitting ? t('common.submitting') : t('common.submit')}
               </Button>
             </div>
           </form>
@@ -661,7 +623,7 @@ export default function MicroclimatePulseForm({
         </div>
       )}
     </Surface>
-  );
+  )
 }
 
 /**
@@ -671,7 +633,7 @@ export default function MicroclimatePulseForm({
  * only thing carrying it.
  */
 function AnonymityNote() {
-  const { t } = useTranslation();
+  const { t } = useTranslation()
 
   return (
     <section className="grid gap-inline rounded-xl border border-accent-green-ring bg-accent-green-soft p-card">
@@ -683,17 +645,15 @@ function AnonymityNote() {
             fill measures 3.49:1 in light, under AA for text this size. The accent
             stays on the icon beside it. */}
         <span className="text-2xs font-semibold uppercase tracking-label text-fg-secondary">
-          {t("microclimates.respondAnonymityChip")}
+          {t('microclimates.respondAnonymityChip')}
         </span>
       </span>
       <h2 className="text-base font-semibold text-fg-primary">
-        {t("microclimates.respondAnonymityTitle")}
+        {t('microclimates.respondAnonymityTitle')}
       </h2>
-      <p className="text-sm text-fg-secondary">
-        {t("microclimates.respondAnonymityBody")}
-      </p>
+      <p className="text-sm text-fg-secondary">{t('microclimates.respondAnonymityBody')}</p>
     </section>
-  );
+  )
 }
 
 /** The one panel on the page — every state renders inside it. */
@@ -702,5 +662,5 @@ function Surface({ children }: { children: React.ReactNode }) {
     <div className="flex flex-1 flex-col gap-panel-gap rounded-xl border border-line-panel bg-surface-panel p-panel">
       {children}
     </div>
-  );
+  )
 }
