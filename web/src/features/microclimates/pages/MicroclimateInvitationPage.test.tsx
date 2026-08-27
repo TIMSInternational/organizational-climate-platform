@@ -187,6 +187,49 @@ describe('MicroclimateInvitationPage', () => {
   })
 
   /**
+   * `completed` means THE ANSWERS ARE IN. Nothing else it could mean is worth recording.
+   *
+   * <p>The rung is not decoration: on a non-anonymous session `Advances` is strictly
+   * monotonic, so `completed` is irreversible, the invitee's token answers 409
+   * `already_completed` from then on, and the only way back is an admin reinstating them.
+   * Reporting it for a submission the server refused would close a respondent's invitation
+   * over answers that were never stored, and hand them a link that tells them they already
+   * answered.</p>
+   *
+   * <p>The neighbouring test covers the TRACKING calls failing. This one is the submission
+   * failing, which is the opposite direction and the one that costs somebody their response:
+   * hoisting `onSubmitted?.()` above the `await` typechecks clean and passed the whole
+   * suite.</p>
+   */
+  it('does not record completed when the server refuses the answers', async () => {
+    serve({ submit: () => new Response(JSON.stringify({ message: 'nope' }), { status: 500 }) })
+    renderPage()
+
+    await screen.findByRole('heading', { name: 'Pulso semanal' })
+    await userEvent.click(screen.getByRole('button', { name: 'Participar' }))
+    await screen.findByText('¿Cómo te sientes hoy?')
+    await userEvent.type(screen.getByRole('textbox'), 'bastante bien')
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+
+    // The ladder stopped where the truth stopped. `completed` is irreversible on a
+    // non-anonymous session, so recording it here would close this invitation over answers
+    // that were never stored.
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
+    expect(steps()).toEqual(['opened', 'started'])
+
+    // And the failure leaves them able to act on it: their words are still in the box and
+    // the button is still there. A failed SUBMIT is not a failed LOAD — folding the two
+    // together unmounted the form and threw the answers away.
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('bastante bien')
+    expect(screen.getByRole('button', { name: 'Enviar' })).toBeTruthy()
+
+    // Retrying works, and only then does the ladder close.
+    serve()
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+    await waitFor(() => expect(steps()).toEqual(['opened', 'started', 'completed']))
+  })
+
+  /**
    * The three writes are telemetry about an invitation, not a precondition for answering.
    * A respondent blocked from a pulse because an administrator's counter would not
    * increment is a product that has confused whose page this is.
@@ -287,6 +330,78 @@ describe('MicroclimateInvitationPage', () => {
     renderPage()
 
     expect(await screen.findByText('Esta sesión registra quién participa')).toBeTruthy()
+  })
+
+  /**
+   * The OTHER anonymity claim on this page, and the more prominent of the two.
+   *
+   * `RespondShell` draws a green "Anónima" chip beside the lockup, above the fold — the first
+   * privacy statement a respondent reads, before the notice tested above. Its own doc calls
+   * the default-off "the one promise it is least entitled to guess at", and this route is its
+   * only microclimate caller. Inverting what gets passed shows the chip on an identified
+   * session and hides it on an anonymous one, which is the worst direction for it to be
+   * wrong in, and the whole test suite stayed green.
+   *
+   * Both directions, because the chip's absence is as load-bearing as its presence.
+   */
+  it.each([
+    ['an anonymous session', true, true],
+    ['a session that records who participates', false, false],
+  ])('shows the shell anonymity chip for %s only when the payload says so', async (_what, anonymous, expected) => {
+    serve({
+      resolve: () =>
+        new Response(
+          JSON.stringify(
+            invitation({
+              anonymity: {
+                anonymous,
+                highestRecordableState: anonymous ? 'opened' : 'completed',
+                suppressedStates: anonymous ? ['started', 'completed'] : [],
+                guarantee: 'x',
+              },
+            }),
+          ),
+          { status: 200 },
+        ),
+    })
+    renderPage()
+
+    await screen.findByRole('heading', { name: 'Pulso semanal' })
+    expect(screen.queryByText('Anónima') !== null).toBe(expected)
+  })
+
+  /**
+   * And it is off before the payload has said anything. A page still resolving the token has
+   * no basis for a privacy claim, and a chip that renders optimistically would be making one
+   * on a link that is about to come back revoked.
+   */
+  it('makes no anonymity claim while the token is still being resolved', async () => {
+    let release: (() => void) | undefined
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+
+    serve({
+      // A fresh Response per call, gated on `held`: a single shared instance would have its
+      // body consumed by whichever caller read it first.
+      resolve: () =>
+        new Response(
+          new ReadableStream({
+            async start(controller) {
+              await held
+              controller.enqueue(new TextEncoder().encode(JSON.stringify(invitation())))
+              controller.close()
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    })
+    renderPage()
+
+    expect(screen.queryByText('Anónima')).toBeNull()
+
+    release!()
+    expect(await screen.findByText('Anónima')).toBeTruthy()
   })
 
   /**
@@ -419,26 +534,47 @@ describe('MicroclimateInvitationPage', () => {
   })
 
   /**
-   * No bearer token on any of these calls, ever.
+   * Two rules about one stored session, and they point opposite ways.
    *
-   * The endpoints take no `ClaimsPrincipal` and the group carries no `RequireAuthorization()`
-   * — the token in the path IS the credential, and the server cannot see an `Authorization`
-   * header here even if one arrives. An administrator checking a link from the browser they
-   * administer in is the routine case, and handing a second credential to a route that
-   * ignores it is a leak with no upside.
+   * <p><b>The invitation routes get no bearer, ever.</b> They take no `ClaimsPrincipal` and
+   * the group carries no `RequireAuthorization()` — the token in the path IS the credential,
+   * and the server cannot see an `Authorization` header here even if one arrives. An
+   * administrator checking a link from the browser they administer in is the routine case,
+   * and handing a second credential to a route that ignores it is a leak with no upside.</p>
+   *
+   * <p><b>The submission gets one whenever there is one to give.</b> A microclimate with
+   * `anonymousResponses: false` answers 401 to an unauthenticated POST, so an invitee who
+   * followed the sign-in note on the card and came back would otherwise have signed in for
+   * nothing — the card would have named a remedy that could not work. Asserted here rather
+   * than only in the api client's own test because it is the PAGE that has to carry the
+   * session from the landing card through to the answers.</p>
    */
-  it('sends no Authorization header even when a session is stored', async () => {
+  it('withholds the bearer from the invitation routes and sends it with the answers', async () => {
     setToken('a-real-looking-jwt')
     serve()
     renderPage()
 
     await screen.findByRole('heading', { name: 'Pulso semanal' })
-    await waitFor(() => expect(steps()).toEqual(['opened']))
+    await userEvent.click(screen.getByRole('button', { name: 'Participar' }))
+    await screen.findByText('¿Cómo te sientes hoy?')
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+    await waitFor(() => expect(steps()).toEqual(['opened', 'started', 'completed']))
 
-    for (const [, init] of vi.mocked(fetch).mock.calls) {
-      const headers = new Headers((init as RequestInit | undefined)?.headers ?? {})
-      expect(headers.get('Authorization')).toBeNull()
-    }
+    const authorizationOn = (predicate: (url: string) => boolean) =>
+      vi
+        .mocked(fetch)
+        .mock.calls.filter((call) => predicate(String(call[0])))
+        .map((call) =>
+          new Headers((call[1] as RequestInit | undefined)?.headers ?? {}).get('Authorization'),
+        )
+
+    const invitationCalls = authorizationOn((url) => url.includes('/microclimate-invitations/'))
+    expect(invitationCalls.length).toBeGreaterThan(0)
+    expect(invitationCalls.every((value) => value === null)).toBe(true)
+
+    expect(authorizationOn((url) => url.endsWith('/responses'))).toEqual([
+      'Bearer a-real-looking-jwt',
+    ])
   })
 
   /**

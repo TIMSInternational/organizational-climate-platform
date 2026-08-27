@@ -433,6 +433,17 @@ export default function MicroclimatePulseForm({
     useState<PublicMicroclimateDetail | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [error, setError] = useState<PageError | null>(null);
+
+  // Kept apart from `error`, and the separation is the respondent's answers.
+  //
+  // A failed LOAD has nothing to render -- there are no questions -- so it replaces the
+  // screen. A failed SUBMIT has everything to render: the questions are on screen and
+  // answered, and the one thing that person needs is the button again. Folding the two into
+  // one state unmounted the form on a 500, destroyed the answers they had just typed, and
+  // announced it under "this session could not be loaded" -- a sentence about a fetch that
+  // succeeded. `respondSubmitFailedTitle` has been sitting in both catalogues unused; this
+  // is the case it was written for.
+  const [submitError, setSubmitError] = useState<PageError | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -451,7 +462,7 @@ export default function MicroclimatePulseForm({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!id) return;
-    setError(null);
+    setSubmitError(null);
     setSubmitting(true);
     try {
       // Send the locale actually rendered, not the browser's current preference:
@@ -462,10 +473,17 @@ export default function MicroclimatePulseForm({
         answers,
         microclimate?.resolvedLocale ?? locale,
       );
+      // Both of these are strictly AFTER the await, and both have to be.
+      //
+      // `onSubmitted` is what records `completed` on the invitation ladder, and on a
+      // non-anonymous session that rung is irreversible: the token answers 409
+      // `already_completed` from then on, and only an admin reinstating the invitation can
+      // undo it. Reporting it for a submission the server refused would close somebody's
+      // invitation over answers that were never stored.
       setSubmitted(true);
       onSubmitted?.();
     } catch (err) {
-      setError(toPageError(err));
+      setSubmitError(toPageError(err));
     } finally {
       setSubmitting(false);
     }
@@ -530,6 +548,21 @@ export default function MicroclimatePulseForm({
             resolvedLocale={microclimate.resolvedLocale}
             fallbackFields={microclimate.fallbackFields}
           />
+
+          {/* Above the questions, not instead of them. Everything this person needs to try
+            again — their answers and the button — is still on screen, which is the whole
+            reason a failed submit is not the same state as a failed load. */}
+          {submitError ? (
+            <Alert variant="warning" role="alert">
+              <Info aria-hidden="true" />
+              <AlertTitle>
+                {t("microclimates.respondSubmitFailedTitle")}
+              </AlertTitle>
+              <AlertDescription>
+                {submitError.message ?? t("errors.generic")}
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
           <form onSubmit={handleSubmit} className="grid gap-section">
             {questions.map((question, index) => {
