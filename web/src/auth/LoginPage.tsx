@@ -9,7 +9,7 @@ import { beginGoogleSignIn, googleClientId } from './googleOAuth'
 import { setToken } from './token'
 import { resolveInitialRoute } from '../app/resolveInitialRoute'
 import { useTranslation } from '../i18n'
-import { Alert, AlertDescription, Button, Separator, TextField } from '../components/ui'
+import { Alert, AlertDescription, Button, TextField } from '../components/ui'
 import { BrandLockup } from '../components/layout'
 
 /**
@@ -107,14 +107,17 @@ export default function LoginPage() {
 
   return (
     <AuthShell
+      variant="storefront"
       title={t('auth.signIn')}
       description={t('auth.signInDetail')}
       brand={<BrandLockup />}
       footer={
-        <>
-          <ShieldCheck aria-hidden="true" className="size-icon shrink-0 text-accent-blue" />
-          <span className="max-w-prose text-fg-secondary">{t('auth.signInAssurance')}</span>
-        </>
+        /* One row, not a wrapping pair: `max-w-prose` on the span was pushing
+           the icon onto its own line above the text. */
+        <span className="inline-flex max-w-prose items-start gap-2 text-left">
+          <ShieldCheck aria-hidden="true" className="mt-0.5 size-icon shrink-0 text-store-ramp-1-text" />
+          <span>{t('auth.signInAssurance')}</span>
+        </span>
       }
     >
       {error && (
@@ -144,18 +147,28 @@ export default function LoginPage() {
             about the reset endpoint that does not exist. Rendered inside the form,
             under the field it is about, where the prototype put the link it
             replaces. */}
-        <p className="text-sm text-fg-secondary">{t('auth.passwordHelp')}</p>
-        <Button type="submit" variant="primary">
+        <p className="text-[0.8rem] leading-relaxed text-store-body">{t('auth.passwordHelp')}</p>
+        {/* Overrides ride on `cn`'s tailwind-merge, so these win over the
+            variant's own utilities deterministically. `outline` is deliberately
+            untouched: `index.css` gives every `<button>` its focus ring in
+            `@layer base`, and setting `outline` here would silently remove it. */}
+        <Button
+          type="submit"
+          variant="primary"
+          className="mt-1 h-12 rounded-full bg-store-accent text-[0.95rem] font-bold text-store-on-accent hover:bg-store-accent-hover"
+        >
           {t('auth.signIn')}
         </Button>
       </form>
 
       {googleClient && (
         <>
-          <div className="flex items-center gap-inline text-sm text-fg-tertiary">
-            <Separator className="flex-1" />
+          <div className="flex items-center gap-inline text-sm text-store-faint">
+            {/* The storefront hairline, not the admin Separator: its colour is
+                an admin token this page no longer speaks. */}
+            <div aria-hidden className="h-px flex-1 bg-store-rule" />
             <span>{t('auth.or')}</span>
-            <Separator className="flex-1" />
+            <div aria-hidden className="h-px flex-1 bg-store-rule" />
           </div>
 
           {/* A full-page navigation, not a react-router one: this leaves the app
@@ -165,6 +178,7 @@ export default function LoginPage() {
           <Button
             type="button"
             variant="secondary"
+            className="h-12 rounded-full border-store-control bg-store-surface text-[0.9rem] font-bold text-store-fg"
             onClick={() => window.location.assign(beginGoogleSignIn(googleClient, window.location.origin))}
           >
             {t('auth.continueWithGoogle')}

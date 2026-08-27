@@ -35,6 +35,7 @@
 @import 'tailwindcss' source(none);
 @import './styles/fonts.css';
 @import './styles/tokens.css';
+@import './styles/storefront.css';
 @import './styles/theme.css';
 
 /* Class detection is declared explicitly rather than left to Tailwind's
@@ -100,10 +101,18 @@
     margin: 0 0 var(--admin-space-8);
   }
 
+  /* The storefront recolour: page-level display headings wear the Conócete
+     serif at its native 400 — the face ships one weight, and synthesised 600
+     is exactly the fake-bold `fonts.css` exists to avoid. h3-h6 stay sans:
+     16px/14px UI headings in an old-style serif read as decoration. */
   h1 {
+    font-family: var(--storefront-font-serif);
+    font-weight: var(--admin-weight-regular);
     font-size: var(--admin-text-3xl); /* 24px — legacy `text-2xl` page title */
   }
   h2 {
+    font-family: var(--storefront-font-serif);
+    font-weight: var(--admin-weight-regular);
     font-size: var(--admin-text-2xl); /* 20px */
   }
   h3,

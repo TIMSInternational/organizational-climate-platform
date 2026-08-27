@@ -1,0 +1,164 @@
+/* ===========================================================================
+ * Storefront tokens — the Conócete visual language
+ * ===========================================================================
+ *
+ * Ported from https://conocete.timsint.com/ (read 2026-08-26).
+ *
+ * Follows the convention in ./tokens.css: raw values live here and nowhere
+ * else, and every contrast ratio written in a comment is MEASURED against the
+ * WCAG 2.x relative-luminance formula, not asserted.
+ *
+ * WHY THIS IS A SEPARATE LAYER FROM `--admin-*`
+ * ---------------------------------------------
+ * `--admin-*` describes an application chrome: 13px base, 32px controls,
+ * weights 400-700, tuned for density. This describes a storefront: fluid
+ * display type up to 4.4rem, a serif display face, generous radii, one soft
+ * elevation. They are two systems for two jobs, so they are two token sets.
+ * A screen picks one; it never mixes them.
+ *
+ * WHAT DISTINGUISHES THE SOURCE SYSTEM
+ * ------------------------------------
+ *   - A violet ink family (#1F114C), not the checkout page's navy. The two
+ *     TIMS surfaces are NOT the same palette; this is the newer one, and it
+ *     is measurably better: ink is 16.90:1 here against 12.88:1 there.
+ *   - Exactly ONE elevation, violet-tinted: 0 10px 34px rgba(31,17,76,.07).
+ *     Not a scale. A second shadow would be a change of system.
+ *   - A serif display face over a system-sans body — the whole typographic
+ *     identity is that pairing.
+ *   - Fluid type via clamp(), so the display sizes are viewport-driven.
+ *
+ * WHAT WAS CHANGED, AND WHY
+ * -------------------------
+ * Three source values fail WCAG AA at body sizes. Hue and saturation are held
+ * fixed and only lightness moves, so the palette still reads as Conócete:
+ *
+ *   --faint  #8f91a6  2.91:1 on ground -> #6e708a  4.53:1
+ *   --f-i    #C77E14  3.27:1 on white  -> #a66911  4.52:1   (as TEXT only)
+ *   --f-s    #12945B  3.88:1 on white  -> #108753  4.55:1   (as TEXT only)
+ *
+ * The line tokens are split in two. The source uses one value for decorative
+ * rules AND for control boundaries; at 1.27:1 that is right for a rule and
+ * fails WCAG 1.4.11 for an input border. Two roles, two tokens.
+ *
+ * The factor ramp is carried across as a generic 4-way categorical scale.
+ * Upstream those four name psychometric factors and drive a lettered grid;
+ * this product has climate dimensions, so the letters are deliberately NOT
+ * reproduced as token names.
+ *
+ * The serif is declared with a Georgia/Times fallback rather than a Google
+ * Fonts <link>. ./fonts.css self-hosts through @fontsource precisely to avoid
+ * a render-blocking third-party connection on first paint, and copying the
+ * upstream CDN tag would silently undo that decision. To self-host the
+ * display face, add the @fontsource package and @import it in ./fonts.css.
+ *
+ * Dark is DERIVED — the source is light-only. Grounds are built from the ink
+ * hue so both themes share a family.
+ * ========================================================================= */
+
+/* Self-hosted for the same reasons fonts.css gives for Poppins: first-party,
+   immutably cached, no render-blocking third-party stylesheet. The upstream
+   page loads this exact face from the Google Fonts CDN; this is the house way
+   of shipping it. Latin 400 only — the face has no other weights. */
+@import '@fontsource/goudy-bookletter-1911/latin-400.css';
+
+:root {
+  /* -- Typefaces --------------------------------------------------------- */
+  --storefront-font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui,
+    sans-serif;
+  --storefront-font-serif: 'Goudy Bookletter 1911', Georgia, 'Times New Roman',
+    serif;
+
+  /* -- Surfaces ---------------------------------------------------------- */
+  --storefront-bg-ground: #f8f7fb; /* --ground: the page ground   */
+  --storefront-bg-surface: #ffffff; /* --surface: cards and panels */
+  --storefront-bg-veil: rgb(248 247 251 / 88%); /* sticky header wash */
+
+  /* -- Foreground -------------------------------------------------------- */
+  --storefront-fg-primary: #1f114c; /* --ink   16.90:1 on surface */
+  --storefront-fg-heading: #3a3364; /* --ink-2 11.43:1 on surface */
+  --storefront-fg-body: #5b5e74; /* --body   6.37:1 on surface */
+  --storefront-fg-faint: #6e708a; /* was #8f91a6 — 4.53:1 on ground */
+
+  /* -- Lines: two roles, deliberately ------------------------------------ */
+  --storefront-line-rule: #e5e3f0; /* --line:      decorative rules */
+  --storefront-line-soft: #eeedf6; /* --line-soft: hairlines        */
+  /* Interactive control boundaries. WCAG 1.4.11 wants 3:1; this is 3.02:1 on
+     surface. Needed because the system leans on borders, not shadow, to say
+     where a control is. */
+  --storefront-line-control: #968ec3;
+
+  /* -- Accent ------------------------------------------------------------ */
+  --storefront-accent: #dd0c15; /* 5.08:1 on surface, both directions */
+  --storefront-accent-hover: #c00a12;
+  --storefront-fg-on-accent: #ffffff;
+  /* The focus ring, carried verbatim: a 3px accent halo at 30% alpha. */
+  --storefront-focus-ring: 0 0 0 3px rgb(221 12 21 / 30%);
+
+  /* -- Categorical ramp -------------------------------------------------- */
+  /* FILL values — use with --storefront-fg-on-accent only where measured. */
+  --storefront-ramp-1: #4a4fc4; /* 6.55:1 with white */
+  --storefront-ramp-2: #dd0c15; /* 5.08:1 with white */
+  --storefront-ramp-3: #c77e14; /* 3.27:1 — large text / fills only */
+  --storefront-ramp-4: #12945b; /* 3.88:1 — large text / fills only */
+  /* TEXT values — the two that fail AA as text are darkened. */
+  --storefront-ramp-1-text: #4a4fc4; /* 6.55:1 */
+  --storefront-ramp-2-text: #dd0c15; /* 5.08:1 */
+  --storefront-ramp-3-text: #a66911; /* was #C77E14 — 4.52:1 */
+  --storefront-ramp-4-text: #108753; /* was #12945B — 4.55:1 */
+
+  /* -- Elevation: one, and only one -------------------------------------- */
+  --storefront-shadow-card: 0 10px 34px rgb(31 17 76 / 7%);
+
+  /* -- Geometry ---------------------------------------------------------- */
+  --storefront-radius-card: 16px;
+  --storefront-radius-panel: 12px;
+  --storefront-radius-pill: 999px;
+  --storefront-radius-dot: 50%;
+
+  /* -- Type: fluid display, carried verbatim from the source -------------- */
+  --storefront-text-display: clamp(2.6rem, 7vw, 4.4rem);
+  --storefront-text-h2: clamp(2rem, 4.5vw, 2.7rem);
+  --storefront-text-h3: clamp(1.7rem, 3.6vw, 2.4rem);
+  --storefront-text-lede: clamp(1.02rem, 2vw, 1.16rem);
+
+  --storefront-weight-body: 400;
+  --storefront-weight-medium: 600;
+  --storefront-weight-strong: 700;
+
+  --storefront-tracking-kicker: 0.16em; /* the all-caps eyebrow */
+  --storefront-tracking-display: -0.02em; /* display tightening   */
+
+  /* -- Measure ----------------------------------------------------------- */
+  --storefront-measure: 68ch;
+}
+
+/* ---------------------------------------------------------------------------
+ * Dark — derived, since the source ships light only.
+ * Ratios measured against --storefront-bg-surface (#1b1240).
+ * ------------------------------------------------------------------------ */
+[data-admin-theme='dark'] {
+  --storefront-bg-ground: #120b2b;
+  --storefront-bg-surface: #1b1240;
+  --storefront-bg-veil: rgb(18 11 43 / 88%);
+
+  --storefront-fg-primary: #dad2f5; /* 12.03:1 */
+  --storefront-fg-heading: #dad2f5; /* 12.03:1 */
+  --storefront-fg-body: #a1a4b5; /*  7.04:1 */
+  --storefront-fg-faint: #8f91a6; /*  5.61:1 — the source value works here */
+
+  --storefront-line-rule: #2b2154;
+  --storefront-line-soft: #241b48;
+  --storefront-line-control: #7d7aa8; /* 4.33:1 */
+
+  --storefront-accent: #f4363e; /* 4.51:1 */
+  --storefront-fg-on-accent: #120b2b;
+
+  --storefront-ramp-1-text: #767ad2; /* 4.54:1 */
+  --storefront-ramp-2-text: #f4363e; /* 4.51:1 */
+  --storefront-ramp-3-text: #c77e14; /* 5.32:1 — unchanged, passes on dark */
+  --storefront-ramp-4-text: #12955c; /* 4.54:1 */
+
+  /* Shadow does almost no work on a dark ground; the rule carries the edge. */
+  --storefront-shadow-card: 0 10px 34px rgb(0 0 0 / 24%);
+}

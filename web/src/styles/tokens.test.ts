@@ -180,7 +180,7 @@ describe('control density', () => {
 })
 
 describe('colour palette', () => {
-  it('is the admin palette: blue on the shell, white inside', () => {
+  it('is the storefront palette: violet ink on the shell, storefront ground inside', () => {
     // No longer byte-for-byte legacy Twenty-CRM. Federico asked for "blue on the
     // shell, white inside", so `--admin-bg-shell` went navy and the content ground
     // went white -- and the light neutrals were re-biased from green-grey to
@@ -190,11 +190,11 @@ describe('colour palette', () => {
     // `chipVariantContrast`, `accentContrast`, ...). Two different claims, kept in
     // two places on purpose: this one catches a value changing AT ALL, those catch a
     // value changing into something unreadable.
-    expect(token('--admin-bg-outer')).toBe('#ffffff')
+    expect(token('--admin-bg-outer')).toBe('#f8f7fb')
     expect(token('--admin-bg-panel')).toBe('#ffffff')
-    expect(token('--admin-border-default')).toBe('#dbe3ee')
-    expect(token('--admin-font-primary')).toBe('#0d1626')
-    expect(token('--admin-font-secondary')).toBe('#44536b')
+    expect(token('--admin-border-default')).toBe('#e0dbee')
+    expect(token('--admin-font-primary')).toBe('#110a29')
+    expect(token('--admin-font-secondary')).toBe('#4a3d72')
     // Re-valued by #83, together with `--admin-font-section-label` and
     // `--admin-font-light`: at #78879c this was 3.66:1 on white, and it is the ink
     // on every `CardDescription`, `TableCaption` and breadcrumb in the product.
@@ -204,23 +204,23 @@ describe('colour palette', () => {
     // that tint on every selected row. `styles/inkContrast.test.ts` is what measures
     // the new values; this line, as the block above says, only catches them changing
     // AT ALL.
-    expect(token('--admin-font-tertiary')).toBe('#5d6b7f')
-    expect(token('--admin-font-section-label')).toBe('#5d6b7f')
-    expect(token('--admin-font-light')).toBe('#79889e')
+    expect(token('--admin-font-tertiary')).toBe('#6e648b')
+    expect(token('--admin-font-section-label')).toBe('#6e648b')
+    expect(token('--admin-font-light')).toBe('#8a82a5')
     // The shell frame itself. Pinned because it is the one token the redesign is
     // ABOUT: it is what "blue on the shell" means, and it is deliberately a separate
     // token from `--admin-bg-outer`, which is also the ground of the sign-in and
     // survey-answering screens and must stay white.
-    expect(token('--admin-bg-shell')).toBe('#122c4d')
-    expect(darkToken('--admin-bg-shell')).toBe('#0a1c31')
+    expect(token('--admin-bg-shell')).toBe('#1f114c')
+    expect(darkToken('--admin-bg-shell')).toBe('#120b2b')
     // The brand accent. NOT byte-for-byte legacy any more: UI-0 revalued it from
     // the legacy `#2e9098` (oklch chroma 0.089, under the 0.1 floor, which is why
     // the product read grey) to the validated teal, and split off a darker fill
     // step so white-on-accent can clear AA. `accentContrast.test.ts` is what pins
     // the relationship between the three; this only pins the values.
-    expect(token('--admin-accent-blue')).toBe('#0d9488')
-    expect(token('--admin-accent-blue-fill')).toBe('#0f766e')
-    expect(token('--admin-accent-blue-fill-hover')).toBe('#115e59')
+    expect(token('--admin-accent-blue')).toBe('#6a6ece')
+    expect(token('--admin-accent-blue-fill')).toBe('#dd0c15')
+    expect(token('--admin-accent-blue-fill-hover')).toBe('#c00a12')
     expect(token('--admin-font-on-accent')).toBe('#ffffff')
   })
 

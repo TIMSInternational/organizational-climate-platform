@@ -179,6 +179,14 @@ const devOnlyRoutes: RouteObject[] = import.meta.env.DEV
           Component: (await import('../features/questions/pages/QuestionLibraryDevPage')).default,
         }),
       },
+      // The storefront visual language on one route, so `npm run shot` can
+      // photograph it in both themes. Same dev-only mechanism as the two above.
+      {
+        path: '/dev/storefront',
+        lazy: async () => ({
+          Component: (await import('../features/storefront/pages/StorefrontGalleryPage')).default,
+        }),
+      },
     ]
   : []
 

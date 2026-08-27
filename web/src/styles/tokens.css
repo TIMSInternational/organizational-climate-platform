@@ -49,8 +49,8 @@
      swap is metrically identical. Everything after it is the legacy stack
      (globals.css `.admin-shell`). */
   --admin-font-sans:
-    'Poppins', 'Poppins Fallback', Inter, -apple-system, 'Segoe UI', Roboto,
-    system-ui, sans-serif;
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui,
+    sans-serif;
   --admin-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* -- Type scale --------------------------------------------------------
@@ -212,7 +212,7 @@
    * ====================================================================== */
   color-scheme: light;
 
-  --admin-bg-outer: #ffffff;
+  --admin-bg-outer: #f8f7fb;
 
   /* -- The shell: rail, top strip and the gutter they sit in (UI-0) -------
      The application chrome is NAVY and everything inside the frame is WHITE.
@@ -243,7 +243,7 @@
      The label clears 4.5:1 on BOTH grounds and not merely on the rail, because
      the user menu lifts to `--admin-shell-bg-raised` and prints the signed-in
      person's role in that ink -- the lighter ground is the binding one. */
-  --admin-bg-shell: #122c4d;
+  --admin-bg-shell: #1f114c;
   /* The user menu, which opens INSIDE the rail. It lifts rather than staying
      flush so the popover reads as above the rail rather than as a hole in it.
      The redesign has no token for this surface, so it is the rail's own navy
@@ -254,7 +254,7 @@
      `#1b3d64` looked right and put the ring at 2.95:1, under WCAG 1.4.11's 3:1
      for a focus indicator, on the one surface in the product where a keyboard
      user opens a menu. */
-  --admin-shell-bg-raised: #193961;
+  --admin-shell-bg-raised: #2f1e66;
   --admin-shell-bg-hover: rgba(255, 255, 255, 0.08);
   --admin-shell-bg-active: rgba(255, 255, 255, 0.14);
   /* Three steps, because `.on-shell` re-points three ink roles at them. The
@@ -262,9 +262,9 @@
      the lighter one for both the brand and a hovered row; `--admin-shell-font`
      is the step this palette keeps between them, so the rail's resting row text
      stays distinct from its wordmark as it does today. */
-  --admin-shell-font-strong: #eef3f9;
-  --admin-shell-font: #c8d8ec;
-  --admin-shell-font-label: #9db3cd;
+  --admin-shell-font-strong: #e1ddee;
+  --admin-shell-font: #c8c0e1;
+  --admin-shell-font-label: #a69bc9;
   /* Left translucent rather than taking the redesign's opaque `--shell-line`
      `#1f4270`: `.on-shell` points all three border roles here, and they are
      drawn on the rail AND on the raised user menu, so a hairline that composites
@@ -272,9 +272,9 @@
   --admin-shell-border: rgba(255, 255, 255, 0.12);
   --admin-bg-panel: #ffffff;
   --admin-bg-card: #ffffff;
-  --admin-bg-card-hover: #f9fbfd;
+  --admin-bg-card-hover: #faf9fd;
   --admin-bg-input: #ffffff;
-  --admin-bg-icon-box: #f3f7fb;
+  --admin-bg-icon-box: #f3f1fa;
   --admin-bg-overlay: rgba(255, 255, 255, 0.8);
   --admin-bg-hover: rgba(0, 0, 0, 0.04);
   --admin-bg-active: rgba(0, 0, 0, 0.08);
@@ -297,13 +297,13 @@
      gave 3.90 / 3.42). Every guard that was written around "tertiary is not a
      body ink" -- `resultsContrast`, `themeDiscipline`, `respondContrast` --
      therefore still measures the same failure it was written for. */
-  --admin-border-default: #dbe3ee;
+  --admin-border-default: #e0dbee;
   /* One step darker than the line, as #d0d0d0 was to #e0e0e0. `ProtectedCell`
      paints its hatch in this, so it has to stay separable from the recessed
      surface it is drawn on: 1.40:1, against protectedHatch's floor of 1.2. */
-  --admin-border-hover: #cbd3de;
-  --admin-border-light: #eaeff6;
-  --admin-border-panel: #dbe3ee;
+  --admin-border-hover: #cdc6e3;
+  --admin-border-light: #eeedf6;
+  --admin-border-panel: #e0dbee;
 
   /* -- Ink ---------------------------------------------------------------
      Three text tiers plus one non-text tier, and #83 is what decided which is
@@ -334,9 +334,9 @@
      print on. Photographed and measured live in Chromium at /admin/companies.
 
      4.55:1 on the darkest composite, 5.42:1 on white. */
-  --admin-font-primary: #0d1626;
-  --admin-font-secondary: #44536b;
-  --admin-font-tertiary: #5d6b7f;
+  --admin-font-primary: #110a29;
+  --admin-font-secondary: #4a3d72;
+  --admin-font-tertiary: #6e648b;
   /* The one NON-text tier. It is held to 1.4.11's 3:1 rather than 1.4.3's
      4.5:1, and that is only defensible because nothing it paints is body text:
      the inactive sort glyph in `ui/table.tsx` (a graphic that says "this column
@@ -354,16 +354,16 @@
      measured on the state-layer composites too: the inactive sort glyph sits in
      a `<th>`, and a `<thead>`'s row is a `TableRow` like any other, so it prints
      on the hover tint. 3.02:1 on the darkest composite. */
-  --admin-font-light: #79889e;
-  --admin-font-section-label: #5d6b7f;
+  --admin-font-light: #8a82a5;
+  --admin-font-section-label: #6e648b;
   /* Text on a solid accent fill — the selected nav row in the legacy
      RoleBasedNav is `color: '#fff'` on `--admin-accent-blue`.
      ONLY ever place this on `--admin-accent-blue-fill`, never on
      `--admin-accent-blue`. See the accent block below for why. */
   --admin-font-on-accent: #ffffff;
 
-  --admin-accent-green: #059669;
-  --admin-accent-red: #dc2626;
+  --admin-accent-green: #12945b;
+  --admin-accent-red: #dd0c15;
 
   /* -- State inks: the accent hues, as TEXT -------------------------------
      Same separation the accent makes below, for the same reason. The three
@@ -385,9 +385,9 @@
      moves in light even though `--admin-accent-red` alone clears 4.5:1 on the
      panel (4.83:1): it does *not* clear it on the icon box (4.24:1), and one
      rule for the family is worth more than one exception in it. */
-  --admin-accent-green-ink: #065f46;
-  --admin-accent-amber-ink: #92400e;
-  --admin-accent-red-ink: #b91c1c;
+  --admin-accent-green-ink: #0f7f4e;
+  --admin-accent-amber-ink: #9b6210;
+  --admin-accent-red-ink: #dd0c15;
 
   /* -- The accent is TWO tokens, deliberately (UI-0) ----------------------
      The old `#2e9098` measures oklch chroma 0.0887, below the 0.1 floor, which
@@ -414,29 +414,29 @@
 
      Every number above is measured, not asserted — `accentContrast.test.ts`
      re-derives all of them from this file and fails if any drifts. */
-  --admin-accent-blue: #0d9488;
-  --admin-accent-blue-fill: #0f766e;
-  --admin-accent-blue-fill-hover: #115e59;
+  --admin-accent-blue: #6a6ece;
+  --admin-accent-blue-fill: #dd0c15;
+  --admin-accent-blue-fill-hover: #c00a12;
   --admin-accent-purple: #7c3aed;
-  --admin-accent-amber: #d97706;
+  --admin-accent-amber: #c77e14;
   --admin-accent-orange: #ea580c;
 
-  --admin-accent-bg-green: rgba(16, 185, 129, 0.08);
-  --admin-accent-bg-red: rgba(239, 68, 68, 0.08);
-  --admin-accent-bg-blue: rgba(13, 148, 136, 0.08);
+  --admin-accent-bg-green: rgba(18, 148, 91, 0.08);
+  --admin-accent-bg-red: rgba(221, 12, 21, 0.08);
+  --admin-accent-bg-blue: rgba(74, 79, 196, 0.08);
   --admin-accent-bg-purple: rgba(139, 92, 246, 0.08);
-  --admin-accent-bg-amber: rgba(245, 158, 11, 0.08);
+  --admin-accent-bg-amber: rgba(199, 126, 20, 0.08);
   --admin-accent-bg-orange: rgba(249, 115, 22, 0.08);
   --admin-accent-bg-green-subtle: rgba(16, 185, 129, 0.04);
-  --admin-accent-bg-blue-subtle: rgba(13, 148, 136, 0.04);
+  --admin-accent-bg-blue-subtle: rgba(74, 79, 196, 0.04);
   --admin-accent-bg-purple-subtle: rgba(139, 92, 246, 0.04);
   --admin-accent-bg-orange-subtle: rgba(249, 115, 22, 0.04);
 
-  --admin-accent-border-green: rgba(16, 185, 129, 0.2);
-  --admin-accent-border-red: rgba(239, 68, 68, 0.2);
-  --admin-accent-border-blue: rgba(13, 148, 136, 0.2);
+  --admin-accent-border-green: rgba(18, 148, 91, 0.2);
+  --admin-accent-border-red: rgba(221, 12, 21, 0.2);
+  --admin-accent-border-blue: rgba(74, 79, 196, 0.2);
   --admin-accent-border-purple: rgba(139, 92, 246, 0.2);
-  --admin-accent-border-amber: rgba(245, 158, 11, 0.2);
+  --admin-accent-border-amber: rgba(199, 126, 20, 0.2);
   --admin-accent-border-orange: rgba(249, 115, 22, 0.2);
 
   /* -- Status-chip fill and ink (UI-0) -----------------------------------
@@ -496,15 +496,15 @@
      `styles/chipVariantContrast.test.ts`, which measures every tone on four
      surfaces (panel, hovered panel, icon box, hovered icon box) and fails a
      fill that is not opaque. */
-  --admin-chip-bg-good: #e7f6ec;
-  --admin-chip-bg-warning: #fdf3e3;
-  --admin-chip-bg-critical: #fdeaea;
-  --admin-chip-bg-accent: #e6f5f3;
+  --admin-chip-bg-good: #f2faf6;
+  --admin-chip-bg-warning: #fdf9f0;
+  --admin-chip-bg-critical: #fdf5f5;
+  --admin-chip-bg-accent: #eeeffb;
   --admin-chip-bg-neutral: var(--admin-bg-icon-box);
-  --admin-chip-ink-good: #166534;
-  --admin-chip-ink-warning: #92400e;
-  --admin-chip-ink-critical: #b91c1c;
-  --admin-chip-ink-accent: #115e59;
+  --admin-chip-ink-good: #0e7246;
+  --admin-chip-ink-warning: #8d590e;
+  --admin-chip-ink-critical: #c70b13;
+  --admin-chip-ink-accent: #4a4fc4;
   --admin-chip-ink-neutral: var(--admin-font-secondary);
 
   /* -- Data visualisation (#79) -------------------------------------------
@@ -616,9 +616,9 @@
   --admin-chart-axis: #9aa7b9;
   --admin-chart-surface-gap: #ffffff;
 
-  --admin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --admin-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --admin-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --admin-shadow-sm: 0 1px 2px rgba(31, 17, 76, 0.06);
+  --admin-shadow-md: 0 2px 8px rgba(31, 17, 76, 0.08);
+  --admin-shadow-lg: 0 10px 34px rgba(31, 17, 76, 0.10);
 
   /* The legacy focus ring pointed at --ring, which was set to the *lightest*
      font colour and then wrapped in hsl() — so it computed to nothing and no
@@ -626,7 +626,7 @@
      which clears 3:1 against every surface in both themes. Since the shell went
      navy the binding surface is `--admin-shell-bg-raised`, at 3.12:1 in light —
      see the note there, which is where the headroom is spent. */
-  --admin-focus-ring: var(--admin-accent-blue);
+  --admin-focus-ring: #f4363e;
   --admin-focus-ring-width: 2px;
   --admin-focus-ring-offset: 2px;
 }
@@ -637,21 +637,21 @@
 :root[data-admin-theme='dark'] {
   color-scheme: dark;
 
-  --admin-bg-outer: #0b111b;
+  --admin-bg-outer: #0f0a1c;
 
   /* -- The shell, dark ----------------------------------------------------
      See the light block for the whole argument. The two values that differ here
      are `--admin-bg-shell`, which deepens so the frame is never the lighter of
      frame-and-page, and `--admin-shell-font-label`, which follows it down.
      Everything else is one value across both themes, as it was before. */
-  --admin-bg-shell: #0a1c31;
+  --admin-bg-shell: #120b2b;
   /* The user menu, which opens INSIDE the rail — see the light block. */
-  --admin-shell-bg-raised: #12314f;
+  --admin-shell-bg-raised: #261852;
   --admin-shell-bg-hover: rgba(255, 255, 255, 0.08);
   --admin-shell-bg-active: rgba(255, 255, 255, 0.14);
-  --admin-shell-font-strong: #eef3f9;
-  --admin-shell-font: #c8d8ec;
-  --admin-shell-font-label: #8ba3bf;
+  --admin-shell-font-strong: #e1ddee;
+  --admin-shell-font: #c8c0e1;
+  --admin-shell-font-label: #9e92c4;
   --admin-shell-border: rgba(255, 255, 255, 0.12);
   /* The dark surfaces are the redesign's own dark block: `--panel #121a26`,
      `--panel-2 #18212f` and `--icon-box #1d2735`. The LADDER is the one this
@@ -661,11 +661,11 @@
      below the white card) finally holding in dark too. `--admin-bg-card` is the
      step furthest from the panel here, so `--admin-font-tertiary` still fails AA
      on it (3.91:1) — the pairing `themeDiscipline.test.ts` exists to catch. */
-  --admin-bg-panel: #121a26;
-  --admin-bg-card: #1d2735;
-  --admin-bg-card-hover: #223045;
-  --admin-bg-input: #1d2735;
-  --admin-bg-icon-box: #18212f;
+  --admin-bg-panel: #150f29;
+  --admin-bg-card: #1f173b;
+  --admin-bg-card-hover: #271c4b;
+  --admin-bg-input: #1f173b;
+  --admin-bg-icon-box: #1b1433;
   --admin-bg-overlay: rgba(0, 0, 0, 0.5);
   --admin-bg-hover: rgba(255, 255, 255, 0.06);
   --admin-bg-active: rgba(255, 255, 255, 0.1);
@@ -681,10 +681,10 @@
      1.30. Do not darken this token or lighten `--admin-bg-shell` by eye; there
      is a quarter of a percent of headroom and the test is the only thing that
      can see it. */
-  --admin-border-default: #26313f;
-  --admin-border-hover: #33404f;
-  --admin-border-light: #1e2734;
-  --admin-border-panel: #26313f;
+  --admin-border-default: #2f235a;
+  --admin-border-hover: #32245e;
+  --admin-border-light: #1f173b;
+  --admin-border-panel: #2f235a;
 
   /* The same #83 re-valuation, in the other direction: dark ink lightens where
      light ink darkened. The binding ground is the LIGHTEST thing a dark-theme
@@ -696,11 +696,11 @@
      really prints on. #8b97ab measured 3.72:1 there and 4.26:1 on the hover
      tint; #697990 measured 2.48:1. The new values clear 4.51:1 and 3.00:1 on
      that composite, and more on every other surface. */
-  --admin-font-primary: #eef3f9;
-  --admin-font-secondary: #a8b6c9;
-  --admin-font-tertiary: #99a7bd;
-  --admin-font-light: #7587a0;
-  --admin-font-section-label: #99a7bd;
+  --admin-font-primary: #f1eff8;
+  --admin-font-secondary: #afa7ca;
+  --admin-font-tertiary: #a29abc;
+  --admin-font-light: #8076a0;
+  --admin-font-section-label: #a29abc;
   --admin-font-on-accent: #ffffff;
 
   --admin-accent-green: #10b981;
@@ -715,27 +715,27 @@
   /* Dark lifts the identity accent to chroma 0.1230 (7.20:1 on the dark panel);
      the fill stays the same step as light because white-on-fill contrast is a
      property of the fill alone, and hover LIGHTENS here — see the light block. */
-  --admin-accent-blue: #14b8a6;
-  --admin-accent-blue-fill: #0f766e;
-  --admin-accent-blue-fill-hover: #0e857b;
+  --admin-accent-blue: #8a71db;
+  --admin-accent-blue-fill: #dd0c15;
+  --admin-accent-blue-fill-hover: #ec0d16;
   --admin-accent-purple: #8b5cf6;
   --admin-accent-amber: #f59e0b;
   --admin-accent-orange: #f97316;
 
   --admin-accent-bg-green: rgba(16, 185, 129, 0.1);
   --admin-accent-bg-red: rgba(239, 68, 68, 0.1);
-  --admin-accent-bg-blue: rgba(20, 184, 166, 0.1);
+  --admin-accent-bg-blue: rgba(138, 113, 219, 0.1);
   --admin-accent-bg-purple: rgba(139, 92, 246, 0.1);
   --admin-accent-bg-amber: rgba(245, 158, 11, 0.1);
   --admin-accent-bg-orange: rgba(249, 115, 22, 0.1);
   --admin-accent-bg-green-subtle: rgba(16, 185, 129, 0.05);
-  --admin-accent-bg-blue-subtle: rgba(20, 184, 166, 0.05);
+  --admin-accent-bg-blue-subtle: rgba(138, 113, 219, 0.05);
   --admin-accent-bg-purple-subtle: rgba(139, 92, 246, 0.05);
   --admin-accent-bg-orange-subtle: rgba(249, 115, 22, 0.05);
 
   --admin-accent-border-green: rgba(16, 185, 129, 0.15);
   --admin-accent-border-red: rgba(239, 68, 68, 0.15);
-  --admin-accent-border-blue: rgba(20, 184, 166, 0.15);
+  --admin-accent-border-blue: rgba(138, 113, 219, 0.15);
   --admin-accent-border-purple: rgba(139, 92, 246, 0.15);
   --admin-accent-border-amber: rgba(245, 158, 11, 0.15);
   --admin-accent-border-orange: rgba(249, 115, 22, 0.15);
@@ -750,12 +750,12 @@
   --admin-chip-bg-good: #10281a;
   --admin-chip-bg-warning: #2e2310;
   --admin-chip-bg-critical: #2e1414;
-  --admin-chip-bg-accent: #10312e;
+  --admin-chip-bg-accent: #19122f;
   --admin-chip-bg-neutral: var(--admin-bg-icon-box);
   --admin-chip-ink-good: #4ade80;
   --admin-chip-ink-warning: #fbbf24;
   --admin-chip-ink-critical: #f87171;
-  --admin-chip-ink-accent: var(--admin-accent-blue);
+  --admin-chip-ink-accent: #9882df;
   --admin-chip-ink-neutral: var(--admin-font-secondary);
 
   /* -- Data visualisation, dark ------------------------------------------
