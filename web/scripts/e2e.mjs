@@ -179,9 +179,9 @@ async function login(role) {
  * — never a navigation to a literal ':id'.
  */
 async function discoverIds(token, companyId) {
-  const get = async (path) => {
+  const get = async (path, origin = API) => {
     try {
-      const response = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` } })
+      const response = await fetch(`${origin}${path}`, { headers: { Authorization: `Bearer ${token}` } })
       if (!response.ok) return null
       return await response.json()
     } catch {
@@ -207,7 +207,14 @@ async function discoverIds(token, companyId) {
     get('/survey-templates'),
   ])
 
+  // The tracking service, which lives on its own origin. `resolveIds` maps
+  // `/tracking/planes/:id` to `plan`, and nothing was supplying it — so that route
+  // reported SKIP "no id available" forever, which reads as missing DATA and was really
+  // the harness never asking. It asks now.
+  const planes = await get('/api/planes-accion', TRACKING)
+
   return {
+    plan: first(planes, 'planes'),
     survey: first(surveys, 'surveys'),
     microclimate: first(micros, 'microclimates'),
     actionPlan: first(plans, 'actionPlans'),
