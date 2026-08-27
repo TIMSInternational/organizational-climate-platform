@@ -401,8 +401,11 @@ public static class MicroclimateInvitationEndpoints
     ///
     /// <para>The token is re-minted rather than re-sent, so a link that has been forwarded,
     /// logged by a mail gateway or pasted into a chat stops working the moment a new one is
-    /// issued. That is the only way an admin has to recover from a leaked invitation without
-    /// deleting the row and losing its history.</para>
+    /// issued — without deleting the row and losing its history. This route covers a LIVE
+    /// invitation; <see cref="ReinstateInvitationAsync"/> covers the same recovery for one
+    /// that was revoked. (An earlier version of this remark called resend "the only way",
+    /// which was true and was the bug: revoke is exactly what an admin does to a leaked link,
+    /// and it made this route answer 409.)</para>
     ///
     /// <para>Refused for a revoked invitation: revocation is a decision, and a resend route
     /// that silently un-revokes is a revocation that does not mean anything. The route that
@@ -562,6 +565,15 @@ public static class MicroclimateInvitationEndpoints
     /// decision, and a decision should have to be spelled. It refuses anything that is not
     /// revoked with a 409 for the same reason -- so it can never be used as a quieter resend,
     /// and so "reinstate" in the audit log means exactly one thing.</para>
+    ///
+    /// <para><b>And why <c>completed</c> is still terminal, deliberately.</b> Resend refuses a
+    /// completed invitation too, and this route does not rescue that one -- which looks like
+    /// the same dead end and is not. A completed invitation means that person answered; the
+    /// response endpoint has no per-user row to deduplicate against, so re-issuing their token
+    /// is handing one respondent a second vote in the aggregate that IS the product here. And
+    /// on an anonymous microclimate the case cannot arise at all, because <c>completed</c> is
+    /// never written (<see cref="MicroclimateInvitationStatuses.AnonymityCeiling"/>). "Invite
+    /// somebody who already answered" is a request the pulse should refuse.</para>
     ///
     /// <para><b>What the new token's deadline is, and why it is NOT
     /// <see cref="ResendExpiryOf"/>.</b> Revocation clobbers <c>ExpiresAt</c> to the moment of

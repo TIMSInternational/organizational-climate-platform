@@ -110,7 +110,13 @@ public sealed record MicroclimateInvitationStateResult(
 
 /// <param name="Requested">Distinct users the request resolved to.</param>
 /// <param name="Created">Invitations actually minted.</param>
-/// <param name="SkippedUserIds">Users who already had an invitation to this microclimate. Re-send rotates theirs; it is not this route's job.</param>
+/// <param name="SkippedUserIds">
+/// Users who already had an invitation to this microclimate. Rotating a live one is the
+/// resend route's job and issuing a fresh token to a revoked one is the reinstate route's;
+/// neither is this route's. <see cref="MicroclimateInvitationBatchResult.Note"/> names the
+/// reinstate route when some of these were skipped for being revoked, because "created: 0"
+/// with no explanation is how an admin concludes the product is broken.
+/// </param>
 /// <param name="NotificationsQueued">
 /// Rows added to <c>notifications</c>, not mails delivered. Delivery is the notification
 /// sweep's job -- see the seam note on <c>MicroclimateInvitationEndpoints</c>.
@@ -121,6 +127,12 @@ public sealed record MicroclimateInvitationStateResult(
 /// refuses these outright (see <c>UndeliverableAddresses</c>), and this number exists so the
 /// admin learns it here, at the click, rather than by opening rows one at a time afterwards
 /// and finding them failed. Zero on a healthy tenant.
+/// </param>
+/// <param name="Note">
+/// Whatever an admin has to be told at the click rather than left to deduce from the
+/// numbers: undeliverable addresses, and users skipped because their invitation to this
+/// microclimate is revoked (with the route that re-issues one). Null when there is nothing
+/// to say, which is the ordinary case.
 /// </param>
 public sealed record MicroclimateInvitationBatchResult(
     int Requested,
