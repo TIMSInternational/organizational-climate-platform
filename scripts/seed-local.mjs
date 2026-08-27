@@ -3,6 +3,15 @@
  *
  *   node scripts/seed-local.mjs [--api http://127.0.0.1:5080] [--tracking http://localhost:5091]
  *
+ * **This is one half.** It fills the TRACKING module: nodos, personas, action plans in all
+ * three semáforo states. The climate side -- closed survey waves with real per-department
+ * scores, and the open survey the stack has never had -- is `scripts/seed-surveys.mjs`,
+ * and it is a separate script because it takes about two minutes: signing in as
+ * twenty-four respondents cannot go faster than the 20/min auth rate limit, and a response
+ * only carries a department if the respondent is authenticated. Run both:
+ *
+ *   node scripts/seed-local.mjs && node scripts/seed-surveys.mjs
+ *
  * ## Why this exists
  *
  * `scripts/e2e.mjs` drives every screen against the real API, and a screen with no rows
