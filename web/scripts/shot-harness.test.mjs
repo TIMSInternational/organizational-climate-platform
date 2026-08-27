@@ -3,6 +3,7 @@ import {
   API_ORIGIN,
   STORAGE_KEYS,
   buildDevToken,
+  nodoIdClaim,
   choosePort,
   parseViteOrigin,
   stripAnsi,
@@ -93,6 +94,39 @@ describe('shot harness: the dev token', () => {
 
   it('has the three segments decodeJwtPayload requires', () => {
     expect(buildDevToken({ role: 'r', companyId: 'c', name: 'n' }).split('.')).toHaveLength(3)
+  })
+
+  /**
+   * The claim `features/tracking/trackingAccess.ts` scopes every plan on.
+   *
+   * A blank one is not a harmless omission: `canCreatePlan` returns false on an empty
+   * `nodoExternalId`, so a `leader` photographed without this claim renders
+   * `/tracking/planes` with no "Nuevo plan" button — the node leader's primary action,
+   * missing from the screenshot but present in production. The API mints it
+   * unconditionally (`JwtTokenService.cs`), so a harness that omits it is testing a
+   * shape the app never sees. These pin the value against
+   * `TrackingIdentifiers.NodoIdClaimForUser`.
+   */
+  it('mints the nodoId claim the tracking module scopes on', () => {
+    const claims = decodeJwtPayload(
+      buildDevToken({ role: 'leader', companyId: 'c1', name: 'n', nodoId: 'nodo-operaciones' }),
+    )
+    expect(claims?.nodoId).toBe('nodo-operaciones')
+  })
+
+  it('falls back to the unassigned nodo the API derives for a user with no department', () => {
+    const claims = decodeJwtPayload(buildDevToken({ role: 'leader', companyId: 'c1', name: 'n' }))
+    // Never '' — `canCreatePlan` refuses a blank, and no real leader holds one.
+    expect(claims?.nodoId).toBe('unassigned-c1')
+    expect(claims?.nodoId).not.toBe('')
+  })
+
+  it('derives the claim exactly as NodoIdClaimForUser does', () => {
+    expect(nodoIdClaim({ nodoId: 'nodo-comercial', companyId: 'c1' })).toBe('nodo-comercial')
+    // Whitespace is not a choice of node.
+    expect(nodoIdClaim({ nodoId: '   ', companyId: 'c1' })).toBe('unassigned-c1')
+    // A company-less caller is a global super_admin, whose nodo is never compared.
+    expect(nodoIdClaim({ nodoId: undefined, companyId: undefined })).toBe('')
   })
 })
 

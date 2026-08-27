@@ -1,5 +1,8 @@
 import { useCallback } from 'react'
-import { AlertTriangle, Info } from 'lucide-react'
+import { Link } from 'react-router'
+// `Inbox` is the glyph `navSections` already gives `/surveys/my` in the sidebar, so the
+// action and the nav row that share a destination also share a mark.
+import { AlertTriangle, Inbox, Info } from 'lucide-react'
 import { getDepartmentAdminDashboard } from '../api/dashboard'
 import { useDashboardData } from '../useDashboardData'
 import DashboardState from './DashboardState'
@@ -9,7 +12,7 @@ import { KpiRow, MonoReadings, SectionHeading } from './dashboardGrammar'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { KpiTile } from '../../../components/charts'
-import { Alert, AlertDescription, AlertTitle } from '../../../components/ui'
+import { Alert, AlertDescription, AlertTitle, Button } from '../../../components/ui'
 
 /**
  * One department's overview, for the person who runs it.
@@ -135,6 +138,41 @@ export default function DepartmentAdminDashboardView() {
         eyebrow={data?.departmentName ?? null}
         title={t('dashboard.title')}
         description={t('dashboard.departmentDashboardDescription')}
+        // The one action on a page that had none at all, and its absence was the
+        // finding rather than an oversight. Every figure on this screen is a
+        // read-only team aggregate, and the loudest element on it — the overdue
+        // alert — deliberately offers no button because `/action-plans` 403s this
+        // role. So a leader or supervisor arriving here after login (this route is
+        // `resolveInitialRoute`'s destination for them) landed on a page with no
+        // next step anywhere in the content column.
+        //
+        // What they are missing is specifically their OWN work: a supervisor is an
+        // evaluated employee too, and `EmployeeDashboardView` leads with a hero card
+        // and a "Start answering" button for the surveys they owe. Being promoted out
+        // of that view takes the personal call to action away and puts nothing in its
+        // place — the participation rate above counts this reader's own answer among
+        // the missing ones without ever saying so.
+        //
+        // A link and not a second fetch. `GET /dashboard/employee` would carry the
+        // pending count, but this component is contracted to one endpoint and adding a
+        // second request to draw a number is a behaviour change, not a design one. The
+        // page already knows where the answer lives, so it points there.
+        //
+        // `/surveys/my` and not `/tracking/mis-tareas`: the first is in `SELF_SERVICE`
+        // and loads for every role in every deployment, while the second is
+        // `requiresTracking` and would be a dead link wherever no tracking service is
+        // configured. `roleCapabilities.ts` records both facts, and
+        // `DepartmentAdminDashboardView.test.tsx` re-checks every href on this page
+        // against `canReach` for BOTH roles that see it — the guard that caught the
+        // `/action-plans` button this page used to carry.
+        actions={
+          <Button asChild size="sm" variant="primary">
+            <Link to="/surveys/my">
+              <Inbox aria-hidden="true" />
+              {t('navigation.mySurveys')}
+            </Link>
+          </Button>
+        }
       />
 
       <DashboardState loading={loading} failed={failed} error={error} onRetry={reload}>

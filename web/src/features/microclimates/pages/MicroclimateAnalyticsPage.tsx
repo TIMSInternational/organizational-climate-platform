@@ -15,7 +15,6 @@ import {
 import {
   Badge,
   EmptyState,
-  H2,
   LoadingRegion,
   NetworkError,
   SkeletonText,
@@ -163,86 +162,112 @@ export default function MicroclimateAnalyticsPage() {
               description={t('microclimates.createMicroclimatesToSeeData')}
             />
           ) : (
-            <>
+            // `gap-section` between the bands, and every band a `<section>`. Without it
+            // the four bands butted straight up against one another: rendered at 1440 the
+            // "Responses by session" heading sat on the KPI row's bottom edge and the
+            // status heading on the bar chart's table toggle, so the page read as one
+            // undivided column rather than as four readings.
+            <div className="flex flex-col gap-section">
               {/* `SectionHeading` + `KpiRow`, the dashboards' grammar, in place of the old
                   card grid. The heading was `KPIDisplay`'s own `title` prop; it becomes a
                   real heading so the band is announced the same way every other section on
                   the page is. Five readings wrap 4-then-1 at `xl` when an average
                   participation rate exists — the row's count is fixed at four by design,
                   and dropping a reading to make it even would be the worse trade. */}
-              <SectionHeading>{t('microclimates.summaryMetrics')}</SectionHeading>
-              <KpiRow>
-                {summaryKpis(summary, t).map((kpi) => (
-                  <KpiTile
-                    key={kpi.id}
-                    label={kpi.label}
-                    value={kpi.value}
-                    format={kpi.format}
-                    locale={locale}
-                  />
-                ))}
-              </KpiRow>
+              <section>
+                <SectionHeading>{t('microclimates.summaryMetrics')}</SectionHeading>
+                <KpiRow>
+                  {summaryKpis(summary, t).map((kpi) => (
+                    <KpiTile
+                      key={kpi.id}
+                      label={kpi.label}
+                      value={kpi.value}
+                      format={kpi.format}
+                      locale={locale}
+                    />
+                  ))}
+                </KpiRow>
+              </section>
 
-              <H2>{t('microclimates.analyticsResponsesBySession')}</H2>
-              <BarChart
-                title={t('microclimates.analyticsResponsesBySession')}
-                data={responseBars}
-                series={[{ key: 'responses', name: t('dashboard.responses') }]}
-              />
+              {/* ONE heading per band, and it is the `SectionHeading` the summary band
+                  already used — not `H2`, whose bare 20px rule made these three shout over
+                  every other section on the page and over the same headings on
+                  `/microclimates` and `/dashboard`.
 
-              <H2>{t('microclimates.analyticsStatusSplit')}</H2>
-              <PieChart
-                data={statusSlices}
-                donut
-                title={t('microclimates.analyticsStatusSplit')}
-              />
+                  The chart's own `title` is gone with it. `ChartFrame` renders `title` as a
+                  `<figcaption>`, so passing the heading's text to both printed it twice,
+                  one line apart, in two different sizes — visible on the rendered page and
+                  invisible to the suite, which only ever asked for "All sessions". The
+                  heading immediately precedes the figure and is the thing in the document
+                  outline, so it is the copy that survives. */}
+              <section>
+                <SectionHeading>{t('microclimates.analyticsResponsesBySession')}</SectionHeading>
+                <BarChart
+                  data={responseBars}
+                  series={[{ key: 'responses', name: t('dashboard.responses') }]}
+                />
+              </section>
 
-              <H2>{t('microclimates.analyticsSessions')}</H2>
-              <Table>
-                <thead>
-                  <tr>
-                    <th>{t('microclimates.title')}</th>
-                    <th>{t('common.status')}</th>
-                    <th>{t('microclimates.responseCount')}</th>
-                    <th>{t('microclimates.analyticsParticipation')}</th>
-                    <th>{t('microclimates.createdDate')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {microclimates.map((microclimate) => {
-                    const rate = participationPercent(
-                      microclimate.responseCount,
-                      microclimate.targetParticipantCount,
-                    )
-                    return (
-                      <tr key={microclimate.id}>
-                        <td>
-                          <Link to={`/microclimates/${microclimate.id}/results`}>
-                            {microclimate.title ?? t('microclimates.untitled')}
-                          </Link>
-                        </td>
-                        <td>
-                          <Badge variant={statusBadgeVariant(microclimate.status)}>
-                            {statusLabel(t, microclimate.status)}
-                          </Badge>
-                        </td>
-                        <td>
-                          {t('surveys.responseProgress', {
-                            count: microclimate.responseCount,
-                            target: microclimate.targetParticipantCount,
-                          })}
-                        </td>
-                        {/* An em dash, not 0%: this session recorded no expected
-                            audience, so there is no rate rather than a rate of
-                            nothing. */}
-                        <td>{rate === null ? '—' : `${Math.round(rate)}%`}</td>
-                        <td>{calendarDay(Date.parse(microclimate.createdAt), locale)}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </Table>
-            </>
+              {/* The donut is capped rather than left to fill the panel. `PieChart` centres
+                  its wedges in whatever width it is given while the radius is set by the
+                  280px height, so at 1440 a 220px donut sat alone in a 1600px band with
+                  ~700px of empty panel on either side. Capped, the figure is the size of
+                  the thing it draws. */}
+              <section>
+                <SectionHeading>{t('microclimates.analyticsStatusSplit')}</SectionHeading>
+                <div className="max-w-md">
+                  <PieChart data={statusSlices} donut />
+                </div>
+              </section>
+
+              <section>
+                <SectionHeading>{t('microclimates.analyticsSessions')}</SectionHeading>
+                <Table>
+                  <thead>
+                    <tr>
+                      <th>{t('microclimates.title')}</th>
+                      <th>{t('common.status')}</th>
+                      <th>{t('microclimates.responseCount')}</th>
+                      <th>{t('microclimates.analyticsParticipation')}</th>
+                      <th>{t('microclimates.createdDate')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {microclimates.map((microclimate) => {
+                      const rate = participationPercent(
+                        microclimate.responseCount,
+                        microclimate.targetParticipantCount,
+                      )
+                      return (
+                        <tr key={microclimate.id}>
+                          <td>
+                            <Link to={`/microclimates/${microclimate.id}/results`}>
+                              {microclimate.title ?? t('microclimates.untitled')}
+                            </Link>
+                          </td>
+                          <td>
+                            <Badge variant={statusBadgeVariant(microclimate.status)}>
+                              {statusLabel(t, microclimate.status)}
+                            </Badge>
+                          </td>
+                          <td>
+                            {t('surveys.responseProgress', {
+                              count: microclimate.responseCount,
+                              target: microclimate.targetParticipantCount,
+                            })}
+                          </td>
+                          {/* An em dash, not 0%: this session recorded no expected
+                              audience, so there is no rate rather than a rate of
+                              nothing. */}
+                          <td>{rate === null ? '—' : `${Math.round(rate)}%`}</td>
+                          <td>{calendarDay(Date.parse(microclimate.createdAt), locale)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </Table>
+              </section>
+            </div>
           )}
         </LoadingRegion>
       )}

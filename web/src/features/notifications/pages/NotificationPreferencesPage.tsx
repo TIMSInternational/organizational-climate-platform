@@ -48,7 +48,15 @@ export default function NotificationPreferencesPage() {
 
   return (
     <div className="grid gap-panel-gap">
+      {/* The eyebrow is passed, not derived, and it has to be. `PageTopBar` names the area
+          from the nav section the open route sits in, and `navSections.ts` has no route
+          under `/settings` for any role — so the derived value is `null` and this was the
+          one page in the shell whose header opened on a bare `<h1>` with no kicker over
+          it. Its two siblings in the same cluster, `/profile` and `/settings/privacy`,
+          both already pass "Account" for exactly this reason; this page did not, and read
+          as a different product's screen sitting between them. */}
       <PageTopBar
+        eyebrow={t('notifications.preferences.eyebrow')}
         title={t('notifications.preferences.title')}
         description={t('notifications.preferences.description')}
       />

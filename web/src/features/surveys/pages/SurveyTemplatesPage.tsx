@@ -84,13 +84,18 @@ export default function SurveyTemplatesPage() {
       <form
         // Flex, not an equal-column grid: a grid column stretches the submit button
         // to a third of the panel, which rendering the page is what showed.
+        //
+        // `mb-0` on the labels for the reason `SurveyFilters` documents at length: the
+        // base layer's 12px `label` bottom margin is inside the label's box, so
+        // `items-end` aligned the Filter button to the bottom of that margin and left it
+        // sitting 12px below the controls it submits.
         className="mb-panel-gap flex flex-wrap items-end gap-inline"
         onSubmit={(event) => {
           event.preventDefault()
           setApplied({ category: draftCategory, q: draftQuery })
         }}
       >
-        <label className="w-full sm:w-56">
+        <label className="mb-0 w-full sm:w-56">
           {t('surveys.templateCategory')}
           <select
             value={draftCategory}
@@ -106,7 +111,7 @@ export default function SurveyTemplatesPage() {
           </select>
         </label>
 
-        <label className="w-full sm:w-80">
+        <label className="mb-0 w-full sm:w-80">
           {t('common.search')}
           <input
             type="search"

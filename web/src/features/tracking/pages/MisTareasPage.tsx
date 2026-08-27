@@ -16,6 +16,7 @@ import { getMisTareas, type PlanAccion, type SemaforoCounts } from '../api/track
 import PlanesAccionTable from '../components/PlanesAccionTable'
 import SemaforoSummary from '../components/SemaforoSummary'
 import { tallySemaforo } from '../semaforo'
+import { canManagePlan, readTrackingClaims } from '../trackingAccess'
 
 /**
  * `/tracking/mis-tareas` — the task-only view.
@@ -35,13 +36,29 @@ import { tallySemaforo } from '../semaforo'
  * That is the whole reason this page exists separately from the listing rather
  * than being a filter on it.
  *
- * ## Read-only, and it says so
+ * ## Read-only, and it says so — but not the same sentence to everybody
  *
  * `PlanAccessHandler` gives an involucrado — and the responsable de ejecución —
  * `AccessLevel.Read` and nothing more. Recording progress belongs to the node's
  * leader. So this page offers no write control of any kind and states who to go to
  * instead, rather than showing buttons that would 403. Rows still link into the
  * detail page, which shows its own read-only face to the same viewer.
+ *
+ * The notice used to be unconditional, and for one reader it was false. **A node
+ * leader is a first-class caller here**: `MisTareasAsync` reads no role claim, so a
+ * leader named as responsable or involucrado on a plan of their own jefatura gets it
+ * in this list — and `canManagePlan` gives them write access to exactly that plan,
+ * because `PlanAccessHandler` matches their `nodoId` claim against the plan's node.
+ * Telling them "el registro de avance lo realiza la jefatura del nodo" names them,
+ * and the detail page they land on one click later then shows them the
+ * `RegistrarAvanceForm` the sentence just said was somebody else's. Photographed as
+ * a leader on `nodo-operaciones`, against a fixture whose two tasks both sit on that
+ * node: every word of the banner was wrong for that reader.
+ *
+ * So the page asks the same predicate the detail page asks. Nothing about what this
+ * page *does* changes — there is still no write control here, which is the true half
+ * of the sentence — only which of two true sentences the reader is given, and the
+ * manager's version points at where their control actually is.
  *
  * ## No company scope
  *
@@ -77,6 +94,19 @@ export default function MisTareasPage() {
   // discloses any shortfall rather than implying it counted everything.
   const counts = useMemo<SemaforoCounts>(() => tallySemaforo(tareas), [tareas])
 
+  // Read once: the claims come from the stored token and do not change while the page
+  // is mounted, and `readTrackingClaims()` decodes on every call.
+  const claims = useMemo(() => readTrackingClaims(), [])
+  // `some`, not `every`. A leader can hold a mixed list — a plan on their own node
+  // beside one they were merely involved in elsewhere — and the sentence that would be
+  // wrong for them is the one denying they may record any progress at all. Where they
+  // can record some, the manager's line is the true one and the detail page draws the
+  // per-plan boundary exactly.
+  const managesAny = useMemo(
+    () => tareas.some((plan) => canManagePlan(plan, claims)),
+    [tareas, claims],
+  )
+
   return (
     <div className="flex flex-col gap-6">
       <PageTopBar
@@ -92,7 +122,13 @@ export default function MisTareasPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <Alert variant="info">
-            <AlertDescription>{t('tracking.misTareas.readOnly')}</AlertDescription>
+            <AlertDescription>
+              {t(
+                managesAny
+                  ? 'tracking.misTareas.readOnlyManager'
+                  : 'tracking.misTareas.readOnly',
+              )}
+            </AlertDescription>
           </Alert>
 
           {loadError ? (

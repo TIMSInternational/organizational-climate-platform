@@ -1340,7 +1340,8 @@
       "alwaysSentBadge": "Siempre se envían",
       "alwaysSentDescription": "Los mensajes de inicio de sesión, contraseña y seguridad de la cuenta siempre se envían. No tienen configuración, porque desactivarlos te dejaría sin forma de recuperar tu cuenta.",
       "saved": "Se guardaron tus preferencias de notificaciones.",
-      "loadError": "No se pudieron cargar tus preferencias de notificaciones."
+      "loadError": "No se pudieron cargar tus preferencias de notificaciones.",
+      "eyebrow": "Cuenta"
     },
     "inboxDescription": "Lo que cambió mientras no estabas.",
     "unreadOnly": "Solo no leídas",
@@ -1463,7 +1464,30 @@
     "maxLoginAttempts": "Intentos Máximos de Inicio de Sesión",
     "sessionTimeoutMinutes": "Tiempo de Espera de Sesión (minutos)",
     "enforcedOnEveryLoginNote": "Inicio de Sesión Habilitado y Modo de Mantenimiento se aplican en cada intento de inicio de sesión (una cuenta SuperAdmin siempre puede iniciar sesión).",
-    "notYetEnforcedNote": "Intentos Máximos de Inicio de Sesión y Tiempo de Espera de Sesión se guardan pero la API aún no los aplica: actualmente no bloquean cuentas ni expiran sesiones antes de tiempo."
+    "notYetEnforcedNote": "Intentos Máximos de Inicio de Sesión y Tiempo de Espera de Sesión se guardan pero la API aún no los aplica: actualmente no bloquean cuentas ni expiran sesiones antes de tiempo.",
+    "availabilityTitle": "Disponibilidad de la plataforma",
+    "loginEnabledDescription": "Cuando está desactivado, nadie puede iniciar sesión salvo una cuenta SuperAdmin.",
+    "maintenanceModeDescription": "Muestra el mensaje de mantenimiento en lugar de la aplicación para todos, salvo una cuenta SuperAdmin.",
+    "maintenanceMessageDescription": "Se muestra en la pantalla de inicio de sesión mientras el modo de mantenimiento está activo.",
+    "lockoutWarningTitle": "Esto dejará a los usuarios fuera de la plataforma",
+    "lockoutWarningDescription": "Con esta configuración guardada, ninguna cuenta salvo SuperAdmin podrá iniciar sesión. Las sesiones abiertas no se cierran.",
+    "sessionTitle": "Política de sesión",
+    "passwordPolicyTitle": "Política de contraseñas",
+    "passwordMinLength": "Longitud mínima",
+    "passwordRequireUppercase": "Requiere una letra mayúscula",
+    "passwordRequireLowercase": "Requiere una letra minúscula",
+    "passwordRequireNumbers": "Requiere un número",
+    "passwordRequireSpecialChars": "Requiere un carácter especial",
+    "emailDeliveryTitle": "Envío de correo",
+    "emailSmtpEnabled": "SMTP activado",
+    "emailSmtpDisabled": "SMTP desactivado",
+    "emailFrom": "Dirección de origen",
+    "emailHost": "Servidor SMTP",
+    "emailPort": "Puerto SMTP",
+    "notConfigured": "Sin configurar",
+    "readOnlyNote": "Solo lectura aquí — cámbialo desde la configuración de la plataforma.",
+    "savedNote": "Configuración del sistema guardada.",
+    "loadError": "No se pudo cargar la configuración del sistema."
   },
   "shell": {
     "account": "Cuenta",
@@ -2511,7 +2535,8 @@
       "description": "Los planes de acción en los que usted participa.",
       "listTitle": "Tareas asignadas",
       "empty": "No tiene tareas asignadas.",
-      "readOnly": "Esta vista es de consulta. El registro de avance lo realiza la jefatura del nodo."
+      "readOnly": "Esta vista es de consulta. El registro de avance lo realiza la jefatura del nodo.",
+      "readOnlyManager": "Este listado es de consulta. Abra un plan de su nodo para registrar el avance."
     },
     "create": {
       "title": "Nuevo plan de acción",
@@ -2590,7 +2615,9 @@
       "registrarAvance": "Registrar avance",
       "marcarCumplido": "Marcar como cumplido",
       "agregarInvolucrados": "Agregar involucrados"
-    }
+    },
+    "consolidadoTitle": "Vista Consolidada",
+    "tableroTitle": "Tablero de Seguimiento"
   },
   "privacy": {
     "eyebrow": "Cuenta",
@@ -2728,5 +2755,63 @@
     "averageScore": "Puntaje promedio",
     "departmentsCaption": "Participación de cada departamento, incluidos aquellos cuyas cifras están reservadas",
     "departmentsWithheld": "Se reservan {count} departamento(s) porque cada uno tiene menos de {minimum} personas que respondieron."
+  },
+  "storefront": {
+    "kicker": {
+      "climate": "Clima organizacional",
+      "dimensions": "Las dimensiones",
+      "report": "El informe",
+      "levels": "Escala de nivel",
+      "how": "Cómo funciona",
+      "why": "Por qué así"
+    },
+    "hero": {
+      "title": "Lo que la organización ya sabe, dicho en voz alta.",
+      "lede": "Un instrumento de clima que se responde en anonimato y se lee por dimensión, con un piso mínimo por segmento que decide qué puede mostrarse y qué no.",
+      "cta": "Ver un informe de ejemplo",
+      "chipDimensions": "4 dimensiones",
+      "chipFloor": "Piso mínimo 5"
+    },
+    "dimensions": {
+      "title": "Cuatro lecturas, no un promedio.",
+      "lede": "Un puntaje único esconde justo lo que hay que ver. Cada dimensión se reporta por separado.",
+      "leadership": "Liderazgo",
+      "leadershipGloss": "Cómo se percibe la dirección: claridad, cercanía y consistencia.",
+      "communication": "Comunicación",
+      "communicationGloss": "Si la información llega completa, a tiempo y en ambos sentidos.",
+      "recognition": "Reconocimiento",
+      "recognitionGloss": "Si el esfuerzo se nota y se nombra, no sólo cuando algo falla.",
+      "environment": "Entorno",
+      "environmentGloss": "Las condiciones materiales y de carga en las que ocurre el trabajo."
+    },
+    "report": {
+      "title": "Figuras que se leen sin explicación.",
+      "lede": "Cada figura se dibuja con DOM y CSS sobre los tokens del tema, así que responde al modo oscuro sin una segunda paleta."
+    },
+    "levels": {
+      "caption": "Nivel {n}",
+      "critical": "Crítico",
+      "atRisk": "En riesgo",
+      "acceptable": "Aceptable",
+      "solid": "Sólido"
+    },
+    "how": {
+      "title": "Tres pasos, sin sorpresas.",
+      "step1": "Se define el instrumento",
+      "step1Body": "Dimensiones, escala y alcance por departamento.",
+      "step2": "Se responde en anonimato",
+      "step2Body": "Sin identificadores por respuesta, con piso mínimo.",
+      "step3": "Se lee el resultado",
+      "step3Body": "Agregados por dimensión, con supresión bajo el piso."
+    },
+    "why": {
+      "title": "Tres decisiones de diseño.",
+      "panel1": "Anonimato real",
+      "panel1Body": "Un piso mínimo por segmento; bajo él, nada se muestra.",
+      "panel2": "Comparable",
+      "panel2Body": "La misma escala entre periodos, para leer tendencia y no ruido.",
+      "panel3": "Accionable",
+      "panel3Body": "El resultado nombra dónde mirar, no sólo qué puntaje salió."
+    }
   }
 }

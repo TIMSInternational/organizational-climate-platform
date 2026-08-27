@@ -119,6 +119,56 @@ describe('MisTareasPage', () => {
     ).toBeTruthy()
   })
 
+  /**
+   * The node leader is in this list too, and the unconditional banner was false for
+   * exactly one reader: the one it names.
+   *
+   * `MisTareasAsync` reads no role claim, so a leader who is responsable or involucrado
+   * on a plan of their own jefatura is listed here — and `PlanAccessHandler` gives them
+   * write access to that plan, because their `nodoId` claim matches its node. Telling
+   * them the registro de avance "lo realiza la jefatura del nodo" points at themselves,
+   * one click before the detail page hands them the form.
+   */
+  it('does not tell a node leader that recording progress is somebody else job', async () => {
+    setToken(tokenFor({ sub: 'persona-1', role: 'leader', nodoId: 'nodo-a' }))
+    vi.mocked(fetch).mockImplementation(() =>
+      // `nodo-a` is the fixture task's own node, so `canManagePlan` is true here.
+      Promise.resolve(new Response(JSON.stringify([tarea()]), { status: 200 })),
+    )
+    renderPage()
+    await screen.findByText('Reunión mensual de seguimiento')
+
+    expect(
+      screen.queryByText(
+        'Esta vista es de consulta. El registro de avance lo realiza la jefatura del nodo.',
+      ),
+    ).toBeNull()
+    expect(
+      screen.getByText(
+        'Este listado es de consulta. Abra un plan de su nodo para registrar el avance.',
+      ),
+    ).toBeTruthy()
+    // Still no write control on this page — that half of the notice was never wrong.
+    expect(screen.queryByRole('button', { name: 'Registrar avance' })).toBeNull()
+  })
+
+  it('keeps the original notice for a leader whose listed tasks are all on other nodes', async () => {
+    // A leader is an involucrado somewhere else: `canManagePlan` refuses a node that is
+    // not their own, so the sentence naming the jefatura is the true one again.
+    setToken(tokenFor({ sub: 'persona-1', role: 'leader', nodoId: 'nodo-b' }))
+    vi.mocked(fetch).mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify([tarea()]), { status: 200 })),
+    )
+    renderPage()
+    await screen.findByText('Reunión mensual de seguimiento')
+
+    expect(
+      screen.getByText(
+        'Esta vista es de consulta. El registro de avance lo realiza la jefatura del nodo.',
+      ),
+    ).toBeTruthy()
+  })
+
   it('says so plainly when there is nothing assigned', async () => {
     vi.mocked(fetch).mockImplementation(() =>
       Promise.resolve(new Response(JSON.stringify([]), { status: 200 })),
