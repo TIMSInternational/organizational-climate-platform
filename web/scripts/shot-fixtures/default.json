@@ -1618,27 +1618,27 @@
     ],
     "dimensions": [
       {
-        "key": "belonging",
+        "key": "Collaboration",
         "surveyCount": 3
       },
       {
-        "key": "growth",
+        "key": "Growth",
         "surveyCount": 3
       },
       {
-        "key": "psychological_safety",
+        "key": "Leadership",
         "surveyCount": 3
       },
       {
-        "key": "recognition",
+        "key": "Psychological safety",
         "surveyCount": 3
       },
       {
-        "key": "trust",
+        "key": "Recognition",
         "surveyCount": 3
       },
       {
-        "key": "workload",
+        "key": "Workload",
         "surveyCount": 3
       }
     ],
@@ -1724,27 +1724,27 @@
     ],
     "dimensions": [
       {
-        "key": "belonging",
+        "key": "Collaboration",
         "surveyCount": 3
       },
       {
-        "key": "growth",
+        "key": "Growth",
         "surveyCount": 3
       },
       {
-        "key": "psychological_safety",
+        "key": "Leadership",
         "surveyCount": 3
       },
       {
-        "key": "recognition",
+        "key": "Psychological safety",
         "surveyCount": 3
       },
       {
-        "key": "trust",
+        "key": "Recognition",
         "surveyCount": 3
       },
       {
-        "key": "workload",
+        "key": "Workload",
         "surveyCount": 3
       }
     ],
