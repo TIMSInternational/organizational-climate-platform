@@ -4,6 +4,7 @@ using System.Text.Json;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Microclimates;
 using ClimateProject.Application.Notifications;
+using ClimateProject.Application.Questions;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using ClimateProject.IntegrationTests.Support;
@@ -911,5 +912,414 @@ public class MicroclimateInvitationEndpointsTests : IAsyncLifetime
         Assert.Null(await afterScope.ServiceProvider
             .GetRequiredService<IMicroclimateInvitationTokens>()
             .LiveTokenAsync(invitationId, userId, _companyAId, CancellationToken.None));
+    }
+
+    // ------------------------------------------------------------------
+    // The journey the invitation is FOR
+    //
+    // Every test above this line walks the ladder. None of them ever submitted an answer,
+    // and the whole invitation surface exists so that somebody does -- which is how a
+    // non-anonymous microclimate shipped for a slice being unanswerable by every person it
+    // invited. The ladder was green throughout.
+    // ------------------------------------------------------------------
+
+    /// <summary>An open-text question, so the pulse below is answerable at all.</summary>
+    private Task<Guid> SeedQuestionAsync(Guid microclimateId)
+        => _harness.WithDbAsync(async db =>
+        {
+            var question = new MicroclimateQuestion
+            {
+                Id = Guid.NewGuid(),
+                MicroclimateId = microclimateId,
+                TextEn = "How do you feel?",
+                TextEs = "¿Cómo te sientes?",
+                Type = QuestionTypes.OpenEnded,
+                Required = false,
+                Order = 0,
+            };
+            db.MicroclimateQuestions.Add(question);
+            await db.SaveChangesAsync();
+            return question.Id;
+        });
+
+    /// <summary>
+    /// The invitation card's promise, kept: an invitee to a NON-anonymous microclimate signs
+    /// in and their answer is stored.
+    ///
+    /// <para><b>What this catches and nothing else did.</b> The landing card tells an invitee
+    /// to a non-anonymous session "you will be asked to sign in before you can answer" and
+    /// offers them <c>/login</c>. Following that advice used to end in a 403:
+    /// <c>POST /microclimates/{id}/responses</c> authorised the submitter with
+    /// <c>CanAccessCompany</c>, the SuperAdmin/CompanyAdmin helper, so an <c>employee</c> --
+    /// the role every invitation on this surface is minted for -- was refused for holding it.
+    /// The card named a remedy that could not work.</para>
+    ///
+    /// <para>Asserted at the storage layer, not on the status code:
+    /// <c>microclimates.response_count</c> has to have moved. A 201 over a handler that
+    /// discarded the submission would satisfy a status assertion perfectly.</para>
+    /// </summary>
+    [Fact]
+    public async Task An_invited_employee_can_answer_a_microclimate_that_is_not_anonymous()
+    {
+        var admin = await AdminAAsync();
+        var microclimateId = await SeedMicroclimateAsync(_companyAId, anonymous: false);
+        var questionId = await SeedQuestionAsync(microclimateId);
+
+        // The invitee is the caller, not a stand-in beside them: the whole finding is about
+        // the role the invitation was minted for.
+        var (invitee, inviteeId) = await _harness.IdentifiedClientAsync(Roles.Employee, _companyAId);
+        var invitationId = await InviteAsync(admin, microclimateId, inviteeId);
+        var token = await TokenOfAsync(invitationId);
+
+        // The ladder, exactly as the page walks it.
+        await Anonymous().PostAsync($"/microclimate-invitations/{token}/opened", null);
+        await Anonymous().PostAsync($"/microclimate-invitations/{token}/started", null);
+
+        var submitted = await invitee.PostAsJsonAsync(
+            $"/microclimates/{microclimateId}/responses",
+            new SubmitResponseRequest(new Dictionary<Guid, string> { [questionId] = "good" }, "en"));
+
+        Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
+        Assert.Equal(
+            1,
+            await _harness.WithDbAsync(db => db.Microclimates
+                .AsNoTracking()
+                .Where(m => m.Id == microclimateId)
+                .Select(m => m.ResponseCount)
+                .SingleAsync()));
+
+        // And only now is `completed` the truth about this invitation.
+        await Anonymous().PostAsync($"/microclimate-invitations/{token}/completed", null);
+        Assert.Equal(MicroclimateInvitationStatuses.Completed, (await RowAsync(invitationId)).Status);
+    }
+
+    /// <summary>
+    /// The two refusals that must survive the fix above, so "let the invitee answer" is not
+    /// read as "let anyone answer".
+    ///
+    /// <para>An unauthenticated caller is still 401 -- that is the rule the sign-in note on
+    /// the card exists to warn about -- and an authenticated employee of ANOTHER tenant is
+    /// still 403. Without the second, the widened check would let any employee of any company
+    /// inflate this one's response count and word cloud, which is the reason the company match
+    /// was there before the role check was the wrong one.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_microclimate_that_is_not_anonymous_still_refuses_a_stranger_and_a_signed_out_caller()
+    {
+        var microclimateId = await SeedMicroclimateAsync(_companyAId, anonymous: false);
+        var questionId = await SeedQuestionAsync(microclimateId);
+        var body = new SubmitResponseRequest(new Dictionary<Guid, string> { [questionId] = "good" }, "en");
+
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            (await Anonymous().PostAsJsonAsync($"/microclimates/{microclimateId}/responses", body)).StatusCode);
+
+        var foreigner = await _harness.ClientAsync(Roles.Employee, _companyBId);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await foreigner.PostAsJsonAsync($"/microclimates/{microclimateId}/responses", body)).StatusCode);
+
+        Assert.Equal(
+            0,
+            await _harness.WithDbAsync(db => db.Microclimates
+                .AsNoTracking()
+                .Where(m => m.Id == microclimateId)
+                .Select(m => m.ResponseCount)
+                .SingleAsync()));
+    }
+
+    // ------------------------------------------------------------------
+    // Recovering a link that went wrong
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Revocation is not a one-way door.
+    ///
+    /// <para>This is the dead end, walked in order: revoke a leaked link, watch resend refuse
+    /// it (correctly), watch the batch route skip the user as already-invited, and then
+    /// reinstate them. Before <c>reinstate</c> existed the walk stopped at step three with the
+    /// employee holding no live token and no route in the product able to mint one -- and
+    /// <c>Revocation_is_not_undone_by_a_resend</c> asserted the 409 and never asked what
+    /// happened next.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_revoked_invitee_can_be_issued_a_new_token_and_the_batch_route_says_how()
+    {
+        var admin = await AdminAAsync();
+        var microclimateId = await SeedMicroclimateAsync(_companyAId);
+        var userId = await SeedEmployeeAsync(_companyAId);
+        var invitationId = await InviteAsync(admin, microclimateId, userId);
+        var leaked = await TokenOfAsync(invitationId);
+
+        await admin.PostAsync($"/microclimates/{microclimateId}/invitations/{invitationId}/revoke", null);
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            (await admin.PostAsync($"/microclimates/{microclimateId}/invitations/{invitationId}/resend", null)).StatusCode);
+
+        // The batch route still skips them -- reviving a revocation is not its decision -- but
+        // it now names the route that is.
+        var reinvite = await admin.PostAsJsonAsync(
+            $"/microclimates/{microclimateId}/invitations",
+            new CreateMicroclimateInvitationsRequest(UserIds: [userId]));
+        var batch = await reinvite.Content.ReadFromJsonAsync<MicroclimateInvitationBatchResult>();
+        Assert.Equal(0, batch!.Created);
+        Assert.Equal([userId], batch.SkippedUserIds);
+        Assert.Contains("reinstate", batch.Note!, StringComparison.Ordinal);
+
+        var reinstated = await admin.PostAsync(
+            $"/microclimates/{microclimateId}/invitations/{invitationId}/reinstate", null);
+        Assert.Equal(HttpStatusCode.OK, reinstated.StatusCode);
+
+        var row = await RowAsync(invitationId);
+        Assert.Equal(MicroclimateInvitationStatuses.Sent, row.Status);
+
+        // A NEW token. The reason a link is revoked is that somebody else may hold it, so
+        // handing the old string back would reinstate them too.
+        Assert.NotEqual(leaked, row.InvitationToken);
+        Assert.Equal(
+            HttpStatusCode.Gone,
+            (await Anonymous().GetAsync($"/microclimate-invitations/{leaked}")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await Anonymous().GetAsync($"/microclimate-invitations/{row.InvitationToken}")).StatusCode);
+    }
+
+    /// <summary>
+    /// And reinstate cannot be used as a quieter resend. It undoes a revocation or it does
+    /// nothing: a route that also rotated live tokens would make "reinstate" in the audit log
+    /// mean two different things, and would give an admin a way to un-revoke by accident.
+    /// </summary>
+    [Fact]
+    public async Task Reinstating_an_invitation_that_was_never_revoked_is_refused()
+    {
+        var admin = await AdminAAsync();
+        var microclimateId = await SeedMicroclimateAsync(_companyAId);
+        var invitationId = await InviteAsync(admin, microclimateId, await SeedEmployeeAsync(_companyAId));
+        var before = await TokenOfAsync(invitationId);
+
+        var response = await admin.PostAsync(
+            $"/microclimates/{microclimateId}/invitations/{invitationId}/reinstate", null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(before, await TokenOfAsync(invitationId));
+    }
+
+    /// <summary>
+    /// A resend gives back the lifetime the invitation was MINTED with, not the session's
+    /// whole remaining window.
+    ///
+    /// <para>Two independent things are asserted here and both were open. The behaviour: an
+    /// admin who created with <c>ExpiresInDays: 1</c> on a five-day pulse used to get a
+    /// five-day token back on the first resend -- a parameter documented as "brings the token
+    /// deadline forward" silently pushing it out, on the one route whose purpose is replacing
+    /// a link that may have leaked. The bound: the new deadline is inside the session, which
+    /// is what a mutation setting it to <c>UtcNow().AddYears(5)</c> breaks -- the create-side
+    /// clamp was covered and the resend side, which mints the REPLACEMENT token, was not.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_resent_token_keeps_the_short_life_the_original_was_given()
+    {
+        var admin = await AdminAAsync();
+
+        // Five days, so a one-day ask is genuinely shorter than the session. A two-hour pulse
+        // clamps every request and the assertion would hold against a handler that ignored the
+        // original window entirely.
+        var endTime = DateTimeOffset.UtcNow.AddDays(5);
+        var microclimateId = await SeedMicroclimateAsync(_companyAId, endTime: endTime);
+
+        var created = await admin.PostAsJsonAsync(
+            $"/microclimates/{microclimateId}/invitations",
+            new CreateMicroclimateInvitationsRequest(UserIds: [await SeedEmployeeAsync(_companyAId)], ExpiresInDays: 1));
+        var invitationId = Assert.Single(
+            (await created.Content.ReadFromJsonAsync<MicroclimateInvitationBatchResult>())!.InvitationIds);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await admin.PostAsync($"/microclimates/{microclimateId}/invitations/{invitationId}/resend", null)).StatusCode);
+
+        var expiry = (await RowAsync(invitationId)).ExpiresAt;
+        Assert.Equal(DateTimeOffset.UtcNow.AddDays(1), expiry, TimeSpan.FromMinutes(1));
+        Assert.True(expiry < endTime, $"the resent token expires at {expiry:o}, past the session's {endTime:o}");
+
+        // And the ceiling still holds on this route: an invitation minted with no shorter ask
+        // is resent against the session's own close and never past it.
+        var openEnded = await InviteAsync(admin, microclimateId, await SeedEmployeeAsync(_companyAId));
+        await admin.PostAsync($"/microclimates/{microclimateId}/invitations/{openEnded}/resend", null);
+        Assert.Equal(endTime, (await RowAsync(openEnded)).ExpiresAt, TimeSpan.FromSeconds(1));
+    }
+
+    // ------------------------------------------------------------------
+    // Scoping: the `&&` that is the only defence left after the path is authorised
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Every by-id admin route is scoped to the microclimate in its own path.
+    ///
+    /// <para><b>Why this is not covered by the tenancy test above.</b> That one sends tenant
+    /// B's admin at tenant A's microclimate and gets a 403 -- it proves the MICROCLIMATE gate.
+    /// <c>LoadAdministrableAsync</c> authorises the microclimate in the path, which in the
+    /// attack below the caller legitimately owns; the only thing standing between them and
+    /// another tenant's invitation row is <c>&amp;&amp; i.MicroclimateId == microclimateId</c>
+    /// in each handler's lookup. Drop it and a CompanyAdmin holding any invitation GUID can
+    /// revoke another tenant's invitee, or resend -- rotating a token so the mail already in
+    /// that person's inbox stops working, and queueing a notification into the wrong
+    /// tenant.</para>
+    ///
+    /// <para>Both directions are exercised: another tenant's invitation, and a sibling
+    /// microclimate inside the caller's OWN tenant. The second is the one an admin could
+    /// stumble into by pasting an id from the wrong listing.</para>
+    /// </summary>
+    [Fact]
+    public async Task An_invitation_id_from_another_microclimate_is_not_found_on_this_ones_routes()
+    {
+        var adminA = await AdminAAsync();
+        var adminB = await _harness.ClientAsync(Roles.CompanyAdmin, _companyBId);
+
+        var ownMicroclimate = await SeedMicroclimateAsync(_companyAId);
+        var siblingMicroclimate = await SeedMicroclimateAsync(_companyAId);
+        var foreignMicroclimate = await SeedMicroclimateAsync(_companyBId);
+
+        var sibling = await InviteAsync(adminA, siblingMicroclimate, await SeedEmployeeAsync(_companyAId));
+        var foreign = await InviteAsync(adminB, foreignMicroclimate, await SeedEmployeeAsync(_companyBId));
+        var foreignToken = await TokenOfAsync(foreign);
+        var siblingToken = await TokenOfAsync(sibling);
+
+        foreach (var victim in new[] { sibling, foreign })
+        {
+            foreach (var verb in new[] { "revoke", "resend", "reinstate" })
+            {
+                var response = await adminA.PostAsync(
+                    $"/microclimates/{ownMicroclimate}/invitations/{victim}/{verb}", null);
+
+                Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            }
+        }
+
+        // Nothing moved: not the status, and not the token in anyone's inbox.
+        Assert.Equal(MicroclimateInvitationStatuses.Sent, (await RowAsync(foreign)).Status);
+        Assert.Equal(MicroclimateInvitationStatuses.Sent, (await RowAsync(sibling)).Status);
+        Assert.Equal(foreignToken, await TokenOfAsync(foreign));
+        Assert.Equal(siblingToken, await TokenOfAsync(sibling));
+    }
+
+    /// <summary>
+    /// The dedup is per microclimate, and that is the half a single-session test cannot see.
+    ///
+    /// <para><c>Inviting_the_same_person_twice_skips_rather_than_failing_the_batch</c> proves
+    /// skipping happens; it uses one microclimate, so it holds just as well over a query that
+    /// skipped anyone invited to ANY pulse in the tenant. That mutant is the worst shape a
+    /// distribution bug can take: the second pulse's invitations are never minted, never
+    /// mailed, and reported as a 201 with the user's own id in <c>skippedUserIds</c>.</para>
+    /// </summary>
+    [Fact]
+    public async Task An_invitation_to_one_microclimate_does_not_skip_the_person_for_another()
+    {
+        var admin = await AdminAAsync();
+        var first = await SeedMicroclimateAsync(_companyAId);
+        var second = await SeedMicroclimateAsync(_companyAId);
+        var userId = await SeedEmployeeAsync(_companyAId);
+
+        await InviteAsync(admin, first, userId);
+
+        var response = await admin.PostAsJsonAsync(
+            $"/microclimates/{second}/invitations",
+            new CreateMicroclimateInvitationsRequest(UserIds: [userId]));
+        var batch = await response.Content.ReadFromJsonAsync<MicroclimateInvitationBatchResult>();
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(1, batch!.Created);
+        Assert.Empty(batch.SkippedUserIds);
+        Assert.Single(await _harness.WithDbAsync(db => db.MicroclimateInvitations
+            .Where(i => i.MicroclimateId == second && i.UserId == userId)
+            .ToListAsync()));
+    }
+
+    /// <summary>
+    /// A deactivated employee is not mailed, on the NAMED-user route as well as the department
+    /// one.
+    ///
+    /// <para><c>A_department_audience_resolves_to_that_departments_active_users</c> covers the
+    /// department branch. The named branch is the one an admin UI drives — pick people from a
+    /// list — and it carries its own <c>u.IsActive</c>, unasserted until now. A leaver whose
+    /// row is deactivated but whose mailbox still forwards is exactly who must not receive an
+    /// invitation into a live session.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_deactivated_employee_cannot_be_invited_by_name()
+    {
+        var admin = await AdminAAsync();
+        var microclimateId = await SeedMicroclimateAsync(_companyAId);
+        var leaver = await SeedEmployeeAsync(_companyAId);
+        var stayer = await SeedEmployeeAsync(_companyAId);
+
+        await _harness.WithDbAsync(async db =>
+        {
+            var user = await db.Users.SingleAsync(u => u.Id == leaver);
+            user.IsActive = false;
+            await db.SaveChangesAsync();
+        });
+
+        // The whole batch is refused rather than silently trimmed: an admin who names five
+        // people and gets four invitations has been told nothing.
+        var response = await admin.PostAsJsonAsync(
+            $"/microclimates/{microclimateId}/invitations",
+            new CreateMicroclimateInvitationsRequest(UserIds: [leaver, stayer]));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(await _harness.WithDbAsync(db => db.MicroclimateInvitations
+            .Where(i => i.MicroclimateId == microclimateId)
+            .ToListAsync()));
+
+        // And the active half of the pair is invitable, so the 400 above is about the leaver
+        // and not about the route.
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync(
+            $"/microclimates/{microclimateId}/invitations",
+            new CreateMicroclimateInvitationsRequest(UserIds: [stayer]))).StatusCode);
+    }
+
+    /// <summary>
+    /// A revoked invitation reads as revoked, not as expired, on the ADMIN listing too.
+    ///
+    /// <para>Revoking sets <c>expires_at</c> to the moment of revocation (belt and braces), so
+    /// without the status guard in <c>ToDetail</c> every revoked row comes back
+    /// <c>isExpired: true</c> — an admin reading a deliberate withdrawal as a deadline
+    /// passing. That is the exact revoked/expired collapse <c>LoadByTokenAsync</c> goes out of
+    /// its way to prevent for the respondent, and the summary's <c>Expired</c> count already
+    /// carries the same rule and is already covered. Two halves of one rule; this is the other
+    /// half.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_revoked_invitation_is_not_reported_as_expired_on_the_admin_listing()
+    {
+        var admin = await AdminAAsync();
+        var microclimateId = await SeedMicroclimateAsync(_companyAId);
+        var revokedId = await InviteAsync(admin, microclimateId, await SeedEmployeeAsync(_companyAId));
+        var liveId = await InviteAsync(admin, microclimateId, await SeedEmployeeAsync(_companyAId));
+
+        await admin.PostAsync($"/microclimates/{microclimateId}/invitations/{revokedId}/revoke", null);
+
+        var listing = await (await admin.GetAsync($"/microclimates/{microclimateId}/invitations"))
+            .Content.ReadFromJsonAsync<MicroclimateInvitationListResponse>();
+
+        var revoked = listing!.Invitations.Single(i => i.Id == revokedId);
+        Assert.Equal(MicroclimateInvitationStatuses.Revoked, revoked.Status);
+        Assert.False(revoked.IsExpired);
+
+        // The row's deadline really is in the past, so the assertion above is about the
+        // guard and not about a deadline that happens not to have arrived.
+        Assert.True(revoked.ExpiresAt <= DateTimeOffset.UtcNow);
+
+        // And IsExpired is not simply hardwired false: a live invitation whose deadline has
+        // genuinely passed still reports true.
+        await _harness.WithDbAsync(async db =>
+        {
+            var row = await db.MicroclimateInvitations.SingleAsync(i => i.Id == liveId);
+            row.ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+            await db.SaveChangesAsync();
+        });
+
+        var after = await (await admin.GetAsync($"/microclimates/{microclimateId}/invitations"))
+            .Content.ReadFromJsonAsync<MicroclimateInvitationListResponse>();
+        Assert.True(after!.Invitations.Single(i => i.Id == liveId).IsExpired);
     }
 }

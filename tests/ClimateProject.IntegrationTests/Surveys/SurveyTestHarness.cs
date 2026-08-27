@@ -55,6 +55,20 @@ internal sealed class SurveyTestHarness(AuthWebApplicationFactory factory, strin
         });
 
     public async Task<string> TokenAsync(string role, Guid? companyId, Guid? departmentId = null)
+        => (await IdentifiedTokenAsync(role, companyId, departmentId)).Token;
+
+    /// <summary>
+    /// A bearer token AND the id of the user row behind it.
+    ///
+    /// <para>Needed by any test that has to address the signed-in caller as a subject rather
+    /// than only as a caller -- inviting the very person who will then answer, for instance.
+    /// <see cref="TokenAsync"/> mints a random email and throws the id away, which leaves a
+    /// test no honest way to name that user afterwards.</para>
+    /// </summary>
+    public async Task<(string Token, Guid UserId)> IdentifiedTokenAsync(
+        string role,
+        Guid? companyId,
+        Guid? departmentId = null)
     {
         await EnsureSignupHomeAsync();
 
@@ -63,6 +77,7 @@ internal sealed class SurveyTestHarness(AuthWebApplicationFactory factory, strin
         var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "a-good-password"));
         signup.EnsureSuccessStatusCode();
 
+        Guid userId;
         using (var scope = Factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
@@ -71,18 +86,26 @@ internal sealed class SurveyTestHarness(AuthWebApplicationFactory factory, strin
             user.CompanyId = companyId;
             user.DepartmentId = departmentId;
             await db.SaveChangesAsync();
+            userId = user.Id;
         }
 
         var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
-        return (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
+        return ((await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token, userId);
     }
 
     public async Task<HttpClient> ClientAsync(string role, Guid? companyId, Guid? departmentId = null)
+        => (await IdentifiedClientAsync(role, companyId, departmentId)).Client;
+
+    /// <summary>A signed-in caller and the id of the row behind them. See <see cref="IdentifiedTokenAsync"/>.</summary>
+    public async Task<(HttpClient Client, Guid UserId)> IdentifiedClientAsync(
+        string role,
+        Guid? companyId,
+        Guid? departmentId = null)
     {
-        var token = await TokenAsync(role, companyId, departmentId);
+        var (token, userId) = await IdentifiedTokenAsync(role, companyId, departmentId);
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return client;
+        return (client, userId);
     }
 
     public async Task<T> WithDbAsync<T>(Func<ClimateProjectDbContext, Task<T>> action)
