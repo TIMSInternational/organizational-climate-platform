@@ -137,6 +137,51 @@ public sealed record CompanyAdminDashboard(
 /// <see cref="DashboardDepartmentSurveySummary"/> for why they are not the company
 /// dashboard's shape.
 /// </param>
+/// <summary>
+/// One dimension of the team's climate, from the most recent closed survey this department
+/// answered.
+/// </summary>
+/// <param name="Dimension">The raw category key, locale-independent, exactly as every other results surface carries it.</param>
+/// <param name="AverageScore">Null when no question in the dimension has a computable average. Null is not zero, and a client must not render it as one.</param>
+public sealed record DashboardDimensionScore(string Dimension, double? AverageScore);
+
+/// <summary>
+/// The team's climate reading, or the statement that it is being withheld.
+///
+/// **The floor applies here, and to the SCORES.** A leader whose team is under
+/// <see cref="SurveyResultsPrivacy.MinimumSegmentRespondents"/> gets
+/// <see cref="IsSuppressed"/> true and an empty <see cref="Dimensions"/> — the same rule
+/// every other surface applies, because a department of three answering six questions is
+/// close enough to three named people's answers that "they run the team" does not make it
+/// safe. Ruled on 2026-08-27.
+///
+/// **The response count on the dashboard around it is deliberately NOT floored, and that
+/// is not an inconsistency.** A leader looking at their own team already knows its size;
+/// publishing one department's sub-threshold count to a company admin reading all of them
+/// is a different disclosure, and <c>DepartmentList</c> withholds it there. Count
+/// unfloored, scores floored. Do not "fix" one to match the other.
+/// </summary>
+/// <param name="SurveyId">The survey these scores are from. Null when there is no closed survey to read.</param>
+/// <param name="RespondentCount">
+/// How many of this department answered that survey. **Zero when suppressed** — the
+/// withheld size never travels with the withheld reading, for the reason
+/// <c>ProtectedCell</c> states.
+/// </param>
+/// <param name="MinimumGroupSize">The floor actually applied, so a client renders the promise the server kept rather than its own constant.</param>
+public sealed record DashboardTeamClimate(
+    Guid? SurveyId,
+    string? SurveyTitle,
+    DateTimeOffset? SurveyEndDate,
+    int RespondentCount,
+    bool IsSuppressed,
+    int MinimumGroupSize,
+    IReadOnlyList<DashboardDimensionScore> Dimensions);
+
+/// <param name="Climate">
+/// The department's own climate scores. Null when the company has no closed survey at all —
+/// which is a different statement from a withheld reading, and the screen says so
+/// differently: "nothing has closed yet" versus "your team is too small to report".
+/// </param>
 public sealed record DepartmentAdminDashboard(
     Guid DepartmentId,
     string DepartmentName,
@@ -147,7 +192,8 @@ public sealed record DepartmentAdminDashboard(
     int CompletedResponseCount,
     int OpenActionPlanCount,
     int OverdueActionPlanCount,
-    IReadOnlyList<DashboardDepartmentSurveySummary> ActiveSurveys);
+    IReadOnlyList<DashboardDepartmentSurveySummary> ActiveSurveys,
+    DashboardTeamClimate? Climate);
 
 /// <summary>
 /// A survey the caller is expected to answer. Narrower than

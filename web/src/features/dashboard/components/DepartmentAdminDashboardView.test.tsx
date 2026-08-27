@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import DepartmentAdminDashboardView from './DepartmentAdminDashboardView'
 import { TranslationProvider } from '../../../i18n'
@@ -30,6 +30,22 @@ function team(overrides: Partial<DepartmentAdminDashboard> = {}): DepartmentAdmi
     activeMemberCount: 54,
     activeSurveyCount: 2,
     completedResponseCount: 41,
+    // A disclosed reading by default. The suppressed and absent cases are their own
+    // tests below rather than the baseline, because a fixture that withholds by default
+    // would let a regression that withholds EVERYTHING pass every test in this file.
+    climate: {
+      surveyId: 's1',
+      surveyTitle: 'Q3 Climate Survey',
+      surveyEndDate: '2026-08-05T00:00:00Z',
+      respondentCount: 9,
+      isSuppressed: false,
+      minimumGroupSize: 5,
+      dimensions: [
+        { dimension: 'psychological_safety', averageScore: 4.2 },
+        { dimension: 'workload', averageScore: 2.4 },
+        { dimension: 'trust', averageScore: 3.8 },
+      ],
+    },
     openActionPlanCount: 3,
     // Non-zero on purpose: the "Needs attention" alert — the block that carried the 403
     // link — only exists above zero, so a fixture with none would leave it untested.
@@ -148,6 +164,148 @@ describe('DepartmentAdminDashboardView', () => {
 
     expect(await screen.findByText('Ingeniería')).toBeTruthy()
     expect(screen.getByText('Encuesta de clima Q2')).toBeTruthy()
+  })
+
+  // ==================================================================
+  // The team's climate — the second caller for the per-dimension aggregation
+  // ==================================================================
+
+  describe("the team's climate", () => {
+    it('draws one row of the team\'s own dimension scores', async () => {
+      serves(team())
+      renderView()
+
+      // Scoped to the climate FIGURE, because this page renders a second table
+      // (`DashboardSurveyTable`) and a bare getByRole('table') silently asserts against
+      // that one instead. Queried by role without a name: `<figcaption>` is a naming
+      // source in the HTML spec but `dom-accessibility-api` does not implement it, so
+      // `{ name }` here matches nothing however correct the markup is. The caption is
+      // asserted separately below.
+      const figure = await screen.findByRole('figure')
+      expect(within(figure).getByText('Q3 Climate Survey')).toBeTruthy()
+      const table = within(figure).getByRole('table')
+      const headers = within(table)
+        .getAllByRole('columnheader')
+        .map((cell) => cell.textContent?.trim())
+      expect(headers).toContain('psychological_safety')
+      expect(headers).toContain('workload')
+
+      // The reading itself, to one decimal like every score in this product.
+      expect(within(table).getByText('2.4')).toBeTruthy()
+    })
+
+    /**
+     * THE guarantee. A team under the floor is rendered as PROTECTED — hatched and
+     * padlocked — and publishes no figure at all.
+     *
+     * The ruling (2026-08-27) is that the floor applies to the SCORES. It deliberately
+     * does NOT apply to the team's size in the tiles above, which is a different
+     * disclosure: a leader already knows how many people they have. So this asserts both
+     * halves — no score in the grid, and the member count still on screen — because a
+     * change that floored everything would otherwise look like a pass.
+     */
+    it('withholds the scores of a team under the floor, but not its size', async () => {
+      serves(
+        team({
+          memberCount: 4,
+          activeMemberCount: 4,
+          climate: {
+            surveyId: 's1',
+            surveyTitle: 'Q3 Climate Survey',
+            surveyEndDate: '2026-08-05T00:00:00Z',
+            // Zeroed by the server with the reading, so the withheld size never travels.
+            respondentCount: 0,
+            isSuppressed: true,
+            minimumGroupSize: 5,
+            // The dimension NAMES survive suppression, with null scores. Which dimensions
+            // were asked is not the protected fact — the scores are — and without the
+            // names there would be no columns to hatch, so the row would render blank.
+            dimensions: [
+              { dimension: 'psychological_safety', averageScore: null },
+              { dimension: 'workload', averageScore: null },
+              { dimension: 'trust', averageScore: null },
+            ],
+          },
+        }),
+      )
+      renderView()
+
+      const figure = await screen.findByRole('figure')
+      const table = within(figure).getByRole('table')
+      const protectedCells = within(table).getAllByRole('img')
+      expect(protectedCells.length).toBeGreaterThan(0)
+      for (const cell of protectedCells) {
+        expect(cell.getAttribute('aria-label')?.toLowerCase()).toContain('protected')
+      }
+
+      // No reading of any kind in the grid — and in particular not the 0 the payload
+      // carries, which is the number the floor exists to withhold.
+      const body = within(table).getAllByRole('row').slice(1)
+      for (const row of body) expect(row.textContent).not.toMatch(/\d/)
+
+      // ...while the team's own size is still on the page. Count unfloored, scores
+      // floored: that split is the ruling, not an oversight. Scoped to the tile rather
+      // than a bare getByText('4'), which matches several figures on this page.
+      const tile = screen.getByText('Team members').closest('[data-slot="kpi-tile"]')
+      expect(tile?.textContent).toContain('4')
+    })
+
+    /**
+     * A dimension with no computable average is DROPPED, never drawn as 0.
+     *
+     * `PooledAverage` returns null for a dimension whose questions all lack an average, and
+     * a `?? 0` on the way to the grid would print "0.0" — a catastrophic reading nobody
+     * recorded, on the screen a team lead judges their team by. This repository has shipped
+     * that failure before, and a plausible zero is worse than a gap because it is believed.
+     */
+    it('drops a dimension with no score rather than drawing it as zero', async () => {
+      serves(
+        team({
+          climate: {
+            surveyId: 's1',
+            surveyTitle: 'Q3 Climate Survey',
+            surveyEndDate: '2026-08-05T00:00:00Z',
+            respondentCount: 9,
+            isSuppressed: false,
+            minimumGroupSize: 5,
+            dimensions: [
+              { dimension: 'psychological_safety', averageScore: 4.2 },
+              { dimension: 'workload', averageScore: null },
+            ],
+          },
+        }),
+      )
+      renderView()
+
+      const figure = await screen.findByRole('figure')
+      const table = within(figure).getByRole('table')
+      const headers = within(table)
+        .getAllByRole('columnheader')
+        .map((cell) => cell.textContent?.trim())
+
+      expect(headers).toContain('psychological_safety')
+      expect(headers).not.toContain('workload')
+      // And no zero anywhere in the grid, which is what `?? 0` would have put there.
+      expect(within(table).queryByText('0.0')).toBeNull()
+      expect(within(table).queryByText('0')).toBeNull()
+    })
+
+    /**
+     * No closed survey is not the same statement as a withheld reading, and the screen
+     * must not collapse them: the first says "nothing has closed yet", the second says
+     * "your team is too small to report". An empty grid for the first would read as a
+     * product that lost the data.
+     */
+    it('draws no grid at all when nothing has closed yet', async () => {
+      serves(team({ climate: null }))
+      renderView()
+
+      await screen.findByText('Ingeniería')
+      // The climate figure specifically. The surveys table below it still renders, which
+      // is why this asserts the absence of the FIGURE and not of any table.
+      expect(screen.queryByRole('figure')).toBeNull()
+      expect(screen.queryByText("Your team's climate")).toBeNull()
+    })
   })
 
   /**

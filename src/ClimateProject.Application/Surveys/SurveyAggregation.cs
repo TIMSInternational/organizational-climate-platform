@@ -171,6 +171,46 @@ public static class SurveyAggregation
     }
 
     /// <summary>
+    /// One segment's dimension scores: its questions rolled up per category, by the same
+    /// weighted pooling the whole-survey rollup uses.
+    ///
+    /// **Why this is a function and not three copies of a GroupBy.** A segment carries
+    /// answered counts and averages per question ID, not categories, so every caller that
+    /// wants "this department's score for this dimension" has to join the segment back to
+    /// the survey's own question rows and then pool. Three surfaces want exactly that: the
+    /// climate-over-time matrix, the department dashboard's climate reading, and any report
+    /// section that scopes to one group. Written three times, a company's dashboard and its
+    /// trend screen could print different numbers for the same department, dimension and
+    /// survey — and the copy that drifted would be the one nobody reads beside the other.
+    ///
+    /// Returns only the categories the segment actually answered something in. A caller
+    /// that needs a dense row across a known dimension list must fill the gaps itself,
+    /// because "no score" and "zero" are different claims and this function will not
+    /// invent the second.
+    /// </summary>
+    /// <param name="questions">The survey's own question results, which carry <c>Category</c>.</param>
+    /// <param name="segment">The segment, whose <c>Questions</c> carry the counts and averages.</param>
+    public static IReadOnlyDictionary<string, double?> SegmentDimensionScores(
+        IReadOnlyList<SurveyQuestionResult> questions,
+        SurveySegmentResult segment)
+    {
+        ArgumentNullException.ThrowIfNull(questions);
+        ArgumentNullException.ThrowIfNull(segment);
+
+        var categoryByQuestion = questions
+            .Where(q => !string.IsNullOrWhiteSpace(q.Category))
+            .ToDictionary(q => q.QuestionId, q => q.Category!);
+
+        return segment.Questions
+            .Where(q => categoryByQuestion.ContainsKey(q.QuestionId))
+            .GroupBy(q => categoryByQuestion[q.QuestionId], StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => PooledAverage(g.Select(q => (q.AnsweredCount, q.Average))),
+                StringComparer.Ordinal);
+    }
+
+    /// <summary>
     /// Only completed responses are aggregated.
     ///
     /// A partial response is a respondent mid-thought: their answers can still change,

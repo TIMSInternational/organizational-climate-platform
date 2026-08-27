@@ -116,6 +116,9 @@ function departmentPayload(): DepartmentAdminDashboard {
     completedResponseCount: 5,
     openActionPlanCount: 2,
     overdueActionPlanCount: 1,
+    // Null: this file proves ROUTING, not the team view's content.
+    // `DepartmentAdminDashboardView.test.tsx` owns the disclosed and withheld cases.
+    climate: null,
     // No `targetAudienceCount`, because the payload has none: see
     // `DashboardDepartmentSurveySummary`. `responseCount` here is THIS department's, and it
     // agrees with `completedResponseCount` above, which is the agreement the company-wide

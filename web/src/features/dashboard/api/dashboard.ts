@@ -110,6 +110,36 @@ export interface CompanyAdminDashboard {
 }
 
 /** `GET /dashboard/department-admin`. One department. */
+/** One dimension of the team's climate. `null` is "no score", never zero. */
+export interface DashboardDimensionScore {
+  /** The raw category key, locale-independent, as every other results surface carries it. */
+  dimension: string
+  averageScore: number | null
+}
+
+/**
+ * The team's climate reading, or the statement that it is withheld.
+ *
+ * `isSuppressed` means the department is under `minimumGroupSize`; `dimensions` is then
+ * empty and `respondentCount` is **0**, because the withheld size must not travel with the
+ * withheld reading. Render it as protected, never as "no data".
+ *
+ * Note the deliberate asymmetry with the counts beside it: `memberCount` and
+ * `completedResponseCount` on the dashboard are NOT floored. A leader already knows their
+ * own team's size; publishing one department's sub-threshold count to a company admin
+ * reading all of them is a different disclosure, which `DepartmentList` withholds there.
+ * Count unfloored, scores floored — do not "fix" one to match the other.
+ */
+export interface DashboardTeamClimate {
+  surveyId: string | null
+  surveyTitle: string | null
+  surveyEndDate: string | null
+  respondentCount: number
+  isSuppressed: boolean
+  minimumGroupSize: number
+  dimensions: DashboardDimensionScore[]
+}
+
 export interface DepartmentAdminDashboard {
   departmentId: string
   departmentName: string
@@ -121,6 +151,12 @@ export interface DepartmentAdminDashboard {
   openActionPlanCount: number
   overdueActionPlanCount: number
   activeSurveys: DashboardDepartmentSurveySummary[]
+  /**
+   * `null` when the company has no closed survey at all — a different statement from a
+   * withheld reading, and the screen says so differently: "nothing has closed yet" versus
+   * "your team is too small to report".
+   */
+  climate: DashboardTeamClimate | null
 }
 
 /**
