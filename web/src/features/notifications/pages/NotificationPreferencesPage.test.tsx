@@ -110,4 +110,48 @@ describe('NotificationPreferencesPage', () => {
     expect(alert.textContent).toContain('Request failed: 500')
     expect(screen.queryAllByRole('switch')).toHaveLength(0)
   })
+
+  /**
+   * The retry, which a merge once dropped: two design lanes wrote this file, and the one
+   * that landed was the one without it. The guarantee is that a failed load is
+   * RECOVERABLE in place — not that a particular component renders. Asserting the button
+   * alone would pass against a button that does nothing, so this drives the click and
+   * requires the second call and the form that follows it.
+   */
+  it('recovers from a failed load without a reload', async () => {
+    vi.mocked(getNotificationPreferences)
+      .mockRejectedValueOnce(new Error('Request failed: 500'))
+      .mockResolvedValueOnce(SAVED)
+    renderPage()
+
+    await screen.findByRole('alert')
+    expect(getNotificationPreferences).toHaveBeenCalledTimes(1)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(4))
+    expect(getNotificationPreferences).toHaveBeenCalledTimes(2)
+    // The error is gone, not merely covered over by the form beneath it.
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  /**
+   * The second failure must re-render the error rather than leave the first message
+   * standing -- that is why `setLoadError(null)` sits in the effect and not in the click
+   * handler. Distinct messages, so a stale render cannot pass.
+   */
+  it('shows the second failure, not the first one left on screen', async () => {
+    vi.mocked(getNotificationPreferences)
+      .mockRejectedValueOnce(new Error('Request failed: 500'))
+      .mockRejectedValueOnce(new Error('Request failed: 503'))
+    renderPage()
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Request failed: 500')
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain('Request failed: 503'),
+    )
+    expect(screen.getByRole('alert').textContent).not.toContain('500')
+  })
 })
