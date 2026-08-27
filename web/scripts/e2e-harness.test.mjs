@@ -9,6 +9,7 @@ import {
   isSignificantConsoleError,
   parseRouterPaths,
   resolveIds,
+  shapeOf,
 } from './e2e-harness.mjs'
 
 describe('parseRouterPaths', () => {
@@ -151,5 +152,40 @@ describe('isSignificantConsoleError, on the browser HTTP echo', () => {
 
   it('still keeps an error the application itself logged', () => {
     expect(isSignificantConsoleError('Uncaught TypeError: cannot read properties of null')).toBe(true)
+  })
+})
+
+describe('shapeOf', () => {
+  it('replaces every leaf with its type', () => {
+    expect(shapeOf({ id: 'x', count: 2, ok: true })).toEqual({ id: 'string', count: 'number', ok: 'boolean' })
+  })
+
+  // The difference between a list of one and a list of a thousand is data, not contract.
+  it('collapses an array to its first element', () => {
+    expect(shapeOf([{ a: 1 }, { a: 2 }, { a: 3 }])).toEqual([{ a: 'number' }])
+    expect(shapeOf([])).toEqual([])
+  })
+
+  // A nullable that came back null is a real difference from one that came back a string,
+  // and it is exactly the kind of thing a hand-written fixture gets wrong.
+  it('keeps null distinct from a value', () => {
+    expect(shapeOf({ titleEn: null })).toEqual({ titleEn: 'null' })
+  })
+
+  it('sorts keys, so two recordings of one endpoint compare equal', () => {
+    expect(JSON.stringify(shapeOf({ b: 1, a: 2 }))).toBe(JSON.stringify(shapeOf({ a: 2, b: 1 })))
+  })
+
+  // No names, no emails, no free text reach the journal.
+  it('carries no values through', () => {
+    const shape = JSON.stringify(shapeOf({ email: 'someone@real.test', answer: 'I have covered three weekends' }))
+    expect(shape).not.toContain('someone')
+    expect(shape).not.toContain('weekends')
+  })
+
+  it('stops recursing rather than following a deep structure forever', () => {
+    let deep = { leaf: 1 }
+    for (let i = 0; i < 12; i += 1) deep = { nested: deep }
+    expect(JSON.stringify(shapeOf(deep))).toContain('…')
   })
 })

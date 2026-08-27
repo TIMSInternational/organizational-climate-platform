@@ -161,3 +161,50 @@ export function resolveIds(routePattern, discovered) {
     id: owner ? discovered[owner[1]] : undefined,
   }
 }
+
+/**
+ * The key structure of a JSON value, with every leaf replaced by its type.
+ *
+ * This is what a fixture can be checked against. A fixture is right or wrong about the
+ * SHAPE of a response — which keys exist, whether a field is a list, whether a nullable
+ * came back null — and wrong about nothing else, because its values are invented anyway.
+ *
+ * Recording shapes rather than bodies also means the journal holds no names, no email
+ * addresses and no free-text answers, so it can be read and diffed without handling
+ * anybody's survey response. On a product whose central promise is anonymity, a debugging
+ * artefact full of real answers is a liability that would eventually be pasted somewhere.
+ *
+ * Arrays collapse to their FIRST element's shape. A list of a thousand rows and a list of
+ * one describe the same contract, and the difference between them is data, not shape.
+ */
+export function shapeOf(value, depth = 0) {
+  if (depth > 6) return '…'
+  if (value === null) return 'null'
+  if (Array.isArray(value)) return value.length === 0 ? [] : [shapeOf(value[0], depth + 1)]
+  if (typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value).sort().map((key) => [key, shapeOf(value[key], depth + 1)]),
+    )
+  }
+  return typeof value
+}
+
+/** Flatten a shape to dotted paths, so two shapes diff as sets of strings. */
+/**
+ * Flatten a shape to dotted paths, so two shapes diff as sets of strings.
+ *
+ * A bare `prefix[]` means an EMPTY array — one side having nothing to say about the
+ * element shape — and is deliberately distinct from `prefix[].field`, so the caller can
+ * tell "the shapes differ" from "there was nothing to compare". Conflating those two is
+ * what made the first drift report forty lines of noise around three real findings.
+ */
+export function flatten(shape, prefix = '') {
+  if (Array.isArray(shape)) {
+    return shape.length === 0 ? [`${prefix}[]`] : flatten(shape[0], `${prefix}[]`)
+  }
+  if (shape !== null && typeof shape === 'object') {
+    return Object.entries(shape).flatMap(([key, value]) =>
+      flatten(value, prefix ? `${prefix}.${key}` : key))
+  }
+  return [`${prefix}: ${shape}`]
+}

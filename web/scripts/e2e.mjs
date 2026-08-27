@@ -26,7 +26,7 @@
  * 29 fixture files can finally be checked against — until now they were a second,
  * unverified copy of the API contract.
  */
-import { mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync, appendFileSync, renameSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { chromium } from 'playwright-core'
@@ -34,6 +34,7 @@ import { STORAGE_KEYS, waitForServer } from './shot-harness.mjs'
 import {
   assertRouterShape,
   deriveMatrix,
+  shapeOf,
   fillParams,
   isSignificantConsoleError,
   parseRouterPaths,
@@ -66,8 +67,17 @@ const TRACKING = values.tracking.replace(/\/$/, '')
 const ORIGIN = values.server.replace(/\/$/, '')
 const OUT = resolve(WEB_ROOT, values.out)
 mkdirSync(OUT, { recursive: true })
+/**
+ * Written to a run-scoped file and renamed into place at the end.
+ *
+ * The first version truncated `journal.jsonl` at startup, and then a run died on the
+ * second route because the dev server had gone away — destroying the previous, good
+ * journal and leaving an empty file. The recording is the reason this harness exists;
+ * a failed run must not be able to delete the last successful one.
+ */
 const JOURNAL = resolve(OUT, 'journal.jsonl')
-writeFileSync(JOURNAL, '')
+const JOURNAL_PARTIAL = resolve(OUT, `journal.${process.pid}.jsonl`)
+writeFileSync(JOURNAL_PARTIAL, '')
 
 /** The five local accounts from the documented dev stack. */
 const ACCOUNT = {
@@ -146,7 +156,7 @@ const PUBLIC_ROUTES = {
 const BROKEN = 'a visible error state, a console error, or a page that would not load'
 
 const log = (line) => process.stdout.write(`${line}\n`)
-const record = (entry) => appendFileSync(JOURNAL, `${JSON.stringify(entry)}\n`)
+const record = (entry) => appendFileSync(JOURNAL_PARTIAL, `${JSON.stringify(entry)}\n`)
 
 async function login(role) {
   const email = `${ACCOUNT[role]}@${values.domain}`
@@ -275,6 +285,7 @@ async function main() {
       const page = await context.newPage()
       const consoleErrors = []
       const apiCalls = []
+      const bodies = []
 
       page.on('console', (message) => {
         if (message.type() === 'error' && isSignificantConsoleError(message.text())) {
@@ -291,7 +302,19 @@ async function main() {
         const url = response.url()
         if (!url.startsWith(API) && !url.startsWith(TRACKING)) return
         const path = new URL(url).pathname
-        apiCalls.push({ method: response.request().method(), path, status: response.status() })
+        const call = { method: response.request().method(), path, status: response.status() }
+        apiCalls.push(call)
+        // The SHAPE of the body, not the body. Comparing fixtures against reality needs
+        // the key structure and nothing else, and a shape carries no names, no emails and
+        // no free text — so the journal can be read, shared and diffed without handling
+        // anybody's answers. `bodies` is awaited before the page closes, because a
+        // response body is not readable after that.
+        bodies.push(
+          response.json().then(
+            (json) => { call.shape = shapeOf(json) },
+            () => {},
+          ),
+        )
       })
 
       try {
@@ -301,6 +324,8 @@ async function main() {
         await page.close()
         continue
       }
+
+      await Promise.allSettled(bodies)
 
       // The app's own verdict on itself. `role="alert"` is an error; `role="status"` on
       // the same component is an empty state, which is not one.
@@ -362,6 +387,7 @@ async function main() {
     log(`\ne2e: skipped (no id to drive them with): ${[...new Set(skips.map((s) => s.route))].join(', ')}`)
   }
 
+  renameSync(JOURNAL_PARTIAL, JOURNAL)
   writeFileSync(resolve(OUT, 'summary.json'), JSON.stringify(results, null, 2))
   log(`\ne2e: journal -> ${JOURNAL}`)
   log(`e2e: summary -> ${resolve(OUT, 'summary.json')}`)
