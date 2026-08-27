@@ -629,6 +629,8 @@ app.MapSurveyResponseEndpoints();
 app.MapSurveyDistributionEndpoints();
 app.MapSurveyDraftEndpoints();
 app.MapSurveyResultsEndpoints();
+// Literal segment, so it cannot collide with /surveys/{id:guid} however these are ordered.
+app.MapSurveyClimateTrendsEndpoints();
 app.MapSurveyHistoryEndpoints();
 app.MapSurveyTemplateEndpoints();
 app.MapMicroclimateEndpoints();
