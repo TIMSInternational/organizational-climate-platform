@@ -51,6 +51,22 @@ namespace ClimateProject.Api.Endpoints;
 /// reason the token column exists at all.</item>
 /// </list>
 ///
+/// <para><b>A third rule lives next door, and this file is why it changed.</b> An invitation
+/// to a NON-anonymous microclimate ends at <c>POST /microclimates/{id}/responses</c>, which
+/// requires a signed-in caller from the same company. That check used to run through
+/// <c>MicroclimateEndpoints.CanAccessCompany</c> — the ADMIN helper, SuperAdmin or
+/// CompanyAdmin only — so the invitee did everything the invitation card told them to, signed
+/// in, and got a 403 for holding the employee role the invitation was minted for. Nothing
+/// before this slice ever completed that journey, so nothing before this slice noticed. It
+/// now runs through <c>CanRespondForCompany</c>: membership, not administration.</para>
+///
+/// <para><b>The recovery ladder for a link that went wrong, in one place.</b>
+/// <c>resend</c> rotates a live invitee's token; <c>revoke</c> kills one; <c>reinstate</c>
+/// issues a fresh token to somebody whose invitation was revoked. The third exists because
+/// the first two were a closed loop: revoke refuses resend (deliberately), and
+/// <see cref="CreateInvitationsAsync"/> counts the dead row as "already invited", so a
+/// revoked employee had no live token and no route that could mint them one.</para>
+///
 /// <para><b>Addressed by token, not by id, and that is a change from legacy.</b> The legacy
 /// routes were <c>invitations/[id]/opened</c> and friends -- an unauthenticated write keyed
 /// by a primary key that every admin listing hands out. Anyone holding an id could advance
@@ -143,6 +159,7 @@ public static class MicroclimateInvitationEndpoints
         admin.MapPost("/{microclimateId:guid}/invitations", CreateInvitationsAsync);
         admin.MapPost("/{microclimateId:guid}/invitations/{invitationId:guid}/resend", ResendInvitationAsync);
         admin.MapPost("/{microclimateId:guid}/invitations/{invitationId:guid}/revoke", RevokeInvitationAsync);
+        admin.MapPost("/{microclimateId:guid}/invitations/{invitationId:guid}/reinstate", ReinstateInvitationAsync);
 
         // Token-addressed and unauthenticated -- see the class remarks. The state routes
         // share ONE handler, so the monotonic rule and the anonymity ceiling cannot be
@@ -284,11 +301,21 @@ public static class MicroclimateInvitationEndpoints
             }
         }
 
-        var alreadyInvited = await db.MicroclimateInvitations
+        // Scoped to THIS microclimate. Without that clause anyone invited to any pulse in the
+        // tenant would be silently skipped for every later one -- an invitation that never
+        // sends and never errors, reported only as a user id in `skippedUserIds`.
+        var existing = await db.MicroclimateInvitations
             .Where(i => i.MicroclimateId == microclimateId && userIds.Contains(i.UserId))
-            .Select(i => i.UserId)
+            .Select(i => new { i.UserId, i.Status })
             .ToListAsync(cancellationToken);
+        var alreadyInvited = existing.Select(i => i.UserId).ToList();
         var alreadyInvitedSet = alreadyInvited.ToHashSet();
+
+        // A revoked row still occupies its invitee's slot, so this route skips them. That is
+        // the right call -- reviving a revocation silently is not this route's decision to
+        // take -- but leaving the admin to work out why "invite Bob" reported `created: 0` is
+        // how a one-way door gets built. The route that opens it is named in the response.
+        var revokedSkips = existing.Count(i => i.Status == MicroclimateInvitationStatuses.Revoked);
 
         var recipients = await db.Users
             .Where(u => userIds.Contains(u.Id))
@@ -337,12 +364,25 @@ public static class MicroclimateInvitationEndpoints
 
         await db.SaveChangesAsync(cancellationToken);
 
-        var note = undeliverable > 0
-            ? $"{undeliverable} of the {created.Count} invitations just created are addressed to a reserved "
-              + "domain (.test, .invalid, .example, .localhost, example.com/.net/.org) that can never receive mail. "
-              + "No mail will be sent to those addresses and they will show as failed; fix the addresses on those "
-              + "accounts and use the resend route."
-            : null;
+        var notes = new List<string>();
+        if (undeliverable > 0)
+        {
+            notes.Add(
+                $"{undeliverable} of the {created.Count} invitations just created are addressed to a reserved "
+                + "domain (.test, .invalid, .example, .localhost, example.com/.net/.org) that can never receive mail. "
+                + "No mail will be sent to those addresses and they will show as failed; fix the addresses on those "
+                + "accounts and use the resend route.");
+        }
+
+        if (revokedSkips > 0)
+        {
+            notes.Add(
+                $"{revokedSkips} of the users in this request were skipped because their invitation to this "
+                + "microclimate is revoked. A revoked invitation is not replaced by a new one; issue that person a "
+                + "fresh token with POST /microclimates/{id}/invitations/{invitationId}/reinstate.");
+        }
+
+        var note = notes.Count > 0 ? string.Join(" ", notes) : null;
 
         return Results.Json(
             new MicroclimateInvitationBatchResult(
@@ -365,7 +405,9 @@ public static class MicroclimateInvitationEndpoints
     /// deleting the row and losing its history.</para>
     ///
     /// <para>Refused for a revoked invitation: revocation is a decision, and a resend route
-    /// that silently un-revokes is a revocation that does not mean anything.</para>
+    /// that silently un-revokes is a revocation that does not mean anything. The route that
+    /// undoes it on purpose is <see cref="ReinstateInvitationAsync"/> — without which this
+    /// 409 was one half of a pair of recoveries that excluded each other.</para>
     /// </summary>
     private static async Task<IResult> ResendInvitationAsync(
         Guid microclimateId,
@@ -414,7 +456,13 @@ public static class MicroclimateInvitationEndpoints
         }
 
         invitation.InvitationToken = MicroclimateInvitationLinks.Mint();
-        invitation.ExpiresAt = microclimate.Scheduling.EndTime;
+
+        // The REPLACEMENT token gets the same lifetime the original was minted with, not the
+        // session's whole remaining window. An admin who asked for `ExpiresInDays: 1` on a
+        // 30-day pulse and then resent used to get a 30-day token back on the first resend --
+        // a route documented as "brings the token deadline forward" silently pushing it out,
+        // on the one route whose entire purpose is replacing a link that may have leaked.
+        invitation.ExpiresAt = ResendExpiryOf(invitation, microclimate, now);
         invitation.Status = MicroclimateInvitationStatuses.Sent;
         invitation.SentAt = now;
         invitation.UpdatedAt = now;
@@ -426,6 +474,39 @@ public static class MicroclimateInvitationEndpoints
 
         await db.SaveChangesAsync(cancellationToken);
         return Results.Ok(ToDetail(invitation, now));
+    }
+
+    /// <summary>
+    /// The lifetime a resent token gets: the one the invitation was originally minted with,
+    /// re-measured from now, and never past the session's own close.
+    ///
+    /// <para>The row does not store <c>ExpiresInDays</c>, so the window is derived from the
+    /// two timestamps that ARE stored -- the deadline the admin got and the moment it was
+    /// measured from. <c>SentAt</c> is the moment the token started being useful; it falls
+    /// back to <c>CreatedAt</c> for a row that was never sent, and the two are written
+    /// together on this surface anyway.</para>
+    ///
+    /// <para>Deriving the DURATION rather than reusing the deadline is what keeps a resend
+    /// from ever handing back a token that is already dead: an invitation minted for one day
+    /// and resent on day three has a deadline in the past, and preserving it literally would
+    /// mail somebody a link that fails on arrival.</para>
+    /// </summary>
+    private static DateTimeOffset ResendExpiryOf(
+        MicroclimateInvitation invitation,
+        Microclimate microclimate,
+        DateTimeOffset now)
+    {
+        var measuredFrom = invitation.SentAt ?? invitation.CreatedAt;
+        var originalWindow = invitation.ExpiresAt - measuredFrom;
+        var endTime = microclimate.Scheduling.EndTime;
+
+        if (originalWindow <= TimeSpan.Zero)
+        {
+            return endTime;
+        }
+
+        var renewed = now + originalWindow;
+        return renewed < endTime ? renewed : endTime;
     }
 
     private static async Task<IResult> RevokeInvitationAsync(
@@ -462,6 +543,93 @@ public static class MicroclimateInvitationEndpoints
             await db.SaveChangesAsync(cancellationToken);
         }
 
+        return Results.Ok(ToDetail(invitation, now));
+    }
+
+    /// <summary>
+    /// Undo a revocation deliberately: mint a fresh token for an invitee whose link was
+    /// killed, and queue the notification that carries it.
+    ///
+    /// <para><b>Why this route exists at all.</b> Without it, revocation was a one-way door.
+    /// <c>revoke</c> is what an admin does to a leaked link; <c>resend</c> then answers 409
+    /// ("revocation is not undone by a resend", which is correct), and
+    /// <see cref="CreateInvitationsAsync"/> counts the dead row as "already invited" and skips
+    /// the user forever. The two documented recoveries were mutually exclusive and the
+    /// employee ended up with no live token and no route that could give them one.</para>
+    ///
+    /// <para><b>Why it is a separate route and not a relaxation of resend.</b> Resend is a
+    /// mechanical act on a row an admin may have forgotten they revoked; reinstating is a new
+    /// decision, and a decision should have to be spelled. It refuses anything that is not
+    /// revoked with a 409 for the same reason -- so it can never be used as a quieter resend,
+    /// and so "reinstate" in the audit log means exactly one thing.</para>
+    ///
+    /// <para><b>What the new token's deadline is.</b> Revocation clobbers <c>ExpiresAt</c> to
+    /// the moment of revocation on purpose (see <see cref="RevokeInvitationAsync"/>), so the
+    /// original window is not recoverable and <see cref="ResendExpiryOf"/> falls through to
+    /// the session's own close. An admin who wants a shorter one revokes and invites through
+    /// the batch route instead.</para>
+    /// </summary>
+    private static async Task<IResult> ReinstateInvitationAsync(
+        Guid microclimateId,
+        Guid invitationId,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var (microclimate, error) = await LoadAdministrableAsync(microclimateId, principal, db, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        var invitation = await db.MicroclimateInvitations
+            .FirstOrDefaultAsync(i => i.Id == invitationId && i.MicroclimateId == microclimateId, cancellationToken);
+        if (invitation is null)
+        {
+            return InvitationNotFound();
+        }
+
+        if (invitation.Status != MicroclimateInvitationStatuses.Revoked)
+        {
+            return Results.Json(
+                new
+                {
+                    message = $"This invitation is '{invitation.Status}', not revoked. "
+                              + "Reinstating only ever undoes a revocation; use the resend route to rotate a live token.",
+                },
+                statusCode: 409);
+        }
+
+        var now = UtcNow();
+        if (microclimate!.Scheduling.EndTime <= now || !MicroclimateStatuses.AcceptsResponses(microclimate.Status))
+        {
+            return Results.Json(
+                new { message = "This microclimate is no longer distributable; its window has closed or it is not active." },
+                statusCode: 409);
+        }
+
+        var recipient = await db.Users.FirstOrDefaultAsync(u => u.Id == invitation.UserId, cancellationToken);
+        if (recipient is null)
+        {
+            return Results.Json(new { message = "The invited user no longer exists." }, statusCode: 409);
+        }
+
+        // A NEW token, never the revoked one. The whole reason a link gets revoked is that
+        // somebody else may be holding it, and handing the old string back would reinstate
+        // them too.
+        invitation.InvitationToken = MicroclimateInvitationLinks.Mint();
+        invitation.ExpiresAt = ResendExpiryOf(invitation, microclimate, now);
+        invitation.Status = MicroclimateInvitationStatuses.Sent;
+        invitation.SentAt = now;
+        invitation.UpdatedAt = now;
+
+        // Progress timestamps survive, exactly as they do across a resend: whether this person
+        // opened the invitation that was later revoked is a fact about them, and erasing it to
+        // make the reinstatement look pristine would corrupt the session's only engagement
+        // history.
+        db.Notifications.Add(BuildInvitationNotification(microclimate, invitation, recipient, now));
+
+        await db.SaveChangesAsync(cancellationToken);
         return Results.Ok(ToDetail(invitation, now));
     }
 
@@ -533,11 +701,16 @@ public static class MicroclimateInvitationEndpoints
     /// lie the whole guarantee is built to avoid.</item>
     /// </list>
     ///
-    /// <para><b>The anonymity check runs before the progression check, and the order is
-    /// load-bearing.</b> Reversed, an anonymous session's <c>started</c> would be reported as
-    /// "not forward progress" once the invitation had already reached <c>started</c> -- which
-    /// it never can. The caller would be told the wrong reason for a write that was refused
-    /// for a completely different one.</para>
+    /// <para><b>The anonymity check runs first, and — stated plainly, because an earlier
+    /// version of this comment claimed otherwise — the order is NOT currently observable.</b>
+    /// Swapping the two blocks changes no response today: for the order to matter, an
+    /// anonymous invitation would have to already be sitting at <c>started</c> or
+    /// <c>completed</c> so the progression check could claim it first, and the ceiling is
+    /// exactly what makes that unreachable. The order is chosen because the anonymity refusal
+    /// is the stronger statement — a policy, not a state — and a reader who meets the
+    /// progression check first would reasonably conclude the ceiling was a special case of
+    /// replay handling. It is a claim about the ladder's shape, not a guard, and calling it
+    /// load-bearing was overstating a comment in a file whose value is its comments.</para>
     /// </summary>
     private static async Task<IResult> RecordStateAsync(
         string token,
