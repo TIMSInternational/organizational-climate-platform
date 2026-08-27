@@ -24,6 +24,30 @@
  * Matching reuses `compileFixtures`/`matchFixture` from the shot harness, so a fixture
  * key's `*` means here exactly what it means there. A second implementation of that
  * matching would be a second thing to get wrong.
+ *
+ * ## DRIFT IS NOT A DEFECT, AND THE FIRST RUN PROVED IT
+ *
+ * The first run found seven nullable fields the fixtures always populate, and the commit
+ * that added this tool called them branches "where a value renders as undefined or a
+ * layout collapses". That was an inference, and reading the seven consumers refuted it —
+ * every one is handled, several deliberately:
+ *
+ *   targetAudienceCount   `?? '—'` in DashboardSurveyTable
+ *   description           `?? undefined` in MicroclimateDetailPage
+ *   departmentId          branched in ActionPlanList
+ *   departmentName        documented null handling in LastOutcomePanel
+ *   companyId             `benchmarkScope.ts` exists FOR the null case (isGlobal)
+ *   nextDeadline          no render site; already null-tested in EmployeeDashboardView
+ *   lastDispatchAt        no render site at all — typed and never displayed
+ *   oldestDueAgeSeconds   likewise
+ *
+ * So what this tool measures is FIXTURE COVERAGE, not correctness. A drift says "no
+ * screenshot can show this state", which matters for design review and says nothing
+ * about whether the code survives it. TypeScript's nullable types already force the
+ * question at every render site; a fixture cannot.
+ *
+ * Report drift as a gap to be looked at. Do not report it as a bug without opening the
+ * consumer, which costs about a minute per field and was skipped once already.
  */
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
