@@ -1299,7 +1299,8 @@
     "login": "Iniciar Sesión",
     "signUp": "Registrarse",
     "home": "Inicio",
-    "systemHealth": "Estado del sistema"
+    "systemHealth": "Estado del sistema",
+    "climateTrends": "Clima en el tiempo"
   },
   "notifications": {
     "eyebrow": "Bandeja de entrada",
@@ -1895,7 +1896,23 @@
       "text": "Pregunta",
       "title": "Editar preguntas"
     },
-    "questionTypeEmojiRating": "Escala de Emojis"
+    "questionTypeEmojiRating": "Escala de Emojis",
+    "climateTrends": {
+      "title": "Clima en el tiempo",
+      "description": "Puntajes por dimensión en las encuestas cerradas de esta empresa, de la más antigua a la más reciente.",
+      "mapTitle": "Puntajes por dimensión y encuesta",
+      "groupByLabel": "Desglosar por",
+      "groupLabel": "Mostrando",
+      "wholeCompany": "Toda la empresa",
+      "byDepartment": "Departamento",
+      "loadError": "No se pudo cargar el clima en el tiempo.",
+      "noSurveysTitle": "Aún no hay encuestas cerradas",
+      "noSurveysBody": "Esta vista lee encuestas cerradas y archivadas. Cuando una encuesta cierre, sus puntajes por dimensión aparecerán aquí como una fila nueva.",
+      "nothingToDrawTitle": "Aún no hay nada que comparar",
+      "nothingToDrawBody": "Ninguna dimensión tiene puntaje en todas las encuestas mostradas, así que no hay columna que pueda leerse entre ellas.",
+      "omittedDimensions": "No se muestran, porque no tuvieron puntaje en todas las encuestas aquí: {dimensions}.",
+      "suppressedGroups": "{count} grupo(s) se reservan en todas las encuestas mostradas, porque respondieron menos de {threshold} personas."
+    }
   },
   "users": {
     "userManagement": "Gestión de Usuarios",

@@ -311,6 +311,15 @@ const ADMIN_SHARED: readonly RoleCapability[] = [
     inNav: true,
   },
   {
+    route: '/surveys/climate-trends',
+    labelKey: 'navigation.climateTrends',
+    authorizedBy:
+      'GET /surveys/climate-trends — SurveyClimateTrendsEndpoints.ResolveCompany mirrors ' +
+      'SurveyEndpoints.CanAdminister: super_admin on the company they name, company_admin on their own. ' +
+      'A leader or supervisor gets a 403, as they do on /surveys/{id}/results.',
+    inNav: true,
+  },
+  {
     route: '/surveys/templates/:id',
     labelKey: 'navigation.surveyTemplates',
     authorizedBy: 'GET /survey-templates/{id} — gates on Roles.Admin.',

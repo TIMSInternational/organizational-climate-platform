@@ -1299,7 +1299,8 @@
     "login": "Login",
     "signUp": "Sign Up",
     "home": "Home",
-    "systemHealth": "System Health"
+    "systemHealth": "System Health",
+    "climateTrends": "Climate over time"
   },
   "notifications": {
     "eyebrow": "Inbox",
@@ -1895,7 +1896,23 @@
       "text": "Question",
       "title": "Edit questions"
     },
-    "questionTypeEmojiRating": "Emoji Rating"
+    "questionTypeEmojiRating": "Emoji Rating",
+    "climateTrends": {
+      "title": "Climate over time",
+      "description": "Dimension scores across this company's closed surveys, oldest first.",
+      "mapTitle": "Dimension scores by survey",
+      "groupByLabel": "Break down by",
+      "groupLabel": "Showing",
+      "wholeCompany": "Whole company",
+      "byDepartment": "Department",
+      "loadError": "Climate over time could not be loaded.",
+      "noSurveysTitle": "No closed surveys yet",
+      "noSurveysBody": "This view reads closed and archived surveys. Once a survey closes, its dimension scores appear here as a new row.",
+      "nothingToDrawTitle": "Nothing to compare yet",
+      "nothingToDrawBody": "No dimension has a score in every survey shown, so there is no column that could be read across them.",
+      "omittedDimensions": "Not shown, because they were not scored in every survey here: {dimensions}.",
+      "suppressedGroups": "{count} group(s) are withheld in every survey shown, because fewer than {threshold} people answered."
+    }
   },
   "users": {
     "userManagement": "User Management",

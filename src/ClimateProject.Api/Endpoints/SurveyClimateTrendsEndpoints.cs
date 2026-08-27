@@ -85,6 +85,19 @@ public static class SurveyClimateTrendsEndpoints
     {
         var currentUser = principal.GetCurrentUser();
 
+        // A SuperAdmin who named no company is a 400 and not a 403, and the distinction is
+        // the whole point: they hold every permission this route could ask for, and
+        // answering Forbid tells them the opposite. The same shape as the missing-parameter
+        // 500 fixed earlier on this branch -- a status that hides the real problem sends the
+        // reader to look in the wrong place, and here it would be an access review for a
+        // request that just needed a query string.
+        if (currentUser.Role == Roles.SuperAdmin && companyId is null)
+        {
+            return Results.Json(
+                new { message = "companyId is required for a super admin: there is no all-companies climate, because dimensions are per-instrument." },
+                statusCode: 400);
+        }
+
         var scope = ResolveCompany(currentUser, companyId);
         if (scope is null)
         {
@@ -149,8 +162,9 @@ public static class SurveyClimateTrendsEndpoints
     {
         if (currentUser.Role == Roles.SuperAdmin)
         {
-            // A SuperAdmin who names no company has not asked a well-formed question --
-            // there is no "all companies" climate, because dimensions are per-instrument.
+            // Null only when they named no company, which the caller has already answered
+            // 400 for -- there is no "all companies" climate, because dimensions are
+            // per-instrument and two tenants' "Liderazgo" are not the same column.
             return requested;
         }
 
