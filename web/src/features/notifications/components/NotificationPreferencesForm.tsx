@@ -174,7 +174,22 @@ export default function NotificationPreferencesForm({
       </Alert>
 
       <div>
-        <Button type="submit" disabled={submitting}>
+        {/* `variant="primary"`, and on this page it is a correctness point rather than a
+            preference. Every switch above is inert until this button is pressed — the
+            form says so in its own first line ("nothing changes until you save") — so
+            Save is not one action among several here, it is the only one, and the page
+            is meaningless without it.
+
+            It rendered as `default`, which `buttonVariants` defines as the same carded
+            surface and hairline border `index.css` gives a bare `<button>`. Photographed
+            at 1440x900 as a leader, the result was a consent screen whose four toggles
+            and four radios all carried the accent colour while the control that commits
+            them was the flattest thing on it. `variant="primary"` is `bg-accent-blue-fill`
+            with `text-fg-on-accent`, the pairing `accentContrast.test.ts` measures at
+            5.47:1 in both themes — the same button the tracking module already gives its
+            submits (`PlanDeAccionForm`, `RegistrarAvanceForm`) and the privacy page gives
+            "Request my data", so this is the house pattern rather than a new one. */}
+        <Button type="submit" variant="primary" disabled={submitting}>
           {submitting ? t('common.saving') : t('common.save')}
         </Button>
       </div>

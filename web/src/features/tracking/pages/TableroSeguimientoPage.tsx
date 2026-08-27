@@ -5,7 +5,7 @@ import { getTrackingApiBaseUrl } from '../api/config'
 import { getNodoNames } from '../api/trackingPickers'
 import SemaforoChip from '../components/SemaforoChip'
 import SemaforoSummary from '../components/SemaforoSummary'
-import { canViewConsolidado, canViewTablero } from '../trackingAccess'
+import { canCreatePlan, canViewConsolidado, canViewTablero, readTrackingClaims } from '../trackingAccess'
 import { formatPercentOrUnavailable } from '../trackingUnits'
 import { useCompanyScope } from '../../../company-context'
 import { getToken } from '../../../auth/token'
@@ -14,6 +14,7 @@ import { calendarDay } from '../../../lib/calendarDay'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import {
+  Button,
   EmptyState,
   ErrorState,
   LoadingRegion,
@@ -73,6 +74,11 @@ export default function TableroSeguimientoPage() {
   const role = typeof claims?.role === 'string' ? claims.role : undefined
   const allowed = canViewTablero(role)
   const isAdmin = canViewConsolidado(role)
+  // The same predicate `PlanesAccionListPage` gates its "Nuevo plan" button on, asked
+  // here so the two screens cannot disagree about whether this reader may create a plan.
+  // `readTrackingClaims()` rather than the payload decoded above: it is the module's one
+  // reader of `sub`/`role`/`nodoId`, and `canCreatePlan` needs the node.
+  const mayCreate = canCreatePlan(readTrackingClaims())
 
   // Trimmed and normalised to null: `?nodoId=` with nothing after it is not a
   // choice, and passing the empty string would ask the server for the nodo whose
@@ -151,12 +157,13 @@ export default function TableroSeguimientoPage() {
 
   return (
     <div>
-      {/* Nav catalogue for the title, `tracking.*` for the longer line — see
-          `ConsolidadoPage`. The eyebrow is the nodo rather than the nav section,
-          because which board this is matters more than which group it sits in. */}
+      {/* Title and line both from `tracking.*` — see `ConsolidadoPage` for why the
+          module titles itself in its own language rather than reaching into the
+          translated `navigation` namespace. The eyebrow is the nodo rather than the nav
+          section, because which board this is matters more than which group it sits in. */}
       <PageTopBar
         eyebrow={nodoLabel}
-        title={t('navigation.trackingDashboard')}
+        title={t('tracking.tableroTitle')}
         description={t('tracking.tableroDescription')}
       />
 
@@ -189,6 +196,45 @@ export default function TableroSeguimientoPage() {
                   fill
                   title={t('tracking.tableroEmptyTitle')}
                   description={t('tracking.tableroEmptyBody')}
+                  // A door, for the one reader who can open it.
+                  //
+                  // Photographed as a leader against a node with no plans: this state
+                  // was the whole screen, and it said "todavía no se ha registrado
+                  // ningún plan de acción para este nodo" to the very person whose job
+                  // §7 says that is — with nothing to click. A node leader's first
+                  // visit to their own board is precisely the moment it is empty, so
+                  // the emptiest version of this page was the one that helped least.
+                  //
+                  // `/tracking/planes` and not a form: creation lives there (see
+                  // `PlanesAccionListPage`'s note on why there is no `/nuevo` route),
+                  // it is in this role's `ROLE_CAPABILITIES` entry, and
+                  // `PlanesAccionEndpoints.ListAsync` scopes it server-side — so this
+                  // is a destination the reader provably loads rather than a button
+                  // that would come back 403, which is the mistake #138 was opened for.
+                  //
+                  // Gated on `canCreatePlan` rather than on the role, because a caller
+                  // whose `nodoId` claim is blank passes the role check and is then
+                  // refused on every node they could pick. They get the plain empty
+                  // state, which is the true one for them.
+                  //
+                  // A `Button asChild variant="primary"` and not a bare `<Link>`, and
+                  // that is a measurement rather than a taste. Measured off
+                  // `styles/tokens.css`: `--admin-accent-blue` #0d9488 as ink on this
+                  // page's white card is **3.74:1** — under WCAG AA's 4.5:1 for normal
+                  // text — while it is 6.05:1 in dark, so a link styled the usual way
+                  // would have been another of this repo's light-only contrast bugs.
+                  // The primary button is `--admin-accent-blue-fill` #0f766e under
+                  // `--admin-font-on-accent` #ffffff, the pairing `accentContrast.test.ts`
+                  // measures at 5.47:1 in *both* themes. It also matches how
+                  // `PlanesAccionListPage` draws the same action, so a reader meets one
+                  // control for one job.
+                  action={
+                    mayCreate ? (
+                      <Button asChild variant="primary">
+                        <Link to="/tracking/planes">{t('tracking.actions.createPlan')}</Link>
+                      </Button>
+                    ) : undefined
+                  }
                 />
               ) : (
                 <Table>

@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
+import { Plus } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
-import { EmptyState, Table } from '../../../components/ui'
+import { Button, EmptyState, Table } from '../../../components/ui'
 import { statusLabel } from '../../surveys/surveyVocabulary'
 import { calendarDay } from '../../../lib/calendarDay'
 
@@ -81,6 +82,23 @@ export default function DashboardSurveyTable({
       <EmptyState
         title={t('dashboard.noOngoingSurveys')}
         description={t('dashboard.startGatheringInsights')}
+        // The copy tells the reader to create their first survey; without this it gave
+        // them nothing to press, on the one screen this persona opens first. The button
+        // is gated on `canOpenSurvey` for the same reason the row links are: `/surveys/new`
+        // posts to `POST /surveys`, which is `SurveyEndpoints.CanAdminister`, so on the
+        // department dashboard this would be a primary action that 403s — the exact
+        // defect `roleCapabilities.ts` was written up about. A leader sees the sentence
+        // and no button, which is honest: creating a survey is not theirs to do.
+        action={
+          canOpenSurvey ? (
+            <Button asChild size="sm" variant="primary">
+              <Link to="/surveys/new">
+                <Plus aria-hidden="true" />
+                {t('dashboard.newSurvey')}
+              </Link>
+            </Button>
+          ) : undefined
+        }
       />
     )
   }

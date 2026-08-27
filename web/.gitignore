@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# Output of scripts/e2e.mjs — the live API journal and per-route summary.
+.e2e/

@@ -246,6 +246,14 @@
       }
     ]
   },
+  "GET /surveys/dimensions": {
+    "dimensions": [
+      "Comunicación",
+      "Liderazgo",
+      "Reconocimiento",
+      "Carga de trabajo"
+    ]
+  },
   "GET /surveys/*": {
     "id": "6ca1a413-0e15-478b-a225-2e82ef13f494",
     "title": "Clima Organizacional 2026",

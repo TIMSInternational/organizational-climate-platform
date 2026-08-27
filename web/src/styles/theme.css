@@ -309,3 +309,60 @@
     }
   }
 }
+
+/* ===========================================================================
+ * Storefront theme — exposes the `--storefront-*` tokens as utilities
+ * ===========================================================================
+ *
+ * A second `@theme inline` block; Tailwind v4 merges them. Kept separate from
+ * the admin block above so the two systems stay visibly distinct: a screen
+ * uses `bg-store-*` or `bg-surface-*`, never both.
+ *
+ * `inline` for the same reason the admin block gives: the utility compiles to
+ * `var(--storefront-*)` and so re-resolves under `[data-admin-theme="dark"]`.
+ * ========================================================================= */
+
+@theme inline {
+  /* -- Typefaces --------------------------------------------------------- */
+  --font-store-sans: var(--storefront-font-sans);
+  --font-store-serif: var(--storefront-font-serif);
+
+  /* -- Surfaces ---------------------------------------------------------- */
+  --color-store-ground: var(--storefront-bg-ground);
+  --color-store-surface: var(--storefront-bg-surface);
+
+  /* -- Foreground -------------------------------------------------------- */
+  --color-store-fg: var(--storefront-fg-primary);
+  --color-store-heading: var(--storefront-fg-heading);
+  --color-store-body: var(--storefront-fg-body);
+  --color-store-faint: var(--storefront-fg-faint);
+  --color-store-on-accent: var(--storefront-fg-on-accent);
+
+  /* -- Lines ------------------------------------------------------------- */
+  --color-store-rule: var(--storefront-line-rule);
+  --color-store-rule-soft: var(--storefront-line-soft);
+  --color-store-control: var(--storefront-line-control);
+
+  /* -- Accent and ramp --------------------------------------------------- */
+  --color-store-accent: var(--storefront-accent);
+  --color-store-accent-hover: var(--storefront-accent-hover);
+  --color-store-ramp-1: var(--storefront-ramp-1);
+  --color-store-ramp-2: var(--storefront-ramp-2);
+  --color-store-ramp-3: var(--storefront-ramp-3);
+  --color-store-ramp-4: var(--storefront-ramp-4);
+  --color-store-ramp-1-text: var(--storefront-ramp-1-text);
+  --color-store-ramp-2-text: var(--storefront-ramp-2-text);
+  --color-store-ramp-3-text: var(--storefront-ramp-3-text);
+  --color-store-ramp-4-text: var(--storefront-ramp-4-text);
+
+  /* -- Elevation, geometry, type ----------------------------------------- */
+  --shadow-store-card: var(--storefront-shadow-card);
+  --radius-store-card: var(--storefront-radius-card);
+  --radius-store-panel: var(--storefront-radius-panel);
+  --text-store-display: var(--storefront-text-display);
+  --text-store-h2: var(--storefront-text-h2);
+  --text-store-h3: var(--storefront-text-h3);
+  --text-store-lede: var(--storefront-text-lede);
+  --tracking-store-kicker: var(--storefront-tracking-kicker);
+  --tracking-store-display: var(--storefront-tracking-display);
+}

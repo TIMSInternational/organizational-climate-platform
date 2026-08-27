@@ -51,14 +51,44 @@ function b64url(value) {
  *
  * The real API rejects this token. It is only ever good enough for the client-side
  * gate, and every request the page then makes is answered from a fixture.
+ *
+ * ## `nodoId`, and why its absence was photographing the wrong screen
+ *
+ * `JwtTokenService.cs` mints `new("nodoId", claims.NodoId ?? string.Empty)`
+ * unconditionally, and `TrackingIdentifiers.NodoIdClaimForUser` derives that value as
+ * the user's department external id, or `unassigned-<companyId>` when they have no
+ * department row — **null only for a company-less super_admin**. So every real leader,
+ * supervisor and employee holds a non-empty `nodoId`.
+ *
+ * This harness minted none, and `features/tracking/trackingAccess.ts` reads it:
+ * `canCreatePlan` requires `claims.nodoExternalId !== ''`, and `canManagePlan` refuses
+ * a blank on either side. The consequence was not a subtle one — every screenshot ever
+ * taken of `/tracking/planes` as a `leader` came out with **no "Nuevo plan" button**,
+ * because the harness was photographing a claim shape the API cannot emit. The node
+ * leader's primary action was invisible to the only instrument in this repository that
+ * can see a screen.
+ *
+ * The default therefore mirrors the departmentless branch of `NodoIdClaimForUser`
+ * rather than being left blank, and `--nodo` names a specific node for the case that
+ * matters most: `canManagePlan` compares this claim against each plan's
+ * `nodoExternalId`, so a fixture whose plans sit on `nodo-operaciones` only exercises
+ * a leader's write affordances when the token says so too.
  */
-export function buildDevToken({ role, companyId, name, userId = '00000000-0000-0000-0000-000000000001', now = Date.now() }) {
+export function nodoIdClaim({ nodoId, companyId }) {
+  if (typeof nodoId === 'string' && nodoId.trim() !== '') return nodoId.trim()
+  // `NodoIdClaimForUser`'s own fallback. A company-less caller is a global super_admin,
+  // whose nodo scoping is short-circuited by the role check before it is ever read.
+  return companyId ? `unassigned-${companyId}` : ''
+}
+
+export function buildDevToken({ role, companyId, name, nodoId, userId = '00000000-0000-0000-0000-000000000001', now = Date.now() }) {
   const claims = {
     sub: userId,
     name,
     email: 'shot@example.invalid',
     role,
     companyId,
+    nodoId: nodoIdClaim({ nodoId, companyId }),
     isActive: 'true',
     exp: Math.floor(now / 1000) + 60 * 60 * 24,
   }

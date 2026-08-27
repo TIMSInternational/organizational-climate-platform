@@ -122,16 +122,27 @@ const PAIRS: readonly Pair[] = [
  *
  * Light is the value this screen ACTUALLY shipped and could not be read in:
  * #78879c was `--admin-font-tertiary` when the map's labels were unreadable on
- * it (3.66:1 on the panel, 3.40:1 on a tile). Dark is one step below the
- * matching historical value — #74839a failed on a tile (4.21:1) but cleared the
- * dark panel at 4.54:1, and a control that only fails on one of the two surfaces
- * it is looped over is not a control. It is constructed, and says so.
+ * it (3.66:1 on the panel, 3.40:1 on a tile — and still 3.66:1 / 3.27:1 on the
+ * violet repaint's surfaces, so the historical value keeps doing its job).
+ *
+ * Dark WAS `#738298` — one step below the matching historical `#74839a`, which
+ * failed on a tile (4.21:1) but cleared the then-dark panel at 4.54:1, and a
+ * control that only fails on one of the two surfaces it is looped over is not a
+ * control. The Conócete repaint then deepened the dark surfaces
+ * (`--admin-bg-panel` #150f29, `--admin-bg-icon-box` #1b1433) and that value
+ * drifted ABOVE the floor: 4.75:1 on the panel and 4.5003:1 on a tile, turning
+ * this "must fail" assertion red — the control working as designed, just aimed
+ * at surfaces that no longer exist. It is re-pinned to #5d6b80, the employee
+ * redesign's own fourth dark ink (`--ink-4`, named in tokens.css), which
+ * genuinely fails on both current surfaces — 3.43:1 on the panel, 3.25:1 on a
+ * tile — with a full point of headroom instead of three ten-thousandths. It is
+ * constructed, and says so.
  *
  * The source ban further down is kept as it was. Those three files use
  * `--admin-font-secondary`, which is stronger than the floor either way, and
  * relaxing another slice's guard is not this issue's to do.
  */
-const REJECTED_INK = { light: '#78879c', dark: '#738298' } as const
+const REJECTED_INK = { light: '#78879c', dark: '#5d6b80' } as const
 
 /** Surfaces ClimateMap is rendered on. */
 const MAP_SURFACES = ['--admin-bg-panel', '--admin-bg-icon-box'] as const
