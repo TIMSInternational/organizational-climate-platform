@@ -563,11 +563,14 @@ public static class MicroclimateInvitationEndpoints
     /// revoked with a 409 for the same reason -- so it can never be used as a quieter resend,
     /// and so "reinstate" in the audit log means exactly one thing.</para>
     ///
-    /// <para><b>What the new token's deadline is.</b> Revocation clobbers <c>ExpiresAt</c> to
-    /// the moment of revocation on purpose (see <see cref="RevokeInvitationAsync"/>), so the
-    /// original window is not recoverable and <see cref="ResendExpiryOf"/> falls through to
-    /// the session's own close. An admin who wants a shorter one revokes and invites through
-    /// the batch route instead.</para>
+    /// <para><b>What the new token's deadline is, and why it is NOT
+    /// <see cref="ResendExpiryOf"/>.</b> Revocation clobbers <c>ExpiresAt</c> to the moment of
+    /// revocation on purpose (see <see cref="RevokeInvitationAsync"/>). That destroys the
+    /// original window rather than merely shortening it: the derived lifetime
+    /// <c>ExpiresAt - SentAt</c> becomes the few seconds between the send and the revocation,
+    /// so reusing the resend rule here mints a token that is dead on arrival. It is the
+    /// session's own close, plainly — the row no longer carries an admin's ask to honour.
+    /// Somebody who wants a shorter one uses the batch route's <c>ExpiresInDays</c>.</para>
     /// </summary>
     private static async Task<IResult> ReinstateInvitationAsync(
         Guid microclimateId,
@@ -618,7 +621,7 @@ public static class MicroclimateInvitationEndpoints
         // somebody else may be holding it, and handing the old string back would reinstate
         // them too.
         invitation.InvitationToken = MicroclimateInvitationLinks.Mint();
-        invitation.ExpiresAt = ResendExpiryOf(invitation, microclimate, now);
+        invitation.ExpiresAt = microclimate.Scheduling.EndTime;
         invitation.Status = MicroclimateInvitationStatuses.Sent;
         invitation.SentAt = now;
         invitation.UpdatedAt = now;

@@ -1046,7 +1046,8 @@ public class MicroclimateInvitationEndpointsTests : IAsyncLifetime
     public async Task A_revoked_invitee_can_be_issued_a_new_token_and_the_batch_route_says_how()
     {
         var admin = await AdminAAsync();
-        var microclimateId = await SeedMicroclimateAsync(_companyAId);
+        var endTime = DateTimeOffset.UtcNow.AddHours(4);
+        var microclimateId = await SeedMicroclimateAsync(_companyAId, endTime: endTime);
         var userId = await SeedEmployeeAsync(_companyAId);
         var invitationId = await InviteAsync(admin, microclimateId, userId);
         var leaked = await TokenOfAsync(invitationId);
@@ -1073,12 +1074,28 @@ public class MicroclimateInvitationEndpointsTests : IAsyncLifetime
         var row = await RowAsync(invitationId);
         Assert.Equal(MicroclimateInvitationStatuses.Sent, row.Status);
 
+        // The reinstated token is LIVE until the session closes, and this is the assertion
+        // that caught the first attempt at this route. Revoking clobbers `expires_at` to the
+        // moment of revocation, so the resend rule -- "keep the lifetime this invitation was
+        // minted with", derived as `expires_at - sent_at` -- resolves to the few seconds
+        // between the send and the revocation, and reinstating minted a token that was
+        // already dead. It answered 410 to the person it was issued for.
+        Assert.Equal(endTime, row.ExpiresAt, TimeSpan.FromSeconds(1));
+        Assert.True(row.ExpiresAt > DateTimeOffset.UtcNow, $"the new token expired at {row.ExpiresAt:o}");
+
         // A NEW token. The reason a link is revoked is that somebody else may hold it, so
         // handing the old string back would reinstate them too.
+        //
+        // The leaked one answers 404 `not_found` and NOT 410 `revoked` -- it no longer names
+        // a row at all, and a rotated-away token has to be indistinguishable from one that
+        // never existed or the route becomes an oracle for "this string used to be a real
+        // invitation". Same answer `Resend_rotates_the_token_and_keeps_the_history` pins for
+        // the resend path. (This assertion said 410 first; the suite was right and I was
+        // wrong.)
         Assert.NotEqual(leaked, row.InvitationToken);
         Assert.Equal(
-            HttpStatusCode.Gone,
-            (await Anonymous().GetAsync($"/microclimate-invitations/{leaked}")).StatusCode);
+            (HttpStatusCode.NotFound, "not_found"),
+            await ReadFailureAsync(await Anonymous().GetAsync($"/microclimate-invitations/{leaked}")));
         Assert.Equal(
             HttpStatusCode.OK,
             (await Anonymous().GetAsync($"/microclimate-invitations/{row.InvitationToken}")).StatusCode);
