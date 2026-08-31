@@ -129,23 +129,45 @@ public static class SurveyAggregation
             .OrderBy(g => g.Key, StringComparer.Ordinal)
             .Select(group =>
             {
-                // Weighted by answered count: a question 40 people answered moves the
-                // dimension more than one 3 people answered, exactly as pooling every
-                // numeric answer would. NumericStats already made Average null for any
-                // question whose values do not all parse, so such a question contributes
-                // no weight here either -- one rule, applied once.
-                var scored = group.Where(q => q.Average is not null).ToList();
-                var weight = scored.Sum(q => q.AnsweredCount);
-
                 return new SurveyDimensionResult(
                     group.Key,
                     group.Count(),
                     group.Sum(q => q.AnsweredCount),
-                    weight == 0
-                        ? null
-                        : Math.Round(scored.Sum(q => q.Average!.Value * q.AnsweredCount) / weight, 2));
+                    PooledAverage(group.Select(q => (q.AnsweredCount, q.Average))));
             })
             .ToList();
+    }
+
+    /// <summary>
+    /// The pooled mean of a set of per-question averages, weighted by answered count.
+    ///
+    /// **Why this is a shared function and not two identical expressions.** A question 40
+    /// people answered moves a dimension more than one 3 people answered, so the rollup is
+    /// weighted -- arithmetically the pooled mean over every numeric answer.
+    /// <see cref="NumericStats"/> already made <c>Average</c> null for any question whose
+    /// values do not all parse, so such a question contributes no weight here either: one
+    /// rule, applied once.
+    ///
+    /// Two callers need exactly this arithmetic: <see cref="DimensionRollup"/>, which rolls
+    /// the whole survey's questions up per category, and <see cref="SurveyClimateTrends"/>,
+    /// which rolls ONE SEGMENT'S questions up per category so a department's dimension score
+    /// can be plotted over time. Had the second been written as its own copy of the
+    /// expression, a company's climate map and its climate-over-time screen could print two
+    /// different numbers for the same department, dimension and survey -- and the copy that
+    /// drifted would be the one nobody reads next to the other. That is the same drift
+    /// #88's boundary exists to make impossible, one level down.
+    ///
+    /// Rounded to 2dp here rather than by the caller for the same reason: a presentation
+    /// that rounds differently is a presentation that disagrees.
+    /// </summary>
+    internal static double? PooledAverage(IEnumerable<(int AnsweredCount, double? Average)> questions)
+    {
+        var scored = questions.Where(q => q.Average is not null).ToList();
+        var weight = scored.Sum(q => q.AnsweredCount);
+
+        return weight == 0
+            ? null
+            : Math.Round(scored.Sum(q => q.Average!.Value * q.AnsweredCount) / weight, 2);
     }
 
     /// <summary>

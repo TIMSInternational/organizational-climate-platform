@@ -88,6 +88,7 @@ const { values, positionals } = parseArgs({
     role: { type: 'string', default: 'super_admin' },
     name: { type: 'string', default: 'María Herrera' },
     company: { type: 'string', default: DEFAULT_COMPANY_ID },
+    nodo: { type: 'string' },
     lang: { type: 'string', default: 'en' },
     fixtures: { type: 'string' },
     server: { type: 'string' },
@@ -113,6 +114,11 @@ Options:
                      supervisor | employee   (default super_admin)
   --name <n>         name claim shown in the sidebar user menu
   --company <guid>   companyId claim + stored company context
+  --nodo <id>        nodoId claim — the tracking service's node scoping. Defaults
+                     to unassigned-<company>, the same value the API mints for a
+                     user with no department. Name a real node (e.g.
+                     nodo-operaciones) to photograph the write affordances a node
+                     leader has over that node's own plans
   --lang <l>         en | es                 (default en)
   --fixtures <file>  JSON map of "METHOD /path" -> response body
                      (default scripts/shot-fixtures/default.json)
@@ -272,7 +278,12 @@ async function main() {
       },
       [
         STORAGE_KEYS,
-        buildDevToken({ role: values.role, companyId: values.company, name: values.name }),
+        buildDevToken({
+          role: values.role,
+          companyId: values.company,
+          name: values.name,
+          nodoId: values.nodo,
+        }),
         theme,
         values.lang,
         values.company,

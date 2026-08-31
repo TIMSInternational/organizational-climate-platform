@@ -6,6 +6,32 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!--
+    THE API'S appsettings.json IS THE ONE THAT SHIPS.
+
+    ClimateTracking.Api references this project so one container is both the API and the
+    scheduler (#219). Both projects carry an appsettings.json at their root, and both
+    want to land at /app/publish/appsettings.json, so `dotnet publish` of the API failed
+    outright with NETSDK1152 — which meant the deploy path added for #219 could not
+    build at all. Nothing caught it because deploy-tracking-prod.yml is a deploy
+    workflow, not a PR check: no pull request has ever built this image.
+
+    Excluded rather than suppressed with ErrorOnDuplicatePublishOutputFiles. That flag
+    lets the SDK pick a winner, and the file below is a DEVELOPMENT config: a localhost
+    connection string with a placeholder password, and three deliberately blank required
+    values. Shipping it as the production appsettings.json would be strictly worse than
+    the build error, and non-deterministically so.
+
+    Nothing is lost. Co-hosted, the workers read IConfiguration from the API's host,
+    which is the API's appsettings.json plus the container's environment. This file
+    serves only ClimateTracking.Workers' own standalone Program.cs, and that host is
+    kept unbuilt as the documented opt-out (see ClimateTracking.Api.csproj) precisely
+    because App Runner needs something that binds a port.
+  -->
+  <ItemGroup>
+    <Content Update="appsettings*.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />

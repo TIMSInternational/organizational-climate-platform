@@ -230,7 +230,16 @@ export default function PlanesAccionListPage() {
         </Card>
       )}
 
-      <SemaforoSummary counts={counts} total={plans.length} />
+      {/* Hidden while loading and on failure, for the reason ConsolidadoPage states
+          about its own strip: "a strip of zeros is a reading nobody took". With the
+          tracking service unreachable this rendered PLANES DE ACCIÓN 0, Atrasado 0,
+          En riesgo 0, Al día 0 above the error panel — four confident readings taken
+          from an empty array, saying "you have nothing assigned and nothing is late"
+          when the truth was "we could not ask". A zero that means "unknown" is worse
+          than an error message, because it is plausible. */}
+      {!loading && !loadError && (
+        <SemaforoSummary counts={counts} total={plans.length} />
+      )}
 
       <Card>
         <CardHeader>
@@ -245,9 +254,18 @@ export default function PlanesAccionListPage() {
           />
 
           {loadError ? (
+            /* `tracking.serviceUnavailable*`, the same pair Consolidado and Tablero
+               already use, rather than errors.generic + the raw exception. Two
+               things were wrong with the old pair: `loadError` is
+               `err.message`, so a browser TypeError put the literal string
+               "Failed to fetch" in front of an end user, and `errors.generic`
+               resolves to the reader's locale — printing an English sentence
+               inside a module whose copy is Spanish-only and test-enforced. The
+               page said, in two languages at once, nothing the reader could act
+               on. */
             <NetworkError
-              title={t('errors.generic')}
-              description={loadError}
+              title={t('tracking.serviceUnavailableTitle')}
+              description={t('tracking.serviceUnavailableBody')}
               onRetry={() => void reload()}
               retryText={t('common.retry')}
             />

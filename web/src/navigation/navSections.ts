@@ -19,6 +19,7 @@ import {
   ListChecks,
   Network,
   SquareKanban,
+  TrendingUp,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -159,6 +160,22 @@ const SURVEY_TEMPLATES_ITEM: NavItem = {
   labelKey: 'navigation.surveyTemplates',
   href: '/surveys/templates',
   icon: LayoutTemplate,
+}
+
+// Climate over time. Admin-only for the same reason the listing above is: the endpoint
+// authorizes through the same CanAdminister rule the results routes use, so a leader or
+// supervisor following this link would get a 403. No companyId is interpolated -- a
+// super_admin's selection comes from `company-context` and a company_admin's from their
+// claim, exactly as DEPARTMENTS_ITEM does it.
+//
+// Placed immediately after the template catalogue and NOT nested under a group, on the
+// warning DEPARTMENTS_ITEM records: `leafNavItems` flattens a group's children ahead of
+// the top-level rows that follow it, so a nested entry would take another item's mobile
+// tab slot.
+const CLIMATE_TRENDS_ITEM: NavItem = {
+  labelKey: 'navigation.climateTrends',
+  href: '/surveys/climate-trends',
+  icon: TrendingUp,
 }
 
 // Departments (#142). Admin-only: `/admin/departments` allows a super_admin
@@ -354,6 +371,7 @@ export function buildNavSections(
           // load-bearing here.
           SURVEYS_ITEM,
           SURVEY_TEMPLATES_ITEM,
+          CLIMATE_TRENDS_ITEM,
           DEPARTMENTS_ITEM,
           // System Health (#275) is appended here rather than filed under System
           // Administration beside Companies and System settings, where it belongs by
@@ -418,6 +436,7 @@ export function buildNavSections(
           // keeps the mobile tab slot navSections.test.ts pins for it.
           SURVEYS_ITEM,
           SURVEY_TEMPLATES_ITEM,
+          CLIMATE_TRENDS_ITEM,
           {
             labelKey: 'navigation.benchmarks',
             href: '/analytics/benchmarks',

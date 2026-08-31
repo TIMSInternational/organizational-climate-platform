@@ -12,6 +12,7 @@ import {
 import { notifyNotificationsChanged, subscribeToNotificationChanges } from '../notificationsChanged'
 import { formatNotificationTimestamp } from '../formatTimestamp'
 import { groupNotificationsByDay, type NotificationGroupKey } from '../groupByDay'
+import { surveyRespondPathFor } from '../surveyLink'
 
 /** Tags this page's own announcements so it can ignore them. See the effect below. */
 const INBOX_PAGE = Symbol('notifications-inbox-page')
@@ -62,8 +63,13 @@ const TYPE_LABEL_PATH: Record<string, string> = {
  * changed, and does it want anything from me* — behind a status column. The redesign
  * renders one hairline-separated row per notification under a recency heading, with
  * the unread mark, the title, the message, what kind of notification it is, and the
- * one action it offers. `Table`'s scroll container (#218) is not lost by this: there
+ * actions it offers. `Table`'s scroll container (#218) is not lost by this: there
  * is no fixed-width row left to scroll, and prose reflows instead.
+ *
+ * Those actions are at most two, and only one of them is ever the point: a row that
+ * announces a survey invitation carries a link to the survey (`../surveyLink.ts`) above
+ * "Mark as Read". Until it did, this page told a respondent that a survey was open to
+ * them and offered them no way to open it.
  *
  * Read state is still carried **in words** as well as by the dot and the weight — the
  * dot is 8px of colour and nothing else (`size-2`, and `theme.css` sets `--spacing` to
@@ -263,6 +269,10 @@ export default function NotificationsInboxPage() {
                 {group.items.map((notification) => {
                   const unread = isUnread(notification)
                   const typePath = TYPE_LABEL_PATH[notification.type]
+                  // The route this row is *about*, when the payload names one. See
+                  // `../surveyLink.ts` — and the note on the action column below for why
+                  // an inbox that could not offer it was the employee's dead end.
+                  const respondPath = surveyRespondPathFor(notification)
                   return (
                     <li
                       key={notification.id}
@@ -319,6 +329,27 @@ export default function NotificationsInboxPage() {
                         >
                           {formatNotificationTimestamp(notification.createdAt, locale)}
                         </time>
+                        {/* The way out of the row, and the reason this column exists at
+                            all for a respondent.
+
+                            An invitation used to be announced here and nowhere
+                            actionable: the only control on a `survey_invitation` was
+                            "Mark as Read", so the employee — the persona whose whole
+                            relationship with this product is *get invited, answer* — read
+                            "a survey is open to you" on a page that could not open it.
+
+                            `primary` and drawn above "Mark as Read": between "answer the
+                            survey" and "tidy the inbox", exactly one is the reason the
+                            notification was sent. It is a `Link`, not a fetch — the
+                            respond endpoint authorizes the reader from their own user row,
+                            so this needs no permission the row's arrival did not already
+                            prove. Absent for every notification whose payload names no
+                            survey, which leaves those rows exactly as they were. */}
+                        {respondPath && (
+                          <Button variant="primary" size="sm" asChild>
+                            <Link to={respondPath}>{t('dashboard.respondNow')}</Link>
+                          </Button>
+                        )}
                         {unread && (
                           <Button
                             variant="outline"

@@ -31,6 +31,12 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!--
+      The secrets store this service's five local-dev values live in. Committed on
+      purpose: the id is a pointer, not a secret, and without it in the project every
+      developer's `dotnet user-secrets` writes to a different store.
+    -->
+    <UserSecretsId>86bbfb95-a955-44a2-bbea-2152b1306109</UserSecretsId>
   </PropertyGroup>
 
   <!--

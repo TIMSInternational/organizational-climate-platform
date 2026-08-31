@@ -296,6 +296,54 @@ export interface ClimateMapModel {
   omittedSegments: string[]
 }
 
+/** The colour scale a climate grid is drawn against: what "on target" is, and how far the ramp runs. */
+export interface ClimateScale {
+  /**
+   * The mean of every visible cell — what the colours are relative to.
+   *
+   * `null` when nothing was disclosed: there is then no cell to average, and
+   * `ClimateMap` renders every row protected rather than colouring against a number
+   * nobody could have set.
+   */
+  target: number | null
+  /** Points from the target at which the ramp saturates. */
+  extremeAt: number
+  /** Points either side of the target that still read as "on target". */
+  deadBandAt: number
+}
+
+/**
+ * The scale, derived from the cells actually on screen.
+ *
+ * **Shared rather than repeated.** Two grids in this product are drawn as climate maps:
+ * the single-survey map, whose rows are groups, and the climate-over-time map, whose rows
+ * are surveys. Both measure the organisation against *itself* — the target is the mean of
+ * the visible cells — because nothing in either payload carries a target and inventing a
+ * fixed one would colour every cell against a number nobody set. Written twice, the two
+ * grids would eventually disagree about what "on target" means while both looked right in
+ * isolation, and a reader moving between them would read the same score as two different
+ * colours. See `SurveyAggregation.PooledAverage` for the same argument one layer down.
+ *
+ * The target is computed from the **rounded** cell values so the caption's number is
+ * exactly the mean of the numbers in the grid. `extremeAt` is the largest distance any
+ * cell sits from the target, so the ramp always uses its full range whatever the answer
+ * scale is — a 1-5 Likert and a 0-10 rating cannot share one hardcoded band width without
+ * saturating on one of them.
+ */
+export function climateScale(cells: readonly number[]): ClimateScale {
+  // No disclosed cell means no mean to take. `reduce`-then-divide would return
+  // NaN here and `Math.max()` over nothing returns -Infinity, and both would be
+  // handed to the colour scale as if they were readings.
+  const target =
+    cells.length === 0 ? null : round1(cells.reduce((sum, cell) => sum + cell, 0) / cells.length)
+  const extremeAt =
+    target === null
+      ? MIN_EXTREME
+      : Math.max(Math.max(...cells.map((cell) => Math.abs(cell - target))), MIN_EXTREME)
+
+  return { target, extremeAt, deadBandAt: extremeAt / DEAD_BAND_FRACTION }
+}
+
 /**
  * The whole climate map, or `null` when there is nothing honest to draw.
  *
@@ -372,15 +420,7 @@ export function buildClimateMap(
   }))
 
   const cells = scoredRows.flatMap((row) => row.scores)
-  // No disclosed cell means no mean to take. `reduce`-then-divide would return
-  // NaN here and `Math.max()` over nothing returns -Infinity, and both would be
-  // handed to the colour scale as if they were readings.
-  const target =
-    cells.length === 0 ? null : round1(cells.reduce((sum, cell) => sum + cell, 0) / cells.length)
-  const extremeAt =
-    target === null
-      ? MIN_EXTREME
-      : Math.max(Math.max(...cells.map((cell) => Math.abs(cell - target))), MIN_EXTREME)
+  const { target, extremeAt } = climateScale(cells)
 
   const scoresByKey = new Map(scoredRows.map((row) => [row.segment.key, row.scores]))
   const rows: ClimateMapRow[] = []

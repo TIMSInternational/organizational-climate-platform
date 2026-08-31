@@ -180,6 +180,61 @@ describe('PlanesAccionListPage', () => {
   it('offers a retry rather than a blank page when the service is unreachable', async () => {
     vi.mocked(fetch).mockRejectedValue(new Error('tracking is down'))
     renderPage()
-    expect(await screen.findByText('tracking is down')).toBeTruthy()
+
+    // The retry affordance and a sentence the reader can act on — which is what this
+    // test was always named for. It used to prove that by asserting the EXCEPTION text
+    // was on screen, which quietly made "show the user err.message" a guarantee: a
+    // browser TypeError then put the literal words "Failed to fetch" in front of an
+    // end user, and the assertion defended it. The intent is unchanged; the evidence
+    // is no longer the defect.
+    expect(await screen.findByText(/No se pudo contactar el servicio de seguimiento/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Reintentar|Retry/ })).toBeTruthy()
+    expect(screen.queryByText('tracking is down')).toBeNull()
+  })
+})
+
+/**
+ * What an unreachable tracking service must NOT look like.
+ *
+ * A rejected `fetch` is the shape a real outage takes in the browser: the service is a
+ * separate deployment, so a stopped container, a DNS failure and an origin the CORS
+ * policy is not configured to allow all arrive as a rejection rather than as a status.
+ *
+ * Both assertions below were false before this was fixed, and each fails on its own.
+ */
+describe('PlanesAccionListPage when the tracking service is unreachable', () => {
+  function outage() {
+    vi.mocked(fetch).mockImplementation(() => {
+      throw new TypeError('Failed to fetch')
+    })
+  }
+
+  it('draws no semáforo strip, because a strip of zeros is a reading nobody took', async () => {
+    outage()
+    renderPage()
+
+    // The error has to be on screen first, or this asserts on a page that has not
+    // finished loading and would pass whatever the strip did.
+    await screen.findByText(/No se pudo contactar el servicio de seguimiento/)
+
+    expect(screen.queryByLabelText('Resumen del semáforo')).toBeNull()
+    // The four confident zeros the strip used to print, by their own sub-labels.
+    expect(screen.queryByText('En total')).toBeNull()
+    expect(screen.queryByText('Vencido o sin avance')).toBeNull()
+    expect(screen.queryByText('En tiempo y con avance')).toBeNull()
+  })
+
+  it('names the service in Spanish instead of showing the browser\'s own words', async () => {
+    outage()
+    renderPage()
+
+    expect(await screen.findByText(/No se pudo contactar el servicio de seguimiento/)).toBeTruthy()
+    expect(screen.getByText(/El módulo de seguimiento no respondió/)).toBeTruthy()
+
+    // The raw TypeError message, and the English generic that framed it. This module's
+    // copy is Spanish-only and test-enforced; `errors.generic` follows the reader's
+    // locale, so the old pair printed an English sentence inside a Spanish page.
+    expect(screen.queryByText(/Failed to fetch/)).toBeNull()
+    expect(screen.queryByText(/An error occurred/)).toBeNull()
   })
 })

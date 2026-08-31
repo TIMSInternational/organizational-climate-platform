@@ -163,15 +163,21 @@ export default function ConsolidadoPage() {
 
   return (
     <div>
-      {/* Title from the nav catalogue and the longer line from `tracking.*`, the
-          same split `ActionPlansListPage` uses: the nav blurb has to fit a 151px
-          rail row, and this header is where the screen gets to say what it is
-          aggregating and what it never shows. Both keys already existed —
-          `navigation.trackingConsolidado` shipped with the legacy port and had no
-          caller until now. */}
+      {/* Both the title and the line under it come from `tracking.*`, which is what
+          makes this page read in ONE language.
+
+          The title used to be `navigation.trackingConsolidado` — an English string,
+          "Consolidated View", set directly above an all-Spanish page. `trackingCopy.test.ts`
+          holds the whole `tracking` namespace to identical Spanish in every locale on
+          purpose (#126's "Rendered in Spanish"), and the `navigation` namespace is
+          translated normally, so reaching across for the h1 imported the app's locale into
+          a module that deliberately has none. `PlanesAccionListPage` and `MisTareasPage`
+          already title themselves from `tracking.*`; this page and `TableroSeguimientoPage`
+          were the two that did not. The nav row keeps its own translated label — the rail
+          is app chrome, this is the module. */}
       <PageTopBar
         eyebrow={companyName}
-        title={t('navigation.trackingConsolidado')}
+        title={t('tracking.consolidadoTitle')}
         description={t('tracking.consolidadoDescription')}
       />
 

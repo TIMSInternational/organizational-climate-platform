@@ -421,6 +421,9 @@ describe('leafNavItems', () => {
       // first four leaves above are unchanged by #109.
       '/surveys',
       '/surveys/templates',
+      // Climate over time, appended beside the other survey rows. Well past the fourth
+      // leaf, so the pinned mobile tab slots above are untouched.
+      '/surveys/climate-trends',
       '/analytics/benchmarks',
       '/analytics/ai-insights',
       // After the top-level rows, not inside the admin group: `leafNavItems` puts a
@@ -457,6 +460,9 @@ describe('leafNavItems', () => {
       // four leaves are untouched.
       '/surveys',
       '/surveys/templates',
+      // Climate over time, appended for the same reason and in the same place as in the
+      // company_admin branch above.
+      '/surveys/climate-trends',
       // #142, appended for the same reason as the two above.
       '/departments',
       // #275's System Health, appended for that same reason -- it belongs beside

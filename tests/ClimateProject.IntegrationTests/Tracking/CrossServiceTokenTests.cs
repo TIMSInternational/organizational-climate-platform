@@ -292,17 +292,33 @@ public class CrossServiceTokenTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_company_less_super_admins_token_never_passes_a_blank_tenant_gate()
+    public async Task A_company_less_super_admin_passes_a_configured_tenant_but_never_a_blank_one()
     {
-        // The fail-closed half of #153, stated across the seam rather than at the handler.
+        // Two rules that look alike and are not, stated across the seam rather than at the
+        // handler — which is the only place the CLAIM and the GATE are both real.
         //
-        // This API mints `companyId: user.CompanyId?.ToString() ?? string.Empty`, so a
-        // company-less super_admin (#191) really does carry a blank tenant claim — asserted
-        // below rather than assumed, because the whole hazard rests on it. climate-tracking's
+        // **The blank tenant is still refused, and that is #153.** This API mints
+        // `companyId: user.CompanyId?.ToString() ?? string.Empty`, so a company-less
+        // super_admin (#191) really does carry a blank tenant claim — asserted below rather
+        // than assumed, because the whole hazard rests on it. climate-tracking's
         // appsettings.json ships `"ProcomerCompanyId": ""`, so a deployment that never
         // overrode it expected a blank tenant too, and blank-equals-blank handed a user
-        // belonging to NO company the run of a tenant's entire API. Its Program.cs now refuses
-        // to start on a blank value, and the handler refuses to match one either.
+        // belonging to NO company the run of a tenant's entire API. Program.cs refuses to
+        // start on a blank value and the handler refuses to match one.
+        //
+        // **The configured tenant is now ADMITTED, and that is deliberate.** This test used
+        // to assert the opposite, and it was right to until the policy changed: the service
+        // is single-tenant by construction (nothing in ClimateTracking.Domain carries a
+        // company column, and ProcomerCompanyId pins the deployment), `PlanAccessHandler`
+        // already holds that admin roles always pass, and the platform operator was excluded
+        // only as a SIDE EFFECT of closing the blank-blank hole — never as a decision.
+        // Ruled explicitly on 2026-08-27 rather than inferred from the code.
+        //
+        // The role split this rests on is `Roles.SuperAdmin` and NOT `Roles.Admin`: a
+        // company_admin belongs to exactly one tenant, so admitting them on the role alone
+        // would hand this deployment's data to another company's administrator.
+        // `MatchingTenantHandlerTests` holds that pair, and four sibling cases, at the unit
+        // level; this one proves the claim a REAL login mints reaches the gate intact.
         var client = _factory.CreateClient();
         var token = await SignUpAndLogInAsync(
             client,
@@ -315,9 +331,14 @@ public class CrossServiceTokenTests : IAsyncLifetime
         var principal = await ValidateAsTrackingDoesAsync(token);
         var currentUser = TrackingAuth.ClaimsPrincipalExtensions.GetCurrentUser(principal);
 
+        // The hazard the rest of this test is about is only real because this is blank.
         Assert.Equal(string.Empty, currentUser.CompanyId);
+
+        // No tenant configured: nobody passes, whatever their role. Fail-closed (#153).
         Assert.False(await PassesTrackingTenantGateAsync(principal, string.Empty));
-        Assert.False(await PassesTrackingTenantGateAsync(principal, _companyId.ToString()));
+
+        // A tenant IS configured: the platform operator reaches it.
+        Assert.True(await PassesTrackingTenantGateAsync(principal, _companyId.ToString()));
     }
 
     [Fact]

@@ -5,6 +5,13 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Pinned, and strict rather than a preference. The API allows exactly ONE CORS
+  // origin in Development (`Cors:AllowedOrigins` is `["http://localhost:5173"]`), so a
+  // dev server that silently moves to 5174 because something holds 5173 does not
+  // degrade — every request dies on preflight with "No 'Access-Control-Allow-Origin'",
+  // which reads as a CORS misconfiguration rather than as port drift. `strictPort`
+  // turns that into a loud failure at startup, where the cause is still visible.
+  server: { port: 5173, strictPort: true },
   test: {
     // src/styles/tokens.test.ts imports the stylesheets with `?raw` to assert
     // the ported values; Vitest stubs CSS out of the module graph unless this

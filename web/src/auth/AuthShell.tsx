@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { LanguageSwitcher, useTranslation } from '../i18n'
 import { ThemeSwitcher } from '../components/layout'
 import { Card, CardContent, CardDescription, CardHeader, H2 } from '../components/ui'
+import { HeroRule } from '../components/storefront/StorefrontPrimitives'
+import { cn } from '../lib/cn'
 
 /**
  * The frame every unauthenticated page shares (#81).
@@ -27,8 +29,7 @@ import { Card, CardContent, CardDescription, CardHeader, H2 } from '../component
  *
  * ## Both themes
  *
- * Every colour here is a `tokens.css` utility (`bg-surface-outer`, `Card`'s
- * `bg-surface-card`, `text-fg-*`), so the palette flips with
+ * Every colour here is a token utility, so the palette flips with
  * `:root[data-theme]`. Nothing is a literal, which is the defect this project
  * hits most often: a hardcoded surface reads fine in light mode and disappears in
  * dark.
@@ -44,23 +45,132 @@ export interface AuthShellProps {
    */
   banner?: ReactNode
   /**
-   * The product lockup, above the card rather than inside it.
-   *
-   * Separate from `banner` on purpose. `banner` is per-state decoration that
-   * belongs to the message — the glyph over "your link expired" — and it sits
-   * inside the card with the title it modifies. The lockup is not about the state
-   * at all: it answers "what IS this, and did I mean to be here", which is a
-   * question about the page and therefore outranks the card. The employee design
-   * draws it centred above.
+   * The product lockup. In the admin variant it floats centred above the card;
+   * in the storefront variant it anchors the page header, the way the source
+   * site wears its brand.
    */
   brand?: ReactNode
   children: ReactNode
   /** Links out of this state: "back to sign in", "create an account". */
   footer?: ReactNode
+  /**
+   * Which visual language this frame wears.
+   *
+   * `admin` — the default and what all current callers except sign-in get — is
+   * the `--admin-*` language the rest of the app is built in.
+   *
+   * `storefront` is the Conócete language (`styles/storefront.css`), and it is
+   * a different PAGE SKELETON, not a repainted card: a site header carrying the
+   * brand, a rule and a tag line with the settings controls opposite; a
+   * centred main; serif display over a lede inside one soft-shadowed card; and
+   * the footer as fineprint. Reskinning the admin card in place was tried
+   * first and read as exactly what it was — admin bones under storefront
+   * paint.
+   *
+   * ## The tension this prop deliberately leaves visible
+   *
+   * The remarks above argue these pages share a frame so that "five auth
+   * states look like one product". A per-caller variant can break that: it is
+   * a prop rather than a wholesale change because the alternative was to
+   * restyle nine surfaces — including `RespondShell` and
+   * `AcceptInvitationPage` — on the strength of a request about one. When the
+   * decision is made for the rest, flip the default and delete the prop rather
+   * than letting the two languages coexist indefinitely.
+   */
+  variant?: 'admin' | 'storefront'
 }
 
-export function AuthShell({ title, description, banner, brand, children, footer }: AuthShellProps) {
+export function AuthShell({
+  title,
+  description,
+  banner,
+  brand,
+  children,
+  footer,
+  variant = 'admin',
+}: AuthShellProps) {
   const { t } = useTranslation()
+
+  if (variant === 'storefront') {
+    return (
+      <div className="flex min-h-dvh flex-col bg-store-ground font-store-sans">
+        {/* The source header: brand, a hairline rule, a tag — and the page's
+            few controls on the opposite edge. The rule and tag drop on small
+            screens the same way the source hides `.rule`/`.tag` under 860px. */}
+        <header className="w-full">
+          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-5">
+            <div className="flex min-w-0 items-center gap-4">
+              {brand}
+              <div aria-hidden className="hidden h-5 w-px bg-store-rule sm:block" />
+              <span className="hidden text-[0.72rem] font-semibold uppercase tracking-store-kicker text-store-faint sm:block">
+                {t('storefront.kicker.climate')}
+              </span>
+            </div>
+            <div
+              className="flex shrink-0 flex-wrap items-center justify-end gap-inline"
+              // Not part of the auth flow itself — grouped so assistive tech can
+              // skip past it to the form. The two selects keep their own inline
+              // `var(--admin-*)` styling; an inline style outranks any class set
+              // from here, so they are placed rather than repainted.
+              role="group"
+              aria-label={t('shell.settings')}
+            >
+              <LanguageSwitcher compact />
+              <ThemeSwitcher />
+            </div>
+          </div>
+        </header>
+
+        <main className="flex flex-1 items-center justify-center px-6 py-10">
+          <div className="flex w-full max-w-md flex-col gap-5">
+            <div className="rounded-store-card border border-store-rule bg-store-surface p-8 shadow-store-card">
+              <div className="flex flex-col gap-4">
+                {banner}
+                {/* The source pairing: serif display, the short accent rule,
+                    then the lede in body colour. `text-store-h3` is the fluid
+                    step the source uses for section heads — the hero step
+                    clamps to 4.4rem and is drawn for a full-width page, not a
+                    28rem card. */}
+                <h1 className="font-store-serif text-store-h3 leading-tight tracking-store-display text-store-fg">
+                  {title}
+                </h1>
+                <HeroRule />
+                {description && (
+                  <p className="text-[0.95rem] leading-relaxed text-store-body">{description}</p>
+                )}
+              </div>
+              {/* Field styling lives here, not on each field: the storefront
+                  system carries affordance on borders (its one shadow belongs
+                  to the card, never to controls), so the input edge takes
+                  `--storefront-line-control` — the 3:1 value WCAG 1.4.11 asks
+                  of a control boundary; the source's own #E5E3F0 is 1.27:1 and
+                  fails it. Inputs sit on the surface itself, as the source
+                  draws them: white on white in light, edge-only in dark. */}
+              <div
+                className={cn(
+                  'mt-6 grid gap-4',
+                  '[&_input]:h-11 [&_input]:rounded-store-panel [&_input]:border-store-control',
+                  '[&_input]:bg-store-surface [&_input]:px-4 [&_input]:text-[0.95rem] [&_input]:text-store-fg',
+                  '[&_input::placeholder]:text-store-faint',
+                  '[&_label]:text-[0.8rem] [&_label]:font-bold [&_label]:text-store-heading',
+                )}
+              >
+                {children}
+              </div>
+            </div>
+
+            {/* Fineprint, the way the source closes a page: quiet, centred,
+                under the card rather than inside it. */}
+            {footer && (
+              <div className="flex flex-wrap items-center justify-center gap-inline px-2 text-center text-[0.8rem] leading-relaxed text-store-faint">
+                {footer}
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-panel-gap bg-surface-outer p-gutter">

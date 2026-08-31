@@ -147,7 +147,13 @@ describe('MicroclimateResultsPage', () => {
     vi.mocked(fetch).mockRejectedValue(new Error('offline'))
     renderPage()
 
-    expect(await screen.findByText('offline')).toBeTruthy()
+    // The retry affordance is what this test is named for. It used to prove that by
+    // asserting the EXCEPTION text was on screen, which quietly made "show the user
+    // err.message" a guarantee the suite defended — and a browser TypeError then put
+    // the words "Failed to fetch" in front of an end user. `authFetch` now turns a
+    // transport failure into a sentence, so the stand-in message no longer surfaces.
+    expect(await screen.findByText(/Network error/)).toBeTruthy()
+    expect(screen.queryByText('offline')).toBeNull()
 
     routeFetch(detail(), results())
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
