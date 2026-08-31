@@ -64,13 +64,21 @@ export default function SurveyFilters({
       // third of the panel while the controls it belongs to stopped at the 32rem field
       // cap. Here each control asks for the width it needs and the button is sized by
       // its label.
+      //
+      // `mb-0` on each label is what makes `items-end` mean what it says. The base
+      // layer gives every `label` a 12px bottom margin — right when a label IS the form
+      // row and stacked with others, wrong here, because the margin is part of the
+      // label's box: `items-end` then aligns the button to the bottom of the MARGIN and
+      // the field sits 12px above it. Measured on the rendered page at 1440, the Filter
+      // button sat 12px below the two controls it submits. The 8px flex `gap` already
+      // separates the rows when they wrap, so nothing is lost by dropping it.
       className="mb-panel-gap flex flex-wrap items-end gap-inline"
       onSubmit={(event) => {
         event.preventDefault()
         onApply()
       }}
     >
-      <label className="w-full sm:w-56">
+      <label className="mb-0 w-full sm:w-56">
         {t('surveys.surveyType')}
         <select
           value={value.type}
@@ -86,7 +94,7 @@ export default function SurveyFilters({
         </select>
       </label>
 
-      <label className="w-full sm:w-80">
+      <label className="mb-0 w-full sm:w-80">
         {t('common.search')}
         <input
           type="search"

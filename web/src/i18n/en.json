@@ -1299,7 +1299,8 @@
     "login": "Login",
     "signUp": "Sign Up",
     "home": "Home",
-    "systemHealth": "System Health"
+    "systemHealth": "System Health",
+    "climateTrends": "Climate over time"
   },
   "notifications": {
     "eyebrow": "Inbox",
@@ -1340,7 +1341,8 @@
       "alwaysSentBadge": "Always sent",
       "alwaysSentDescription": "Sign-in, password and account-security messages are always sent. There is no setting for them, because turning them off would leave you unable to recover your account.",
       "saved": "Your notification preferences were saved.",
-      "loadError": "Your notification preferences could not be loaded."
+      "loadError": "Your notification preferences could not be loaded.",
+      "eyebrow": "Account"
     },
     "inboxDescription": "What changed while you were away.",
     "unreadOnly": "Unread only",
@@ -1463,7 +1465,30 @@
     "maxLoginAttempts": "Max login attempts",
     "sessionTimeoutMinutes": "Session timeout (minutes)",
     "enforcedOnEveryLoginNote": "Login enabled and Maintenance mode are enforced on every login attempt (a SuperAdmin account can always still sign in).",
-    "notYetEnforcedNote": "Max login attempts and Session timeout are saved but not yet enforced by the API — they do not currently lock out accounts or expire sessions early."
+    "notYetEnforcedNote": "Max login attempts and Session timeout are saved but not yet enforced by the API — they do not currently lock out accounts or expire sessions early.",
+    "availabilityTitle": "Platform availability",
+    "loginEnabledDescription": "When off, nobody can sign in except a SuperAdmin account.",
+    "maintenanceModeDescription": "Shows the maintenance message instead of the app for everyone except a SuperAdmin account.",
+    "maintenanceMessageDescription": "Shown on the sign-in screen while maintenance mode is on.",
+    "lockoutWarningTitle": "This will keep users out of the platform",
+    "lockoutWarningDescription": "With these settings saved, every account except a SuperAdmin will be unable to sign in. Existing sessions are not ended.",
+    "sessionTitle": "Session policy",
+    "passwordPolicyTitle": "Password policy",
+    "passwordMinLength": "Minimum length",
+    "passwordRequireUppercase": "Requires an uppercase letter",
+    "passwordRequireLowercase": "Requires a lowercase letter",
+    "passwordRequireNumbers": "Requires a number",
+    "passwordRequireSpecialChars": "Requires a special character",
+    "emailDeliveryTitle": "Email delivery",
+    "emailSmtpEnabled": "SMTP enabled",
+    "emailSmtpDisabled": "SMTP disabled",
+    "emailFrom": "From address",
+    "emailHost": "SMTP host",
+    "emailPort": "SMTP port",
+    "notConfigured": "Not configured",
+    "readOnlyNote": "Read-only here — change it through the platform configuration.",
+    "savedNote": "System settings saved.",
+    "loadError": "System settings could not be loaded."
   },
   "shell": {
     "account": "Account",
@@ -1871,7 +1896,23 @@
       "text": "Question",
       "title": "Edit questions"
     },
-    "questionTypeEmojiRating": "Emoji Rating"
+    "questionTypeEmojiRating": "Emoji Rating",
+    "climateTrends": {
+      "title": "Climate over time",
+      "description": "Dimension scores across this company's closed surveys, oldest first.",
+      "mapTitle": "Dimension scores by survey",
+      "groupByLabel": "Break down by",
+      "groupLabel": "Showing",
+      "wholeCompany": "Whole company",
+      "byDepartment": "Department",
+      "loadError": "Climate over time could not be loaded.",
+      "noSurveysTitle": "No closed surveys yet",
+      "noSurveysBody": "This view reads closed and archived surveys. Once a survey closes, its dimension scores appear here as a new row.",
+      "nothingToDrawTitle": "Nothing to compare yet",
+      "nothingToDrawBody": "No dimension has a score in every survey shown, so there is no column that could be read across them.",
+      "omittedDimensions": "Not shown, because they were not scored in every survey here: {dimensions}.",
+      "suppressedGroups": "{count} group(s) are withheld in every survey shown, because fewer than {threshold} people answered."
+    }
   },
   "users": {
     "userManagement": "User Management",
@@ -2512,7 +2553,8 @@
       "description": "Los planes de acción en los que usted participa.",
       "listTitle": "Tareas asignadas",
       "empty": "No tiene tareas asignadas.",
-      "readOnly": "Esta vista es de consulta. El registro de avance lo realiza la jefatura del nodo."
+      "readOnly": "Esta vista es de consulta. El registro de avance lo realiza la jefatura del nodo.",
+      "readOnlyManager": "Este listado es de consulta. Abra un plan de su nodo para registrar el avance."
     },
     "create": {
       "title": "Nuevo plan de acción",
@@ -2591,7 +2633,9 @@
       "registrarAvance": "Registrar avance",
       "marcarCumplido": "Marcar como cumplido",
       "agregarInvolucrados": "Agregar involucrados"
-    }
+    },
+    "consolidadoTitle": "Vista Consolidada",
+    "tableroTitle": "Tablero de Seguimiento"
   },
   "privacy": {
     "eyebrow": "Account",
@@ -2729,5 +2773,63 @@
     "averageScore": "Average score",
     "departmentsCaption": "Participation for each department, including the ones whose figures are withheld",
     "departmentsWithheld": "{count} department(s) are withheld because each has fewer than {minimum} respondents."
+  },
+  "storefront": {
+    "kicker": {
+      "climate": "Organizational climate",
+      "dimensions": "The dimensions",
+      "report": "The report",
+      "levels": "Level scale",
+      "how": "How it works",
+      "why": "Why this way"
+    },
+    "hero": {
+      "title": "What the organization already knows, said out loud.",
+      "lede": "A climate instrument answered anonymously and read dimension by dimension, with a per-segment minimum that decides what may be shown and what may not.",
+      "cta": "See a sample report",
+      "chipDimensions": "4 dimensions",
+      "chipFloor": "Minimum of 5"
+    },
+    "dimensions": {
+      "title": "Four readings, not one average.",
+      "lede": "A single score hides exactly what needs looking at. Each dimension is reported on its own.",
+      "leadership": "Leadership",
+      "leadershipGloss": "How direction is perceived: clarity, closeness and consistency.",
+      "communication": "Communication",
+      "communicationGloss": "Whether information arrives complete, on time and in both directions.",
+      "recognition": "Recognition",
+      "recognitionGloss": "Whether effort is noticed and named, not only when something fails.",
+      "environment": "Environment",
+      "environmentGloss": "The material and workload conditions the work happens in."
+    },
+    "report": {
+      "title": "Figures that read without explanation.",
+      "lede": "Every figure is drawn from DOM and CSS over the theme tokens, so it answers dark mode without a second palette."
+    },
+    "levels": {
+      "caption": "Level {n}",
+      "critical": "Critical",
+      "atRisk": "At risk",
+      "acceptable": "Acceptable",
+      "solid": "Solid"
+    },
+    "how": {
+      "title": "Three steps, no surprises.",
+      "step1": "The instrument is defined",
+      "step1Body": "Dimensions, scale and scope per department.",
+      "step2": "It is answered anonymously",
+      "step2Body": "No per-response identifiers, with a minimum floor.",
+      "step3": "The result is read",
+      "step3Body": "Aggregated per dimension, suppressed below the floor."
+    },
+    "why": {
+      "title": "Three design decisions.",
+      "panel1": "Real anonymity",
+      "panel1Body": "A per-segment floor; below it, nothing is shown.",
+      "panel2": "Comparable",
+      "panel2Body": "The same scale across periods, to read trend rather than noise.",
+      "panel3": "Actionable",
+      "panel3Body": "The result names where to look, not just what score came out."
+    }
   }
 }

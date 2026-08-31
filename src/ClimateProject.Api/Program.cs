@@ -449,6 +449,36 @@ app.UseExceptionHandler(errorApp =>
     {
         var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
 
+        // A CLIENT error, and it was being reported as a server one.
+        //
+        // Minimal-API parameter binding throws BadHttpRequestException when a required
+        // parameter is absent or unparseable -- `GET /admin/users` with no `?companyId=`
+        // produces "Required parameter \"Guid companyId\" was not provided from query
+        // string." The type carries its own StatusCode (400 here, 413 for a body over
+        // Kestrel's ceiling), and ASP.NET Core would honour it; this handler did not, so
+        // every one of them fell through the arms below and was answered
+        // 500 "An unexpected error occurred."
+        //
+        // Three costs, in increasing order of seriousness. It tells a caller their
+        // well-formed-but-incomplete request crashed the server. It hides a message that
+        // says exactly which parameter is missing, which is the whole content of the
+        // answer. And #158's alarm pages on 5xx rate -- so a stale client, a bot, or a
+        // hand-typed URL omitting a parameter is indistinguishable from the API falling
+        // over, and would wake somebody at night for a 400.
+        //
+        // The message is passed through, unlike the arms below. These strings are written
+        // by the framework and name only the signature of a public route -- a parameter's
+        // declared type and name, or a byte ceiling. No application data reaches them,
+        // which is not true of a DbUpdateException's, and that is the reason those are
+        // replaced and this one is not.
+        if (exception is BadHttpRequestException badRequest)
+        {
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = badRequest.StatusCode;
+            await context.Response.WriteAsJsonAsync(new { message = badRequest.Message });
+            return;
+        }
+
         // Checked BEFORE the unique-violation test, and it has to be:
         // DbUpdateConcurrencyException derives from DbUpdateException, so an `is
         // DbUpdateException` arm placed first would swallow it.
@@ -600,6 +630,8 @@ app.MapSurveyDistributionEndpoints();
 app.MapSurveyDraftEndpoints();
 app.MapSurveyResultsEndpoints();
 app.MapSurveyExportEndpoints();
+// Literal segment, so it cannot collide with /surveys/{id:guid} however these are ordered.
+app.MapSurveyClimateTrendsEndpoints();
 app.MapSurveyHistoryEndpoints();
 app.MapSurveyTemplateEndpoints();
 app.MapMicroclimateEndpoints();

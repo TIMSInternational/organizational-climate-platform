@@ -81,6 +81,10 @@ public class AuditCoverageTests : IAsyncLifetime
     [
         "GET /admin/reports/{id:guid}",
         "GET /audit/export",
+        // The widest read of employee-opinion content in the product: dimension scores per
+        // department across up to twelve surveys. Marked for the same reason
+        // /surveys/{id}/results is, more so.
+        "GET /surveys/climate-trends",
         "GET /surveys/{id:guid}/export",
         "GET /surveys/{id:guid}/export/csv",
         "GET /surveys/{id:guid}/export/pdf",

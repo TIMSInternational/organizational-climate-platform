@@ -21,6 +21,14 @@ public class MatchingTenantHandlerTests
             companyId is null ? [] : new[] { new Claim("companyId", companyId) },
             "TestAuth"));
 
+    private static ClaimsPrincipal UserWith(string? companyId, string? role) => new(
+        new ClaimsIdentity(
+            [
+                .. companyId is null ? Array.Empty<Claim>() : [new Claim("companyId", companyId)],
+                .. role is null ? Array.Empty<Claim>() : [new Claim("role", role)],
+            ],
+            "TestAuth"));
+
     private static async Task<bool> Authorize(ClaimsPrincipal user, string expectedCompanyId)
     {
         var handler = new MatchingTenantHandler();
@@ -67,5 +75,69 @@ public class MatchingTenantHandlerTests
     public async Task A_blank_tenant_on_either_side_never_matches(string claim, string expected)
     {
         Assert.False(await Authorize(UserWithCompanyClaim(claim), expected));
+    }
+
+    // ------------------------------------------------------------------
+    // The platform operator.
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// A global super_admin has no company since #191, so their `companyId` claim is blank
+    /// and can never match the pin. That kept them out of a service whose own
+    /// PlanAccessHandler says "Admin roles (company_admin, super_admin) always pass" — an
+    /// unintended side effect of closing the blank==blank hole, not a decision.
+    /// </summary>
+    [Fact]
+    public async Task A_super_admin_with_no_company_of_their_own_passes()
+    {
+        Assert.True(await Authorize(UserWith(companyId: null, role: "super_admin"), ProcomerCompanyId));
+        Assert.True(await Authorize(UserWith(companyId: "", role: "super_admin"), ProcomerCompanyId));
+    }
+
+    /// <summary>
+    /// #153 outranks the arm above, and this is the test that proves the ordering rather than
+    /// trusting it. "No tenant configured" must fail closed for EVERY caller — the one thing
+    /// a second arm could quietly undo.
+    /// </summary>
+    [Fact]
+    public async Task A_super_admin_still_does_not_pass_when_no_tenant_is_configured()
+    {
+        Assert.False(await Authorize(UserWith(companyId: null, role: "super_admin"), string.Empty));
+        Assert.False(await Authorize(UserWith(companyId: null, role: "super_admin"), "   "));
+    }
+
+    /// <summary>
+    /// The failure this arm invites. `Roles.Admin` holds company_admin as well, so admitting
+    /// on "is an admin role" would hand this deployment's plans to the administrator of a
+    /// DIFFERENT tenant — the exact property the gate exists to hold.
+    /// </summary>
+    [Fact]
+    public async Task A_company_admin_from_another_tenant_still_does_not_pass()
+    {
+        var otherTenant = Guid.NewGuid().ToString();
+        Assert.False(await Authorize(UserWith(otherTenant, "company_admin"), ProcomerCompanyId));
+        Assert.False(await Authorize(UserWith(companyId: null, role: "company_admin"), ProcomerCompanyId));
+    }
+
+    /// <summary>
+    /// And a company_admin of THIS tenant is unaffected by the new arm — they pass on their
+    /// company claim, exactly as before.
+    /// </summary>
+    [Fact]
+    public async Task A_company_admin_of_this_tenant_still_passes()
+    {
+        Assert.True(await Authorize(UserWith(ProcomerCompanyId, "company_admin"), ProcomerCompanyId));
+    }
+
+    /// <summary>
+    /// A role nobody grants must not be a way in. Guards against an arm written as
+    /// "anything that is not blank" or a typo'd constant.
+    /// </summary>
+    [Fact]
+    public async Task An_unknown_role_does_not_pass_on_the_role_alone()
+    {
+        Assert.False(await Authorize(UserWith(companyId: null, role: "superadmin"), ProcomerCompanyId));
+        Assert.False(await Authorize(UserWith(companyId: null, role: "SUPER_ADMIN"), ProcomerCompanyId));
+        Assert.False(await Authorize(UserWith(companyId: null, role: "leader"), ProcomerCompanyId));
     }
 }

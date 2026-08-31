@@ -302,6 +302,61 @@ describe('TableroSeguimientoPage', () => {
   })
 
   /**
+   * The empty board is the node leader's FIRST board, and it used to be a dead end.
+   *
+   * "Todavía no se ha registrado ningún plan de acción para este nodo" was the entire
+   * screen — said to the one person §7 makes responsible for registering one, with
+   * nothing to click. `/tracking/planes` is where creation lives (there is no
+   * `/nuevo` route) and it is in this role's `ROLE_CAPABILITIES` entry, so the link
+   * is a destination the reader loads rather than a 403.
+   */
+  const emptyTablero = () =>
+    new Response(
+      JSON.stringify({ nodoExternalId: 'nodo-alpha', conteos: { rojo: 0, amarillo: 0, verde: 0 }, planes: [] }),
+      { status: 200 },
+    )
+
+  it('offers a node leader the way to register their first plan', async () => {
+    // `sub` matters here and nowhere else in this file: `readTrackingClaims` returns
+    // null without it, mirroring `GetCurrentUser`, which throws on a token missing it.
+    setToken(
+      tokenFor({
+        sub: 'persona-lider-1',
+        role: 'leader',
+        companyId: 'procomer-co',
+        nodoId: 'nodo-alpha',
+        isActive: 'true',
+      }),
+    )
+    routeFetch({ tablero: emptyTablero })
+    renderPage()
+
+    await screen.findByText('Este nodo no tiene planes de acción')
+    const link = screen.getByRole('link', { name: 'Crear plan de acción' })
+    expect(link.getAttribute('href')).toBe('/tracking/planes')
+  })
+
+  it('offers no such link to a leader whose token carries no node', async () => {
+    // `CreateAsync` compares `currentUser.NodoExternalId` to the requested node, so a
+    // blank claim is refused on every node they could pick. `canCreatePlan` says so
+    // and the empty state stays plain rather than pointing at a refusal.
+    setToken(
+      tokenFor({
+        sub: 'persona-lider-1',
+        role: 'leader',
+        companyId: 'procomer-co',
+        nodoId: '',
+        isActive: 'true',
+      }),
+    )
+    routeFetch({ tablero: emptyTablero })
+    renderPage()
+
+    await screen.findByText('Este nodo no tiene planes de acción')
+    expect(screen.queryByRole('link', { name: 'Crear plan de acción' })).toBeNull()
+  })
+
+  /**
    * The product rule from §7, and it is only that — see `trackingAccess.ts`.
    * `TableroAsync` would serve these roles their own nodo's full board; the browser
    * cannot close that, and this test is not evidence that it is closed.

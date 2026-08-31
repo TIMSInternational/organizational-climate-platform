@@ -1586,5 +1586,352 @@
     "answeredQuestionCount": 4,
     "questionCount": 4,
     "suppressedDemographics": []
+  },
+  "GET /surveys/climate-trends": {
+    "companyId": "22cc8ed9-2e02-401a-8d52-52068ff5e6c0",
+    "groupBy": null,
+    "surveys": [
+      {
+        "surveyId": "11111111-1111-1111-1111-111111111111",
+        "title": "Q1 Climate Survey",
+        "status": "closed",
+        "endDate": "2026-03-31T00:00:00+00:00",
+        "completedCount": 42,
+        "isSuppressed": false
+      },
+      {
+        "surveyId": "22222222-2222-2222-2222-222222222222",
+        "title": "Q2 Climate Survey",
+        "status": "closed",
+        "endDate": "2026-06-30T00:00:00+00:00",
+        "completedCount": 47,
+        "isSuppressed": false
+      },
+      {
+        "surveyId": "33333333-3333-3333-3333-333333333333",
+        "title": "Q3 Climate Survey",
+        "status": "closed",
+        "endDate": "2026-09-30T00:00:00+00:00",
+        "completedCount": 51,
+        "isSuppressed": false
+      }
+    ],
+    "dimensions": [
+      {
+        "key": "belonging",
+        "surveyCount": 3
+      },
+      {
+        "key": "growth",
+        "surveyCount": 3
+      },
+      {
+        "key": "psychological_safety",
+        "surveyCount": 3
+      },
+      {
+        "key": "recognition",
+        "surveyCount": 3
+      },
+      {
+        "key": "trust",
+        "surveyCount": 3
+      },
+      {
+        "key": "workload",
+        "surveyCount": 3
+      }
+    ],
+    "groups": [
+      {
+        "key": "__company__",
+        "label": null,
+        "points": [
+          {
+            "surveyId": "11111111-1111-1111-1111-111111111111",
+            "respondentCount": 42,
+            "isSuppressed": false,
+            "scores": [
+              3.6,
+              3.4,
+              3.5,
+              3.0,
+              3.4,
+              3.0
+            ]
+          },
+          {
+            "surveyId": "22222222-2222-2222-2222-222222222222",
+            "respondentCount": 47,
+            "isSuppressed": false,
+            "scores": [
+              3.8,
+              3.5,
+              3.6,
+              3.1,
+              3.5,
+              3.1
+            ]
+          },
+          {
+            "surveyId": "33333333-3333-3333-3333-333333333333",
+            "respondentCount": 51,
+            "isSuppressed": false,
+            "scores": [
+              3.92,
+              3.67,
+              3.75,
+              3.25,
+              3.67,
+              3.21
+            ]
+          }
+        ]
+      }
+    ],
+    "suppressedGroupCount": 0,
+    "minimumGroupSize": 5,
+    "generatedAt": "2026-10-01T09:00:00+00:00"
+  },
+  "GET /surveys/climate-trends?groupBy=department": {
+    "companyId": "22cc8ed9-2e02-401a-8d52-52068ff5e6c0",
+    "groupBy": "department",
+    "surveys": [
+      {
+        "surveyId": "11111111-1111-1111-1111-111111111111",
+        "title": "Q1 Climate Survey",
+        "status": "closed",
+        "endDate": "2026-03-31T00:00:00+00:00",
+        "completedCount": 42,
+        "isSuppressed": false
+      },
+      {
+        "surveyId": "22222222-2222-2222-2222-222222222222",
+        "title": "Q2 Climate Survey",
+        "status": "closed",
+        "endDate": "2026-06-30T00:00:00+00:00",
+        "completedCount": 47,
+        "isSuppressed": false
+      },
+      {
+        "surveyId": "33333333-3333-3333-3333-333333333333",
+        "title": "Q3 Climate Survey",
+        "status": "closed",
+        "endDate": "2026-09-30T00:00:00+00:00",
+        "completedCount": 51,
+        "isSuppressed": false
+      }
+    ],
+    "dimensions": [
+      {
+        "key": "belonging",
+        "surveyCount": 3
+      },
+      {
+        "key": "growth",
+        "surveyCount": 3
+      },
+      {
+        "key": "psychological_safety",
+        "surveyCount": 3
+      },
+      {
+        "key": "recognition",
+        "surveyCount": 3
+      },
+      {
+        "key": "trust",
+        "surveyCount": 3
+      },
+      {
+        "key": "workload",
+        "surveyCount": 3
+      }
+    ],
+    "groups": [
+      {
+        "key": "d-eng",
+        "label": "Engineering",
+        "points": [
+          {
+            "surveyId": "11111111-1111-1111-1111-111111111111",
+            "respondentCount": 14,
+            "isSuppressed": false,
+            "scores": [
+              4.0,
+              3.8,
+              4.0,
+              3.0,
+              3.8,
+              3.5
+            ]
+          },
+          {
+            "surveyId": "22222222-2222-2222-2222-222222222222",
+            "respondentCount": 15,
+            "isSuppressed": false,
+            "scores": [
+              4.1,
+              3.9,
+              4.1,
+              3.1,
+              3.9,
+              3.6
+            ]
+          },
+          {
+            "surveyId": "33333333-3333-3333-3333-333333333333",
+            "respondentCount": 16,
+            "isSuppressed": false,
+            "scores": [
+              4.17,
+              4.0,
+              4.17,
+              3.17,
+              4.0,
+              3.67
+            ]
+          }
+        ]
+      },
+      {
+        "key": "d-fin",
+        "label": "Finance",
+        "points": [
+          {
+            "surveyId": "11111111-1111-1111-1111-111111111111",
+            "respondentCount": 0,
+            "isSuppressed": true,
+            "scores": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          },
+          {
+            "surveyId": "22222222-2222-2222-2222-222222222222",
+            "respondentCount": 0,
+            "isSuppressed": true,
+            "scores": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          },
+          {
+            "surveyId": "33333333-3333-3333-3333-333333333333",
+            "respondentCount": 0,
+            "isSuppressed": true,
+            "scores": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          }
+        ]
+      },
+      {
+        "key": "d-ops",
+        "label": "Operations",
+        "points": [
+          {
+            "surveyId": "11111111-1111-1111-1111-111111111111",
+            "respondentCount": 11,
+            "isSuppressed": false,
+            "scores": [
+              3.0,
+              3.4,
+              2.6,
+              3.0,
+              3.0,
+              2.6
+            ]
+          },
+          {
+            "surveyId": "22222222-2222-2222-2222-222222222222",
+            "respondentCount": 12,
+            "isSuppressed": false,
+            "scores": [
+              2.9,
+              3.3,
+              2.4,
+              2.9,
+              2.9,
+              2.4
+            ]
+          },
+          {
+            "surveyId": "33333333-3333-3333-3333-333333333333",
+            "respondentCount": 12,
+            "isSuppressed": false,
+            "scores": [
+              2.8,
+              3.2,
+              2.2,
+              2.8,
+              2.8,
+              2.2
+            ]
+          }
+        ]
+      },
+      {
+        "key": "d-people",
+        "label": "People",
+        "points": [
+          {
+            "surveyId": "11111111-1111-1111-1111-111111111111",
+            "respondentCount": 8,
+            "isSuppressed": false,
+            "scores": [
+              4.2,
+              4.0,
+              4.2,
+              3.4,
+              3.8,
+              3.2
+            ]
+          },
+          {
+            "surveyId": "22222222-2222-2222-2222-222222222222",
+            "respondentCount": 9,
+            "isSuppressed": false,
+            "scores": [
+              4.3,
+              4.1,
+              4.3,
+              3.5,
+              3.9,
+              3.3
+            ]
+          },
+          {
+            "surveyId": "33333333-3333-3333-3333-333333333333",
+            "respondentCount": 9,
+            "isSuppressed": false,
+            "scores": [
+              4.4,
+              4.2,
+              4.4,
+              3.6,
+              4.0,
+              3.4
+            ]
+          }
+        ]
+      }
+    ],
+    "suppressedGroupCount": 1,
+    "minimumGroupSize": 5,
+    "generatedAt": "2026-10-01T09:00:00+00:00"
   }
 }

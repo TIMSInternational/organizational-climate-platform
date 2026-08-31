@@ -40,6 +40,7 @@ import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
 import ReportsListPage from '../features/reports/pages/ReportsListPage'
 import SharedReportPage from '../features/reports/pages/SharedReportPage'
 import SurveyResultsPage from '../features/surveys/pages/SurveyResultsPage'
+import ClimateTrendsPage from '../features/surveys/pages/ClimateTrendsPage'
 import SurveysListPage from '../features/surveys/pages/SurveysListPage'
 import SurveyCreatePage from '../features/surveys/pages/SurveyCreatePage'
 import SurveyDetailPage from '../features/surveys/pages/SurveyDetailPage'
@@ -177,6 +178,14 @@ const devOnlyRoutes: RouteObject[] = import.meta.env.DEV
         path: '/dev/question-library',
         lazy: async () => ({
           Component: (await import('../features/questions/pages/QuestionLibraryDevPage')).default,
+        }),
+      },
+      // The storefront visual language on one route, so `npm run shot` can
+      // photograph it in both themes. Same dev-only mechanism as the two above.
+      {
+        path: '/dev/storefront',
+        lazy: async () => ({
+          Component: (await import('../features/storefront/pages/StorefrontGalleryPage')).default,
         }),
       },
     ]
@@ -326,6 +335,11 @@ export const router = createBrowserRouter([
               // is never parsed as a survey id.
               { path: '/surveys/templates', element: <SurveyTemplatesPage /> },
               { path: '/surveys/templates/:id', element: <SurveyTemplateDetailPage /> },
+              // Same static-beats-dynamic ranking again, so `climate-trends` is never
+              // parsed as a survey id. Unlike `/surveys/:id/results` this one IS in the
+              // sidebar: it is a company-level reading rather than a per-survey
+              // destination, and there is no survey to reach it from.
+              { path: '/surveys/climate-trends', element: <ClimateTrendsPage /> },
               { path: '/surveys/:id', element: <SurveyDetailPage /> },
               // `/surveys/:id/respond` used to be declared here. It is now a sibling
               // of this whole `AdminLayout` branch, one level up — see the comment
