@@ -66,27 +66,6 @@
   "GET /notifications/mine": {
     "notifications": [
       {
-        "id": "aaaaaaaa-0000-0000-0000-000000000001",
-        "userId": "00000000-0000-0000-0000-000000000001",
-        "companyId": "11111111-1111-1111-1111-111111111111",
-        "type": "survey_reminder",
-        "channel": "in_app",
-        "priority": "medium",
-        "status": "delivered",
-        "title": "Quarterly climate survey closes Friday",
-        "message": "412 of 480 invited people have responded.",
-        "data": null,
-        "templateId": null,
-        "scheduledFor": "2026-08-09T08:00:00Z",
-        "sentAt": "2026-08-09T08:00:04Z",
-        "deliveredAt": "2026-08-09T08:00:06Z",
-        "openedAt": null,
-        "failedAt": null,
-        "failureReason": null,
-        "retryCount": 0,
-        "createdAt": "2026-08-09T08:00:00Z"
-      },
-      {
         "id": "aaaaaaaa-0000-0000-0000-000000000002",
         "userId": "00000000-0000-0000-0000-000000000001",
         "companyId": "11111111-1111-1111-1111-111111111111",
@@ -106,6 +85,27 @@
         "failureReason": null,
         "retryCount": 0,
         "createdAt": "2026-08-10T13:30:00Z"
+      },
+      {
+        "id": "aaaaaaaa-0000-0000-0000-000000000001",
+        "userId": "00000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "type": "survey_reminder",
+        "channel": "in_app",
+        "priority": "medium",
+        "status": "delivered",
+        "title": "Quarterly climate survey closes Friday",
+        "message": "412 of 480 invited people have responded.",
+        "data": null,
+        "templateId": null,
+        "scheduledFor": "2026-08-09T08:00:00Z",
+        "sentAt": "2026-08-09T08:00:04Z",
+        "deliveredAt": "2026-08-09T08:00:06Z",
+        "openedAt": null,
+        "failedAt": null,
+        "failureReason": null,
+        "retryCount": 0,
+        "createdAt": "2026-08-09T08:00:00Z"
       }
     ]
   },
@@ -258,7 +258,41 @@
         "responseCount": 29,
         "targetAudienceCount": 48
       }
-    ]
+    ],
+    "climate": {
+      "surveyId": "11111111-1111-1111-1111-111111111111",
+      "surveyTitle": "Q1 Climate Survey",
+      "surveyEndDate": "2026-03-31T00:00:00+00:00",
+      "respondentCount": 23,
+      "isSuppressed": false,
+      "minimumGroupSize": 5,
+      "dimensions": [
+        {
+          "dimension": "Collaboration",
+          "averageScore": 3.9
+        },
+        {
+          "dimension": "Growth",
+          "averageScore": 3.2
+        },
+        {
+          "dimension": "Leadership",
+          "averageScore": 3.6
+        },
+        {
+          "dimension": "Psychological safety",
+          "averageScore": 4.1
+        },
+        {
+          "dimension": "Recognition",
+          "averageScore": 2.8
+        },
+        {
+          "dimension": "Workload",
+          "averageScore": 3.1
+        }
+      ]
+    }
   },
   "GET /dashboard/employee/last-outcome": {
     "surveyId": "s0000000-0000-0000-0000-000000000004",
@@ -359,7 +393,7 @@
           "internal"
         ],
         "usageCount": 3,
-        "rating": 4.0,
+        "rating": 4,
         "questionCount": 12,
         "lastUsed": null,
         "createdAt": "2026-02-02T09:00:00Z"
@@ -398,7 +432,7 @@
         "required": true,
         "commentRequired": false,
         "commentPrompt": null,
-        "order": 1,
+        "order": 0,
         "category": "Psychological safety"
       },
       {
@@ -413,7 +447,7 @@
         "required": true,
         "commentRequired": false,
         "commentPrompt": null,
-        "order": 2,
+        "order": 1,
         "category": "Psychological safety"
       },
       {
@@ -428,7 +462,7 @@
         "required": true,
         "commentRequired": false,
         "commentPrompt": null,
-        "order": 3,
+        "order": 2,
         "category": "Workload"
       },
       {
@@ -443,7 +477,7 @@
         "required": true,
         "commentRequired": false,
         "commentPrompt": null,
-        "order": 4,
+        "order": 3,
         "category": "Workload"
       },
       {
@@ -458,7 +492,7 @@
         "required": true,
         "commentRequired": false,
         "commentPrompt": null,
-        "order": 5,
+        "order": 4,
         "category": "Recognition"
       },
       {
@@ -473,7 +507,7 @@
         "required": true,
         "commentRequired": false,
         "commentPrompt": null,
-        "order": 6,
+        "order": 5,
         "category": "Recognition"
       },
       {
@@ -488,7 +522,7 @@
         "required": true,
         "commentRequired": false,
         "commentPrompt": null,
-        "order": 7,
+        "order": 6,
         "category": "Leadership"
       },
       {
@@ -503,7 +537,7 @@
         "required": true,
         "commentRequired": false,
         "commentPrompt": null,
-        "order": 8,
+        "order": 7,
         "category": "Leadership"
       },
       {
@@ -518,7 +552,7 @@
         "required": true,
         "commentRequired": false,
         "commentPrompt": null,
-        "order": 9,
+        "order": 8,
         "category": "Growth"
       },
       {
@@ -533,7 +567,7 @@
         "required": true,
         "commentRequired": false,
         "commentPrompt": null,
-        "order": 10,
+        "order": 9,
         "category": "Growth"
       },
       {
@@ -548,7 +582,7 @@
         "required": true,
         "commentRequired": false,
         "commentPrompt": null,
-        "order": 11,
+        "order": 10,
         "category": "Collaboration"
       },
       {
@@ -563,7 +597,7 @@
         "required": true,
         "commentRequired": false,
         "commentPrompt": null,
-        "order": 12,
+        "order": 11,
         "category": "Collaboration"
       }
     ],
@@ -753,7 +787,7 @@
           }
         ],
         "average": 3.9,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -806,7 +840,7 @@
           }
         ],
         "average": 3.6,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -859,7 +893,7 @@
           }
         ],
         "average": 3.1,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -912,7 +946,7 @@
           }
         ],
         "average": 2.8,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -965,7 +999,7 @@
           }
         ],
         "average": 3.4,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -1018,7 +1052,7 @@
           }
         ],
         "average": 3.2,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -1071,7 +1105,7 @@
           }
         ],
         "average": 3.8,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -1124,7 +1158,7 @@
           }
         ],
         "average": 3.5,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -1177,7 +1211,7 @@
           }
         ],
         "average": 3.3,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -1229,8 +1263,8 @@
             "averageRank": null
           }
         ],
-        "average": 3.0,
-        "median": 4.0,
+        "average": 3,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -1283,7 +1317,7 @@
           }
         ],
         "average": 3.7,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -1336,7 +1370,7 @@
           }
         ],
         "average": 3.4,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -1354,7 +1388,7 @@
             "key": "dep-eng",
             "label": "Engineering",
             "respondentCount": 34,
-            "participationRate": 85.0,
+            "participationRate": 85,
             "headcount": 40,
             "isSuppressed": false,
             "questions": [
@@ -1366,7 +1400,7 @@
               {
                 "questionId": "q2",
                 "answeredCount": 34,
-                "average": 4.0
+                "average": 4
               },
               {
                 "questionId": "q3",
@@ -1391,7 +1425,7 @@
               {
                 "questionId": "q7",
                 "answeredCount": 34,
-                "average": 4.0
+                "average": 4
               },
               {
                 "questionId": "q8",
@@ -1411,7 +1445,7 @@
               {
                 "questionId": "q11",
                 "answeredCount": 34,
-                "average": 4.0
+                "average": 4
               },
               {
                 "questionId": "q12",
@@ -1447,7 +1481,7 @@
               {
                 "questionId": "q4",
                 "answeredCount": 21,
-                "average": 2.0
+                "average": 2
               },
               {
                 "questionId": "q5",
@@ -1503,7 +1537,7 @@
               {
                 "questionId": "q1",
                 "answeredCount": 18,
-                "average": 4.0
+                "average": 4
               },
               {
                 "questionId": "q2",
@@ -1548,7 +1582,7 @@
               {
                 "questionId": "q10",
                 "answeredCount": 18,
-                "average": 3.0
+                "average": 3
               },
               {
                 "questionId": "q11",
@@ -1660,12 +1694,12 @@
               {
                 "questionId": "q4",
                 "answeredCount": 9,
-                "average": 3.0
+                "average": 3
               },
               {
                 "questionId": "q5",
                 "answeredCount": 9,
-                "average": 4.0
+                "average": 4
               },
               {
                 "questionId": "q6",
@@ -1685,7 +1719,7 @@
               {
                 "questionId": "q9",
                 "answeredCount": 9,
-                "average": 3.0
+                "average": 3
               },
               {
                 "questionId": "q10",
@@ -2047,9 +2081,9 @@
               3.6,
               3.4,
               3.5,
-              3.0,
+              3,
               3.4,
-              3.0
+              3
             ]
           },
           {
@@ -2181,10 +2215,10 @@
             "respondentCount": 14,
             "isSuppressed": false,
             "scores": [
-              4.0,
+              4,
               3.8,
-              4.0,
-              3.0,
+              4,
+              3,
               3.8,
               3.5
             ]
@@ -2208,10 +2242,10 @@
             "isSuppressed": false,
             "scores": [
               4.17,
-              4.0,
+              4,
               4.17,
               3.17,
-              4.0,
+              4,
               3.67
             ]
           }
@@ -2271,11 +2305,11 @@
             "respondentCount": 11,
             "isSuppressed": false,
             "scores": [
-              3.0,
+              3,
               3.4,
               2.6,
-              3.0,
-              3.0,
+              3,
+              3,
               2.6
             ]
           },
@@ -2317,7 +2351,7 @@
             "isSuppressed": false,
             "scores": [
               4.2,
-              4.0,
+              4,
               4.2,
               3.4,
               3.8,
@@ -2346,7 +2380,7 @@
               4.2,
               4.4,
               3.6,
-              4.0,
+              4,
               3.4
             ]
           }
@@ -2832,7 +2866,6 @@
       "invitationCustomMessage": null
     },
     "allowedStatusTransitions": [
-      "paused",
       "closed"
     ],
     "isContentEditable": false,
@@ -3333,8 +3366,8 @@
           "questionsCreated": 1,
           "timesAsked": 4,
           "timesAnswered": 1,
-          "responseRate": 25.0,
-          "skipRate": 75.0,
+          "responseRate": 25,
+          "skipRate": 75,
           "averageTimeSpentSeconds": 14.2,
           "lastUsedAt": "2026-08-27T08:41:00Z"
         }
@@ -3475,7 +3508,7 @@
         "industry": null,
         "companySize": null,
         "usageCount": 1,
-        "responseRate": 25.0,
+        "responseRate": 25,
         "insightScore": 0.1,
         "lastUsedAt": "2026-08-27T08:41:00Z",
         "isActive": true,
@@ -3556,7 +3589,7 @@
         "companySize": null,
         "usageCount": 0,
         "responseRate": 0,
-        "insightScore": 0.0,
+        "insightScore": 0,
         "lastUsedAt": null,
         "isActive": true,
         "isAiGenerated": false,
