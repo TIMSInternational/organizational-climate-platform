@@ -14,7 +14,11 @@
  * a real spread) needs at least three.
  *
  * It also creates the OPEN survey the local stack has never had, which is what makes
- * `/surveys/:id/respond` and the distribution screens answer with something.
+ * `/surveys/:id/respond` and the distribution screens answer with something, plus the two
+ * things that hang off it: a DISTRIBUTION for that survey and a survey TEMPLATE. Without
+ * those, `/surveys/:surveyId/distribution` answers 404 and `/surveys/templates` and the
+ * template step of `/surveys/new` render an empty list -- and the 404 has already been
+ * filed once as a defect when it was the state of the data.
  *
  * ## What it does NOT do: rewrite the titles
  *
@@ -62,7 +66,13 @@
  *
  * ## Idempotent
  *
- * Waves are matched by title before anything is created, because this WILL be re-run.
+ * Waves are matched by title before anything is created, because this WILL be re-run. So
+ * is the open survey; the distribution is matched by asking for it (a 404 means none) and
+ * the template by name. A second run reports `0 created` and changes nothing.
+ *
+ * The respondent sign-in loop is skipped entirely when no wave is missing, so that second
+ * run takes seconds rather than two minutes -- and, more to the point, a stack that
+ * already had the waves used to return before reaching the open survey at all.
  */
 import { parseArgs } from 'node:util'
 
@@ -94,6 +104,30 @@ async function json(url, init = {}, token) {
       ...init.headers,
     },
   })
+  const body = await response.text()
+  if (!response.ok) {
+    throw new Error(`${init.method ?? 'GET'} ${url} -> ${response.status} ${body.slice(0, 300)}`)
+  }
+  return body ? JSON.parse(body) : null
+}
+
+/**
+ * `json`, except a 404 is an answer rather than a failure.
+ *
+ * `GET /surveys/{id}/distribution` answers 404 when the survey has none, and that is
+ * exactly the question this script needs to ask before creating one. Everything else still
+ * throws, so a 403 or a 500 stays as loud as it was.
+ */
+async function tryJson(url, init = {}, token) {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init.headers,
+    },
+  })
+  if (response.status === 404) return null
   const body = await response.text()
   if (!response.ok) {
     throw new Error(`${init.method ?? 'GET'} ${url} -> ${response.status} ${body.slice(0, 300)}`)
@@ -226,45 +260,63 @@ async function main() {
   }
 
   const existing = await json(`${API}/surveys`, {}, adminToken)
-  const have = new Set((existing.surveys ?? []).map((s) => s.title))
+  // A Map, not a Set: the open survey's ID is needed on a RE-RUN too, because its
+  // distribution is checked every time rather than only on the run that created it.
+  const have = new Map((existing.surveys ?? []).map((s) => [s.title, s]))
 
   const wanted = WAVES.filter((w) => !have.has(w.title))
   const needOpen = !have.has(OPEN_SURVEY.title)
-  if (wanted.length === 0 && !needOpen) {
-    log('seed-surveys: every wave and the open survey already exist; nothing to do.')
-    return
-  }
 
   // Sign in as each respondent ONCE, paced under the 20/min auth ceiling, and reuse the
   // token for every wave. This is the slow part and it is deliberate -- see the header.
+  //
+  // Skipped entirely when no wave is missing. Respondent tokens exist only to ANSWER a
+  // wave; the open survey, its distribution and the template are admin-only writes. Before
+  // this the script returned early instead, which is why a stack that had the waves could
+  // never acquire the two things below.
   const tokens = new Map()
-  const total = roster.reduce((n, r) => n + r.members.length, 0)
-  log(`seed-surveys: signing in ${total} respondents, ~${Math.round((total * LOGIN_GAP) / 1000)}s (auth is 20/min)`)
-  let signedIn = 0
-  for (const { members } of roster) {
-    for (const member of members) {
-      const { temporaryPassword } = await json(`${API}/auth/admin/reset-credentials`, {
-        method: 'POST',
-        body: JSON.stringify({ userId: member.id }),
-      }, adminToken)
-      const { token } = await json(`${API}/auth/login`, {
-        method: 'POST',
-        body: JSON.stringify({ email: member.email, password: temporaryPassword }),
-      })
-      tokens.set(member.id, token)
-      signedIn += 1
-      if (signedIn % 6 === 0) log(`seed-surveys:   ${signedIn}/${total} signed in`)
-      await sleep(LOGIN_GAP)
+  if (wanted.length > 0) {
+    const total = roster.reduce((n, r) => n + r.members.length, 0)
+    log(`seed-surveys: signing in ${total} respondents, ~${Math.round((total * LOGIN_GAP) / 1000)}s (auth is 20/min)`)
+    let signedIn = 0
+    for (const { members } of roster) {
+      for (const member of members) {
+        const { temporaryPassword } = await json(`${API}/auth/admin/reset-credentials`, {
+          method: 'POST',
+          body: JSON.stringify({ userId: member.id }),
+        }, adminToken)
+        const { token } = await json(`${API}/auth/login`, {
+          method: 'POST',
+          body: JSON.stringify({ email: member.email, password: temporaryPassword }),
+        })
+        tokens.set(member.id, token)
+        signedIn += 1
+        if (signedIn % 6 === 0) log(`seed-surveys:   ${signedIn}/${total} signed in`)
+        await sleep(LOGIN_GAP)
+      }
     }
   }
 
+  let created = 0
+
   for (const wave of wanted) {
     await seedWave(adminToken, companyId, wave, roster, tokens)
+    created += 1
   }
 
-  if (needOpen) await seedOpenSurvey(adminToken, companyId, roster)
+  // The open survey, then the two things that hang off it. `openSurvey` is resolved from
+  // the listing on a re-run so the distribution check has an id to ask about.
+  let openSurvey = have.get(OPEN_SURVEY.title) ?? null
+  if (needOpen) {
+    openSurvey = await seedOpenSurvey(adminToken, companyId, roster)
+    created += 1
+  }
 
-  log('\nseed-surveys: done. /surveys/climate-trends now has a real series.')
+  if (await seedDistribution(adminToken, openSurvey)) created += 1
+  if (await seedTemplate(adminToken, companyId)) created += 1
+
+  log(`\nseed-surveys: done, ${created} created.`)
+  if (created === 0) log('seed-surveys: everything already existed; nothing was changed.')
 }
 
 /** One closed wave: draft -> active -> responses -> closed. */
@@ -381,6 +433,120 @@ async function seedOpenSurvey(adminToken, companyId, roster) {
     body: JSON.stringify({ status: 'active' }),
   }, adminToken)
   log(`seed-surveys: ${OPEN_SURVEY.title} is ACTIVE at /surveys/${survey.id}`)
+  return survey
+}
+
+/**
+ * The open survey's distribution.
+ *
+ * `/surveys/:id/distribution` answered 404 on every local stack this repository has ever
+ * had, and that 404 was once filed as a defect. It was the state of the data: a survey has
+ * no distribution until an admin creates one, and nothing here ever did.
+ *
+ * `accessType: 'public'` rather than the `tokenized` DDL default, because tokenized mints
+ * no `publicLink` and the screen's share-link block, its QR panel and the regenerate/revoke
+ * affordances are then all unreachable — the larger half of the screen, invisible.
+ *
+ * ## What this deliberately does NOT do: invite anybody
+ *
+ * `POST /surveys/{id}/invitations` is what fills the summary strip, and it QUEUES MAIL.
+ * A seed that mails an entire seeded company the first time someone runs it is a seed
+ * nobody can run twice, so the invitation counts stay at zero and the strip is
+ * photographed in its real "distributed, nobody invited yet" state. Invite from the UI
+ * when that is the state you want.
+ *
+ * Returns true when it created one.
+ */
+async function seedDistribution(adminToken, survey) {
+  if (!survey) {
+    log('seed-surveys: no open survey to distribute; skipping the distribution.')
+    return false
+  }
+  const current = await tryJson(`${API}/surveys/${survey.id}/distribution`, {}, adminToken)
+  if (current) {
+    log(`seed-surveys: ${OPEN_SURVEY.title} already has a distribution (${current.accessType}).`)
+    return false
+  }
+
+  const distribution = await json(`${API}/surveys/${survey.id}/distribution`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      accessType: 'public',
+      accessRules: {
+        // Login required and anonymous OFF for the same reason the waves are not
+        // anonymous: a response only carries a department when its author is
+        // authenticated, and the department breakdown is what these screens are for.
+        requireLogin: true,
+        allowAnonymous: false,
+        singleResponse: true,
+        activeOutsideSchedule: false,
+      },
+      qrCustomization: {
+        foregroundColor: '#1F2544',
+        backgroundColor: '#FFFFFF',
+        size: 256,
+      },
+    }),
+  }, adminToken)
+
+  log(`seed-surveys: distribution created, accessType=${distribution.accessType}, link=${distribution.publicLink ?? 'none'}`)
+  return true
+}
+
+/**
+ * One survey template, so `/surveys/templates` and `/surveys/new` are not empty.
+ *
+ * Scoped to the company rather than global: `CanWriteTemplate` refuses a company_admin who
+ * omits `companyId`, and this script is documented to run as one. A global template would
+ * also be visible to every other tenant on a shared stack, which a local seed has no
+ * business creating.
+ *
+ * The questions are the same six dimensions the waves ask, so a survey created FROM this
+ * template aggregates into the same climate map as the seeded history rather than into a
+ * seventh, empty set of dimensions.
+ *
+ * Matched by name before anything is created. Returns true when it created one.
+ */
+const TEMPLATE_NAME = 'Standard climate instrument (seeded)'
+
+async function seedTemplate(adminToken, companyId) {
+  const { templates } = await json(`${API}/survey-templates?companyId=${companyId}`, {}, adminToken)
+  if ((templates ?? []).some((template) => template.name === TEMPLATE_NAME)) {
+    log(`seed-surveys: template "${TEMPLATE_NAME}" already exists.`)
+    return false
+  }
+
+  const template = await json(`${API}/survey-templates`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: TEMPLATE_NAME,
+      description: 'The six-dimension climate instrument the seeded waves use. Start here.',
+      category: 'climate',
+      companyId,
+      industry: 'Logistics',
+      companySize: '100-500',
+      isPublic: true,
+      tags: ['climate', 'seeded'],
+      // `language` is deliberately omitted. It exists only to attribute BARE strings to a
+      // column, and every string below is already locale-keyed, so declaring one could
+      // only ever contradict the content.
+      questions: QUESTIONS.map(([category, en, es], order) => ({
+        text: { en, es },
+        type: 'likert',
+        category,
+        scaleMin: 1,
+        scaleMax: 5,
+        scaleLabelMin: { en: 'Strongly disagree', es: 'Muy en desacuerdo' },
+        scaleLabelMax: { en: 'Strongly agree', es: 'Muy de acuerdo' },
+        required: true,
+        commentRequired: false,
+        order,
+      })),
+    }),
+  }, adminToken)
+
+  log(`seed-surveys: template created at /surveys/templates/${template.id} (${template.questions?.length ?? 0} questions)`)
+  return true
 }
 
 await main()
