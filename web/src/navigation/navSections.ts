@@ -16,6 +16,7 @@ import {
   Inbox,
   LayoutDashboard,
   LayoutTemplate,
+  Library,
   ListChecks,
   Network,
   SquareKanban,
@@ -176,6 +177,29 @@ const CLIMATE_TRENDS_ITEM: NavItem = {
   labelKey: 'navigation.climateTrends',
   href: '/surveys/climate-trends',
   icon: TrendingUp,
+}
+
+// The question bank (#114). Admin-only, and correct for BOTH admin branches with no
+// companyId interpolated, exactly like SURVEY_TEMPLATES_ITEM above: every
+// `/admin/question-bank` route gates on `Roles.Admin` and then scopes by role -- a
+// super_admin reads every tenant's rows plus the global ones, a company_admin the global
+// ones plus their own. Offered to neither employee, supervisor nor leader, who would all
+// get a 403.
+//
+// This is the BANK, not the library. `/dev/question-library` is #112's picker and reaches
+// a different set of tables; #58 settles that they must not be merged.
+//
+// Appended LAST in each Workspace group rather than inserted among the existing rows, on
+// the warning DEPARTMENTS_ITEM and the System Health entry both record: `leafNavItems`
+// flattens sections in order and the first four leaves ARE the mobile tab bar, so an
+// entry placed higher would silently take another page's tab slot. This is a curation
+// surface an admin visits occasionally, not one of the four things they do most.
+const QUESTION_BANK_ITEM: NavItem = {
+  labelKey: 'navigation.questionBank',
+  href: '/admin/question-bank',
+  // Not ListChecks: TRACKING_MIS_TAREAS_ITEM already carries it, and two sidebar rows
+  // with one glyph is how a reader learns to stop trusting the glyphs.
+  icon: Library,
 }
 
 // Departments (#142). Admin-only: `/admin/departments` allows a super_admin
@@ -388,6 +412,7 @@ export function buildNavSections(
             href: '/admin/system',
             icon: Activity,
           },
+          QUESTION_BANK_ITEM,
         ],
       },
       {
@@ -476,6 +501,7 @@ export function buildNavSections(
             icon: ChartColumn,
           },
           DEPARTMENTS_ITEM,
+          QUESTION_BANK_ITEM,
         ],
       },
       {

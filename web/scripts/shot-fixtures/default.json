@@ -3215,6 +3215,361 @@
       }
     ]
   },
+  "GET /admin/question-bank/categories": {
+    "categories": [
+      {
+        "category": "psychological_safety",
+        "subcategory": null,
+        "itemCount": 1,
+        "activeItemCount": 1
+      },
+      {
+        "category": "workload",
+        "subcategory": null,
+        "itemCount": 2,
+        "activeItemCount": 2
+      },
+      {
+        "category": "operations",
+        "subcategory": null,
+        "itemCount": 1,
+        "activeItemCount": 1
+      },
+      {
+        "category": "recognition",
+        "subcategory": null,
+        "itemCount": 1,
+        "activeItemCount": 1
+      },
+      {
+        "category": "facilities",
+        "subcategory": null,
+        "itemCount": 1,
+        "activeItemCount": 0
+      },
+      {
+        "category": "leadership",
+        "subcategory": null,
+        "itemCount": 1,
+        "activeItemCount": 1
+      },
+      {
+        "category": "engagement",
+        "subcategory": null,
+        "itemCount": 1,
+        "activeItemCount": 1
+      }
+    ]
+  },
+  "GET /admin/question-bank/effectiveness": {
+    "items": [
+      {
+        "questionBankItemId": "c0000000-0000-0000-0000-000000000001",
+        "text": "I can raise a concern without fear",
+        "language": "en",
+        "category": "psychological_safety",
+        "subcategory": "voice",
+        "isActive": true,
+        "metrics": {
+          "questionBankItemId": "c0000000-0000-0000-0000-000000000001",
+          "surveysUsedIn": 9,
+          "questionsCreated": 9,
+          "timesAsked": 312,
+          "timesAnswered": 306,
+          "responseRate": 98.1,
+          "skipRate": 1.9,
+          "averageTimeSpentSeconds": 14.2,
+          "lastUsedAt": "2026-08-04T09:00:00Z"
+        }
+      },
+      {
+        "questionBankItemId": "c0000000-0000-0000-0000-000000000002",
+        "text": "My workload is manageable",
+        "language": "en",
+        "category": "workload",
+        "subcategory": null,
+        "isActive": true,
+        "metrics": {
+          "questionBankItemId": "c0000000-0000-0000-0000-000000000002",
+          "surveysUsedIn": 9,
+          "questionsCreated": 9,
+          "timesAsked": 312,
+          "timesAnswered": 298,
+          "responseRate": 95.5,
+          "skipRate": 4.5,
+          "averageTimeSpentSeconds": 14.2,
+          "lastUsedAt": "2026-08-04T09:00:00Z"
+        }
+      },
+      {
+        "questionBankItemId": "c0000000-0000-0000-0000-000000000003",
+        "text": "Describe anything that made this quarter harder than it needed to be",
+        "language": "en",
+        "category": "workload",
+        "subcategory": "open feedback",
+        "isActive": true,
+        "metrics": {
+          "questionBankItemId": "c0000000-0000-0000-0000-000000000003",
+          "surveysUsedIn": 9,
+          "questionsCreated": 9,
+          "timesAsked": 312,
+          "timesAnswered": 121,
+          "responseRate": 38.8,
+          "skipRate": 61.2,
+          "averageTimeSpentSeconds": 14.2,
+          "lastUsedAt": "2026-08-04T09:00:00Z"
+        }
+      },
+      {
+        "questionBankItemId": "c0000000-0000-0000-0000-000000000004",
+        "text": "How did the new depot rota land with your team?",
+        "language": "en",
+        "category": "operations",
+        "subcategory": null,
+        "isActive": true,
+        "metrics": {
+          "questionBankItemId": "c0000000-0000-0000-0000-000000000004",
+          "surveysUsedIn": 1,
+          "questionsCreated": 1,
+          "timesAsked": 4,
+          "timesAnswered": 1,
+          "responseRate": 25.0,
+          "skipRate": 75.0,
+          "averageTimeSpentSeconds": 14.2,
+          "lastUsedAt": "2026-08-27T08:41:00Z"
+        }
+      },
+      {
+        "questionBankItemId": "c0000000-0000-0000-0000-000000000005",
+        "text": "Good work is recognised here",
+        "language": "en",
+        "category": "recognition",
+        "subcategory": null,
+        "isActive": true,
+        "metrics": {
+          "questionBankItemId": "c0000000-0000-0000-0000-000000000005",
+          "surveysUsedIn": 8,
+          "questionsCreated": 8,
+          "timesAsked": 288,
+          "timesAnswered": 279,
+          "responseRate": 96.9,
+          "skipRate": 3.1,
+          "averageTimeSpentSeconds": 14.2,
+          "lastUsedAt": "2026-06-19T13:05:00Z"
+        }
+      },
+      {
+        "questionBankItemId": "c0000000-0000-0000-0000-000000000006",
+        "text": "Rate the canteen",
+        "language": "en",
+        "category": "facilities",
+        "subcategory": null,
+        "isActive": false,
+        "metrics": {
+          "questionBankItemId": "c0000000-0000-0000-0000-000000000006",
+          "surveysUsedIn": 2,
+          "questionsCreated": 2,
+          "timesAsked": 96,
+          "timesAnswered": 41,
+          "responseRate": 42.7,
+          "skipRate": 57.3,
+          "averageTimeSpentSeconds": 14.2,
+          "lastUsedAt": "2026-02-11T12:20:00Z"
+        }
+      },
+      {
+        "questionBankItemId": "c0000000-0000-0000-0000-000000000007",
+        "text": "Is it clear who decides what on your team?",
+        "language": "en",
+        "category": "leadership",
+        "subcategory": "clarity",
+        "isActive": true,
+        "metrics": {
+          "questionBankItemId": "c0000000-0000-0000-0000-000000000007",
+          "surveysUsedIn": 6,
+          "questionsCreated": 6,
+          "timesAsked": 210,
+          "timesAnswered": 203,
+          "responseRate": 96.7,
+          "skipRate": 3.3,
+          "averageTimeSpentSeconds": 14.2,
+          "lastUsedAt": "2026-08-04T09:00:00Z"
+        }
+      }
+    ]
+  },
+  "GET /admin/question-bank": {
+    "items": [
+      {
+        "id": "c0000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "text": "I can raise a concern without fear",
+        "language": "en",
+        "type": "likert",
+        "category": "psychological_safety",
+        "subcategory": "voice",
+        "industry": null,
+        "companySize": null,
+        "usageCount": 9,
+        "responseRate": 98.1,
+        "insightScore": 0.81,
+        "lastUsedAt": "2026-08-04T09:00:00Z",
+        "isActive": true,
+        "isAiGenerated": false,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": [
+          "core"
+        ]
+      },
+      {
+        "id": "c0000000-0000-0000-0000-000000000002",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "text": "My workload is manageable",
+        "language": "en",
+        "type": "likert",
+        "category": "workload",
+        "subcategory": null,
+        "industry": null,
+        "companySize": null,
+        "usageCount": 9,
+        "responseRate": 95.5,
+        "insightScore": 0.74,
+        "lastUsedAt": "2026-08-04T09:00:00Z",
+        "isActive": true,
+        "isAiGenerated": false,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": []
+      },
+      {
+        "id": "c0000000-0000-0000-0000-000000000003",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "text": "Describe anything that made this quarter harder than it needed to be",
+        "language": "en",
+        "type": "open_ended",
+        "category": "workload",
+        "subcategory": "open feedback",
+        "industry": null,
+        "companySize": null,
+        "usageCount": 9,
+        "responseRate": 38.8,
+        "insightScore": 0.33,
+        "lastUsedAt": "2026-08-04T09:00:00Z",
+        "isActive": true,
+        "isAiGenerated": false,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": [
+          "long-form"
+        ]
+      },
+      {
+        "id": "c0000000-0000-0000-0000-000000000004",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "text": "How did the new depot rota land with your team?",
+        "language": "en",
+        "type": "rating",
+        "category": "operations",
+        "subcategory": null,
+        "industry": null,
+        "companySize": null,
+        "usageCount": 1,
+        "responseRate": 25.0,
+        "insightScore": 0.1,
+        "lastUsedAt": "2026-08-27T08:41:00Z",
+        "isActive": true,
+        "isAiGenerated": false,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": []
+      },
+      {
+        "id": "c0000000-0000-0000-0000-000000000005",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "text": "Good work is recognised here",
+        "language": "en",
+        "type": "likert",
+        "category": "recognition",
+        "subcategory": null,
+        "industry": null,
+        "companySize": null,
+        "usageCount": 8,
+        "responseRate": 96.9,
+        "insightScore": 0.69,
+        "lastUsedAt": "2026-06-19T13:05:00Z",
+        "isActive": true,
+        "isAiGenerated": false,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": []
+      },
+      {
+        "id": "c0000000-0000-0000-0000-000000000006",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "text": "Rate the canteen",
+        "language": "en",
+        "type": "rating",
+        "category": "facilities",
+        "subcategory": null,
+        "industry": null,
+        "companySize": null,
+        "usageCount": 2,
+        "responseRate": 42.7,
+        "insightScore": 0.08,
+        "lastUsedAt": "2026-02-11T12:20:00Z",
+        "isActive": false,
+        "isAiGenerated": false,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": []
+      },
+      {
+        "id": "c0000000-0000-0000-0000-000000000007",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "text": "Is it clear who decides what on your team?",
+        "language": "en",
+        "type": "yes_no",
+        "category": "leadership",
+        "subcategory": "clarity",
+        "industry": null,
+        "companySize": null,
+        "usageCount": 6,
+        "responseRate": 96.7,
+        "insightScore": 0.77,
+        "lastUsedAt": "2026-08-04T09:00:00Z",
+        "isActive": true,
+        "isAiGenerated": true,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": []
+      },
+      {
+        "id": "c0000000-0000-0000-0000-000000000008",
+        "companyId": null,
+        "text": "I would recommend this organisation as a place to work",
+        "language": "en",
+        "type": "likert",
+        "category": "engagement",
+        "subcategory": null,
+        "industry": null,
+        "companySize": null,
+        "usageCount": 0,
+        "responseRate": 0,
+        "insightScore": 0.0,
+        "lastUsedAt": null,
+        "isActive": true,
+        "isAiGenerated": false,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": [
+          "global",
+          "enps"
+        ]
+      }
+    ],
+    "total": 8
+  },
   "GET /admin/ai-insights": [
     {
       "id": "i0000000-0000-0000-0000-000000000001",

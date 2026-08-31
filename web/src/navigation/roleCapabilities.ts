@@ -311,6 +311,17 @@ const ADMIN_SHARED: readonly RoleCapability[] = [
     inNav: true,
   },
   {
+    // #114. The question BANK, not the question library — they reach different tables
+    // and #58 settles that they must not be merged.
+    route: '/admin/question-bank',
+    labelKey: 'navigation.questionBank',
+    authorizedBy:
+      'GET /admin/question-bank — QuestionBankEndpoints gates on Roles.Admin, then CanRead ' +
+      'scopes by role: a super_admin reads every tenant plus the global rows, a company_admin ' +
+      'the global rows plus their own. Every other role gets a 403.',
+    inNav: true,
+  },
+  {
     route: '/surveys/climate-trends',
     labelKey: 'navigation.climateTrends',
     authorizedBy:

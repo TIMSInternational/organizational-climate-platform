@@ -435,6 +435,10 @@ describe('leafNavItems', () => {
       // existing rows: nested, it would flatten ahead of Action Plans and take its
       // fourth mobile tab slot.
       '/departments',
+      // #114, appended last in Workspace for the same four-slot reason. A curation
+      // surface an admin visits occasionally is not one of the four things they do
+      // most, and every leaf above is unmoved by it.
+      '/admin/question-bank',
       // Last, for the same four-slot reason -- see 'puts Notifications last' above.
       '/notifications',
     ])
@@ -468,6 +472,10 @@ describe('leafNavItems', () => {
       // #275's System Health, appended for that same reason -- it belongs beside
       // Companies by subject, but the ADMINISTRATION section feeds the mobile tab bar.
       '/admin/system',
+      // #114's question bank, appended last in Workspace for the same reason again.
+      // Both admin branches get the identical entry: no companyId is interpolated,
+      // because the endpoint scopes by role rather than by a URL segment.
+      '/admin/question-bank',
       '/notifications',
     ])
   })
