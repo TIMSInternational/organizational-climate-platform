@@ -35,15 +35,23 @@ public sealed record ReportAIInsightItem(
 /// <para>
 /// <see cref="Surveys"/> is real aggregation (#88): one <see cref="ReportSurveySection"/> per
 /// non-draft survey of the company, each a projection of the same <c>SurveyAggregate</c> the
-/// results screens serve. <see cref="GenerationNote"/> remains because the document is still
-/// not the whole report -- it names the sections that do not exist yet, and saying so in the
-/// document beats a consumer inferring completeness from a section that happens to be present.
+/// results screens serve -- participation, per-question distributions, open-text word
+/// frequencies, per-dimension scores, departments and demographic breakdowns.
+/// <see cref="Benchmarks"/> is the same arrangement for the benchmark surface: the readings
+/// and year-over-year figures <c>GET /admin/benchmarks/{id}</c> serves, through that route's
+/// own code rather than a second subtraction.
+/// </para>
+/// <para>
+/// <see cref="GenerationNote"/> remains because the document is still not the whole report --
+/// it names the sections that do not exist yet, and saying so in the document beats a
+/// consumer inferring completeness from a section that happens to be present.
 /// </para>
 /// </summary>
 public sealed record ReportOutputDocument(
     string GenerationNote,
     IReadOnlyList<ReportSurveySection> Surveys,
-    IReadOnlyList<ReportAIInsightItem> AiInsights);
+    IReadOnlyList<ReportAIInsightItem> AiInsights,
+    IReadOnlyList<ReportBenchmarkComparison> Benchmarks);
 
 /// <summary>
 /// The single path by which a generated report reads AI insights.
