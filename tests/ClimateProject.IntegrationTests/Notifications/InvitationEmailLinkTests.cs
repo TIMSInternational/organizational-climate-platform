@@ -381,7 +381,12 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
         Assert.Equal(NotificationStatuses.Pending, queued.Status);
 
         // The issue's precondition, verbatim: the notification is held until the survey opens.
-        Assert.Equal(survey.StartDate, queued.ScheduledFor);
+        // Compared at microsecond precision, not exactly: survey.StartDate comes back from the
+        // create response with full 100ns ticks, queued.ScheduledFor has been through Postgres
+        // 'timestamptz', which stores microseconds -- so exactly one side is truncated and the
+        // last digit can differ. "Held until the survey opens" was never a sub-microsecond
+        // property. Same rationale as SurveyDistributionEndpointsTests' expiry-clamp assert.
+        Assert.Equal(survey.StartDate, queued.ScheduledFor, TimeSpan.FromMicroseconds(1));
         Assert.True(queued.ScheduledFor > DateTimeOffset.UtcNow);
 
         (await client.PostAsync(
@@ -896,7 +901,13 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
             {
                 Id = Guid.NewGuid(),
                 CompanyId = formerCompanyId,
-                Email = $"{Guid.NewGuid():N}@rehomed-revoke.test",
+                // Deliverable on purpose, unlike every other address in this class. The test's
+                // last act is to assert this person's OTHER tenant's mail is actually sent when
+                // it comes due, and the send path permanently refuses RFC-reserved domains at
+                // every chokepoint (UndeliverableAddresses, the #399 bounce guard) -- a `.test`
+                // recipient here would measure the guard, not the tenant boundary. The capturing
+                // transport is what receives it; nothing leaves the process either way.
+                Email = $"{Guid.NewGuid():N}@fixtures.timsint.com",
                 Name = "Rehomed",
                 Role = Roles.Employee,
                 IsActive = true,
