@@ -60,8 +60,13 @@ public static class TrackingInternalEndpoints
     /// happens to be the same number today for the same cost reason. That one is a display
     /// window a product decision may widen or narrow; tuning it must not silently change how
     /// far back an action plan can resolve the finding it was written against.
+    ///
+    /// <c>internal</c> so the integration fixture can seed exactly enough of a rival tenant's
+    /// history to fill this window. A copy of the literal 12 in the test would keep passing
+    /// after this number was raised, while quietly no longer proving the thing it was written
+    /// for -- which is how a test rots into a weaker test without ever going red.
     /// </summary>
-    private const int MaxSurveysAggregated = 12;
+    internal const int MaxSurveysAggregated = 12;
 
     private static readonly JsonSerializerOptions SnakeCaseOptions = new()
     {

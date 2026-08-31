@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Surveys;
@@ -117,10 +118,15 @@ public class TrackingCiclosHallazgosEndpointsTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// One fewer than <c>TrackingInternalEndpoints.MaxSurveysAggregated</c>, so that company
-    /// B's real survey plus these exactly fill the window.
+    /// One fewer than the scan window, so company B's real survey plus these exactly fill it.
+    ///
+    /// Derived from <see cref="TrackingInternalEndpoints.MaxSurveysAggregated"/> rather than
+    /// written as 11: a copy would keep passing after the window was widened while silently
+    /// no longer filling it, and the tenant-predicate assertion in
+    /// <see cref="Another_companys_survey_never_appears_in_this_companys_feed"/> -- which
+    /// exists only because that fixture fills the window -- would go back to proving nothing.
     /// </summary>
-    private const int FillerSurveys = 11;
+    private const int FillerSurveys = TrackingInternalEndpoints.MaxSurveysAggregated - 1;
 
     private Task SetWindowAsync(Guid surveyId, DateTimeOffset start, DateTimeOffset end)
         => _harness.WithDbAsync(async db =>
