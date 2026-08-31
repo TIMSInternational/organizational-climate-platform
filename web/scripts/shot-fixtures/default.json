@@ -1618,27 +1618,27 @@
     ],
     "dimensions": [
       {
-        "key": "belonging",
+        "key": "Collaboration",
         "surveyCount": 3
       },
       {
-        "key": "growth",
+        "key": "Growth",
         "surveyCount": 3
       },
       {
-        "key": "psychological_safety",
+        "key": "Leadership",
         "surveyCount": 3
       },
       {
-        "key": "recognition",
+        "key": "Psychological safety",
         "surveyCount": 3
       },
       {
-        "key": "trust",
+        "key": "Recognition",
         "surveyCount": 3
       },
       {
-        "key": "workload",
+        "key": "Workload",
         "surveyCount": 3
       }
     ],
@@ -1724,27 +1724,27 @@
     ],
     "dimensions": [
       {
-        "key": "belonging",
+        "key": "Collaboration",
         "surveyCount": 3
       },
       {
-        "key": "growth",
+        "key": "Growth",
         "surveyCount": 3
       },
       {
-        "key": "psychological_safety",
+        "key": "Leadership",
         "surveyCount": 3
       },
       {
-        "key": "recognition",
+        "key": "Psychological safety",
         "surveyCount": 3
       },
       {
-        "key": "trust",
+        "key": "Recognition",
         "surveyCount": 3
       },
       {
-        "key": "workload",
+        "key": "Workload",
         "surveyCount": 3
       }
     ],
@@ -1933,5 +1933,310 @@
     "suppressedGroupCount": 1,
     "minimumGroupSize": 5,
     "generatedAt": "2026-10-01T09:00:00+00:00"
+  },
+  "GET /profile": {
+    "id": "u0000000-0000-0000-0000-000000000001",
+    "name": "María Herrera",
+    "email": "maria.herrera@northwind.test",
+    "role": "company_admin",
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "companyName": "Northwind Logistics",
+    "departmentId": null,
+    "departmentName": null,
+    "managerId": null,
+    "demographics": {},
+    "hasPassword": true,
+    "isActive": true,
+    "lastLoginAt": "2026-08-27T08:12:00Z",
+    "createdAt": "2025-11-04T09:30:00Z"
+  },
+  "GET /admin/departments": {
+    "departments": [
+      {
+        "id": "d0000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Operations",
+        "description": "Fulfilment, routing and the depots.",
+        "employeeCount": 48,
+        "parentDepartmentId": null,
+        "isActive": true
+      },
+      {
+        "id": "d0000000-0000-0000-0000-000000000002",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Support",
+        "description": "First line, and the escalation desk.",
+        "employeeCount": 23,
+        "parentDepartmentId": null,
+        "isActive": true
+      },
+      {
+        "id": "d0000000-0000-0000-0000-000000000003",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Sales",
+        "description": "Field sales and account management.",
+        "employeeCount": 31,
+        "parentDepartmentId": null,
+        "isActive": true
+      },
+      {
+        "id": "d0000000-0000-0000-0000-000000000004",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Engineering",
+        "description": "Platform, data and internal tools.",
+        "employeeCount": 57,
+        "parentDepartmentId": null,
+        "isActive": true
+      },
+      {
+        "id": "d0000000-0000-0000-0000-000000000005",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "People",
+        "description": "Hiring, development and employee relations.",
+        "employeeCount": 12,
+        "parentDepartmentId": null,
+        "isActive": true
+      },
+      {
+        "id": "d0000000-0000-0000-0000-000000000006",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Finance",
+        "description": "Controlling, payroll and procurement.",
+        "employeeCount": 4,
+        "parentDepartmentId": null,
+        "isActive": true
+      },
+      {
+        "id": "d0000000-0000-0000-0000-000000000007",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Facilities",
+        "description": "Sites, fleet and workplace services.",
+        "employeeCount": 0,
+        "parentDepartmentId": null,
+        "isActive": true
+      }
+    ]
+  },
+  "GET /surveys": {
+    "surveys": [
+      {
+        "id": "s0000000-0000-0000-0000-000000000005",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "title": "Exit interview",
+        "type": "exit",
+        "status": "draft",
+        "language": "en",
+        "startDate": "2026-09-01T00:00:00Z",
+        "endDate": "2026-12-31T00:00:00Z",
+        "questionCount": 12,
+        "responseCount": 0,
+        "targetAudienceCount": null,
+        "createdAt": "2026-08-22T15:40:00Z"
+      },
+      {
+        "id": "s0000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "title": "Q2 climate survey",
+        "type": "periodic",
+        "status": "active",
+        "language": "en",
+        "startDate": "2026-05-01T00:00:00Z",
+        "endDate": "2026-06-12T00:00:00Z",
+        "questionCount": 24,
+        "responseCount": 175,
+        "targetAudienceCount": 208,
+        "createdAt": "2026-04-20T10:00:00Z"
+      },
+      {
+        "id": "s0000000-0000-0000-0000-000000000002",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "title": "Onboarding pulse",
+        "type": "onboarding",
+        "status": "active",
+        "language": "en",
+        "startDate": "2026-08-01T00:00:00Z",
+        "endDate": "2026-09-30T00:00:00Z",
+        "questionCount": 8,
+        "responseCount": 41,
+        "targetAudienceCount": 64,
+        "createdAt": "2026-07-25T11:00:00Z"
+      },
+      {
+        "id": "s0000000-0000-0000-0000-000000000003",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "title": "Q3 climate survey",
+        "type": "periodic",
+        "status": "active",
+        "language": "en",
+        "startDate": "2026-10-01T00:00:00Z",
+        "endDate": "2026-10-31T00:00:00Z",
+        "questionCount": 24,
+        "responseCount": 0,
+        "targetAudienceCount": 208,
+        "createdAt": "2026-08-14T09:00:00Z"
+      },
+      {
+        "id": "s0000000-0000-0000-0000-000000000004",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "title": "Q1 climate survey",
+        "type": "periodic",
+        "status": "closed",
+        "language": "en",
+        "startDate": "2026-02-01T00:00:00Z",
+        "endDate": "2026-03-14T00:00:00Z",
+        "questionCount": 24,
+        "responseCount": 189,
+        "targetAudienceCount": 201,
+        "createdAt": "2026-01-18T09:00:00Z"
+      }
+    ]
+  },
+  "GET /action-plans": {
+    "actionPlans": [
+      {
+        "id": "a0000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "title": "Company-wide recognition standard",
+        "status": "in_progress",
+        "priority": "high",
+        "departmentId": null,
+        "dueDate": "2026-08-06T00:00:00Z",
+        "createdAt": "2026-07-05T09:00:00Z"
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000002",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "title": "Publish the weekend rota two weeks ahead",
+        "status": "in_progress",
+        "priority": "medium",
+        "departmentId": "d0000000-0000-0000-0000-000000000001",
+        "dueDate": "2026-09-01T00:00:00Z",
+        "createdAt": "2026-07-06T09:00:00Z"
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000003",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "title": "Peer recognition programme",
+        "status": "not_started",
+        "priority": "medium",
+        "departmentId": "d0000000-0000-0000-0000-000000000005",
+        "dueDate": "2026-10-31T00:00:00Z",
+        "createdAt": "2026-07-07T09:00:00Z"
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000004",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "title": "Rebalance the escalation queue",
+        "status": "in_progress",
+        "priority": "high",
+        "departmentId": "d0000000-0000-0000-0000-000000000002",
+        "dueDate": "2026-08-20T00:00:00Z",
+        "createdAt": "2026-07-08T09:00:00Z"
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000005",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "title": "Career frameworks for field sales",
+        "status": "completed",
+        "priority": "low",
+        "departmentId": "d0000000-0000-0000-0000-000000000003",
+        "dueDate": "2026-06-30T00:00:00Z",
+        "createdAt": "2026-07-09T09:00:00Z"
+      }
+    ]
+  },
+  "GET /action-plan-templates": {
+    "templates": []
+  },
+  "GET /microclimates": {
+    "microclimates": [
+      {
+        "id": "m0000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "title": "How did this week's release land?",
+        "status": "active",
+        "language": "en",
+        "responseCount": 18,
+        "targetParticipantCount": 57,
+        "createdAt": "2026-08-11T10:00:00Z"
+      },
+      {
+        "id": "m0000000-0000-0000-0000-000000000002",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "title": "Depot handover — quick pulse",
+        "status": "active",
+        "language": "en",
+        "responseCount": 31,
+        "targetParticipantCount": 48,
+        "createdAt": "2026-08-12T10:00:00Z"
+      },
+      {
+        "id": "m0000000-0000-0000-0000-000000000003",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "title": "After the reorg announcement",
+        "status": "closed",
+        "language": "en",
+        "responseCount": 96,
+        "targetParticipantCount": 120,
+        "createdAt": "2026-08-13T10:00:00Z"
+      }
+    ]
+  },
+  "GET /admin/benchmarks": [],
+  "GET /admin/ai-insights": [
+    {
+      "id": "i0000000-0000-0000-0000-000000000001",
+      "companyId": "11111111-1111-1111-1111-111111111111",
+      "title": "Support's response rate is half the organisation's",
+      "type": "risk",
+      "category": "participation",
+      "priority": "high",
+      "isAcknowledged": false
+    },
+    {
+      "id": "i0000000-0000-0000-0000-000000000002",
+      "companyId": "11111111-1111-1111-1111-111111111111",
+      "title": "Workload scores fell for a second quarter",
+      "type": "trend",
+      "category": "workload",
+      "priority": "high",
+      "isAcknowledged": false
+    },
+    {
+      "id": "i0000000-0000-0000-0000-000000000003",
+      "companyId": "11111111-1111-1111-1111-111111111111",
+      "title": "Recognition is the weakest dimension in four of six departments",
+      "type": "pattern",
+      "category": "recognition",
+      "priority": "medium",
+      "isAcknowledged": false
+    },
+    {
+      "id": "i0000000-0000-0000-0000-000000000004",
+      "companyId": "11111111-1111-1111-1111-111111111111",
+      "title": "Engineering's psychological safety is the strongest reading on record",
+      "type": "strength",
+      "category": "psychological_safety",
+      "priority": "low",
+      "isAcknowledged": true
+    }
+  ],
+  "GET /profile/activity": {
+    "activity": []
+  },
+  "GET /profile/preferences": {
+    "notifications": {
+      "emailSurveys": true,
+      "emailMicroclimates": true,
+      "emailActionPlans": true,
+      "emailReminders": false,
+      "digestFrequency": "weekly"
+    },
+    "display": {
+      "theme": "system",
+      "language": "en",
+      "timezone": "Europe/Madrid",
+      "dashboardLayout": "default"
+    }
   }
 }

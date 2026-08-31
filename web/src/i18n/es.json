@@ -745,7 +745,9 @@
     "attentionUnmeasured": "Aún no se puede comparar ningún departamento",
     "attentionUnmeasuredEvidence": "Ningún departamento tiene una lectura publicable, así que aquí nada está por encima ni por debajo de la organización: solo sin medir.",
     "noDepartmentReadings": "Aún no se puede medir ningún departamento",
-    "noDepartmentReadingsBody": "La tasa de respuesta se mide por persona, así que un departamento sin personas no tiene lectura que representar."
+    "noDepartmentReadingsBody": "La tasa de respuesta se mide por persona, así que un departamento sin personas no tiene lectura que representar.",
+    "teamClimate": "El clima de tu equipo",
+    "yourTeam": "Tu equipo"
   },
   "departments": {
     "structureOverview": "Visión General de la Estructura",
