@@ -66,13 +66,40 @@ public static partial class BenchmarkEndpoints
     /// </remarks>
     public const long PriorPeriodLinkLockKey = 89_0089_0089;
 
+    /// <summary>
+    /// Which benchmarks ONE TENANT may read: its own, plus the global rows
+    /// (<c>CompanyId == null</c>) every tenant compares against.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Split out of <see cref="CanReadBenchmark"/> because the rule now has a second kind
+    /// of caller. <c>CanReadBenchmark</c> answers for a signed-in principal, whose role can
+    /// lift the tenant scope entirely; report generation (#88) has no principal at all --
+    /// it renders a company's document, and the scheduled runner renders it with nobody
+    /// logged in -- so it needs the tenant half of the rule on its own. One function, two
+    /// callers, rather than the literal <c>CompanyId == null || CompanyId == mine</c>
+    /// written a fourth time. Its shape is deliberately <c>Guid?</c> on BOTH sides: since
+    /// #191 a CompanyAdmin's own company may be null, and null-reads-global is the answer
+    /// that keeps such a user to the rows they are entitled to instead of throwing.
+    /// </para>
+    /// </remarks>
+    internal static bool CanCompanyReadBenchmark(Guid? readerCompanyId, Guid? benchmarkCompanyId)
+        => benchmarkCompanyId is null || benchmarkCompanyId == readerCompanyId;
+
+    /// <summary>
+    /// <see cref="CanCompanyReadBenchmark"/> as a query, so the scope is applied in Postgres
+    /// rather than after the rows are on the wire.
+    /// </summary>
+    internal static IQueryable<Benchmark> ReadableBy(IQueryable<Benchmark> benchmarks, Guid? companyId)
+        => benchmarks.Where(b => b.CompanyId == null || b.CompanyId == companyId);
+
     // Read access: a CompanyAdmin may view global benchmarks (CompanyId == null, visible to
     // every tenant for comparison purposes -- see ListAsync) as well as their own company's.
     private static bool CanReadBenchmark(CurrentUser currentUser, Guid? benchmarkCompanyId)
     {
         if (currentUser.Role == Roles.SuperAdmin) return true;
         if (currentUser.Role != Roles.CompanyAdmin) return false;
-        return benchmarkCompanyId is null || currentUser.CompanyId == benchmarkCompanyId.Value.ToString();
+        return CanCompanyReadBenchmark(CompanyScope.OwnCompanyId(currentUser), benchmarkCompanyId);
     }
 
     // Write access: a CompanyAdmin may only create/update/add-metrics-to benchmarks scoped to
@@ -100,8 +127,7 @@ public static partial class BenchmarkEndpoints
             // may be null, which reaches the handler as a blank claim; Guid.Parse answers
             // that with a 500 on the benchmarks list. Null narrows the scope to global rows,
             // which is exactly what CanReadBenchmark grants such a user one route over.
-            var ownCompanyId = CompanyScope.OwnCompanyId(currentUser);
-            query = query.Where(b => b.CompanyId == null || b.CompanyId == ownCompanyId);
+            query = ReadableBy(query, CompanyScope.OwnCompanyId(currentUser));
         }
         else if (companyId.HasValue)
         {
