@@ -16,6 +16,14 @@ concurrency:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    # The .NET integration suite is the longest gate in this repository -- ~18 min on a
+    # healthy runner, of which ~13 is Testcontainers Postgres. Without a ceiling, a runner
+    # that stalls mid-suite burns the default SIX HOURS and then reports a bare "failure"
+    # with no test summary in the log, which is exactly how 2026-08-27 was spent: the run
+    # died mid-SaveChanges, said nothing, and looked environmental when it was a real
+    # failing test. 35 minutes is roughly double the healthy time -- long enough that a
+    # slow runner still finishes, short enough that a hang is a fast, legible verdict.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 

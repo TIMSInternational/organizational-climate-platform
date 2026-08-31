@@ -372,6 +372,9 @@ public static class DashboardEndpoints
                 activeSurveys, db.Responses, department.CompanyId, scopedDepartmentId, SurveyRowLimit)
             .ToListAsync(cancellationToken);
 
+        var climate = await TeamClimateAsync(
+            db, department.CompanyId, scopedDepartmentId, lang, cancellationToken);
+
         return Results.Ok(new DepartmentAdminDashboard(
             department.Id,
             department.Name,
@@ -382,7 +385,8 @@ public static class DashboardEndpoints
             responses.Completed,
             actionPlans.Open,
             actionPlans.Overdue,
-            surveyRows.Select(s => ToDepartmentSummary(s, lang)).ToList()));
+            surveyRows.Select(s => ToDepartmentSummary(s, lang)).ToList(),
+            climate));
     }
 
     // ------------------------------------------------------------------
@@ -665,4 +669,104 @@ public static class DashboardEndpoints
             row.StartDate,
             row.EndDate,
             row.ResponseCount);
+
+    /// <summary>
+    /// One department's climate scores from the most recent survey it could have answered.
+    ///
+    /// **This is the second caller for the per-dimension aggregation**, which is what this
+    /// screen's own note said it was waiting for. It runs the same
+    /// <see cref="SurveyAggregateLoader"/> the results routes and the climate-over-time
+    /// matrix run, and rolls the department's segment up through the shared
+    /// <see cref="SurveyAggregation.SegmentDimensionScores"/> — so a leader's dashboard and
+    /// a company admin's climate map cannot print two different numbers for the same team.
+    ///
+    /// **The most recent CLOSED survey, not the active one.** An open survey's scores move
+    /// under the reader between two loads, and a team reading that changes while nobody
+    /// answered anything invites the leader to read collection progress as a change in
+    /// climate. It is also why the participation figures above this are a separate
+    /// question from the scores.
+    ///
+    /// **Cost:** exactly one aggregation, of one survey. The trends route is capped at
+    /// twelve because it is this N times; a dashboard is a page load and reads one.
+    ///
+    /// Returns null when the company has no closed survey at all — "nothing has closed
+    /// yet" is a different statement from "your team's reading is withheld", and the two
+    /// must not collapse into one empty panel.
+    /// </summary>
+    private static async Task<DashboardTeamClimate?> TeamClimateAsync(
+        ClimateProjectDbContext db,
+        Guid companyId,
+        Guid departmentId,
+        string? lang,
+        CancellationToken cancellationToken)
+    {
+        var survey = await db.Surveys
+            .AsNoTracking()
+            .Where(s => s.CompanyId == companyId
+                        && (s.Status == SurveyStatuses.Closed || s.Status == SurveyStatuses.Archived))
+            .OrderByDescending(s => s.EndDate)
+            .ThenByDescending(s => s.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (survey is null) return null;
+
+        var locale = SurveyContent.ResolveRequestLocale(lang, survey.Language);
+        var fallbackFields = new List<string>();
+        var aggregate = await SurveyAggregateLoader.ComputeAsync(
+            db, survey, locale, fallbackFields, cancellationToken);
+
+        var title = SurveyContent.Resolve(
+            survey.TitleEn, survey.TitleEs, locale, survey.Language, "title", fallbackFields);
+
+        // A survey below its OWN floor withholds every group in it, however large the
+        // department -- that floor is about the survey, and a big team inside a small
+        // survey does not satisfy it. Its dimension list is empty too, so there is not
+        // even a set of names to withhold scores for.
+        if (aggregate.IsSuppressed)
+        {
+            return new DashboardTeamClimate(
+                survey.Id, title, survey.EndDate, 0, IsSuppressed: true,
+                SurveyResultsPrivacy.MinimumSegmentRespondents, []);
+        }
+
+        // A withheld SEGMENT still names the dimensions, with null scores.
+        //
+        // Which dimensions an instrument asked about is not the protected fact -- it is the
+        // same list for everyone in the company, and a leader can already read it off the
+        // survey. The protected fact is this team's SCORES. Returning an empty list instead
+        // would leave a client with no columns to hatch, so the row would render blank,
+        // which is precisely the "reads as missing data" failure `ProtectedCell` exists to
+        // prevent. Found by writing the test for it: the grid drew nothing at all.
+        var withheld = new DashboardTeamClimate(
+            survey.Id, title, survey.EndDate, 0, IsSuppressed: true,
+            SurveyResultsPrivacy.MinimumSegmentRespondents,
+            aggregate.Dimensions
+                .Select(d => new DashboardDimensionScore(d.Dimension, null))
+                .ToList());
+
+        var segment = aggregate.Breakdowns
+            .FirstOrDefault(b => string.Equals(b.Dimension, "department", StringComparison.Ordinal))
+            ?.Segments
+            .FirstOrDefault(s => string.Equals(s.Key, departmentId.ToString(), StringComparison.Ordinal));
+
+        // Absent and too-small collapse to one withheld answer on purpose: told apart, a
+        // reader could difference "we did not answer" against "we were too few" and learn
+        // roughly how few.
+        if (segment is null || segment.IsSuppressed) return withheld;
+
+        var scores = SurveyAggregation.SegmentDimensionScores(aggregate.Questions, segment);
+
+        return new DashboardTeamClimate(
+            survey.Id,
+            title,
+            survey.EndDate,
+            segment.RespondentCount,
+            IsSuppressed: false,
+            SurveyResultsPrivacy.MinimumSegmentRespondents,
+            scores
+                .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .Select(pair => new DashboardDimensionScore(pair.Key, pair.Value))
+                .ToList());
+    }
+
 }

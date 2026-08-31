@@ -224,21 +224,10 @@ public static class SurveyClimateTrends
             return Suppressed(input.SurveyId, dimensionKeys);
         }
 
-        // Category comes from the survey's own question rows -- the segment carries answered
-        // counts and averages per question id, not categories -- so this joins the two the
-        // same way DimensionRollup joins nothing at all: by reading Category off the
-        // question result that already resolved it.
-        var categoryByQuestion = input.Aggregate.Questions
-            .Where(q => !string.IsNullOrWhiteSpace(q.Category))
-            .ToDictionary(q => q.QuestionId, q => q.Category!);
-
-        var pooled = segment.Questions
-            .Where(q => categoryByQuestion.ContainsKey(q.QuestionId))
-            .GroupBy(q => categoryByQuestion[q.QuestionId], StringComparer.Ordinal)
-            .ToDictionary(
-                g => g.Key,
-                g => SurveyAggregation.PooledAverage(g.Select(q => (q.AnsweredCount, q.Average))),
-                StringComparer.Ordinal);
+        // The shared rollup, not a local GroupBy: the department dashboard reads the same
+        // scores for the same segment, and two implementations would let one screen
+        // disagree with the other about a department nobody re-checked.
+        var pooled = SurveyAggregation.SegmentDimensionScores(input.Aggregate.Questions, segment);
 
         return new ClimateTrendPoint(
             input.SurveyId,

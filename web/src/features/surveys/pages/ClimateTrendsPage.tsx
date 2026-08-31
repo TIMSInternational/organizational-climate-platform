@@ -155,7 +155,11 @@ export default function ClimateTrendsPage() {
       ) : (
         <LoadingRegion loading={payload === null} label={t('common.loading')}>
           {payload && (
-            <>
+            // `gap-section`, and not nothing: the controls and the grid are siblings, so
+            // without it the map's own caption sat flush under the dropdown and read as a
+            // second label attached to it rather than as the heading of the figure below.
+            // Same spacing rhythm the results page uses between its sections.
+            <div className="flex flex-col gap-section">
               {/* Native `<select>`, not the `ui/select.tsx` primitive, on the precedent
                   `SurveyFilters` sets and for the same hard reason: that primitive wraps
                   `@radix-ui/react-select`, whose `Select.Item` THROWS on an empty-string
@@ -246,7 +250,7 @@ export default function ClimateTrendsPage() {
                   )}
                 </>
               )}
-            </>
+            </div>
           )}
         </LoadingRegion>
       )}

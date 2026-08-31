@@ -3,7 +3,11 @@ import { Link } from 'react-router'
 // `Inbox` is the glyph `navSections` already gives `/surveys/my` in the sidebar, so the
 // action and the nav row that share a destination also share a mark.
 import { AlertTriangle, Inbox, Info } from 'lucide-react'
-import { getDepartmentAdminDashboard } from '../api/dashboard'
+import {
+  getDepartmentAdminDashboard,
+  type DashboardDimensionScore,
+  type DashboardTeamClimate,
+} from '../api/dashboard'
 import { useDashboardData } from '../useDashboardData'
 import DashboardState from './DashboardState'
 import DashboardSurveyTable from './DashboardSurveyTable'
@@ -11,8 +15,43 @@ import EmployeeDashboardView from './EmployeeDashboardView'
 import { KpiRow, MonoReadings, SectionHeading } from './dashboardGrammar'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
-import { KpiTile } from '../../../components/charts'
+import { ClimateMap, KpiTile } from '../../../components/charts'
+import { climateScale } from '../../surveys/surveyResultsMap'
 import { Alert, AlertDescription, AlertTitle, Button } from '../../../components/ui'
+
+/**
+ * The dimensions actually drawn, and the readings under them.
+ *
+ * **A dimension with no score is dropped, never rendered as 0.**
+ * `SurveyAggregation.PooledAverage` returns null for a dimension whose questions have no
+ * computable average, and `?? 0` on that prints "0.0" as a reading — a catastrophic score
+ * nobody recorded, on the one screen a team lead judges their team by. This repository has
+ * shipped that exact failure before (the tracking strip's four zeros), and the zero was
+ * plausible enough to be believed. `ClimateMapRow.scores` is a dense array with no
+ * representation for a missing cell, so the COLUMN goes rather than the cell — the same
+ * rule `buildClimateMap` applies, for the same reason.
+ *
+ * When the reading is WITHHELD the columns are the dimension names the server still sends
+ * and there are no scores at all. `ClimateMap` then hatches the row twice over: it
+ * suppresses on `target === null`, which an empty cell list produces, as well as on
+ * `responses` being under the threshold — and the server zeroes that count, so either
+ * guard holds alone.
+ */
+function scoredDimensions(climate: DashboardTeamClimate) {
+  return climate.dimensions.filter(
+    (d): d is DashboardDimensionScore & { averageScore: number } => d.averageScore !== null,
+  )
+}
+
+function climateColumns(climate: DashboardTeamClimate): string[] {
+  return climate.isSuppressed
+    ? climate.dimensions.map((d) => d.dimension)
+    : scoredDimensions(climate).map((d) => d.dimension)
+}
+
+function climateScores(climate: DashboardTeamClimate): number[] {
+  return climate.isSuppressed ? [] : scoredDimensions(climate).map((d) => d.averageScore)
+}
 
 /**
  * One department's overview, for the person who runs it.
@@ -50,10 +89,19 @@ import { Alert, AlertDescription, AlertTitle, Button } from '../../../components
  *
  * ## What is deliberately NOT here
  *
- * No climate map. The department payload carries `completedResponseCount` and no scores at
- * all — not per dimension, not overall — so there is nothing to lay against a target. The
- * company hero has the same gap and the same cause; when the per-dimension aggregation
- * lands, this screen is the second caller for it, scoped to one department.
+ * ~~No climate map.~~ **Resolved.** That gap is closed: the per-dimension aggregation
+ * landed, and this screen is the second caller for it exactly as this note predicted.
+ * `DashboardTeamClimate` carries the department's own dimension scores from the most
+ * recent CLOSED survey, rolled up through the same
+ * `SurveyAggregation.SegmentDimensionScores` the climate-over-time matrix uses — so a
+ * leader's dashboard and a company admin's climate map cannot disagree about this team.
+ *
+ * It is drawn as a ONE-ROW `ClimateMap` rather than as a strip of numbers. Two reasons:
+ * that component owns the anonymity floor (a row under the threshold renders hatched and
+ * padlocked, and nothing here has to re-derive that), and a single row coloured against
+ * its own mean answers the question a leader actually has — *which of my dimensions is
+ * the weak one* — rather than inviting a comparison against other teams this reader
+ * cannot see.
  *
  * The response count is printed rather than withheld below the anonymity floor. That is the
  * *existing* behaviour of this view and of `DashboardSurveyTable`, and changing it is a
@@ -230,6 +278,41 @@ export default function DepartmentAdminDashboardView() {
                 }
               />
             </KpiRow>
+
+            {/* The team's own climate. Rendered only when a closed survey exists — with
+                none, there is no reading to withhold OR to show, and an empty panel
+                would read as a product that lost the data.
+
+                `respondentCount` is handed to `ClimateMap` as the row's `responses` and
+                it is 0 whenever the server suppressed the row, which is what makes the
+                component hatch it. The count is never printed: the KPI tiles above
+                deliberately print the team's SIZE unfloored, and that is a different
+                figure from how many of them answered this particular survey. */}
+            {data.climate?.surveyId && (
+              <section>
+                <SectionHeading>{t('dashboard.teamClimate')}</SectionHeading>
+                <ClimateMap
+                  dimensions={climateColumns(data.climate).map((key) => ({ key, label: key }))}
+                  rows={[
+                    {
+                      id: data.departmentId,
+                      // "Your team", not the department name: the page eyebrow already
+                      // names it, and a grid whose single row repeats the heading above it
+                      // reads as a rendering fault. The label still carries into each
+                      // cell's accessible name ("Your team, workload: ..."), which is what
+                      // the row label is actually for.
+                      label: t('dashboard.yourTeam'),
+                      responses: data.climate.respondentCount,
+                      scores: climateScores(data.climate),
+                    },
+                  ]}
+                  {...climateScale(climateScores(data.climate))}
+                  threshold={Math.max(1, data.climate.minimumGroupSize)}
+                  decimals={1}
+                  title={data.climate.surveyTitle ?? undefined}
+                />
+              </section>
+            )}
 
             {/* The one thing most worth the reader's attention, and only when it exists.
                 An always-present panel that usually says "nothing is wrong" trains a
