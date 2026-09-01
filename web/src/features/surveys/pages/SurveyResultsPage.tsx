@@ -20,7 +20,9 @@ import {
   Table,
 } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
+import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import { downloadTextFile } from '../../../lib/downloadTextFile'
+import { getSurveyResultsPdf, surveyResultsPdfFileName } from '../api/surveyExport'
 import { getSurveyAnalytics, type SurveyAnalyticsResponse } from '../api/surveyResults'
 import ClimateDetailPanel from '../components/ClimateDetailPanel'
 import QuestionDistributionRow from '../components/QuestionDistributionRow'
@@ -196,6 +198,25 @@ export default function SurveyResultsPage() {
   const activeBreakdown =
     breakdowns.find((candidate) => candidate.dimension === dimension) ?? breakdowns[0] ?? null
 
+  // The one export that is not built in the browser (#122). The two CSVs above serialise
+  // the payload this page already holds; a PDF cannot be, and there was no PDF at all
+  // before #122. Failures land in the page's own error banner rather than in a silent
+  // no-op, because a download button that does nothing reads as a broken build.
+  const [exporting, setExporting] = useState(false)
+  const downloadPdf = useCallback(async () => {
+    if (!id) return
+    setExporting(true)
+    try {
+      // The UI locale is a request, exactly as it is for the payload: the server renders
+      // the document's chrome in the locale the reader is actually reading.
+      downloadBlobFile(surveyResultsPdfFileName(id), await getSurveyResultsPdf(baseUrl, id, locale))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('errors.generic'))
+    } finally {
+      setExporting(false)
+    }
+  }, [baseUrl, id, locale, t])
+
   const questionLabel = useCallback(
     (question: { order: number }) => t('surveyResults.questionShort', { order: question.order }),
     [t],
@@ -358,6 +379,9 @@ export default function SurveyResultsPage() {
                 }
               >
                 {t('surveyResults.exportBreakdown')}
+              </Button>
+              <Button variant="outline" disabled={exporting} onClick={downloadPdf}>
+                {t('surveyResults.exportPdf')}
               </Button>
             </>
           ) : undefined

@@ -46,16 +46,24 @@ const DARK_SELECTOR = ":root[data-admin-theme='dark']"
 /**
  * Two files outside `features/surveys/` that render this same page.
  *
- * `components/layout/RespondShell.tsx` is the frame all three respond routes now
+ * `components/layout/RespondShell.tsx` is the frame all four respond routes now
  * share — the eyebrow, the reading labels and the reading sub-lines are its ink,
- * not the feature's. `microclimates/pages/MicroclimateRespondPage.tsx` is the third
- * respond route, built from the same tiles and answered by the same people. A ban
- * that stops at a directory boundary is a ban the next edit walks around, and the
- * blind spot this file exists for does not care which folder the class is in.
+ * not the feature's. The microclimate files are the other two respond routes, built
+ * from the same tiles and answered by the same people. A ban that stops at a
+ * directory boundary is a ban the next edit walks around, and the blind spot this
+ * file exists for does not care which folder the class is in.
+ *
+ * `components/MicroclimatePulseForm.tsx` is on this list because #130 moved the
+ * questions there out of `pages/MicroclimateRespondPage.tsx`, which now holds a shell
+ * and nothing else. Sweeping only the page would still pass — vacuously, over a file
+ * with no classes left in it — while every drawn string on that route went unchecked.
+ * `pages/MicroclimateInvitationPage.tsx` is the landing card in front of them.
  */
 const ALSO_SWEPT = [
   join(process.cwd(), 'src', 'components', 'layout', 'RespondShell.tsx'),
   join(process.cwd(), 'src', 'features', 'microclimates', 'pages', 'MicroclimateRespondPage.tsx'),
+  join(process.cwd(), 'src', 'features', 'microclimates', 'pages', 'MicroclimateInvitationPage.tsx'),
+  join(process.cwd(), 'src', 'features', 'microclimates', 'components', 'MicroclimatePulseForm.tsx'),
 ]
 
 type Rgba = [number, number, number, number]

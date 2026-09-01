@@ -64,11 +64,22 @@ public static class SurveyResultsEndpoints
 
         // Audited as a sensitive read (#143). This route is the one that returns the
         // per-question answer breakdown for a survey of confidential employee opinion, so
-        // "who read this" has an answer. The three aggregates below are not marked: they are
-        // polled by dashboards and return counts, not content.
+        // "who read this" has an answer.
         group.MapGet("/{id:guid}/results", GetResultsAsync)
             .WithMetadata(new AuditSensitiveReadAttribute(AuditVerbs.Read));
 
+        // KNOWN GAP, and NOT what the previous comment here claimed. It said these three
+        // "are polled by dashboards and return counts, not content"; that is true only of
+        // /real-time-stats. /statistics returns Aggregate.Breakdowns and /analytics returns
+        // Aggregate.Questions AND Aggregate.Breakdowns -- between them the whole content of
+        // the #122 CSV export, unaudited, one route over from a /results that is audited for
+        // returning exactly that. So "who exported this data" can be answered while "who took
+        // an untraced copy of the same data" cannot.
+        //
+        // Deliberately left as it is rather than fixed here: which read surfaces are audited
+        // is #143's decision and it has to be made once, with the retention and volume
+        // consequences in view, not appended by whichever slice noticed. #122 records the
+        // limitation instead of narrowing it by half.
         group.MapGet("/{id:guid}/statistics", GetStatisticsAsync);
         group.MapGet("/{id:guid}/analytics", GetAnalyticsAsync);
         group.MapGet("/{id:guid}/real-time-stats", GetRealTimeStatsAsync);
@@ -294,20 +305,30 @@ public static class SurveyResultsEndpoints
     // Loading
     // ------------------------------------------------------------------
 
-    private sealed record ResultsContext(
+    internal sealed record ResultsContext(
         Survey Survey,
         string? Title,
         string ResolvedLocale,
         IReadOnlyList<string> FallbackFields,
         SurveyAggregate Aggregate);
 
-    private sealed record LoadOutcome(IResult? Failure, ResultsContext? Context);
+    internal sealed record LoadOutcome(IResult? Failure, ResultsContext? Context);
 
     /// <summary>
-    /// Loads and aggregates once, for the three heavy routes. They differ only in which
-    /// half of the <see cref="SurveyAggregate"/> they serialise.
+    /// Loads and aggregates once, for the three heavy routes -- and, since #122, for the two
+    /// export routes as well. They differ only in which half of the
+    /// <see cref="SurveyAggregate"/> they serialise.
     /// </summary>
-    private static async Task<LoadOutcome> LoadAsync(
+    /// <remarks>
+    /// <b>Internal rather than private, on purpose.</b> <see cref="SurveyExportEndpoints"/>
+    /// has to resolve the survey, authorize the caller, resolve the locale and aggregate in
+    /// exactly the way the results screen does, because an export that loaded the same survey
+    /// even slightly differently is an export that can disagree with the screen it was taken
+    /// from -- including about a suppression decision. Sharing the loader is the same boundary
+    /// #88 drew when report generation started calling
+    /// <see cref="SurveyAggregateLoader.ComputeAsync"/>: one loader, several presentations.
+    /// </remarks>
+    internal static async Task<LoadOutcome> LoadAsync(
         Guid id,
         string? lang,
         ClaimsPrincipal principal,
@@ -349,6 +370,6 @@ public static class SurveyResultsEndpoints
         return new LoadOutcome(null, new ResultsContext(survey, title, resolvedLocale, fallbackFields, aggregate));
     }
 
-    private static IResult SurveyNotFound()
+    internal static IResult SurveyNotFound()
         => Results.Json(new { message = "Survey not found" }, statusCode: 404);
 }

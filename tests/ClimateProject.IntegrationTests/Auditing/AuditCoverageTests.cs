@@ -85,6 +85,9 @@ public class AuditCoverageTests : IAsyncLifetime
         // department across up to twelve surveys. Marked for the same reason
         // /surveys/{id}/results is, more so.
         "GET /surveys/climate-trends",
+        "GET /surveys/{id:guid}/export",
+        "GET /surveys/{id:guid}/export/csv",
+        "GET /surveys/{id:guid}/export/pdf",
         "GET /surveys/{id:guid}/results",
     ];
 
@@ -162,6 +165,10 @@ public class AuditCoverageTests : IAsyncLifetime
         "POST /auth/login",
         "POST /auth/signup",
         "POST /invitations/{token}/accept",
+        "POST /microclimate-invitations/{token}/completed",
+        "POST /microclimate-invitations/{token}/opened",
+        "POST /microclimate-invitations/{token}/participated",
+        "POST /microclimate-invitations/{token}/started",
         "POST /microclimates/{id:guid}/responses",
         "POST /survey-invitations/{token}/completed",
         "POST /survey-invitations/{token}/opened",
