@@ -50,6 +50,7 @@ import MySurveysPage from '../features/surveys/pages/MySurveysPage'
 import SurveyTemplatesPage from '../features/surveys/pages/SurveyTemplatesPage'
 import SurveyTemplateDetailPage from '../features/surveys/pages/SurveyTemplateDetailPage'
 import AnalyticsDashboardPage from '../features/analytics/pages/AnalyticsDashboardPage'
+import QuestionBankPage from '../features/questions/pages/QuestionBankPage'
 import { resolveInitialRoute } from './resolveInitialRoute'
 
 // /admin/companies (the old unconditional target) is SuperAdmin-only -- a
@@ -315,6 +316,17 @@ export const router = createBrowserRouter([
               { path: '/admin/companies/:companyId/analytics', element: <AnalyticsDashboardPage /> },
               { path: '/admin/system-settings', element: <SystemSettingsPage /> },
               { path: '/admin/system', element: <SystemHealthPage /> },
+              // #114, the question BANK — not the question library, which is #112's
+              // picker and lives behind `/dev/question-library`. The two reach
+              // different tables on purpose; `questionBank.ts` and
+              // `QuestionBankEndpoints.cs` both say why.
+              //
+              // No route-level role gate, matching every sibling here: every
+              // `/admin/question-bank` route checks `Roles.Admin` and then scopes by
+              // role, so a leader or employee who typed the URL gets the page's own
+              // error state rather than another tenant's corpus. `navSections.ts` is
+              // what keeps it out of their sidebar.
+              { path: '/admin/question-bank', element: <QuestionBankPage /> },
               // Flat, with no company id in the path (#142), like /surveys and
               // /action-plans: the page takes its company from `company-context`,
               // so one route and one nav entry serve both admin roles.

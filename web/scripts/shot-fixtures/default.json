@@ -33,29 +33,38 @@
       }
     ]
   },
+  "GET /admin/companies/*": {
+    "id": "11111111-1111-1111-1111-111111111111",
+    "name": "Northwind Logistics",
+    "emailDomain": "northwind.example",
+    "industry": "Transportation",
+    "size": "large",
+    "country": "Colombia",
+    "subscriptionTier": "enterprise",
+    "createdAt": "2025-03-14T09:12:00Z",
+    "userCount": 208
+  },
+  "PUT /admin/companies/*/settings": {
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "settings": {
+      "surveyFrequency": "quarterly",
+      "anonymousSurveys": true,
+      "dataRetentionDays": 730,
+      "aiInsightsEnabled": true,
+      "microclimateEnabled": true,
+      "timezone": "America/Bogota",
+      "language": "en"
+    },
+    "branding": {
+      "primaryColor": "#1F4E79",
+      "secondaryColor": "#8FB8DE",
+      "logoUrl": null,
+      "fontFamily": "Poppins",
+      "customCss": null
+    }
+  },
   "GET /notifications/mine": {
     "notifications": [
-      {
-        "id": "aaaaaaaa-0000-0000-0000-000000000001",
-        "userId": "00000000-0000-0000-0000-000000000001",
-        "companyId": "11111111-1111-1111-1111-111111111111",
-        "type": "survey_reminder",
-        "channel": "in_app",
-        "priority": "medium",
-        "status": "delivered",
-        "title": "Quarterly climate survey closes Friday",
-        "message": "412 of 480 invited people have responded.",
-        "data": null,
-        "templateId": null,
-        "scheduledFor": "2026-08-09T08:00:00Z",
-        "sentAt": "2026-08-09T08:00:04Z",
-        "deliveredAt": "2026-08-09T08:00:06Z",
-        "openedAt": null,
-        "failedAt": null,
-        "failureReason": null,
-        "retryCount": 0,
-        "createdAt": "2026-08-09T08:00:00Z"
-      },
       {
         "id": "aaaaaaaa-0000-0000-0000-000000000002",
         "userId": "00000000-0000-0000-0000-000000000001",
@@ -76,8 +85,36 @@
         "failureReason": null,
         "retryCount": 0,
         "createdAt": "2026-08-10T13:30:00Z"
+      },
+      {
+        "id": "aaaaaaaa-0000-0000-0000-000000000001",
+        "userId": "00000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "type": "survey_reminder",
+        "channel": "in_app",
+        "priority": "medium",
+        "status": "delivered",
+        "title": "Quarterly climate survey closes Friday",
+        "message": "412 of 480 invited people have responded.",
+        "data": null,
+        "templateId": null,
+        "scheduledFor": "2026-08-09T08:00:00Z",
+        "sentAt": "2026-08-09T08:00:04Z",
+        "deliveredAt": "2026-08-09T08:00:06Z",
+        "openedAt": null,
+        "failedAt": null,
+        "failureReason": null,
+        "retryCount": 0,
+        "createdAt": "2026-08-09T08:00:00Z"
       }
     ]
+  },
+  "GET /notifications/preferences": {
+    "emailSurveys": true,
+    "emailReminders": true,
+    "emailActionPlans": true,
+    "emailMicroclimates": false,
+    "digestFrequency": "weekly"
   },
   "GET /dashboard/company-admin": {
     "companyId": "11111111-1111-1111-1111-111111111111",
@@ -166,6 +203,141 @@
       }
     ]
   },
+  "GET /dashboard/super-admin": {
+    "companyCount": 3,
+    "userCount": 412,
+    "activeUserCount": 388,
+    "surveyCount": 24,
+    "activeSurveyCount": 6,
+    "responseCount": 812,
+    "completedResponseCount": 703,
+    "companies": [
+      {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "name": "Northwind Logistics",
+        "userCount": 208,
+        "activeSurveyCount": 3,
+        "completedResponseCount": 262,
+        "createdAt": "2025-03-14T09:12:00Z"
+      },
+      {
+        "id": "22222222-2222-2222-2222-222222222222",
+        "name": "Helios Manufacturing",
+        "userCount": 137,
+        "activeSurveyCount": 2,
+        "completedResponseCount": 301,
+        "createdAt": "2025-06-02T16:40:00Z"
+      },
+      {
+        "id": "33333333-3333-3333-3333-333333333333",
+        "name": "Vela Health",
+        "userCount": 67,
+        "activeSurveyCount": 1,
+        "completedResponseCount": 140,
+        "createdAt": "2025-11-21T11:05:00Z"
+      }
+    ]
+  },
+  "GET /dashboard/department-admin": {
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "departmentId": "d0000000-0000-0000-0000-000000000001",
+    "departmentName": "Operations",
+    "memberCount": 48,
+    "activeMemberCount": 46,
+    "activeSurveyCount": 1,
+    "completedResponseCount": 61,
+    "openActionPlanCount": 3,
+    "overdueActionPlanCount": 1,
+    "activeSurveys": [
+      {
+        "id": "55555555-0000-0000-0000-000000000003",
+        "title": "Q3 climate survey",
+        "status": "active",
+        "startDate": "2026-10-01T00:00:00Z",
+        "endDate": "2026-10-31T00:00:00Z",
+        "responseCount": 29,
+        "targetAudienceCount": 48
+      }
+    ],
+    "climate": {
+      "surveyId": "11111111-1111-1111-1111-111111111111",
+      "surveyTitle": "Q1 Climate Survey",
+      "surveyEndDate": "2026-03-31T00:00:00+00:00",
+      "respondentCount": 23,
+      "isSuppressed": false,
+      "minimumGroupSize": 5,
+      "dimensions": [
+        {
+          "dimension": "Collaboration",
+          "averageScore": 3.9
+        },
+        {
+          "dimension": "Growth",
+          "averageScore": 3.2
+        },
+        {
+          "dimension": "Leadership",
+          "averageScore": 3.6
+        },
+        {
+          "dimension": "Psychological safety",
+          "averageScore": 4.1
+        },
+        {
+          "dimension": "Recognition",
+          "averageScore": 2.8
+        },
+        {
+          "dimension": "Workload",
+          "averageScore": 3.1
+        }
+      ]
+    }
+  },
+  "GET /dashboard/employee/last-outcome": {
+    "surveyId": "s0000000-0000-0000-0000-000000000004",
+    "surveyTitle": "Q1 climate survey",
+    "closedOn": "2026-03-14T00:00:00Z",
+    "responseCount": 178,
+    "departmentCount": 6,
+    "protectedDepartmentCount": 1,
+    "minimumGroupSize": 5,
+    "openPlanCount": 7,
+    "plansOpenedSince": [
+      {
+        "createdAt": "2026-03-20T09:00:00Z",
+        "departmentName": null
+      },
+      {
+        "createdAt": "2026-04-02T14:30:00Z",
+        "departmentName": null
+      },
+      {
+        "createdAt": "2026-05-11T08:15:00Z",
+        "departmentName": null
+      }
+    ]
+  },
+  "GET /dashboard/employee": {
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "departmentId": "d0000000-0000-0000-0000-000000000001",
+    "departmentName": "Operations",
+    "name": "María Herrera",
+    "pendingSurveyCount": 1,
+    "completedSurveyCount": 4,
+    "unreadNotificationCount": 2,
+    "nextDeadline": "2026-10-31T00:00:00Z",
+    "pendingSurveys": [
+      {
+        "id": "s0000000-0000-0000-0000-000000000003",
+        "title": "Q3 climate survey",
+        "status": "active",
+        "startDate": "2026-10-01T00:00:00Z",
+        "endDate": "2026-10-31T00:00:00Z",
+        "questionCount": 12
+      }
+    ]
+  },
   "GET /survey-templates": {
     "templates": [
       {
@@ -221,12 +393,218 @@
           "internal"
         ],
         "usageCount": 3,
-        "rating": 4.0,
+        "rating": 4,
         "questionCount": 12,
         "lastUsed": null,
         "createdAt": "2026-02-02T09:00:00Z"
       }
     ]
+  },
+  "GET /survey-templates/*": {
+    "id": "t1",
+    "name": "Annual climate survey",
+    "description": "Six dimensions across the whole organisation, the shape most companies start from.",
+    "category": "climate",
+    "industry": "manufacturing",
+    "companySize": "500-1000",
+    "isPublic": true,
+    "companyId": null,
+    "isGlobal": true,
+    "tags": [
+      "climate",
+      "annual"
+    ],
+    "usageCount": 18,
+    "rating": 4.6,
+    "language": "en",
+    "resolvedLocale": "en",
+    "fallbackFields": [],
+    "questions": [
+      {
+        "id": "tq1",
+        "text": "I can raise a concern without fear",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 0,
+        "category": "Psychological safety"
+      },
+      {
+        "id": "tq2",
+        "text": "Mistakes are treated as learning",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 1,
+        "category": "Psychological safety"
+      },
+      {
+        "id": "tq3",
+        "text": "My workload is manageable",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 2,
+        "category": "Workload"
+      },
+      {
+        "id": "tq4",
+        "text": "I can disconnect outside working hours",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 3,
+        "category": "Workload"
+      },
+      {
+        "id": "tq5",
+        "text": "Good work is recognised here",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 4,
+        "category": "Recognition"
+      },
+      {
+        "id": "tq6",
+        "text": "Feedback is specific and useful",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 5,
+        "category": "Recognition"
+      },
+      {
+        "id": "tq7",
+        "text": "My manager is clear about priorities",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 6,
+        "category": "Leadership"
+      },
+      {
+        "id": "tq8",
+        "text": "Decisions are explained",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 7,
+        "category": "Leadership"
+      },
+      {
+        "id": "tq9",
+        "text": "I can grow in this role",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 8,
+        "category": "Growth"
+      },
+      {
+        "id": "tq10",
+        "text": "Training is available when I need it",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 9,
+        "category": "Growth"
+      },
+      {
+        "id": "tq11",
+        "text": "Teams share what they know",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 10,
+        "category": "Collaboration"
+      },
+      {
+        "id": "tq12",
+        "text": "Handovers between teams work",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "required": true,
+        "commentRequired": false,
+        "commentPrompt": null,
+        "order": 11,
+        "category": "Collaboration"
+      }
+    ],
+    "sourceSurveyId": null,
+    "lastUsed": "2026-06-18T10:00:00Z",
+    "createdAt": "2026-02-02T09:00:00Z",
+    "updatedAt": "2026-06-18T10:00:00Z"
   },
   "GET /admin/system/status": {
     "service": "climate-project-api",
@@ -308,6 +686,29 @@
       }
     ]
   },
+  "GET /admin/system-settings": {
+    "loginEnabled": true,
+    "maintenanceMode": false,
+    "maintenanceMessage": null,
+    "maintenanceMessageIsFallback": true,
+    "maxLoginAttempts": 5,
+    "sessionTimeoutMinutes": 60,
+    "resolvedLocale": "en",
+    "updatedAt": "2026-08-14T11:02:00Z",
+    "emailSettings": {
+      "smtpEnabled": true,
+      "smtpHost": null,
+      "smtpPort": null,
+      "fromEmail": null
+    },
+    "passwordPolicy": {
+      "minLength": 12,
+      "requireUppercase": true,
+      "requireLowercase": true,
+      "requireNumbers": true,
+      "requireSpecialChars": false
+    }
+  },
   "GET /surveys/*/analytics": {
     "surveyId": "11111111-1111-1111-1111-111111111111",
     "title": "Q3 climate survey",
@@ -386,7 +787,7 @@
           }
         ],
         "average": 3.9,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -439,7 +840,7 @@
           }
         ],
         "average": 3.6,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -492,7 +893,7 @@
           }
         ],
         "average": 3.1,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -545,7 +946,7 @@
           }
         ],
         "average": 2.8,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -598,7 +999,7 @@
           }
         ],
         "average": 3.4,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -651,7 +1052,7 @@
           }
         ],
         "average": 3.2,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -704,7 +1105,7 @@
           }
         ],
         "average": 3.8,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -757,7 +1158,7 @@
           }
         ],
         "average": 3.5,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -810,7 +1211,7 @@
           }
         ],
         "average": 3.3,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -862,8 +1263,8 @@
             "averageRank": null
           }
         ],
-        "average": 3.0,
-        "median": 4.0,
+        "average": 3,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -916,7 +1317,7 @@
           }
         ],
         "average": 3.7,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -969,7 +1370,7 @@
           }
         ],
         "average": 3.4,
-        "median": 4.0,
+        "median": 4,
         "scaleMin": 1,
         "scaleMax": 5,
         "scaleLabelMin": "Strongly disagree",
@@ -987,7 +1388,7 @@
             "key": "dep-eng",
             "label": "Engineering",
             "respondentCount": 34,
-            "participationRate": 85.0,
+            "participationRate": 85,
             "headcount": 40,
             "isSuppressed": false,
             "questions": [
@@ -999,7 +1400,7 @@
               {
                 "questionId": "q2",
                 "answeredCount": 34,
-                "average": 4.0
+                "average": 4
               },
               {
                 "questionId": "q3",
@@ -1024,7 +1425,7 @@
               {
                 "questionId": "q7",
                 "answeredCount": 34,
-                "average": 4.0
+                "average": 4
               },
               {
                 "questionId": "q8",
@@ -1044,7 +1445,7 @@
               {
                 "questionId": "q11",
                 "answeredCount": 34,
-                "average": 4.0
+                "average": 4
               },
               {
                 "questionId": "q12",
@@ -1080,7 +1481,7 @@
               {
                 "questionId": "q4",
                 "answeredCount": 21,
-                "average": 2.0
+                "average": 2
               },
               {
                 "questionId": "q5",
@@ -1136,7 +1537,7 @@
               {
                 "questionId": "q1",
                 "answeredCount": 18,
-                "average": 4.0
+                "average": 4
               },
               {
                 "questionId": "q2",
@@ -1181,7 +1582,7 @@
               {
                 "questionId": "q10",
                 "answeredCount": 18,
-                "average": 3.0
+                "average": 3
               },
               {
                 "questionId": "q11",
@@ -1293,12 +1694,12 @@
               {
                 "questionId": "q4",
                 "answeredCount": 9,
-                "average": 3.0
+                "average": 3
               },
               {
                 "questionId": "q5",
                 "answeredCount": 9,
-                "average": 4.0
+                "average": 4
               },
               {
                 "questionId": "q6",
@@ -1318,7 +1719,7 @@
               {
                 "questionId": "q9",
                 "answeredCount": 9,
-                "average": 3.0
+                "average": 3
               },
               {
                 "questionId": "q10",
@@ -1353,6 +1754,31 @@
         "unsegmentedRespondentCount": 4
       }
     ]
+  },
+  "GET /surveys/*/invitations": {
+    "summary": {
+      "total": 208,
+      "pending": 21,
+      "sent": 187,
+      "opened": 154,
+      "started": 131,
+      "completed": 118,
+      "expired": 0,
+      "revoked": 2
+    },
+    "anonymity": {
+      "anonymous": true,
+      "guarantee": "no_response_link",
+      "highestRecordableState": "opened",
+      "suppressedStates": [
+        "started",
+        "completed"
+      ]
+    },
+    "invitations": []
+  },
+  "GET /surveys/*/distribution 404": {
+    "message": "This survey has no distribution yet."
   },
   "GET /survey-links/dead-token 404": {
     "message": "This link is not valid."
@@ -1787,9 +2213,9 @@
               3.6,
               3.4,
               3.5,
-              3.0,
+              3,
               3.4,
-              3.0
+              3
             ]
           },
           {
@@ -1824,6 +2250,37 @@
     "suppressedGroupCount": 0,
     "minimumGroupSize": 5,
     "generatedAt": "2026-10-01T09:00:00+00:00"
+  },
+  "GET /surveys/drafts/latest": {
+    "draft": null
+  },
+  "GET /surveys/dimensions": {
+    "dimensions": [
+      "Psychological safety",
+      "Workload",
+      "Recognition",
+      "Leadership",
+      "Growth",
+      "Collaboration"
+    ]
+  },
+  "GET /surveys/my": {
+    "surveys": [
+      {
+        "id": "s0000000-0000-0000-0000-000000000003",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "title": "Q3 climate survey",
+        "type": "periodic",
+        "status": "active",
+        "language": "en",
+        "startDate": "2026-10-01T00:00:00Z",
+        "endDate": "2026-10-31T00:00:00Z",
+        "questionCount": 12,
+        "responseCount": 101,
+        "targetAudienceCount": null,
+        "createdAt": "2026-09-18T10:22:00Z"
+      }
+    ]
   },
   "GET /surveys/climate-trends?groupBy=department": {
     "companyId": "22cc8ed9-2e02-401a-8d52-52068ff5e6c0",
@@ -1890,10 +2347,10 @@
             "respondentCount": 14,
             "isSuppressed": false,
             "scores": [
-              4.0,
+              4,
               3.8,
-              4.0,
-              3.0,
+              4,
+              3,
               3.8,
               3.5
             ]
@@ -1917,10 +2374,10 @@
             "isSuppressed": false,
             "scores": [
               4.17,
-              4.0,
+              4,
               4.17,
               3.17,
-              4.0,
+              4,
               3.67
             ]
           }
@@ -1980,11 +2437,11 @@
             "respondentCount": 11,
             "isSuppressed": false,
             "scores": [
-              3.0,
+              3,
               3.4,
               2.6,
-              3.0,
-              3.0,
+              3,
+              3,
               2.6
             ]
           },
@@ -2026,7 +2483,7 @@
             "isSuppressed": false,
             "scores": [
               4.2,
-              4.0,
+              4,
               4.2,
               3.4,
               3.8,
@@ -2055,7 +2512,7 @@
               4.2,
               4.4,
               3.6,
-              4.0,
+              4,
               3.4
             ]
           }
@@ -2149,6 +2606,109 @@
       }
     ]
   },
+  "GET /admin/users": {
+    "users": [
+      {
+        "id": "99999999-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "María Herrera",
+        "email": "maria.herrera@northwind.example",
+        "role": "company_admin",
+        "departmentId": null,
+        "isActive": true,
+        "createdAt": "2025-03-14T09:20:00Z",
+        "lastLoginAt": "2026-08-30T07:41:00Z"
+      },
+      {
+        "id": "99999999-0000-0000-0000-000000000002",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Diego Ramírez",
+        "email": "diego.ramirez@northwind.example",
+        "role": "leader",
+        "departmentId": "d0000000-0000-0000-0000-000000000001",
+        "isActive": true,
+        "createdAt": "2025-04-02T11:00:00Z",
+        "lastLoginAt": "2026-08-29T16:12:00Z"
+      },
+      {
+        "id": "99999999-0000-0000-0000-000000000003",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Ana Solís",
+        "email": "ana.solis@northwind.example",
+        "role": "supervisor",
+        "departmentId": "d0000000-0000-0000-0000-000000000002",
+        "isActive": true,
+        "createdAt": "2025-05-19T08:30:00Z",
+        "lastLoginAt": "2026-08-28T09:03:00Z"
+      },
+      {
+        "id": "99999999-0000-0000-0000-000000000004",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Tomás Iglesias",
+        "email": "tomas.iglesias@northwind.example",
+        "role": "employee",
+        "departmentId": "d0000000-0000-0000-0000-000000000004",
+        "isActive": true,
+        "createdAt": "2025-09-08T13:45:00Z",
+        "lastLoginAt": "2026-08-25T18:55:00Z"
+      },
+      {
+        "id": "99999999-0000-0000-0000-000000000005",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "name": "Lucía Bravo",
+        "email": "lucia.bravo@northwind.example",
+        "role": "employee",
+        "departmentId": "d0000000-0000-0000-0000-000000000003",
+        "isActive": false,
+        "createdAt": "2025-10-30T10:05:00Z",
+        "lastLoginAt": "2026-02-11T12:20:00Z"
+      }
+    ]
+  },
+  "GET /admin/invitations": {
+    "invitations": []
+  },
+  "GET /admin/demographic-fields": {
+    "fields": []
+  },
+  "GET /admin/reports": [
+    {
+      "id": "r0000000-0000-0000-0000-000000000001",
+      "title": "Q3 climate summary",
+      "type": "summary",
+      "companyId": "11111111-1111-1111-1111-111111111111",
+      "status": "completed",
+      "format": "pdf",
+      "createdAt": "2026-08-04T09:00:00Z"
+    },
+    {
+      "id": "r0000000-0000-0000-0000-000000000002",
+      "title": "Operations against Support, Q2 to Q3",
+      "type": "comparison",
+      "companyId": "11111111-1111-1111-1111-111111111111",
+      "status": "completed",
+      "format": "excel",
+      "createdAt": "2026-07-28T16:20:00Z"
+    },
+    {
+      "id": "r0000000-0000-0000-0000-000000000003",
+      "title": "Board pack — climate and action plans",
+      "type": "executive",
+      "companyId": "11111111-1111-1111-1111-111111111111",
+      "status": "generating",
+      "format": "pdf",
+      "createdAt": "2026-08-27T08:41:00Z"
+    },
+    {
+      "id": "r0000000-0000-0000-0000-000000000004",
+      "title": "Every question, every department",
+      "type": "detailed",
+      "companyId": "11111111-1111-1111-1111-111111111111",
+      "status": "completed",
+      "format": "csv",
+      "createdAt": "2026-06-19T13:05:00Z"
+    }
+  ],
   "GET /surveys": {
     "surveys": [
       {
@@ -2159,7 +2719,7 @@
         "status": "draft",
         "language": "en",
         "startDate": "2026-09-01T00:00:00Z",
-        "endDate": "2026-12-31T00:00:00Z",
+        "endDate": "2026-09-30T00:00:00Z",
         "questionCount": 12,
         "responseCount": 0,
         "targetAudienceCount": null,
@@ -2223,6 +2783,229 @@
       }
     ]
   },
+  "GET /surveys/*": {
+    "id": "s0000000-0000-0000-0000-000000000003",
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "title": "Q3 climate survey",
+    "description": "The quarterly climate measurement: six dimensions, twelve questions, every department.",
+    "type": "periodic",
+    "status": "active",
+    "language": "en",
+    "resolvedLocale": "en",
+    "fallbackFields": [],
+    "startDate": "2026-10-01T00:00:00Z",
+    "endDate": "2026-10-31T00:00:00Z",
+    "responseCount": 101,
+    "targetAudienceCount": null,
+    "departmentIds": [],
+    "questions": [
+      {
+        "id": "q1",
+        "text": "I can raise a concern without fear",
+        "type": "likert",
+        "category": "Psychological safety",
+        "order": 0,
+        "required": true,
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "commentPrompt": null,
+        "commentRequired": false
+      },
+      {
+        "id": "q2",
+        "text": "Mistakes are treated as learning",
+        "type": "likert",
+        "category": "Psychological safety",
+        "order": 1,
+        "required": true,
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "commentPrompt": null,
+        "commentRequired": false
+      },
+      {
+        "id": "q3",
+        "text": "My workload is manageable",
+        "type": "likert",
+        "category": "Workload",
+        "order": 2,
+        "required": true,
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "commentPrompt": null,
+        "commentRequired": false
+      },
+      {
+        "id": "q4",
+        "text": "I can disconnect outside working hours",
+        "type": "likert",
+        "category": "Workload",
+        "order": 3,
+        "required": true,
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "commentPrompt": null,
+        "commentRequired": false
+      },
+      {
+        "id": "q5",
+        "text": "Good work is recognised here",
+        "type": "likert",
+        "category": "Recognition",
+        "order": 4,
+        "required": true,
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "commentPrompt": null,
+        "commentRequired": false
+      },
+      {
+        "id": "q6",
+        "text": "Feedback is specific and useful",
+        "type": "likert",
+        "category": "Recognition",
+        "order": 5,
+        "required": true,
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "commentPrompt": null,
+        "commentRequired": false
+      },
+      {
+        "id": "q7",
+        "text": "My manager is clear about priorities",
+        "type": "likert",
+        "category": "Leadership",
+        "order": 6,
+        "required": true,
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "commentPrompt": null,
+        "commentRequired": false
+      },
+      {
+        "id": "q8",
+        "text": "Decisions are explained",
+        "type": "likert",
+        "category": "Leadership",
+        "order": 7,
+        "required": true,
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "commentPrompt": null,
+        "commentRequired": false
+      },
+      {
+        "id": "q9",
+        "text": "I can grow in this role",
+        "type": "likert",
+        "category": "Growth",
+        "order": 8,
+        "required": true,
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "commentPrompt": null,
+        "commentRequired": false
+      },
+      {
+        "id": "q10",
+        "text": "Training is available when I need it",
+        "type": "likert",
+        "category": "Growth",
+        "order": 9,
+        "required": true,
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "commentPrompt": null,
+        "commentRequired": false
+      },
+      {
+        "id": "q11",
+        "text": "Teams share what they know",
+        "type": "likert",
+        "category": "Collaboration",
+        "order": 10,
+        "required": true,
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "commentPrompt": null,
+        "commentRequired": false
+      },
+      {
+        "id": "q12",
+        "text": "Handovers between teams work",
+        "type": "likert",
+        "category": "Collaboration",
+        "order": 11,
+        "required": true,
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Strongly disagree",
+        "scaleLabelMax": "Strongly agree",
+        "commentPrompt": null,
+        "commentRequired": false
+      }
+    ],
+    "settings": {
+      "anonymous": true,
+      "allowPartialResponses": true,
+      "randomizeQuestions": false,
+      "showProgress": true,
+      "autoSave": true,
+      "responseLimit": null,
+      "timeLimitMinutes": null,
+      "notificationSendInvitations": true,
+      "notificationSendReminders": true,
+      "notificationReminderFrequencyDays": 3,
+      "invitationSendImmediately": true,
+      "invitationIncludeCredentials": false,
+      "invitationBrandingEnabled": true,
+      "invitationCustomSubject": null,
+      "invitationCustomMessage": null
+    },
+    "allowedStatusTransitions": [
+      "closed"
+    ],
+    "isContentEditable": false,
+    "version": 3,
+    "createdBy": "99999999-0000-0000-0000-000000000001",
+    "createdAt": "2026-09-18T10:22:00Z",
+    "updatedAt": "2026-10-01T08:00:00Z"
+  },
   "GET /action-plans": {
     "actionPlans": [
       {
@@ -2277,6 +3060,60 @@
       }
     ]
   },
+  "GET /action-plans/*": {
+    "id": "a0000000-0000-0000-0000-000000000001",
+    "title": "Company-wide recognition standard",
+    "description": "Recognition is the weakest dimension in four of six departments. One standard, published, with a named owner in each.",
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "departmentId": null,
+    "createdBy": "99999999-0000-0000-0000-000000000001",
+    "dueDate": "2026-08-06T00:00:00Z",
+    "status": "in_progress",
+    "priority": "high",
+    "tags": [],
+    "templateId": null,
+    "kpis": [
+      {
+        "id": "b2000000-0000-0000-0000-000000000001",
+        "name": "Recognition index",
+        "targetValue": 70,
+        "currentValue": 58,
+        "unit": "pts",
+        "measurementFrequency": "quarterly"
+      },
+      {
+        "id": "b2000000-0000-0000-0000-000000000002",
+        "name": "Departments with a published standard",
+        "targetValue": 6,
+        "currentValue": 2,
+        "unit": "departments",
+        "measurementFrequency": "monthly"
+      }
+    ],
+    "objectives": [
+      {
+        "id": "b3000000-0000-0000-0000-000000000001",
+        "description": "Publish one recognition standard every department can apply.",
+        "successCriteria": "Signed off by People and visible on the intranet.",
+        "currentStatus": "in_progress",
+        "completionPercentage": 60
+      },
+      {
+        "id": "b3000000-0000-0000-0000-000000000002",
+        "description": "Name an owner for it in each of the six departments.",
+        "successCriteria": "Six names, each acknowledged by the person named.",
+        "currentStatus": "in_progress",
+        "completionPercentage": 33
+      },
+      {
+        "id": "b3000000-0000-0000-0000-000000000003",
+        "description": "Re-measure recognition in the next climate survey.",
+        "successCriteria": "The Q4 survey carries the same two recognition questions.",
+        "currentStatus": "not_started",
+        "completionPercentage": 0
+      }
+    ]
+  },
   "GET /action-plan-templates": {
     "templates": []
   },
@@ -2314,7 +3151,590 @@
       }
     ]
   },
-  "GET /admin/benchmarks": [],
+  "GET /microclimate-templates": {
+    "templates": [
+      {
+        "id": "b1000000-0000-0000-0000-000000000001",
+        "name": "Weekly pulse",
+        "description": "Three questions, asked every Monday. The shortest thing that still moves.",
+        "category": "pulse",
+        "companyId": null,
+        "isSystemTemplate": true,
+        "usageCount": 42,
+        "isActive": true
+      },
+      {
+        "id": "b1000000-0000-0000-0000-000000000002",
+        "name": "Post-release retrospective",
+        "description": "How the last release landed with the people who shipped it.",
+        "category": "retrospective",
+        "companyId": null,
+        "isSystemTemplate": true,
+        "usageCount": 17,
+        "isActive": true
+      },
+      {
+        "id": "b1000000-0000-0000-0000-000000000003",
+        "name": "Depot handover check",
+        "description": "Northwind's own: the two questions the night shift is asked at handover.",
+        "category": "operations",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "isSystemTemplate": false,
+        "usageCount": 6,
+        "isActive": true
+      }
+    ]
+  },
+  "GET /microclimates/*/live-results": {
+    "responseCount": 18,
+    "targetParticipantCount": 57,
+    "sentimentScore": 0.42,
+    "engagementLevel": "medium",
+    "wordCloud": [
+      {
+        "text": "smooth",
+        "value": 7,
+        "language": "en"
+      },
+      {
+        "text": "rushed",
+        "value": 5,
+        "language": "en"
+      },
+      {
+        "text": "clear",
+        "value": 4,
+        "language": "en"
+      },
+      {
+        "text": "tranquilo",
+        "value": 4,
+        "language": "es"
+      },
+      {
+        "text": "confusing",
+        "value": 3,
+        "language": "en"
+      },
+      {
+        "text": "apurado",
+        "value": 3,
+        "language": "es"
+      },
+      {
+        "text": "steady",
+        "value": 2,
+        "language": "en"
+      },
+      {
+        "text": "coordinado",
+        "value": 2,
+        "language": "es"
+      }
+    ]
+  },
+  "GET /microclimates/*": {
+    "id": "m0000000-0000-0000-0000-000000000001",
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "title": "How did this week's release land?",
+    "description": null,
+    "status": "active",
+    "language": "en",
+    "resolvedLocale": "en",
+    "fallbackFields": [],
+    "startTime": "2026-08-11T10:00:00Z",
+    "endTime": "2026-08-11T18:00:00Z",
+    "responseCount": 18,
+    "targetParticipantCount": 57,
+    "anonymousResponses": true,
+    "showLiveResults": true,
+    "createdBy": "99999999-0000-0000-0000-000000000001",
+    "questions": [
+      {
+        "id": "mq1",
+        "text": "How did this week's release land with your team?",
+        "type": "likert",
+        "order": 1,
+        "required": true,
+        "options": null
+      },
+      {
+        "id": "mq2",
+        "text": "In one word, how does the handover feel right now?",
+        "type": "open_ended",
+        "order": 2,
+        "required": false,
+        "options": null
+      }
+    ]
+  },
+  "GET /admin/benchmarks": [
+    {
+      "id": "b0000000-0000-0000-0000-000000000002",
+      "name": "Transportation · 500-1000 staff",
+      "type": "industry",
+      "category": "engagement",
+      "companyId": null,
+      "isActive": true,
+      "qualityScore": 0.88
+    },
+    {
+      "id": "b0000000-0000-0000-0000-000000000001",
+      "name": "Northwind Q3 2026",
+      "type": "internal",
+      "category": "engagement",
+      "companyId": "11111111-1111-1111-1111-111111111111",
+      "isActive": true,
+      "qualityScore": 0.92
+    },
+    {
+      "id": "b0000000-0000-0000-0000-000000000003",
+      "name": "LatAm logistics",
+      "type": "regional",
+      "category": "engagement",
+      "companyId": null,
+      "isActive": true,
+      "qualityScore": 0.79
+    },
+    {
+      "id": "b0000000-0000-0000-0000-000000000004",
+      "name": "Global all-industry",
+      "type": "industry",
+      "category": "engagement",
+      "companyId": null,
+      "isActive": true,
+      "qualityScore": 0.74
+    }
+  ],
+  "GET /admin/benchmarks/*": {
+    "id": "b0000000-0000-0000-0000-000000000002",
+    "name": "Transportation · 500-1000 staff",
+    "description": "The industry cohort Northwind is read against: transportation and logistics companies of comparable size.",
+    "type": "industry",
+    "category": "engagement",
+    "source": "industry_panel",
+    "industry": "Transportation",
+    "companySize": "500-1000",
+    "region": null,
+    "companyId": null,
+    "isActive": true,
+    "validationStatus": "validated",
+    "qualityScore": 0.88,
+    "priorPeriodBenchmarkId": null,
+    "metrics": [
+      {
+        "id": "b4000000-0000-0000-0000-000000000001",
+        "metricName": "Psychological safety",
+        "value": 66,
+        "unit": "pts",
+        "percentile": null,
+        "sampleSize": 184
+      },
+      {
+        "id": "b4000000-0000-0000-0000-000000000002",
+        "metricName": "Workload",
+        "value": 55,
+        "unit": "pts",
+        "percentile": null,
+        "sampleSize": 184
+      },
+      {
+        "id": "b4000000-0000-0000-0000-000000000003",
+        "metricName": "Recognition",
+        "value": 61,
+        "unit": "pts",
+        "percentile": null,
+        "sampleSize": 184
+      },
+      {
+        "id": "b4000000-0000-0000-0000-000000000004",
+        "metricName": "Leadership",
+        "value": 64,
+        "unit": "pts",
+        "percentile": null,
+        "sampleSize": 184
+      },
+      {
+        "id": "b4000000-0000-0000-0000-000000000005",
+        "metricName": "Growth",
+        "value": 58,
+        "unit": "pts",
+        "percentile": null,
+        "sampleSize": 184
+      },
+      {
+        "id": "b4000000-0000-0000-0000-000000000006",
+        "metricName": "Collaboration",
+        "value": 63,
+        "unit": "pts",
+        "percentile": null,
+        "sampleSize": 184
+      },
+      {
+        "id": "b4000000-0000-0000-0000-000000000007",
+        "metricName": "overall_index",
+        "value": 61,
+        "unit": "pts",
+        "percentile": 44,
+        "sampleSize": 184
+      }
+    ]
+  },
+  "GET /admin/question-bank/categories": {
+    "categories": [
+      {
+        "category": "psychological_safety",
+        "subcategory": null,
+        "itemCount": 1,
+        "activeItemCount": 1
+      },
+      {
+        "category": "workload",
+        "subcategory": null,
+        "itemCount": 2,
+        "activeItemCount": 2
+      },
+      {
+        "category": "operations",
+        "subcategory": null,
+        "itemCount": 1,
+        "activeItemCount": 1
+      },
+      {
+        "category": "recognition",
+        "subcategory": null,
+        "itemCount": 1,
+        "activeItemCount": 1
+      },
+      {
+        "category": "facilities",
+        "subcategory": null,
+        "itemCount": 1,
+        "activeItemCount": 0
+      },
+      {
+        "category": "leadership",
+        "subcategory": null,
+        "itemCount": 1,
+        "activeItemCount": 1
+      },
+      {
+        "category": "engagement",
+        "subcategory": null,
+        "itemCount": 1,
+        "activeItemCount": 1
+      }
+    ]
+  },
+  "GET /admin/question-bank/effectiveness": {
+    "items": [
+      {
+        "questionBankItemId": "c0000000-0000-0000-0000-000000000001",
+        "text": "I can raise a concern without fear",
+        "language": "en",
+        "category": "psychological_safety",
+        "subcategory": "voice",
+        "isActive": true,
+        "metrics": {
+          "questionBankItemId": "c0000000-0000-0000-0000-000000000001",
+          "surveysUsedIn": 9,
+          "questionsCreated": 9,
+          "timesAsked": 312,
+          "timesAnswered": 306,
+          "responseRate": 98.1,
+          "skipRate": 1.9,
+          "averageTimeSpentSeconds": 14.2,
+          "lastUsedAt": "2026-08-04T09:00:00Z"
+        }
+      },
+      {
+        "questionBankItemId": "c0000000-0000-0000-0000-000000000002",
+        "text": "My workload is manageable",
+        "language": "en",
+        "category": "workload",
+        "subcategory": null,
+        "isActive": true,
+        "metrics": {
+          "questionBankItemId": "c0000000-0000-0000-0000-000000000002",
+          "surveysUsedIn": 9,
+          "questionsCreated": 9,
+          "timesAsked": 312,
+          "timesAnswered": 298,
+          "responseRate": 95.5,
+          "skipRate": 4.5,
+          "averageTimeSpentSeconds": 14.2,
+          "lastUsedAt": "2026-08-04T09:00:00Z"
+        }
+      },
+      {
+        "questionBankItemId": "c0000000-0000-0000-0000-000000000003",
+        "text": "Describe anything that made this quarter harder than it needed to be",
+        "language": "en",
+        "category": "workload",
+        "subcategory": "open feedback",
+        "isActive": true,
+        "metrics": {
+          "questionBankItemId": "c0000000-0000-0000-0000-000000000003",
+          "surveysUsedIn": 9,
+          "questionsCreated": 9,
+          "timesAsked": 312,
+          "timesAnswered": 121,
+          "responseRate": 38.8,
+          "skipRate": 61.2,
+          "averageTimeSpentSeconds": 14.2,
+          "lastUsedAt": "2026-08-04T09:00:00Z"
+        }
+      },
+      {
+        "questionBankItemId": "c0000000-0000-0000-0000-000000000004",
+        "text": "How did the new depot rota land with your team?",
+        "language": "en",
+        "category": "operations",
+        "subcategory": null,
+        "isActive": true,
+        "metrics": {
+          "questionBankItemId": "c0000000-0000-0000-0000-000000000004",
+          "surveysUsedIn": 1,
+          "questionsCreated": 1,
+          "timesAsked": 4,
+          "timesAnswered": 1,
+          "responseRate": 25,
+          "skipRate": 75,
+          "averageTimeSpentSeconds": 14.2,
+          "lastUsedAt": "2026-08-27T08:41:00Z"
+        }
+      },
+      {
+        "questionBankItemId": "c0000000-0000-0000-0000-000000000005",
+        "text": "Good work is recognised here",
+        "language": "en",
+        "category": "recognition",
+        "subcategory": null,
+        "isActive": true,
+        "metrics": {
+          "questionBankItemId": "c0000000-0000-0000-0000-000000000005",
+          "surveysUsedIn": 8,
+          "questionsCreated": 8,
+          "timesAsked": 288,
+          "timesAnswered": 279,
+          "responseRate": 96.9,
+          "skipRate": 3.1,
+          "averageTimeSpentSeconds": 14.2,
+          "lastUsedAt": "2026-06-19T13:05:00Z"
+        }
+      },
+      {
+        "questionBankItemId": "c0000000-0000-0000-0000-000000000006",
+        "text": "Rate the canteen",
+        "language": "en",
+        "category": "facilities",
+        "subcategory": null,
+        "isActive": false,
+        "metrics": {
+          "questionBankItemId": "c0000000-0000-0000-0000-000000000006",
+          "surveysUsedIn": 2,
+          "questionsCreated": 2,
+          "timesAsked": 96,
+          "timesAnswered": 41,
+          "responseRate": 42.7,
+          "skipRate": 57.3,
+          "averageTimeSpentSeconds": 14.2,
+          "lastUsedAt": "2026-02-11T12:20:00Z"
+        }
+      },
+      {
+        "questionBankItemId": "c0000000-0000-0000-0000-000000000007",
+        "text": "Is it clear who decides what on your team?",
+        "language": "en",
+        "category": "leadership",
+        "subcategory": "clarity",
+        "isActive": true,
+        "metrics": {
+          "questionBankItemId": "c0000000-0000-0000-0000-000000000007",
+          "surveysUsedIn": 6,
+          "questionsCreated": 6,
+          "timesAsked": 210,
+          "timesAnswered": 203,
+          "responseRate": 96.7,
+          "skipRate": 3.3,
+          "averageTimeSpentSeconds": 14.2,
+          "lastUsedAt": "2026-08-04T09:00:00Z"
+        }
+      }
+    ]
+  },
+  "GET /admin/question-bank": {
+    "items": [
+      {
+        "id": "c0000000-0000-0000-0000-000000000001",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "text": "I can raise a concern without fear",
+        "language": "en",
+        "type": "likert",
+        "category": "psychological_safety",
+        "subcategory": "voice",
+        "industry": null,
+        "companySize": null,
+        "usageCount": 9,
+        "responseRate": 98.1,
+        "insightScore": 0.81,
+        "lastUsedAt": "2026-08-04T09:00:00Z",
+        "isActive": true,
+        "isAiGenerated": false,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": [
+          "core"
+        ]
+      },
+      {
+        "id": "c0000000-0000-0000-0000-000000000002",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "text": "My workload is manageable",
+        "language": "en",
+        "type": "likert",
+        "category": "workload",
+        "subcategory": null,
+        "industry": null,
+        "companySize": null,
+        "usageCount": 9,
+        "responseRate": 95.5,
+        "insightScore": 0.74,
+        "lastUsedAt": "2026-08-04T09:00:00Z",
+        "isActive": true,
+        "isAiGenerated": false,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": []
+      },
+      {
+        "id": "c0000000-0000-0000-0000-000000000003",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "text": "Describe anything that made this quarter harder than it needed to be",
+        "language": "en",
+        "type": "open_ended",
+        "category": "workload",
+        "subcategory": "open feedback",
+        "industry": null,
+        "companySize": null,
+        "usageCount": 9,
+        "responseRate": 38.8,
+        "insightScore": 0.33,
+        "lastUsedAt": "2026-08-04T09:00:00Z",
+        "isActive": true,
+        "isAiGenerated": false,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": [
+          "long-form"
+        ]
+      },
+      {
+        "id": "c0000000-0000-0000-0000-000000000004",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "text": "How did the new depot rota land with your team?",
+        "language": "en",
+        "type": "rating",
+        "category": "operations",
+        "subcategory": null,
+        "industry": null,
+        "companySize": null,
+        "usageCount": 1,
+        "responseRate": 25,
+        "insightScore": 0.1,
+        "lastUsedAt": "2026-08-27T08:41:00Z",
+        "isActive": true,
+        "isAiGenerated": false,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": []
+      },
+      {
+        "id": "c0000000-0000-0000-0000-000000000005",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "text": "Good work is recognised here",
+        "language": "en",
+        "type": "likert",
+        "category": "recognition",
+        "subcategory": null,
+        "industry": null,
+        "companySize": null,
+        "usageCount": 8,
+        "responseRate": 96.9,
+        "insightScore": 0.69,
+        "lastUsedAt": "2026-06-19T13:05:00Z",
+        "isActive": true,
+        "isAiGenerated": false,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": []
+      },
+      {
+        "id": "c0000000-0000-0000-0000-000000000006",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "text": "Rate the canteen",
+        "language": "en",
+        "type": "rating",
+        "category": "facilities",
+        "subcategory": null,
+        "industry": null,
+        "companySize": null,
+        "usageCount": 2,
+        "responseRate": 42.7,
+        "insightScore": 0.08,
+        "lastUsedAt": "2026-02-11T12:20:00Z",
+        "isActive": false,
+        "isAiGenerated": false,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": []
+      },
+      {
+        "id": "c0000000-0000-0000-0000-000000000007",
+        "companyId": "11111111-1111-1111-1111-111111111111",
+        "text": "Is it clear who decides what on your team?",
+        "language": "en",
+        "type": "yes_no",
+        "category": "leadership",
+        "subcategory": "clarity",
+        "industry": null,
+        "companySize": null,
+        "usageCount": 6,
+        "responseRate": 96.7,
+        "insightScore": 0.77,
+        "lastUsedAt": "2026-08-04T09:00:00Z",
+        "isActive": true,
+        "isAiGenerated": true,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": []
+      },
+      {
+        "id": "c0000000-0000-0000-0000-000000000008",
+        "companyId": null,
+        "text": "I would recommend this organisation as a place to work",
+        "language": "en",
+        "type": "likert",
+        "category": "engagement",
+        "subcategory": null,
+        "industry": null,
+        "companySize": null,
+        "usageCount": 0,
+        "responseRate": 0,
+        "insightScore": 0,
+        "lastUsedAt": null,
+        "isActive": true,
+        "isAiGenerated": false,
+        "version": 1,
+        "parentQuestionBankItemId": null,
+        "tags": [
+          "global",
+          "enps"
+        ]
+      }
+    ],
+    "total": 8
+  },
   "GET /admin/ai-insights": [
     {
       "id": "i0000000-0000-0000-0000-000000000001",
@@ -2347,7 +3767,7 @@
       "id": "i0000000-0000-0000-0000-000000000004",
       "companyId": "11111111-1111-1111-1111-111111111111",
       "title": "Engineering's psychological safety is the strongest reading on record",
-      "type": "strength",
+      "type": "trend",
       "category": "psychological_safety",
       "priority": "low",
       "isAcknowledged": true
