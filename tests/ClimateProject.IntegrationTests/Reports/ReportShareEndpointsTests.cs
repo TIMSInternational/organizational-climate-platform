@@ -123,7 +123,10 @@ public class ReportShareEndpointsTests : IAsyncLifetime
         Assert.Equal("climate_summary", body.Type);
         Assert.NotNull(body.GeneratedAt);
 
-        // The generated document itself, carried through verbatim rather than recomputed.
+        // The generated document, narrowed by PublicReportProjection to the sections an
+        // anonymous reader is allow-listed for -- not the stored column, and not recomputed
+        // either: the floors inside the admitted sections are the generator's own.
+        // ReportShareRefutationTests owns what may and may not be in there.
         Assert.NotNull(body.ReportOutput);
         using var document = JsonDocument.Parse(body.ReportOutput!);
         Assert.True(document.RootElement.ValueKind == JsonValueKind.Object);

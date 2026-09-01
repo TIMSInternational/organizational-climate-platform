@@ -68,15 +68,24 @@ internal static class ReportGeneration
         foreach (var survey in surveys)
         {
             // A report is a company document, not a browser request: content resolves
-            // for the survey's own language, with no ?lang to honour. The fallback list
-            // is per-survey plumbing the report does not print -- question text never
-            // reaches the document, only category names and department names do.
+            // for the survey's own language, with no ?lang to honour. The resolved locale
+            // IS printed, on the section, because the section prints authored text --
+            // question text, option labels and scale anchors -- and a reader of the stored
+            // document would otherwise have no way to know which language it is in. The
+            // fallback list stays per-survey plumbing: it names the individual fields that
+            // fell back, which is an authoring diagnostic, not report content.
             var locale = SurveyContent.ResolveRequestLocale(null, survey.Language);
             var fallbackFields = new List<string>();
             var aggregate = await SurveyAggregateLoader.ComputeAsync(db, survey, locale, fallbackFields, cancellationToken);
             var surveyTitle = SurveyContent.Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language, "title", fallbackFields);
-            sections.Add(ReportSurveySections.ToSection(survey.Id, surveyTitle, survey.Status, aggregate));
+            sections.Add(ReportSurveySections.ToSection(survey.Id, surveyTitle, survey.Status, locale, aggregate));
         }
+
+        // The benchmark section (#88): the company's own benchmarks plus the global rows
+        // every tenant compares against, each with the year-over-year reading #89 computes.
+        // Loaded through BenchmarkPriorPeriod -- the benchmarks route's own code -- so the
+        // number a report prints is the number that route serves, byte for byte.
+        var benchmarks = await ReportBenchmarks.LoadAsync(db, report.CompanyId, cancellationToken);
 
         report.Status = "completed";
         report.GenerationCompletedAt = DateTimeOffset.UtcNow;
@@ -87,19 +96,30 @@ internal static class ReportGeneration
         // payload this API hands a browser -- reportOutput is delivered verbatim to the web app.
         report.ReportOutput = JsonSerializer.Serialize(
             new ReportOutputDocument(
-                // Honest scope (#88): what the document still does not carry. Each item
-                // is issue-sized on its own; none may be faked in the meantime.
-                // TODO(#88 follow-up): per-question distributions and open-text word
-                //   clouds per survey (SurveyAggregate.Questions, projected like
-                //   ReportSurveySections does departments).
-                // TODO(#88 follow-up): demographic breakdowns beyond department
-                //   (SurveyAggregate.Breakdowns already computes and suppresses them;
-                //   the projection just does not print them yet).
-                // TODO(#88 follow-up): benchmark comparisons (#61's boundary applies:
-                //   reuse BenchmarkEndpoints' source, do not re-derive).
-                "Sections not yet generated: per-question distributions, word clouds, demographic breakdowns, benchmark comparisons.",
+                // Honest scope (#88): what the document still does not carry, and nothing
+                // more. The three follow-ups this note used to name -- per-question
+                // distributions and word clouds, demographic breakdowns beyond department,
+                // benchmark comparisons -- are above; the note shrank when they landed,
+                // because a note that keeps claiming a gap it no longer has teaches a
+                // consumer to stop reading it. Each remaining item is issue-sized on its
+                // own; none may be faked in the meantime.
+                // TODO(#88 follow-up): period-over-period comparative analysis -- the same
+                //   survey, or the same dimension, across two windows. Every input exists
+                //   (SurveyClimateTrends already computes the matrix); nothing projects it
+                //   into this document yet, and the delta must come from there rather than
+                //   from a subtraction written here.
+                // TODO(#88 follow-up): report configuration, the filter model and report
+                //   templates. `reports.template_id` is a free string today with no
+                //   template table behind it, so a report cannot yet be told WHAT to
+                //   include -- every document is the whole company.
+                // TODO(#88 follow-up): `reports.format` is stored and not honoured. This
+                //   document is JSON whatever a caller asked for; there is no PDF or
+                //   spreadsheet renderer, and download hands back the same JSON.
+                "Sections not yet generated: period-over-period comparative analysis, report configuration/filters, "
+                + "report templates. The requested `format` is not rendered: this document is JSON whatever was asked for.",
                 sections,
-                ReportAIInsights.ToSection(insights)),
+                ReportAIInsights.ToSection(insights),
+                benchmarks),
             JsonSerializerOptions.Web);
         report.UpdatedAt = DateTimeOffset.UtcNow;
     }
