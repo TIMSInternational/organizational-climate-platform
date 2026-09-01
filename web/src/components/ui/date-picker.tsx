@@ -80,6 +80,13 @@ export function DatePicker({
         <Calendar
           mode="single"
           selected={value}
+          // Open on the month of the date that is actually selected, not on today's.
+          // `react-day-picker` falls back to the current month when `defaultMonth` is
+          // absent, so without this a survey dated 3 August opened on 1 September shows
+          // September -- the user's own selection is off-screen and they have to page
+          // backwards to find it. Undefined for an empty picker, which correctly leaves
+          // the library's today-based default in place.
+          defaultMonth={value}
           onSelect={(date) => {
             onChange?.(date)
             // Close on pick: leaving it open after a single-date selection means a
