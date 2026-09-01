@@ -10,23 +10,28 @@ name: deploy-tracking-prod
 # a second deploy path with a lower bar is rehearsing a different play.
 #
 # ---------------------------------------------------------------------------------
-# THIS WORKFLOW HAS NEVER RUN, AND IT CANNOT SUCCEED YET.
+# THIS WORKFLOW HAS RUN ONCE AND IS BLOCKED ON CONFIGURATION, NOT ON CODE.
 #
-# Three things must land before a dispatch can get past the canary, all of them in
-# services/tracking-api source, none of them in this file:
+# CORRECTED 2026-09-01. The previous header read "THIS WORKFLOW HAS NEVER RUN, AND IT
+# CANNOT SUCCEED YET" and listed three source-side blockers. Both halves are now false,
+# and the header was the first thing anyone read before dispatching:
 #
-#   1. GET /ready that round-trips Postgres. App Runner's health check probes it
-#      (climate-tracking-api-prod-service.yml, HealthCheckPath), and today the
-#      tracking host serves only a static /health. Without it the rollout fails its
-#      health check and is rejected.
-#   2. GET /version reporting a 40-hex `commit`. scripts/read-deployed-commit.sh --
-#      the same reader deploy-prod.yml uses -- requires that field, and the
-#      tracking /version returns {service, runtime, environment}. The Dockerfile
-#      already passes /p:CommitSha, so this is a source-side BuildInfo away.
-#   3. ClimateTracking.Api referencing ClimateTracking.Workers and registering
-#      CacheSyncWorker + DailySemaforoWorker. Without it the service deploys,
-#      serves, and syncs nothing: the cache tables stay empty and every nodo and
-#      persona name in the plans list and the .xlsx export renders blank.
+#   - It ran on 2026-08-27. It failed at step 3 of 17, "Verify deploy configuration is
+#     present" -- the credential-free preflight, before AWS credentials and before any
+#     migration. Nothing was touched.
+#   - All three source blockers it named are closed, verified in source 2026-09-01:
+#       1. GET /ready round-tripping Postgres -- ClimateTracking.Api/Program.cs:154
+#       2. GET /version with a 40-hex commit -- Program.cs:194, Commit: BuildInfo.CommitSha
+#       3. Workers referenced and registered -- AddClimateTrackingWorkers, Program.cs:76
+#     The fourth, the NETSDK1152 Docker build, was fixed in 59c4034 and merged in #408.
+#
+# What actually blocks a successful dispatch today is THREE configuration values, all
+# in the table below: PROCOMER_COMPANY_ID (a human decision -- the climate-project
+# Company GUID this deployment serves), and the two that describe a tracking database
+# that does not exist yet (TRACKING_DATABASE_CONNECTION_STRING_SECRET_ARN and the
+# TRACKING_MIGRATION_DATABASE_CONNECTION_STRING secret). The preflight below checks all
+# three for shape, not just presence, so a placeholder fails at step 3 and touches
+# nothing.
 #
 # Full sequence, with the exact code for each, in
 # docs/runbooks/tracking-service-provisioning.md.

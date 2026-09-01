@@ -579,6 +579,45 @@ hypothetical.
 Fill from §7. Until these hold numbers, §3.2's timings are guesses and are labelled as
 such throughout.
 
+### 8.0 Steady-state baseline — measured 2026-09-01, production on `4b21c0a`
+
+The first half of §7.3 has now been run. `scripts/rollback-probe.sh` makes **zero AWS
+calls**, so the probe needs no production credentials — it was run from a machine holding
+only `795965600143`, which cannot see App Runner at all. Only the three `aws` commands in
+§7.3 still require `747814092517` (H1).
+
+`scripts/rollback-probe.sh <url> 90 1.0 2` — deliberately light, ~2 req/s:
+
+| | value |
+|---|---|
+| requests / non-200 | **56 / 0** |
+| longest consecutive failure run | **0 s** |
+| `/ready` latency mean | **2.22 s** |
+| min / max | **1.41 s / 5.46 s** |
+| distribution | 42 in 1–2 s · 7 in 3–4 s · 5 in 4–5 s · **2 in 5–6 s** |
+
+**The steady state costs zero failed requests.** That is the number a rehearsal is
+compared against, and without it a rollback that costs four failures means nothing.
+
+### 8.1 The health-check margin this exposed — read before rehearsing
+
+`HealthCheckConfiguration` on the prod service is `Interval: 20`, **`Timeout: 5`**,
+`HealthyThreshold: 3`, `UnhealthyThreshold: 5`. The baseline above puts **2 of 56 probes
+(3.6%) past that 5 s timeout**, at a measured max of 5.46 s.
+
+At steady state this is absorbed by design, and is not an incident: marking an instance
+unhealthy needs 5 consecutive failures at a 20 s interval — 100 seconds of sustained
+slowness, not a sporadic 3.6%.
+
+**It matters during a rollback.** The replacement instance cold-starts, and #220 measured
+a **9.4 s** cold-start `/ready` — roughly twice the timeout — while `HealthyThreshold: 3`
+means it must pass three consecutive checks before it serves. So a rollback that appears
+to stall in health checks for a minute or more is the **expected** behaviour of this
+configuration, not a failed rollback. Do not abort it on that signal alone; abort on the
+§5 triggers.
+
+
+
 | | Rehearsal 1 | Rehearsal 2 |
 |---|---|---|
 | Date / environment | `____` | `____` |
@@ -604,13 +643,14 @@ Ordered by how much of this document collapses without it.
 |---|---|---|---|
 | H1 | **Does any human hold credentials in AWS account `747814092517` that can update `climate-project-api-prod`?** The only principal proven to have `cloudformation:UpdateStack` on it is the GitHub OIDC role `climate-project-github-deploy-prod`, assumable only from Actions. The credentials in this environment are for `795965600143` and cannot see App Runner at all. | If the answer is no, the break-glass path in §3.2 does not exist, and every rollback depends on GitHub Actions being available. Test it with §7.3's first command — it takes ten seconds. | `____` |
 | H2 | **Is Supabase PITR on for the climate project, and are there restorable backups?** Unverifiable from here (§4.5). | Decides whether §4.5's `pg_dump` is a belt-and-braces habit or the *only* recovery lever in existence. Also decides how frightening PONR-1 and PONR-2 are. | `____` |
-| H3 | **Merge `rollback-prod.yml` to `main`.** | `workflow_dispatch` workflows are only offered from the default branch. On a feature branch it is inert. | `____` |
+| H3 | ~~**Merge `rollback-prod.yml` to `main`.**~~ **DONE** — it is on `main` (verified 2026-09-01), so `workflow_dispatch` offers it. It has still **never been run**: that is H10. | `workflow_dispatch` workflows are only offered from the default branch. On a feature branch it is inert. | ✅ |
 | H4 | **Ratify or replace the §5 thresholds, and name the decision owner and their backup.** | A threshold nobody agreed to will not be pulled at 3am. | `____` |
 | H5 | **#156, staging.** | §7.1's rehearsal has nowhere to run. Also blocks any future rehearsal being repeatable. | `____` |
 | H6 | **#158, monitoring.** | T2 and T3 are unmeasurable without it. Two of six triggers are decorative until it lands. | `____` |
-| H7 | **Decide what happens to `services/tracking-api` (§3.4).** No CI, no Dockerfile, no deploy. The Procomer `.xlsx` export (#386) cannot reach the client. #219's `InternalApiKey` two-sided wiring must land in the *same* change as its first deploy. | Not a rollback question — a "can it ship at all" question, seven weeks before a government go-live. | `____` |
+| H7 | **Provision the tracking database and decide `PROCOMER_COMPANY_ID` (§3.4).** **CORRECTED 2026-09-01: "No CI, no Dockerfile, no deploy" is now false on all three counts** — `ci.yml` gates `tracking-build-and-test` (163 tests, added in #410), `services/tracking-api/Dockerfile` exists, and `deploy-tracking-prod.yml` ran on 2026-08-27, failing at its credential-free preflight. **#219's `InternalApiKey` wiring is already correct**: both services read the same `INTERNAL_API_KEY_SECRET_ARN`, and the preflight refuses an empty or malformed one, so the two-sided coupling cannot be broken silently. What remains is three config values, two of which are one task (the database does not exist). | Still a "can it ship at all" question — but a provisioning one, not an engineering one. | `____` |
+| H10 | **Rehearse the rollback (#159).** `rollback-prod.yml`, `deploy-staging.yml` and `rollback-rehearsal-staging.yml` have **zero runs between them** (verified 2026-09-01). **The 2026-09-01 release is the most forgiving moment this will ever have**: its only migration, `AddReportShares`, is a pure `CreateTable`, so the previous image (`98f6a4b`) runs unchanged against the new schema, and this workflow is image-only by design. | An untested recovery path is not a recovery path. The conditions will not be this benign for the next release. | `____` |
 | H8 | **Decide the Vercel auto-deploy posture during an incident (§3.1).** Merges to main silently roll the web forward again. | A web rollback that a merge undoes is not a rollback. | `____` |
-| H9 | **Close the API/web version gap, or accept it deliberately.** Prod API is 23 commits and 5 days behind main while the web is current, and a route the web calls 404s today. | Every rollback in this document is harder while the two halves are decoupled. | `____` |
+| H9 | ~~**Close the API/web version gap.**~~ **CLOSED 2026-09-01** — the nine-PR merge queue landed and `deploy-prod` shipped it: prod and `main` are both `4b21c0a`, so the gap is zero and `deploy-drift` is green for the first time since 2026-08-28. Re-open this row the moment drift reappears; it is a recurring condition, not a one-time fix. | Every rollback in this document is harder while the two halves are decoupled. | ✅ |
 
 ---
 
