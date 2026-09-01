@@ -197,6 +197,9 @@ public static class SubjectAccessExport
             // reports.shared_with is a text[] with no writer in src/ today; matched on both the
             // subject's id and their email because no code fixes which of the two it would hold.
             await ReportsAsync(db, id, idText, email, companyScope, cancellationToken),
+
+            // #139. Which public links to a report the subject minted, and which they revoked.
+            await ReportSharesAsync(db, id, companyScope, cancellationToken),
         };
 
         // Direct reports are folded into the User section rather than given one of their own:
@@ -401,6 +404,50 @@ public static class SubjectAccessExport
             .ToList();
 
         return Section("Report", ExportTreatment.Reference, records);
+    }
+
+    /// <summary>
+    /// The share links (#139) the subject minted or revoked, inside the caller's authority.
+    /// </summary>
+    /// <remarks>
+    /// A reference, not a full record, and the omission is deliberate: <c>token_hash</c> never
+    /// leaves the database. It is the hash of a live credential to a report, and an access
+    /// export is a document the subject downloads, keeps and forwards.
+    ///
+    /// Scoped through the report rather than through the share, because <c>report_shares</c>
+    /// carries no <c>company_id</c> -- the report it opens is the only thing that knows the
+    /// tenant, so the join to <paramref name="companyScope"/>'s reports IS the scoping.
+    /// </remarks>
+    private static async Task<SubjectAccessSection> ReportSharesAsync(
+        ClimateProjectDbContext db,
+        Guid id,
+        Guid? companyScope,
+        CancellationToken cancellationToken)
+    {
+        IQueryable<Report> reports = db.Reports;
+        if (companyScope is { } company)
+        {
+            reports = reports.Where(r => r.CompanyId == company);
+        }
+
+        var shares = await db.ReportShares
+            .Where(s => s.CreatedBy == id || s.RevokedBy == id)
+            .Join(reports, s => s.ReportId, r => r.Id, (s, r) => new
+            {
+                s.Id,
+                Minted = s.CreatedBy == id,
+                r.Title,
+            })
+            .ToListAsync(cancellationToken);
+
+        // Labelled by the report the link opens -- the share's own id means nothing to the
+        // person reading their export. A subject who both minted and revoked a link is filed
+        // under minting, the stronger of the two facts about them.
+        var records = shares
+            .Select(s => ReferenceRecord(new Reference(s.Id, s.Title), s.Minted ? "CreatedBy" : "RevokedBy"))
+            .ToList();
+
+        return Section("ReportShare", ExportTreatment.Reference, records);
     }
 
     private static async Task<SubjectAccessSection> MixedInvitationsAsync(

@@ -344,6 +344,21 @@ public static class SubjectDataMap
             + "report's contents are aggregates over a department or survey and are not returned as one "
             + "person's data."),
 
+        new("ReportShare", "report_shares", SubjectLink.Actor, ["CreatedBy", "RevokedBy"],
+            ExportTreatment.Reference, ErasureTreatment.Retained,
+            BasisLegitimateInterest,
+            "For as long as the link exists; attribution survives erasure.",
+            "Who minted a public link to a report (#139), and who revoked it. Both are acts of "
+            + "administration by an employee on the employer's behalf, not anything the subject "
+            + "disclosed, and the record of who opened a company's climate data to the public is "
+            + "precisely the kind of security record an employer has a legitimate interest in "
+            + "keeping. Nothing here belongs to the person the link is about, because a link is "
+            + "not about a person: a report's contents are aggregates over a department or a "
+            + "survey. token_hash is a SHA-256 of a credential and is not personal data under any "
+            + "reading — it identifies a link, not a human. Both columns are already nullable "
+            + "behind SET NULL, so an erasure that did delete the account would sever the "
+            + "attribution without destroying a link its holders still hold."),
+
         new("Response", "responses", SubjectLink.Subject, ["UserId"],
             ExportTreatment.FullRecord, ErasureTreatment.Anonymised,
             BasisContract,
