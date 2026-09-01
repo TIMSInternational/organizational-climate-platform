@@ -19,6 +19,7 @@ const document = {
       surveyId: '44444444-4444-4444-4444-444444444444',
       title: 'Encuesta de clima organizacional Q3',
       status: 'closed',
+      resolvedLocale: 'es',
       participation: {
         invitedCount: 248,
         responseCount: 187,
@@ -47,8 +48,99 @@ const document = {
         { departmentId: 'd4', name: 'Dirección General', respondentCount: 0, participationRate: null, isSuppressed: true },
       ],
       suppressedDepartmentCount: 1,
-      suppressedRespondentCount: 4,
       unsegmentedRespondentCount: 20,
+      // Demographic breakdowns beyond department: one dimension, one withheld group in
+      // it, so the screenshot carries the ProtectedCell grammar in a table that also
+      // has real readings to sit beside.
+      demographics: [
+        {
+          dimension: 'antigüedad',
+          segments: [
+            {
+              key: '0-1',
+              label: 'Menos de un año',
+              respondentCount: 34,
+              isSuppressed: false,
+              dimensions: [
+                { dimension: 'psychological_safety', averageScore: 3.71 },
+                { dimension: 'workload', averageScore: 3.4 },
+              ],
+            },
+            {
+              key: '2-5',
+              label: 'Entre uno y cinco años',
+              respondentCount: 88,
+              isSuppressed: false,
+              dimensions: [
+                { dimension: 'psychological_safety', averageScore: 4.02 },
+                { dimension: 'workload', averageScore: 3.05 },
+              ],
+            },
+            {
+              key: '10+',
+              label: 'Más de diez años',
+              respondentCount: 0,
+              isSuppressed: true,
+              dimensions: [],
+            },
+          ],
+          suppressedSegmentCount: 1,
+          unsegmentedRespondentCount: 20,
+        },
+      ],
+      // Per-question distributions and word clouds. The open question's cloud is a
+      // frequency map floored at two answers; `suppressedWordCount` is non-zero so the
+      // screenshot shows the sentence that says something was withheld rather than
+      // absent.
+      questions: [
+        {
+          questionId: 'aaaaaaaa-0000-0000-0000-000000000001',
+          order: 0,
+          type: 'likert',
+          text: '¿Qué tanto apoyo sientes de tu jefatura?',
+          category: 'psychological_safety',
+          answeredCount: 170,
+          distribution: [
+            { value: '1', label: 'Nunca', count: 9, percentage: 5.29, averageRank: null },
+            { value: '2', label: 'Rara vez', count: 17, percentage: 10, averageRank: null },
+            { value: '3', label: 'A veces', count: 38, percentage: 22.35, averageRank: null },
+            { value: '4', label: 'Casi siempre', count: 71, percentage: 41.76, averageRank: null },
+            { value: '5', label: 'Siempre', count: 35, percentage: 20.59, averageRank: null },
+          ],
+          average: 3.62,
+          median: 4,
+          scaleMin: 1,
+          scaleMax: 5,
+          scaleLabelMin: 'Nunca',
+          scaleLabelMax: 'Siempre',
+          words: [],
+          suppressedWordCount: 0,
+        },
+        {
+          questionId: 'aaaaaaaa-0000-0000-0000-000000000002',
+          order: 1,
+          type: 'open_ended',
+          text: '¿Qué cambiarías de tu experiencia de trabajo?',
+          category: 'open',
+          answeredCount: 96,
+          distribution: [],
+          average: null,
+          median: null,
+          scaleMin: null,
+          scaleMax: null,
+          scaleLabelMin: null,
+          scaleLabelMax: null,
+          words: [
+            { language: 'es', word: 'turnos', count: 41, responseCount: 29 },
+            { language: 'es', word: 'comunicación', count: 33, responseCount: 26 },
+            { language: 'es', word: 'reconocimiento', count: 24, responseCount: 21 },
+            { language: 'es', word: 'capacitación', count: 18, responseCount: 15 },
+            { language: 'en', word: 'workload', count: 12, responseCount: 9 },
+            { language: 'en', word: 'schedule', count: 7, responseCount: 6 },
+          ],
+          suppressedWordCount: 118,
+        },
+      ],
       isSuppressed: false,
       suppressionReason: null,
       minimumGroupSize: 5,
@@ -57,6 +149,7 @@ const document = {
       surveyId: '55555555-5555-5555-5555-555555555555',
       title: 'Microclima de Dirección General',
       status: 'closed',
+      resolvedLocale: 'es',
       participation: {
         invitedCount: 6,
         responseCount: 4,
@@ -71,12 +164,89 @@ const document = {
       },
       dimensions: [],
       departments: [],
+      demographics: [],
+      questions: [],
       suppressedDepartmentCount: 0,
-      suppressedRespondentCount: 4,
       unsegmentedRespondentCount: 0,
       isSuppressed: true,
       suppressionReason: 'below_minimum_respondents',
       minimumGroupSize: 5,
+    },
+  ],
+  // Benchmark comparisons: the company's own rows plus the global ones every tenant
+  // compares against, each with the year-over-year reading #89 computes. The four
+  // states a row can be in, so one screenshot judges them all: a real change, the
+  // units-differ refusal, a global row nobody has linked yet, and a first measurement.
+  benchmarks: [
+    {
+      benchmarkId: '88888888-8888-8888-8888-888888888881',
+      name: 'Compromiso organizacional 2026',
+      category: 'engagement',
+      type: 'industry',
+      isGlobal: false,
+      priorPeriodStatus: 'linked',
+      metrics: [
+        { id: 'me1', metricName: 'compromiso', value: 74.2, unit: 'percent', percentile: 68, sampleSize: 175 },
+        { id: 'me2', metricName: 'tiempo de respuesta', value: 1.2, unit: 's', percentile: null, sampleSize: null },
+      ],
+      priorPeriod: {
+        name: 'Compromiso organizacional 2025',
+        metrics: [
+          {
+            metricName: 'compromiso',
+            value: 74.2,
+            unit: 'percent',
+            priorValue: 70.1,
+            priorUnit: 'percent',
+            delta: 4.1,
+            changeRatio: 4.1 / 70.1,
+          },
+          {
+            metricName: 'rotación voluntaria',
+            value: 8.4,
+            unit: 'percent',
+            priorValue: 11.9,
+            priorUnit: 'percent',
+            delta: -3.5,
+            changeRatio: -3.5 / 11.9,
+          },
+          // Recorded in seconds this year and milliseconds last: the server withholds
+          // the change and reports both units so this page can say why.
+          {
+            metricName: 'tiempo de respuesta',
+            value: 1.2,
+            unit: 's',
+            priorValue: 1400,
+            priorUnit: 'ms',
+            delta: null,
+            changeRatio: null,
+          },
+        ],
+      },
+    },
+    {
+      benchmarkId: '88888888-8888-8888-8888-888888888882',
+      name: 'Referencia sectorial de compromiso',
+      category: 'engagement',
+      type: 'industry',
+      isGlobal: true,
+      priorPeriodStatus: 'unlinked',
+      metrics: [
+        { id: 'mg1', metricName: 'compromiso', value: 65.8, unit: 'percent', percentile: null, sampleSize: 4200 },
+      ],
+      priorPeriod: null,
+    },
+    {
+      benchmarkId: '88888888-8888-8888-8888-888888888883',
+      name: 'Ausentismo 2026',
+      category: 'absence',
+      type: 'internal',
+      isGlobal: false,
+      priorPeriodStatus: 'none',
+      metrics: [
+        { id: 'ma1', metricName: 'ausentismo', value: 3.5, unit: 'percent', percentile: null, sampleSize: 175 },
+      ],
+      priorPeriod: null,
     },
   ],
   aiInsights: [
@@ -89,7 +259,6 @@ const document = {
         'La puntuación de carga de trabajo bajó 0,4 puntos respecto del trimestre anterior, y el descenso se concentra en los turnos de fin de semana.',
       confidenceScore: 87,
       priority: 'high',
-      affectedSegments: ['Operaciones'],
       recommendedActions: [
         'Revisar la distribución de turnos de fin de semana',
         'Contrastar con las horas extra registradas en el trimestre',
@@ -105,7 +274,6 @@ const document = {
         'Tercer trimestre consecutivo por encima de 3,9. Las respuestas abiertas mencionan reuniones de equipo más frecuentes.',
       confidenceScore: 74,
       priority: 'medium',
-      affectedSegments: [],
       recommendedActions: ['Documentar la práctica de reuniones y extenderla a Promoción Comercial'],
       isAcknowledged: true,
     },

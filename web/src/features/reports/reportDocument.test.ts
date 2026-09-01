@@ -1,12 +1,56 @@
 import { describe, it, expect } from 'vitest'
 import { parseReportDocument } from './reportDocument'
 
+/** One question's results as the section carries them — `SurveyQuestionResult`, verbatim. */
+function question(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    questionId: '99999999-9999-9999-9999-999999999999',
+    order: 0,
+    type: 'likert',
+    text: '¿Qué tanto apoyo sientes de tu jefatura?',
+    category: 'leadership',
+    answeredCount: 7,
+    distribution: [
+      { value: '1', label: 'Nunca', count: 2, percentage: 28.57, averageRank: null },
+      { value: '4', label: 'Casi siempre', count: 5, percentage: 71.43, averageRank: null },
+    ],
+    average: 3.14,
+    median: 4,
+    scaleMin: 1,
+    scaleMax: 5,
+    scaleLabelMin: 'Nunca',
+    scaleLabelMax: 'Siempre',
+    words: [],
+    suppressedWordCount: 0,
+    ...overrides,
+  }
+}
+
 /** A section as `ReportGeneration` writes one, with every field the server sends. */
 function section(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     surveyId: '44444444-4444-4444-4444-444444444444',
     title: 'Encuesta de clima Q3',
     status: 'closed',
+    resolvedLocale: 'es',
+    questions: [question()],
+    demographics: [
+      {
+        dimension: 'tenure',
+        segments: [
+          {
+            key: '2-5',
+            label: '2-5 años',
+            respondentCount: 5,
+            isSuppressed: false,
+            dimensions: [{ dimension: 'leadership', averageScore: 4 }],
+          },
+        ],
+        suppressedSegmentCount: 0,
+        suppressedRespondentCount: 0,
+        unsegmentedRespondentCount: 0,
+      },
+    ],
     participation: {
       invitedCount: 248,
       responseCount: 187,
@@ -41,11 +85,52 @@ function section(overrides: Record<string, unknown> = {}): Record<string, unknow
   }
 }
 
+/** One benchmark as the document carries it — `ReportBenchmarkComparison`. */
+function benchmark(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    benchmarkId: '88888888-8888-8888-8888-888888888888',
+    name: '2026 Engagement',
+    category: 'engagement',
+    type: 'industry',
+    isGlobal: false,
+    priorPeriodStatus: 'linked',
+    metrics: [
+      {
+        id: 'm1',
+        metricName: 'engagement',
+        value: 74,
+        unit: 'percent',
+        percentile: null,
+        sampleSize: null,
+      },
+    ],
+    priorPeriod: {
+      // Still written into the RAW document, because a stored document really does carry
+      // it — the assertion below is that the parser does not copy it out.
+      id: '99999999-0000-0000-0000-000000000000',
+      name: '2025 Engagement',
+      metrics: [
+        {
+          metricName: 'engagement',
+          value: 74,
+          unit: 'percent',
+          priorValue: 70,
+          priorUnit: 'percent',
+          delta: 4,
+          changeRatio: 4 / 70,
+        },
+      ],
+    },
+    ...overrides,
+  }
+}
+
 function documentJson(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
     generationNote: '',
     surveys: [section()],
     aiInsights: [],
+    benchmarks: [benchmark()],
     ...overrides,
   })
 }
@@ -199,5 +284,299 @@ describe('parseReportDocument', () => {
     expect(parsed?.aiInsights[0].confidenceScore).toBe(87)
     expect(parsed?.aiInsights[0].recommendedActions).toEqual(['Revisar la distribución de turnos'])
     expect(parsed?.aiInsights[0].isAcknowledged).toBe(false)
+  })
+
+  it('carries a question’s distribution and its resolved locale across', () => {
+    const parsed = parseReportDocument(documentJson())
+    const [first] = parsed?.surveys ?? []
+
+    expect(first.resolvedLocale).toBe('es')
+    const [only] = first.questions
+    expect(only.text).toBe('¿Qué tanto apoyo sientes de tu jefatura?')
+    expect(only.answeredCount).toBe(7)
+    expect(only.distribution.map((bucket) => [bucket.value, bucket.count])).toEqual([
+      ['1', 2],
+      ['4', 5],
+    ])
+    expect(only.scaleMax).toBe(5)
+  })
+
+  /**
+   * THE open-text rule, at the layer that can enforce it.
+   *
+   * The server tokenises on whitespace and sentence punctuation, so a legitimate cloud
+   * entry is a single token and nothing else. An entry carrying a phrase did not come
+   * from that tokeniser — a generator regression, a hand-edited `report_output`, a
+   * document from somewhere this client did not expect — and it is exactly the value a
+   * renderer must never print, because a phrase from one open answer names the person
+   * who wrote it to a colleague who recognises the phrasing. That is the guarantee
+   * "Voices" was closed on.
+   *
+   * Dropped rather than trimmed, and **counted onto `suppressedWordCount`**: a list that
+   * silently shortened itself tells the reader they are seeing everything that was said.
+   */
+  it('drops a word-cloud entry that is a phrase, and counts it as withheld', () => {
+    const parsed = parseReportDocument(
+      documentJson({
+        surveys: [
+          section({
+            questions: [
+              question({
+                type: 'open_ended',
+                distribution: [],
+                words: [
+                  { language: 'es', word: 'carga', count: 9, responseCount: 6 },
+                  // Not a word. Every way a sentence could arrive: spaces, and the
+                  // punctuation the tokeniser also splits on.
+                  { language: 'es', word: 'el trámite de la visa es estresante', count: 1, responseCount: 1 },
+                  { language: 'es', word: 'renovación,visa', count: 1, responseCount: 1 },
+                  { language: 'en', word: 'workload', count: 4, responseCount: 3 },
+                ],
+                suppressedWordCount: 5,
+              }),
+            ],
+          }),
+        ],
+      }),
+    )
+
+    const [only] = parsed?.surveys[0].questions ?? []
+    expect(only.words.map((word) => word.word)).toEqual(['carga', 'workload'])
+    // 5 the server withheld, plus the 2 this parser refused to pass on.
+    expect(only.suppressedWordCount).toBe(7)
+  })
+
+  it('keeps a real word cloud whole — word, language and both counts', () => {
+    const parsed = parseReportDocument(
+      documentJson({
+        surveys: [
+          section({
+            questions: [
+              question({
+                words: [{ language: 'es', word: 'carga', count: 9, responseCount: 6 }],
+                suppressedWordCount: 3,
+              }),
+            ],
+          }),
+        ],
+      }),
+    )
+
+    expect(parsed?.surveys[0].questions[0].words).toEqual([
+      { language: 'es', word: 'carga', count: 9, responseCount: 6 },
+    ])
+    expect(parsed?.surveys[0].questions[0].suppressedWordCount).toBe(3)
+  })
+
+  /**
+   * The same safe default the section and the department rows take, one level down. A
+   * demographic group whose flag did not survive serialisation is read as withheld, so
+   * a malformed document cannot publish a group's size or its scores.
+   */
+  it('treats a demographic group with no suppression flag as suppressed', () => {
+    const parsed = parseReportDocument(
+      documentJson({
+        surveys: [
+          section({
+            demographics: [
+              {
+                dimension: 'tenure',
+                segments: [
+                  {
+                    key: '0-1',
+                    label: 'Menos de un año',
+                    respondentCount: 2,
+                    dimensions: [{ dimension: 'leadership', averageScore: 1 }],
+                  },
+                ],
+                suppressedSegmentCount: 1,
+                suppressedRespondentCount: 2,
+                unsegmentedRespondentCount: 0,
+              },
+            ],
+          }),
+        ],
+      }),
+    )
+
+    const [group] = parsed?.surveys[0].demographics[0].segments ?? []
+    expect(group.isSuppressed).toBe(true)
+    expect(group.respondentCount).toBe(0)
+    expect(group.dimensions).toEqual([])
+    // The name stays: a withheld group is still a row.
+    expect(group.label).toBe('Menos de un año')
+  })
+
+  it('zeroes a suppressed demographic group that still carries a count and a score', () => {
+    const parsed = parseReportDocument(
+      documentJson({
+        surveys: [
+          section({
+            demographics: [
+              {
+                dimension: 'tenure',
+                segments: [
+                  {
+                    key: '0-1',
+                    label: 'Menos de un año',
+                    respondentCount: 2,
+                    isSuppressed: true,
+                    dimensions: [{ dimension: 'leadership', averageScore: 1 }],
+                  },
+                ],
+                suppressedSegmentCount: 1,
+                suppressedRespondentCount: 2,
+                unsegmentedRespondentCount: 0,
+              },
+            ],
+          }),
+        ],
+      }),
+    )
+
+    const [group] = parsed?.surveys[0].demographics[0].segments ?? []
+    expect(group.respondentCount).toBe(0)
+    expect(group.dimensions).toEqual([])
+  })
+
+  /**
+   * `ReportSurveySection` says Questions, Dimensions and Demographics are all empty when
+   * the survey is below the floor. The parser makes that a property of the document a
+   * renderer receives rather than a promise it has to trust — and a suppressed section
+   * is the case where those three lists ARE the withheld data.
+   */
+  it('drops the questions and demographics of a suppressed section', () => {
+    const parsed = parseReportDocument(
+      documentJson({
+        surveys: [
+          section({
+            isSuppressed: true,
+            suppressionReason: 'below_minimum_respondents',
+            // A malformed document that kept them. The server empties them; this proves
+            // the client does not depend on that.
+            questions: [question()],
+          }),
+        ],
+      }),
+    )
+
+    expect(parsed?.surveys[0].questions).toEqual([])
+    expect(parsed?.surveys[0].demographics).toEqual([])
+    expect(parsed?.surveys[0].dimensions).toEqual([])
+    // Participation still survives — a count identifies nobody.
+    expect(parsed?.surveys[0].participation.completedCount).toBe(175)
+  })
+
+  it('carries a benchmark and its year-over-year reading across', () => {
+    const parsed = parseReportDocument(documentJson())
+    const [only] = parsed?.benchmarks ?? []
+
+    expect(only.name).toBe('2026 Engagement')
+    expect(only.priorPeriodStatus).toBe('linked')
+    expect(only.metrics[0].value).toBe(74)
+    expect(only.priorPeriod?.name).toBe('2025 Engagement')
+    expect(only.priorPeriod?.metrics[0].delta).toBe(4)
+    expect(only.priorPeriod?.metrics[0].changeRatio).toBeCloseTo(4 / 70, 10)
+  })
+
+  /**
+   * A global benchmark — the rows every tenant compares against — arrives with
+   * `isGlobal: true`, and the three no-prior-period cases are told apart by
+   * `priorPeriodStatus` alone. A parser that defaulted the status to a string of its own
+   * would make a renderer state a reason the server never gave.
+   *
+   * `isGlobal` replaced a `companyId` that was the report's **tenant GUID** on an
+   * anonymous URL. The default is `false` rather than `true`, so a document carrying
+   * neither field claims nothing instead of labelling a company's own row as the sector's.
+   */
+  it('reads a global benchmark’s flag and its prior-period status', () => {
+    const parsed = parseReportDocument(
+      documentJson({
+        benchmarks: [
+          benchmark({ isGlobal: true, priorPeriodStatus: 'none', priorPeriod: null }),
+        ],
+      }),
+    )
+
+    expect(parsed?.benchmarks[0].isGlobal).toBe(true)
+    expect(parsed?.benchmarks[0].priorPeriodStatus).toBe('none')
+    expect(parsed?.benchmarks[0].priorPeriod).toBeNull()
+  })
+
+  /**
+   * The four things the public projection withholds, refused a second time here.
+   *
+   * Every one of them is written into the RAW document this fixture parses, which is the
+   * point: the server no longer sends them, and a parser that copied them anyway would
+   * put them back on the page the day a document from anywhere else arrived. The tenant
+   * GUID, the linked benchmark's row id, the unfloored segment names and the withheld
+   * sub-floor headcounts are all absent from the parsed shape, and TypeScript will not
+   * even let this file assert on them by name — so the assertions go through
+   * `JSON.stringify`, which sees the whole object.
+   */
+  it('does not copy the tenant id, the prior-period id, affected segments or a withheld headcount', () => {
+    const parsed = parseReportDocument(
+      documentJson({
+        benchmarks: [benchmark({ companyId: '11111111-1111-1111-1111-111111111111' })],
+      }),
+    )
+    const serialised = JSON.stringify(parsed)
+
+    expect(serialised).not.toContain('companyId')
+    expect(serialised).not.toContain('11111111-1111-1111-1111-111111111111')
+    expect(serialised).not.toContain('99999999-0000-0000-0000-000000000000')
+    expect(serialised).not.toContain('affectedSegments')
+    expect(serialised).not.toContain('suppressedRespondentCount')
+
+    // And the row really did come through, so this cannot pass by parsing nothing.
+    expect(parsed?.benchmarks[0].name).toBe('2026 Engagement')
+    expect(parsed?.benchmarks[0].isGlobal).toBe(false)
+    expect(parsed?.benchmarks[0].priorPeriod?.name).toBe('2025 Engagement')
+  })
+
+  /**
+   * The change is the server's, or it is absent. `BuildChanges` withholds the delta when
+   * the two periods recorded the metric in different units — 1.2 seconds against 1200
+   * milliseconds is the same reading twice — and a parser that filled the gap by
+   * subtracting the two values beside it would print exactly the confidently wrong
+   * number #89 exists to avoid.
+   */
+  it('leaves a withheld delta withheld rather than differencing the two values', () => {
+    const parsed = parseReportDocument(
+      documentJson({
+        benchmarks: [
+          benchmark({
+            priorPeriod: {
+              id: 'p1',
+              name: '2025 Latency',
+              metrics: [
+                {
+                  metricName: 'latency',
+                  value: 1.2,
+                  unit: 's',
+                  priorValue: 1200,
+                  priorUnit: 'ms',
+                  delta: null,
+                  changeRatio: null,
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    )
+
+    const [change] = parsed?.benchmarks[0].priorPeriod?.metrics ?? []
+    expect(change.delta).toBeNull()
+    expect(change.changeRatio).toBeNull()
+    // Both units survive, because the renderer owes the reader a reason.
+    expect(change.unit).toBe('s')
+    expect(change.priorUnit).toBe('ms')
+  })
+
+  it('renders a document with no benchmarks rather than throwing on a missing array', () => {
+    const parsed = parseReportDocument(JSON.stringify({ surveys: [] }))
+
+    expect(parsed?.benchmarks).toEqual([])
   })
 })

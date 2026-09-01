@@ -31,6 +31,52 @@ function reportBody(overrides: Record<string, unknown> = {}): Record<string, unk
           surveyId: 's1',
           title: 'Encuesta de clima Q3',
           status: 'closed',
+          resolvedLocale: 'es',
+          questions: [
+            {
+              questionId: 'q1',
+              order: 0,
+              type: 'open_ended',
+              text: '¿Algo más que quieras contarnos?',
+              category: 'open',
+              answeredCount: 9,
+              distribution: [],
+              average: null,
+              median: null,
+              scaleMin: null,
+              scaleMax: null,
+              scaleLabelMin: null,
+              scaleLabelMax: null,
+              // A frequency map, floored server-side. This is the whole of the open-text
+              // surface that reaches an unauthenticated reader.
+              words: [{ language: 'es', word: 'carga', count: 9, responseCount: 6 }],
+              suppressedWordCount: 4,
+            },
+          ],
+          demographics: [
+            {
+              dimension: 'antigüedad',
+              segments: [
+                {
+                  key: '2-5',
+                  label: '2-5 años',
+                  respondentCount: 9,
+                  isSuppressed: false,
+                  dimensions: [{ dimension: 'recognition', averageScore: 4.2 }],
+                },
+                {
+                  key: '0-1',
+                  label: 'Menos de un año',
+                  respondentCount: 0,
+                  isSuppressed: true,
+                  dimensions: [],
+                },
+              ],
+              suppressedSegmentCount: 1,
+              suppressedRespondentCount: 3,
+              unsegmentedRespondentCount: 0,
+            },
+          ],
           participation: {
             invitedCount: 248,
             responseCount: 187,
@@ -78,6 +124,9 @@ function reportBody(overrides: Record<string, unknown> = {}): Record<string, unk
           surveyId: 's2',
           title: 'Microclima de Dirección',
           status: 'closed',
+          resolvedLocale: 'es',
+          questions: [],
+          demographics: [],
           participation: {
             invitedCount: 6,
             responseCount: 4,
@@ -98,6 +147,34 @@ function reportBody(overrides: Record<string, unknown> = {}): Record<string, unk
           isSuppressed: true,
           suppressionReason: 'below_minimum_respondents',
           minimumGroupSize: 5,
+        },
+      ],
+      benchmarks: [
+        {
+          benchmarkId: 'b1',
+          name: 'Compromiso 2026',
+          category: 'engagement',
+          type: 'industry',
+          companyId: 'c1',
+          priorPeriodStatus: 'linked',
+          metrics: [
+            { id: 'm1', metricName: 'engagement', value: 74, unit: 'percent', percentile: null, sampleSize: null },
+          ],
+          priorPeriod: {
+            id: 'b0',
+            name: 'Compromiso 2025',
+            metrics: [
+              {
+                metricName: 'engagement',
+                value: 74,
+                unit: 'percent',
+                priorValue: 70,
+                priorUnit: 'percent',
+                delta: 4,
+                changeRatio: 4 / 70,
+              },
+            ],
+          },
         },
       ],
       aiInsights: [
@@ -170,6 +247,15 @@ describe('SharedReportPage', () => {
     expect(screen.getByText('175')).toBeTruthy()
     expect(screen.getByText('Seguridad psicológica')).toBeTruthy()
     expect(screen.getByText('Revisar la distribución de turnos')).toBeTruthy()
+
+    // The three sections #88 added, through the fetch and the parser rather than by
+    // handing the component an object: a word cloud that is frequencies only and says
+    // how many words it withheld, a demographic group withheld in the ProtectedCell
+    // grammar, and a benchmark's year-over-year reading.
+    expect(screen.getByText('carga')).toBeTruthy()
+    expect(screen.getByText(/4 palabras quedan reservadas/)).toBeTruthy()
+    expect(screen.getByRole('img', { name: /Menos de un año: protegido/i })).toBeTruthy()
+    expect(screen.getByText('Comparado con Compromiso 2025.')).toBeTruthy()
   })
 
   /**
