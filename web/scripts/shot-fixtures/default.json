@@ -1587,6 +1587,138 @@
     "questionCount": 4,
     "suppressedDemographics": []
   },
+  "GET /microclimate-invitations/revoked-token 410": {
+    "message": "This invitation has been revoked.",
+    "reason": "revoked"
+  },
+  "GET /microclimate-invitations/expired-token 410": {
+    "message": "This invitation has expired.",
+    "reason": "expired"
+  },
+  "GET /microclimate-invitations/used-token 409": {
+    "message": "This invitation has already been used.",
+    "reason": "already_completed"
+  },
+  "GET /microclimate-invitations/unknown-token 404": {
+    "message": "This invitation link is not valid.",
+    "reason": "not_found"
+  },
+  "GET /microclimate-invitations/identified-token": {
+    "invitationId": "99999999-9999-9999-9999-999999999991",
+    "microclimateId": "66666666-6666-6666-6666-666666666666",
+    "microclimateTitle": "How is this week landing?",
+    "microclimateDescription": "Four questions, two minutes. The answers are read together, never one at a time.",
+    "language": "en",
+    "resolvedLocale": "en",
+    "fallbackFields": [],
+    "status": "sent",
+    "microclimateStatus": "active",
+    "startTime": "2026-08-26T09:00:00Z",
+    "endTime": "2026-08-28T17:00:00Z",
+    "expiresAt": "2026-08-28T17:00:00Z",
+    "anonymity": {
+      "anonymous": false,
+      "highestRecordableState": "completed",
+      "suppressedStates": [],
+      "guarantee": "This microclimate is not anonymous; it already requires respondents to sign in. The full invitation lifecycle is recorded per invitee."
+    }
+  },
+  "GET /microclimate-invitations/*": {
+    "invitationId": "99999999-9999-9999-9999-999999999991",
+    "microclimateId": "66666666-6666-6666-6666-666666666666",
+    "microclimateTitle": "How is this week landing?",
+    "microclimateDescription": "Four questions, two minutes. The answers are read together, never one at a time.",
+    "language": "en",
+    "resolvedLocale": "en",
+    "fallbackFields": [],
+    "status": "sent",
+    "microclimateStatus": "active",
+    "startTime": "2026-08-26T09:00:00Z",
+    "endTime": "2026-08-28T17:00:00Z",
+    "expiresAt": "2026-08-28T17:00:00Z",
+    "anonymity": {
+      "anonymous": true,
+      "highestRecordableState": "opened",
+      "suppressedStates": [
+        "started",
+        "completed"
+      ],
+      "guarantee": "This microclimate is anonymous, so tracking stops at 'opened'; participation is only ever counted in aggregate."
+    }
+  },
+  "POST /microclimate-invitations/*/opened": {
+    "invitationId": "99999999-9999-9999-9999-999999999991",
+    "status": "opened",
+    "recorded": true,
+    "suppressedForAnonymity": false,
+    "reason": null,
+    "anonymity": {
+      "anonymous": true,
+      "highestRecordableState": "opened",
+      "suppressedStates": [
+        "started",
+        "completed"
+      ],
+      "guarantee": "This microclimate is anonymous, so tracking stops at 'opened'; participation is only ever counted in aggregate."
+    }
+  },
+  "POST /microclimate-invitations/*/started": {
+    "invitationId": "99999999-9999-9999-9999-999999999991",
+    "status": "opened",
+    "recorded": true,
+    "suppressedForAnonymity": false,
+    "reason": null,
+    "anonymity": {
+      "anonymous": true,
+      "highestRecordableState": "opened",
+      "suppressedStates": [
+        "started",
+        "completed"
+      ],
+      "guarantee": "This microclimate is anonymous, so tracking stops at 'opened'; participation is only ever counted in aggregate."
+    }
+  },
+  "POST /microclimate-invitations/*/completed": {
+    "invitationId": "99999999-9999-9999-9999-999999999991",
+    "status": "opened",
+    "recorded": true,
+    "suppressedForAnonymity": false,
+    "reason": null,
+    "anonymity": {
+      "anonymous": true,
+      "highestRecordableState": "opened",
+      "suppressedStates": [
+        "started",
+        "completed"
+      ],
+      "guarantee": "This microclimate is anonymous, so tracking stops at 'opened'; participation is only ever counted in aggregate."
+    }
+  },
+  "GET /microclimates/*": {
+    "id": "66666666-6666-6666-6666-666666666666",
+    "title": "How is this week landing?",
+    "status": "active",
+    "language": "en",
+    "resolvedLocale": "en",
+    "fallbackFields": [],
+    "questions": [
+      {
+        "id": "aaaaaaa1-0000-0000-0000-000000000001",
+        "text": "How manageable has your workload felt this week?",
+        "type": "likert",
+        "required": true,
+        "order": 0
+      },
+      {
+        "id": "aaaaaaa1-0000-0000-0000-000000000002",
+        "text": "Anything you want to add?",
+        "type": "open_ended",
+        "required": false,
+        "order": 1
+      }
+    ]
+  },
+  "POST /microclimates/*/responses 201": {},
   "GET /surveys/climate-trends": {
     "companyId": "22cc8ed9-2e02-401a-8d52-52068ff5e6c0",
     "groupBy": null,

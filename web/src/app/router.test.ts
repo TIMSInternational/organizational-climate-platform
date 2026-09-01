@@ -50,6 +50,13 @@ describe('router', () => {
     expect(paths).toContain('/s/:token')
     expect(paths).toContain('/survey-invitations/:token')
 
+    // #130's link. Same reason as the two above and the same failure mode: the API mints
+    // it, `MicroclimateInvitationLinks.LinkPrefix` composes it into outbound mail, and no
+    // reference connects that C# constant to this router. A rename on either side sends
+    // every invitation already in an inbox to the error boundary, and this is the
+    // assertion that notices.
+    expect(paths).toContain('/microclimate-invitations/:token')
+
     // #139's public consumption page. Registered here for the same reason the two token
     // routes above are — a route the product hands out and the router does not declare
     // reaches the error boundary — and the path is the legacy one
@@ -112,6 +119,10 @@ describe('router', () => {
     // credentials to hand.
     expect(topLevel).toContain('/s/:token')
     expect(topLevel).toContain('/survey-invitations/:token')
+    // #130's, and on this one the case is stronger still: a microclimate is answered
+    // anonymously by default, so its invitees routinely have no account to sign in with
+    // at all.
+    expect(topLevel).toContain('/microclimate-invitations/:token')
     // The authenticated twin is deliberately NOT out here: an employee answering a
     // survey their company does not run anonymously should be sent to sign in.
     expect(topLevel).not.toContain('/surveys/:id/respond')
@@ -180,6 +191,7 @@ describe('router', () => {
       '/microclimates/:id/respond',
       '/s/:token',
       '/survey-invitations/:token',
+      '/microclimate-invitations/:token',
       // #139 is not a respond route, but it belongs in this list for a stronger reason
       // than any of them: `AdminLayout` is a role-aware rail built from JWT claims, a
       // company-context switcher, a notification bell and a sign-out control. Around an

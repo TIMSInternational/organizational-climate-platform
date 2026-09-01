@@ -1,5 +1,6 @@
 using ClimateProject.Application.Email;
 using ClimateProject.Application.Localization;
+using ClimateProject.Application.Microclimates;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
@@ -37,6 +38,19 @@ public class EmailNotificationSenderTests
     /// </summary>
     private const string Token = "invitation-token-for-test-not-a-real-secret";
 
+    /// <summary>
+    /// The microclimate equivalent, and deliberately a DIFFERENT string from
+    /// <see cref="Token"/>. Sharing one fixture would make "the sender mailed the right table's
+    /// token" unassertable -- both branches would produce the same characters and the test
+    /// could not tell which resolver had run.
+    /// </summary>
+    private const string MicroclimateToken = "microclimate-token-for-test-not-a-real-secr";
+
+    /// <summary>The microclimate and invitation a microclimate notification here names.</summary>
+    private static readonly Guid MicroclimateId = Guid.NewGuid();
+
+    private static readonly Guid MicroclimateInvitationId = Guid.NewGuid();
+
     private static Notification Notification(string channel, string type = NotificationTypes.SurveyInvitation) => new()
     {
         Id = Guid.NewGuid(),
@@ -71,8 +85,16 @@ public class EmailNotificationSenderTests
     private static NotificationRecipient Recipient(string email = DeliverableAddress)
         => new(RecipientUserId, email, "Ana", ContentLanguages.Spanish);
 
-    private static EmailNotificationSender Sender(RecordingTransport transport, ISurveyInvitationTokens? tokens = null)
-        => new(transport, Options(), tokens ?? new RecordingTokens(Token), NullLogger<EmailNotificationSender>.Instance);
+    private static EmailNotificationSender Sender(
+        RecordingTransport transport,
+        ISurveyInvitationTokens? tokens = null,
+        IMicroclimateInvitationTokens? microclimateTokens = null)
+        => new(
+            transport,
+            Options(),
+            tokens ?? new RecordingTokens(Token),
+            microclimateTokens ?? new RecordingMicroclimateTokens(MicroclimateToken),
+            NullLogger<EmailNotificationSender>.Instance);
 
     [Fact]
     public async Task An_email_notification_is_handed_to_the_transport_and_reported_sent()
@@ -292,6 +314,128 @@ public class EmailNotificationSenderTests
         Assert.DoesNotContain("survey-invitations", sent.HtmlBody, StringComparison.Ordinal);
     }
 
+    // ------------------------------------------------------------------
+    // The microclimate branch (#130)
+    //
+    // Two tables, two payload classes, two resolvers. The assertions that matter are the
+    // NEGATIVE ones -- that each branch leaves the other resolver untouched -- because the
+    // failure this design exists to prevent is silent: a microclimate id looked up in
+    // survey_invitations finds nothing, throws nothing, and mails a linkless invitation to
+    // every invitee while every test stays green.
+    // ------------------------------------------------------------------
+
+    /// <summary>A notification about a microclimate invitation, with the matching payload.</summary>
+    private static Notification MicroclimateNotification() => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = RecipientUserId,
+        CompanyId = CompanyId,
+        Type = NotificationTypes.MicroclimateInvitation,
+        Channel = NotificationChannels.Email,
+        Status = NotificationStatuses.Pending,
+        Title = "Title",
+        Message = "Message",
+        Data = MicroclimateNotificationData.Serialize(MicroclimateId, MicroclimateInvitationId),
+    };
+
+    [Fact]
+    public async Task A_microclimate_invitation_carries_a_link_built_from_the_microclimate_token()
+    {
+        var transport = new RecordingTransport(EmailSendOutcome.Success());
+        var surveyTokens = new RecordingTokens(Token);
+        var microclimateTokens = new RecordingMicroclimateTokens(MicroclimateToken);
+
+        await Sender(transport, surveyTokens, microclimateTokens)
+            .SendAsync(MicroclimateNotification(), Recipient(), CancellationToken.None);
+
+        // Keyed by the id the payload carried -- and scoped to the mailbox this is addressed
+        // to and to the notification's own tenant, which is what stops the caller's choice of
+        // id from being a choice of victim.
+        Assert.Equal(
+            new Lookup(MicroclimateInvitationId, RecipientUserId, CompanyId),
+            Assert.Single(microclimateTokens.Lookups));
+
+        // The survey table was not read. This is the assertion the whole two-interface design
+        // exists for: a sender that consulted survey_invitations here would get a null and
+        // ship a linkless mail, and no positive assertion would notice.
+        Assert.Empty(surveyTokens.Lookups);
+
+        var expected = $"https://app.example.com/microclimate-invitations/{MicroclimateToken}";
+        var sent = Assert.Single(transport.Sent);
+        Assert.Contains(expected, sent.TextBody, StringComparison.Ordinal);
+        Assert.Contains(expected, sent.HtmlBody, StringComparison.Ordinal);
+
+        // And nothing from the other surface leaked in. The two fixtures are different
+        // strings precisely so this can be asserted.
+        Assert.DoesNotContain("/survey-invitations/", sent.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(Token, sent.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(MicroclimateId.ToString(), sent.TextBody, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(NotificationTypes.SurveyInvitation)]
+    [InlineData(NotificationTypes.SurveyReminder)]
+    public async Task A_survey_invitation_never_reads_the_microclimate_table(string type)
+    {
+        var transport = new RecordingTransport(EmailSendOutcome.Success());
+        var surveyTokens = new RecordingTokens(Token);
+        var microclimateTokens = new RecordingMicroclimateTokens(MicroclimateToken);
+
+        await Sender(transport, surveyTokens, microclimateTokens).SendAsync(
+            Notification(NotificationChannels.Email, type), Recipient(), CancellationToken.None);
+
+        Assert.Empty(microclimateTokens.Lookups);
+        Assert.Single(surveyTokens.Lookups);
+
+        var sent = Assert.Single(transport.Sent);
+        Assert.DoesNotContain("/microclimate-invitations/", sent.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(MicroclimateToken, sent.TextBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_revoked_or_missing_microclimate_invitation_sends_the_mail_without_a_link()
+    {
+        var transport = new RecordingTransport(EmailSendOutcome.Success());
+
+        var result = await Sender(transport, microclimateTokens: new RecordingMicroclimateTokens(token: null))
+            .SendAsync(MicroclimateNotification(), Recipient(), CancellationToken.None);
+
+        Assert.True(result.Delivered);
+        var sent = Assert.Single(transport.Sent);
+        Assert.DoesNotContain("microclimate-invitations", sent.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("microclimate-invitations", sent.HtmlBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("href=\"\"", sent.HtmlBody, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The exact mix-up the brief warned about, written down as an executable description of
+    /// what it costs. A microclimate notification carrying a SURVEY payload names no
+    /// microclimate invitation, so the sender reads neither table and mails a link-less
+    /// message -- delivered, green, and useless to its recipient. Nothing here asserts this is
+    /// desirable; it asserts it is silent, which is why the two payload classes exist.
+    /// </summary>
+    [Fact]
+    public async Task A_microclimate_notification_carrying_a_survey_payload_mails_no_link_and_fails_nothing()
+    {
+        var transport = new RecordingTransport(EmailSendOutcome.Success());
+        var surveyTokens = new RecordingTokens(Token);
+        var microclimateTokens = new RecordingMicroclimateTokens(MicroclimateToken);
+        var notification = MicroclimateNotification();
+        notification.Data = SurveyNotificationData.Serialize(MicroclimateId, MicroclimateInvitationId);
+
+        var result = await Sender(transport, surveyTokens, microclimateTokens)
+            .SendAsync(notification, Recipient(), CancellationToken.None);
+
+        Assert.True(result.Delivered);
+        Assert.Empty(surveyTokens.Lookups);
+        Assert.Empty(microclimateTokens.Lookups);
+        Assert.DoesNotContain("invitations/", Assert.Single(transport.Sent).TextBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_microclimate_test_token_has_the_shape_a_minted_one_does()
+        => Assert.True(MicroclimateInvitationLinks.HasExpectedShape(MicroclimateToken));
+
     [Fact]
     public async Task A_lookup_that_throws_is_not_swallowed()
     {
@@ -344,7 +488,12 @@ public class EmailNotificationSenderTests
         var transport = new RecordingTransport(outcome);
         var logger = new CapturingLogger();
 
-        await new EmailNotificationSender(transport, Options(), new RecordingTokens(Token), logger)
+        await new EmailNotificationSender(
+                transport,
+                Options(),
+                new RecordingTokens(Token),
+                new RecordingMicroclimateTokens(MicroclimateToken),
+                logger)
             .SendAsync(Notification(NotificationChannels.Email), Recipient(), CancellationToken.None);
 
         // The mail really did carry it -- otherwise this passes for the wrong reason.
@@ -370,7 +519,11 @@ public class EmailNotificationSenderTests
         var logger = new CapturingLogger();
 
         await new EmailNotificationSender(
-                new RecordingTransport(EmailSendOutcome.Success()), Options(), new RecordingTokens(Token), logger)
+                new RecordingTransport(EmailSendOutcome.Success()),
+                Options(),
+                new RecordingTokens(Token),
+                new RecordingMicroclimateTokens(MicroclimateToken),
+                logger)
             .SendAsync(Notification(NotificationChannels.Email), Recipient(), CancellationToken.None);
 
         Assert.Contains(logger.Lines, line => line.Contains("Delivered notification", StringComparison.Ordinal));
@@ -433,7 +586,11 @@ public class EmailNotificationSenderTests
         var logger = new CapturingLogger();
 
         var result = await new EmailNotificationSender(
-                new RecordingTransport(EmailSendOutcome.Success()), Options(), new RecordingTokens(Token), logger)
+                new RecordingTransport(EmailSendOutcome.Success()),
+                Options(),
+                new RecordingTokens(Token),
+                new RecordingMicroclimateTokens(MicroclimateToken),
+                logger)
             .SendAsync(
                 Notification(NotificationChannels.Email),
                 Recipient("ana.gomez@demo.test"),
@@ -496,6 +653,27 @@ public class EmailNotificationSenderTests
     private sealed record Lookup(Guid InvitationId, Guid RecipientUserId, Guid CompanyId);
 
     private sealed class RecordingTokens(string? token) : ISurveyInvitationTokens
+    {
+        public List<Lookup> Lookups { get; } = [];
+
+        public Task<string?> LiveTokenAsync(
+            Guid invitationId,
+            Guid recipientUserId,
+            Guid companyId,
+            CancellationToken cancellationToken)
+        {
+            Lookups.Add(new Lookup(invitationId, recipientUserId, companyId));
+            return Task.FromResult(token);
+        }
+    }
+
+    /// <summary>
+    /// The microclimate half of the same seam (#130), and a separate fake on purpose: it
+    /// implements a DIFFERENT interface, so a test that hands the sender the wrong one does
+    /// not compile. That is the whole reason the production code takes two interfaces rather
+    /// than one with two methods.
+    /// </summary>
+    private sealed class RecordingMicroclimateTokens(string? token) : IMicroclimateInvitationTokens
     {
         public List<Lookup> Lookups { get; } = [];
 

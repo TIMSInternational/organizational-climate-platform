@@ -1,4 +1,5 @@
 using ClimateProject.Application.Email;
+using ClimateProject.Application.Microclimates;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
@@ -53,6 +54,7 @@ public sealed class EmailNotificationSender(
     IEmailTransport transport,
     EmailOptions options,
     ISurveyInvitationTokens invitationTokens,
+    IMicroclimateInvitationTokens microclimateInvitationTokens,
     ILogger<EmailNotificationSender> logger) : INotificationSender
 {
     public async Task<NotificationDeliveryResult> SendAsync(
@@ -108,7 +110,7 @@ public sealed class EmailNotificationSender(
             notification,
             recipient,
             options.LinkTo(NotificationEmailComposer.PreferencesPath),
-            await SurveyUrlAsync(notification, recipient, cancellationToken).ConfigureAwait(false));
+            await InvitationUrlAsync(notification, recipient, cancellationToken).ConfigureAwait(false));
 
         var outcome = await transport.SendAsync(message, cancellationToken).ConfigureAwait(false);
 
@@ -137,6 +139,18 @@ public sealed class EmailNotificationSender(
     /// none to give them.
     ///
     /// <para>
+    /// **Two surfaces, two tables, and the branch is the point.** A survey invitation or
+    /// reminder resolves against <c>survey_invitations</c>; a microclimate invitation resolves
+    /// against <c>microclimate_invitations</c>. They are separate tables with separate primary
+    /// keys, so a microclimate id looked up in the survey table would not throw -- it would
+    /// find nothing, degrade to the link-less mail, and ship green while every invitee got an
+    /// email they could not act on. That is why the payload keys differ
+    /// (<c>surveyInvitationId</c> vs <c>microclimateInvitationId</c>), why the two
+    /// <c>CarriesAnInvitationLink</c> predicates name disjoint type sets, and why the two
+    /// resolvers are separate interfaces injected separately: the mix-up has to be deliberate
+    /// at three independent points before it can happen.
+    /// </para>
+    /// <para>
     /// **The type check comes first, and it is a guard on the database, not a tidy-up.**
     /// Everything that is not a survey invitation or reminder returns before the payload is
     /// even parsed, so an <c>action_plan_alert</c> or a <c>system_notification</c> costs no
@@ -161,16 +175,37 @@ public sealed class EmailNotificationSender(
     /// notification's own tenant.
     /// </para>
     /// </summary>
+    private Task<string?> InvitationUrlAsync(
+        Notification notification,
+        NotificationRecipient recipient,
+        CancellationToken cancellationToken)
+    {
+        if (SurveyNotificationData.CarriesAnInvitationLink(notification.Type))
+        {
+            return SurveyUrlAsync(notification, recipient, cancellationToken);
+        }
+
+        if (MicroclimateNotificationData.CarriesAnInvitationLink(notification.Type))
+        {
+            return MicroclimateUrlAsync(notification, recipient, cancellationToken);
+        }
+
+        // Everything else -- an action_plan_alert, a system_notification, a user_invitation --
+        // returns before either payload is parsed and before either table is touched. The
+        // dispatch sweep sends in batches; one wasted round trip per mail is a wasted round
+        // trip per mail.
+        return Task.FromResult<string?>(null);
+    }
+
+    /// <summary>
+    /// The <c>/survey-invitations/{token}</c> URL for a survey invitation or reminder.
+    /// Reads <c>survey_invitations</c> and nothing else.
+    /// </summary>
     private async Task<string?> SurveyUrlAsync(
         Notification notification,
         NotificationRecipient recipient,
         CancellationToken cancellationToken)
     {
-        if (!SurveyNotificationData.CarriesAnInvitationLink(notification.Type))
-        {
-            return null;
-        }
-
         if (SurveyNotificationData.InvitationIdOrNull(notification.Data) is not { } invitationId)
         {
             logger.LogWarning(
@@ -207,5 +242,54 @@ public sealed class EmailNotificationSender(
         // The same configured AppBaseUrl the preferences link uses, so staging mail cannot
         // send a recipient into production.
         return options.LinkTo(SurveyAccessTokens.InvitationLinkPath(token));
+    }
+
+    /// <summary>
+    /// The <c>/microclimate-invitations/{token}</c> URL for a microclimate invitation (#130).
+    /// Reads <c>microclimate_invitations</c> and nothing else.
+    ///
+    /// <para>
+    /// Structurally the twin of <see cref="SurveyUrlAsync"/> and deliberately not folded into
+    /// it. Folding would mean one method taking "which table" as an argument, and the value of
+    /// that argument would be the only thing standing between a microclimate invitee and a
+    /// silent link-less mail. Two short methods, each naming one table and one payload class,
+    /// cannot be called with the wrong one.
+    /// </para>
+    /// </summary>
+    private async Task<string?> MicroclimateUrlAsync(
+        Notification notification,
+        NotificationRecipient recipient,
+        CancellationToken cancellationToken)
+    {
+        if (MicroclimateNotificationData.InvitationIdOrNull(notification.Data) is not { } invitationId)
+        {
+            logger.LogWarning(
+                "Notification {NotificationId} of type {NotificationType} names no usable microclimate invitation "
+                + "in its data payload; sending it without a link.",
+                notification.Id,
+                notification.Type);
+
+            return null;
+        }
+
+        // Scoped to the mailbox this message is addressed to and to the notification's own
+        // tenant, for the reason ISurveyInvitationTokens spells out and this surface inherits
+        // unchanged: POST /notifications writes `data` verbatim, so the id above is
+        // caller-controlled and without these two the choice of id would be a choice of victim.
+        var token = await microclimateInvitationTokens
+            .LiveTokenAsync(invitationId, recipient.UserId, notification.CompanyId, cancellationToken)
+            .ConfigureAwait(false);
+        if (token is null)
+        {
+            logger.LogInformation(
+                "Microclimate invitation {MicroclimateInvitationId} has no live token for the recipient of "
+                + "notification {NotificationId}, which is therefore being sent without a link.",
+                invitationId,
+                notification.Id);
+
+            return null;
+        }
+
+        return options.LinkTo(MicroclimateInvitationLinks.LinkPath(token));
     }
 }

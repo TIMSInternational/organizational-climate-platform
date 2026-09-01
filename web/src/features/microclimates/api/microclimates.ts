@@ -245,17 +245,28 @@ export async function getLiveResults(baseUrl: string, id: string): Promise<LiveR
 
 // Deliberately does not use authFetch -- this is called from the unauthenticated
 // public respond page (Task 7) when the microclimate allows anonymous responses.
-// A token IS still attached if one happens to be present (an already-logged-in
-// admin previewing the form), but its absence must not block the request.
+// A token IS still attached if one happens to be present, and that is load-bearing
+// rather than incidental: a microclimate with `anonymousResponses: false` answers
+// 401 to an unauthenticated POST, so an invitee who followed the sign-in note on
+// the invitation card and came back would have signed in for nothing. Its absence
+// must still not block the request -- a genuinely anonymous visitor has no token at
+// all, and authFetch's 401 handling would yank them off the page. Same rule, and
+// the same reasons, as getMicroclimatePublic above.
 export async function submitResponse(
   baseUrl: string,
   id: string,
   answers: Record<string, string>,
   language?: string,
 ): Promise<void> {
+  const token = getToken()
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
   const response = await fetch(`${baseUrl}/microclimates/${id}/responses`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     // The locale the respondent was actually served, recorded rather than inferred
     // from what they typed.
     body: JSON.stringify({ answers, language }),

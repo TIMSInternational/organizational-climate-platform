@@ -135,6 +135,28 @@ public static class MicroclimateEndpoints
         => currentUser.Role == Roles.SuperAdmin
            || (currentUser.Role == Roles.CompanyAdmin && currentUser.CompanyId == companyId.ToString());
 
+    /// <summary>
+    /// Who may ANSWER an identified microclimate: anyone signed in who belongs to it.
+    ///
+    /// <para>Deliberately not <see cref="CanAccessCompany"/>, and the split is the whole point
+    /// of having two helpers. That one answers "may this caller administer this company's
+    /// microclimates" and is correctly SuperAdmin/CompanyAdmin only. Answering a pulse is not
+    /// an administrative act -- it is the one thing every employee on the invitation list is
+    /// supposed to do -- and routing the submit through the admin helper made a non-anonymous
+    /// microclimate unanswerable by its own invitees: the token page told them to sign in,
+    /// they did, and the submit came back 403 for having the role the invitation was minted
+    /// for. #130 is the slice that turned that into a shipped journey and therefore the slice
+    /// that has to own it.</para>
+    ///
+    /// <para>Still not a bare "is authenticated": the caller's own company must match, or any
+    /// employee of any tenant could inflate another tenant's response count and word cloud.
+    /// A user with no company claim at all is refused, because
+    /// <c>Guid.ToString()</c> never yields null.</para>
+    /// </summary>
+    internal static bool CanRespondForCompany(CurrentUser currentUser, Guid companyId)
+        => currentUser.Role == Roles.SuperAdmin
+           || currentUser.CompanyId == companyId.ToString();
+
     internal static async Task<MicroclimateDetail> ToDetailAsync(
         Microclimate m,
         ClimateProjectDbContext db,
@@ -1425,8 +1447,9 @@ public static class MicroclimateEndpoints
 
             // Non-anonymous microclimates require the submitter to belong to the same
             // company -- otherwise any authenticated user from any company could inflate
-            // another company's ResponseCount/word cloud.
-            if (!CanAccessCompany(httpContext.User.GetCurrentUser(), microclimate.CompanyId))
+            // another company's ResponseCount/word cloud. Membership, NOT administration:
+            // see CanRespondForCompany for why the admin helper was the wrong one here.
+            if (!CanRespondForCompany(httpContext.User.GetCurrentUser(), microclimate.CompanyId))
             {
                 return Results.Forbid();
             }

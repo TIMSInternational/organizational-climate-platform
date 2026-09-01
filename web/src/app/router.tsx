@@ -26,6 +26,7 @@ import MicroclimateDetailPage from '../features/microclimates/pages/Microclimate
 import MicroclimateLivePage from '../features/microclimates/pages/MicroclimateLivePage'
 import MicroclimateResultsPage from '../features/microclimates/pages/MicroclimateResultsPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
+import MicroclimateInvitationPage from '../features/microclimates/pages/MicroclimateInvitationPage'
 import SurveyRespondPage from '../features/surveys/pages/SurveyRespondPage'
 import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespondPage'
 import PublicSurveyLinkPage from '../features/surveys/pages/PublicSurveyLinkPage'
@@ -245,6 +246,20 @@ export const router = createBrowserRouter([
       // notice, so it moves only in lockstep with that constant.
       { path: '/s/:token', element: <PublicSurveyLinkPage /> },
       { path: '/survey-invitations/:token', element: <SurveyInvitationPage /> },
+      // #130's link, and out here for the reason the two above it are: an invitee
+      // arriving from a mail client has no session, and a microclimate is answered
+      // anonymously by default so many of them have no account at all. The API group
+      // takes no ClaimsPrincipal and carries no RequireAuthorization(); the token in the
+      // path IS the credential, and RequireAuth here would redirect with no `state.from`
+      // — destroying the destination rather than deferring it.
+      //
+      // The literal is a contract with a string the API already composes into outbound
+      // mail: `MicroclimateInvitationLinks.LinkPrefix` builds
+      // `/microclimate-invitations/` on the C# side, and no reference connects it to this
+      // line. Renaming this route breaks every link already sitting in a recipient's
+      // inbox and no .NET test will notice, so it moves only in lockstep with that
+      // constant.
+      { path: '/microclimate-invitations/:token', element: <MicroclimateInvitationPage /> },
       // #139, and out here for a reason the two routes above only half share.
       //
       // They are public because their visitor has no account. This one is public because
