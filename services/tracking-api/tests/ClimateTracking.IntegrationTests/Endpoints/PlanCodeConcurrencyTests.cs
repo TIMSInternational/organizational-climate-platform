@@ -128,11 +128,39 @@ public class PlanCodeConcurrencyTests : IClassFixture<PostgresFixture>, IAsyncLi
                 fechaCompromiso = new DateOnly(2026, 12, 31),
                 involucrados = (string[]?)null,
             });
-            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-            return body.GetProperty("planCode").GetString();
+
+            // Read the body as text and assert the STATUS before parsing it. Going
+            // straight to ReadFromJsonAsync turns any non-2xx into
+            // "JsonException: 'M' is an invalid start of a value" -- the response body
+            // is an exception page, and 'M' is the first letter of "Microsoft...".
+            // That is exactly how this test failed on main at 6d04ad4 (2026-09-01):
+            // the parse error told us nothing about WHICH failure had occurred, so it
+            // was impossible to tell the defect this test exists to catch (a duplicate
+            // plan code from the CREATE SEQUENCE race in GeneratePlanCodeAsync) from an
+            // unrelated 500. A test that cannot name its own failure cannot be triaged.
+            var raw = await response.Content.ReadAsStringAsync();
+            Assert.True(
+                response.IsSuccessStatusCode,
+                $"Request {i}: POST /api/planes-accion returned {(int)response.StatusCode} "
+                    + $"({response.StatusCode}). Body: {raw}");
+
+            using var parsed = JsonDocument.Parse(raw);
+            return parsed.RootElement.GetProperty("planCode").GetString();
         });
 
         var planCodes = await Task.WhenAll(tasks);
+
+        // Name the colliding codes rather than leaving "expected 20, actual 19", which
+        // says a duplicate happened but not which one -- and the code is the only clue
+        // to where in the sequence the race landed.
+        var duplicates = planCodes
+            .GroupBy(code => code)
+            .Where(group => group.Count() > 1)
+            .Select(group => $"{group.Key} x{group.Count()}")
+            .ToArray();
+        Assert.True(
+            duplicates.Length == 0,
+            $"Concurrent creation produced duplicate plan codes: {string.Join(", ", duplicates)}");
 
         Assert.Equal(20, planCodes.Distinct().Count());
     }

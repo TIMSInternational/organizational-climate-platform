@@ -148,10 +148,19 @@ jobs:
         working-directory: web
         run: npm run lint
 
-  # The deploy path was the one path CI never validated. `deploy-prod.yml` has never
-  # had a successful run and is workflow_dispatch-only, so nothing exercised it, and
-  # the CloudFormation templates were only ever "validated" by attempting a real
-  # deploy. Both jobs below are static and credential-free, which is the point:
+  # The deploy path is the one path CI cannot validate by running it: `deploy-prod.yml`
+  # is workflow_dispatch-only, so no pull request ever exercises it, and the
+  # CloudFormation templates would otherwise only be "validated" by attempting a real
+  # deploy.
+  #
+  # CORRECTED 2026-09-01: this comment used to open "`deploy-prod.yml` has never had a
+  # successful run". That was true when written and is now badly false -- the workflow
+  # has 15 successful runs, the most recent of which put main's nine-PR merge on
+  # production. The reason these jobs exist is unchanged (a dispatch-only workflow is
+  # never exercised by a PR), but the old wording made a well-trodden deploy path read
+  # as unproven, which is exactly the kind of stale scare that changes a decision.
+  #
+  # Both jobs below are static and credential-free, which is the point:
   # `aws cloudformation validate-template` needs AWS credentials and therefore
   # cannot run on a pull request, whereas cfn-lint parses the template locally and
   # additionally checks resource properties against its own AWS spec.
