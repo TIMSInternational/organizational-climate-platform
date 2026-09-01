@@ -1,4 +1,9 @@
-import type { SurveyResultsSummary } from '../surveys/api/surveyResults'
+import type {
+  SurveyDistributionBucket,
+  SurveyQuestionResult,
+  SurveyResultsSummary,
+  SurveyWordFrequency,
+} from '../surveys/api/surveyResults'
 
 /**
  * The document persisted in `reports.report_output`, as a client can safely read it.
@@ -61,6 +66,55 @@ export interface ReportDimensionScore {
 }
 
 /**
+ * One dimension's score inside ONE demographic group — `ReportSegmentDimensionScore`.
+ *
+ * `averageScore` is null when the group answered nothing scoreable in this dimension.
+ * "No score" and "zero" are different claims and the server keeps them apart, so a
+ * renderer must too.
+ */
+export interface ReportSegmentDimensionScore {
+  dimension: string
+  averageScore: number | null
+}
+
+/**
+ * One demographic group as a report prints it — `ReportSegmentParticipation`.
+ *
+ * The same contract as `ReportDepartmentParticipation`, applied to a group that has no
+ * headcount: `respondentCount` is **already zero** and `dimensions` **already empty**
+ * when `isSuppressed` is true, because the aggregation zeroed and emptied them before
+ * the projection ever saw the group. `key` is the stable, locale-independent value the
+ * aggregation grouped on; `label` is the reader-facing name when the field has one.
+ */
+export interface ReportSegmentParticipation {
+  key: string
+  label: string | null
+  respondentCount: number
+  isSuppressed: boolean
+  dimensions: ReportSegmentDimensionScore[]
+}
+
+/**
+ * One demographic dimension of a survey — `ReportDemographicBreakdown`.
+ *
+ * Department is deliberately not one of these: it has a denominator and a participation
+ * rate, and it is printed as `ReportSurveySection.departments`.
+ *
+ * `suppressedRespondentCount` is the withheld headcount. It is carried because the
+ * document carries it, and it is **not rendered anywhere** — printing it, or printing
+ * anything one subtraction recovers it from, publishes the exact sub-threshold count
+ * the floor exists to hide. `SegmentBreakdownPanel` makes the same refusal in the
+ * authenticated product for the same reason.
+ */
+export interface ReportDemographicBreakdown {
+  dimension: string
+  segments: ReportSegmentParticipation[]
+  suppressedSegmentCount: number
+  suppressedRespondentCount: number
+  unsegmentedRespondentCount: number
+}
+
+/**
  * One survey's section of a report — `ReportSurveySection` in ReportDtos.cs.
  *
  * `participation` is populated even below the disclosure floor ("a count identifies
@@ -72,16 +126,104 @@ export interface ReportSurveySection {
   surveyId: string
   title: string | null
   status: string
+  /**
+   * The locale the printed question text, option labels and scale anchors are in —
+   * `en` or `es`, resolved from the survey's own language because a report is a company
+   * document with no `?lang` to honour.
+   *
+   * A reader of the stored document has no other way to know which language they are
+   * looking at, which is why the server started sending it when the section started
+   * printing authored text.
+   */
+  resolvedLocale: string
   participation: SurveyResultsSummary
+  /**
+   * The per-question results **verbatim** — the same `SurveyQuestionResult` the results
+   * screen is served, distributions and all.
+   *
+   * `words` is the only open-text surface this platform has and it is a **frequency
+   * map**: a word, the language it was written in, and two counts. Verbatim response
+   * text is not carried by this type on the wire and is not carried by it here, so a
+   * renderer has nothing to reconstruct a sentence out of. `suppressedWordCount` says
+   * how many distinct words were withheld for appearing in too few answers.
+   *
+   * Empty when `isSuppressed` is true.
+   */
+  questions: SurveyQuestionResult[]
   dimensions: ReportDimensionScore[]
   departments: ReportDepartmentParticipation[]
   suppressedDepartmentCount: number
   suppressedRespondentCount: number
   unsegmentedRespondentCount: number
+  /** Every non-department breakdown the aggregation produced. Empty when `isSuppressed`. */
+  demographics: ReportDemographicBreakdown[]
   isSuppressed: boolean
   /** A machine-readable code, e.g. `below_minimum_respondents`. Never display copy. */
   suppressionReason: string | null
   minimumGroupSize: number
+}
+
+/** One reading of a benchmark — `BenchmarkMetricDto` in BenchmarkDtos.cs. */
+export interface ReportBenchmarkMetric {
+  id: string
+  metricName: string
+  value: number
+  unit: string
+  percentile: number | null
+  sampleSize: number | null
+}
+
+/**
+ * One metric read against the same metric in the prior period —
+ * `BenchmarkMetricChangeDto`.
+ *
+ * `delta` is null when either side is missing **or when the two sides are recorded in
+ * different units** — subtracting a percentage from a point score produces a
+ * confidently wrong number, which is the failure #89 exists to avoid. Both units are
+ * carried so a renderer can say *why* the change is absent instead of printing a dash.
+ *
+ * `changeRatio` is a **fraction** (0.057, not 5.7), null when `delta` is null and null
+ * when `priorValue` is zero.
+ */
+export interface ReportBenchmarkMetricChange {
+  metricName: string
+  value: number | null
+  unit: string | null
+  priorValue: number | null
+  priorUnit: string | null
+  delta: number | null
+  changeRatio: number | null
+}
+
+/** The prior period a benchmark links to — `BenchmarkPriorPeriodDto`. */
+export interface ReportBenchmarkPriorPeriod {
+  id: string
+  name: string
+  /** Every metric named by **either** period; see `BenchmarkPriorPeriod.BuildChanges`. */
+  metrics: ReportBenchmarkMetricChange[]
+}
+
+/**
+ * One benchmark of the report's company, read against its own prior period —
+ * `ReportBenchmarkComparison` in ReportDtos.cs.
+ *
+ * `companyId` is null for a global benchmark, the rows every tenant compares against.
+ *
+ * `priorPeriod` is null for three different reasons and `priorPeriodStatus` is the only
+ * thing that tells them apart: `none` (an administrator has said no prior period
+ * exists), `unlinked` (nobody has linked one yet), and `linked` with a null period (the
+ * link points at a row outside what this company may read). A renderer that printed one
+ * sentence for all three would state a fact it does not have.
+ */
+export interface ReportBenchmarkComparison {
+  benchmarkId: string
+  name: string
+  category: string
+  type: string
+  companyId: string | null
+  priorPeriodStatus: string
+  metrics: ReportBenchmarkMetric[]
+  priorPeriod: ReportBenchmarkPriorPeriod | null
 }
 
 /** One AI insight as a report prints it — `ReportAIInsightItem` in ReportAIInsights.cs. */
@@ -117,6 +259,7 @@ export interface ReportDocument {
   generationNote: string
   surveys: ReportSurveySection[]
   aiInsights: ReportAIInsight[]
+  benchmarks: ReportBenchmarkComparison[]
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -204,6 +347,194 @@ function departmentOf(value: unknown): ReportDepartmentParticipation {
   }
 }
 
+function bucketOf(value: unknown): SurveyDistributionBucket {
+  const raw = isRecord(value) ? value : {}
+  return {
+    value: str(raw.value),
+    label: nullableStr(raw.label),
+    count: num(raw.count),
+    percentage: num(raw.percentage),
+    averageRank: nullableNum(raw.averageRank),
+  }
+}
+
+/**
+ * One entry of a word cloud: a word, its language, and two counts. Nothing else.
+ *
+ * ## The whitespace guard is the frequency-only rule, enforced rather than trusted
+ *
+ * This platform never returns verbatim open-text content — "Voices" was closed
+ * permanently on that basis — and a word cloud is the one open-text surface that
+ * survived, because a *frequency map* names no one the way a sentence does.
+ *
+ * The server tokenises on `[' ', '\t', '\n', '\r', '.', ',', '!', '?', ';', ':', '(',
+ * ')', '"']` (`SurveyAggregation.WordSeparators`), so a legitimate entry can never
+ * contain whitespace or sentence punctuation. An entry that does is therefore not a
+ * word: it is a phrase, and the only ways one arrives are a generator regression, a
+ * hand-edited column, or a document from somewhere this client did not expect. Each of
+ * those is exactly the case where a renderer must not print it.
+ *
+ * So the entry is dropped here, at the parser, and `wordsOf` counts what it dropped
+ * onto `suppressedWordCount` — because a reader must be told something was withheld
+ * rather than shown a shorter list that looks complete. Dropping is deliberately not
+ * "trim it into a word": splitting a phrase back into tokens would be this client
+ * inventing frequencies the aggregation never computed and never floored.
+ */
+const NOT_A_SINGLE_WORD = /[\s.,!?;:()"]/
+
+function wordOf(value: unknown): SurveyWordFrequency | null {
+  const raw = isRecord(value) ? value : {}
+  const word = str(raw.word)
+  if (word === '' || NOT_A_SINGLE_WORD.test(word)) return null
+  return {
+    language: str(raw.language),
+    word,
+    count: num(raw.count),
+    responseCount: num(raw.responseCount),
+  }
+}
+
+/**
+ * A question's cloud, and the withheld total that goes with it.
+ *
+ * The two are read together because they are one statement: "these words, and this many
+ * you cannot see". A list shortened without its counter says "these words, and that is
+ * all there was", which is a claim about other people's answers that this client is in
+ * no position to make.
+ */
+function wordsOf(raw: Record<string, unknown>): {
+  words: SurveyWordFrequency[]
+  suppressedWordCount: number
+} {
+  const entries = array(raw.words)
+  const words = entries.map(wordOf).filter((word): word is SurveyWordFrequency => word !== null)
+  return {
+    words,
+    suppressedWordCount: num(raw.suppressedWordCount) + (entries.length - words.length),
+  }
+}
+
+/**
+ * One question's results — `SurveyQuestionResult`, carried by the report verbatim.
+ *
+ * Read field by field rather than cast, for the reason the module header gives, and
+ * with one addition of its own: the fields listed here are the *only* ones that survive
+ * parsing, so a document that grew a verbatim-answers field — from a future generator,
+ * a hand-edited column, a different product's export pointed at this page — cannot
+ * carry it into a renderer. The open-text guarantee is a property of what this function
+ * copies, not of what the renderer chooses to print.
+ */
+function questionOf(value: unknown): SurveyQuestionResult {
+  const raw = isRecord(value) ? value : {}
+  const { words, suppressedWordCount } = wordsOf(raw)
+  return {
+    questionId: str(raw.questionId),
+    order: num(raw.order),
+    type: str(raw.type),
+    text: nullableStr(raw.text),
+    category: nullableStr(raw.category),
+    answeredCount: num(raw.answeredCount),
+    distribution: array(raw.distribution).map(bucketOf),
+    average: nullableNum(raw.average),
+    median: nullableNum(raw.median),
+    scaleMin: nullableNum(raw.scaleMin),
+    scaleMax: nullableNum(raw.scaleMax),
+    scaleLabelMin: nullableStr(raw.scaleLabelMin),
+    scaleLabelMax: nullableStr(raw.scaleLabelMax),
+    words,
+    suppressedWordCount,
+  }
+}
+
+function segmentScoreOf(value: unknown): ReportSegmentDimensionScore {
+  const raw = isRecord(value) ? value : {}
+  return {
+    dimension: str(raw.dimension),
+    averageScore: nullableNum(raw.averageScore),
+  }
+}
+
+/**
+ * One demographic group, with the same refusal `departmentOf` makes.
+ *
+ * A group that arrives suppressed and still carrying a count or a score is a generator
+ * bug or a hand-edited column, and it is precisely the row a client must not pass on —
+ * so the count is zeroed and the scores dropped here as well as there.
+ */
+function segmentOf(value: unknown): ReportSegmentParticipation {
+  const raw = isRecord(value) ? value : {}
+  const isSuppressed = bool(raw.isSuppressed, true)
+  return {
+    key: str(raw.key),
+    label: nullableStr(raw.label),
+    respondentCount: isSuppressed ? 0 : num(raw.respondentCount),
+    isSuppressed,
+    dimensions: isSuppressed ? [] : array(raw.dimensions).map(segmentScoreOf),
+  }
+}
+
+function demographicOf(value: unknown): ReportDemographicBreakdown {
+  const raw = isRecord(value) ? value : {}
+  return {
+    dimension: str(raw.dimension),
+    segments: array(raw.segments).map(segmentOf),
+    suppressedSegmentCount: num(raw.suppressedSegmentCount),
+    suppressedRespondentCount: num(raw.suppressedRespondentCount),
+    unsegmentedRespondentCount: num(raw.unsegmentedRespondentCount),
+  }
+}
+
+function benchmarkMetricOf(value: unknown): ReportBenchmarkMetric {
+  const raw = isRecord(value) ? value : {}
+  return {
+    id: str(raw.id),
+    metricName: str(raw.metricName),
+    value: num(raw.value),
+    unit: str(raw.unit),
+    percentile: nullableNum(raw.percentile),
+    sampleSize: nullableNum(raw.sampleSize),
+  }
+}
+
+function benchmarkChangeOf(value: unknown): ReportBenchmarkMetricChange {
+  const raw = isRecord(value) ? value : {}
+  return {
+    metricName: str(raw.metricName),
+    value: nullableNum(raw.value),
+    unit: nullableStr(raw.unit),
+    priorValue: nullableNum(raw.priorValue),
+    priorUnit: nullableStr(raw.priorUnit),
+    // Carried, never recomputed from the two values above. The server withholds this
+    // when the units differ, and a client that filled the gap with its own subtraction
+    // would print exactly the confidently wrong number #89 exists to avoid.
+    delta: nullableNum(raw.delta),
+    changeRatio: nullableNum(raw.changeRatio),
+  }
+}
+
+function priorPeriodOf(value: unknown): ReportBenchmarkPriorPeriod | null {
+  if (!isRecord(value)) return null
+  return {
+    id: str(value.id),
+    name: str(value.name),
+    metrics: array(value.metrics).map(benchmarkChangeOf),
+  }
+}
+
+function benchmarkOf(value: unknown): ReportBenchmarkComparison {
+  const raw = isRecord(value) ? value : {}
+  return {
+    benchmarkId: str(raw.benchmarkId),
+    name: str(raw.name),
+    category: str(raw.category),
+    type: str(raw.type),
+    companyId: nullableStr(raw.companyId),
+    priorPeriodStatus: str(raw.priorPeriodStatus),
+    metrics: array(raw.metrics).map(benchmarkMetricOf),
+    priorPeriod: priorPeriodOf(raw.priorPeriod),
+  }
+}
+
 function sectionOf(value: unknown): ReportSurveySection {
   const raw = isRecord(value) ? value : {}
   const isSuppressed = bool(raw.isSuppressed, true)
@@ -211,16 +542,20 @@ function sectionOf(value: unknown): ReportSurveySection {
     surveyId: str(raw.surveyId),
     title: nullableStr(raw.title),
     status: str(raw.status),
+    resolvedLocale: str(raw.resolvedLocale),
     participation: participationOf(raw.participation),
-    // Dropped outright for a suppressed section, mirroring the server's own
-    // "Dimensions is empty when IsSuppressed is true". Two implementations of one rule
-    // is a smell, but the alternative is a renderer that trusts a list the server
-    // promises is empty — and this list is the withheld data itself.
+    // Dropped outright for a suppressed section, mirroring the server's own "Questions,
+    // Dimensions and Demographics are empty when IsSuppressed is true". Two
+    // implementations of one rule is a smell, but the alternative is a renderer that
+    // trusts a list the server promises is empty — and these lists are the withheld
+    // data itself, per-question distributions and word clouds included.
+    questions: isSuppressed ? [] : array(raw.questions).map(questionOf),
     dimensions: isSuppressed ? [] : array(raw.dimensions).map(dimensionOf),
     departments: array(raw.departments).map(departmentOf),
     suppressedDepartmentCount: num(raw.suppressedDepartmentCount),
     suppressedRespondentCount: num(raw.suppressedRespondentCount),
     unsegmentedRespondentCount: num(raw.unsegmentedRespondentCount),
+    demographics: isSuppressed ? [] : array(raw.demographics).map(demographicOf),
     isSuppressed,
     suppressionReason: nullableStr(raw.suppressionReason),
     minimumGroupSize: num(raw.minimumGroupSize),
@@ -270,5 +605,6 @@ export function parseReportDocument(raw: string | null | undefined): ReportDocum
     generationNote: str(parsed.generationNote),
     surveys: array(parsed.surveys).map(sectionOf),
     aiInsights: array(parsed.aiInsights).map(insightOf),
+    benchmarks: array(parsed.benchmarks).map(benchmarkOf),
   }
 }
