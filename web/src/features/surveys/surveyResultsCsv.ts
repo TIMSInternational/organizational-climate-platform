@@ -9,20 +9,29 @@ import { bucketLabel } from './surveyResultsView'
  * CSV serialisation of **what is on the screen**, which is not the same thing as the
  * survey's data.
  *
- * ## Why this exists here rather than waiting for #122
+ * ## Why this exists alongside the server export
  *
- * #122 (server-side CSV and PDF export) is still open, so there is no export endpoint
- * to wire an action to. These two functions are deliberately *not* a client-side
- * reimplementation of it: #122 exports the underlying responses, this exports the
- * already-aggregated, already-suppressed payload the page received. That distinction is
- * the reason it is safe to build now — every privacy decision was taken by
- * `SurveyAggregation` before the bytes reached the browser, so there is no floor to
- * re-derive here and no way for this file to disagree with the page above it or to leak
- * something the page does not already show.
+ * These two functions are deliberately *not* a client-side reimplementation of the server
+ * export. They serialise the already-aggregated, already-suppressed payload this page
+ * received, into translated columns for the reader who is looking at it — every privacy
+ * decision was taken by `SurveyAggregation` before the bytes reached the browser, so there
+ * is no floor to re-derive here and no way for this file to disagree with the page above it
+ * or to leak something the page does not already show.
  *
- * When #122 lands, a *raw* export belongs to it. This one should stay, or be moved
- * behind it, but it must not be replaced by an export that re-derives suppression on a
- * second code path.
+ * **#122 has landed, and it did not do what the note here predicted.** This block used to
+ * say "#122 exports the underlying responses" and that a *raw* export would belong to it.
+ * It does not. `SurveyExport` on the server exports the same aggregate, in a
+ * machine-readable long format with reason codes, and it refuses a per-respondent export
+ * outright — because `SurveyResultsPrivacy` justifies displaying a bucket of one on the
+ * grounds that "the joint distribution that would let a reader link two answers to one
+ * person is never exposed", and a raw CSV is exactly that joint distribution. The
+ * prediction is corrected here rather than deleted, so the next reader does not go looking
+ * for a raw export that was decided against.
+ *
+ * So there are two CSVs on purpose: this one is the screen in a spreadsheet, translated;
+ * the server's is the document, with machine-readable keys and an audit row behind it. What
+ * the server has that this cannot is the PDF, which the header's third export button
+ * downloads (`api/surveyExport.ts`).
  *
  * ## Withheld is a value, not an empty cell
  *

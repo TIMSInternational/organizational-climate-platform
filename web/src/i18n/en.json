@@ -2379,6 +2379,7 @@
     "noSegmentsDescription": "No response carries a department or demographic value, so there is nothing to break down.",
     "exportQuestions": "Export questions (CSV)",
     "exportBreakdown": "Export breakdown (CSV)",
+    "exportPdf": "Export report (PDF)",
     "csvQuestionOrder": "Question number",
     "csvQuestionText": "Question",
     "csvQuestionType": "Question type",

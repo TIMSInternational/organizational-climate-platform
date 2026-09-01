@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import SurveyResultsPage from './SurveyResultsPage'
 import { downloadTextFile } from '../../../lib/downloadTextFile'
+import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import { TranslationProvider } from '../../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { setToken } from '../../../auth/token'
@@ -12,6 +13,9 @@ import type { SurveyAnalyticsResponse } from '../api/surveyResults'
 // The only part of the export that touches the DOM. Stubbed so the assertions
 // below can read the bytes the page decided to write.
 vi.mock('../../../lib/downloadTextFile', () => ({ downloadTextFile: vi.fn() }))
+// The PDF is the one export the browser does not build, so its DOM half is stubbed for the
+// same reason: the assertions below are about which bytes the page asked the server for.
+vi.mock('../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
 
 function payload(overrides: Partial<SurveyAnalyticsResponse> = {}): SurveyAnalyticsResponse {
   return {
@@ -168,6 +172,7 @@ describe('SurveyResultsPage', () => {
     // The download stub is module scoped, so a call recorded by one test would
     // otherwise be the "last call" another test reads.
     vi.mocked(downloadTextFile).mockClear()
+    vi.mocked(downloadBlobFile).mockClear()
   })
 
   it('reads the whole page from one request to /analytics', async () => {
@@ -819,6 +824,45 @@ describe('SurveyResultsPage', () => {
       const [, , contents] = vi.mocked(downloadTextFile).mock.calls.at(-1)!
       expect(contents).toContain('I feel safe raising concerns')
       expect(contents).toContain('What would you change?')
+    })
+
+    it('downloads the PDF from the server rather than building one in the browser', async () => {
+      // The two CSVs above serialise the payload the page already holds. A PDF cannot be
+      // built from it -- there was no PDF anywhere in the product before #122 -- so this
+      // button has to reach the export endpoint, carrying the reader's locale so the
+      // document's chrome comes back in the language they are reading.
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findAllByText(/I feel safe raising concerns/)
+
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46])]), { status: 200 }),
+      )
+
+      await user.click(screen.getByRole('button', { name: 'Export report (PDF)' }))
+
+      await waitFor(() => expect(vi.mocked(downloadBlobFile)).toHaveBeenCalled())
+
+      const requested = vi.mocked(fetch).mock.calls.map((call) => String(call[0]))
+      expect(requested.some((url) => /\/surveys\/s1\/export\/pdf\?lang=en$/.test(url))).toBe(true)
+
+      const [fileName] = vi.mocked(downloadBlobFile).mock.calls.at(-1)!
+      expect(fileName).toBe('survey-s1-results.pdf')
+    })
+
+    it('reports a failed PDF download instead of doing nothing', async () => {
+      // A download button that silently no-ops reads as a broken build, and an admin who
+      // cannot tell "refused" from "nothing happened" will retry rather than escalate.
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findAllByText(/I feel safe raising concerns/)
+
+      vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ message: 'Forbidden' }, 403))
+
+      await user.click(screen.getByRole('button', { name: 'Export report (PDF)' }))
+
+      expect(await screen.findByText('Forbidden')).toBeTruthy()
+      expect(vi.mocked(downloadBlobFile)).not.toHaveBeenCalled()
     })
 
     it('writes every dimension of the breakdown, not just the selected one', async () => {

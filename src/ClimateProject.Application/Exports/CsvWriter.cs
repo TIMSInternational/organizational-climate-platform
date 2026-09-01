@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 
 namespace ClimateProject.Application.Exports;
@@ -8,8 +7,8 @@ namespace ClimateProject.Application.Exports;
 /// spreadsheet formula injection.
 ///
 /// <para>
-/// <b>Provenance.</b> The <em>escaping rule</em> -- <see cref="Escape"/> and
-/// <see cref="FormulaLeadingCharacters"/> -- is lifted verbatim, reasoning included, from the
+/// <b>Provenance.</b> The <em>escaping rule</em> -- <see cref="CsvField.Escape"/> and
+/// <see cref="CsvField.FormulaLeadingCharacters"/> -- is lifted verbatim, reasoning included, from the
 /// private <c>Csv</c> helper in <c>AuditEndpoints</c>, the only place in this solution that
 /// had got it right. It is promoted to the Application layer rather than copied a second time
 /// so that the next export does not have to rediscover the two separate jobs below. The same
@@ -28,7 +27,8 @@ namespace ClimateProject.Application.Exports;
 /// </para>
 ///
 /// <para>
-/// <b>Two separate jobs, and quoting only does the first.</b>
+/// <b>Two separate jobs, and quoting only does the first.</b> Both are
+/// <see cref="CsvField"/>'s, since #122 gave the same rule a second, streaming serialisation.
 /// </para>
 ///
 /// <para>
@@ -51,18 +51,9 @@ namespace ClimateProject.Application.Exports;
 /// </summary>
 public sealed class CsvWriter
 {
-    /// <summary>
-    /// The leading characters a spreadsheet reads as the start of a formula rather than as
-    /// text.
-    /// </summary>
-    /// <remarks>
-    /// <c>=</c> and <c>+</c> begin a formula in Excel, LibreOffice Calc and Sheets; <c>-</c>
-    /// does too (it is parsed as unary minus applied to an expression); <c>@</c> is Excel's
-    /// legacy intersection/function prefix. Tab and carriage return are included because a
-    /// leading whitespace character can be dropped on import, which would promote the
-    /// character after it into the leading position this rule is about.
-    /// </remarks>
-    private static readonly char[] FormulaLeadingCharacters = ['=', '+', '-', '@', '\t', '\r'];
+    // The escaping rule itself -- unconditional quoting, doubled quotes, the leading
+    // apostrophe -- lives in CsvField, shared with CsvStreamWriter. See that class for the
+    // reasoning and for why the two writers must not each carry a copy.
 
     private readonly StringBuilder _builder = new();
     private readonly int _columnCount;
@@ -109,10 +100,10 @@ public sealed class CsvWriter
     /// file is a value that has to be quoted to survive at all and reads as text once it
     /// does. Every numeric field in an export goes through here.
     /// </remarks>
-    public static string Number(double value) => value.ToString(CultureInfo.InvariantCulture);
+    public static string Number(double value) => CsvField.Number(value);
 
     /// <inheritdoc cref="Number(double)"/>
-    public static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
+    public static string Number(int value) => CsvField.Number(value);
 
     /// <summary>The document as UTF-8 bytes, BOM first. The only supported serialisation.</summary>
     /// <remarks>
@@ -142,25 +133,11 @@ public sealed class CsvWriter
                 _builder.Append(',');
             }
 
-            _builder.Append(Escape(fields[i]));
+            _builder.Append(CsvField.Escape(fields[i]));
         }
 
         // CRLF rather than LF: RFC 4180 specifies it, and it is what Excel expects on the
         // platform most of these files are opened on.
-        _builder.Append("\r\n");
-    }
-
-    /// <summary>One CSV field, quoted and made inert. See the class remarks.</summary>
-    private static string Escape(string? value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return "\"\"";
-        }
-
-        var escaped = value.Replace("\"", "\"\"", StringComparison.Ordinal);
-        var inert = FormulaLeadingCharacters.Contains(value[0]) ? "'" + escaped : escaped;
-
-        return $"\"{inert}\"";
+        _builder.Append(CsvField.RowTerminator);
     }
 }
