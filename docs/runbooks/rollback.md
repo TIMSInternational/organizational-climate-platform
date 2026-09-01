@@ -579,6 +579,45 @@ hypothetical.
 Fill from §7. Until these hold numbers, §3.2's timings are guesses and are labelled as
 such throughout.
 
+### 8.0 Steady-state baseline — measured 2026-09-01, production on `4b21c0a`
+
+The first half of §7.3 has now been run. `scripts/rollback-probe.sh` makes **zero AWS
+calls**, so the probe needs no production credentials — it was run from a machine holding
+only `795965600143`, which cannot see App Runner at all. Only the three `aws` commands in
+§7.3 still require `747814092517` (H1).
+
+`scripts/rollback-probe.sh <url> 90 1.0 2` — deliberately light, ~2 req/s:
+
+| | value |
+|---|---|
+| requests / non-200 | **56 / 0** |
+| longest consecutive failure run | **0 s** |
+| `/ready` latency mean | **2.22 s** |
+| min / max | **1.41 s / 5.46 s** |
+| distribution | 42 in 1–2 s · 7 in 3–4 s · 5 in 4–5 s · **2 in 5–6 s** |
+
+**The steady state costs zero failed requests.** That is the number a rehearsal is
+compared against, and without it a rollback that costs four failures means nothing.
+
+### 8.1 The health-check margin this exposed — read before rehearsing
+
+`HealthCheckConfiguration` on the prod service is `Interval: 20`, **`Timeout: 5`**,
+`HealthyThreshold: 3`, `UnhealthyThreshold: 5`. The baseline above puts **2 of 56 probes
+(3.6%) past that 5 s timeout**, at a measured max of 5.46 s.
+
+At steady state this is absorbed by design, and is not an incident: marking an instance
+unhealthy needs 5 consecutive failures at a 20 s interval — 100 seconds of sustained
+slowness, not a sporadic 3.6%.
+
+**It matters during a rollback.** The replacement instance cold-starts, and #220 measured
+a **9.4 s** cold-start `/ready` — roughly twice the timeout — while `HealthyThreshold: 3`
+means it must pass three consecutive checks before it serves. So a rollback that appears
+to stall in health checks for a minute or more is the **expected** behaviour of this
+configuration, not a failed rollback. Do not abort it on that signal alone; abort on the
+§5 triggers.
+
+
+
 | | Rehearsal 1 | Rehearsal 2 |
 |---|---|---|
 | Date / environment | `____` | `____` |
