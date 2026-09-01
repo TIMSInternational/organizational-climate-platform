@@ -53,10 +53,45 @@ describe('microclimates api client', () => {
     expect(result).toEqual(live)
   })
 
-  it('submits a response without auth', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 201 }))
-    await submitResponse(baseUrl, 'm1', { q1: 'good' })
-    expect(fetch).toHaveBeenCalledWith(`${baseUrl}/microclimates/m1/responses`, expect.objectContaining({ method: 'POST' }))
+  describe('submitResponse', () => {
+    it('submits without an Authorization header when nobody is signed in', async () => {
+      clearToken()
+      vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 201 }))
+      await submitResponse(baseUrl, 'm1', { q1: 'good' })
+      expect(fetch).toHaveBeenCalledWith(`${baseUrl}/microclimates/m1/responses`, expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }))
+    })
+
+    /**
+     * The header this call used to drop, and the reason the whole invitation journey ended in
+     * a 401 for anyone it was minted for.
+     *
+     * A microclimate with `anonymousResponses: false` refuses an unauthenticated POST. The
+     * invitation landing card tells that invitee to sign in and hands them /login; they did,
+     * came back, pressed submit — and the request went out bare, so the server saw exactly the
+     * caller it had already refused. The advice was correct and could not be acted on.
+     */
+    it('attaches an Authorization header so an identified session can be answered', async () => {
+      setToken('test-token')
+      vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 201 }))
+      await submitResponse(baseUrl, 'm1', { q1: 'good' })
+      expect(fetch).toHaveBeenCalledWith(`${baseUrl}/microclimates/m1/responses`, expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-token' },
+      }))
+    })
+
+    it('throws a plain error on a non-ok response instead of redirecting to /login', async () => {
+      clearToken()
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: 'This microclimate requires authentication to respond' }), { status: 401 }),
+      )
+      await expect(submitResponse(baseUrl, 'm1', { q1: 'good' })).rejects.toThrow(
+        'This microclimate requires authentication to respond',
+      )
+    })
   })
 
   describe('getMicroclimatePublic', () => {

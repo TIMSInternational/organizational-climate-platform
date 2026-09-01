@@ -26,6 +26,7 @@ import MicroclimateDetailPage from '../features/microclimates/pages/Microclimate
 import MicroclimateLivePage from '../features/microclimates/pages/MicroclimateLivePage'
 import MicroclimateResultsPage from '../features/microclimates/pages/MicroclimateResultsPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
+import MicroclimateInvitationPage from '../features/microclimates/pages/MicroclimateInvitationPage'
 import SurveyRespondPage from '../features/surveys/pages/SurveyRespondPage'
 import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespondPage'
 import PublicSurveyLinkPage from '../features/surveys/pages/PublicSurveyLinkPage'
@@ -49,6 +50,7 @@ import MySurveysPage from '../features/surveys/pages/MySurveysPage'
 import SurveyTemplatesPage from '../features/surveys/pages/SurveyTemplatesPage'
 import SurveyTemplateDetailPage from '../features/surveys/pages/SurveyTemplateDetailPage'
 import AnalyticsDashboardPage from '../features/analytics/pages/AnalyticsDashboardPage'
+import QuestionBankPage from '../features/questions/pages/QuestionBankPage'
 import { resolveInitialRoute } from './resolveInitialRoute'
 
 // /admin/companies (the old unconditional target) is SuperAdmin-only -- a
@@ -245,6 +247,20 @@ export const router = createBrowserRouter([
       // notice, so it moves only in lockstep with that constant.
       { path: '/s/:token', element: <PublicSurveyLinkPage /> },
       { path: '/survey-invitations/:token', element: <SurveyInvitationPage /> },
+      // #130's link, and out here for the reason the two above it are: an invitee
+      // arriving from a mail client has no session, and a microclimate is answered
+      // anonymously by default so many of them have no account at all. The API group
+      // takes no ClaimsPrincipal and carries no RequireAuthorization(); the token in the
+      // path IS the credential, and RequireAuth here would redirect with no `state.from`
+      // — destroying the destination rather than deferring it.
+      //
+      // The literal is a contract with a string the API already composes into outbound
+      // mail: `MicroclimateInvitationLinks.LinkPrefix` builds
+      // `/microclimate-invitations/` on the C# side, and no reference connects it to this
+      // line. Renaming this route breaks every link already sitting in a recipient's
+      // inbox and no .NET test will notice, so it moves only in lockstep with that
+      // constant.
+      { path: '/microclimate-invitations/:token', element: <MicroclimateInvitationPage /> },
       // #139, and out here for a reason the two routes above only half share.
       //
       // They are public because their visitor has no account. This one is public because
@@ -300,6 +316,17 @@ export const router = createBrowserRouter([
               { path: '/admin/companies/:companyId/analytics', element: <AnalyticsDashboardPage /> },
               { path: '/admin/system-settings', element: <SystemSettingsPage /> },
               { path: '/admin/system', element: <SystemHealthPage /> },
+              // #114, the question BANK — not the question library, which is #112's
+              // picker and lives behind `/dev/question-library`. The two reach
+              // different tables on purpose; `questionBank.ts` and
+              // `QuestionBankEndpoints.cs` both say why.
+              //
+              // No route-level role gate, matching every sibling here: every
+              // `/admin/question-bank` route checks `Roles.Admin` and then scopes by
+              // role, so a leader or employee who typed the URL gets the page's own
+              // error state rather than another tenant's corpus. `navSections.ts` is
+              // what keeps it out of their sidebar.
+              { path: '/admin/question-bank', element: <QuestionBankPage /> },
               // Flat, with no company id in the path (#142), like /surveys and
               // /action-plans: the page takes its company from `company-context`,
               // so one route and one nav entry serve both admin roles.

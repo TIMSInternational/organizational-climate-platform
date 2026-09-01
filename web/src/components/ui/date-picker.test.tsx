@@ -8,6 +8,12 @@ import type { Locale } from '../../i18n'
 
 afterEach(cleanup)
 
+// Deliberately a date in the past, and deliberately not "today" in any month.
+// The pick test below used to pass only while the machine's clock happened to sit in
+// August 2026: `DatePicker` did not pass `defaultMonth`, so the calendar opened on the
+// CURRENT month and August's grid was on screen by coincidence. It went red on its own
+// on 1 September 2026, on a tree nobody had touched. A test whose result depends on the
+// day it runs is not pinning the behaviour it names.
 const AUGUST_2026 = new Date(2026, 7, 3)
 
 function renderPicker(
@@ -53,6 +59,11 @@ describe('DatePicker', () => {
 
     await userEvent.click(trigger())
     await screen.findByRole('grid')
+
+    // The calendar must open on the SELECTED date's month, whatever today is. Asserting
+    // the caption first makes the failure say "it opened on the wrong month" instead of
+    // "a cell was missing", which is what sent the original failure looking at the grid.
+    expect(baseElement.querySelector('[role="grid"]')?.getAttribute('aria-label')).toMatch(/August 2026/i)
 
     const day = baseElement.querySelector<HTMLElement>('td[data-day="2026-08-14"] button')
     expect(day).not.toBeNull()

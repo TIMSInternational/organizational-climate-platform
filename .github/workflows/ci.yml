@@ -40,9 +40,50 @@ jobs:
       - name: Test
         run: dotnet test ClimateProject.slnx --no-build --configuration Release --verbosity normal
 
-  # The ETL tool lives in its own solution ON PURPOSE (the production Dockerfile
-  # restores ClimateProject.slnx and must never pull migration tooling into the
-  # image), which also meant its tests ran nowhere until this job. Its suite spins
+  # `services/tracking-api` is a SEPARATE SOLUTION, so `dotnet test ClimateProject.slnx`
+  # above never touched it: 163 tests across ClimateTracking.UnitTests and
+  # ClimateTracking.IntegrationTests ran nowhere at all. The only automation that built
+  # this code was deploy-tracking-prod.yml, which means a red suite would have been
+  # discovered *inside a production deploy* rather than on the pull request that broke
+  # it. That is not hypothetical here -- it is exactly how the tracking Docker build
+  # (NETSDK1152) stayed broken on main for weeks while CI reported green, because only a
+  # deploy job ever built that image.
+  #
+  # Added after running the suite green once locally, which is the precondition
+  # docs/runbooks/tracking-service-provisioning.md §2 sets before wiring this job:
+  # 95 unit + 68 integration, 0 failures, on 2026-08-31.
+  tracking-build-and-test:
+    runs-on: ubuntu-latest
+    # The suite is ~35s locally (2s unit, 30s integration). The ceiling is generous
+    # against that rather than tight, because the dominant cost on a cold runner is
+    # Testcontainers pulling postgres:16-alpine, not the tests -- and the reason for
+    # any ceiling at all is the one in build-and-test above: a stalled runner must
+    # produce a fast verdict instead of burning the default six hours and reporting
+    # a bare "failure" with no summary.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # services/tracking-api/global.json, not the root one. They pin the same SDK
+      # today (10.0.100, rollForward latestFeature); using the solution's own is what
+      # keeps this job correct if exactly one of them moves.
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: services/tracking-api/global.json
+
+      - name: Restore
+        run: dotnet restore services/tracking-api/ClimateTracking.slnx
+
+      - name: Build
+        run: dotnet build services/tracking-api/ClimateTracking.slnx --no-restore --configuration Release
+
+      # ClimateTracking.IntegrationTests uses Testcontainers (PostgresFixture spins
+      # postgres:16-alpine), so this needs the runner's Docker daemon. The
+      # build-and-test job above already relies on the same thing, so this adds no
+      # new requirement to the runner.
+      - name: Test
+        run: dotnet test services/tracking-api/ClimateTracking.slnx --no-build --configuration Release --verbosity normal
+
   web-build-and-test:
     runs-on: ubuntu-latest
     strategy:

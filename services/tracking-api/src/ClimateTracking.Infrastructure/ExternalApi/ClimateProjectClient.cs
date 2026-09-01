@@ -58,10 +58,12 @@ public sealed class ClimateProjectClient : IClimateProjectClient
         var query = $"/api/internal/hallazgos?hallazgo_id={Uri.EscapeDataString(hallazgoId)}" +
             $"&company_id={Uri.EscapeDataString(_options.ProcomerCompanyId)}";
         var envelope = await GetAsync<Envelope<HallazgosData>>(query, cancellationToken);
-        // Don't trust the server to have honored hallazgo_id: climate-project's live
-        // /internal/hallazgos route only reads company_id and ignores hallazgo_id entirely,
-        // returning every hallazgo for the company. Filtering client-side keeps this method
-        // correct regardless of the server's filter fidelity (today or after it's fixed).
+        // Don't trust the server to have honored hallazgo_id. It does now -- #385 replaced
+        // the stub that ignored every filter, and climate-project's TrackingInternalEndpoints
+        // applies hallazgo_id server-side -- but this method's correctness must not depend on
+        // which version of climate-project is deployed opposite it. The predecessor route
+        // (the legacy Next.js one) read company_id and nothing else, and a client that
+        // trusted it would have attached the wrong categoria to a plan rather than none.
         return envelope.Data.Hallazgos.FirstOrDefault(h => h.HallazgoId == hallazgoId);
     }
 
