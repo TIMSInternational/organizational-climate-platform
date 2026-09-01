@@ -268,7 +268,10 @@ public class SubjectDataMapTests
         // 30 since #58: QuestionCategory, QuestionLibraryItem and QuestionBankItem each carry an
         // authorship FK into users. QuestionLibraryItem has two (CreatedBy and LastModifiedBy) but
         // counts once here -- this is a census of referring TYPES, not of columns.
-        Assert.Equal(30, nonOwnedReferrers.Count);
+        //
+        // 31 since #139: report_shares carries created_by and revoked_by, both SET NULL, and
+        // counts once for the same reason QuestionLibraryItem does.
+        Assert.Equal(31, nonOwnedReferrers.Count);
 
         var restricting = user.GetReferencingForeignKeys()
             .Where(fk => !fk.DeclaringEntityType.IsOwned() && fk.DeleteBehavior == DeleteBehavior.Restrict)

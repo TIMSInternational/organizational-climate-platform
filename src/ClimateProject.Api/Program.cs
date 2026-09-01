@@ -636,6 +636,7 @@ app.MapSurveyTemplateEndpoints();
 app.MapMicroclimateEndpoints();
 app.MapMicroclimateTemplateEndpoints();
 app.MapReportEndpoints();
+app.MapReportShareEndpoints();
 app.MapBenchmarkEndpoints();
 app.MapQuestionLibraryEndpoints();
 app.MapQuestionBankEndpoints();
