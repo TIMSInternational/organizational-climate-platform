@@ -35,11 +35,21 @@ public sealed record CicloDto(
 
 /// <summary>Mirrors /internal/hallazgos (organizational-climate-platform's
 /// TrackingInternalEndpoints).</summary>
+/// <param name="ResultadoPct">
+/// The nodo's score for this categoria, as a fraction of the survey instrument's scale.
+///
+/// **Nullable, and that is a disclosure control rather than a missing value.** A nodo
+/// whose survey segment fell below climate-project's anonymity floor still publishes its
+/// hallazgo -- so a small team can still be given a plan de accion -- but never its score.
+/// A dimension with no numeric scale reads null too, and the two are deliberately
+/// indistinguishable from here. Anything that renders this must render "sin dato", never
+/// a zero: a withheld score printed as 0% is a team reported as the worst in the company.
+/// </param>
 public sealed record HallazgoDto(
     string HallazgoId,
     string NodoId,
     string Categoria,
-    decimal ResultadoPct,
+    decimal? ResultadoPct,
     decimal? BenchmarkSectorPct,
     decimal? ResultadoAnioAnteriorPct,
     string? CicloId);
