@@ -305,12 +305,14 @@ function reportDocument(): ReportDocument {
         name: 'Compromiso 2026',
         category: 'engagement',
         type: 'industry',
-        companyId: 'c1',
+        isGlobal: false,
         priorPeriodStatus: 'linked',
         metrics: [
           { id: 'm1', metricName: 'engagement', value: 74, unit: 'percent', percentile: null, sampleSize: null },
         ],
         priorPeriod: {
+          // Written into the RAW document and dropped by the parser: the public
+          // projection withholds the linked benchmark's own row id.
           id: 'b0',
           name: 'Compromiso 2025',
           metrics: [
@@ -343,7 +345,9 @@ function reportDocument(): ReportDocument {
         category: 'engagement',
         type: 'industry',
         // A global row: every tenant compares against it, and none of them owns it.
-        companyId: null,
+        // The server says so with a flag; it used to say so by shipping this report's
+        // tenant GUID to an anonymous reader and letting the page check it for null.
+        isGlobal: true,
         priorPeriodStatus: 'unlinked',
         metrics: [
           { id: 'm2', metricName: 'referencia_global', value: 65, unit: 'percent', percentile: null, sampleSize: null },
@@ -355,7 +359,7 @@ function reportDocument(): ReportDocument {
         name: 'Rotación 2026',
         category: 'turnover',
         type: 'internal',
-        companyId: 'c1',
+        isGlobal: false,
         // An answer, not a silence: an administrator has said there is no prior period.
         priorPeriodStatus: 'none',
         metrics: [
@@ -368,7 +372,7 @@ function reportDocument(): ReportDocument {
         name: 'Ausentismo 2026',
         category: 'absence',
         type: 'internal',
-        companyId: 'c1',
+        isGlobal: false,
         // Linked, and the row it points at is outside what this report may carry.
         priorPeriodStatus: 'linked',
         metrics: [

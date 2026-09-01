@@ -48,7 +48,6 @@ const document = {
         { departmentId: 'd4', name: 'Dirección General', respondentCount: 0, participationRate: null, isSuppressed: true },
       ],
       suppressedDepartmentCount: 1,
-      suppressedRespondentCount: 4,
       unsegmentedRespondentCount: 20,
       // Demographic breakdowns beyond department: one dimension, one withheld group in
       // it, so the screenshot carries the ProtectedCell grammar in a table that also
@@ -86,7 +85,6 @@ const document = {
             },
           ],
           suppressedSegmentCount: 1,
-          suppressedRespondentCount: 3,
           unsegmentedRespondentCount: 20,
         },
       ],
@@ -169,7 +167,6 @@ const document = {
       demographics: [],
       questions: [],
       suppressedDepartmentCount: 0,
-      suppressedRespondentCount: 4,
       unsegmentedRespondentCount: 0,
       isSuppressed: true,
       suppressionReason: 'below_minimum_respondents',
@@ -186,14 +183,13 @@ const document = {
       name: 'Compromiso organizacional 2026',
       category: 'engagement',
       type: 'industry',
-      companyId: '11111111-1111-1111-1111-111111111111',
+      isGlobal: false,
       priorPeriodStatus: 'linked',
       metrics: [
         { id: 'me1', metricName: 'compromiso', value: 74.2, unit: 'percent', percentile: 68, sampleSize: 175 },
         { id: 'me2', metricName: 'tiempo de respuesta', value: 1.2, unit: 's', percentile: null, sampleSize: null },
       ],
       priorPeriod: {
-        id: '88888888-8888-8888-8888-888888888880',
         name: 'Compromiso organizacional 2025',
         metrics: [
           {
@@ -233,7 +229,7 @@ const document = {
       name: 'Referencia sectorial de compromiso',
       category: 'engagement',
       type: 'industry',
-      companyId: null,
+      isGlobal: true,
       priorPeriodStatus: 'unlinked',
       metrics: [
         { id: 'mg1', metricName: 'compromiso', value: 65.8, unit: 'percent', percentile: null, sampleSize: 4200 },
@@ -245,7 +241,7 @@ const document = {
       name: 'Ausentismo 2026',
       category: 'absence',
       type: 'internal',
-      companyId: '11111111-1111-1111-1111-111111111111',
+      isGlobal: false,
       priorPeriodStatus: 'none',
       metrics: [
         { id: 'ma1', metricName: 'ausentismo', value: 3.5, unit: 'percent', percentile: null, sampleSize: 175 },
@@ -263,7 +259,6 @@ const document = {
         'La puntuación de carga de trabajo bajó 0,4 puntos respecto del trimestre anterior, y el descenso se concentra en los turnos de fin de semana.',
       confidenceScore: 87,
       priority: 'high',
-      affectedSegments: ['Operaciones'],
       recommendedActions: [
         'Revisar la distribución de turnos de fin de semana',
         'Contrastar con las horas extra registradas en el trimestre',
@@ -279,7 +274,6 @@ const document = {
         'Tercer trimestre consecutivo por encima de 3,9. Las respuestas abiertas mencionan reuniones de equipo más frecuentes.',
       confidenceScore: 74,
       priority: 'medium',
-      affectedSegments: [],
       recommendedActions: ['Documentar la práctica de reuniones y extenderla a Promoción Comercial'],
       isAcknowledged: true,
     },

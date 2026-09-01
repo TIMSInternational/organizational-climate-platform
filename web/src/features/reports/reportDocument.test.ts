@@ -92,7 +92,7 @@ function benchmark(overrides: Record<string, unknown> = {}): Record<string, unkn
     name: '2026 Engagement',
     category: 'engagement',
     type: 'industry',
-    companyId: '11111111-1111-1111-1111-111111111111',
+    isGlobal: false,
     priorPeriodStatus: 'linked',
     metrics: [
       {
@@ -105,6 +105,8 @@ function benchmark(overrides: Record<string, unknown> = {}): Record<string, unkn
       },
     ],
     priorPeriod: {
+      // Still written into the RAW document, because a stored document really does carry
+      // it — the assertion below is that the parser does not copy it out.
       id: '99999999-0000-0000-0000-000000000000',
       name: '2025 Engagement',
       metrics: [
@@ -478,23 +480,58 @@ describe('parseReportDocument', () => {
   })
 
   /**
-   * A global benchmark — the rows every tenant compares against — carries a null
-   * `companyId`, and the three no-prior-period cases are told apart by
+   * A global benchmark — the rows every tenant compares against — arrives with
+   * `isGlobal: true`, and the three no-prior-period cases are told apart by
    * `priorPeriodStatus` alone. A parser that defaulted the status to a string of its own
    * would make a renderer state a reason the server never gave.
+   *
+   * `isGlobal` replaced a `companyId` that was the report's **tenant GUID** on an
+   * anonymous URL. The default is `false` rather than `true`, so a document carrying
+   * neither field claims nothing instead of labelling a company's own row as the sector's.
    */
-  it('keeps a global benchmark’s null company and its prior-period status', () => {
+  it('reads a global benchmark’s flag and its prior-period status', () => {
     const parsed = parseReportDocument(
       documentJson({
         benchmarks: [
-          benchmark({ companyId: null, priorPeriodStatus: 'none', priorPeriod: null }),
+          benchmark({ isGlobal: true, priorPeriodStatus: 'none', priorPeriod: null }),
         ],
       }),
     )
 
-    expect(parsed?.benchmarks[0].companyId).toBeNull()
+    expect(parsed?.benchmarks[0].isGlobal).toBe(true)
     expect(parsed?.benchmarks[0].priorPeriodStatus).toBe('none')
     expect(parsed?.benchmarks[0].priorPeriod).toBeNull()
+  })
+
+  /**
+   * The four things the public projection withholds, refused a second time here.
+   *
+   * Every one of them is written into the RAW document this fixture parses, which is the
+   * point: the server no longer sends them, and a parser that copied them anyway would
+   * put them back on the page the day a document from anywhere else arrived. The tenant
+   * GUID, the linked benchmark's row id, the unfloored segment names and the withheld
+   * sub-floor headcounts are all absent from the parsed shape, and TypeScript will not
+   * even let this file assert on them by name — so the assertions go through
+   * `JSON.stringify`, which sees the whole object.
+   */
+  it('does not copy the tenant id, the prior-period id, affected segments or a withheld headcount', () => {
+    const parsed = parseReportDocument(
+      documentJson({
+        benchmarks: [benchmark({ companyId: '11111111-1111-1111-1111-111111111111' })],
+      }),
+    )
+    const serialised = JSON.stringify(parsed)
+
+    expect(serialised).not.toContain('companyId')
+    expect(serialised).not.toContain('11111111-1111-1111-1111-111111111111')
+    expect(serialised).not.toContain('99999999-0000-0000-0000-000000000000')
+    expect(serialised).not.toContain('affectedSegments')
+    expect(serialised).not.toContain('suppressedRespondentCount')
+
+    // And the row really did come through, so this cannot pass by parsing nothing.
+    expect(parsed?.benchmarks[0].name).toBe('2026 Engagement')
+    expect(parsed?.benchmarks[0].isGlobal).toBe(false)
+    expect(parsed?.benchmarks[0].priorPeriod?.name).toBe('2025 Engagement')
   })
 
   /**

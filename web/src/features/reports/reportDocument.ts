@@ -100,17 +100,21 @@ export interface ReportSegmentParticipation {
  * Department is deliberately not one of these: it has a denominator and a participation
  * rate, and it is printed as `ReportSurveySection.departments`.
  *
- * `suppressedRespondentCount` is the withheld headcount. It is carried because the
- * document carries it, and it is **not rendered anywhere** — printing it, or printing
- * anything one subtraction recovers it from, publishes the exact sub-threshold count
- * the floor exists to hide. `SegmentBreakdownPanel` makes the same refusal in the
- * authenticated product for the same reason.
+ * `suppressedRespondentCount` — the withheld headcount — is **not here, and no longer on
+ * the wire either**. This parser used to carry it "because the document carries it" and
+ * refuse to render it; `PublicReportProjection` now withholds it from the public payload
+ * outright, so the refusal is a property of what arrives rather than of what this file
+ * chooses to copy. Printing it, or printing anything one subtraction recovers it from,
+ * publishes the exact sub-threshold count the floor exists to hide, and
+ * `SegmentBreakdownPanel` makes the same refusal in the authenticated product — where the
+ * number IS still served, to a reader with a session inside the tenant.
+ *
+ * `suppressedSegmentCount` stays: how many groups were withheld names nobody.
  */
 export interface ReportDemographicBreakdown {
   dimension: string
   segments: ReportSegmentParticipation[]
   suppressedSegmentCount: number
-  suppressedRespondentCount: number
   unsegmentedRespondentCount: number
 }
 
@@ -153,7 +157,11 @@ export interface ReportSurveySection {
   dimensions: ReportDimensionScore[]
   departments: ReportDepartmentParticipation[]
   suppressedDepartmentCount: number
-  suppressedRespondentCount: number
+  /**
+   * `suppressedRespondentCount` is deliberately absent, here as on the breakdown: the
+   * public projection withholds the withheld headcount. Only the count of withheld
+   * *departments* survives, and it names nobody.
+   */
   unsegmentedRespondentCount: number
   /** Every non-department breakdown the aggregation produced. Empty when `isSuppressed`. */
   demographics: ReportDemographicBreakdown[]
@@ -195,9 +203,16 @@ export interface ReportBenchmarkMetricChange {
   changeRatio: number | null
 }
 
-/** The prior period a benchmark links to — `BenchmarkPriorPeriodDto`. */
+/**
+ * The prior period a benchmark links to — `PublicBenchmarkPriorPeriod`.
+ *
+ * No `id`. The public projection withholds the linked benchmark's own row id, which this
+ * page never read: it prints the name and the metric changes. `BenchmarkDetail` withholds
+ * the same pointer from an *authenticated* caller who may not read the row, because
+ * returning an id while withholding the numbers still discloses that a benchmark with
+ * that id exists.
+ */
 export interface ReportBenchmarkPriorPeriod {
-  id: string
   name: string
   /** Every metric named by **either** period; see `BenchmarkPriorPeriod.BuildChanges`. */
   metrics: ReportBenchmarkMetricChange[]
@@ -205,9 +220,14 @@ export interface ReportBenchmarkPriorPeriod {
 
 /**
  * One benchmark of the report's company, read against its own prior period —
- * `ReportBenchmarkComparison` in ReportDtos.cs.
+ * `PublicBenchmarkComparison`.
  *
- * `companyId` is null for a global benchmark, the rows every tenant compares against.
+ * `isGlobal` is true for a benchmark every tenant compares against, false for one of this
+ * organisation's own measurements. It replaces the `companyId` this shape used to carry,
+ * which was the report's **tenant GUID** on the most exposed page in the product — and
+ * `companyId === null` was the only thing this page ever asked it. The name is the
+ * product's own: `SurveyTemplateListItem.isGlobal` is the same flag for the same reason,
+ * and the authenticated benchmark screens call the derivation `isGlobalBenchmark`.
  *
  * `priorPeriod` is null for three different reasons and `priorPeriodStatus` is the only
  * thing that tells them apart: `none` (an administrator has said no prior period
@@ -220,13 +240,23 @@ export interface ReportBenchmarkComparison {
   name: string
   category: string
   type: string
-  companyId: string | null
+  isGlobal: boolean
   priorPeriodStatus: string
   metrics: ReportBenchmarkMetric[]
   priorPeriod: ReportBenchmarkPriorPeriod | null
 }
 
-/** One AI insight as a report prints it — `ReportAIInsightItem` in ReportAIInsights.cs. */
+/**
+ * One AI insight as a *shared* report prints it — `PublicAiInsight`.
+ *
+ * No `affectedSegments`. It is a free list of segment names the insight generator wrote,
+ * and it passes through none of the aggregation that applies the anonymity floor — so a
+ * department too small to keep its row in the tables above can be named beside a finding
+ * about it. This page always refused to render it; the public projection now refuses to
+ * send it, which is the version of that refusal that holds when somebody reads the JSON
+ * instead of the page. The authenticated Insights page still shows it, and should: its
+ * reader is inside the tenant.
+ */
 export interface ReportAIInsight {
   id: string
   type: string
@@ -240,7 +270,6 @@ export interface ReportAIInsight {
    */
   confidenceScore: number
   priority: string
-  affectedSegments: string[]
   recommendedActions: string[]
   isAcknowledged: boolean
 }
@@ -479,7 +508,9 @@ function demographicOf(value: unknown): ReportDemographicBreakdown {
     dimension: str(raw.dimension),
     segments: array(raw.segments).map(segmentOf),
     suppressedSegmentCount: num(raw.suppressedSegmentCount),
-    suppressedRespondentCount: num(raw.suppressedRespondentCount),
+    // `suppressedRespondentCount` is not read. It is not sent either — the public
+    // projection withholds it — and not reading it is what keeps that true if a document
+    // written by something else ever arrives carrying one.
     unsegmentedRespondentCount: num(raw.unsegmentedRespondentCount),
   }
 }
@@ -515,7 +546,9 @@ function benchmarkChangeOf(value: unknown): ReportBenchmarkMetricChange {
 function priorPeriodOf(value: unknown): ReportBenchmarkPriorPeriod | null {
   if (!isRecord(value)) return null
   return {
-    id: str(value.id),
+    // No `id`. The server withholds the linked benchmark's row id, this page never
+    // printed it, and not copying it means a document that still carries one cannot put
+    // it in front of a reader.
     name: str(value.name),
     metrics: array(value.metrics).map(benchmarkChangeOf),
   }
@@ -528,7 +561,14 @@ function benchmarkOf(value: unknown): ReportBenchmarkComparison {
     name: str(raw.name),
     category: str(raw.category),
     type: str(raw.type),
-    companyId: nullableStr(raw.companyId),
+    // The server's own flag, read rather than derived. This used to be
+    // `companyId: nullableStr(raw.companyId)` and the renderer asked `companyId === null`
+    // — which meant the report's TENANT GUID travelled to every holder of the URL so the
+    // page could print one chip. `false` is the fallback for a document that carries
+    // neither field, because "this organisation's own measurement" is the quieter of the
+    // two wrong answers: the page has no chip for it, so it claims nothing, whereas
+    // defaulting to `true` would label a company's own row as the sector's.
+    isGlobal: bool(raw.isGlobal, false),
     priorPeriodStatus: str(raw.priorPeriodStatus),
     metrics: array(raw.metrics).map(benchmarkMetricOf),
     priorPeriod: priorPeriodOf(raw.priorPeriod),
@@ -553,7 +593,7 @@ function sectionOf(value: unknown): ReportSurveySection {
     dimensions: isSuppressed ? [] : array(raw.dimensions).map(dimensionOf),
     departments: array(raw.departments).map(departmentOf),
     suppressedDepartmentCount: num(raw.suppressedDepartmentCount),
-    suppressedRespondentCount: num(raw.suppressedRespondentCount),
+    // `suppressedRespondentCount` is not read, for the reason `demographicOf` gives.
     unsegmentedRespondentCount: num(raw.unsegmentedRespondentCount),
     demographics: isSuppressed ? [] : array(raw.demographics).map(demographicOf),
     isSuppressed,
@@ -572,7 +612,9 @@ function insightOf(value: unknown): ReportAIInsight {
     description: str(raw.description),
     confidenceScore: num(raw.confidenceScore),
     priority: str(raw.priority),
-    affectedSegments: stringArray(raw.affectedSegments),
+    // `affectedSegments` is not read. The server no longer sends it; not copying it is
+    // what makes "unfloored segment names cannot reach this page" a property of the code
+    // rather than of the payload that happened to arrive.
     recommendedActions: stringArray(raw.recommendedActions),
     isAcknowledged: bool(raw.isAcknowledged, false),
   }

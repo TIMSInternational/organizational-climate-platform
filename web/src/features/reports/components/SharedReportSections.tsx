@@ -490,6 +490,12 @@ function WordFrequencies({ question }: { question: SurveyQuestionResult }) {
  * reason that applies here twice over: this page is unauthenticated, and a number a
  * reader recovers by one subtraction is the sub-threshold count the floor exists to
  * hide. The count of withheld *groups* is reported, which names nobody.
+ *
+ * That refusal is now structural rather than editorial: the server withholds the number
+ * from the public payload and `reportDocument.ts` does not copy it, so there is nothing
+ * on this shape for a future edit to print. It is still served, unchanged, to an
+ * authenticated reader of `/admin/reports/{id}` — the boundary is the reader, not the
+ * number.
  */
 function DemographicBreakdown({
   breakdown,
@@ -659,10 +665,17 @@ function BenchmarkBlock({ benchmark }: { benchmark: ReportBenchmarkComparison })
       </h3>
       <p className="mb-0 max-w-prose text-sm text-fg-secondary">
         {t('sharedReport.benchmarkCategory', { category: benchmark.category })}
-        {/* A global benchmark — `companyId: null` — is a row every tenant compares
-            against rather than one of this organisation's own measurements, and a
-            reader comparing themselves to it should know which they are looking at. */}
-        {benchmark.companyId === null && <> · {t('sharedReport.benchmarkGlobal')}</>}
+        {/* A global benchmark is a row every tenant compares against rather than one of
+            this organisation's own measurements, and a reader comparing themselves to it
+            should know which they are looking at.
+
+            This used to ask `benchmark.companyId === null`, which meant the report's
+            TENANT GUID had to travel to every anonymous holder of the share URL so that
+            this one chip could be printed. The server now answers the question instead of
+            handing over the identifier: `isGlobal` is `CompanyId is null` computed in
+            `PublicReportProjection`, so the chip appears on exactly the rows it appeared
+            on before and the id appears nowhere. */}
+        {benchmark.isGlobal && <> · {t('sharedReport.benchmarkGlobal')}</>}
       </p>
       <p className="mb-0 max-w-prose text-sm text-fg-secondary">{priorStatement}</p>
 
@@ -795,10 +808,9 @@ function Reading({ value, unit }: { value: number | null; unit: string | null })
 /**
  * One AI insight, as a link holder reads it.
  *
- * ## `affectedSegments` is deliberately not rendered
+ * ## `affectedSegments` is not rendered, and is no longer sent
  *
- * It is the one omission on this page that is a judgement rather than a projection. It
- * is a free list of segment names written by the insight generator, and it passes
+ * It is a free list of segment names written by the insight generator, and it passes
  * through none of the aggregation that applies the anonymity floor — so a small
  * department can be named there while the table above withholds its row, or a segment
  * too small to appear in that table at all can be named beside a finding about it.
@@ -806,9 +818,16 @@ function Reading({ value, unit }: { value: number | null; unit: string | null })
  * to be on. The authenticated Insights page shows it (`insights.affectedSegments`) and
  * should: its reader is inside the tenant.
  *
+ * It used to be an omission this file made about a field the server still published, so
+ * the names were in the bytes of an anonymous response whether or not this component drew
+ * them — and "not rendered" is no protection at all from anyone who opens the JSON.
+ * `PublicReportProjection` now withholds it and `reportDocument.ts` does not copy it, so
+ * the judgement is made in three places and enforced in the first.
+ *
  * `SharedReportSections.test.tsx` pins the omission with a fixture whose segment names
  * appear nowhere else on the page, so a renderer that printed them — in any casing —
- * fails rather than merely differing from this paragraph.
+ * fails rather than merely differing from this paragraph. That fixture still puts them in
+ * the raw JSON, which now makes it a test of the parser's refusal as well.
  *
  * ## A card, not an `Alert`
  *
