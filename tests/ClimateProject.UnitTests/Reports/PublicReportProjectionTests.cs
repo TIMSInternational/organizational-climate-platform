@@ -69,6 +69,218 @@ public class PublicReportProjectionTests
     }
 
     /// <summary>
+    /// The same tripwire one level down, at the FIELD.
+    ///
+    /// <para>
+    /// If you are reading this because it just went red: you added a property to a type the
+    /// public share document reaches, and whether an anonymous holder of a share URL may read
+    /// it is now your decision to make. It is currently WITHHELD, which is the safe answer and
+    /// may well be the right one. To keep it withheld, name it in that type's
+    /// <see cref="PublicShapeRuling.Withheld"/> set and say why. To publish it, declare it on
+    /// the public record and carry it in <c>PublicReportProjection.ToPublic</c>.
+    /// </para>
+    /// <para>
+    /// <b>Why this test exists.</b> <see cref="Every_stored_section_has_been_ruled_on"/> holds
+    /// at the section level and held nowhere below it, because the four admitted sections were
+    /// typed as the INTERNAL records -- so every field on
+    /// <see cref="ReportBenchmarkComparison"/> and the sixteen other types they reach published
+    /// itself, then and in future, with nobody deciding and nothing going red. That was not
+    /// hypothetical: <c>ReportBenchmarkComparison.CompanyId</c> is the tenant GUID and it was
+    /// reaching an anonymous reader that way.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Every_admitted_field_has_been_ruled_on()
+    {
+        foreach (var ruling in PublicReportProjection.ShapeRulings)
+        {
+            var stored = PropertiesOf(ruling.Stored);
+            var published = PropertiesOf(ruling.Public);
+
+            var unruled = stored.Except(published, StringComparer.Ordinal)
+                .Except(ruling.Withheld, StringComparer.Ordinal)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToList();
+            Assert.True(
+                unruled.Count == 0,
+                $"{ruling.Stored.Name} field(s) nobody has ruled on: {string.Join(", ", unruled)}. "
+                + $"They are withheld from the public share link until either declared on {ruling.Public.Name} "
+                + "(which PUBLISHES them to every anonymous holder of a share URL) or named in that type's "
+                + "withhold set -- see PublicReportProjection.ShapeRulings.");
+
+            // A withheld name that no longer exists on the stored type is a ruling that has
+            // stopped protecting anything and would not trip on the next real addition.
+            var stale = ruling.Withheld.Except(stored, StringComparer.Ordinal)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToList();
+            Assert.True(
+                stale.Count == 0,
+                $"Withheld but no longer part of {ruling.Stored.Name}: {string.Join(", ", stale)}.");
+
+            // And a public field with no stored source: either the projection derives it and
+            // somebody said so, or nobody can say where the value on the wire comes from.
+            var unexplained = published.Except(stored, StringComparer.Ordinal)
+                .Except(ruling.Derived, StringComparer.Ordinal)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToList();
+            Assert.True(
+                unexplained.Count == 0,
+                $"{ruling.Public.Name} publishes field(s) with no source on {ruling.Stored.Name} and no "
+                + $"Derived ruling: {string.Join(", ", unexplained)}.");
+
+            var notDerived = ruling.Derived.Intersect(stored, StringComparer.Ordinal)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToList();
+            Assert.True(
+                notDerived.Count == 0,
+                $"Declared derived but {ruling.Stored.Name} now carries it: {string.Join(", ", notDerived)}. "
+                + "Carry it across or withhold it; do not compute a second version of a stored field.");
+        }
+    }
+
+    /// <summary>
+    /// The last hole in the field tripwire: a whole new nested record, added to the public
+    /// document with no ruling at all, would leave every one of ITS fields unchecked.
+    /// </summary>
+    /// <remarks>
+    /// Walks the public document's own type graph rather than a hand-kept list, because a
+    /// hand-kept list is the thing that goes stale. Every public record reachable from
+    /// <see cref="PublicReportDocument"/> must be the <see cref="PublicShapeRuling.Public"/>
+    /// half of exactly one ruling, and every ruling must be reachable -- a ruling for a record
+    /// nothing reaches is checking a type nobody publishes.
+    /// </remarks>
+    [Fact]
+    public void Every_public_type_reaches_a_ruling()
+    {
+        var reachable = PublicTypeGraph(typeof(PublicReportDocument)).ToList();
+        var ruled = PublicReportProjection.ShapeRulings.Select(r => r.Public).ToList();
+
+        var unruled = reachable.Except(ruled).Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal).ToList();
+        Assert.True(
+            unruled.Count == 0,
+            $"Public record(s) the share document reaches with no PublicShapeRuling: {string.Join(", ", unruled)}. "
+            + "Every field on them is unchecked until one is added.");
+
+        var unreachable = ruled.Except(reachable).Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal).ToList();
+        Assert.True(
+            unreachable.Count == 0,
+            $"Ruled on but not reachable from PublicReportDocument: {string.Join(", ", unreachable)}.");
+
+        Assert.Equal(ruled.Count, ruled.Distinct().Count());
+    }
+
+    /// <summary>
+    /// The leak this whole field-level pass was for: the <b>tenant GUID</b> reached an
+    /// anonymous reader inside every benchmark row, and now does not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>SharedReportResponse</c> already calls <c>companyId</c> one of "the two identifiers
+    /// that would let a holder join this document to another tenant surface" and keeps it off
+    /// the envelope. It was arriving one level down, inside the document, because the admitted
+    /// <c>Benchmarks</c> section was the internal type.
+    /// </para>
+    /// <para>
+    /// Both rows are asserted, because the replacement has to mean the same thing it replaced:
+    /// <c>isGlobal</c> is true on exactly the rows <c>companyId === null</c> was true on, which
+    /// is what keeps the page's "Global" chip on the same benchmarks.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void A_benchmark_says_whether_it_is_global_and_never_which_tenant_it_belongs_to()
+    {
+        var tenant = Guid.Parse("cccccccc-0000-0000-0000-00000000000c");
+        var priorPeriodId = Guid.Parse("dddddddd-0000-0000-0000-00000000000d");
+        var document = new ReportOutputDocument(
+            "a note",
+            [],
+            [],
+            [
+                new ReportBenchmarkComparison(
+                    BenchmarkId, "Sector engagement", "engagement", "industry", null, "no_prior_period",
+                    [new BenchmarkMetricDto(Guid.Empty, "engagement", 70, "score", null, 4000)],
+                    null),
+                new ReportBenchmarkComparison(
+                    BenchmarkId, "Our engagement", "engagement", "internal", tenant, "linked",
+                    [new BenchmarkMetricDto(Guid.Empty, "engagement", 72.5, "score", null, 400)],
+                    new BenchmarkPriorPeriodDto(
+                        priorPeriodId,
+                        "Our engagement 2024",
+                        [new BenchmarkMetricChangeDto("engagement", 72.5, "score", 70, "score", 2.5, 0.0357)])),
+            ]);
+
+        var published = PublicReportProjection.ToPublicJson(JsonSerializer.Serialize(document, JsonSerializerOptions.Web));
+
+        // The tenant GUID, in any casing, anywhere in the bytes: gone. So is the prior period's
+        // own row id, which the page never read -- BenchmarkDetail withholds that same pointer
+        // from an AUTHENTICATED caller who may not read the row.
+        Assert.DoesNotContain(tenant.ToString(), published!, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(priorPeriodId.ToString(), published!, StringComparison.OrdinalIgnoreCase);
+
+        using var parsed = JsonDocument.Parse(published!);
+        var benchmarks = parsed.RootElement.GetProperty("benchmarks").EnumerateArray().ToList();
+        var names = PropertyNames(parsed.RootElement).ToHashSet(StringComparer.Ordinal);
+        Assert.DoesNotContain("companyId", names);
+
+        var global = benchmarks.Single(b => b.GetProperty("name").GetString() == "Sector engagement");
+        Assert.True(global.GetProperty("isGlobal").GetBoolean());
+
+        var ours = benchmarks.Single(b => b.GetProperty("name").GetString() == "Our engagement");
+        Assert.False(ours.GetProperty("isGlobal").GetBoolean());
+
+        // The row is otherwise intact -- a projection that dropped the comparison would satisfy
+        // every assertion above and ship a benchmarks section with nothing to compare.
+        var prior = ours.GetProperty("priorPeriod");
+        Assert.Equal("Our engagement 2024", prior.GetProperty("name").GetString());
+        Assert.Equal(2.5, prior.GetProperty("metrics").EnumerateArray().Single().GetProperty("delta").GetDouble());
+    }
+
+    /// <summary>
+    /// The three other field-level withholdings, asserted on the bytes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>affectedSegments</c> is a free list of segment names the insight generator wrote,
+    /// which passes through none of the aggregation that applies the anonymity floor -- so a
+    /// department too small to keep its row in the tables above can be named beside a finding
+    /// about it. <c>SharedReportSections.tsx</c> refuses to render it and pins the refusal; the
+    /// server was publishing it in the bytes regardless, where not rendering is no protection.
+    /// </para>
+    /// <para>
+    /// The two <c>suppressedRespondentCount</c> fields are the withheld HEADCOUNT behind the
+    /// suppressed departments and groups -- the exact number the floor exists to hide, which
+    /// <c>SegmentBreakdownPanel</c> will not print even to an administrator inside the tenant.
+    /// The counts of withheld GROUPS stay, because they name nobody, and they are asserted here
+    /// so this test cannot pass by emptying the section.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void Unfloored_segment_names_and_withheld_headcounts_do_not_reach_an_anonymous_reader()
+    {
+        var published = PublicReportProjection.ToPublicJson(Serialize(DocumentWith(ScaleQuestion())))!;
+
+        using var parsed = JsonDocument.Parse(published);
+        var names = PropertyNames(parsed.RootElement).ToHashSet(StringComparer.Ordinal);
+        Assert.DoesNotContain("affectedSegments", names);
+        Assert.DoesNotContain("suppressedRespondentCount", names);
+
+        // The fixture's affected segment is a department name, and it is the ONLY place that
+        // string appears in the document -- the department rows below carry their own names, so
+        // a hit here is the unfloored list and nothing else.
+        Assert.DoesNotContain("Sales", published, StringComparison.Ordinal);
+
+        // What stays: the counts of withheld groups, which name nobody, and the recommended
+        // actions, which are the platform's own prose.
+        var section = parsed.RootElement.GetProperty("surveys").EnumerateArray().Single();
+        Assert.Equal(1, section.GetProperty("suppressedDepartmentCount").GetInt32());
+        Assert.Equal(2, section.GetProperty("demographics").EnumerateArray().Single().GetProperty("suppressedSegmentCount").GetInt32());
+        Assert.Equal(
+            "Talk to them",
+            parsed.RootElement.GetProperty("aiInsights").EnumerateArray().Single()
+                .GetProperty("recommendedActions").EnumerateArray().Single().GetString());
+    }
+
+    /// <summary>
     /// The structural half: a key sitting in <c>report_output</c> that the allow-list does not
     /// name never reaches the public payload -- at the top level, and nested inside a section
     /// that IS admitted.
@@ -262,7 +474,11 @@ public class PublicReportProjectionTests
                 MinimumGroupSize: SurveyResultsPrivacy.MinimumSegmentRespondents),
         ],
         [
-            new ReportAIInsightItem(InsightId, "risk", "retention", "Rotation is up", "Two teams", 80, "high", ["Engineering"], ["Talk to them"], false),
+            // The affected segment is deliberately a name that appears NOWHERE else in this
+            // fixture, so `DoesNotContain("Sales")` can only be failed by the unfloored
+            // `affectedSegments` list itself and not by a department row that legitimately
+            // carries its own name.
+            new ReportAIInsightItem(InsightId, "risk", "retention", "Rotation is up", "Two teams", 80, "high", ["Sales"], ["Talk to them"], false),
         ],
         [
             new ReportBenchmarkComparison(
@@ -279,6 +495,59 @@ public class PublicReportProjectionTests
     private static SurveyQuestionResult OpenQuestion(IReadOnlyList<SurveyWordFrequency> words, int suppressedWordCount) => new(
         OpenQuestionId, 1, QuestionTypes.OpenEnded, "What would you change?", null, 8,
         [], null, null, null, null, null, null, words, suppressedWordCount);
+
+    /// <summary>Public instance property names of a record, minus the compiler's own.</summary>
+    private static IReadOnlyCollection<string> PropertiesOf(Type type) => type
+        .GetProperties()
+        .Select(p => p.Name)
+        .Where(name => name != "EqualityContract")
+        .ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Every public record the share document reaches, found by walking property types rather
+    /// than by keeping a list -- a list is what goes stale.
+    /// </summary>
+    private static IEnumerable<Type> PublicTypeGraph(Type root)
+    {
+        var seen = new HashSet<Type>();
+        var pending = new Queue<Type>();
+        pending.Enqueue(root);
+
+        while (pending.Count > 0)
+        {
+            var type = pending.Dequeue();
+            if (!seen.Add(type)) continue;
+
+            foreach (var property in type.GetProperties())
+            {
+                foreach (var candidate in ElementTypes(property.PropertyType))
+                {
+                    if (candidate.Namespace == typeof(PublicReportDocument).Namespace
+                        && candidate.Name.StartsWith("Public", StringComparison.Ordinal))
+                    {
+                        pending.Enqueue(candidate);
+                    }
+                }
+            }
+        }
+
+        return seen;
+    }
+
+    /// <summary>A property's own type and, for a list or a nullable, the types inside it.</summary>
+    private static IEnumerable<Type> ElementTypes(Type type)
+    {
+        var inner = Nullable.GetUnderlyingType(type) ?? type;
+        if (inner.IsGenericType)
+        {
+            foreach (var argument in inner.GetGenericArguments())
+            {
+                foreach (var nested in ElementTypes(argument)) yield return nested;
+            }
+        }
+
+        yield return inner;
+    }
 
     private static IEnumerable<string> PropertyNames(JsonElement element)
     {

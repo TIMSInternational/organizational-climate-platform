@@ -446,6 +446,17 @@ public class ReportShareRefutationTests : IAsyncLifetime
         var payId = tiny.Questions.Single().Id;
         for (var i = 0; i < 2; i++) await SeedResponseAsync(tiny.Id, bigDept, payId, "2", null, null);
 
+        // TWO benchmarks, and the company-scoped one is the whole point of it. Until it
+        // existed the `DoesNotContain(_companyId)` assertion below was LATENT: the fixture
+        // seeded no benchmark, so the benchmarks section came back empty and the one place in
+        // this document that carried the tenant GUID was never built. The projection published
+        // `ReportBenchmarkComparison` -- the internal record, `CompanyId` and all -- so this
+        // test would have gone red the first day a company benchmark existed and green every
+        // day before it, which is a passing assertion that proves nothing. Both rows are
+        // seeded so `isGlobal` is exercised in both directions too.
+        var ourBenchmark = await SeedBenchmarkAsync("Our Engagement", _companyId, 72.5, admin.UserId);
+        var globalBenchmark = await SeedBenchmarkAsync("Sector Engagement", null, 68d, admin.UserId);
+
         var reportId = await CreateReportAsync(admin.Client, _companyId, "Refutation Report");
         var share = await MintAsync(admin.Client, reportId);
 
@@ -457,7 +468,8 @@ public class ReportShareRefutationTests : IAsyncLifetime
         Assert.DoesNotContain(sentinel, raw, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("fine as it is", raw, StringComparison.OrdinalIgnoreCase);
 
-        // The minting administrator, the token, its hash, the tenant: none of them.
+        // The minting administrator, the token, its hash, the tenant: none of them. The last
+        // of those is now a real assertion rather than a latent one -- see the seeding above.
         Assert.DoesNotContain(admin.Email, raw, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(admin.UserId.ToString(), raw, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(share.Token, raw, StringComparison.Ordinal);
@@ -544,7 +556,103 @@ public class ReportShareRefutationTests : IAsyncLifetime
         Assert.Empty(below.GetProperty("dimensions").EnumerateArray());
         Assert.Empty(below.GetProperty("departments").EnumerateArray());
         Assert.Equal(2, below.GetProperty("participation").GetProperty("completedCount").GetInt32());
+
+        // ---- The benchmarks section, which is what makes the tenant assertion above real ----
+        //
+        // The rows really did reach the document, so a projection that dropped the section
+        // would fail here rather than passing the DoesNotContain by publishing nothing.
+        // Found by id, not by count: `BenchmarkEndpoints.ReadableBy` is "own OR global", so
+        // any GLOBAL row another test in this suite seeds is legitimately readable by this
+        // company too and lands in this report. An exact count here passes alone and fails in
+        // the full run, which is a test measuring the suite rather than the product.
+        var benchmarks = document.RootElement.GetProperty("benchmarks").EnumerateArray().ToList();
+        Assert.False(names.Contains("companyId"), "the public document carries a 'companyId' property");
+
+        // `isGlobal` says the one thing the page derived from the tenant GUID, in both
+        // directions, and says it without carrying an id anybody can join on.
+        var ours = benchmarks.Single(b => b.GetProperty("benchmarkId").GetGuid() == ourBenchmark);
+        Assert.False(ours.GetProperty("isGlobal").GetBoolean());
+        Assert.Equal("Our Engagement", ours.GetProperty("name").GetString());
+        Assert.Equal(72.5, ours.GetProperty("metrics").EnumerateArray().Single().GetProperty("value").GetDouble());
+
+        var global = benchmarks.Single(b => b.GetProperty("benchmarkId").GetGuid() == globalBenchmark);
+        Assert.True(global.GetProperty("isGlobal").GetBoolean());
+
+        // ---- And the authenticated reader still gets the stored document verbatim ----
+        //
+        // The public projection is the only thing that changed. GET /admin/reports/{id} serves
+        // `report_output` as generated -- tenant GUID, affected segments, withheld headcounts
+        // and all -- to a reader with a session inside the tenant, which is the boundary this
+        // whole change is drawn against. A change that tightened BOTH surfaces would pass every
+        // assertion above and silently take data off the results page.
+        var detail = await admin.Client.GetFromJsonAsync<ReportDetail>($"/admin/reports/{reportId}");
+        Assert.NotNull(detail!.ReportOutput);
+        using var stored = JsonDocument.Parse(detail.ReportOutput!);
+        var storedNames = PropertyNames(stored.RootElement).ToHashSet(StringComparer.Ordinal);
+
+        var storedBenchmarks = stored.RootElement.GetProperty("benchmarks").EnumerateArray().ToList();
+        Assert.Equal(
+            _companyId,
+            storedBenchmarks.Single(b => b.GetProperty("benchmarkId").GetGuid() == ourBenchmark)
+                .GetProperty("companyId").GetGuid());
+        Assert.Equal(
+            JsonValueKind.Null,
+            storedBenchmarks.Single(b => b.GetProperty("benchmarkId").GetGuid() == globalBenchmark)
+                .GetProperty("companyId").ValueKind);
+
+        // The withheld headcount is still there for a reader inside the tenant, and the
+        // derived flag the public projection adds is NOT -- the stored document is the stored
+        // document. (`affectedSegments` is not asserted here because this fixture generates no
+        // AI insights at all; the unit suite pins that withholding on a document that has one.)
+        Assert.Contains("suppressedRespondentCount", storedNames);
+        Assert.DoesNotContain("isGlobal", storedNames);
+        // And the word cloud the public projection empties: still there, lower-cased by the
+        // aggregation's tokeniser, which is why this is the case-insensitive comparison the
+        // anonymous assertion above is.
+        Assert.Contains(sentinel, detail.ReportOutput!, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// A benchmark of <paramref name="companyId"/> -- or a global one when it is null -- with a
+    /// single reading, written straight to the database.
+    /// </summary>
+    /// <remarks>
+    /// Direct rather than through <c>POST /admin/benchmarks</c> because the fixture needs a
+    /// GLOBAL row too, and only a SuperAdmin may write one; a second actor with no company
+    /// would be three more requests to set up a row this test only reads.
+    /// </remarks>
+    private Task<Guid> SeedBenchmarkAsync(string name, Guid? companyId, double value, Guid createdBy)
+        => WithDbAsync(async db =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var benchmark = new Benchmark
+            {
+                Id = Guid.NewGuid(),
+                Name = name,
+                Description = "Seeded by the refutation fixture",
+                Type = companyId is null ? BenchmarkTypes.Industry : BenchmarkTypes.Internal,
+                Category = "engagement",
+                Source = "fixture",
+                // A real user: `FK_benchmarks_users_created_by` is enforced, and a default
+                // Guid.Empty fails the insert rather than the assertion.
+                CreatedBy = createdBy,
+                CompanyId = companyId,
+                IsActive = true,
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            db.Benchmarks.Add(benchmark);
+            db.BenchmarkMetrics.Add(new BenchmarkMetric
+            {
+                Id = Guid.NewGuid(),
+                BenchmarkId = benchmark.Id,
+                MetricName = "engagement",
+                Value = value,
+                Unit = "score",
+            });
+            await db.SaveChangesAsync();
+            return benchmark.Id;
+        });
 
     /// <summary>
     /// The property this whole surface now rests on: <b>the public payload is an allow-list,
