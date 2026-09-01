@@ -378,8 +378,28 @@ public class ReportShareRefutationTests : IAsyncLifetime
     /// or the administrator who minted the link, this test's sentinels would find them.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Two surveys, so both floors are exercised: one above the survey floor with a department
     /// under the segment floor, and one below the survey floor altogether.
+    /// </para>
+    /// <para>
+    /// <b>This test has found its bug once already and the fixture is built to keep finding
+    /// it.</b> The sentinel is written by all three members of the sub-floor department and by
+    /// nobody else, which is the case neither floor catches on its own: the segment floor of 5
+    /// suppresses that department everywhere else in the same document but does not govern
+    /// words, and the word floor of 2 counts distinct responses without knowing which segment
+    /// they came from -- so three people in a suppressed team clear it. The word separators do
+    /// not include <c>-</c>, so the sentinel survives tokenisation as one word and lands in the
+    /// cloud intact. When the resolve handler returned <c>report_output</c> verbatim it
+    /// published exactly that.
+    /// </para>
+    /// <para>
+    /// The answer is that <c>PublicReportProjection</c> empties every word list on the public
+    /// document, so the assertion below is not "the sentinel is absent" -- which one lucky
+    /// tokenisation could satisfy -- but "no <c>words</c> array anywhere on this document has
+    /// anything in it". A future change that re-admits word clouds to the anonymous route fails
+    /// here whatever the words happen to be.
+    /// </para>
     /// </remarks>
     [Fact]
     public async Task The_public_document_carries_no_verbatim_text_no_sub_floor_score_and_no_minting_identity()
@@ -468,17 +488,54 @@ public class ReportShareRefutationTests : IAsyncLifetime
         Assert.False(largeTeam.GetProperty("isSuppressed").GetBoolean());
         Assert.Equal(5, largeTeam.GetProperty("respondentCount").GetInt32());
 
-        // Nothing per question, per segment, or per word reaches the document at all: a
-        // department's own likert average is exactly what the floor exists to withhold, and
-        // the projection is supposed to have dropped that level entirely.
+        // Respondent-WRITTEN content: never, in any shape. The word list is the only place in
+        // this document a respondent's own characters could appear, so the assertion is on the
+        // shape and not on the sentinel -- every `words` array on the public payload, at any
+        // depth, is empty. Re-admit word clouds to the anonymous route and this fails loudly,
+        // whatever the words are and whether or not they happen to contain a sentinel.
+        var wordArrays = PropertyValues(document.RootElement, "words").ToList();
+        Assert.NotEmpty(wordArrays); // the fixture really did produce open-text questions
+        foreach (var words in wordArrays)
+        {
+            Assert.Equal(JsonValueKind.Array, words.ValueKind);
+            Assert.Empty(words.EnumerateArray());
+        }
+
+        // And the reader is told they were withheld rather than left to read an empty list as
+        // "nobody wrote anything" -- the platform's own rule, from SurveyResultsPrivacy: a
+        // withheld count is always reported. The open question was answered by all eight.
+        var openQuestion = section.GetProperty("questions").EnumerateArray()
+            .Single(q => q.GetProperty("type").GetString() == QuestionTypes.OpenEnded);
+        Assert.Equal(8, openQuestion.GetProperty("answeredCount").GetInt32());
+        Assert.True(
+            openQuestion.GetProperty("suppressedWordCount").GetInt32() > 0,
+            "the public document says nothing was withheld from a question eight people wrote answers to");
+
+        // The document still carries the aggregates it is published to carry -- a projection
+        // that emptied everything would pass every assertion above and ship a blank page.
+        Assert.NotEmpty(section.GetProperty("questions").EnumerateArray());
+        var likert = section.GetProperty("questions").EnumerateArray()
+            .Single(q => q.GetProperty("type").GetString() == QuestionTypes.Likert);
+        Assert.NotEmpty(likert.GetProperty("distribution").EnumerateArray());
+
+        // This list used to also forbid `questions`, `distribution`, `average`, `median` and
+        // `text`, because when it was written the document had no per-question section at all
+        // and "the projection dropped that level entirely" was the guarantee. #413 built the
+        // level, and #414 built the public page that renders it, so forbidding those names now
+        // would be a test defending a feature's absence. They are deliberately gone from this
+        // list and the guarantee moved: per-question AGGREGATES are published (asserted a few
+        // lines up, so their absence is a failure too), and the respondent-written half of the
+        // same section is not (asserted above). What stays forbidden is the raw answer
+        // storage and the identifiers, which no report document has ever been allowed to carry.
         var names = PropertyNames(document.RootElement).ToHashSet(StringComparer.Ordinal);
-        foreach (var forbidden in new[] { "questions", "words", "distribution", "average", "median", "responseText", "responseValue", "text" })
+        foreach (var forbidden in new[] { "responseText", "responseValue", "email", "userId", "respondentId" })
         {
             Assert.False(names.Contains(forbidden), $"the public document carries a '{forbidden}' property");
         }
 
         // Only the department names and the "1"/"5" that appear as counts may show up; the
-        // tiny team's average of 1.0 must not be anywhere as a score.
+        // tiny team's average of 1.0 must not be anywhere as a score, under any key that
+        // carries one.
         Assert.DoesNotContain("\"averageScore\":1", raw.Replace("\\\"", "\""), StringComparison.Ordinal);
 
         // The survey below the survey floor: still listed, participation counts only.
@@ -487,6 +544,130 @@ public class ReportShareRefutationTests : IAsyncLifetime
         Assert.Empty(below.GetProperty("dimensions").EnumerateArray());
         Assert.Empty(below.GetProperty("departments").EnumerateArray());
         Assert.Equal(2, below.GetProperty("participation").GetProperty("completedCount").GetInt32());
+    }
+
+    /// <summary>
+    /// The property this whole surface now rests on: <b>the public payload is an allow-list,
+    /// so a key in the stored document that nobody named cannot reach an anonymous reader.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The tests above assert the fields we know about. This one asserts the shape of the
+    /// guarantee, which is the part that survives the next person: the stored document is
+    /// rewritten to carry three sections nobody allow-listed -- one of them a respondent's
+    /// sentence, one of them a user id -- and the endpoint publishes none of them, while the
+    /// sections that ARE on the list come through intact.
+    /// </para>
+    /// <para>
+    /// Written against the database rather than the generator on purpose. The failure being
+    /// refuted is not "the generator emits something new", it is "the public payload is
+    /// whatever is in that column", which was literally true until
+    /// <c>PublicReportProjection</c> existed. Writing the column directly is the shortest
+    /// statement of that, and it is also how the next section will arrive: as a change to what
+    /// gets stored, made by somebody who is not thinking about this endpoint.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_stored_section_nobody_allow_listed_does_not_reach_the_public_payload()
+    {
+        const string sentinel = "UNRULED-SECTION-SENTINEL-do-not-publish";
+        var admin = await ActorAsync();
+        var reportId = await CreateReportAsync(admin.Client, _companyId, "Fail Closed");
+        var share = await MintAsync(admin.Client, reportId);
+
+        // A document from some future generator: the four sections that have been ruled on,
+        // plus three that have not -- at the top level and nested inside a section that is
+        // itself admitted.
+        await WithDbAsync(async db =>
+        {
+            var report = await db.Reports.FirstAsync(r => r.Id == reportId);
+            report.ReportOutput = $$"""
+                {
+                  "generationNote": "still a note",
+                  "surveys": [
+                    {
+                      "surveyId": "11111111-1111-1111-1111-111111111111",
+                      "title": "Kept Survey",
+                      "status": "closed",
+                      "resolvedLocale": "en",
+                      "questions": [],
+                      "dimensions": [],
+                      "departments": [],
+                      "demographics": [],
+                      "isSuppressed": false,
+                      "minimumGroupSize": 5,
+                      "verbatimResponses": ["{{sentinel}}"]
+                    }
+                  ],
+                  "aiInsights": [],
+                  "benchmarks": [],
+                  "openTextAppendix": ["{{sentinel}}"],
+                  "generatedBy": "{{admin.UserId}}"
+                }
+                """;
+            await db.SaveChangesAsync();
+        });
+
+        var response = await AnonymousClient().GetAsync(share.Path);
+
+        // The status code is not part of this: a document the projection narrows is still a
+        // document, and this route answers 200 or the one 404 and nothing else, ever.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var raw = await response.Content.ReadAsStringAsync();
+
+        using var envelope = JsonDocument.Parse(raw);
+        using var document = JsonDocument.Parse(envelope.RootElement.GetProperty("reportOutput").GetString()!);
+
+        // The allow-listed sections survived, so this is not passing by publishing nothing.
+        Assert.Equal("still a note", document.RootElement.GetProperty("generationNote").GetString());
+        Assert.Equal(
+            "Kept Survey",
+            document.RootElement.GetProperty("surveys").EnumerateArray().Single().GetProperty("title").GetString());
+
+        // The three nobody named did not.
+        var names = PropertyNames(document.RootElement).ToHashSet(StringComparer.Ordinal);
+        Assert.DoesNotContain("openTextAppendix", names);
+        Assert.DoesNotContain("generatedBy", names);
+        Assert.DoesNotContain("verbatimResponses", names);
+        Assert.DoesNotContain(sentinel, raw, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(admin.UserId.ToString(), raw, StringComparison.OrdinalIgnoreCase);
+
+        // The authenticated owner of the report still gets the column as stored -- the
+        // narrowing is a property of the anonymous route, not of the report.
+        var detail = await admin.Client.GetFromJsonAsync<ReportDetail>($"/admin/reports/{reportId}");
+        Assert.Contains(sentinel, detail!.ReportOutput!, StringComparison.Ordinal);
+        Assert.Contains("openTextAppendix", detail.ReportOutput!, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The public document is a tree of arrays of objects, so "no word list anywhere has
+    /// anything in it" cannot be asked of the top level. Every value stored under
+    /// <paramref name="name"/>, at any depth.
+    /// </summary>
+    private static IEnumerable<JsonElement> PropertyValues(JsonElement element, string name)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    if (string.Equals(property.Name, name, StringComparison.Ordinal))
+                    {
+                        yield return property.Value;
+                    }
+
+                    foreach (var nested in PropertyValues(property.Value, name)) yield return nested;
+                }
+
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                {
+                    foreach (var nested in PropertyValues(item, name)) yield return nested;
+                }
+
+                break;
+        }
     }
 
     private static IEnumerable<string> PropertyNames(JsonElement element)
@@ -681,6 +862,26 @@ public class ReportShareRefutationTests : IAsyncLifetime
     /// reads <c>generationNote</c>, <c>surveys</c> and <c>aiInsights</c> from it. Asserted on
     /// the raw bytes: a deserialised DTO would accept a PascalCase wire without complaint.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This list is the public allow-list, restated from the client's side, and every
+    /// entry on it is a decision.</b> It is not a description of what the generator happens to
+    /// write: <c>PublicReportProjection</c> decides what an anonymous reader gets, and this
+    /// test is where that decision is visible to somebody reading the tests rather than the
+    /// projection. A new section reaching the public document makes this test red, which is
+    /// the intended cost of publishing one.
+    /// </para>
+    /// <para>
+    /// <c>benchmarks</c> is here <b>deliberately</b>, and was argued rather than inherited.
+    /// #413 added it to the stored document, at which point the old verbatim handler published
+    /// it with nobody deciding and this test caught that. The ruling: a benchmark comparison is
+    /// anonymised cohort data -- the company's own readings against its own prior period, plus
+    /// the global rows every tenant compares against -- carrying no respondent, no verbatim
+    /// text and no segment below a floor, and the public page
+    /// (<c>SharedReportSections.tsx</c>) exists to render exactly that. So it is admitted, on
+    /// purpose, and this line is the record of it.
+    /// </para>
+    /// </remarks>
     [Fact]
     public async Task The_wire_shape_is_exactly_what_the_shipped_client_parses()
     {
@@ -720,9 +921,10 @@ public class ReportShareRefutationTests : IAsyncLifetime
         Assert.Equal(JsonValueKind.String, output.ValueKind);
         using var document = JsonDocument.Parse(output.GetString()!);
         Assert.Equal(
-            new[] { "aiInsights", "generationNote", "surveys" },
+            new[] { "aiInsights", "benchmarks", "generationNote", "surveys" },
             document.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(JsonValueKind.Array, document.RootElement.GetProperty("surveys").ValueKind);
         Assert.Equal(JsonValueKind.Array, document.RootElement.GetProperty("aiInsights").ValueKind);
+        Assert.Equal(JsonValueKind.Array, document.RootElement.GetProperty("benchmarks").ValueKind);
     }
 }

@@ -58,10 +58,18 @@ public record ReportShareSummary(
 /// <c>web/src/features/reports/api/sharedReports.ts</c> already parses.
 /// </remarks>
 /// <param name="ReportOutput">
-/// <c>reports.report_output</c> verbatim. The anonymity floor and the suppression flags were
-/// decided by <c>ReportGeneration</c> when the document was built and are carried through
-/// untouched -- nothing is recomputed here, so a public link cannot disagree with the
-/// authenticated view of the same report.
+/// <c>reports.report_output</c> projected through <see cref="PublicReportProjection"/> -- an
+/// allow-list of the sections an anonymous reader may have, <b>not</b> the stored document.
+/// Read <see cref="PublicReportDocument"/> before adding a section to
+/// <see cref="ReportOutputDocument"/>: this is the one payload in the product where a new
+/// section would otherwise become world-readable by default.
+///
+/// Within the admitted sections nothing is recomputed: the anonymity floors and suppression
+/// flags were decided by <c>ReportGeneration</c> when the document was built and are carried
+/// through untouched, so a public link cannot disagree with the authenticated view of the
+/// same report. The one subtraction is the open-text word frequencies, which are emptied and
+/// reported as withheld -- see <c>PublicReportProjection.WithoutWords</c> for why neither
+/// existing floor covers them.
 /// </param>
 public record SharedReportResponse(
     string Title,

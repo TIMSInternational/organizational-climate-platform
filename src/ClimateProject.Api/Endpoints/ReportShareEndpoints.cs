@@ -330,12 +330,18 @@ public static class ReportShareEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         ApplyPublicHeaders(http);
+
+        // NOT `match.Report.ReportOutput`. The stored document goes through the allow-list in
+        // PublicReportProjection, so what this route publishes is decided there, once, by name
+        // -- and a section added to ReportOutputDocument later is withheld until someone rules
+        // on it. Returning the stored document verbatim is what made #413's word clouds,
+        // demographic breakdowns and benchmarks anonymously readable with nobody deciding.
         return Results.Ok(new SharedReportResponse(
             match.Report.Title,
             match.Report.Description,
             match.Report.Type,
             match.Report.GenerationCompletedAt,
-            match.Report.ReportOutput));
+            PublicReportProjection.ToPublicJson(match.Report.ReportOutput)));
     }
 
     /// <summary>
