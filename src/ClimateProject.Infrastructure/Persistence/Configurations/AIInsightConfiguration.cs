@@ -46,9 +46,12 @@ public class AIInsightConfiguration : IEntityTypeConfiguration<AIInsight>
         // sign-off (AcknowledgedBy/AcknowledgedAt, kept idempotent on purpose at
         // AIInsightEndpoints.cs:195-210) and deleting the survey it came from must not erase that.
         // Restrict was rejected for the same reason as action_plans: it would break a working
-        // DELETE /surveys/{id}. Measured before choosing: `grep -rn "SurveyId ==" src/` returns
-        // three hits, all in DemographicSnapshotEndpoints -- no read path anywhere treats a NULL
-        // survey_id on an insight as meaning anything, so nulling it reclassifies nothing.
+        // DELETE /surveys/{id}. The measurement behind "nulling it reclassifies nothing" was
+        // stated wrongly first time round -- `grep -rn "SurveyId ==" src/` returns 59 hits across
+        // 14 files, not three. The conclusion survives on a narrower, checkable measurement: in
+        // AIInsightEndpoints, SurveyId appears ONLY as insert-time validation (:107-126), the
+        // insert assignment (:147) and the output projection (:242). No read path filters
+        // ai_insights by survey_id at all, so SET NULL drops a pointer and reclassifies nothing.
         builder.HasOne<Survey>().WithMany().HasForeignKey(a => a.SurveyId).OnDelete(DeleteBehavior.SetNull);
     }
 }

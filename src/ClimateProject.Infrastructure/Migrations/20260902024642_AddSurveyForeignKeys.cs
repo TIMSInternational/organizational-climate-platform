@@ -126,9 +126,12 @@ namespace ClimateProject.Infrastructure.Migrations
             // goes out of its way to keep the FIRST acknowledgement rather than the last, because
             // that row is who accepted the finding. Deleting the survey the finding came from
             // must not erase who accepted it. Restrict is out for the same reason as above.
-            // Nulling the column reclassifies nothing: `grep -rn "SurveyId ==" src/` returns three
-            // hits, all in DemographicSnapshotEndpoints, so no read path anywhere gives a NULL
-            // survey_id on an insight a second meaning.
+            // Nulling the column reclassifies nothing -- but not for the reason first written here.
+            // `grep -rn "SurveyId ==" src/` returns 59 hits across 14 files, not three. What actually
+            // holds is narrower and checkable: in AIInsightEndpoints and AnalyticsInsightEndpoints,
+            // SurveyId appears only as insert-time validation, the insert assignment and the output
+            // projection. Neither table is ever FILTERED by survey_id, so a NULL there is never read
+            // as meaning something.
             migrationBuilder.AddForeignKey(
                 name: "FK_ai_insights_surveys_survey_id",
                 table: "ai_insights",

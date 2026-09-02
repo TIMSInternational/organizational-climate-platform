@@ -37,9 +37,15 @@ So the choice is per column, and each one is argued at its own statement in
 
 Two supporting measurements, because the arguments rest on them:
 
-- `grep -rn "SurveyId ==" src/` returns **3 hits, all in `DemographicSnapshotEndpoints.cs`**
-  (lines 73, 133, 385). No read path anywhere gives a `NULL` `survey_id` on an insight a second
-  meaning, so `SET NULL` drops a pointer and reclassifies nothing.
+- **Corrected 2026-09-02.** This first read `grep -rn "SurveyId ==" src/` returns *3 hits, all in
+  `DemographicSnapshotEndpoints.cs`*. That is false: it returns **59 hits across 14 files**. The
+  conclusion it was offered for still holds, on a measurement that can actually be checked — in
+  `AIInsightEndpoints` and `AnalyticsInsightEndpoints`, `SurveyId` appears **only** as insert-time
+  validation (`:107-126`, `:97-116`), the insert assignment (`:147`, `:134`) and the output
+  projection (`:242`, `:256`). Neither table is ever *filtered* by `survey_id`, so `SET NULL`
+  drops a pointer and reclassifies nothing. Recording the error rather than quietly fixing it,
+  because a right conclusion resting on a wrong measurement is the failure mode this repo keeps
+  paying for.
 - `grep -rn "sourceInsightId" web/src` returns **0**. `ActionPlanList.tsx:39-46` documents the
   same thing from the other side: neither `SourceSurveyId` nor `SourceInsightId` is projected
   into `ActionPlanListItem` or `ActionPlanDetail`, so nothing in the browser can lose anything.

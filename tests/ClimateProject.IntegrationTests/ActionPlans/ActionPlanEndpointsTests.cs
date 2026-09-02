@@ -309,4 +309,103 @@ public class ActionPlanEndpointsTests : IAsyncLifetime
         var list = await listResponse.Content.ReadFromJsonAsync<ActionPlanTemplateListResponse>();
         Assert.Equal(1, list!.Templates.Single(t => t.Id == template.Id).UsageCount);
     }
+
+    /// <summary>
+    /// req(#168): `action_plans.source_survey_id` now carries a foreign key. An FK turns an
+    /// unknown id into a <c>DbUpdateException</c> at SaveChanges, which reaches the caller as an
+    /// opaque 500 -- where this same request returned 201 before the constraint existed. That is
+    /// the regression the constraint introduces, and it is invisible to the persistence-layer
+    /// tests, which never go through the endpoint.
+    ///
+    /// <para>The FK also cannot close tenancy: it checks that the survey row EXISTS, not whose it
+    /// is. So the second case here is the cross-tenant one -- the same hole #87 closed on
+    /// demographic snapshots and #207's follow-up closed on analytics insights.</para>
+    /// </summary>
+    [Fact]
+    public async Task Creating_a_plan_against_an_unknown_source_survey_is_refused_with_400_not_a_500()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            Title: "Plan from a survey that is not there",
+            Description: "The source survey id names no row",
+            CompanyId: _companyAId,
+            DepartmentId: null,
+            DueDate: DateTimeOffset.UtcNow.AddDays(30),
+            Priority: "high",
+            Tags: null,
+            TemplateId: null,
+            SourceSurveyId: Guid.NewGuid(),
+            SourceInsightId: null,
+            Kpis: null,
+            Objectives: null));
+
+        // Asserting the status AND the body: "not a 500" is not the guarantee. The caller has to
+        // be told which field it got wrong, or the refusal is unactionable.
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("SourceSurveyId", body);
+    }
+
+    [Fact]
+    public async Task Creating_a_plan_against_another_companys_survey_is_refused()
+    {
+        var client = _factory.CreateClient();
+
+        // Company B has no users until someone signs up into it, and surveys.created_by is a
+        // foreign key, so the author has to exist before the survey can.
+        await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyBDomain, _companyBId);
+
+        Guid otherCompanysSurveyId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            // surveys.created_by is itself a foreign key, so the survey needs an author that
+            // exists. Seeding one without it fails inside this fixture rather than at the
+            // endpoint, which is a confusing way to learn the same lesson #168 is about.
+            var author = await db.Users.FirstAsync(u => u.CompanyId == _companyBId);
+            var survey = new Survey
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _companyBId,
+                CreatedBy = author.Id,
+                TitleEn = "Company B climate",
+                Language = "en",
+                Type = "general_climate",
+                Status = "closed",
+                StartDate = DateTimeOffset.UtcNow.AddDays(-10),
+                EndDate = DateTimeOffset.UtcNow.AddDays(-1),
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            };
+            db.Surveys.Add(survey);
+            await db.SaveChangesAsync();
+            otherCompanysSurveyId = survey.Id;
+        }
+
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            Title: "Plan from someone else's survey",
+            Description: "The source survey exists, but belongs to company B",
+            CompanyId: _companyAId,
+            DepartmentId: null,
+            DueDate: DateTimeOffset.UtcNow.AddDays(30),
+            Priority: "high",
+            Tags: null,
+            TemplateId: null,
+            SourceSurveyId: otherCompanysSurveyId,
+            SourceInsightId: null,
+            Kpis: null,
+            Objectives: null));
+
+        // The FK would have accepted this row: the survey exists. Only the hand-written tenancy
+        // check refuses it, which is exactly why the FK does not make that check redundant.
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("different company", await response.Content.ReadAsStringAsync());
+    }
+
 }
