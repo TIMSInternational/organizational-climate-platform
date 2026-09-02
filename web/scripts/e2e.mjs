@@ -25,6 +25,13 @@
  * Every request and response is appended to `<out>/journal.jsonl`. That corpus is what the
  * 29 fixture files can finally be checked against — until now they were a second,
  * unverified copy of the API contract.
+ *
+ * ## The tracking module is optional, and so are its routes
+ *
+ * `--tracking` is probed before anything is driven. When nothing answers there, the
+ * `requiresTracking` routes are dropped from the drive list and printed under
+ * `NOT EXERCISED` — they are not failed. The coverage matrix still demands the full route
+ * set, so a router path can never disappear from this harness's sight that way.
  */
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, renameSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -108,6 +115,13 @@ const PUBLIC_ROUTES = {
   '/survey/:id': { anonymous: true, needs: 'survey' },
   '/s/:token': { anonymous: true, needs: 'token' },
   '/survey-invitations/:token': { anonymous: true, needs: 'token' },
+  // #130's per-invitee microclimate link. Added to the router by PR #406 and to no
+  // coverage table, which made this harness exit 2 before it launched a browser —
+  // `deriveMatrix` is deliberately fatal on an uncovered route, so from a9bf184 onward
+  // NOBODY could run e2e at all, for any role. Anonymous for the reason router.tsx
+  // states on the route itself: the API group takes no ClaimsPrincipal and the token in
+  // the path IS the credential.
+  '/microclimate-invitations/:token': { anonymous: true, needs: 'token' },
   '/shared/reports/:token': { anonymous: true, needs: 'token' },
   '/microclimates/:id/respond': { anonymous: true, needs: 'microclimate' },
   // Dev-only routes. They deliberately depend on no backend, so they are listed to satisfy
@@ -213,15 +227,27 @@ async function discoverIds(token, companyId) {
   // the harness never asking. It asks now.
   const planes = await get('/api/planes-accion', TRACKING)
 
+  // `GET /surveys` is `Roles.Admin`. A leader, a supervisor and an employee are all 403'd
+  // by it, so `surveys` above is null for every non-admin role and `/surveys/:id/respond`
+  // — the ONE thing the whole product asks an employee to do — reported SKIP "no id
+  // available" on all three, run after run. That reads as "there is no survey to answer"
+  // and the truth was that the harness asked the admin question and gave up.
+  //
+  // `GET /surveys/my` is the non-admin's own list: it resolves the caller's user row and
+  // filters by that row's company and department, reading no role claim
+  // (`roleCapabilities.ts`, `/surveys/my`). Asked second and only when the admin list came
+  // back empty or refused, so an admin run keeps driving the admin corpus unchanged.
+  const survey = first(surveys, 'surveys') ?? first(await get('/surveys/my'), 'surveys')
+
   return {
     plan: first(planes, 'planes'),
-    survey: first(surveys, 'surveys'),
+    survey,
     microclimate: first(micros, 'microclimates'),
     actionPlan: first(plans, 'actionPlans'),
     template: first(templates, 'templates'),
     company: scope,
     companyId: scope,
-    surveyId: first(surveys, 'surveys'),
+    surveyId: survey,
   }
 }
 
@@ -261,14 +287,50 @@ async function main() {
     process.exit(2)
   })
 
+  // Is there a tracking service to drive the tracking routes against?
+  //
+  // The coverage matrix above deliberately asks for the tracking-enabled route set — a
+  // route in router.tsx must be covered whatever this deployment configures. The DRIVE
+  // list is a different question, and the harness used to conflate them: it drove
+  // `reachableRoutes(role, true)` unconditionally, so on any stack without
+  // `services/tracking-api` running it reported /tracking/tablero, /tracking/planes and
+  // /tracking/mis-tareas as BROKEN. Measured on 2026-09-01 over leader, supervisor and
+  // employee: five BROKEN and one SKIP, every one of them the app correctly rendering
+  // "no se pudo contactar el servicio de seguimiento" for a service that is not there.
+  // That is precisely the false-positive report this file's own WHAT COUNTS AS BROKEN
+  // note was written against.
+  //
+  // `features/tracking/api/config.ts` calls this a CAPABILITY of the deployment, and
+  // `web/.env.example` ships `VITE_TRACKING_API_BASE_URL` commented out on purpose — so
+  // the default local stack has the module OFF and its screens are in nobody's sidebar.
+  // Probing the origin answers the same question from the outside.
+  //
+  // Three quick attempts, not `waitForServer`'s 150: this is a question, not a wait. A
+  // service that is going to be there is already there by the time the dev server is up.
+  const trackingEnabled = await waitForServer(`${TRACKING}/health`, { attempts: 3, delayMs: 200 }).then(
+    () => true,
+    () => false,
+  )
+  if (!trackingEnabled) {
+    log(`e2e: no tracking service at ${TRACKING} — its routes are NOT exercised, not failed.`)
+    log('e2e: to cover them, run services/tracking-api and start the dev server with')
+    log(`e2e: VITE_TRACKING_API_BASE_URL=${TRACKING} (the module is off without it).`)
+  }
+
   const roles = values.roles ? values.roles.split(',') : [...PLATFORM_ROLES]
   const browser = await chromium.launch()
   const results = []
+  const notExercised = []
 
   for (const role of roles) {
     const { token, profile } = await login(role)
     const ids = await discoverIds(token, profile.companyId)
-    const routes = [...reachableRoutes(role, true)]
+    const routes = [...reachableRoutes(role, trackingEnabled)]
+    if (!trackingEnabled) {
+      for (const route of reachableRoutes(role, true)) {
+        if (!routes.includes(route)) notExercised.push({ role, route })
+      }
+    }
     log(`\ne2e: ${role} — ${routes.length} reachable routes (company ${profile.companyId ?? 'none'})`)
 
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
@@ -363,6 +425,17 @@ async function main() {
   const passes = results.filter((r) => r.status === 'PASS')
   log(`\ne2e: ${results.length} route visits — ${passes.length} pass, ${warns.length} warn, ${fails.length} broken, ${skips.length} skipped`)
   log(`e2e: broken means ${BROKEN}.`)
+
+  // Printed even though the count is zero on a full stack. "Not exercised" is a result,
+  // and a run that silently drops routes reads as a run that covered them.
+  if (notExercised.length > 0) {
+    const byRoute = new Map()
+    for (const { role, route } of notExercised) {
+      byRoute.set(route, (byRoute.get(route) ?? new Set()).add(role))
+    }
+    log(`\ne2e: NOT EXERCISED — no tracking service at ${TRACKING} (${notExercised.length} role/route pairs):`)
+    for (const [route, roles] of [...byRoute].sort()) log(`e2e:   ${route}  <- ${[...roles].join(', ')}`)
+  }
 
   for (const fail of fails) {
     log(`\ne2e: BROKEN ${fail.role} ${fail.route}`)
