@@ -1,4 +1,34 @@
-# Decision needed: QuestionPool adaptive behaviour (#113)
+# QuestionPool adaptive behaviour (#113) — DECIDED: defer
+
+> ## The ruling — 2026-09-02, Federico
+>
+> **Option A. Question adaptation is NOT in the 16 November 2026 go-live scope.**
+>
+> It is deferred, not dropped: the decision to build, narrow or abandon it is deliberately left
+> open and is revisited **after the PROCOMER pilot has produced real response volume**, which is
+> also the first moment "question effectiveness" can be measured rather than guessed.
+>
+> - **Owner of the revisit:** Federico.
+> - **Revisit trigger:** first closed PROCOMER survey cycle with responses (post-16 Nov).
+> - **Recommended sequence when revisited, unchanged from §6:** C next, B after the pilot,
+>   **D not without a psychometric answer to §4.**
+>
+> **This is a scope reduction against a binding requirement**, and under
+> `docs/requirements/README.md:18-20` it needs the client's sign-off — it is not an engineering
+> call. **It must be stated to PROCOMER now, not discovered at UAT.** §8 is the statement to
+> take to them.
+>
+> **#113 is closed as decided.** The four acceptance criteria are ruled on in §9. #119 is
+> *not* blocked on this issue and never was (§2.5); deferring #113 does not park #119.
+>
+> **What this ruling does not do:** it does not unblock or resolve #67 items 1 and 2 (the
+> monthly AI cost ceiling, and sign-off on dropping turnover prediction — §5). Under Option A
+> nothing in scope trips that gate, so those two remain open and are simply not on the go-live
+> path.
+
+---
+
+## The original framing, written 2026-09-01
 
 Written 2026-09-01 against main `1ef86b8`, from greps over this repository and a read of the
 legacy checkout at `../climate-project`. Every number below is a command and its output, not a
@@ -358,3 +388,55 @@ have been the wrong move under every reading of the issue.
 **Gates run for this lane:** none. This lane touched one new Markdown file under `docs/` and no
 code, so `dotnet build` / `dotnet test` / `npm run typecheck` had nothing to gate and were not
 run.
+
+---
+
+## 8. The statement for PROCOMER
+
+Drafted 2026-09-02 to satisfy the sign-off obligation in §3
+(`docs/requirements/README.md:18-20`). Federico's to send, edit or replace — it is deliberately
+written as a scope position rather than an apology, because per §2.4 and §4 that is what it is.
+
+> **Adaptación de preguntas por IA — alcance para el 16 de noviembre**
+>
+> El `TECH_SPEC` §3 describe un motor que combina, reformula y genera preguntas sobre un banco
+> de 200+. Esa funcionalidad **no forma parte de la entrega del 16 de noviembre**, y queremos
+> decirlo ahora y no en la aceptación.
+>
+> Dos razones, en este orden:
+>
+> 1. **No existe nada que migrar.** El "motor de IA" del sistema anterior (704 líneas) no
+>    realiza ninguna llamada de inferencia: selecciona plantillas con `Math.random()` y calcula
+>    la "efectividad" sumando un número aleatorio. Portarlo daría la apariencia de la función
+>    sin la función.
+> 2. **La versión completa degradaría el instrumento.** Si la IA reformula una pregunta por
+>    departamento, entonces dos departamentos respondieron preguntas distintas y sus resultados
+>    dejan de ser comparables — y la comparación entre departamentos y entre periodos es el
+>    producto principal de la plataforma.
+>
+> **Lo que sí está construido y entra el 16 de noviembre:** la biblioteca de preguntas con
+> categorías jerárquicas bilingües, el selector compartido en ambos asistentes (encuestas y
+> microclimas), y el banco de preguntas con su página de administración.
+>
+> **Propuesta de secuencia posterior al piloto**, para conversar: primero una adaptación
+> *asistida y aprobada por un administrador* — la IA sugiere una reformulación, una persona la
+> aprueba antes de que entre en una encuesta — que entrega el beneficio visible sin romper la
+> comparabilidad. La adaptación automática en la ruta del encuestado requiere antes una
+> definición metodológica sobre estabilidad del instrumento.
+
+## 9. Ruling on the four acceptance criteria
+
+Closed against the criteria, not against code. Two of the four were unsatisfiable as written and
+are waived with the reason recorded, per §2.1 and §2.2.
+
+| # | Criterion | Ruling |
+|---|---|---|
+| 1 | Real production usage established from data, not assumption | **WAIVED — unsatisfiable.** There is no production data and none is coming: `docs/decisions/no-data-migration.md` records that the legacy MongoDB held mock data, and the new platform started empty. The *absence* was established instead, by measurement: 0 grep hits for `QuestionPool`, `QuestionEffectiveness` and `adaptive` across `src`, `web/src`, `services` and `tests` (§1). |
+| 2 | Explicit build/drop/defer decision recorded | **MET.** Defer, with owner and revisit trigger, in the ruling block above. |
+| 3 | If dropped, excluded from the ETL scope | **VOID — not applicable.** The decision is defer, not drop; and there is no ETL scope to be excluded from. #154 is `CLOSED / NOT_PLANNED` and the tool was deleted 2026-08-19 (§2.2). |
+| 4 | If built, boundary with #119 documented | **NOT APPLICABLE — not built.** The boundary is nonetheless recorded in §2.5, because the issue stated it wrongly: #119 is deterministic branching over `QuestionConditionalLogic`, which is already live here; #113 is text generation. They are not rivals and #119 is not blocked on #113. |
+
+**Follow-on that outlives this issue:** the 200+ question corpus (§3) has no owner and no
+delivery channel, and that is true under every option including this one. For PROCOMER's own
+44–50 item instrument the channel now exists — `docs/runbooks/question-library-import.md`,
+written for #423 on the same day. The wider corpus is still unowned.
