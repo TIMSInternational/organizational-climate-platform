@@ -1,6 +1,7 @@
 # Staging provisioning runbook — #156
 
-**Status: repo side DONE and MERGED, console side NOT STARTED.** Every artifact staging
+**Status: repo side DONE and MERGED. Console side PART DONE 2026-09-02 — AWS and GitHub are
+provisioned; the database is blocked on a purchase decision. See "Provisioning status" below.** Every artifact staging
 needs from this repository is now on `main` (commit `3856acf`): the two CloudFormation templates
 are environment-parameterised (production defaults render the live prod stacks
 byte-identically — proven by rendered diff, recorded in that branch's commit message),
@@ -19,6 +20,52 @@ project `climate` (production URL `https://web-one-green-86.vercel.app`).
 Nothing in this runbook touches production. The staging deploy role's trust policy and
 permissions are scoped so that even a misdispatched staging workflow cannot reach the
 prod stack — that is a property of the bootstrap template, not of care taken on the day.
+
+---
+
+## Provisioning status — 2026-09-02
+
+Both decisions are made and **steps 1, 3 (partial) and 4 are done**. What remains is one
+purchase decision and the steps that depend on it.
+
+| Step | State | Evidence |
+|---|---|---|
+| 1 — GitHub `staging` environment | **DONE** | environment exists; `AWS_ACCOUNT_ID`, `TRACKING_JWT_SECRET_ARN`, `INTERNAL_API_KEY_SECRET_ARN` set |
+| 2 — staging database | **BLOCKED** — see below | — |
+| 3 — Secrets Manager | **2 of 3 DONE** | `tracking-jwt-secret` and `internal-api-key` created with fresh random values in `795965600143`; `database-connection-string` waits on step 2 |
+| 4a — GitHub OIDC provider (dev account) | **DONE** | `arn:aws:iam::795965600143:oidc-provider/token.actions.githubusercontent.com` |
+| 4b — bootstrap stack | **DONE** | `climate-project-api-staging-bootstrap`, four outputs present, trust policy scoped to `environment:staging` |
+| 5, 7, 8 — Vercel, web wiring, first user | **NOT STARTED**, and not required by #159 | the rollback rehearsal exercises the API path only |
+| 6 — first staging deploy | waits on step 2 | |
+
+### What step 2 is blocked on, precisely
+
+**The NexaDev organization (`lbxqfmlcxervtttrspjv`) already holds two active projects** —
+`tims-ats` and `organizational-climate-platform`. That is exactly the free-plan cap this runbook
+warns about two paragraphs below, and it is now live rather than hypothetical.
+
+So creating a staging project is a **purchase decision, not a click**:
+
+- If the org is on **Free**, a third project is refused outright.
+- If the org is on **Pro**, it succeeds and starts a **$10/mo** Micro-compute charge on an
+  organization that also bills a different client's product (`tims-ats`).
+
+Either way it needs an owner who can commit that spend. The alternative in the table below —
+a persistent branch on the climate platform's own project — costs about the same
+(~$9.81/mo), is not covered by the Spend Cap, and puts branch controls one click from
+production's.
+
+**Nothing else is waiting on anything else.** The moment a staging connection string exists:
+create `climate-project-api/staging/database-connection-string`, set
+`DATABASE_CONNECTION_STRING_SECRET_ARN` and the `MIGRATION_DATABASE_CONNECTION_STRING` secret,
+and `deploy-staging` can run.
+
+### A correction to this document
+
+Option B below named `lzhfnjfsdwdywwnlqgqq` as the project to branch. **That is the `tims-ats`
+project, not this one** — a different client's product. The climate platform is
+`uleeeziiceduvmiftgby`. Corrected in the table; recorded here because acting on the old value
+would have branched the wrong product.
 
 ---
 
@@ -71,7 +118,9 @@ Two honest caveats, because the vCPU row is the only volatile line:
 Neither figure is large. It is written down because a recurring charge needs a named
 owner before it starts rather than after.
 
-> **Decide:** account `____________`  date `________`  by `________`
+> **DECIDED:** account **`795965600143` (Option A, the DEV account)**  date `2026-09-02`  by `Federico`
+>
+> Chosen for full isolation. Step 4a was required and has been done.
 
 ### Decision box 2 — may real employee responses be copied into staging?
 
@@ -96,7 +145,10 @@ reseeded from migrations/seed only ("data isn't migrated between branches", Supa
 branching docs, read 2026-08-15) — so choosing a branch in step 2 does not by itself
 decide this box; copying data is always a separate, deliberate act.
 
-> **Decide:** option `____`  date `________`  by `________`
+> **DECIDED:** option **`A` — never; synthetic seed only**  date `2026-09-02`  by `Federico`
+>
+> No production rows are copied to staging, now or later. Any change to this is a new privacy
+> decision and belongs in this box, not in a script.
 
 ---
 
@@ -146,7 +198,7 @@ The app uses Supabase as plain Postgres — it does its own auth (bcrypt in its 
 deploy workflow applies **before** rollout. So do not hand-create any schema; an empty
 database plus a green deploy is the correct end state.
 
-| | Option A: separate Supabase project | Option B: persistent branch on `lzhfnjfsdwdywwnlqgqq` |
+| | Option A: separate Supabase project | Option B: persistent branch on `uleeeziiceduvmiftgby` |
 |---|---|---|
 | Isolation | Full: own pooler, own dashboard, own credentials | Same dashboard and org; branch has own connection strings, but branch controls (merge/reset/delete) live one click from production's |
 | Cost | Micro compute ≈ **$10/mo** (billed per project; the org's $10/mo compute credit applies to projects but is single and presumably consumed by prod) | **$0.01344/hr ≈ $9.81/mo** while it exists (Micro); **not** covered by Spend Cap; compute credits do **not** apply to branch compute (Supabase docs, 2026-08-15) |
