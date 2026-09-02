@@ -421,3 +421,347 @@ Worth a test in `tests/` asserting the exact heartbeat format string — the sam
 | Worker heartbeat alert active | **Templates authored, not applied.** Seven per-job alarms plus the in-process stale alarm |
 | Logs verified free of PII and response content | **Substantially met and now audited** (§3). Two residual items: `{ClientIp}` and unbounded retention |
 | Alert routing documented | **Met** — §4 routing, §5 setup, §7 the human decisions |
+
+**Amended 2026-09-02 by §9, and the amendment is not an improvement to two of these rows.**
+The table above was written assuming the synthetic probe row of "error alerting" was carried
+by `ops-synthetic-probe.yml`. It is not: that workflow's declared 15-minute cadence runs at a
+measured mean of **4h13m** (§9), and `gh secret list` returns nothing, so `TEAMS_WEBHOOK_URL`
+does not exist and neither of its posting steps has ever fired.
+`infra/aws/climate-project-synthetic-probe.yml` fixes the cadence and makes a dead probe an
+alarm rather than a silence — but it is **not applied**, and its documented first deploy is
+deliberately dark (`AlarmTopicArn=''`). So on both rows the honest status after §9 is:
+**detection improved, delivery unchanged — no human is notified by either prober today.**
+
+---
+
+## 9. Probe cadence: declared vs measured, and the EventBridge probe
+
+> Added 2026-09-02. §5's "Enable the synthetic probe" is still correct about *what* the
+> workflow checks and *what secret it needs*. This section is about the one thing it assumed
+> and did not measure: that a `schedule:` trigger runs on its schedule. On this repository it
+> does not, and the gap is not minutes.
+
+### The measurement
+
+`.github/workflows/ops-synthetic-probe.yml:75` declares `cron: "*/15 * * * *"`. (Every line
+number in this section is against that file **as it stands after** the 30-line header comment
+this change set added to it. An earlier draft of this section cited the pre-edit numbers,
+which were all 30 short.) The last 17 scheduled runs, read from the API rather than from the
+file:
+
+```bash
+gh run list --workflow ops-synthetic-probe.yml --limit 40 \
+  --json createdAt,event --jq '.[] | select(.event=="schedule") | .createdAt'
+```
+
+The 16 gaps between those runs, in order (oldest first):
+
+| From (UTC) | To (UTC) | Gap |
+|---|---|---|
+| 2026-08-30 22:23 | 2026-08-31 00:44 | 2h21m |
+| 2026-08-31 00:44 | 2026-08-31 06:16 | 5h31m |
+| 2026-08-31 06:16 | 2026-08-31 14:16 | **8h00m** |
+| 2026-08-31 14:16 | 2026-08-31 20:15 | 5h59m |
+| 2026-08-31 20:15 | 2026-08-31 23:58 | 3h43m |
+| 2026-08-31 23:58 | 2026-09-01 04:53 | 4h54m |
+| 2026-09-01 04:53 | 2026-09-01 09:44 | 4h51m |
+| 2026-09-01 09:44 | 2026-09-01 14:19 | 4h34m |
+| 2026-09-01 14:19 | 2026-09-01 17:54 | 3h35m |
+| 2026-09-01 17:54 | 2026-09-01 20:33 | 2h39m |
+| 2026-09-01 20:33 | 2026-09-01 22:49 | 2h15m |
+| 2026-09-01 22:49 | 2026-09-02 00:48 | **1h59m** (the best one) |
+| 2026-09-02 00:48 | 2026-09-02 05:26 | 4h37m |
+| 2026-09-02 05:26 | 2026-09-02 09:49 | 4h22m |
+| 2026-09-02 09:49 | 2026-09-02 14:04 | 4h15m |
+| 2026-09-02 14:04 | 2026-09-02 17:53 | 3h49m |
+
+- **Declared interval:** 15 minutes.
+- **Measured:** min 1h59m, max 8h00m, mean 4h13m, median 4h19m. **16.9x the declared
+  interval**, and the shortest gap observed is still eight times it.
+- Over that 2-day 19-hour window a 15-minute cron declares 271 runs. 17 happened — **6.3%**.
+
+Two consequences, and the second is the dangerous one:
+
+1. **Detection latency is hours, not minutes.** An outage starting just after a run is
+   invisible for a mean of four hours and, once, for eight. The 15 minutes was chosen against
+   `SystemStatusPolicy.BacklogAgeThresholdSeconds` (900s) — the point at which the product
+   itself calls its notification queue a backlog. We are probing at 17x the product's own
+   patience, which means the customer reports the outage first.
+2. **The workflow cannot report its own absence.** GitHub does not alert on a scheduled run
+   that never happened. A silent Actions tab is what a healthy week and a disabled workflow
+   look like, identically. That is the exact failure mode `TreatMissingData: breaching` was
+   introduced to cover *inside* CloudWatch, and the outside-in prober had no equivalent.
+
+This is not a bug to file. GitHub documents that scheduled workflows are delayed under load
+and may be dropped entirely; on a repository with this much Actions traffic, that is the
+normal operating point. The fix is to stop asking GitHub to keep the clock.
+
+### The EventBridge probe
+
+`infra/aws/climate-project-synthetic-probe.yml` runs the **same checks** on a rate rule inside
+AWS, which does fire on its rate.
+
+- Same targets, same assertions, same retry policy as the workflow: `GET /ready` expecting
+  200 (workflow:185), then — only if that passed (workflow:194) — `GET /version` expecting
+  200; three attempts 10s apart, 15s per request, a target fails only when all three miss
+  (workflow:169-182); status code only, `commit` and `builtAt` logged and never asserted
+  (workflow:197). **Redirects are not followed**, because the workflow's `curl` carries no
+  `-L` (workflow:172) — `urllib` would follow one by default and score a 302 as a success,
+  so the Lambda builds an opener with the redirect handler removed. Verified locally: the
+  default opener returns `200` for a 302, the probe's opener returns `302`. This matters at
+  #160's cutover, when a redirect is the normal first symptom. The failure strings are copied
+  verbatim (workflow:190 and :199) so an alarm and an Actions-tab failure for the same outage
+  read identically.
+- One addition the workflow does not make: `GET {WebBaseUrl}/` expecting 200. Set
+  `WebBaseUrl=''` to get the workflow's behaviour exactly. It is on by default because
+  `web/vercel.json` hardcodes the App Runner origin in its CSP `connect-src`, so the web app
+  can serve a page that cannot reach an API this probe just called healthy — two Success
+  metrics side by side tell that apart, one does not.
+- Metrics: `ClimateProject/SyntheticProbe` → `Success` (1/0) and `LatencyMs`, both
+  dimensioned `Target` ∈ {`api`, `web`}. Latency is published **only on success**, so a
+  timeout cannot page twice.
+- Alarms: `…-synthetic-probe-api-down` (**`TreatMissingData: breaching`** — a probe that stops
+  reporting is itself the alarm, which is the whole point), `…-synthetic-probe-api-slow`, and
+  `…-synthetic-probe-web-down` when `WebBaseUrl` is set. All three carry `OKActions` as well
+  as `AlarmActions`, so a wired channel sees incidents close.
+- **The alarm period is derived, not passed.** `ProbeIntervalMinutes` is the only cadence
+  knob; a `Mappings` table turns it into an alarm period of exactly **twice** the interval
+  (15 min → 1800 s). This is not cosmetic. At `Period == interval` an alarm expects exactly
+  one datapoint per period, at a phase offset fixed by stack-creation time and unaligned to
+  CloudWatch's clock-aligned boundaries — so `rate()` delivery jitter, or the probe's own
+  25–65 s slow path when it succeeds on attempt 3, can push one `PutMetricData` across a
+  boundary, empty a period, and fire `breaching` for a service that never wavered. At twice
+  the interval a period always holds two probes: one displaced or lost publish leaves
+  `Minimum` at 1 and nothing fires, while two consecutive misses — a genuinely dead probe —
+  still empty it and still alarm. CloudFormation cannot multiply, so the invariant is
+  enforced by construction rather than stated in prose that a deploy command can contradict.
+- **Detection latency, honestly:** up to one interval to see the outage (≤15 min), plus up to
+  one alarm period for it to close (≤30 min), plus CloudWatch's ~1 min evaluation lag. Worst
+  case ~46 minutes, mean ~23. Against a measured mean gap of 4h13m that is roughly **10x**,
+  not the 17x the raw cadence ratio suggests. Do not quote 15 minutes.
+- A dashboard, `climate-project-api-prod-synthetic-probe` (`CreateDashboard=false` skips it),
+  because both down alarms tell the responder to read api and web *next to each other* and
+  nothing previously created that surface — `grep -rin dashboard infra/aws/*.yml` matched
+  nothing before this change.
+- IAM: an inline policy with `logs:CreateLogGroup/CreateLogStream/PutLogEvents` scoped to the
+  probe's own log group ARN, and `cloudwatch:PutMetricData` conditioned on
+  `cloudwatch:namespace = ClimateProject/SyntheticProbe`. No managed policy, so it cannot
+  write the `ClimateProject/Prod` metrics the §4 alarms read.
+
+### Read this before you believe the section above: **nobody is paged, by either prober**
+
+**It does not need the Teams webhook.** `AlarmTopicArn` defaults to empty and a Condition then
+gives every alarm an empty action list. That is deliberate: §7 has been waiting on a webhook
+and a fallback email since this runbook was written, and the measurement above says the
+waiting is itself the outage risk. Deploy it dark, get the datapoints, wire the topic later.
+
+The cost of that choice has to be said plainly, because it is easy to read this section as
+"monitoring is fixed":
+
+| Path | Status after this change |
+|---|---|
+| CloudWatch alarms in this stack | Evaluate and change state. **Notify nobody** — the deploy command below passes `AlarmTopicArn=''` |
+| `ops-synthetic-probe.yml` → Teams | **Never fires.** `gh secret list` returned nothing on 2026-09-02, so `TEAMS_WEBHOOK_URL` does not exist and both `if: env.WEBHOOK != ''` steps (workflow:111, :222) are skipped |
+| `ops-synthetic-probe.yml` → GitHub's own email to watchers | The only live delivery path, and it fires at the workflow's measured cadence, not at 15 minutes |
+
+So **the 4h13m detection latency is fixed for the metric, not for the page.** What this stack
+buys today is a truthful record: a graph you can point at, a dead-probe alarm that is not a
+silence, and a state change already sitting in `describe-alarms` when someone finally looks.
+Turning that into a notification is one `AlarmTopicArn` away and is a §7 decision, not a code
+change. `describe-stacks … AlarmActionsWired` answers "can these alarms reach a human" in one
+line; until someone acts, it answers `false`.
+
+### Rehearse it in the dev account first
+
+The dev account `795965600143` (`AWS_PROFILE=default`) already has
+`climate-project-api-staging-bootstrap` deployed, and #156 exists precisely so there is
+somewhere to make a mistake cheaply. `rollback-rehearsal-staging.yml` has **0 lifetime runs**;
+the pattern of authoring a rehearsal and never running it is the one to avoid here.
+
+There is no staging *service* yet, so a staging probe has nothing of its own to watch — but
+that is not a reason to skip the rehearsal, because what needs rehearsing is **this stack's
+own behaviour**, not the target's. Deploy it in the dev account pointed at the same public
+URLs (unauthenticated `GET`s, exactly what the GitHub workflow already does from outside), and
+watch it for a few hours. What you are looking for is a false `ALARM` from period alignment.
+If the derived-period reasoning above is wrong, it is wrong in a place where the blast radius
+is a state change in an account nobody pages from.
+
+```bash
+# NOT YET RUN. Dev account 795965600143. Same template, alarms deliberately silent.
+AWS_PROFILE=default aws cloudformation deploy \
+  --region us-east-1 \
+  --stack-name climate-project-synthetic-probe-rehearsal \
+  --template-file infra/aws/climate-project-synthetic-probe.yml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides \
+    ServiceName=climate-project-api-rehearsal \
+    ApiBaseUrl=https://bhgrdkd4gt.us-east-1.awsapprunner.com \
+    WebBaseUrl=https://climate.timsint.com \
+    ProbeIntervalMinutes=15 \
+    ApiLatencyThresholdMs=2500 \
+    AlarmTopicArn='' \
+    AlarmsEnabled=false \
+    CreateDashboard=true \
+    LogRetentionDays=7
+```
+
+`ServiceName` differs so nothing collides if both accounts are ever viewed together, and
+`AlarmsEnabled=false` is belt-and-braces on top of the empty topic. Delete the stack when the
+rehearsal has told you what you wanted to know — it is 96 invocations a day against production
+URLs from a second account, which is harmless but pointless to leave running.
+
+### Deploy it — **NOT YET RUN**
+
+Validated only. `aws cloudformation validate-template` returns clean and reports
+`CAPABILITY_NAMED_IAM`; nothing has been created.
+
+```bash
+# NOT YET RUN — no stack by this name exists in 747814092517.
+aws cloudformation deploy \
+  --region us-east-1 \
+  --stack-name climate-project-synthetic-probe-prod \
+  --template-file infra/aws/climate-project-synthetic-probe.yml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides \
+    ServiceName=climate-project-api-prod \
+    ApiBaseUrl=https://bhgrdkd4gt.us-east-1.awsapprunner.com \
+    WebBaseUrl=https://climate.timsint.com \
+    ProbeIntervalMinutes=15 \
+    ApiLatencyThresholdMs=2500 \
+    AlarmTopicArn='' \
+    AlarmsEnabled=true \
+    CreateDashboard=true \
+    LogRetentionDays=30
+```
+
+There is no `AlarmPeriodSeconds` to pass: it is derived from `ProbeIntervalMinutes` inside the
+template, for the reason given above. `describe-stacks … AlarmPeriodSeconds` reports what it
+resolved to.
+
+Every other parameter is passed explicitly for the reason `infra/aws/README.md:62` gives:
+`aws cloudformation deploy` reuses a previous value for anything omitted, so an omitted
+parameter is a silent inheritance rather than a default.
+
+Confirm it is actually probing before trusting any of it. **These commands are the gate on
+trusting the probe, so they must run on whatever host you are on:** `date -u -v-2H` is
+BSD/macOS-only and dies on a Linux ops box with `date: invalid option -- 'v'` before the AWS
+call is ever made, so use the helper below (GNU's equivalent is `date -u -d '2 hours ago'`).
+
+```bash
+# Portable relative timestamp: hours back, UTC, in the format the CLI wants.
+ago() { python3 -c "import datetime,sys;print((datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(hours=float(sys.argv[1]))).strftime('%Y-%m-%dT%H:%M:%SZ'))" "$1"; }
+now() { python3 -c "import datetime;print(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))"; }
+
+# The rule fired and the function ran.
+aws logs tail /aws/lambda/climate-project-api-prod-synthetic-probe \
+  --region us-east-1 --since 1h
+
+# Datapoints are landing. Expect ~4 per hour, all 1.0, and TWO per 1800s period.
+aws cloudwatch get-metric-statistics --region us-east-1 \
+  --namespace ClimateProject/SyntheticProbe --metric-name Success \
+  --dimensions Name=Target,Value=api \
+  --start-time "$(ago 2)" --end-time "$(now)" \
+  --period 1800 --statistics Minimum SampleCount --output table
+
+# Alarms exist and are OK, not INSUFFICIENT_DATA. `actions` should be [] on a dark deploy.
+aws cloudwatch describe-alarms --region us-east-1 \
+  --alarm-name-prefix climate-project-api-prod-synthetic-probe \
+  --query 'MetricAlarms[].{name:AlarmName,state:StateValue,period:Period,actions:AlarmActions}' \
+  --output table
+```
+
+`SampleCount` is the one to read: **2 per period** is the arrangement the alarm design depends
+on. A period showing 1 is a displaced publish — harmless by construction, but if it is the
+common case rather than the rare one, the derived period is not buying what it claims and the
+mapping should go to 3x.
+
+**Expect one early `ALARM`, and do not go hunting for a bug in it.** On stack creation the
+alarm starts `INSUFFICIENT_DATA`; the first `rate()` fire is up to 15 minutes out, and the
+first clock-aligned 30-minute period can close before any datapoint lands. With
+`TreatMissingData: breaching` that period is a breach, so `api-down` legitimately goes `ALARM`
+once and clears on the next period. That is a working probe warming up, not a broken one —
+which is exactly why the first deploy is dark. **Only wire `AlarmTopicArn` after you have seen
+a run of green periods**, or the channel's first message from this stack is a false alarm and
+the second thing it teaches people is to ignore it. If `ALARM` persists past two consecutive
+periods with no datapoints in `get-metric-statistics`, then it is broken — read the log group.
+
+### Re-baseline the latency threshold before you believe it
+
+`ApiLatencyThresholdMs=2500` is a guess with margin, and this runbook's own §6 rule applies:
+verify the instrument. What was actually measured on 2026-09-02, from a laptop, is `/version`
+at 162–224 ms over 6 samples and `https://climate.timsint.com/` at 161–258 ms over 3 samples.
+Neither is `/ready`, which adds a real Postgres round-trip, and neither was measured from
+`us-east-1`. After a week of data:
+
+```bash
+# `ago` and `now` are defined in the verification block above -- BSD's `date -u -v-7d` is not
+# portable and fails outright on a Linux ops host.
+aws cloudwatch get-metric-statistics --region us-east-1 \
+  --namespace ClimateProject/SyntheticProbe --metric-name LatencyMs \
+  --dimensions Name=Target,Value=api \
+  --start-time "$(ago 168)" --end-time "$(now)" \
+  --period 86400 --statistics Average Maximum --output table
+```
+
+Then re-deploy with `ApiLatencyThresholdMs` set above the observed maximum with headroom.
+
+### Wiring `AlarmTopicArn` once the observability stack exists
+
+The observability stack exports its critical topic (§5 creates it; the export name is
+`<observability-stack-name>-critical-topic`). After it is deployed:
+
+```bash
+# 1. Read the ARN out of the observability stack's outputs.
+aws cloudformation describe-stacks --region us-east-1 \
+  --stack-name climate-project-observability-prod \
+  --query "Stacks[0].Outputs[?OutputKey=='CriticalTopicArn'].OutputValue" --output text
+
+# 2. Re-deploy the probe stack with that value. Only AlarmTopicArn changes; everything else
+#    is repeated because `deploy` inherits omitted parameters silently.
+aws cloudformation deploy \
+  --region us-east-1 \
+  --stack-name climate-project-synthetic-probe-prod \
+  --template-file infra/aws/climate-project-synthetic-probe.yml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides \
+    ServiceName=climate-project-api-prod \
+    ApiBaseUrl=https://bhgrdkd4gt.us-east-1.awsapprunner.com \
+    WebBaseUrl=https://climate.timsint.com \
+    ProbeIntervalMinutes=15 \
+    ApiLatencyThresholdMs=<re-baselined value> \
+    AlarmTopicArn=<CriticalTopicArn from step 1> \
+    AlarmsEnabled=true \
+    CreateDashboard=true \
+    LogRetentionDays=30
+
+# 3. Prove routing, do not assume it. Force one alarm through the real path.
+aws cloudwatch set-alarm-state --region us-east-1 \
+  --alarm-name climate-project-api-prod-synthetic-probe-api-down \
+  --state-value ALARM --state-reason "routing test"
+```
+
+Step 3 is not optional and it is the same warning §5 gives about the Teams webhook shape: a
+webhook that has been revoked answers 4xx, but one whose payload *shape* is wrong answers 200
+and renders nothing. **Look at the channel with your eyes.** Then set the state back to `OK`
+so the next real transition is not swallowed as a no-change.
+
+`describe-stacks --query "Stacks[0].Outputs[?OutputKey=='AlarmActionsWired'].OutputValue"`
+reports `true` only when a topic is set *and* `AlarmsEnabled=true`, so there is one place to
+check whether these alarms can reach anyone.
+
+### What this does not replace
+
+Keep `ops-synthetic-probe.yml` running. It is the only prober that lives outside the AWS
+account, and the whole argument for an outside-in probe (§ the workflow's own header) is that
+alarms sharing a fate with the thing they watch cannot report a deleted stack, a deleted log
+group, or a suspended account. The EventBridge probe shares that fate; the workflow does not.
+The correct arrangement after this change is:
+
+| | Cadence | Worst-case detection | Survives the AWS account failing | Reports its own absence | Notifies a human today |
+|---|---|---|---|---|---|
+| `ops-synthetic-probe.yml` | measured 4h13m mean, 8h00m worst | 8h+ | yes | no | only GitHub's email to watchers |
+| `climate-project-synthetic-probe.yml` | 15 min | ~46 min (see above) | no | yes (`breaching`) | **no** — `AlarmTopicArn=''` |
+
+Neither alone is monitoring, and as the last column says, neither of them pages anyone right
+now. The workflow also still carries the `deploy-drift.yml` relay, which nothing in AWS
+replicates.
