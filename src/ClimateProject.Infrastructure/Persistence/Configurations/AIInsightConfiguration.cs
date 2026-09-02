@@ -10,7 +10,6 @@ public class AIInsightConfiguration : IEntityTypeConfiguration<AIInsight>
     {
         builder.ToTable("ai_insights");
         builder.HasKey(a => a.Id);
-        // survey_id is a plain column, not an EF FK -- see AnalyticsInsightConfiguration's comment.
         builder.Property(a => a.SurveyId).HasColumnName("survey_id");
         builder.Property(a => a.CompanyId).HasColumnName("company_id").IsRequired();
         builder.Property(a => a.DepartmentId).HasColumnName("department_id");
@@ -40,5 +39,19 @@ public class AIInsightConfiguration : IEntityTypeConfiguration<AIInsight>
         builder.HasOne<Company>().WithMany().HasForeignKey(a => a.CompanyId);
         builder.HasOne<Department>().WithMany().HasForeignKey(a => a.DepartmentId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<User>().WithMany().HasForeignKey(a => a.AcknowledgedBy).OnDelete(DeleteBehavior.SetNull);
+
+        // SetNull. AIInsightEndpoints.cs:107-126 already checks at insert time that the survey
+        // exists and belongs to the caller's company; nothing checked it at delete time, which is
+        // the gap this closes. Cascade was rejected: an acknowledged insight records a human
+        // sign-off (AcknowledgedBy/AcknowledgedAt, kept idempotent on purpose at
+        // AIInsightEndpoints.cs:195-210) and deleting the survey it came from must not erase that.
+        // Restrict was rejected for the same reason as action_plans: it would break a working
+        // DELETE /surveys/{id}. The measurement behind "nulling it reclassifies nothing" was
+        // stated wrongly first time round -- `grep -rn "SurveyId ==" src/` returns 59 hits across
+        // 14 files, not three. The conclusion survives on a narrower, checkable measurement: in
+        // AIInsightEndpoints, SurveyId appears ONLY as insert-time validation (:107-126), the
+        // insert assignment (:147) and the output projection (:242). No read path filters
+        // ai_insights by survey_id at all, so SET NULL drops a pointer and reclassifies nothing.
+        builder.HasOne<Survey>().WithMany().HasForeignKey(a => a.SurveyId).OnDelete(DeleteBehavior.SetNull);
     }
 }

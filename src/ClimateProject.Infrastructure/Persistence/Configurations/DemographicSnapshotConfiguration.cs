@@ -10,8 +10,6 @@ public class DemographicSnapshotConfiguration : IEntityTypeConfiguration<Demogra
     {
         builder.ToTable("demographic_snapshots");
         builder.HasKey(s => s.Id);
-        // survey_id is a plain column, not an EF FK -- see AnalyticsInsightConfiguration's comment
-        // (Task 3): no Survey entity/table exists yet in this repo.
         builder.Property(s => s.SurveyId).HasColumnName("survey_id").IsRequired();
         builder.Property(s => s.CompanyId).HasColumnName("company_id").IsRequired();
         builder.Property(s => s.Version).HasColumnName("version").IsRequired();
@@ -37,5 +35,21 @@ public class DemographicSnapshotConfiguration : IEntityTypeConfiguration<Demogra
 
         builder.HasOne<Company>().WithMany().HasForeignKey(s => s.CompanyId);
         builder.HasOne<User>().WithMany().HasForeignKey(s => s.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+
+        // Cascade, and it is the only behaviour the column shape allows. survey_id is NOT NULL
+        // (line above), so SetNull is not available; Restrict would turn today's working
+        // DELETE /surveys/{id} into a 500 the moment a survey has a snapshot. A snapshot is
+        // defined by its survey -- keyed (survey_id, version), listed and diffed by survey_id
+        // (DemographicSnapshotEndpoints.cs:73, 133, 385) -- so one whose survey is gone has no
+        // version sequence and no way back through the API.
+        //
+        // What this costs, stated plainly rather than discovered later: snapshot_id on
+        // demographic_snapshot_entries and _changes is a required FK with EF's default Cascade
+        // (DemographicSnapshotEntryConfiguration.cs:28, DemographicSnapshotChangeConfiguration.cs:23),
+        // so this cascade reaches per-user demographic rows that SubjectErasure.cs:238 classifies
+        // as RETAINED under erasure. Deleting a response-less survey therefore now also deletes
+        // those. Reversing this to Restrict is a one-line follow-up migration if that trade is
+        // judged wrong -- docs/decisions/survey-foreign-keys.md records the trade.
+        builder.HasOne<Survey>().WithMany().HasForeignKey(s => s.SurveyId).OnDelete(DeleteBehavior.Cascade);
     }
 }

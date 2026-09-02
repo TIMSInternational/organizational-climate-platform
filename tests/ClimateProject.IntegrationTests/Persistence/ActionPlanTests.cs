@@ -49,7 +49,24 @@ public class ActionPlanTests(PostgresContainerFixture postgres)
         await using var db = CreateContext();
         await db.Database.MigrateAsync();
         var (company, department, user, template) = await SeedScaffoldAsync(db, "1");
-        var surveyId = Guid.NewGuid();
+
+        // source_survey_id is a real foreign key since #168, so this used to be a bare
+        // Guid.NewGuid() and the row it wrote was the defect: an action plan naming a survey
+        // that had never existed. The plan still has to link to a survey for the round trip to
+        // prove anything, so the survey is seeded instead of invented.
+        var survey = new Survey
+        {
+            Id = Guid.NewGuid(), CompanyId = company.Id, CreatedBy = user.Id, TitleEn = "Engagement Q3",
+            Type = "custom", StartDate = DateTimeOffset.UtcNow, EndDate = DateTimeOffset.UtcNow.AddDays(7),
+            CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        db.Surveys.Add(survey);
+        await db.SaveChangesAsync();
+        var surveyId = survey.Id;
+
+        // source_insight_id is deliberately still unconstrained -- nothing records whether it
+        // points at ai_insights or analytics_insights -- so a free guid is still what the column
+        // accepts, and this assertion is the pin on that. See docs/decisions/survey-foreign-keys.md.
         var insightId = Guid.NewGuid();
 
         var plan = new ActionPlan

@@ -112,6 +112,34 @@ public static class ActionPlanEndpoints
             }
         }
 
+        if (request.SourceSurveyId.HasValue)
+        {
+            // #168 added an FK on action_plans.source_survey_id. An FK turns an unknown id into a
+            // DbUpdateException at SaveChanges, which surfaces as an opaque 500 -- where the same
+            // request used to return 201. A 500 is not the message this refusal should send, and
+            // "the status code is the message" has bitten this repo three times now.
+            //
+            // Existence alone is not enough either: an FK checks that the row exists, not whose it
+            // is. Without the tenancy half a CompanyAdmin could file a plan against another
+            // tenant's survey id and read it back out of the detail payload -- the identical hole
+            // #87 closed on demographic snapshots and #207's follow-up closed on analytics
+            // insights. This is deliberately the same shape as AIInsightEndpoints.cs:107-126.
+            var sourceCompanyId = await db.Surveys
+                .Where(s => s.Id == request.SourceSurveyId.Value)
+                .Select(s => (Guid?)s.CompanyId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (sourceCompanyId is null)
+            {
+                return Results.Json(new { message = "SourceSurveyId does not reference an existing survey" }, statusCode: 400);
+            }
+
+            if (sourceCompanyId.Value != request.CompanyId)
+            {
+                return Results.Json(new { message = "SourceSurveyId belongs to a different company" }, statusCode: 400);
+            }
+        }
+
         var actingUser = await db.Users.FirstOrDefaultAsync(u => u.Email == currentUser.Email, cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var plan = new ActionPlan

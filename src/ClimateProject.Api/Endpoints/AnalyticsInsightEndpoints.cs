@@ -96,8 +96,8 @@ public static class AnalyticsInsightEndpoints
 
         if (request.SurveyId.HasValue)
         {
-            // survey_id is a plain column, not an EF FK (AnalyticsInsightConfiguration), so its
-            // tenancy has to be checked by hand. Checking only existence -- as the plan text does
+            // #168 gave survey_id an FK, which checks that the row exists -- not whose it is. The
+            // tenancy half still has to be checked by hand. Checking only existence -- as the plan text does
             // -- would let a CompanyAdmin file their own company's aggregate against another
             // tenant's survey id, and then read that survey id back out of the detail payload.
             // Same hole #87 closed on demographic snapshots.
