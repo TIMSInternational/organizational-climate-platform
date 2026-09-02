@@ -1,0 +1,797 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  EventBridge-scheduled synthetic probe for climate-project-api (#158). It runs the SAME
+  checks as .github/workflows/ops-synthetic-probe.yml and exists because that workflow's
+  declared "*/15 * * * *" is not honoured: over the last 17 scheduled runs the gap between
+  them ranged from 1h59m to 8h00m (mean 4h13m). A 15-minute rate() rule inside AWS is.
+
+  It does not depend on the Teams webhook that has blocked climate-project-observability.yml:
+  AlarmTopicArn defaults to empty and a Condition then gives the alarms no actions.
+
+  NOT APPLIED, AND AS SHIPPED IT PAGES NOBODY -- see NOTIFICATION below and
+  docs/runbooks/alerting.md section 9. This stack fixes the MEASUREMENT, not the DELIVERY.
+
+# ------------------------------------------------------------------------------------------
+# NOTIFICATION: THIS STACK PAGES NOBODY UNTIL A HUMAN ACTS.
+#
+# With AlarmTopicArn empty -- the default, and what the runbook's deploy command passes --
+# all three alarms evaluate, change state, and notify no one. The GitHub workflow's other
+# path is dead too: `gh secret list` returned NOTHING on 2026-09-02, so TEAMS_WEBHOOK_URL
+# does not exist and its two `if: env.WEBHOOK != ''` posting steps (workflow lines 111 and
+# 222) have never fired. After this change NO HUMAN IS NOTIFIED BY EITHER PROBER.
+#
+# What this stack does fix is the measurement: detection goes from a measured mean of 4h13m
+# to tens of minutes, and a probe that stops reporting becomes an alarm instead of a silence.
+# Delivery still needs the decision in docs/runbooks/alerting.md section 7. The
+# AlarmActionsWired output reports, in one place, whether these alarms can reach anyone.
+#
+# The stack touches nothing the API runs on: one Lambda, one rule, one log group, three
+# alarms, one dashboard, and a role that may only write its own logs and call
+# cloudwatch:PutMetricData in one namespace.
+# ------------------------------------------------------------------------------------------
+# COST, from arithmetic. No dollar figure is quoted here because none was derived; price the
+# quantities below at published AWS rates.
+#
+#   Invocations:  60 / 15 = 4 per hour x 24 = 96 per day x 30 = 2,880 per month.
+#   Compute:      128 MB = 0.125 GB. Measured from this machine on 2026-09-02, /version
+#                 answered in 162-224 ms over 6 samples and https://climate.timsint.com/ in
+#                 161-258 ms over 3; a happy-path run makes three such requests, so ~3 s
+#                 billed duration is a generous round-up.
+#                 2,880 x 3 s x 0.125 GB = 1,080 GB-seconds per month.
+#   Worst case:   every probe exhausting the 240 s timeout every time is
+#                 2,880 x 240 s x 0.125 GB = 86,400 GB-seconds per month. That is the ceiling
+#                 this template can reach.
+#   Metrics:      4 custom metric streams -- Success and LatencyMs, each x Target in
+#                 {api, web}. Metric COUNT is what CloudWatch bills, not datapoint count.
+#   API calls:    1 PutMetricData call per SUCCESSFUL invocation = 2,880 per month, plus up
+#                 to 2 more per invocation that throws. EventBridge invokes Lambda
+#                 asynchronously and retries a failed invocation twice by default, and this
+#                 handler deliberately does not catch put_metric_data errors (see the comment
+#                 on that call), so a CloudWatch API blip or a throttle can produce up to 3
+#                 invocations -- hence up to 3 PutMetricData calls -- for one scheduled tick.
+#                 The ceiling is therefore 8,640 calls per month, not 2,880. A throttled
+#                 invocation that never runs publishes nothing at all, which is the missing
+#                 datapoint the api-down alarm is built to treat as breaching.
+#   Alarms:       3 standard-resolution alarms (2 with WebBaseUrl empty).
+#   Dashboard:    1, and only when CreateDashboard is "true".
+#   Logs:         ~6 log lines per invocation, retained LogRetentionDays (default 30).
+#
+# THESE QUANTITIES ARE SMALL. THEY ARE NOT "FREE". Every AWS free-tier allowance is
+# per-ACCOUNT, and account 747814092517 is shared: `aws cloudformation list-stacks` on
+# 2026-09-02 returned 15 stacks, of which only 2 are this project (mep-ses-delegation,
+# tims-marketing-platform, doc-verification-tims, alto-vela, formmaps-api-prod,
+# formmaps-api-staging, translate-demo, TimsSuite-v2, tims-marketing-infra,
+# job-automation-system and others are not). The arithmetic above therefore shows that THIS
+# STACK'S SHARE is small; it does not show that the account has headroom left to absorb it.
+# The one allowance actually checked: `aws cloudwatch list-dashboards` returned exactly one
+# dashboard ("translate-prod"), so CreateDashboard takes the account to 2 of the 3 that
+# CloudWatch publishes as free. Confirm against the published rates and against the account's
+# current bill before quoting a number to anyone.
+# ------------------------------------------------------------------------------------------
+
+Parameters:
+  ServiceName:
+    Type: String
+    Default: climate-project-api-prod
+    Description: >-
+      Naming prefix for every resource here, matching climate-project-observability.yml so a
+      console filter on "climate-project-api-prod" finds the probe next to the alarms it
+      supplements. Nothing in this stack reads the App Runner service itself -- the probe is
+      deliberately outside-in, like the workflow it replaces -- so this need not resolve to a
+      real service for the stack to deploy.
+
+  ApiBaseUrl:
+    Type: String
+    Default: https://bhgrdkd4gt.us-east-1.awsapprunner.com
+    AllowedPattern: "https://.+"
+    Description: >-
+      Origin the probe hits, no trailing slash. Default is the App Runner default hostname,
+      which is what production answers on today -- no custom domain is attached (#160). The
+      workflow reads the same value from `vars.PROD_API_BASE_URL` with this same fallback
+      (.github/workflows/ops-synthetic-probe.yml:87); when #160 lands, BOTH have to move.
+      `gh variable list` on 2026-09-02 returned only AWS_ACCOUNT_ID, so PROD_API_BASE_URL is
+      unset and the workflow is on the fallback today -- the two are in agreement by accident,
+      not by configuration.
+
+  WebBaseUrl:
+    Type: String
+    Default: https://climate.timsint.com
+    Description: >-
+      Customer-facing web origin, no trailing slash. Set EMPTY to probe the API only, which
+      is exactly what the GitHub workflow does -- the web target is the one thing this probe
+      checks that the workflow does not. It earns its place because web/vercel.json hardcodes
+      the App Runner origin in its CSP connect-src, so the web app can be serving a page that
+      cannot talk to an API this probe just called healthy; the two Success metrics side by
+      side are what tells those apart.
+
+  ProbeIntervalMinutes:
+    Type: String
+    Default: "15"
+    AllowedValues: ["5", "10", "15", "30", "60"]
+    Description: >-
+      Minutes between probes, AND the only cadence knob in this template -- the alarm period
+      is derived from it through the AlarmPeriodByProbeInterval mapping below, so the two
+      cannot be set to a contradictory pair. 15 is the workflow's declared cadence and is
+      chosen against SystemStatusPolicy.BacklogAgeThresholdSeconds (900s), the point at which
+      the product itself calls the notification queue a backlog. A String with AllowedValues
+      rather than a Number because (a) the value is a Mappings key, which must be a literal
+      string, and (b) rate() takes a singular "minute" at 1 and a plural "minutes" above it,
+      and !Sub cannot pick between them -- every allowed value here is plural.
+
+  ApiLatencyThresholdMs:
+    Type: Number
+    Default: 2500
+    MinValue: 1
+    Description: >-
+      PROVISIONAL, and the one number here that must be re-baselined from a week of the
+      metric's own data. /ready cannot be measured from this brief -- it is unauthenticated
+      but production-touching, and it opens a real Postgres connection. What WAS measured on
+      2026-09-02 is /version at 162-224 ms over 6 samples, which does not touch the database
+      at all. 2500 is roughly ten times that, leaving room for the round-trip /ready adds and
+      for App Runner cold starts, and it is deliberately loose: a latency alarm that cries
+      before there is a baseline is how a channel gets muted.
+
+  AlarmTopicArn:
+    Type: String
+    Default: ""
+    Description: >-
+      SNS topic the alarms notify. EMPTY BY DEFAULT AND THAT IS THE POINT -- when it is empty
+      the Condition below gives every alarm an empty action list, so this stack deploys and
+      starts measuring without waiting on the Teams webhook and fallback email that
+      climate-project-observability.yml has been blocked on. The intended value, once that
+      stack exists, is its CriticalTopicArn output (exported as
+      <observability-stack-name>-critical-topic); see docs/runbooks/alerting.md for the
+      one-line update-stack that wires it.
+
+  AlarmsEnabled:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Same escape hatch climate-project-observability.yml carries: "false" creates the alarms
+      without letting them notify, for a first deploy where the latency threshold has not yet
+      been checked against real data.
+
+  CreateDashboard:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Creates the one surface where the api and web Success metrics sit side by side, which
+      is the arrangement WebDownAlarm's own description tells the responder to read. Set
+      "false" to skip it. CloudWatch publishes an allowance of 3 dashboards per ACCOUNT and
+      `aws cloudwatch list-dashboards` returned exactly one on 2026-09-02 ("translate-prod"),
+      so this is the second of three in a shared account -- see the COST block.
+
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653]
+    Description: >-
+      Retention on the probe's own log group. The group is created here rather than left to
+      Lambda, because a Lambda-created group retains forever and silently accrues cost --
+      the same point docs/runbooks/alerting.md section 3 makes for the application logs.
+
+Mappings:
+  # THE ALARM PERIOD IS DERIVED, NOT PASSED. An earlier revision of this template exposed
+  # AlarmPeriodSeconds as its own parameter with a prose invariant ("MUST be >=
+  # ProbeIntervalMinutes x 60"). Prose is not a check, and worse, the equality that the prose
+  # permits is itself the bug: at Period == interval the alarm expects EXACTLY ONE datapoint
+  # per period, at a phase offset fixed by when the stack happened to be created and NOT
+  # aligned to CloudWatch's clock-aligned period boundaries. Two ordinary things then empty a
+  # period and, with TreatMissingData: breaching, page someone for nothing:
+  #
+  #   (a) EventBridge rate() delivery jitter -- AWS documents delivery within the minute, not
+  #       on the second; and
+  #   (b) the probe's own variable duration -- a happy run publishes ~0.5 s after the fire,
+  #       but a run that only succeeds on attempt 3 publishes 25-65 s after it.
+  #
+  # Either can push one PutMetricData across a boundary. The period it left is then empty
+  # (ALARM), and the next holds two datapoints (OK) -- a page and a recovery for a service
+  # that never wavered, produced by exactly the transient the three-attempt retry loop was
+  # written to swallow.
+  #
+  # So every value here is ProbeIntervalMinutes x 60 x 2: an alarm period always spans TWO
+  # scheduled probes. One displaced or lost publish still leaves a datapoint in the period,
+  # Minimum over it is 1, and nothing fires. A period with NO datapoint now means two
+  # consecutive probes are missing, which is a dead probe and should alarm.
+  #
+  # Mapping values are quoted strings because Mappings values are String or List of String;
+  # CloudFormation coerces them into the Integer that Period wants. Verified with cfn-lint
+  # 1.53.3, which resolves Fn::FindInMap and type-checks the result: this template lints
+  # clean, and substituting a non-numeric value raises W1034 "is not of type 'integer' when
+  # 'Fn::FindInMap' is resolved". The invariant is now structural -- there is no command line
+  # that can violate it.
+  AlarmPeriodByProbeInterval:
+    "5":  { Seconds: "600" }
+    "10": { Seconds: "1200" }
+    "15": { Seconds: "1800" }
+    "30": { Seconds: "3600" }
+    "60": { Seconds: "7200" }
+
+Conditions:
+  HasAlarmTopic: !Not [!Equals [!Ref AlarmTopicArn, ""]]
+  WantsDashboard: !Equals [!Ref CreateDashboard, "true"]
+  HasWebTarget: !Not [!Equals [!Ref WebBaseUrl, ""]]
+  # Both must hold. AlarmsEnabled=false silences a wired topic; an empty topic silences
+  # everything regardless. Neither case leaves a dangling empty-string ARN in AlarmActions,
+  # which CloudFormation would reject at deploy time rather than at validate time.
+  NotifyingEnabled: !And
+    - !Condition HasAlarmTopic
+    - !Equals [!Ref AlarmsEnabled, "true"]
+  NotifyingWebTarget: !And
+    - !Condition NotifyingEnabled
+    - !Condition HasWebTarget
+
+Resources:
+
+  # ----------------------------------------------------------------------------------------
+  # IAM. Two grants, no managed policies.
+  #
+  # AWSLambdaBasicExecutionRole (which climate-project-observability.yml's forwarder uses) is
+  # deliberately NOT attached here: it grants logs:* against every log group in the account.
+  # This role can write one log group and put metrics into one namespace, and that is the
+  # complete list of what the probe does.
+  # ----------------------------------------------------------------------------------------
+
+  ProbeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ServiceName}-synthetic-probe
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: probe-logs-and-metrics
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: OwnLogGroupOnly
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ServiceName}-synthetic-probe
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ServiceName}-synthetic-probe:*
+              # cloudwatch:PutMetricData does not support resource-level permissions -- the
+              # Resource must be "*" and IAM rejects anything else. The namespace condition
+              # key is the only thing that narrows it, and it does so exactly: this role can
+              # write ClimateProject/SyntheticProbe and nothing else, so a bug here cannot
+              # corrupt the ClimateProject/Prod metrics the observability alarms read.
+              - Sid: PutMetricsInOneNamespace
+                Effect: Allow
+                Action: cloudwatch:PutMetricData
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    cloudwatch:namespace: ClimateProject/SyntheticProbe
+      Tags:
+        - Key: Project
+          Value: climate-project-api
+        - Key: Environment
+          Value: production
+
+  ProbeLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ServiceName}-synthetic-probe
+      RetentionInDays: !Ref LogRetentionDays
+
+  # ----------------------------------------------------------------------------------------
+  # The probe.
+  #
+  # Inline ZipFile, standard library plus boto3 (present in the managed python3.12 runtime).
+  # No layer, no S3 bucket, no build step: the whole reason the GitHub workflow was the only
+  # live monitoring is that anything needing a pipeline never got deployed.
+  #
+  # THE ASSERTIONS ARE COPIED FROM .github/workflows/ops-synthetic-probe.yml, LINE FOR LINE.
+  # Line numbers are against that file AS IT STANDS AFTER the 30-line header comment this
+  # change set added to it -- an earlier revision of this template cited the pre-edit
+  # numbers, which were all 30 short and landed a reader on unrelated text:
+  #   - GET {ApiBaseUrl}/ready, expect HTTP 200                    (workflow line 185)
+  #   - GET {ApiBaseUrl}/version, expect HTTP 200, ONLY IF /ready
+  #     passed -- the workflow guards it with `if [ -z "$FAILURE" ]` (workflow line 194)
+  #   - three attempts, 10 s apart, 15 s per request; a target fails
+  #     only when ALL THREE miss                                   (workflow lines 169-182)
+  #   - redirects are NOT followed. The workflow's curl carries no
+  #     -L (workflow line 172), so a 301/302 is a non-200 and a
+  #     miss. urllib WOULD follow one by default, so the opener
+  #     below removes that handler -- see _NoRedirect.
+  #   - status code only. The workflow reads .commit and .builtAt
+  #     out of /version but falls back to "unknown" and asserts
+  #     NOTHING about them (workflow line 197), so this logs them
+  #     and does not assert on them either. Widening that into an
+  #     assertion would be a different change, made on purpose,
+  #     with the deploy-drift workflow consulted first.
+  # The failure strings below are the workflow's own text (lines 190 and 199) so that an
+  # alarm and an Actions-tab failure for the same outage read identically.
+  # ----------------------------------------------------------------------------------------
+
+  ProbeFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: ProbeLogGroup
+    Properties:
+      FunctionName: !Sub ${ServiceName}-synthetic-probe
+      Role: !GetAtt ProbeRole.Arn
+      Runtime: python3.12
+      Handler: index.handler
+      # 3 attempts x 15 s + 2 x 10 s backoff = 65 s per target. /version is skipped when
+      # /ready fails, so the worst reachable path is ready(65) + version(65) + web(65) = 195 s.
+      # 240 leaves margin without letting a wedged run overlap the next 15-minute tick.
+      #
+      # ONE REMAINING DIVERGENCE FROM THE WORKFLOW, recorded rather than hidden: curl's -m 15
+      # is a ceiling on the WHOLE transfer, while urllib's timeout=15 is per socket operation,
+      # so a server trickling bytes forever would be cut off by curl at 15 s and not by urllib.
+      # This timeout is the backstop for that case, and it fails in the right direction -- a
+      # killed invocation publishes nothing, and missing data is breaching on api-down.
+      #
+      # A SECOND divergence existed and has been closed: urllib.request.urlopen installs
+      # HTTPRedirectHandler by default and follows 3xx transparently, returning the FINAL
+      # status, while the workflow's curl carries no -L and reports the 3xx itself. A target
+      # that started answering 302 would have been a FAILURE in Actions and a success here.
+      # That is not a hypothetical: a redirect is the normal first symptom of #160's custom-
+      # domain cutover. _NoRedirect below removes the handler. Measured 2026-09-02, neither
+      # target redirects today (`curl -w '%{num_redirects}'` -> 0 on /version and on
+      # https://climate.timsint.com/), so this changes nothing now and everything then.
+      Timeout: 240
+      MemorySize: 128
+      Environment:
+        Variables:
+          API_BASE_URL: !Ref ApiBaseUrl
+          WEB_BASE_URL: !Ref WebBaseUrl
+          METRIC_NAMESPACE: ClimateProject/SyntheticProbe
+          ATTEMPTS: "3"
+          BACKOFF_SECONDS: "10"
+          REQUEST_TIMEOUT_SECONDS: "15"
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+
+          import boto3
+
+          NAMESPACE = os.environ["METRIC_NAMESPACE"]
+          API_BASE = os.environ["API_BASE_URL"].rstrip("/")
+          WEB_BASE = os.environ.get("WEB_BASE_URL", "").rstrip("/")
+          ATTEMPTS = int(os.environ.get("ATTEMPTS", "3"))
+          BACKOFF = float(os.environ.get("BACKOFF_SECONDS", "10"))
+          TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT_SECONDS", "15"))
+
+          # Created at import so the client is reused across warm invocations. A failure to
+          # construct it is a cold-start crash, which produces no datapoint, which the
+          # api-down alarm's TreatMissingData: breaching turns into an alarm. That is the
+          # intended behaviour: a probe that cannot report is an outage of the probe.
+          CLOUDWATCH = boto3.client("cloudwatch")
+
+
+          class _NoRedirect(urllib.request.HTTPRedirectHandler):
+              """Make a 3xx a miss, the way the workflow's `curl` (no -L) does.
+
+              urlopen's default handler follows 301/302/303/307 and hands back the FINAL
+              status, so a target that started answering 302 would be a FAILURE in the
+              Actions tab and a success here -- and a redirect is the normal first symptom
+              of #160's custom-domain cutover. Returning None from redirect_request leaves
+              the response unhandled, so OpenerDirector raises HTTPError carrying the 3xx
+              code itself, which _get() below turns back into a status.
+              """
+
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+
+          # build_opener replaces the default HTTPRedirectHandler with this subclass.
+          OPENER = urllib.request.build_opener(_NoRedirect)
+
+
+          def _get(url):
+              """One GET. Returns (status, body, elapsed_ms).
+
+              status is 0 for a transport-level failure -- DNS, TLS, connection refused,
+              timeout -- which is what `curl ... || echo 000` produces in the workflow.
+              urllib raises HTTPError on 4xx/5xx (and, through _NoRedirect, on 3xx) instead
+              of returning them, so that branch has to put the code back; without it a 503
+              from /ready would be indistinguishable from the service being gone, and the
+              workflow distinguishes them.
+              """
+              started = time.monotonic()
+              request = urllib.request.Request(
+                  url,
+                  method="GET",
+                  headers={"User-Agent": "climate-project-synthetic-probe/1"},
+              )
+              try:
+                  with OPENER.open(request, timeout=TIMEOUT) as response:
+                      body = response.read(4096)
+                      return response.status, body, (time.monotonic() - started) * 1000.0
+              except urllib.error.HTTPError as error:
+                  try:
+                      body = error.read(4096)
+                  except Exception:
+                      body = b""
+                  return error.code, body, (time.monotonic() - started) * 1000.0
+              except Exception as error:
+                  print("  transport failure: %s" % error)
+                  return 0, b"", (time.monotonic() - started) * 1000.0
+
+
+          def probe_thrice(url, expect):
+              """The workflow's probe_thrice(), same shape and same numbers.
+
+              A single miss is App Runner replacing an instance, a TLS handshake losing a
+              race, or egress hiccuping. Three consecutive misses over ~20 s is a service
+              that is genuinely not answering.
+              """
+              status, body, elapsed_ms = 0, b"", 0.0
+              for attempt in range(1, ATTEMPTS + 1):
+                  status, body, elapsed_ms = _get(url)
+                  if status == expect:
+                      print("  attempt %d: %d OK (%.0f ms)" % (attempt, status, elapsed_ms))
+                      return True, body, elapsed_ms
+                  print("  attempt %d: %s (want %d)" % (attempt, status or "000", expect))
+                  if attempt < ATTEMPTS:
+                      time.sleep(BACKOFF)
+              print("  body: %s" % body[:300].decode("utf-8", "replace"))
+              return False, body, elapsed_ms
+
+
+          def _datum(name, target, value, unit):
+              return {
+                  "MetricName": name,
+                  "Dimensions": [{"Name": "Target", "Value": target}],
+                  "Value": float(value),
+                  "Unit": unit,
+              }
+
+
+          def handler(event, context):
+              metrics = []
+              failure = ""
+
+              print("GET %s/ready" % API_BASE)
+              ready_ok, _, ready_ms = probe_thrice(API_BASE + "/ready", 200)
+              if not ready_ok:
+                  # /ready round-trips Postgres, so a 503 here is specifically "the process
+                  # is up and cannot reach its database" -- distinct from no answer at all.
+                  # Both land in the same metric because both mean the product does not
+                  # work; the status code in the log above tells them apart.
+                  failure = (
+                      "/ready did not return 200 on three consecutive attempts. Either the "
+                      "service is down, or it is up and cannot reach Postgres."
+                  )
+
+              version_ok = False
+              if not failure:
+                  print("GET %s/version" % API_BASE)
+                  version_ok, version_body, _ = probe_thrice(API_BASE + "/version", 200)
+                  if version_ok:
+                      try:
+                          payload = json.loads(version_body)
+                      except Exception:
+                          payload = {}
+                      # Reported, never asserted -- see the header comment.
+                      print("  running: %s built %s" % (
+                          payload.get("commit", "unknown"),
+                          payload.get("builtAt", "unknown"),
+                      ))
+                  else:
+                      failure = "/version did not return 200 on three consecutive attempts."
+
+              api_ok = ready_ok and version_ok
+              metrics.append(_datum("Success", "api", 1 if api_ok else 0, "Count"))
+              # Latency is published ONLY on success. A timed-out attempt would otherwise
+              # publish 15000 ms and fire the latency alarm for an outage the Success alarm
+              # already owns, turning one incident into two pages.
+              if api_ok:
+                  metrics.append(_datum("LatencyMs", "api", ready_ms, "Milliseconds"))
+
+              if WEB_BASE:
+                  print("GET %s/" % WEB_BASE)
+                  web_ok, _, web_ms = probe_thrice(WEB_BASE + "/", 200)
+                  metrics.append(_datum("Success", "web", 1 if web_ok else 0, "Count"))
+                  if web_ok:
+                      metrics.append(_datum("LatencyMs", "web", web_ms, "Milliseconds"))
+                  if not failure and not web_ok:
+                      failure = "The web origin did not return 200 on three consecutive attempts."
+
+              # One call, and deliberately NOT wrapped in try/except. If PutMetricData fails
+              # the invocation fails, no datapoint lands, and the alarm breaches on missing
+              # data. A swallowed exception here would produce a probe that reports success
+              # by never reporting at all, which is the exact failure this stack exists to
+              # remove from the GitHub workflow.
+              #
+              # THE CONSEQUENCE, stated because it is not obvious: EventBridge invokes Lambda
+              # ASYNCHRONOUSLY and retries a failed invocation twice. So one scheduled tick
+              # can run this probe up to three times and publish up to three datapoints into
+              # one period -- each a fresh, independent measurement, not a copy. That is
+              # benign here and by design: the down alarms use Statistic: Minimum, so three
+              # datapoints alarm exactly when at least one of them is 0, and the retry is a
+              # free second opinion. It is NOT free of cost, and the COST block counts it.
+              # If the invocation is THROTTLED and never runs at all, nothing is published,
+              # which is the missing-datapoint case api-down treats as breaching -- and the
+              # derived alarm period spans two probes, so a single throttled tick is absorbed
+              # and two consecutive ones are not.
+              CLOUDWATCH.put_metric_data(Namespace=NAMESPACE, MetricData=metrics)
+
+              result = {"ok": not failure, "detail": failure, "published": len(metrics)}
+              print(json.dumps(result))
+              return result
+      Tags:
+        - Key: Project
+          Value: climate-project-api
+        - Key: Environment
+          Value: production
+
+  # ----------------------------------------------------------------------------------------
+  # The schedule. AWS::Events::Rule and not AWS::Scheduler::Schedule on purpose: Scheduler
+  # needs its own IAM role holding lambda:InvokeFunction, and this stack's whole claim is that
+  # it grants two things. An Events rule invokes through a resource policy on the function
+  # instead, so no second role exists to audit.
+  #
+  # This is the fix. GitHub honours "*/15 * * * *" on this repository at a measured mean of
+  # 4h13m and a worst observed gap of 8h00m (17 consecutive scheduled runs to 2026-09-02);
+  # an EventBridge rate() rule fires on the rate.
+  # ----------------------------------------------------------------------------------------
+
+  ProbeSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub ${ServiceName}-synthetic-probe
+      Description: >-
+        Invokes the synthetic probe. Replaces the effective cadence of
+        .github/workflows/ops-synthetic-probe.yml, which is not the cadence it declares.
+      ScheduleExpression: !Sub rate(${ProbeIntervalMinutes} minutes)
+      State: ENABLED
+      Targets:
+        - Id: probe
+          Arn: !GetAtt ProbeFunction.Arn
+
+  ProbeScheduleInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt ProbeFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ProbeSchedule.Arn
+
+  # ----------------------------------------------------------------------------------------
+  # Alarms.
+  #
+  # EvaluationPeriods is 1 on the two DOWN alarms, and that is safe only because the period
+  # they evaluate spans TWO scheduled probes (see the AlarmPeriodByProbeInterval mapping,
+  # which is where the reasoning lives). The two facts have to be read together:
+  #
+  #   - A single 0 is enough to alarm, and should be. The probe already retried three times
+  #     over ~20 seconds before publishing it, which is the same evidence the workflow fails
+  #     its run on. Requiring two consecutive bad periods would not just double detection
+  #     latency; it would let a genuine 15-minute outage that produced exactly one 0 pass
+  #     unreported.
+  #   - A single MISSING datapoint is not enough to alarm, and must not be. Delivery jitter
+  #     and the probe's own 25-65 s slow path can displace one publish across a boundary. At
+  #     Period == interval that empty period would fire immediately under
+  #     TreatMissingData: breaching. At Period == 2 x interval the surviving datapoint holds
+  #     Minimum at 1 and nothing fires, while two consecutive misses -- a probe that is
+  #     actually dead -- still empty the period and still alarm.
+  #
+  # DETECTION LATENCY, stated honestly rather than claimed as "15 minutes": an outage waits
+  # up to one probe interval to be seen (<=15 min), then up to one alarm period for that
+  # period to close (<=30 min), plus CloudWatch's own evaluation lag of about a minute. Worst
+  # case ~46 minutes, mean ~23. The measurement it replaces is a mean gap of 4h13m and a
+  # worst observed gap of 8h00m between GitHub-scheduled runs. Roughly a 10x improvement,
+  # not the 17x the raw cadence numbers would suggest.
+  # ----------------------------------------------------------------------------------------
+
+  ApiDownAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-synthetic-probe-api-down
+      AlarmDescription: >-
+        The synthetic probe could not get 200 from both /ready and /version on three
+        consecutive attempts, OR the probe itself did not report. Those are one alarm because
+        they are one customer experience: nobody outside AWS can tell the API apart from the
+        thing that watches it. Check the probe's own log group first -- if it has no recent
+        stream the fault is here, not in production.
+      Namespace: ClimateProject/SyntheticProbe
+      MetricName: Success
+      Dimensions:
+        - Name: Target
+          Value: api
+      Statistic: Minimum
+      Period: !FindInMap [AlarmPeriodByProbeInterval, !Ref ProbeIntervalMinutes, Seconds]
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      # BREACHING, and this is the load-bearing line of the whole template. The failure the
+      # GitHub workflow cannot report is the one where it does not run, and a rule that stops
+      # firing looks exactly like a healthy midnight on the graph. Treating absence as failure
+      # is what makes a dead probe page someone instead of going quiet.
+      TreatMissingData: breaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref AlarmTopicArn], !Ref "AWS::NoValue"]
+      OKActions: !If [NotifyingEnabled, [!Ref AlarmTopicArn], !Ref "AWS::NoValue"]
+
+  ApiSlowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-synthetic-probe-api-slow
+      AlarmDescription: >-
+        /ready is answering, but slowly. /ready opens a real Postgres connection and runs
+        SELECT 1, so this is usually the database or the pooler rather than the container --
+        the same cause the transaction-pooler regression alarm watches for from inside.
+        THRESHOLD IS PROVISIONAL: re-baseline it from a week of this metric before believing
+        it, see docs/runbooks/alerting.md.
+      Namespace: ClimateProject/SyntheticProbe
+      MetricName: LatencyMs
+      Dimensions:
+        - Name: Target
+          Value: api
+      Statistic: Average
+      Period: !FindInMap [AlarmPeriodByProbeInterval, !Ref ProbeIntervalMinutes, Seconds]
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: !Ref ApiLatencyThresholdMs
+      ComparisonOperator: GreaterThanThreshold
+      # notBreaching, unlike the alarm above. A failed probe publishes NO latency at all, on
+      # purpose, so missing data here always means "the probe failed or did not run" -- a
+      # condition api-down already owns. Making this one breaching too would page twice for
+      # one incident.
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref AlarmTopicArn], !Ref "AWS::NoValue"]
+      # OKActions, like both down alarms and like every alarm in
+      # climate-project-observability.yml (:567, :591, :613, :772). An earlier revision of
+      # this template omitted it here and only here, with no comment saying why -- which,
+      # once a topic is wired, is a latency incident that opens in the channel and never
+      # closes. There was no reason; it was an oversight, and this is the fix.
+      OKActions: !If [NotifyingEnabled, [!Ref AlarmTopicArn], !Ref "AWS::NoValue"]
+
+  # Created only when WebBaseUrl is non-empty. There is no matching web LATENCY alarm: the
+  # web origin is served from a CDN edge whose latency varies with where the probe runs from,
+  # and no baseline for it exists. The metric is published either way, so the baseline can be
+  # read off a week of data and the alarm added in five lines when someone wants it.
+  WebDownAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasWebTarget
+    Properties:
+      AlarmName: !Sub ${ServiceName}-synthetic-probe-web-down
+      AlarmDescription: >-
+        The customer-facing web origin did not return 200 on three consecutive attempts.
+        Read this one NEXT TO api-down: web red with api green is Vercel or DNS; both red is
+        the platform; api red with web green still means the product does not work, because
+        every screen loads its data over the origin in web/vercel.json's CSP connect-src.
+      Namespace: ClimateProject/SyntheticProbe
+      MetricName: Success
+      Dimensions:
+        - Name: Target
+          Value: web
+      Statistic: Minimum
+      Period: !FindInMap [AlarmPeriodByProbeInterval, !Ref ProbeIntervalMinutes, Seconds]
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: !If [NotifyingWebTarget, [!Ref AlarmTopicArn], !Ref "AWS::NoValue"]
+      OKActions: !If [NotifyingWebTarget, [!Ref AlarmTopicArn], !Ref "AWS::NoValue"]
+
+  # ----------------------------------------------------------------------------------------
+  # The surface the alarms keep referring to.
+  #
+  # WebDownAlarm's description tells the responder to "Read this one NEXT TO api-down", and
+  # WebBaseUrl's whole argument for probing the web at all is "the two Success metrics side by
+  # side". Until this resource existed nothing created the place where they sit side by side,
+  # so the instruction pointed at a console the responder had to assemble by hand mid-incident.
+  #
+  # No precedent to copy: `grep -rin dashboard infra/aws/*.yml` matched nothing before this
+  # line, so climate-project-observability.yml does NOT create one either.
+  # ----------------------------------------------------------------------------------------
+
+  ProbeDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Condition: WantsDashboard
+    Properties:
+      DashboardName: !Sub ${ServiceName}-synthetic-probe
+      DashboardBody: !Sub
+        - |
+          {
+            "widgets": [
+              {
+                "type": "text", "x": 0, "y": 0, "width": 24, "height": 3,
+                "properties": {
+                  "markdown": "### Synthetic probe -- outside-in, every ${ProbeIntervalMinutes} minutes\n**Success = 1** means /ready and /version both answered 200. **0** means three consecutive misses over ~20s. **A gap in the line is the probe itself failing**, and `${ServiceName}-synthetic-probe-api-down` treats it as breaching for exactly that reason.\n\nRead api and web together: web red with api green is Vercel or DNS; both red is the platform; api red with web green still means the product does not work. Latency is published **only on success**, so a gap there during an outage is expected, not a second fault."
+                }
+              },
+              {
+                "type": "metric", "x": 0, "y": 3, "width": 12, "height": 6,
+                "properties": {
+                  "title": "Success -- api and web, side by side",
+                  "view": "timeSeries", "stacked": false,
+                  "region": "${AWS::Region}",
+                  "stat": "Minimum", "period": ${AlarmPeriod},
+                  "yAxis": { "left": { "min": 0, "max": 1 } },
+                  "metrics": [
+                    [ "ClimateProject/SyntheticProbe", "Success", "Target", "api" ]${WebSuccessSeries}
+                  ]
+                }
+              },
+              {
+                "type": "metric", "x": 12, "y": 3, "width": 12, "height": 6,
+                "properties": {
+                  "title": "LatencyMs -- successful probes only",
+                  "view": "timeSeries", "stacked": false,
+                  "region": "${AWS::Region}",
+                  "stat": "Average", "period": ${AlarmPeriod},
+                  "yAxis": { "left": { "min": 0 } },
+                  "annotations": {
+                    "horizontal": [
+                      { "label": "ApiLatencyThresholdMs (PROVISIONAL -- re-baseline it)", "value": ${ApiLatencyThresholdMs} }
+                    ]
+                  },
+                  "metrics": [
+                    [ "ClimateProject/SyntheticProbe", "LatencyMs", "Target", "api" ]${WebLatencySeries}
+                  ]
+                }
+              }
+            ]
+          }
+        - AlarmPeriod: !FindInMap [AlarmPeriodByProbeInterval, !Ref ProbeIntervalMinutes, Seconds]
+          WebSuccessSeries: !If
+            - HasWebTarget
+            - ', [ "ClimateProject/SyntheticProbe", "Success", "Target", "web" ]'
+            - ""
+          WebLatencySeries: !If
+            - HasWebTarget
+            - ', [ "ClimateProject/SyntheticProbe", "LatencyMs", "Target", "web" ]'
+            - ""
+
+Outputs:
+  ProbeFunctionName:
+    Description: Lambda that performs the probe. Its log group is the first place to look.
+    Value: !Ref ProbeFunction
+
+  ProbeLogGroupName:
+    Description: Where each run's per-attempt status codes and latencies are written.
+    Value: !Ref ProbeLogGroup
+
+  MetricNamespace:
+    Description: >-
+      Namespace holding Success and LatencyMs, both dimensioned by Target (api, web).
+    Value: ClimateProject/SyntheticProbe
+
+  ScheduleRuleName:
+    Description: EventBridge rule driving the probe. Disable this to silence it cleanly.
+    Value: !Ref ProbeSchedule
+
+  ApiDownAlarmName:
+    Description: >-
+      The alarm that is also the probe's own dead-man switch (TreatMissingData: breaching).
+    Value: !Ref ApiDownAlarm
+
+  AlarmPeriodSeconds:
+    Description: >-
+      The alarm period this stack derived from ProbeIntervalMinutes (always 2x it, in
+      seconds). Surfaced as an output because it is no longer a parameter anyone can read
+      back off the deploy command.
+    Value: !FindInMap [AlarmPeriodByProbeInterval, !Ref ProbeIntervalMinutes, Seconds]
+
+  DashboardName:
+    Condition: WantsDashboard
+    Description: >-
+      Where the api and web Success metrics sit side by side, which is what both down alarms
+      tell the responder to do.
+    Value: !Ref ProbeDashboard
+
+  AlarmActionsWired:
+    Description: >-
+      "true" when AlarmTopicArn is set AND AlarmsEnabled is true; otherwise the alarms
+      evaluate and change state but notify nobody. IT IS "false" ON THE DEPLOY THIS
+      REPOSITORY DOCUMENTS -- see the runbook. This is the one place to check whether these
+      alarms can reach a human at all.
+    Value: !If [NotifyingEnabled, "true", "false"]

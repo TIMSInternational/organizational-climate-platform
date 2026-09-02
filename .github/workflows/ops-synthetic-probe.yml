@@ -21,6 +21,46 @@ name: ops-synthetic-probe
 # `if:` guard on every posting step, so until someone adds it this workflow probes and fails
 # loudly in the Actions tab without ever attempting a post. That is deliberate: a notify step
 # that silently no-ops on a missing secret is how an alerting pipeline ends up decorative.
+#
+# ------------------------------------------------------------------------------------------
+# MEASURED CADENCE, 2026-09-02. THE `*/15` BELOW IS NOT WHAT HAPPENS.
+#
+# The cron comment further down predicted GitHub would delay scheduled runs "routinely by
+# several minutes and occasionally by tens of them". That estimate was wrong by an order of
+# magnitude. Over the last 17 scheduled runs on this repository (2026-08-30 22:23Z to
+# 2026-09-02 17:53Z, read with `gh run list --workflow ops-synthetic-probe.yml`) the 16 gaps
+# between them were:
+#
+#   min 1h59m   max 8h00m   mean 4h13m   median 4h19m
+#
+# That is 16.9x the declared 15-minute interval, and the SHORTEST gap observed is still eight
+# times it. A 15-minute cron declares 271 runs across that window; 17 happened, or 6.3%.
+#
+# Two consequences. Detection latency is hours, not minutes -- and this workflow cannot report
+# its own absence, because GitHub does not alert on a scheduled run that never fired, so a
+# silent Actions tab looks identical to a healthy week.
+#
+# infra/aws/climate-project-synthetic-probe.yml fixes THE CADENCE: an EventBridge
+# rate(15 minutes) rule invoking a Lambda that makes the SAME assertions this file makes --
+# /ready 200 (line 185), then /version 200 only if /ready passed (line 194), three attempts
+# 10s apart, 15s each (lines 169-182), redirects not followed because the curl on line 172
+# carries no -L, status code only -- publishing to CloudWatch, where an alarm with
+# TreatMissingData: breaching turns a probe that stops reporting into an alarm. Worst-case
+# detection goes from 8h+ to about 46 minutes. See docs/runbooks/alerting.md section 9.
+#
+# IT DOES NOT FIX THE ALERT. That template is NOT DEPLOYED, and its documented first deploy
+# passes AlarmTopicArn='' deliberately, so its alarms notify nobody. Neither does this file:
+# `gh secret list` returned NOTHING on 2026-09-02, so TEAMS_WEBHOOK_URL does not exist and
+# both posting steps below (lines 111 and 222) are skipped by their `if: env.WEBHOOK != ''`.
+# The only delivery path that works today is GitHub's own email to repository watchers when
+# the last step fails -- at the 4h13m cadence measured above. What improves is the
+# MEASUREMENT, not the PAGE; the page is the section 7 decision that is still open.
+#
+# KEEP THIS WORKFLOW RUNNING ANYWAY. It is the only prober outside the AWS account, which is
+# the entire argument at the top of this header: a probe inside the account shares a fate with
+# the thing it watches. The EventBridge probe covers cadence; this one covers the account
+# itself, and it alone carries the deploy-drift relay. Nothing below has been changed.
+# ------------------------------------------------------------------------------------------
 
 on:
   schedule:
