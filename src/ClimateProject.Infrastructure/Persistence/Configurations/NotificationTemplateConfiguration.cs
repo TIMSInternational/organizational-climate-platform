@@ -33,6 +33,14 @@ public class NotificationTemplateConfiguration : IEntityTypeConfiguration<Notifi
         builder.HasIndex(t => new { t.IsDefault, t.IsActive });
 
         builder.HasOne<Company>().WithMany().HasForeignKey(t => t.CompanyId).OnDelete(DeleteBehavior.SetNull);
-        builder.HasOne<User>().WithMany().HasForeignKey(t => t.CreatedBy);
+        // #168. This was the ONE actor column in the schema with no explicit `OnDelete`, and the
+        // EF default for a required foreign key is CASCADE -- so deleting a user would have taken
+        // every notification template they authored with them. Templates are company-wide
+        // configuration, not the author's personal data, and every other `CreatedBy`/`UpdatedBy`
+        // into `users` is RESTRICT (see ActionPlanConfiguration, BenchmarkConfiguration and the
+        // rest). Nothing hard-deletes a user today -- GDPR erasure pseudonymises the row and there
+        // is no delete endpoint -- so this changes no behaviour now. It closes the trap that would
+        // open the moment a hard delete is ever added.
+        builder.HasOne<User>().WithMany().HasForeignKey(t => t.CreatedBy).OnDelete(DeleteBehavior.Restrict);
     }
 }

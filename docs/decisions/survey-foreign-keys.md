@@ -129,6 +129,62 @@ ALTER TABLE demographic_snapshots
 
 ---
 
+## RULINGS — 2026-09-02, Federico
+
+Both decisions below are now settled, and two of the "still open" items at the foot of this
+document moved with them. Recorded here rather than in a new file so the argument and its outcome
+stay in one place.
+
+| | Ruling | Shipped as |
+|---|---|---|
+| **Decision 1** — `action_plans.source_insight_id` | **Stays unconstrained.** No parent table is chosen, because nothing writes the column. | no change; marker test unchanged |
+| **Decision 2** — `notification_templates.created_by` | **RESTRICT**, as recommended below. | `20260902191612_SchemaReviewDeleteBehaviourFixes` |
+| Loose end — `microclimate_templates.company_id` | **SET NULL**, matching its seven siblings. Needed an owner, not a decision. | same migration |
+| Loose end — `survey_department_targets.department_id` | **Still open.** Needs a ruling on which of the two divergent behaviours is right. | — |
+
+### Why Decision 1 resolves to "leave it alone" rather than to a table
+
+A measurement that was not in the original write-up: **`source_insight_id` has no producer.**
+
+```
+grep -rn "SourceInsightId" src/ --include="*.cs" | grep -v Migrations/
+→ ActionPlan.cs:18            the property
+→ ActionPlanEndpoints.cs:159  copies it straight off the create request
+→ ActionPlanDtos.cs:46        the request field
+→ ActionPlanConfiguration.cs  HasColumnName only — no relationship
+
+grep -rn "sourceInsightId" web/src   → 0 hits
+```
+
+The web application never sends it. No service sets it. The only path to a non-null value is a
+direct API call carrying a Guid the server does not validate. So the question "which table does it
+name" has no empirical answer today, and picking one would make an arbitrary choice permanent in a
+foreign key. The existing marker test
+(`SurveyForeignKeyDeleteBehaviourTests.Source_insight_id_still_takes_any_guid_because_its_parent_table_is_undecided`)
+stays as the tripwire: it goes red the day a producer and a parent are chosen together.
+
+**What would change this:** a feature that creates an action plan *from* an insight. Whoever builds
+it picks the parent table, and constrains the column in the same change.
+
+### Decision 2, as shipped
+
+`RESTRICT`, and the argument below is unchanged. Two facts settled how safe the change was:
+
+- It is **latent, not live.** Nothing hard-deletes a user — GDPR erasure pseudonymises the row
+  (`SubjectDataMap.cs`, `User` → `ErasureTreatment.Anonymised`) and there is no user `DELETE`
+  endpoint. So the CASCADE could not fire, and removing it changes no behaviour today.
+- It was the **only** foreign key into `users` with no explicit `OnDelete`, so it inherited EF
+  Core's CASCADE default while every sibling actor column spells out `Restrict`.
+
+Both new constraints carry a test that was **proved by mutation**, not merely written:
+
+| Guarantee | Test | Under the old behaviour |
+|---|---|---|
+| Deleting a template's author is refused, and the template survives | `NotificationTemplateDeleteBehaviourTests` | delete **succeeded silently** — "No exception was thrown" — and the template was destroyed |
+| Purging a tenant keeps its microclimate template and makes it global | `MicroclimateTemplateDeleteBehaviourTests` | delete **raised a foreign-key violation**, aborting the purge half-done |
+
+---
+
 # Decision 1 — what does `action_plans.source_insight_id` point at?
 
 **Unconstrained on purpose. Nobody has ruled, and a foreign key would make the guess permanent.**
@@ -207,16 +263,15 @@ change, and it matches what this schema already does with authorship everywhere 
 a rule about what happens to a person's work when the person is deleted, so it should be said out
 loud rather than inferred from a majority vote of sibling tables.
 
-## Two more from the same review, still open and out of #168's scope
+## Two more from the same review — one fixed, one still open
 
 Recorded so they are not rediscovered a third time. Both re-verified here against a live schema.
 
-- **`microclimate_templates.company_id` is the only foreign key in the schema with a defaulted
-  `onDelete`** — Postgres applied `NO ACTION` — while its seven sibling global tables
-  (`survey_templates`, `action_plan_templates`, `benchmarks`, `notification_templates`,
-  `question_bank_items`, `question_categories`, `question_library_items`) all pin `SET NULL`. The
-  column is nullable, so this is a one-line fix; a tenant purge `SET NULL`s the siblings and
-  aborts here. Needs no decision — only an owner.
+- ~~**`microclimate_templates.company_id` is the only foreign key in the schema with a defaulted
+  `onDelete`**~~ — **FIXED 2026-09-02** in `20260902191612_SchemaReviewDeleteBehaviourFixes`. It
+  now pins `SET NULL` like its seven siblings (`survey_templates`, `action_plan_templates`,
+  `benchmarks`, `notification_templates`, `question_bank_items`, `question_categories`,
+  `question_library_items`), and `MicroclimateTemplateDeleteBehaviourTests` holds it there.
 - **`survey_department_targets.department_id` is CASCADE while
   `microclimate_department_targets.department_id` is RESTRICT.** Identical semantics, opposite
   behaviour. Latent today because nothing hard-deletes a department, which is also why it has
