@@ -25,7 +25,13 @@ public class MicroclimateTemplateConfiguration : IEntityTypeConfiguration<Microc
         builder.HasIndex(t => new { t.CompanyId, t.IsActive });
         builder.HasIndex(t => new { t.Category, t.IsActive });
 
-        builder.HasOne<Company>().WithMany().HasForeignKey(t => t.CompanyId);
+        // #168 follow-up. This was the only `company_id` in the schema with a defaulted `onDelete`
+        // -- Postgres applied NO ACTION -- while all seven sibling global tables (survey_templates,
+        // action_plan_templates, benchmarks, notification_templates, question_bank_items,
+        // question_categories, question_library_items) pin SET NULL. The column is nullable, so
+        // NO ACTION bought nothing: a tenant purge would SET NULL the siblings and then abort
+        // here, half-done. SET NULL makes the row what it already can be -- a global template.
+        builder.HasOne<Company>().WithMany().HasForeignKey(t => t.CompanyId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<User>().WithMany().HasForeignKey(t => t.CreatedBy).OnDelete(DeleteBehavior.SetNull);
 
         builder.OwnsOne(t => t.Settings, settings =>

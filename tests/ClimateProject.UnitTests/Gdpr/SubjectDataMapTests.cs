@@ -288,7 +288,15 @@ public class SubjectDataMapTests
         // there is now more of the employer's authored record that a row delete would destroy.
         // (question_library_items.last_modified_by is SetNull and correctly absent here -- losing
         // the last editor's identity costs nothing, losing the author's costs provenance.)
-        Assert.Equal(19, restricting.Count);
+        //
+        // 20 since the #168 follow-up: notification_templates.created_by. Re-read, as this comment
+        // requires, and the argument is not merely unchanged -- it was INCOMPLETE before. That
+        // column was the one authorship FK into users with no explicit OnDelete, so it inherited
+        // EF's CASCADE default: the single place where the "a DELETE would take the company's
+        // business records with it" clause was literally true rather than prevented. Notification
+        // templates are company-wide configuration the author does not own. Moving it to Restrict
+        // closes the exception the map's own prose did not know it had.
+        Assert.Equal(20, restricting.Count);
     }
 
     [Fact]
