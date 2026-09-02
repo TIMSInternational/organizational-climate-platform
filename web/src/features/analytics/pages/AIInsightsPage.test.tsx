@@ -10,11 +10,7 @@ import {
   COMPANY_CONTEXT_STORAGE_KEY,
 } from '../../../company-context'
 import type { AIInsight, AIInsightListItem } from '../api/insights'
-
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
+import { tokenFor } from '../../../test/jwtFixture'
 
 const OWN = 'company-1'
 

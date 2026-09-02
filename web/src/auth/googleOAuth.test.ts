@@ -7,12 +7,9 @@ import {
   takeGoogleHandshake,
   type GoogleHandshake,
 } from './googleOAuth'
+import { tokenFor as idTokenFor } from '../test/jwtFixture'
 
 /** An unsigned JWT whose payload is exactly `claims`. Only the payload is read here. */
-function idTokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
 
 const HANDSHAKE: GoogleHandshake = { state: 'state-abc', nonce: 'nonce-xyz' }
 

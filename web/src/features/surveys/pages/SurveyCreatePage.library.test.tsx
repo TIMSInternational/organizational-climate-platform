@@ -6,6 +6,7 @@ import { TranslationProvider } from '../../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
+import { tokenFor } from '../../../test/jwtFixture'
 
 /**
  * #115's third acceptance criterion: **verified working in the survey wizard.**
@@ -19,11 +20,6 @@ import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../co
  * questions step, pick a multiple-choice item, and find its OPTIONS on the POST body
  * — options that exist nowhere in the list projection the picker first reads.
  */
-
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
 
 const LIST_ROW = {
   id: 'lib-choice',

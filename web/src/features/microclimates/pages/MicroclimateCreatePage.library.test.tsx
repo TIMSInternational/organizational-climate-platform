@@ -6,6 +6,7 @@ import { TranslationProvider } from '../../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
+import { tokenFor } from '../../../test/jwtFixture'
 
 /**
  * #115's fourth acceptance criterion: **verified working in the microclimate
@@ -17,11 +18,6 @@ import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../co
  * a microclimate question shape has no dimension and no scale-end labels, so what
  * must arrive intact is the text, the type and the OPTIONS.
  */
-
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
 
 const LIST_ROW = {
   id: 'lib-choice',

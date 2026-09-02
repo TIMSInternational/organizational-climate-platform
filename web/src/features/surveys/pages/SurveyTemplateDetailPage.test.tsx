@@ -8,11 +8,7 @@ import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../co
 import { setToken, clearToken } from '../../../auth/token'
 import SurveyTemplateDetailPage from './SurveyTemplateDetailPage'
 import type { SurveyTemplateDetail } from '../api/surveyTemplates'
-
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
+import { tokenFor } from '../../../test/jwtFixture'
 
 function template(overrides: Partial<SurveyTemplateDetail> = {}): SurveyTemplateDetail {
   return {

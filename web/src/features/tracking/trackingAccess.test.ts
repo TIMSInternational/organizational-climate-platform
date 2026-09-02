@@ -8,6 +8,7 @@ import {
   readTrackingClaims,
   type TrackingClaims,
 } from './trackingAccess'
+import { tokenFor } from '../../test/jwtFixture'
 
 /**
  * These mirror `ClimateTracking.Application.Auth.PlanAccessHandler` case for case.
@@ -25,14 +26,6 @@ function claims(overrides: Partial<TrackingClaims> = {}): TrackingClaims {
     nodoExternalId: 'nodo-a',
     ...overrides,
   }
-}
-
-function tokenFor(payload: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(payload))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
-  return `header.${body}.signature`
 }
 
 afterEach(() => {

@@ -12,11 +12,7 @@ import RequireAuth from '../app/RequireAuth'
 import { TranslationProvider } from '../i18n'
 import { getToken, setToken, clearToken } from './token'
 import { beginGoogleSignIn, peekGoogleHandshake } from './googleOAuth'
-
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
+import { tokenFor } from '../test/jwtFixture'
 
 /** Renders the current path and router state so a navigation can be asserted on. */
 function LocationProbe() {

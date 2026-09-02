@@ -5,6 +5,7 @@ import { TranslationProvider } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import MisTareasPage from './MisTareasPage'
 import type { PlanAccion } from '../api/trackingApi'
+import { tokenFor } from '../../../test/jwtFixture'
 
 /**
  * `/tracking/mis-tareas` is the acceptance criterion "reachable and usable by a
@@ -35,14 +36,6 @@ function tarea(overrides: Partial<PlanAccion> = {}): PlanAccion {
     involucradosExternalIds: ['persona-1'],
     ...overrides,
   }
-}
-
-function tokenFor(payload: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(payload))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
-  return `header.${body}.signature`
 }
 
 function renderPage() {

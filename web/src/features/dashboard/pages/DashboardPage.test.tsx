@@ -12,11 +12,18 @@ import type {
   EmployeeDashboard,
   SuperAdminDashboard,
 } from '../api/dashboard'
+import { tokenFor as tokenForClaims } from '../../../test/jwtFixture'
+
+/**
+ * #384: the role/companyId shorthand this file's call sites use, over the shared UTF-8
+ * encoder. Kept local rather than pushed into the shared helper, because the shorthand is
+ * this file's convenience and not a fixture shape other suites share.
+ */
+function tokenFor(role: string, companyId = 'c1'): string {
+  return tokenForClaims({ role, companyId })
+}
 
 /** A well-formed unsigned JWT, so `readSessionClaims` reads the role rather than bailing. */
-function tokenFor(role: string, companyId = 'c1'): string {
-  return `header.${btoa(JSON.stringify({ role, companyId }))}.signature`
-}
 
 /**
  * Answers `fetch` from the URL, with a fresh `Response` on every call.

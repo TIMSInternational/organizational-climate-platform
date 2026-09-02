@@ -8,6 +8,7 @@ import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider } from '../../../company-context'
 import { SURVEY_DRAFT_CONTENT_VERSION } from '../draftContent'
+import { tokenFor } from '../../../test/jwtFixture'
 
 /**
  * The survey wizard's autosave and recovery (#266).
@@ -40,11 +41,6 @@ import { SURVEY_DRAFT_CONTENT_VERSION } from '../draftContent'
 vi.setConfig({ testTimeout: 20_000 })
 
 const AUTOSAVE_DELAY_MS = 1500
-
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
 
 interface DraftOverrides {
   id?: string

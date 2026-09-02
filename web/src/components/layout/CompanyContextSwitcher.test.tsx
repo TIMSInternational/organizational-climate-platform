@@ -9,6 +9,7 @@ import {
   useCompanyScope,
 } from '../../company-context'
 import { CompanyContextSwitcher } from './CompanyContextSwitcher'
+import { tokenFor } from '../../test/jwtFixture'
 
 afterEach(() => {
   cleanup()
@@ -19,10 +20,6 @@ afterEach(() => {
 })
 
 /** An unsigned JWT carrying just the claims the context reads. */
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
 
 const COMPANIES = [
   { id: 'co-a', name: 'Acme Holdings', emailDomain: null, industry: null, size: null, country: null, subscriptionTier: null, createdAt: '2026-01-01T00:00:00Z' },
