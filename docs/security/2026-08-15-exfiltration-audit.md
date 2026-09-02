@@ -52,9 +52,10 @@ detonated on **the original vendor's infrastructure** — a Coolify host per tha
 script — not in this Vercel team. That relocates the remaining search, and it is the reason
 item 1 of [OPEN](#open--what-a-human-must-still-do) exists.
 
-This also corrects `docs/security/rotation-inventory.md`, which attributes
-"Legacy Vercel env (`MONGODB_URI`)" and "`NEXTAUTH_SECRET` | Legacy Vercel env" to a Vercel
-project — see [Corrections owed to other documents](#corrections-owed-to-other-documents).
+`docs/security/rotation-inventory.md` **already carries this correction** — it landed on `main`
+in `3c5a18f` ("the legacy app never deployed on this Vercel — it was Coolify"), and its MongoDB
+row now reads *"Vendor hosting env — Coolify, per the legacy repo's `deploy.sh`"*. This document
+is the evidence underneath that correction, not a request to make it.
 **It does not clear a single credential.** The build-time environment was still readable
 in-process, on vendor infrastructure and on developer machines. #70 stands unchanged.
 
@@ -226,12 +227,19 @@ systems and does not survive being restated without that scope.
 Recorded, not applied — these files are edited by other work in flight. Each is a factual error
 this audit disproves:
 
-1. **`docs/security/rotation-inventory.md`** — rows attributing exposure to "Legacy Vercel env"
-   should read *vendor hosting environment (Coolify, per the legacy repo's `deploy.sh`) —
-   enumerate with the vendor*. Row E's "Vercel dashboard → project `climate`" should note that
-   `climate` is the **new** app's project, created 2026-07-31T17:50:55Z, after the removal
-   commit; its environment never overlapped the malware window. Separately, its description of
-   `40fc19a` as "unreachable from any branch tip" is wrong — the commit is in `main`'s history.
+1. **`docs/security/rotation-inventory.md`** — **nothing owed; already applied.** Both
+   corrections this audit would have asked for landed on `main` in `3c5a18f`: the exposure rows
+   read *"Vendor hosting env — Coolify, per the legacy repo's `deploy.sh`"*, and row E already
+   notes that project `climate` is the **new** app's, created 2026-07-31T17:50:55Z, after the
+   removal commit.
+
+   One claim in that file is **NOT** corrected here, deliberately. It describes `40fc19a` as
+   "unreachable from any branch tip". That sentence is about the **legacy `climate-project`
+   repository**, not this one — `git cat-file -t 40fc19a` in this repo returns *no such object*,
+   and the commit is reachable from no ref here. So this audit can neither confirm nor disprove
+   it from this repository, and an earlier draft of this document asserted that it was wrong.
+   That assertion is withdrawn. Verify it inside `climate-project` before acting on it — which
+   is work that belongs to #166 (deleting that repository) rather than to this audit.
 2. **`docs/runbooks/legacy-dependencies.md`** — the row describing "the legacy Vercel deployment
    itself … Vercel project `climate`" rests on the same disproven premise: that project is the
    new app and post-dates the incident.
