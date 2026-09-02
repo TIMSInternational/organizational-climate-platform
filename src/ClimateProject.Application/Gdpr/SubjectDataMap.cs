@@ -430,7 +430,7 @@ public static class SubjectDataMap
             "For as long as the account exists; pseudonymised on erasure and never afterwards restored.",
             "The account itself, together with its owned columns — preferences, notification opt-outs and the "
             + "consent flags. Pseudonymised rather than deleted, and the reason is structural as well as legal: "
-            + "nineteen foreign keys into users are ON DELETE RESTRICT (surveys.created_by, reports.created_by, "
+            + "twenty foreign keys into users are ON DELETE RESTRICT (surveys.created_by, reports.created_by, "
             + "survey_audit_logs.user_id and the rest), so a DELETE would either fail or, if those restrictions "
             + "were relaxed, take the audit trail and the company's business records with it. Erasure overwrites "
             + "the identifiers — email, name, credential, legacy persona id, last login — and deactivates the "
