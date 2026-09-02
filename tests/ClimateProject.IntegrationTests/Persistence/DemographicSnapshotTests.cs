@@ -47,7 +47,19 @@ public class DemographicSnapshotTests(PostgresContainerFixture postgres)
         db.Users.Add(member);
         await db.SaveChangesAsync();
 
-        var surveyId = Guid.NewGuid();
+        // survey_id is a real foreign key since #168. It was a bare Guid.NewGuid() here, and the
+        // column is NOT NULL, so this test was writing exactly the row the constraint now forbids:
+        // a snapshot of a survey that never existed.
+        var survey = new Survey
+        {
+            Id = Guid.NewGuid(), CompanyId = company.Id, CreatedBy = admin.Id, TitleEn = "Launch survey",
+            Type = "custom", StartDate = DateTimeOffset.UtcNow, EndDate = DateTimeOffset.UtcNow.AddDays(7),
+            CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        db.Surveys.Add(survey);
+        await db.SaveChangesAsync();
+        var surveyId = survey.Id;
+
         var snapshot = new DemographicSnapshot
         {
             Id = Guid.NewGuid(),
@@ -118,12 +130,23 @@ public class DemographicSnapshotTests(PostgresContainerFixture postgres)
         await db.Database.MigrateAsync();
         var (company, admin) = await SeedCompanyAndUserAsync(db);
 
+        // A real survey, not a free guid: survey_id is a NOT NULL foreign key since #168, so an
+        // invented one is rejected by the database even on this raw-SQL path.
+        var survey = new Survey
+        {
+            Id = Guid.NewGuid(), CompanyId = company.Id, CreatedBy = admin.Id, TitleEn = "Minimal survey",
+            Type = "custom", StartDate = DateTimeOffset.UtcNow, EndDate = DateTimeOffset.UtcNow.AddDays(7),
+            CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        db.Surveys.Add(survey);
+        await db.SaveChangesAsync();
+
         var minimalSnapshotId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
              INSERT INTO demographic_snapshots ("Id", survey_id, company_id, version, "timestamp", created_by, reason, created_at, updated_at)
-             VALUES ({minimalSnapshotId}, {Guid.NewGuid()}, {company.Id}, {1}, {now}, {admin.Id}, {"Minimal"}, {now}, {now})
+             VALUES ({minimalSnapshotId}, {survey.Id}, {company.Id}, {1}, {now}, {admin.Id}, {"Minimal"}, {now}, {now})
              """);
 
         await using var readDb = CreateContext();
