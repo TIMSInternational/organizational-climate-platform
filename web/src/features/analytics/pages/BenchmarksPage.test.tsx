@@ -6,12 +6,9 @@ import BenchmarksPage from './BenchmarksPage'
 import { TranslationProvider } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import type { Benchmark, BenchmarkListItem } from '../api/benchmarks'
+import { tokenFor } from '../../../test/jwtFixture'
 
 /** An unsigned JWT carrying just the claims the page reads. */
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
 
 const OWN = 'company-1'
 const OTHER = 'company-2'

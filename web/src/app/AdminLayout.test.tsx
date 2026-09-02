@@ -7,6 +7,7 @@ import { setToken, clearToken } from '../auth/token'
 import { ADMIN_THEME_ATTRIBUTE, ADMIN_THEME_STORAGE_KEY } from '../theme/adminTheme'
 import { COMPANY_CONTEXT_STORAGE_KEY } from '../company-context'
 import AdminLayout from './AdminLayout'
+import { tokenFor } from '../test/jwtFixture'
 
 afterEach(() => {
   cleanup()
@@ -71,10 +72,6 @@ function stubShellFetch(): void {
 }
 
 /** An unsigned JWT carrying just the claims the shell reads. */
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
 
 function renderShell(initialPath = '/action-plans') {
   const router = createMemoryRouter(

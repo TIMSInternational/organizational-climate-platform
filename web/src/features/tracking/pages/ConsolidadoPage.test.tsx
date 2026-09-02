@@ -10,6 +10,7 @@ import { clearCompanyNameCache } from '../../../company-context/useCompanyName'
 import { SEMAFORO_ORDER, semaforoPresentation } from '../semaforo'
 import { CATALOGUES } from '../../../i18n/locale'
 import type { MessageNode } from '../../../i18n/translate'
+import { tokenFor } from '../../../test/jwtFixture'
 
 /** An already-translated string from the Spanish catalogue, by dotted path. */
 function copy(path: string): string {
@@ -23,11 +24,6 @@ function copy(path: string): string {
 }
 
 const TRACKING = 'http://tracking.test'
-
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
 
 const CONSOLIDADO = {
   conteos: { rojo: 2, amarillo: 3, verde: 7 },

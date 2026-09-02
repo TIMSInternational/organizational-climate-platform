@@ -7,12 +7,9 @@ import {
   writeSelectedCompanyId,
 } from './companyContext'
 import { setToken, clearToken } from '../auth/token'
+import { tokenFor } from '../test/jwtFixture'
 
 /** An unsigned JWT carrying just the claims this module reads. */
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
 
 afterEach(() => {
   clearToken()

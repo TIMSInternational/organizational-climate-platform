@@ -7,12 +7,9 @@ import { TranslationProvider } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider } from '../../../company-context'
 import type { QuestionBankItem, QuestionBankMetrics } from '../api/questionBank'
+import { tokenFor } from '../../../test/jwtFixture'
 
 /** An unsigned JWT carrying just the claims the page reads. */
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
 
 const OWN = 'company-1'
 

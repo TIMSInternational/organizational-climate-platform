@@ -12,6 +12,7 @@ import {
   COMPANY_CONTEXT_STORAGE_KEY,
   useCompanyContext,
 } from '../../../company-context'
+import { tokenFor } from '../../../test/jwtFixture'
 
 /**
  * The URLs of requests for company-scoped DATA.
@@ -29,7 +30,6 @@ function dataRequestUrls(): string[] {
     .filter((url) => !/\/profile(\?|$)/.test(url))
 }
 
-
 /**
  * #124. This page is the one every other lane's TODO pointed at: it was the
  * documented example of a SuperAdmin being silently scoped to whatever company
@@ -39,11 +39,6 @@ function dataRequestUrls(): string[] {
  * rather than guessed at, and a CompanyAdmin is unaffected by anything the
  * selector stores.
  */
-
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
 
 function routeFetch() {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {

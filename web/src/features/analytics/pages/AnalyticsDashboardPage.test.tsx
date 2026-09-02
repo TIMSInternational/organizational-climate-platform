@@ -7,6 +7,16 @@ import { TranslationProvider } from '../../../i18n'
 import { setToken } from '../../../auth/token'
 import type { BenchmarkListItem } from '../api/benchmarks'
 import type { AIInsightListItem } from '../api/insights'
+import { tokenFor as tokenForClaims } from '../../../test/jwtFixture'
+
+/**
+ * #384: same shorthand over the shared UTF-8 encoder. The hard-coded `other-company` is
+ * the point of these tests -- they assert what an admin of a DIFFERENT company may see --
+ * so it stays here rather than becoming a default in the shared helper.
+ */
+function tokenFor(role: string): string {
+  return tokenForClaims({ role, companyId: 'other-company' })
+}
 
 function benchmarkRow(overrides: Partial<BenchmarkListItem> = {}): BenchmarkListItem {
   return {
@@ -36,10 +46,6 @@ function insightRow(overrides: Partial<AIInsightListItem> = {}): AIInsightListIt
 }
 
 /** A well-formed unsigned JWT, so `decodeJwtPayload` reads the role rather than bailing. */
-function tokenFor(role: string): string {
-  const payload = btoa(JSON.stringify({ role, companyId: 'other-company' }))
-  return `header.${payload}.signature`
-}
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status })

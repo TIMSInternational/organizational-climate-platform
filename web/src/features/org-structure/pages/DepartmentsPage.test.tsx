@@ -7,6 +7,7 @@ import { TranslationProvider } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
 import type { Department } from '../api/departments'
+import { tokenFor } from '../../../test/jwtFixture'
 
 /**
  * The URLs of requests for company-scoped DATA.
@@ -22,13 +23,6 @@ function dataRequestUrls(): string[] {
     .mocked(fetch)
     .mock.calls.map((call) => String(call[0]))
     .filter((url) => !/\/profile(\?|$)/.test(url))
-}
-
-
-
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
 }
 
 const OWN = 'company-1'

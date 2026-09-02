@@ -9,13 +9,9 @@ import { ANONYMITY_FLOOR, isSuppressed } from '../../../components/charts'
 import type { CompanyDetail } from '../api/companies'
 import type { Department } from '../api/departments'
 import type { CompanySettingsResponse } from '../api/companySettings'
+import { tokenFor } from '../../../test/jwtFixture'
 
 const COMPANY = 'company-1'
-
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
 
 function companyDetail(overrides: Partial<CompanyDetail> = {}): CompanyDetail {
   return {

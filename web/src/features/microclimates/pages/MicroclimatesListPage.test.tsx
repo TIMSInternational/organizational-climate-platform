@@ -7,6 +7,7 @@ import type { Microclimate } from '../api/microclimates'
 import { TranslationProvider } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
+import { tokenFor } from '../../../test/jwtFixture'
 
 /**
  * The redesigned listing surface: the KPI strip, the live panel and the rule that
@@ -17,10 +18,6 @@ import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../co
  * strip wired to the filtered array still renders four plausible numbers, which is
  * exactly how a wrong one survives review.
  */
-function tokenFor(claims: Record<string, unknown>): string {
-  const body = btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `header.${body}.signature`
-}
 
 function session(overrides: Partial<Microclimate> = {}): Microclimate {
   return {
