@@ -50,7 +50,7 @@ public class BulkImportEndpointsTests : IAsyncLifetime
     private async Task<string> SignUpAndGetTokenAsync(HttpClient client, string role, AuthWebApplicationFactory? factory = null)
     {
         var email = $"{Guid.NewGuid():N}@{_companyDomain}";
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test Admin", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test Admin", email, "A-good-passw0rd"));
         var token = (await signup.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
 
         using var scope = (factory ?? _factory).Services.CreateScope();
@@ -60,7 +60,7 @@ public class BulkImportEndpointsTests : IAsyncLifetime
         user.CompanyId = _companyId;
         await db.SaveChangesAsync();
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         return (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
     }
 
@@ -274,12 +274,12 @@ public class BulkImportEndpointsTests : IAsyncLifetime
         var anonymous = _factory.CreateClient();
         var accept = await anonymous.PostAsJsonAsync(
             $"/invitations/{invitationToken}/accept",
-            new { name = "Ana Funcionaria", password = "her-own-password" });
+            new { name = "Ana Funcionaria", password = "Her-0wn-password" });
         Assert.Equal(HttpStatusCode.Created, accept.StatusCode);
 
         // The proof. Signing in with a credential she chose is exactly what the discarded-Guid
         // account made impossible for every person a CSV ever named.
-        var login = await anonymous.PostAsJsonAsync("/auth/login", new LoginRequest(email, "her-own-password"));
+        var login = await anonymous.PostAsJsonAsync("/auth/login", new LoginRequest(email, "Her-0wn-password"));
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         Assert.False(string.IsNullOrWhiteSpace((await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token));
     }

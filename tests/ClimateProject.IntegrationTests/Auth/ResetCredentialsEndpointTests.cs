@@ -115,6 +115,26 @@ public class ResetCredentialsEndpointTests : IAsyncLifetime
 
     public Task DisposeAsync() => Task.CompletedTask;
 
+    /// <summary>
+    /// The temporary password must be one the product would accept on the next change.
+    /// The old Guid-derived twelve hex characters failed the default policy (no uppercase);
+    /// this asserts the minted value passes the same validator every password-setting
+    /// route now runs, and is comfortably longer than the minimum.
+    /// </summary>
+    [Fact]
+    public async Task Reset_mints_a_temporary_password_that_satisfies_the_password_policy()
+    {
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _adminToken);
+
+        var response = await client.PostAsJsonAsync("/auth/admin/reset-credentials", new ResetCredentialsRequest(_employee.Id));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ResetCredentialsResponse>();
+        Assert.Null(ClimateProject.Application.Auth.PasswordPolicyValidation.Validate(body!.TemporaryPassword, new PasswordPolicy()));
+        Assert.True(body.TemporaryPassword.Length >= 16, body.TemporaryPassword);
+    }
+
     [Fact]
     public async Task Admin_can_reset_another_users_credentials()
     {

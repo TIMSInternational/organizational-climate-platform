@@ -69,7 +69,7 @@ public class NodoClaimTests : IAsyncLifetime
     private static string DecodeNodoClaim(string token)
         => new JwtSecurityTokenHandler().ReadJwtToken(token).Claims.Single(c => c.Type == "nodoId").Value;
 
-    private const string Password = "a-good-password";
+    private const string Password = "A-good-passw0rd";
 
     /// <summary>Signs a user up and returns their signup token.</summary>
     private async Task<string> SignupAsync(HttpClient client, string email, string name)

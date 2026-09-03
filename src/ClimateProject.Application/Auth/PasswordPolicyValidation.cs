@@ -13,10 +13,13 @@ namespace ClimateProject.Application.Auth;
 /// worse than an absent one, the same argument that keeps push notifications off #103's
 /// API surface.
 ///
-/// This closes that gap for the self-service change-password route only. Signup is left
-/// alone on purpose: tightening it is a behaviour change to an unauthenticated endpoint
-/// that existing tests and existing accounts depend on, and it belongs in a change that
-/// says so in its title rather than as a side effect of building a profile page.
+/// #136 closed that gap for the self-service change-password route only and left signup
+/// alone, saying the tightening belonged in a change that named it. That change is the one
+/// that wired this validator into <c>AuthEndpoints.SignupAsync</c> and
+/// <c>InvitationAcceptEndpoints</c> (which had a hardcoded 8 that read no setting at all),
+/// and made <c>reset-credentials</c> mint a password that passes it
+/// (<see cref="TemporaryPasswords"/>). Existing accounts are untouched: nothing here runs
+/// at login.
 ///
 /// Pure and dependency-free so it is unit-testable without a database or a host.
 /// </summary>

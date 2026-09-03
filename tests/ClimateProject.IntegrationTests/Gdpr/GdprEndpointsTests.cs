@@ -81,7 +81,7 @@ public class GdprEndpointsTests : IAsyncLifetime
     {
         var client = _factory.CreateClient();
         var email = $"{Guid.NewGuid():N}@{domain ?? _domain}";
-        await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "a-good-password"));
+        await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "A-good-passw0rd"));
 
         Guid userId;
         await using (var db = NewContext())
@@ -93,7 +93,7 @@ public class GdprEndpointsTests : IAsyncLifetime
             userId = user.Id;
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         var token = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return (client, userId, email);
@@ -889,7 +889,7 @@ public class GdprEndpointsTests : IAsyncLifetime
         // stamp, so SecurityStampValidation refuses the old token before #280's mint-time
         // check (which remains as the backstop) is ever reached.
         var login = await _factory.CreateClient()
-            .PostAsJsonAsync("/auth/login", new LoginRequest(subjectEmail, "a-good-password"));
+            .PostAsJsonAsync("/auth/login", new LoginRequest(subjectEmail, "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.Unauthorized, login.StatusCode);
         Assert.Equal(
             HttpStatusCode.Unauthorized,

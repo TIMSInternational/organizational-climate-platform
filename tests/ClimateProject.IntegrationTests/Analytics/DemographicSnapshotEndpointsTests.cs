@@ -125,7 +125,7 @@ public class DemographicSnapshotEndpointsTests : IAsyncLifetime
     private async Task<string> SignUpAndGetTokenAsync(HttpClient client, string role, string emailDomain, Guid? companyId = null)
     {
         var email = $"{Guid.NewGuid():N}@{emailDomain}";
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "A-good-passw0rd"));
         var token = (await signup.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
 
         using (var scope = _factory.Services.CreateScope())
@@ -141,7 +141,7 @@ public class DemographicSnapshotEndpointsTests : IAsyncLifetime
             await db.SaveChangesAsync();
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         return (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
     }
 
@@ -577,9 +577,9 @@ public class DemographicSnapshotEndpointsTests : IAsyncLifetime
         var victimEmail = $"{Guid.NewGuid():N}@{_companyADomain}";
         var colliderEmail = $"{Guid.NewGuid():N}@{_companyADomain}";
         var client = _factory.CreateClient();
-        (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Victim", victimEmail, "a-good-password")))
+        (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Victim", victimEmail, "A-good-passw0rd")))
             .EnsureSuccessStatusCode();
-        (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Collider", colliderEmail, "a-good-password")))
+        (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Collider", colliderEmail, "A-good-passw0rd")))
             .EnsureSuccessStatusCode();
 
         Guid colliderId;
@@ -596,7 +596,7 @@ public class DemographicSnapshotEndpointsTests : IAsyncLifetime
             Assert.NotEqual(victim.Id, collider.Id);
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(colliderEmail, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(colliderEmail, "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer", (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token);

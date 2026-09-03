@@ -61,7 +61,7 @@ public class SystemStatusEndpointsTests : IAsyncLifetime
     private async Task<(string Token, Guid UserId)> SignUpAndGetTokenAsync(HttpClient client, string role)
     {
         var email = $"{Guid.NewGuid():N}@{_companyDomain}";
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.Created, signup.StatusCode);
 
         Guid userId;
@@ -73,7 +73,7 @@ public class SystemStatusEndpointsTests : IAsyncLifetime
             userId = user.Id;
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         var token = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
         return (token, userId);
     }

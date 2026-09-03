@@ -212,7 +212,7 @@ public class SearchEndpointsTests : IAsyncLifetime
     {
         var client = _factory.CreateClient();
         var email = $"{Guid.NewGuid():N}@{emailDomain}";
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Search Tester", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Search Tester", email, "A-good-passw0rd"));
         Assert.True(signup.IsSuccessStatusCode, $"signup failed: {signup.StatusCode}");
 
         using (var scope = _factory.Services.CreateScope())
@@ -224,7 +224,7 @@ public class SearchEndpointsTests : IAsyncLifetime
             await db.SaveChangesAsync();
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         var token = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;

@@ -76,6 +76,34 @@ public class InvitationAcceptEndpointTests : IAsyncLifetime
         return invitation;
     }
 
+    /// <summary>
+    /// Acceptance used to check <c>Length &lt; 8</c> and read no setting. It now runs the
+    /// same validator as signup and the profile page: under the default policy a password
+    /// with no uppercase letter and no digit is refused, naming both rules, and no user
+    /// row is written.
+    /// </summary>
+    [Fact]
+    public async Task Accepting_enforces_the_full_password_policy_and_writes_no_user_on_refusal()
+    {
+        var invitation = await CreateDirectInvitationAsync("weakpolicy@example.test");
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            $"/invitations/{invitation.InvitationToken}/accept",
+            new AcceptInvitationRequest(Email: null, Name: "Weak Policy", Password: "a-good-password"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ErrorBody>();
+        Assert.Contains("uppercase", body!.Message);
+        Assert.Contains("number", body.Message);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        Assert.Null(await db.Users.FirstOrDefaultAsync(u => u.Email == "weakpolicy@example.test"));
+    }
+
+    private sealed record ErrorBody(string Message);
+
     [Fact]
     public async Task Accepting_a_direct_invitation_creates_an_active_user_and_returns_a_token()
     {
@@ -84,7 +112,7 @@ public class InvitationAcceptEndpointTests : IAsyncLifetime
 
         var response = await client.PostAsJsonAsync(
             $"/invitations/{invitation.InvitationToken}/accept",
-            new AcceptInvitationRequest(Email: null, Name: "Direct Invitee", Password: "a-good-password"));
+            new AcceptInvitationRequest(Email: null, Name: "Direct Invitee", Password: "A-good-passw0rd"));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var token = (await response.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
@@ -109,7 +137,7 @@ public class InvitationAcceptEndpointTests : IAsyncLifetime
 
         var response = await client.PostAsJsonAsync(
             $"/invitations/{invitation.InvitationToken}/accept",
-            new AcceptInvitationRequest(Email: null, Name: "Too Late", Password: "a-good-password"));
+            new AcceptInvitationRequest(Email: null, Name: "Too Late", Password: "A-good-passw0rd"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -122,12 +150,12 @@ public class InvitationAcceptEndpointTests : IAsyncLifetime
 
         var first = await client.PostAsJsonAsync(
             $"/invitations/{invitation.InvitationToken}/accept",
-            new AcceptInvitationRequest(Email: null, Name: "First Try", Password: "a-good-password"));
+            new AcceptInvitationRequest(Email: null, Name: "First Try", Password: "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
 
         var second = await client.PostAsJsonAsync(
             $"/invitations/{invitation.InvitationToken}/accept",
-            new AcceptInvitationRequest(Email: null, Name: "Second Try", Password: "another-password"));
+            new AcceptInvitationRequest(Email: null, Name: "Second Try", Password: "An0ther-password"));
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
     }
 
@@ -137,7 +165,7 @@ public class InvitationAcceptEndpointTests : IAsyncLifetime
         var client = _factory.CreateClient();
         var response = await client.PostAsJsonAsync(
             "/invitations/not-a-real-token/accept",
-            new AcceptInvitationRequest(Email: null, Name: "Nobody", Password: "a-good-password"));
+            new AcceptInvitationRequest(Email: null, Name: "Nobody", Password: "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -185,12 +213,12 @@ public class InvitationAcceptEndpointTests : IAsyncLifetime
 
         var wrongDomain = await client.PostAsJsonAsync(
             "/invitations/shareable-token-1/accept",
-            new AcceptInvitationRequest(Email: $"someone@not-{_companyDomain}", Name: "Wrong Domain", Password: "a-good-password"));
+            new AcceptInvitationRequest(Email: $"someone@not-{_companyDomain}", Name: "Wrong Domain", Password: "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.BadRequest, wrongDomain.StatusCode);
 
         var rightDomain = await client.PostAsJsonAsync(
             "/invitations/shareable-token-1/accept",
-            new AcceptInvitationRequest(Email: $"someone@{_companyDomain}", Name: "Right Domain", Password: "a-good-password"));
+            new AcceptInvitationRequest(Email: $"someone@{_companyDomain}", Name: "Right Domain", Password: "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.Created, rightDomain.StatusCode);
     }
 
@@ -240,7 +268,7 @@ public class InvitationAcceptEndpointTests : IAsyncLifetime
         // directly rather than relying on that side effect.
         var response = await client.PostAsJsonAsync(
             "/invitations/shareable-token-malformed/accept",
-            new AcceptInvitationRequest(Email: "not-an-email", Name: "Bad Email", Password: "a-good-password"));
+            new AcceptInvitationRequest(Email: "not-an-email", Name: "Bad Email", Password: "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -294,7 +322,7 @@ public class InvitationAcceptEndpointTests : IAsyncLifetime
 
         var response = await client.PostAsJsonAsync(
             "/invitations/shareable-token-no-domain/accept",
-            new AcceptInvitationRequest(Email: "literally-anything@example.test", Name: "Anyone", Password: "a-good-password"));
+            new AcceptInvitationRequest(Email: "literally-anything@example.test", Name: "Anyone", Password: "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -336,7 +364,7 @@ public class InvitationAcceptEndpointTests : IAsyncLifetime
         var client = _factory.CreateClient();
         var response = await client.PostAsJsonAsync(
             $"/invitations/{invitation.InvitationToken}/accept",
-            new AcceptInvitationRequest(Email: null, Name: "Carry Over", Password: "a-good-password"));
+            new AcceptInvitationRequest(Email: null, Name: "Carry Over", Password: "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         using var scope = _factory.Services.CreateScope();

@@ -95,7 +95,7 @@ public class GoogleLoginEndpointTests : IAsyncLifetime
         var client = _factory.CreateClient();
 
         var google = await client.PostAsJsonAsync("/auth/google", new GoogleLoginRequest($"valid:someone@{unknownDomain}:Some One"));
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Some One", $"someone@{unknownDomain}", "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Some One", $"someone@{unknownDomain}", "A-good-passw0rd"));
 
         Assert.Equal(signup.StatusCode, google.StatusCode);
         var googleBody = await google.Content.ReadFromJsonAsync<ErrorResponse>();

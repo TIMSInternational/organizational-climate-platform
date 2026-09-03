@@ -1548,7 +1548,7 @@ public class MicroclimateLifecycleJobTests(PostgresContainerFixture postgres)
     {
         var email = $"{Guid.NewGuid():N}@{emailDomain}";
         var signup = await client.PostAsJsonAsync(
-            "/auth/signup", new SignupRequest("Pulse Admin", email, "a-good-password"));
+            "/auth/signup", new SignupRequest("Pulse Admin", email, "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.Created, signup.StatusCode);
 
         using (var scope = postgres.App.Services.CreateScope())
@@ -1560,7 +1560,7 @@ public class MicroclimateLifecycleJobTests(PostgresContainerFixture postgres)
             await db.SaveChangesAsync();
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         return (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
     }
 

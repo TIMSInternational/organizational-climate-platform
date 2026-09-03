@@ -42,7 +42,7 @@ public class IdentityMappingClaimsTests : IAsyncLifetime
     {
         var client = _factory.CreateClient();
         var email = $"noexternal@{_emailDomain}";
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("No External", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("No External", email, "A-good-passw0rd"));
         var signupToken = (await signup.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
 
         Guid userId;
@@ -67,7 +67,7 @@ public class IdentityMappingClaimsTests : IAsyncLifetime
         // suite runs against a Postgres instance shared across the whole collection, so a
         // hardcoded literal here would collide with the same literal in a sibling test.
         var externalId = $"legacy-mongo-id-{Guid.NewGuid():N}";
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Has External", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Has External", email, "A-good-passw0rd"));
         await signup.Content.ReadFromJsonAsync<TokenResponse>();
 
         using (var scope = _factory.Services.CreateScope())
@@ -78,7 +78,7 @@ public class IdentityMappingClaimsTests : IAsyncLifetime
             await db.SaveChangesAsync();
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         var loginToken = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
 
         Assert.Equal(externalId, DecodeSubClaim(loginToken));
@@ -91,7 +91,7 @@ public class IdentityMappingClaimsTests : IAsyncLifetime
         var email = $"refresh-external@{_emailDomain}";
         // See the uniqueness note in Login_uses_PersonaExternalId_as_sub_when_it_is_set.
         var externalId = $"legacy-mongo-id-{Guid.NewGuid():N}";
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Refresh External", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Refresh External", email, "A-good-passw0rd"));
         await signup.Content.ReadFromJsonAsync<TokenResponse>();
 
         using (var scope = _factory.Services.CreateScope())
@@ -102,7 +102,7 @@ public class IdentityMappingClaimsTests : IAsyncLifetime
             await db.SaveChangesAsync();
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         var loginToken = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
         Assert.Equal(externalId, DecodeSubClaim(loginToken));
 
@@ -126,8 +126,8 @@ public class IdentityMappingClaimsTests : IAsyncLifetime
         var client = _factory.CreateClient();
         var emailOne = $"dup-one@{_emailDomain}";
         var emailTwo = $"dup-two@{_emailDomain}";
-        await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Dup One", emailOne, "a-good-password"));
-        await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Dup Two", emailTwo, "a-good-password"));
+        await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Dup One", emailOne, "A-good-passw0rd"));
+        await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Dup Two", emailTwo, "A-good-passw0rd"));
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
@@ -164,9 +164,9 @@ public class IdentityMappingClaimsTests : IAsyncLifetime
         var client = _factory.CreateClient();
         var victimEmail = $"collision-victim-{Guid.NewGuid():N}@{_emailDomain}";
         var colliderEmail = $"collision-collider-{Guid.NewGuid():N}@{_emailDomain}";
-        (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Victim", victimEmail, "a-good-password")))
+        (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Victim", victimEmail, "A-good-passw0rd")))
             .EnsureSuccessStatusCode();
-        (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Collider", colliderEmail, "a-good-password")))
+        (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Collider", colliderEmail, "A-good-passw0rd")))
             .EnsureSuccessStatusCode();
 
         Guid victimId;
@@ -182,7 +182,7 @@ public class IdentityMappingClaimsTests : IAsyncLifetime
             await db.SaveChangesAsync();
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(colliderEmail, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(colliderEmail, "A-good-passw0rd"));
         var loginToken = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
 
         // The collider's own sub is now the victim's Id, spelled exactly.
@@ -223,7 +223,7 @@ public class IdentityMappingClaimsTests : IAsyncLifetime
         // See the uniqueness note in Login_uses_PersonaExternalId_as_sub_when_it_is_set.
         var externalId = $"legacy-mongo-id-{Guid.NewGuid():N}";
         Assert.False(Guid.TryParse(externalId, out _));
-        (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Orphaned Sub", email, "a-good-password")))
+        (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Orphaned Sub", email, "A-good-passw0rd")))
             .EnsureSuccessStatusCode();
 
         using (var scope = _factory.Services.CreateScope())
@@ -234,7 +234,7 @@ public class IdentityMappingClaimsTests : IAsyncLifetime
             await db.SaveChangesAsync();
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         var loginToken = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
         Assert.Equal(externalId, DecodeSubClaim(loginToken));
 
@@ -267,8 +267,8 @@ public class IdentityMappingClaimsTests : IAsyncLifetime
         // The unique index is filtered (persona_external_id IS NOT NULL) so it must not
         // block ordinary signups, which all leave PersonaExternalId unset.
         var client = _factory.CreateClient();
-        var signupOne = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Null One", $"null-one@{_emailDomain}", "a-good-password"));
-        var signupTwo = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Null Two", $"null-two@{_emailDomain}", "a-good-password"));
+        var signupOne = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Null One", $"null-one@{_emailDomain}", "A-good-passw0rd"));
+        var signupTwo = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Null Two", $"null-two@{_emailDomain}", "A-good-passw0rd"));
 
         Assert.True(signupOne.IsSuccessStatusCode);
         Assert.True(signupTwo.IsSuccessStatusCode);
