@@ -138,8 +138,11 @@ public static class ReportEndpoints
     /// <remarks>
     /// <para>
     /// Everything before the render is unchanged and deliberately so: the same verb, the same
-    /// 404-before-403 order (a caller of another tenant learns "not found", never "forbidden",
-    /// which would confirm the id exists), the same 400 for a report that is not
+    /// 404-then-403 order (missing is 404; another tenant's report is <b>403</b> -- measured,
+    /// not assumed: <c>ReportShareEndpoints</c> answers 404 for a foreign report precisely so a
+    /// 403 cannot confirm the id exists, and this endpoint has never done that. Changing a
+    /// status code is a decision with its own tests, not a side effect of adding a renderer),
+    /// the same 400 for a report that is not
     /// <c>completed</c>, and the same <c>download_count</c> increment. What used to return
     /// <c>Results.Ok(ToDetail(report))</c> now returns the rendered document -- so the web's
     /// download-count toast lost its only source, which is why

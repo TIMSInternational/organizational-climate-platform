@@ -262,6 +262,22 @@ internal sealed record ReportRenderCopy(
             ? $"Departamentos reservados: {Count(departments)} (con {Count(respondents)} personas en total) por tener menos de {floor} personas que respondieron. Respuestas sin departamento: {Count(unsegmented)}."
             : $"Withheld departments: {Count(departments)} (covering {Count(respondents)} people) for having fewer than {floor} respondents. Responses carrying no department: {Count(unsegmented)}.";
 
+    /// <summary>
+    /// The same counters for a demographic breakdown, which is NOT a department table.
+    /// </summary>
+    /// <remarks>
+    /// A separate string rather than the department one reused with a different number. Reusing
+    /// it printed "Withheld departments: 1 (covering 2 people)" under the heading
+    /// "Dimension: nationality" -- a sentence naming the wrong kind of group entirely, which is
+    /// worse than an untranslated one because it reads as correct. The word for the group comes
+    /// from the aggregation's own dimension key, so it is the reader's own vocabulary rather
+    /// than a catalogue's.
+    /// </remarks>
+    public string SegmentsWithheldCounts(string dimension, int segments, int respondents, int unsegmented, int floor)
+        => DecimalComma
+            ? $"Grupos reservados en «{dimension}»: {Count(segments)} (con {Count(respondents)} personas en total) por tener menos de {floor} personas que respondieron. Respuestas sin este dato: {Count(unsegmented)}."
+            : $"Withheld groups in \"{dimension}\": {Count(segments)} (covering {Count(respondents)} people) for having fewer than {floor} respondents. Responses carrying no value for this: {Count(unsegmented)}.";
+
     /// <summary>Said once, at the top, so a reader of the file knows what floors produced it.</summary>
     public string PrivacyNotice(int surveyFloor)
         => DecimalComma

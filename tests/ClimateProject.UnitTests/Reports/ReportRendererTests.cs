@@ -178,6 +178,94 @@ public partial class ReportRendererTests
     }
 
     /// <summary>
+    /// The counters under a demographic breakdown must name the kind of group they are about.
+    /// </summary>
+    /// <remarks>
+    /// The first version reused the department string, so the paragraph under
+    /// "Dimension: nationality" read "Withheld departments: 1 (covering 2 people)" -- a
+    /// sentence about a kind of group that is not in that table, and worse than an
+    /// untranslated one because it reads as correct.
+    /// </remarks>
+    [Fact]
+    public void The_withheld_counters_name_the_kind_of_group_they_are_about()
+    {
+        var prose = Prose(ReportRenderer.BuildPdf(Context()));
+
+        Assert.Contains(
+            $"Withheld groups in \"nationality\": 1 (covering 2 people) for having fewer than {SurveyResultsPrivacy.MinimumSegmentRespondents} respondents.",
+            prose,
+            StringComparison.Ordinal);
+
+        // The department table's own counters, which are a different sentence about a
+        // different table. Exactly one of each, so neither has silently replaced the other.
+        Assert.Contains("Withheld departments: 1", prose, StringComparison.Ordinal);
+        Assert.Equal(1, CountOccurrences(prose, "Withheld departments"));
+        Assert.Equal(1, CountOccurrences(prose, "Withheld groups in"));
+    }
+
+    /// <summary>
+    /// A survey nobody answered from a department gets no department section at all.
+    /// </summary>
+    /// <remarks>
+    /// The first draft printed the heading whenever any counter was non-zero, and
+    /// <c>UnsegmentedRespondentCount</c> is non-zero for exactly this survey -- so the document
+    /// carried "Participation by department / Withheld departments: 0 (covering 0 people) …
+    /// Responses carrying no department: 7" over an absent table, which reads as though
+    /// departments exist and none of them answered. Found by reading the rendered prose, not by
+    /// a test.
+    /// </remarks>
+    [Fact]
+    public void A_survey_with_no_department_breakdown_prints_no_department_section()
+    {
+        var context = Context();
+        var prose = Prose(ReportRenderer.BuildPdf(context));
+        var second = context.Document!.Surveys.Single(s => s.SurveyId == SecondSurvey);
+
+        // The fixture's premise, asserted rather than assumed: this survey has no department
+        // rows and a non-zero unsegmented count, which is what made the phantom section appear.
+        Assert.Empty(second.Departments);
+        Assert.Equal(7, second.UnsegmentedRespondentCount);
+
+        // Exactly one department heading in the whole document -- the survey that has one.
+        Assert.Equal(1, CountOccurrences(prose, "Participation by department"));
+        Assert.Equal(1, CountOccurrences(prose, "Withheld departments"));
+    }
+
+    /// <summary>
+    /// Every table column is wide enough for the values this product writes into it.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="PdfDocument.WrapText"/> falls back to breaking mid-token when a token is
+    /// wider than its column -- which is right, because the alternative overruns into the next
+    /// column -- so a narrow column silently renders <c>multiple_choice</c> as
+    /// <c>multiple_choi</c> + <c>ce</c> and the header "Answers" as "Answer" + "s". Both were
+    /// in the first draft. No search over the whole document can see it: the characters are all
+    /// there, in order, on two lines. Only the drawn cells can.
+    /// </remarks>
+    [Fact]
+    public void No_table_cell_is_split_mid_token_by_a_column_too_narrow_for_it()
+    {
+        var drawn = DrawnStrings(ReportRenderer.BuildPdf(Context()));
+
+        foreach (var value in new[] { "multiple_choice", "Answers", "Average", "Median", "Dimension", "environment" })
+        {
+            Assert.Contains(value, drawn, StringComparer.Ordinal);
+        }
+    }
+
+    private static int CountOccurrences(string haystack, string needle)
+    {
+        var count = 0;
+        for (var i = haystack.IndexOf(needle, StringComparison.Ordinal); i >= 0;
+             i = haystack.IndexOf(needle, i + needle.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
     /// Four complete responses is below <see cref="SurveyResultsPrivacy.MinimumRespondents"/>.
     /// A reader of a FILE cannot ask anyone why a section is empty, and a section that simply
     /// omitted its results would read as "this survey got no answers" -- a different and

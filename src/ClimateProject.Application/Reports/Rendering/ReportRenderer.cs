@@ -253,13 +253,20 @@ public static class ReportRenderer
             document.Heading(copy.QuestionResults);
             document.Table(
                 [
-                    new PdfTableColumn(copy.Ordinal, 0.7, RightAligned: true),
-                    new PdfTableColumn(copy.Question, 5),
-                    new PdfTableColumn(copy.QuestionType, 1.5),
+                    // Weights measured against the values this product actually writes, not
+                    // guessed: `PdfDocument.WrapText` falls back to breaking mid-token when a
+                    // token is wider than its column, so a Type column too narrow for
+                    // `multiple_choice` renders it as "multiple_choi ce" and an Answers column
+                    // too narrow for its own header renders "Answer s". Both were in the first
+                    // draft and both are invisible to every assertion that searches the whole
+                    // document rather than the drawn cells.
+                    new PdfTableColumn(copy.Ordinal, 0.6, RightAligned: true),
+                    new PdfTableColumn(copy.Question, 4.2),
+                    new PdfTableColumn(copy.QuestionType, 2.3),
                     new PdfTableColumn(copy.Dimension, 2),
-                    new PdfTableColumn(copy.AnsweredCount, 1.1, RightAligned: true),
-                    new PdfTableColumn(copy.Average, 1.1, RightAligned: true),
-                    new PdfTableColumn(copy.Median, 1.1, RightAligned: true),
+                    new PdfTableColumn(copy.AnsweredCount, 1.3, RightAligned: true),
+                    new PdfTableColumn(copy.Average, 1.3, RightAligned: true),
+                    new PdfTableColumn(copy.Median, 1.3, RightAligned: true),
                 ],
                 [.. section.Questions.Select(q => new string?[]
                 {
@@ -283,18 +290,19 @@ public static class ReportRenderer
 
     private static void WriteDepartments(PdfDocument document, ReportRenderCopy copy, ReportSurveySection section)
     {
-        var hasCounters = section.SuppressedDepartmentCount > 0
-            || section.SuppressedRespondentCount > 0
-            || section.UnsegmentedRespondentCount > 0;
-
-        if (section.Departments.Count == 0 && !hasCounters)
+        // No department rows means the aggregation produced no department breakdown for this
+        // survey -- nobody who answered carries one. Printing the heading anyway produced
+        // "Participation by department / Withheld departments: 0 (covering 0 people) …
+        // Responses carrying no department: 7" over an absent table, which reads as though
+        // departments exist and none of them answered. The unsegmented count in that case is
+        // simply everyone, and the participation counters above already report it.
+        if (section.Departments.Count == 0)
         {
             return;
         }
 
         document.Heading(copy.Departments);
 
-        if (section.Departments.Count > 0)
         {
             document.Table(
                 [
@@ -319,7 +327,6 @@ public static class ReportRenderer
             }
         }
 
-        if (hasCounters)
         {
             document.Paragraph(copy.DepartmentsWithheldCounts(
                 section.SuppressedDepartmentCount,
@@ -364,7 +371,11 @@ public static class ReportRenderer
                     })]);
             }
 
-            document.Paragraph(copy.DepartmentsWithheldCounts(
+            // NOT DepartmentsWithheldCounts: this is a demographic breakdown, and that string
+            // says "Withheld departments", which under the heading "Dimension: nationality"
+            // names the wrong kind of group while reading as correct.
+            document.Paragraph(copy.SegmentsWithheldCounts(
+                breakdown.Dimension,
                 breakdown.SuppressedSegmentCount,
                 breakdown.SuppressedRespondentCount,
                 breakdown.UnsegmentedRespondentCount,
