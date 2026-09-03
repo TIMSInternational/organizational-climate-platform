@@ -60,8 +60,15 @@ Three further reasons the client side is the right side of the boundary:
    `SurveyAccessTokens.PublicLinkPrefix` documents that `public_url` is stored site-relative
    *on purpose*, because the column is uniquely indexed and "baking a host into it would mean
    the same link stored under two different origins (staging and production, or before and
-   after a domain change) is two different rows and one broken index", and adds "nothing here
-   may ever concatenate a host." A camera has no page to resolve a relative path against, so
+   after a domain change) is two different rows and one broken index"
+   (`src/ClimateProject.Application/Surveys/SurveyAccessTokens.cs:33-39`). The blunter
+   sentence "nothing here may ever concatenate a host" belongs to a **different** member —
+   `InvitationLinkPath`, at `SurveyAccessTokens.cs:66-75` — and is scoped to invitation links,
+   which the mail sender resolves against `EmailOptions.AppBaseUrl`. An earlier draft of this
+   document and of `ShareLinkQr.tsx` attributed that sentence to `PublicLinkPrefix`; it is
+   corrected here because a reader who chases the citation would not find it where the text
+   said it was. The conclusion is unchanged, because it rests on the first quotation.
+   A camera has no page to resolve a relative path against, so
    a QR must carry an absolute URL. In the browser that absolute URL is
    `window.location.origin` — the origin the admin is actually looking at, so staging
    produces a staging code and production a production one, with no configuration to get
@@ -76,13 +83,14 @@ i18n keys in both catalogues:
 
 | Asset | Before | After | Delta |
 |---|---|---|---|
-| `dist/assets/index-*.js` | 1,739.58 kB (gzip 482.88 kB) | 1,765.05 kB (gzip 492.50 kB) | **+25.47 kB raw, +9.62 kB gzip** |
+| `dist/assets/index-*.js` | 1,739.58 kB (gzip 482.88 kB) | 1,765.29 kB (gzip 492.56 kB) | **+25.71 kB raw, +9.68 kB gzip** |
 | `dist/assets/index-*.css` | 74.05 kB (gzip 14.85 kB) | 74.45 kB (gzip 14.92 kB) | +0.40 kB raw, +0.07 kB gzip |
 
 That delta is the whole change, not the library alone: it includes `ShareLinkQr.tsx` and the
 new catalogue keys. The library's own shipped ESM module is 51,907 bytes unminified
 (`node_modules/qrcode-generator/dist/qrcode.mjs`); +9.62 kB gzip is what survives
-minification and compression of the parts actually reached.
+minification and compression of the parts actually reached. (Re-measured after the review
+fixes; the first draft read +25.47 kB / +9.62 kB gzip.)
 
 **It is not code-split, and that is a choice to revisit rather than a mistake to fix now.**
 The bundle already emits one 1.7 MB `index-*.js` and warns about it on every build; a
@@ -133,6 +141,32 @@ pass happens, this module is a clean candidate: it is reached from exactly one s
   inactive link" is the requirement, and a requirement enforced only by a value arriving
   `null` from somewhere else is enforced by accident.
 
+## How big the code is, and which artefact to scan
+
+Two artefacts come out of this component and they are not equally scannable, so the numbers
+are recorded rather than left to be discovered by an admin holding up a phone.
+
+Measured in Chromium at 1440x900, on the real page, with a production-shaped 43-character
+token (`getBoundingClientRect()` on the live `<svg>`, then divided by the 45 viewBox units):
+
+| Artefact | Extent | Per module | What it is for |
+|---|---|---|---|
+| The code on screen | 270 CSS px | **6.0 CSS px** | reading with a phone held near the screen |
+| The downloaded PNG | 1024 px | **22.8 px** | printing, pasting into a slide or a poster |
+
+Six CSS pixels per module is one device pixel per module more than a 1x display strictly
+needs for the finder patterns to resolve, and it is not a lot. The plaque was `16rem` wide
+in the first draft, which measured **4.58 CSS px per module** — that is thin for a camera
+pointed at a screen across a desk, so the column is `20rem`. It is a `md:` width on a column
+that sits beside the link panel; growing it further starts taking width from the panel that
+holds the link itself.
+
+**The download is the reliable artefact.** Anything printed, projected, or scanned from more
+than arm's length should be the PNG, not a photograph of the screen. Both are the same
+matrix, and both were decoded from a real Chromium render: the on-screen SVG and the
+1024x1024 PNG each read back as `http://<origin>/s/<the fixture's token>` in light and in
+dark, and the `<path>` the two themes draw is byte-identical.
+
 ## What the download cannot promise
 
 The PNG is produced by serialising standalone SVG markup — with the plaque colours read back
@@ -144,6 +178,35 @@ Every step there is a step a browser can refuse. `qrPngBlob` therefore returns `
 than throwing on all of them, and the component says so in both languages
 (`surveys.distribution.qrDownloadFailed`) while leaving the code on screen, because the code
 is still valid and still screenshottable.
+
+**`handleDownload` catches as well as returning `null`.** `qrPngBlob`'s `null` covers the
+paths it owns; the lines around it can still *throw* — `getComputedStyle` inside
+`resolveQrColors`, `createObjectURL` on a blob the browser will not take, `click()` under a
+download policy that refuses. The first draft had a `try`/`finally` with no `catch`, so those
+escaped `void handleDownload()` as an unhandled rejection: the button un-disabled and the
+user was told nothing, which is precisely the outcome `qrDownloadFailed` exists to prevent,
+reached by the one path that skipped it. The `catch` raises the same notice, and the test
+named "says the download failed when a browser API throws, rather than going quiet" fails
+without it.
+
+**The file is named after the survey, not after the link.** `publicLink` is `/s/` plus the
+*whole* token — 43 base64url characters, `SurveyAccessTokens.EncodedLength` — so a name taken
+from the link's last segment is the entire bearer credential written into the download
+bubble, the browser's downloads page and every file listing. Those are the same screen-share
+surfaces the reveal-on-click exists to keep the code off. `downloadFileName` uses the survey
+id, which is already in this page's own URL and opens nothing, and falls back to a fixed
+`qr-survey-share-link.png` for anything that is not a plain id rather than interpolating it
+into a path. Measured in a real Chromium download: `"qr-survey-s1.png"`, a 1024x1024 PNG that
+decodes back to the link.
+
+**The anchor is in the document when it is clicked.** It is appended, clicked and removed,
+rather than clicked while detached. Chromium honours a detached `<a download>` and Chromium
+is the only engine installed on the machine this was built on — `ls
+~/Library/Caches/ms-playwright` lists `chromium` and `chromium_headless_shell` and nothing
+else, so **Firefox and Safari could not be tested here at all**. Firefox has historically
+required a programmatically-clicked download anchor to be in the document, so the form that
+works in both is the one that ships. That it still works in Chromium is measured; that it
+works in Firefox and Safari is a UAT step, listed below.
 
 **The successful path is not proved by the unit suite, and that is stated rather than
 implied.** `happy-dom` answers `getContext('2d')` with `null` — measured in
@@ -159,6 +222,22 @@ all. Two consequences, both written into the test file:
 
 Real pixels are proved in a browser, by the light and dark screenshots of
 `/surveys/:id/distribution` attached to the PR.
+
+### A caveat about those screenshots
+
+`web/scripts/shot-fixtures/distribution.json` serves
+`"publicLink": "https://climate.example/s/7f3a9c21b4e8"` — a **12-character** fake token. That
+payload is 41 characters and encodes as a **29-module (version 3)** code, which is a grid 21%
+coarser in each direction than the 37-module code a real 43-character token produces. A
+screenshot taken straight from `npm run shot` therefore photographs an easier code than
+production's, and any claim about module crispness made from it is a claim about the wrong
+grid.
+
+The evidence in this document and in the PR was taken with a scratch copy of that fixture
+carrying a token minted the way `SurveyAccessTokens.Mint()` mints one (32 random bytes,
+base64url, 43 characters), so every number above is a production-shaped code. Correcting the
+committed fixture is a one-line change in a file this lane does not own; it is listed as an
+open question rather than made here.
 
 ## How the geometry is proved
 
@@ -181,8 +260,42 @@ asserted rather than looked at.
 
 What is **not** proved by the suite: that a phone camera reads the rendered code. The
 matrix comes from a reference implementation and agrees with that implementation's own
-renderer, and the light/dark screenshots show crisp modules, an intact quiet zone and no
-inversion — but nobody has pointed a phone at it. That is a UAT step, not a test.
+renderer, `cv2.QRCodeDetector` read the correct URL back out of both the live SVG and the
+1024 px PNG, and the light/dark screenshots show crisp modules, an intact quiet zone and no
+inversion — but nobody has pointed a phone at it.
+
+### The UAT list
+
+Three things a browser and a decoder on this machine cannot answer:
+
+1. **A phone camera on the on-screen code**, at 6.0 CSS px per module, from about a metre —
+   the distance an admin actually stands from a screen they are showing someone.
+2. **The download in Firefox and in Safari.** Neither is installed here (see above), and the
+   detached-versus-attached anchor rule is exactly the kind of thing that differs.
+3. **A printed PNG**, scanned from a poster, which is what the 1024 px artefact is for.
+
+One measurement about the decoder itself, recorded because it cuts against reading too much
+into a successful decode: `cv2.QRCodeDetector` failed to find the code in one dark-theme
+screenshot and read it perfectly in another dark-theme screenshot of the same component,
+where the only difference was the dev server's port and therefore the payload. A decode is a
+useful spot check; the assertion against `qrcode-generator`'s own renderer is the guard.
+
+## What this does NOT cover, and somebody should say whether that is the scope
+
+**Only `public` surveys get a QR.** A `tokenized` or `restricted` survey renders no code at
+all, because there is no open link to encode and a per-invitee token must never be drawn.
+
+That is a narrower reading than the server's. `SurveyDistributionEndpoints.cs:262` sets
+`distribution.QrCodeUrl = distribution.PublicUrl ?? SurveyPath(surveyId)`, so for a survey
+with no open link the API still supplies a QR-able path — `/survey/<id>`, the authenticated
+landing page. A code for that would send a scanner to a login wall, which is a legitimate
+poster ("this is the survey, sign in") and is presumably what the `??` branch was written
+for. Nothing renders that branch today.
+
+So, plainly: **CLIMA-005's "QR distribution" ships for open links only, and the `??` branch of
+that server line has no UI consumer.** If invitation-only surveys are meant to get a
+sign-in QR too, that is a small addition to this component and a decision about what a
+scanner should land on — not a defect in what is here.
 
 ## When to revisit
 
