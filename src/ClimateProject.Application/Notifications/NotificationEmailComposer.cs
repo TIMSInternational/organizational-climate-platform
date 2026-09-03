@@ -88,6 +88,32 @@ public static class NotificationEmailComposer
         NotificationRecipient recipient,
         string? preferencesUrl,
         string? surveyUrl)
+        => Compose(notification, recipient, preferencesUrl, surveyUrl, templateBody: null);
+
+    /// <summary>
+    /// The same message, composed from a rendered notification template instead of from the
+    /// notification's own title and message.
+    ///
+    /// <para>
+    /// **The chrome does not change, and that is the point of the overload.** The greeting,
+    /// the "why you are receiving this" line, the preferences link and the invitation button
+    /// are product UI in the recipient's language; a template governs the message inside them,
+    /// not the envelope. So this is one extra parameter on the existing composer rather than a
+    /// second composer, and a template that renders to nothing for one field leaves that
+    /// field's non-template behaviour exactly as it was.
+    /// </para>
+    /// </summary>
+    /// <param name="templateBody">
+    /// The rendered template, or null for the pre-template behaviour. Each field falls back
+    /// independently: a template with a subject but no content still mails the notification's
+    /// own message under the template's subject.
+    /// </param>
+    public static EmailMessage Compose(
+        Notification notification,
+        NotificationRecipient recipient,
+        string? preferencesUrl,
+        string? surveyUrl,
+        NotificationTemplateBody? templateBody)
     {
         ArgumentNullException.ThrowIfNull(notification);
         ArgumentNullException.ThrowIfNull(recipient);
@@ -96,9 +122,22 @@ public static class NotificationEmailComposer
         var greeting = string.Format(System.Globalization.CultureInfo.InvariantCulture, chrome.Greeting, recipient.Name);
         var why = string.Format(System.Globalization.CultureInfo.InvariantCulture, chrome.WhyReceiving, EmailBranding.ProductName);
 
-        var subject = string.IsNullOrWhiteSpace(notification.Title)
+        // The template's subject when it rendered one, the notification's own title otherwise,
+        // and the product-name fallback only when neither exists -- a mail with a blank
+        // subject line is worse than a generic one.
+        var subjectSource = string.IsNullOrWhiteSpace(templateBody?.Subject)
+            ? notification.Title
+            : templateBody!.Subject!;
+
+        var subject = string.IsNullOrWhiteSpace(subjectSource)
             ? string.Format(System.Globalization.CultureInfo.InvariantCulture, chrome.SubjectFallback, EmailBranding.ProductName)
-            : EmailMessage.ToHeaderValue(notification.Title);
+            : EmailMessage.ToHeaderValue(subjectSource);
+
+        // One decision, read by both bodies below, so the plain-text part and the HTML part of
+        // the same message cannot come from different sources.
+        var messageText = string.IsNullOrWhiteSpace(templateBody?.Text)
+            ? notification.Message
+            : templateBody!.Text!;
 
         // One decision, read by both bodies below, so the two parts of the same message
         // cannot disagree about whether this mail has a destination.
@@ -107,7 +146,16 @@ public static class NotificationEmailComposer
         var html = new StringBuilder();
         html.Append(EmailBranding.Heading(subject));
         html.Append(EmailBranding.Paragraphs(greeting));
-        html.Append(EmailBranding.Paragraphs(notification.Message));
+        if (!string.IsNullOrWhiteSpace(templateBody?.Html))
+        {
+            // Verbatim: the markup is the admin's own and the values substituted into it were
+            // HTML-encoded when they were substituted. See NotificationTemplateRenderer.
+            html.Append(templateBody!.Html);
+        }
+        else
+        {
+            html.Append(EmailBranding.Paragraphs(messageText));
+        }
         if (hasSurveyLink)
         {
             html.Append(EmailBranding.Button(surveyUrl!, chrome.OpenSurvey));
@@ -125,7 +173,7 @@ public static class NotificationEmailComposer
 
         var text = new StringBuilder();
         text.Append(greeting).Append("\n\n");
-        text.Append(notification.Message).Append("\n\n");
+        text.Append(messageText).Append("\n\n");
         if (hasSurveyLink)
         {
             // The bare URL, not a label wrapping one. A plain-text reader has to be able to

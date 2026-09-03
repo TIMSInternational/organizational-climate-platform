@@ -1,8 +1,11 @@
 using ClimateProject.Application.Email;
+using ClimateProject.Application.Localization;
 using ClimateProject.Application.Microclimates;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
+using ClimateProject.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace ClimateProject.Infrastructure.Notifications;
@@ -55,7 +58,8 @@ public sealed class EmailNotificationSender(
     EmailOptions options,
     ISurveyInvitationTokens invitationTokens,
     IMicroclimateInvitationTokens microclimateInvitationTokens,
-    ILogger<EmailNotificationSender> logger) : INotificationSender
+    ILogger<EmailNotificationSender> logger,
+    ClimateProjectDbContext? db = null) : INotificationSender
 {
     public async Task<NotificationDeliveryResult> SendAsync(
         Notification notification,
@@ -106,13 +110,20 @@ public sealed class EmailNotificationSender(
             return NotificationDeliveryResult.PermanentFailure(UndeliverableAddresses.ReasonFor(recipient.EmailAddress));
         }
 
-        var message = NotificationEmailComposer.Compose(
+        var actionUrl = await InvitationUrlAsync(notification, recipient, cancellationToken).ConfigureAwait(false);
+        var template = await TemplateForAsync(notification, cancellationToken).ConfigureAwait(false);
+
+        var composed = NotificationTemplateDispatch.Compose(
             notification,
             recipient,
+            template.Content,
+            template.CompanyName,
             options.LinkTo(NotificationEmailComposer.PreferencesPath),
-            await InvitationUrlAsync(notification, recipient, cancellationToken).ConfigureAwait(false));
+            actionUrl);
 
-        var outcome = await transport.SendAsync(message, cancellationToken).ConfigureAwait(false);
+        LogComposition(notification, composed);
+
+        var outcome = await transport.SendAsync(composed.Message, cancellationToken).ConfigureAwait(false);
 
         if (outcome.Delivered)
         {
@@ -291,5 +302,151 @@ public sealed class EmailNotificationSender(
         }
 
         return options.LinkTo(MicroclimateInvitationLinks.LinkPath(token));
+    }
+
+    /// <summary>
+    /// Says, once per composed mail, which body the recipient is actually getting.
+    ///
+    /// <para>
+    /// The whole reason this line exists: before #96's dispatch gap was closed, a company that
+    /// authored a template got a preview and a foreign key, and the mail that went out ignored
+    /// the template entirely -- silently, with every test green. A template that is not being
+    /// used has to be visible somewhere other than in a recipient's mailbox.
+    /// </para>
+    /// <para>
+    /// Ids, the type and the path only. The rendered subject and body are user-authored text
+    /// that routinely names a person or a department, and application logs are not a place to
+    /// put that -- the same rule the delivery log below states.
+    /// </para>
+    /// </summary>
+    private void LogComposition(Notification notification, ComposedNotificationEmail composed)
+    {
+        if (string.Equals(composed.Path, NotificationTemplateDispatch.PathNoTemplate, StringComparison.Ordinal))
+        {
+            // The common case and not a fault: most notifications name no template at all.
+            // Debug so it can be turned on when a mail is being traced and costs nothing when
+            // it is not.
+            logger.LogDebug(
+                "Notification {NotificationId} of type {NotificationType} was composed from its own title and "
+                + "message ({CompositionPath}).",
+                notification.Id,
+                notification.Type,
+                composed.Path);
+
+            return;
+        }
+
+        if (string.Equals(composed.Path, NotificationTemplateDispatch.PathTemplate, StringComparison.Ordinal))
+        {
+            logger.LogInformation(
+                "Notification {NotificationId} of type {NotificationType} was composed from template "
+                + "{NotificationTemplateId} ({CompositionPath}).",
+                notification.Id,
+                notification.Type,
+                notification.TemplateId,
+                composed.Path);
+
+            return;
+        }
+
+        // Everything else: the notification named a template and is going out without it.
+        logger.LogWarning(
+            composed.Failure,
+            "Notification {NotificationId} of type {NotificationType} names template {NotificationTemplateId} but "
+            + "was composed from its own title and message ({CompositionPath}). The notification is still being "
+            + "sent.",
+            notification.Id,
+            notification.Type,
+            notification.TemplateId,
+            composed.Path);
+    }
+
+    /// <summary>
+    /// The template row this notification names, as stored, plus the company name the render
+    /// substitutes -- or nulls when the notification names no template.
+    ///
+    /// <para>
+    /// <b>It costs nothing when there is no template.</b> The <c>TemplateId is null</c> guard
+    /// comes first, so the batched dispatch sweep -- which is bounded at a fixed number of
+    /// round trips per batch, pinned by a test -- issues not one extra query for the
+    /// overwhelming majority of notifications, which name no template.
+    /// </para>
+    /// <para>
+    /// <b>The row is loaded unfiltered and refused afterwards.</b> Inactive and cross-tenant
+    /// rows come back and are rejected by <see cref="NotificationTemplateDispatch"/>, which is
+    /// what lets the refusal be logged by name. A <c>WHERE is_active AND company_id = ...</c>
+    /// would produce the same mail and no way to tell which of the two happened.
+    /// </para>
+    /// <para>
+    /// <b>Why a <c>DbContext</c> and not a narrow interface</b>, unlike
+    /// <see cref="ISurveyInvitationTokens"/>: a narrow seam needs a DI registration, and the
+    /// registration lines live in <c>Program.cs</c> and <c>WorkerHostFactory.cs</c>. The
+    /// parameter is optional so that a sender constructed without a container -- the whole of
+    /// the unit suite -- still composes, and a notification naming a template under a null
+    /// context takes the same documented fallback as a missing row.
+    /// </para>
+    /// </summary>
+    private async Task<(NotificationTemplateContent? Content, string? CompanyName)> TemplateForAsync(
+        Notification notification,
+        CancellationToken cancellationToken)
+    {
+        if (notification.TemplateId is null || db is null)
+        {
+            return (null, null);
+        }
+
+        var template = await db.NotificationTemplates
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == notification.TemplateId.Value, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (template is null)
+        {
+            return (null, null);
+        }
+
+        var company = await db.Companies
+            .AsNoTracking()
+            .Where(c => c.Id == notification.CompanyId)
+            .Select(c => new { c.Name, c.Settings.Language })
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var declared = await db.NotificationTemplateVariables
+            .AsNoTracking()
+            .Where(v => v.NotificationTemplateId == template.Id)
+            .ToDictionaryAsync(v => v.Name, v => v.DefaultValue, StringComparer.Ordinal, cancellationToken)
+            .ConfigureAwait(false);
+
+        return (
+            NotificationTemplateContent.From(template, ContentLanguageOf(template, notification, company?.Language), declared),
+            company?.Name);
+    }
+
+    /// <summary>
+    /// The language a template is authored in, derived exactly as
+    /// <c>NotificationTemplateEndpoints.ResolveContentLanguageAsync</c> derives it: a global
+    /// template is <c>both</c>, a company template inherits its company's language.
+    ///
+    /// A template belonging to some *other* company is refused before it is rendered, so the
+    /// only company whose language can matter here is the notification's own -- which the
+    /// caller has already loaded for the <c>companyName</c> variable.
+    /// </summary>
+    private static string ContentLanguageOf(
+        NotificationTemplate template,
+        Notification notification,
+        string? companyLanguage)
+    {
+        if (template.CompanyId is null)
+        {
+            return ContentLanguages.Both;
+        }
+
+        if (template.CompanyId.Value != notification.CompanyId)
+        {
+            return ContentLanguages.FallbackLocale;
+        }
+
+        return ContentLanguages.NormaliseLanguage(companyLanguage) ?? ContentLanguages.FallbackLocale;
     }
 }
