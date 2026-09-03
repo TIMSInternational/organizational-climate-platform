@@ -188,4 +188,72 @@ describe('MicroclimateResultsPage KPI strip', () => {
     expect(tiles.length).toBeGreaterThan(0)
     expect(container.querySelector('[data-slot="kpi-tile"] .font-mono')).not.toBeNull()
   })
+
+  describe('the CSV export', () => {
+    /**
+     * `GET /microclimates/{id}/export/csv` existed for a month with no caller. These pin
+     * the three things a caller can get wrong: the URL shape (the path form, not the legacy
+     * `?format=csv`), the bearer header (an `<a href>` would send cookies and 401), and the
+     * language request.
+     */
+    function routeFetchWithCsv(csvBody = 'question,answer\n') {
+      vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes('/export/csv')) {
+          return Promise.resolve(new Response(csvBody, { status: 200, headers: { 'content-type': 'text/csv' } }))
+        }
+        return Promise.resolve(new Response(JSON.stringify(url.includes('/live-results') ? results() : detail()), { status: 200 }))
+      })
+    }
+
+    it('fetches /export/csv with the bearer token and the reader\u2019s language, then hands the blob to the browser', async () => {
+      routeFetchWithCsv()
+      const createObjectURL = vi.fn(() => 'blob:csv')
+      const revokeObjectURL = vi.fn()
+      vi.stubGlobal('URL', Object.assign(URL, { createObjectURL, revokeObjectURL }))
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+      renderPage()
+      await screen.findByRole('heading', { name: 'Friday pulse' })
+      await userEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+      await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(1))
+      const exportCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input).includes('/export'))
+      expect(exportCall).toBeDefined()
+      const [input, init] = exportCall!
+      expect(String(input)).toMatch(/\/microclimates\/m1\/export\/csv\?lang=en$/)
+      expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer test-token')
+      expect(click).toHaveBeenCalledTimes(1)
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:csv')
+    })
+
+    it('reports a failed export in the page\u2019s own words, on the page, without replacing it', async () => {
+      vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes('/export/csv')) {
+          return Promise.resolve(new Response(JSON.stringify({ message: 'raw server text' }), { status: 500 }))
+        }
+        return Promise.resolve(new Response(JSON.stringify(url.includes('/live-results') ? results() : detail()), { status: 200 }))
+      })
+      renderPage()
+      await screen.findByRole('heading', { name: 'Friday pulse' })
+      await userEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert.textContent).toContain('The export did not download')
+      expect(alert.textContent).toContain('Failed to export data. Please try again.')
+      // The raw exception never reaches the screen, and the page it was on is still there.
+      expect(alert.textContent).not.toContain('raw server text')
+      expect(screen.getByRole('heading', { name: 'Friday pulse' })).toBeTruthy()
+      expect((screen.getByRole('button', { name: 'Export CSV' }) as HTMLButtonElement).disabled).toBe(false)
+    })
+
+    it('is offered for a closed microclimate too — the export is not a live-session feature', async () => {
+      routeFetch(detail({ status: 'closed' }), results())
+      renderPage()
+      await screen.findByRole('heading', { name: 'Friday pulse' })
+      expect(screen.getByRole('button', { name: 'Export CSV' })).toBeTruthy()
+      expect(screen.queryByRole('link', { name: /live/i })).toBeNull()
+    })
+  })
 })

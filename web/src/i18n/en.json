@@ -1255,7 +1255,9 @@
     "invitationAlreadyCompletedBody": "Your answers were received. There is nothing else to do, and answering again would not replace them.",
     "invitationLoadFailedTitle": "This invitation could not be opened",
     "invitationSignInNote": "This session records who takes part, so you will be asked to sign in to your account before you can answer.",
-    "invitationSignIn": "Sign in"
+    "invitationSignIn": "Sign in",
+    "exportCsv": "Export CSV",
+    "exportCsvFailedTitle": "The export did not download"
   },
   "navigation": {
     "sectionAdministration": "Administration",
