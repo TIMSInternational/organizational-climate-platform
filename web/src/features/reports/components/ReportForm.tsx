@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from '../../../i18n'
 import { Button, Input, Label, Textarea } from '../../../components/ui'
+import { REPORT_FORMATS } from '../api/reports'
 
 export interface ReportFormValues {
   title: string
@@ -10,13 +11,23 @@ export interface ReportFormValues {
 }
 
 /**
- * `type` and `format` are free text on the wire — `CreateReportRequest` validates neither,
- * and nothing downstream branches on them, because rendering is stubbed. Offering a fixed
- * list anyway keeps the values consistent enough to group and filter on later; a free-text
- * box would give one company "PDF", "pdf" and "Pdf".
+ * `type` is free text on the wire — `CreateReportRequest` does not validate it and nothing
+ * downstream branches on it. Offering a fixed list anyway keeps the values consistent enough
+ * to group and filter on later; a free-text box would give one company "Summary", "summary"
+ * and "SUMMARY".
+ *
+ * `format` is NOT free text any more. `ReportEndpoints.CreateAsync` answers 400 for anything
+ * `ReportFormats.Normalise` refuses, because `DownloadAsync` now renders the column and a
+ * stored value is a promise the download has to keep. The list therefore comes from
+ * `REPORT_FORMATS` in the api module, which mirrors `ReportFormats.Supported` — so the
+ * dropdown cannot offer a value the server will reject.
+ *
+ * **`excel` is gone from this list**, and that is the one visible consequence of the change.
+ * It was offered here for a year and never produced a spreadsheet; there is no xlsx writer in
+ * the API's solution. See `docs/decisions/report-rendering.md`. `ReportList` still ships a
+ * label for it, because rows created before the validation still say `excel`.
  */
 const TYPES = ['summary', 'detailed', 'comparison', 'executive'] as const
-const FORMATS = ['pdf', 'excel', 'csv'] as const
 
 const EMPTY_VALUES: ReportFormValues = {
   title: '',
@@ -96,7 +107,7 @@ export default function ReportForm({ onSubmit }: ReportFormProps) {
           value={values.format}
           onChange={(event) => setValues({ ...values, format: event.target.value })}
         >
-          {FORMATS.map((format) => (
+          {REPORT_FORMATS.map((format) => (
             <option key={format} value={format}>
               {t(`reports.format_${format}`)}
             </option>

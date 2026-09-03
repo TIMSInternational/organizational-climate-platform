@@ -1464,8 +1464,7 @@
     "statusFailed": "Fallido",
     "noReports": "Aún no hay informes",
     "noReportsDescription": "Cree un informe y aparecerá en esta lista.",
-    "generationStubbed": "La generación de informes aún no está implementada. Al crear un informe se registra y se marca como completado, y al descargarlo se registra la solicitud — no se produce ningún archivo.",
-    "downloadRecorded": "Descarga registrada para {title}. Descargado {count} veces en total."
+    "downloaded": "Se descargó {title} como {fileName}."
   },
   "settings": {
     "title": "Configuración",

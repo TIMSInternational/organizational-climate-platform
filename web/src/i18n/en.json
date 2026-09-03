@@ -1464,8 +1464,7 @@
     "statusFailed": "Failed",
     "noReports": "No reports yet",
     "noReportsDescription": "Create a report and it will be listed here.",
-    "generationStubbed": "Report rendering is not built yet. Creating a report records it and marks it complete, and downloading records the request — no file is produced.",
-    "downloadRecorded": "Download recorded for {title}. Downloaded {count} times in total."
+    "downloaded": "Downloaded {title} as {fileName}."
   },
   "settings": {
     "title": "Settings",

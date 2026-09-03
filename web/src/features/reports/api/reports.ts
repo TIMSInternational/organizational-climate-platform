@@ -35,9 +35,10 @@ export interface Report {
   format: string
   /**
    * A JSON-encoded `ReportOutputDocument` (ReportAIInsights.cs), camelCase:
-   * `{ generationNote, aiInsights }`. Aggregation is still stubbed backend-side (#88) --
-   * `generationNote` says so -- but `aiInsights` is real, so this is no longer an opaque
-   * placeholder string. It is still not a rendered document; do not display it raw.
+   * `{ generationNote, surveys, aiInsights, benchmarks }`. Real aggregation (#88), and
+   * `generationNote` names the sections the generator still does not build. It is the SOURCE
+   * a file is rendered from, server-side, by `ReportRenderer` -- never a document itself, so
+   * do not display it raw. `parseReportDocument` (../reportDocument) is the safe reader.
    */
   reportOutput: string | null
   downloadCount: number
@@ -73,12 +74,52 @@ export async function getReport(baseUrl: string, id: string): Promise<Report> {
   return response.json() as Promise<Report>
 }
 
+/** Every format the server will render. Mirrors `ReportFormats.Supported` (C#). */
+export const REPORT_FORMATS = ['pdf', 'csv'] as const
+
+export type ReportFormat = (typeof REPORT_FORMATS)[number]
+
 /**
- * Registers a download. This is a POST that increments `downloadCount` and returns the
- * updated record -- it does not stream a file, because nothing is rendered yet. The
- * backend rejects it with 400 unless `status === 'completed'`.
+ * Downloads the rendered report.
+ *
+ * ## Why a fetch and not a link
+ *
+ * The same reason `features/surveys/api/surveyExport.ts` gives, plus one more. The route is
+ * authorized, and an `<a href>` sends cookies rather than the bearer header — so the file has
+ * to arrive as a response body this module turns into a `Blob`. And the route is a **POST**:
+ * it increments `download_count`, which is the record answering "who exported this data"
+ * (#143), so an anchor could not reach it at all.
+ *
+ * The whole document is in memory in the tab for a moment. That is fine for a report bounded
+ * by the instrument, the org chart and the company's survey count — the unbounded export in
+ * this product is a survey's raw CSV, and that one streams server-side.
+ *
+ * The backend rejects the call with 400 unless `status === 'completed'`; `authFetch` turns a
+ * non-2xx into a throw, so a page never sees a half-successful download.
  */
-export async function downloadReport(baseUrl: string, id: string): Promise<Report> {
+export async function downloadReport(baseUrl: string, id: string): Promise<Blob> {
   const response = await authFetch(`${baseUrl}/admin/reports/${id}/download`, { method: 'POST' })
-  return response.json() as Promise<Report>
+  return response.blob()
+}
+
+/**
+ * The name the browser saves the file under.
+ *
+ * ## Why this is computed here and not read from the response
+ *
+ * The server puts a title-derived name in `Content-Disposition` (`ReportFormats.FileName`),
+ * and the browser cannot read it: `Content-Disposition` is not a CORS-safelisted response
+ * header and the API does not call `WithExposedHeaders` (`Program.cs` configures the
+ * "Frontend" policy with `AllowAnyHeader().AllowAnyMethod()` and nothing else). So
+ * `response.headers.get('content-disposition')` is `null` in the deployed app, and a name
+ * parsed from it would be `null` in production and correct in a unit test.
+ *
+ * `downloadBlobFile` sets `link.download`, which wins over the header regardless — so this
+ * is the name the user actually gets, and it is derived from the id because the id is the one
+ * thing the caller is certain of. Exposing the header server-side would let both names agree;
+ * that is a one-line CORS change in `Program.cs`, outside this slice.
+ */
+export function reportFileName(id: string, format: string): string {
+  const extension = format === 'csv' ? 'csv' : 'pdf'
+  return `report-${id}.${extension}`
 }
