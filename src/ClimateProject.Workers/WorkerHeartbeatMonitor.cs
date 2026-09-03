@@ -74,9 +74,7 @@ public sealed class WorkerHeartbeatMonitor(
         foreach (var stale in heartbeats.StaleJobs(nowUtc, _tolerance))
         {
             logger.LogError(
-                "Scheduled job {JobName} has not completed a run since {LastSuccessUtc}. Its interval is {Interval} " +
-                "and the staleness tolerance is {Tolerance}x. Last attempt of any kind was {LastAttemptUtc}, with " +
-                "{ConsecutiveFailures} consecutive failures. Reminders and digests are not being produced.",
+                WorkerLogLines.JobStale,
                 stale.JobName,
                 stale.LastSuccessUtc?.ToString("O") ?? "never",
                 stale.Interval,

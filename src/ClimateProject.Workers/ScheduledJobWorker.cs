@@ -147,7 +147,7 @@ public abstract class ScheduledJobWorker : BackgroundService
                 // do -- an alarm on the absence of this line is what catches the process being
                 // gone, which by definition cannot log an error about itself (#158).
                 _logger.LogInformation(
-                    "Heartbeat: scheduled job {JobName} completed a run at {RunAtUtc:O} holding the lease.",
+                    WorkerLogLines.HeartbeatCompleted,
                     JobName,
                     now);
             }
@@ -155,7 +155,7 @@ public abstract class ScheduledJobWorker : BackgroundService
             {
                 _heartbeats.RecordSkipped(JobName, now);
                 _logger.LogInformation(
-                    "Heartbeat: scheduled job {JobName} ticked at {RunAtUtc:O} but another instance holds the lease.",
+                    WorkerLogLines.HeartbeatSkipped,
                     JobName,
                     now);
             }
@@ -169,8 +169,7 @@ public abstract class ScheduledJobWorker : BackgroundService
             _heartbeats.RecordFailure(JobName, now);
             _logger.LogError(
                 exception,
-                "Scheduled job {JobName} threw at {RunAtUtc:O}. The transaction was rolled back and the tick will be " +
-                "retried on the next interval.",
+                WorkerLogLines.JobThrew,
                 JobName,
                 now);
         }
