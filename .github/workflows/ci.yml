@@ -164,6 +164,22 @@ jobs:
   # `aws cloudformation validate-template` needs AWS credentials and therefore
   # cannot run on a pull request, whereas cfn-lint parses the template locally and
   # additionally checks resource properties against its own AWS spec.
+  # The operator scripts under scripts/ (the question-library importer, the seeded-account
+  # rotation) carry node:test suites next to them. They have no package.json and no
+  # dependencies, so this is a checkout, a node, and one command. Node 25 treats a bare
+  # directory argument as a module path, hence the glob.
+  scripts-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Run the scripts' own tests
+        run: node --test 'scripts/*.test.mjs'
+
   deploy-path-lint:
     name: deploy-path-lint
     runs-on: ubuntu-latest
