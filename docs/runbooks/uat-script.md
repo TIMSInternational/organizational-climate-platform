@@ -11,11 +11,34 @@ Every route, endpoint, floor and expectation was read out of the source tree at 
 the step. Where a claim comes from a document rather than from code it says so, and one such
 document was found to be stale — see §9.
 
-**Method rule for whoever runs this.** A step has three outcomes: **pass**, **fail**, and
-**blocked**. "Blocked" is not a soft fail — it means the data or the provisioning the step needs
-does not exist yet, and it points at §2 or §8, not at a defect report. The repository's standing
-rule applies to the tester too: *state the measurement, not the inference.* Write down the screen
-you were on, the exact text you saw, and the HTTP status if you looked, not your reading of it.
+**Method rule for whoever runs this.** A step has four outcomes: **pass**, **fail**, **blocked**,
+and **observation**. "Blocked" is not a soft fail — it means the data or the provisioning the step
+needs does not exist yet, and it points at §2 or §8, not at a defect report. "Observation" is
+rarer and is used by exactly one flow in this document (§6.6): the code does what the code says,
+so there is nothing to fail, but what it does is a product decision nobody at the client has
+been asked to make. An observation is written down verbatim and carried to the owner — see §7.
+The repository's standing rule applies to the tester too: *state the measurement, not the
+inference.* Write down the screen you were on, the exact text you saw, and the HTTP status if you
+looked, not your reading of it.
+
+**Route coverage, measured.** `web/src/app/router.tsx` declares **58** paths
+(`grep -oE "path: '[^']+'" web/src/app/router.tsx | sort -u | wc -l` → 58, run 2026-09-03).
+**49** of them are named in this script in the form `` `path` (`router.tsx:NNN`) ``. The nine that
+are not, and what each of them is:
+
+- **three `/dev/*`** — `/dev/chart-gallery`, `/dev/question-library`, `/dev/storefront`. Inside an
+  `import.meta.env.DEV` block (`router.tsx:168`), so they are **not in the production build** and
+  cannot be walked at all.
+- **four `/tracking/*`** — `/tracking`, `/tracking/tablero`, `/tracking/planes`,
+  `/tracking/planes/:id`. Declared blocked by **§8.1**, which cites the fifth,
+  `/tracking/mis-tareas`, and the router lines for all of them.
+- **`/microclimate-invitations/:token`** — walked in **§6.3 row 5**, which cites `router.tsx:263`
+  in prose rather than in the form above.
+- **`/`** — walked in prose in **§3.2**, which cites `router.tsx:200` for `HomeRedirect`.
+
+**So no production route is both uncovered and undeclared.** If you add a route, add a step or add
+a §8 subsection saying why not, and re-run the count above rather than editing this number by
+hand.
 
 ---
 
@@ -24,10 +47,13 @@ you were on, the exact text you saw, and the HTTP status if you looked, not your
 Five roles (`super_admin`, `company_admin`, `leader`, `supervisor`, `employee` —
 `web/src/navigation/roleCapabilities.ts:75-81`, checked against the backend's own `Roles.All` by
 `roleCapabilities.test.ts`), one climate-survey lifecycle end to end, one microclimate lifecycle,
-the invitation loop, **both** public link surfaces — the survey share link `/s/{token}` (§6.5)
-and the public report link `/shared/reports/{token}` (§6.4) — and the two languages. It does
-**not** cover the tracking module, the question library, or anything on staging: §8 says why for
-each, and §8.6 names two microclimate routes that exist on the API and have no screen at all.
+**all three ways a person can get an account** — the invitation loop (§6.1), self-service
+registration by email domain (§6.6) and Google sign-in (§3.4) — **both** public link surfaces —
+the survey share link `/s/{token}` (§6.5) and the public report link `/shared/reports/{token}`
+(§6.4) — and the two languages. It does **not** cover the tracking module, the question library,
+or anything on staging: §8 says why for each, §8.6 names two microclimate routes that exist on
+the API and have no screen at all, and §8.7 names the one condition under which §3.4 cannot be
+run at all.
 
 ---
 
@@ -115,8 +141,10 @@ Proven by `tests/ClimateProject.UnitTests/Surveys/SurveyResultsPrivacyTests.cs`:
 
 ## 3. Every role does these three steps first
 
-Run §3 for each of the five roles before running that role's own journey. They are the steps
-that fail for everybody at once if something is wrong with the deployment.
+Run §3.1–3.3 for each of the five roles before running that role's own journey. They are the
+steps that fail for everybody at once if something is wrong with the deployment. **§3.4 is
+different: it is walked once, by one person, not per role** — it is the *other* way a session
+gets created, and it is filed here rather than under a role because no role owns it.
 
 ### 3.1 Log in
 
@@ -170,6 +198,33 @@ that fail for everybody at once if something is wrong with the deployment.
 > to English (`locale.ts:36-51`). A Spanish-speaking client user on a Spanish browser should land
 > in Spanish without touching the switcher — worth confirming once, on a fresh profile.
 
+### 3.4 Google sign-in — the page that creates the session (walk once, not per role)
+
+**Read §8.7 before running this step.** Whether it can be run at all is build-time and
+console state this repository cannot read. If the button described in row 1 is not on the login
+page, every row here is **blocked, blocked-by §8.7** — that is a one-line record, not five.
+
+`/auth/loading` is the Google OAuth `redirect_uri` itself — `GOOGLE_REDIRECT_PATH =
+'/auth/loading'` (`googleOAuth.ts:68`), sent to Google as `` `${origin}${GOOGLE_REDIRECT_PATH}` ``
+(`googleOAuth.ts:130`). It is not a decoration on the way in; it is the page that exchanges the
+token and creates the session. Nothing else in this document walks it.
+
+| # | Page (route) | Action | Expect | Failure looks like |
+|---|---|---|---|---|
+| 1 | `/login` (`router.tsx:201`) | Look for the Google button, in both languages | A button reading **"Continuar con Google"** / **"Continue with Google"** (`auth.continueWithGoogle`). It renders **only** when a client id is configured — `googleClientId()` reads `VITE_GOOGLE_CLIENT_ID` (`googleOAuth.ts:89`) and `LoginPage.tsx:164` hides the whole block otherwise, because "a *Continue with Google* that can only ever come back as `invalid_client` is worse than no button" (`LoginPage.tsx:63-64`) | **No button at all is not a defect** — it is §8.7. Record it there and stop |
+| 2 | `/login` → `accounts.google.com` | Press the button | You leave the app for Google's own consent screen. `beginGoogleSignIn` stores a `state`/`nonce` handshake in `sessionStorage` first (`googleOAuth.ts:127-131`) | Staying on `/login`; a Google page reading **`Error 400: redirect_uri_mismatch`** or **`invalid_client`**. That is the origin allowlist, not this app — §8.7, and it is cutover step **B5** |
+| 3 | `/auth/loading` (`router.tsx:217`) | Complete the Google consent and watch the interstitial | A stated waiting state, not a blank page: the text **"Finalizando el inicio de sesión…"** / **"Finishing sign-in…"** (`auth.completingSignIn`, `AuthLoadingPage.tsx:120`) | A blank white page; a spinner with no words; the browser sitting on `accounts.google.com` |
+| 4 | `/auth/loading` → `/dashboard` (`router.tsx:310`) | Observe where it puts you | `/dashboard`, via `resolveInitialRoute()` (`AuthLoadingPage.tsx:98`). A Google user is minted `Roles.Employee`, so they get the Employee view of §4.5 — **walk §4.5 rows 2–4 from here once**, because this is a different account from the seeded one | Landing on `/admin/companies` or anything that then 403s |
+| 5 | `/auth/loading` | **Negative test.** Type `https://climate.timsint.com/auth/loading` straight into the address bar, signed out | Redirected to `/login` with no error shown. No `id_token` and no `error` in the URL is `status: 'absent'` and "nobody came back from anywhere; somebody typed the URL" (`googleOAuth.ts:176`, `AuthLoadingPage.tsx:79-80`) | An error page, or a session being created out of nothing. The second is the severe one |
+| 6 | `/auth/loading` | **Negative test.** Start the flow in one browser, then close Google's window / press *Cancel* on the consent screen | `/auth/error?reason=google-signin` reading **"La ventana de Google se cerró antes de completar el inicio de sesión."** / **"The Google sign-in window was closed before it finished."** (`auth.googleCancelled`, `AuthLoadingPage.tsx:87-88`) | A raw exception; a hang on the interstitial |
+| 7 | `/auth/loading` | **Negative test, security-relevant.** Copy the whole `/auth/loading#id_token=…` URL out of one browser and open it in a **different** browser (or a private window) | Refused. The `state`/`nonce` do not match this browser's stored handshake, so the token is **never exchanged** — `status: 'mismatch'` → `/auth/error?reason=google-signin` reading **"Esta respuesta de inicio de sesión no corresponde a la solicitud hecha desde este navegador, por lo que se descartó."** / **"This sign-in response does not match the request this browser made, so it was discarded."** (`auth.googleMismatch`, `AuthLoadingPage.tsx:87-88`) | **A session being created in the second browser. Stop UAT and report immediately** — that is someone else's token being accepted |
+| 8 | `/auth/loading` | Sign in with a Google account whose email domain **no company owns** | Refused, and the refusal says why: since #280 `POST /auth/google` answers **404** with the same sentence signup uses — "No company found for this email domain. Please contact your administrator for an invitation." (`AuthEndpoints.cs:24-25`, thrown at `:221`), carried onto `/auth/error?reason=google-signin` (`AuthLoadingPage.tsx:103`) | **A brand-new company being provisioned for that domain.** That was the pre-#280 behaviour, gmail.com included (`AuthEndpoints.cs:20-23`), and it is a tenant-creation defect, not a login defect |
+
+> **Row 8 is the same rule as §6.6 row 4 seen from the other side, and it is why the two constants
+> were merged.** `NoCompanyForDomainMessage` is one string shared by `/auth/signup` and
+> `/auth/google` precisely because the two paths used to disagree (`AuthEndpoints.cs:20-25`). If
+> §3.4 row 8 and §6.6 row 4 do not produce the same sentence, one of them has regressed.
+
 ---
 
 ## 4. Per-role journeys
@@ -195,6 +250,8 @@ the role that sets up everything the other four journeys need.
 | 8 | `/admin/system-settings` (`router.tsx:317`) | Open, read, do not change | Settings render read-only to the eye | — |
 | 9 | `/analytics/benchmarks` (`router.tsx:408`) | Open Benchmarks | For this role the page is genuinely cross-company: `GET /admin/benchmarks` returns every tenant's plus the global rows (`navSections.ts:352-357`) | A single company's numbers presented as the platform's |
 | 10 | `/admin/question-bank` (`router.tsx:329`) | Open the question **bank** | Loads, scoped to global + every tenant for this role (`roleCapabilities.ts:317-322`) | Confusing this with the question **library**, which has no production UI — §8.2 |
+| 10a | `/surveys/templates/:id` (`router.tsx:366`) | Open any template from `/surveys/templates` (`router.tsx:365`) **with no company selected in the header switcher**, and read the panel above *Usar esta plantilla* / *Use This Template* | The page **states which company the survey would be created in, before you press anything**, and with no tenant selected it says instead: **"Elige una empresa en la cabecera antes de crear una encuesta a partir de esta plantilla."** / **"Choose a company from the header before creating a survey from this template."** (`surveys.chooseCompanyToUseTemplate`). This branch exists for this role specifically — a super_admin has had no implicit tenant since #191, so firing `POST /survey-templates/{id}/use` without one "would produce a 400 that reads like a bug rather than a missing choice" (`SurveyTemplateDetailPage.tsx:32-37`) | The **Use This Template** button being live with no company chosen, and the request then 400ing. Also a defect: the sentence appearing *after* the press instead of before it |
+| 10b | `/surveys/templates` (`router.tsx:365`) | With no company selected, read the list; then pick a company in the header and read it again | With no company the list is **every tenant's templates plus the global ones**; with a company it narrows. `ListAsync` gates on `Roles.Admin` and then, for a super_admin only, filters by `companyId` when one is supplied and otherwise does not filter at all (`SurveyTemplateEndpoints.cs:105-118`) | The unfiltered list being empty for a role that can see everything; or a company filter that does not narrow |
 | 11 | Hand off | — | Everything §4.2 needs now exists | — |
 
 ### 4.2 `company_admin`
@@ -208,12 +265,18 @@ The client's own administrator. **This is the role the client will spend UAT in.
 | 3 | `/admin/companies/:companyId/users` (`router.tsx:313`) | Read the roster | Only **their own** company's users. `UserEndpoints.CanAccessCompany` (`roleCapabilities.ts:452-457`) | Another tenant's users appearing — stop UAT and report immediately |
 | 4 | `/admin/companies/:companyId/demographic-fields` (`router.tsx:314`) | Read the demographic fields | The fields that will become result breakdowns | — |
 | 5 | `/surveys` (`router.tsx:349`) | Open the survey list | Only their own company's surveys — `ListAsync` overwrites the scope with their own company for this role (`roleCapabilities.ts:272-275`) | Another tenant's survey in the list |
+| 5a | `/surveys/templates` (`router.tsx:365`) | Open **Plantillas de Encuesta** / **Survey Templates** from the rail. Search a template by name, then filter by category, then search for something that cannot match | Header eyebrow **"Biblioteca"** / **"Library"** (`surveys.templatesEyebrow`) over **"Plantillas de Encuesta"** / **"Survey Templates"** (`navigation.surveyTemplates`). The search box reads **"Buscar plantillas por nombre o descripción..."** / **"Search templates by name or description..."** (`surveys.searchTemplates`) and the category filter offers **"Todas las categorías"** / **"All Categories"** (`surveys.allCategories`). A search with no matches gives an empty **state**, not a blank page: **"No se encontraron plantillas"** / **"No Templates Found"** with **"Intente ajustar los filtros o cree una nueva encuesta para comenzar."** / **"Try adjusting your filters or create a new survey to get started."** (`surveys.noTemplatesFound`, `surveys.tryAdjustingFilters`). For this role the list is the global templates **plus their own company's only** — `ListAsync` takes the non-super_admin branch, resolves `OwnCompanyId`, and 403s a request for another company (`SurveyTemplateEndpoints.cs:119-130`) | Another tenant's template in the list — **stop UAT and report immediately**. A blank page where the empty state should be. **Not** a failure: a short list, or a list of global templates only, on a tenant that has authored none |
+| 5b | `/surveys/templates/:id` (`router.tsx:366`) | Open one template. Read the questions, read the *Resumen* / *At a glance* panel, then press **"Usar esta plantilla"** / **"Use This Template"** (`surveys.useTemplate`) | The questions render, and the **language of the questions is stated on the page** when it is not the language you asked for: **"Idioma de este contenido"** / **"Language of this content"** with **"Mostrando el contenido en {resolved} porque no está disponible en {requested}."** / **"Showing content in {resolved} because it is not available in {requested}."** (`surveys.contentLanguageNotice`, `surveys.showingContentIn`). Pressing *Use* calls `POST /survey-templates/{id}/use` (`SurveyTemplateEndpoints.cs:53`), which answers **201 with the new survey**, and the page navigates to `/surveys/{new id}` (`SurveyTemplateDetailPage.tsx:88-90`) — **a draft survey now exists**; §6.2 can start from it instead of from a blank wizard | Landing back on the template list, or staying put, after a successful *Use* — the created survey is then invisible. A template with no questions offering a live *Use* button; it should say **"Esta plantilla no tiene preguntas, así que todavía no puede crear una encuesta utilizable."** / **"This template has no questions, so it cannot create a usable survey yet."** (`surveys.noTemplateQuestionsDescription`) |
+| 5c | `/surveys/templates/:id` | Read the **template's own name and description** in Spanish and then in English | **They do not change, and that is issue #210, not a defect here.** `survey_templates.name` / `.description` are single `text` columns — #195 paired only `template_questions` — so the heading is monolingual whatever locale is asked for while the questions below are resolved and self-report their fallback (`SurveyTemplateDetailPage.tsx:45-49`) | A tester filing "the template name did not translate". Record it once, against #210 |
 | 6 | §6 survey lifecycle | Run **all of §6.2** | — | — |
 | 7 | `/surveys/climate-trends` (`router.tsx:371`) | Open Climate trends | Company-level trend across surveys. `GET /surveys/climate-trends`, admin-only, scoped to their own company (`roleCapabilities.ts:327-331`) | 403; or trends over a company that is not theirs |
 | 8 | `/analytics/ai-insights` (`router.tsx:409`) | Open AI insights | Renders for their own company — this endpoint **requires** a company id (`roleCapabilities.ts:391`) | A "no company" state for a role that always has one |
 | 9 | `/admin/companies/:companyId/reports` (`router.tsx:315`) | Create a report, then download it | An alert states plainly that **report rendering is not built**: "Creating a report records it and marks it complete, and downloading records the request — no file is produced" (`ReportsListPage.tsx:143`, key `reports.generationStubbed`) | A tester filing "download does nothing" as a defect. It is disclosed on the page. **No file is expected** |
 | 10 | `/admin/companies/:companyId/analytics` (`router.tsx:316`) | Open Analytics. It is a nav row for this role (`navSections.ts:498-502`), so it must not be skipped | Two **independent** sections: **benchmarks** (`GET /admin/benchmarks`) and **AI insights** (`GET /admin/ai-insights?companyId=` — `AIInsightEndpoints.cs:35-40`, registered at `Program.cs:654`). They are fetched separately so that one failing does not blank the other (`AnalyticsDashboardPage.tsx:44-51`). Company comes from the **URL**, never from the viewer's JWT (`AnalyticsDashboardPage.tsx:31-33`) | Both sections erroring together — that means the page regressed to a single fetch. **Note for whoever reads the source:** the comment at `AnalyticsDashboardPage.tsx:47` says `/admin/ai-insights` "is not registered in `Program.cs` … so every call 404s today". **That comment is stale** — the group *is* registered (`Program.cs:654`). A 404 from that section today is a defect, not a documented gap |
 | 11 | `/action-plans` (`router.tsx:334`) | Open Action plans | Loads. `ActionPlanEndpoints.CanAccessCompany` — super_admin, or company_admin on their own company, **and nobody else** (`roleCapabilities.ts:395-401`) | — |
+| 11a | `/action-plans/:id` (`router.tsx:335`) | Open one plan from the list. Read the *Resumen* / *At a glance* panel, the **"Indicadores Clave de Rendimiento (KPIs)"** / **"Key Performance Indicators (KPIs)"** table and the **"Objetivos"** / **"Objectives"** table (`actionPlans.atAGlance`, `actionPlans.kpis`, `actionPlans.objectives`) | Both tables render, each KPI showing **"Valor Actual"** / **"Current Value"** against **"Valor Objetivo"** / **"Target Value"** with a progress bar. A plan that tracks neither gives an empty **state** with a sentence, not a blank panel: **"Todavía no hay KPIs" / "Este plan no hace seguimiento de indicadores numéricos."** and **"Todavía no hay objetivos" / "Este plan no hace seguimiento de resultados cualitativos."** (`actionPlans.noKpis`, `actionPlans.noKpisDescription`, `actionPlans.noObjectives`, `actionPlans.noObjectivesDescription`). `GET /action-plans/{id}` (`ActionPlanEndpoints.cs:18`), same `CanAccessCompany` gate as row 11 | A blank region where a table or its empty state should be. A plan from another company opening at all — **stop UAT and report immediately** |
+| 11b | `/action-plans/:id` | Use the **"Registrar Progreso"** / **"Record progress"** form (`actionPlans.recordProgress`): move one KPI's current value, submit. Then change the plan's **status** and **priority** from the selects and submit that | After the progress submission the page **refetches** and the KPI's current value and bar move, with **"Progreso registrado el {fecha}."** / **"Progress recorded on {date}."** (`actionPlans.progressRecordedAt`, `ActionPlanDetailPage.tsx:132-136,181`). `POST /action-plans/{id}/progress` (`ActionPlanEndpoints.cs:20`). The status/priority save takes the **PUT response** rather than refetching (`ActionPlanDetailPage.tsx:118`, `PUT /action-plans/{id}` — `ActionPlanEndpoints.cs:19`) | The numbers not moving until a manual reload; an action error blanking the whole page — errors from these two actions are never allowed to do that (`ActionPlanDetailPage.tsx:71`) |
+| 11c | `/action-plans/:id` | Look for a list of past progress updates | **There is none, and that is a known backend gap, not a missing panel.** `POST /action-plans/{id}/progress` writes the rows and **nothing reads them back**: `ActionPlanDetail` carries `Kpis` and `Objectives` and no updates collection, and `ProgressUpdate` appears nowhere else in `src/ClimateProject.Api/Endpoints/`. A history table here "could only be fabricated, or could only show the entries made since the tab was opened — which is worse, because it looks like a history and is not one" (`ActionPlanDetailPage.tsx:38-53`). What the page shows instead is the state those writes actually mutate | A tester filing "progress history is missing". Record it once as an **observation** against the missing `GET /action-plans/{id}/progress`, which has no issue number in this repo yet — see §10 |
 | 12 | §6 microclimate | Run **all of §6.3** | — | — |
 
 ### 4.3 `leader` (the node leader / jefe de nodo)
@@ -305,6 +368,13 @@ The role most of the client's people hold. This journey is the product for them.
 | "There is no export button" on `/microclimates/:id/results` | Correct — the two export routes have no web caller | §8.6, §6.3 row 8 |
 | A `/s/<token>` link that lands on an error page | Revoked, regenerated, out of window, or made up — the server will not say which | §6.5 row 6 |
 | An imported user who cannot log in | A bulk import writes invitations, not accounts | §2.2 |
+| No "Continue with Google" button on the login page | No client id was configured at build time; the button is hidden rather than shipped broken | §8.7 |
+| Google answering `redirect_uri_mismatch` or `invalid_client` | The origin allowlist on the Google OAuth client, not this app | §8.7, cutover **B5** |
+| "No company found for this email domain" on `/register` | The invitation-only branch, answered **404**. Not an error state | §6.6 row 3 |
+| A stranger with a company email address creating a live account unaided | **Expected today.** The rule is the company's `EmailDomain` field, and there is no approval step | §6.6 row 4 — record it as an **observation** |
+| A survey template's name not translating | `survey_templates.name`/`.description` are single columns — #210 | §4.2 row 5c |
+| No progress-update history on an action plan | Nothing reads those rows back; a table here could only be fabricated | §4.2 row 11c |
+| "Use This Template" refusing, or asking for a company first | A `super_admin` has no implicit tenant since #191; pick one in the header | §4.1 row 10a |
 
 ---
 
@@ -419,14 +489,84 @@ invitations still work alongside it" (`SurveyAccessTokens.cs:139-140`).
 | 10 | admin | Distribution page | Confirm the counters | `total_accesses` and `last_accessed_at` move on every resolve, updated atomically in SQL because a share link is hit concurrently. **`unique_visitors` deliberately does not move** — counting distinct visitors of an anonymous link means fingerprinting them (`SurveyDistributionEndpoints.cs:1068-1078`) | A unique-visitor count climbing. That would be a privacy regression, not a fixed counter |
 | 11 | respondent | `/s/:token` | Switch language on the public page | The page renders in the other language; the server resolves content locale from `?lang` and falls back to the survey's own (`SurveyDistributionEndpoints.cs:1080-1083`), and the frame carrying the picker renders **before** the token resolves, so a visitor who cannot read English is not stuck on "resolving" (`PublicSurveyLinkPage.tsx:45-49`) | The picker only appearing after the survey loads |
 
+### 6.6 Self-service registration — the other way an account is created, and the one the client has never been shown
+
+**Run this flow, and record row 4 as an `observation`, not as a pass or a fail.** Nothing here is
+broken. The question is whether the client knows the rule, and no one has asked them — §7 says how
+to write it down and §10 says where it goes.
+
+**Nothing in the product links to `/register`.** The login page deliberately stopped advertising
+it: employees arrive by bulk import or by `/accept-invitation/:token`, and for most people who
+reach the login page that link "led to a form that could only refuse them"
+(`LoginPage.tsx:38-44`). The route still exists and is still routed (`router.tsx:214`), so it is
+reachable by typing the URL, by an old bookmark, and by anyone who is told it exists.
+
+> **A note for whoever reads the source alongside this.** `LoginPage.tsx:41` says signup "400s
+> when no company is registered for it". **It answers 404**, not 400 —
+> `AuthEndpoints.cs:134-137`, `Results.Json(new ErrorResponse(NoCompanyForDomainMessage),
+> statusCode: 404)`. The behaviour in row 4 below is the code's, not the comment's.
+
+**Preconditions.** Two mailboxes the tester can actually open: **(a)** one whose domain matches a
+company's `EmailDomain` exactly, and **(b)** one whose domain matches no company at all — a
+personal `gmail.com` address is the easy second. The first is the precondition that decides
+whether this flow is walkable at all: read the domain off `/admin/companies/:id`, which shows it
+as **"Dominio de correo"** / **"Email domain"** in the identity panel
+(`companySettings.emailDomain`, `CompanyDetailPage.tsx:196-200`). **If that field is empty for the
+client's company, rows 3–6 are `blocked`** — not a defect, and worth saying out loud to the owner,
+because an empty domain is also what closes this door.
+
+| # | Who | Page (route) | Action | Expect | Failure looks like |
+|---|---|---|---|---|---|
+| 1 | anyone, signed out | `/login` (`router.tsx:201`) | Look for a "create an account" link | **There is none, on purpose** (`LoginPage.tsx:38-44`) | A tester recording "registration is missing". It is not linked; it is not absent |
+| 2 | anyone, signed out | `/register` (`router.tsx:214`) | Type the URL. Read the page in both languages before typing anything | **"Crear una cuenta"** / **"Create an account"** over **"Cree una cuenta con su correo corporativo."** / **"Create an account with your work email address."** (`auth.createAccount`, `auth.registerDetail`), and under the email field the hint **"Use su correo corporativo: la organización a la que se une la determina el dominio."** / **"Use your work email — the organization you join is decided by its domain."** (`auth.companyFromDomainHint`) | A raw dotted key; a "company" picker of any kind — the endpoint would ignore it (`RegisterPage.tsx:25-31`) |
+| 3 | anyone, signed out | `/register` | Type mailbox **(b)** — the address at the **unregistered** domain — with a name and an 8-character password, and submit | Refused with **404**, and rendered as guidance rather than as a red failure: **"Este correo necesita una invitación"** / **"An invitation is needed for this address"**, then **"Solicite a un administrador de su organización que le invite. Puede enviarle un enlace de invitación o registrar el dominio de su correo para que cualquier persona con una dirección de ese dominio pueda registrarse."** / **"Ask an administrator at your organization to invite you. They can send an invitation link, or register your email domain so that anyone with an address at it can sign up."** (`auth.invitationRequiredTitle`, `auth.invitationRequiredDetail`; server text `AuthEndpoints.cs:24-25`, returned at `:137`). **The form stays filled in behind it** (`RegisterPage.tsx:33-41`) | A red "Request failed" banner; the form being cleared; **an account being created for an unregistered domain** — that would be a tenant-provisioning defect (#280) and must be reported |
+| 4 | anyone, signed out | `/register` | **This is the observation.** Type mailbox **(a)** — the address at the **client's registered domain** — as if you were a stranger who had learned the URL. Watch what the form tells you *before* you submit, then submit | Before submitting, the page names the organisation you are about to join: **"Se unirá a la organización registrada con el dominio {domain}. Esto lo determina su correo electrónico y no puede cambiarse aquí."** / **"You will join the organization registered to {domain}. This is decided by your email address and cannot be changed here."** (`auth.companyFromDomain`). On submit you get **201 and a live session** (`AuthEndpoints.cs:163`). The account is real: `CompanyId` = the company owning the domain, `Role = Roles.Employee` hardcoded, `IsActive = true`, created and saved with **no approval step of any kind** (`AuthEndpoints.cs:134-155`, `db.Users.Add(user)` at `:154`) | **Record the measurement, not a verdict.** There is no failure branch here to report as a defect: the code does exactly this. See the box below for what to write |
+| 5 | the new account | `/auth/success` (`router.tsx:218`) | Read the page. Then press **"Continuar"** / **"Continue"** (`auth.continueToApp`) | **"Cuenta Creada"** / **"Account created"**, **"Bienvenido, {name}. Su cuenta está lista."** / **"Welcome, {name}. Your account is ready."** (`auth.accountCreatedFor`), the organisation under the label **"Organización"** / **"Organization"** (`auth.joinedOrganization`) read back **off the token that was just issued** rather than off the form (`AuthSuccessPage.tsx:21-26`), and **"Se le agregó como empleado. Un administrador puede cambiar su rol y su departamento más adelante."** / **"You have been added as an employee. An administrator can change your role and department later."** (`auth.accountCreatedRoleNote`). *Continue* lands on `/dashboard` via `resolveInitialRoute` | The organisation name being absent or wrong — it is the one surprising fact self-registration decides silently, and the whole reason this page exists (`AuthSuccessPage.tsx:19-26`). A `super_admin`-only destination behind *Continue*; a fresh account is an employee and would 403 (`AuthSuccessPage.tsx:36-41`) |
+| 6 | the new account | `/auth/success` | **Negative test.** Sign out, then type `/auth/success` directly | Redirected to `/login`. With no token this "would be a congratulation with nothing behind it" (`AuthSuccessPage.tsx:28-34`) | A success page rendering for nobody |
+| 7 | `company_admin` | `/admin/companies/:companyId/users` (`router.tsx:313`) | Look for the account row 4 created | **It is in the roster, active, with no invitation ever having been sent and no admin action taken.** This is the same measurement as row 4, seen from the administrator's side, and it is the half the owner will care about | The row being absent — *that* would be a defect, because the session in row 5 proves the user exists |
+| 8 | the new account | — | Walk **§4.5 rows 2, 5 and 14** as this account | An ordinary employee surface, and 403s on the admin routes | Any admin data reaching an account that let itself in |
+
+> **What to write for row 4, and why it is an `observation` rather than a `fail`.**
+>
+> Write the fact and the consequence, in the tester's own words, with no verdict attached:
+> *"On `/register`, `<address>@<client domain>` created a working employee account in
+> `<company>` in one submit. No invitation, no approval, no notification to an administrator. It
+> appeared in the roster at `/admin/companies/:companyId/users` immediately."*
+>
+> Then attach the two facts the owner needs to decide: **(a)** the rule is per-company and it is
+> the `EmailDomain` field on the company — anyone with an address at that domain can do this, and
+> nobody with an address anywhere else can (`AuthEndpoints.cs:134-137`); **(b)** the only lever
+> that exists today is that field itself, plus the platform-wide `LoginEnabled` kill switch that
+> `CheckSystemSettingsGateAsync` applies to signup as well as login (`AuthEndpoints.cs:106-111`,
+> `:401-430`). **There is no per-company "allow self-registration" setting** and no approval
+> queue; do not promise the client one.
+>
+> This is a **product decision for the owner**, and the reason it is in this document at all is
+> that a client who does not know the rule will discover it the first time a contractor or a
+> departed employee with a live company address signs themselves back in. Do not argue it in the
+> defect log; carry it to §10.
+
 ---
 
 ## 7. Recording a result
 
 For every step, record **six** fields: **role**, **step number**, **route**,
-**pass / fail / blocked**, **blocked-by** (the step number or the §8 subsection that stopped it,
-empty otherwise), and for a failure the **exact on-screen text** plus the request and status if
-you looked. A screenshot in both languages is worth more than a paragraph.
+**pass / fail / blocked / observation**, **blocked-by** (the step number or the §8 subsection that
+stopped it, empty otherwise), and for a failure the **exact on-screen text** plus the request and
+status if you looked. A screenshot in both languages is worth more than a paragraph.
+
+**The `observation` outcome.** Used by **§6.6 row 4** and nowhere else in this document, and by
+any step where the same shape recurs: *the software did what its source says it does, and what it
+does is a decision the client has never been asked to make.* Record it with the same six fields,
+outcome `observation`, and the **exact on-screen text plus what it caused** — §6.6's box says what
+that sentence looks like. Two rules keep it honest:
+
+- **An `observation` is never a `fail` in a nicer coat.** If a step has a stated expectation and
+  the screen did not meet it, that is a `fail`, whatever anyone thinks of the design.
+- **An `observation` is never a `pass` either.** It does not close, it does not count toward the
+  sign-off, and it is not settled by the tester. It goes to §10 with the owner's name on it, and
+  it stays open until the owner answers. §4.2 row 11c is the other kind — a measured absence with
+  no issue number yet — and is recorded the same way.
 
 ### 7.1 When a step cannot be run because an earlier one did not finish
 
@@ -450,6 +590,16 @@ The rule:
    - **§6.4 step 1** needs an operator who can call the API (§8.3). Steps 2–8 need step 1.
    - **§6.5** needs no responses at all beyond row 5, and **§6.1, §3, §4.1–4.5 and §6.3 rows
      1–7** need none of it. Run those first if the room is thin.
+   - **§3.4 needs nobody but the tester** — one Google account and one browser — and depends on
+     nothing in this document. It does depend on §8.7, which is a build and a console, not a
+     person. Run it first if the room is thin; record it once against §8.7 if the button is
+     absent.
+   - **§6.6 needs two mailboxes and no other participant**, and it creates the account §6.6 rows
+     7–8 then read. It does **not** need the invitation loop, so it survives a §6.1 step 3 mail
+     failure — which makes it the one account-creation path still walkable when gate 2 is
+     `blocked`. That is a reason to run it, not a substitute for gate 2.
+   - **§4.2 rows 5a–5c and 11a–11c** need only that a template and an action plan exist. Row 5b
+     *creates* a draft survey, so it can feed §6.2 rather than waiting on it.
 4. **A step blocked by §8 is recorded once, against the §8 subsection**, and carries the issue
    number from §10. It is not re-argued per step.
 5. **Never mark a step `pass` on inference.** "The others worked so this must too" is the failure
@@ -571,6 +721,35 @@ API-only checks for a TIMS operator, not client-facing UAT steps.
 and the endpoints that exist are not those. Read that comment before writing a defect about a
 microclimate analytics gap.
 
+### 8.7 Google sign-in (§3.4) may not be runnable at all, and this repository cannot tell you
+
+§3.4 walks `/auth/loading`, the page that creates the session on the Google path. Whether it can
+be reached depends on two things this repository does not contain, and a tester must know which
+of the two stopped them before writing anything down.
+
+| What decides it | Where it lives | What this repo can and cannot say |
+|---|---|---|
+| **Is the button there?** `VITE_GOOGLE_CLIENT_ID` is read at build time (`googleOAuth.ts:89`) and `LoginPage.tsx:164` renders nothing without it | Vercel project environment variables | **In-repo: nothing.** "Every one is read from `import.meta.env` at build time; **none has an in-repo default**" (`docs/decisions/legacy-dependency-inventory.md:325`). `docs/runbooks/staging-provisioning.md:329` records the same for staging: *"optional; omit and the Google button is simply not rendered."* So an absent button is a **configuration state, not a defect** |
+| **Does Google accept the round trip?** The redirect is `` `${origin}/auth/loading` `` (`googleOAuth.ts:68,130`) and must be on the OAuth client's authorized origins / redirect URIs | Google Cloud console | **UNCONFIRMED**, and it is a named cutover blocker. `docs/runbooks/cutover.md` **B5** (line 322): the value to allowlist is exactly `https://climate.timsint.com/auth/loading`, verified from the repo half; *"[CANNOT VERIFY FROM HERE: Google Cloud console.]"* Precondition **P11** (line 100) says the same: *"Google OAuth origins are unconfirmed for `climate.timsint.com`."* Both are **HUMAN-ONLY, one paste** |
+
+**How to record it.** One line, once, not eight:
+
+- **No button on `/login`** → §3.4 is `blocked`, `blocked-by: §8.7`, and say *which* half: "no
+  Google button rendered on `climate.timsint.com/login`". That is a fact about the deployed
+  build, and it is worth reporting even though it is not a defect, because nobody in this
+  repository can read it.
+- **Button present, Google refuses with `redirect_uri_mismatch` / `invalid_client`** → §3.4 rows
+  2–8 are `blocked`, `blocked-by: §8.7`, and the finding is **cutover B5 / P11**, carried to §10
+  under **#162**. Do not file it as a login defect: nothing in this codebase can fix it.
+- **Button present and the round trip completes** → run all of §3.4, and note in the sign-off
+  that B5 is now **observed working from a browser**, which is exactly what cutover step **D8**
+  says it could not verify from here. That is the single most valuable by-product of this
+  section, and it is why §3.4 exists rather than being written off with the rest of §8.
+
+> **Do not confuse this with §8.5's domain item.** #160 is about the *API* having no custom
+> domain. This is about the *web* origin the browser is on, which already exists
+> (`https://climate.timsint.com`) and simply may not be on Google's list.
+
 ---
 
 ## 9. One correction to an existing document, so nobody repeats it
@@ -596,11 +775,23 @@ never-configured mailer looked like before #100.
 
 ## 10. Sign-off
 
-UAT is complete when, for each of the five roles, §3 and that role's §4 journey are recorded, and
-§6.1 through §6.5 are recorded with the participants they need. Steps marked **blocked** by §8 are
-listed on the sign-off with the issue that unblocks them (#219 tracking, #423/import question
-library, #156 staging, #158 monitoring, #159 rollback, #160 domains) rather than being counted as
-passes, and each carries its **blocked-by** field from §7.1.
+UAT is complete when, for each of the five roles, §3.1–3.3 and that role's §4 journey are
+recorded, **§3.4 is recorded once**, and §6.1 through §6.6 are recorded with the participants they
+need. Steps marked **blocked** by §8 are listed on the sign-off with the issue that unblocks them
+(#219 tracking, #423/import question library, #156 staging, #158 monitoring, #159 rollback, #160
+domains, **#162 for the Google origins of §8.7**) rather than being counted as passes, and each
+carries its **blocked-by** field from §7.1.
+
+**Observations are listed separately, and each one names the person who must answer it.** They
+are not defects, they do not gate cutover on their own, and they must not be quietly folded into
+"passed". As written today there are two, and both are decisions rather than bugs:
+
+| Observation | Measured at | Who answers | What they are being asked |
+|---|---|---|---|
+| **Anyone with an email address at the company's registered domain can create a live employee account, unaided and unannounced** | §6.6 row 4, confirmed from the admin's side by row 7 | **The client's owner**, with TIMS advising | Is that the rule they want? The only levers today are the company's `EmailDomain` field and the platform-wide `LoginEnabled` switch (§6.6's box) — there is **no** per-company self-registration setting and **no** approval queue, so "turn it off for us" means clearing the domain and losing the rule for everybody at that domain |
+| **An action plan's progress updates are written and never read back** | §4.2 row 11c | **TIMS** | Is a `GET /action-plans/{id}/progress` worth an issue before go-live? There is no issue number for it in this repository today; it needs one or an explicit decision to defer |
+
+An observation with no name against it is not recorded; it is deferred by accident.
 
 ### 10.1 Gates — a `blocked` on one of these is as disqualifying as a `fail`
 
