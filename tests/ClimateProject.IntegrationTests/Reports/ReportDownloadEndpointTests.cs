@@ -333,7 +333,7 @@ public class ReportDownloadEndpointTests : IAsyncLifetime
     {
         var client = _factory.CreateClient();
         var email = $"{Guid.NewGuid():N}@{_companyDomain}";
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.Created, signup.StatusCode);
 
         using (var scope = _factory.Services.CreateScope())
@@ -345,7 +345,7 @@ public class ReportDownloadEndpointTests : IAsyncLifetime
             await db.SaveChangesAsync();
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         var token = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
