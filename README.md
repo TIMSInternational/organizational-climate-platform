@@ -1,11 +1,35 @@
 # organizational-climate-platform
 
-Monorepo for the organizational climate platform: `web/` (React + Vite frontend) and
-`src/` (.NET 10 backend) — the migration target for the legacy Next.js/MongoDB stack at
-[climate-project](https://github.com/TIMSInternational/climate-project). See
-[climate-project#17](https://github.com/TIMSInternational/climate-project/issues/17) for the
-full migration epic and [#47](https://github.com/TIMSInternational/climate-project/issues/47)
-for this repo's foundation-scaffold spec.
+Monorepo for the organizational climate platform: `web/` (React + Vite SPA) and `src/`
+(.NET 10 API). It runs organizational-climate surveys and microclimates — build an
+instrument from a question library, invite a company's employees, collect responses under an
+anonymity floor, and read the results as dimension scores, a climate map and action plans.
+`services/tracking-api/` is a separate, single-tenant action-plan tracking service. It is
+**live**: the web is `https://climate.timsint.com` and the API is
+`https://bhgrdkd4gt.us-east-1.awsapprunner.com`, serving commit `e0896f9` (`GET /version`,
+2026-09-03).
+
+This repository replaced a legacy Next.js/MongoDB app, but it is **not** a migration target:
+the legacy database held mock data and was abandoned rather than migrated on 2026-08-19 —
+[`docs/decisions/no-data-migration.md`](docs/decisions/no-data-migration.md). The new platform
+starts from an empty database populated by real use.
+
+**Where the docs live:**
+
+- [`docs/requirements/`](docs/requirements/README.md) — what the client asked for (see the
+  paragraph below, which is the one to read first).
+- [`docs/decisions/`](docs/decisions/) — why things are the way they are, one file per call.
+- [`docs/runbooks/`](docs/runbooks/) — cutover, rollback, alerting, UAT, staging and the two
+  provisioning runbooks. Each states its own measurement date; re-verify before acting.
+- [`docs/legacy-issues/`](docs/legacy-issues/) — the legacy tracker, archived. This paragraph
+  previously linked `climate-project#17` and `#47`; those issues were deleted
+  (`gh issue view 17 --repo TIMSInternational/climate-project` → *"Could not resolve to an
+  issue or pull request with the number of 17"*, same for 47, measured 2026-09-03), which is
+  why the links are gone and the archive is cited instead.
+
+[REWRITTEN 2026-09-03. The previous opening described this repo as "the migration target for
+the legacy Next.js/MongoDB stack" and pointed at two deleted issues for "the full migration
+epic".]
 
 **What the client asked for lives in [`docs/requirements/`](docs/requirements/README.md)** — the
 PRD, the tech spec and five rounds of client review notes, ported verbatim from the legacy repo.
@@ -72,11 +96,12 @@ Background and the credential-rotation checklist: `docs/security/rotation-invent
 
 ## Deployments
 
-- **Frontend:** [web-one-green-86.vercel.app](https://web-one-green-86.vercel.app) — Vercel project `climate` (team `federicos-projects-21f2ff63`), Root Directory `web/`, builds on push independent of GitHub Actions. Preview deployments use the `https://climate-*-federicos-projects-21f2ff63.vercel.app` pattern (also allowlisted in the API's CORS policy).
+- **Frontend:** **[climate.timsint.com](https://climate.timsint.com)** — Vercel project `climate` (team `federicos-projects-21f2ff63`), Root Directory `web/`, builds on push independent of GitHub Actions. Preview deployments use the `https://climate-*-federicos-projects-21f2ff63.vercel.app` pattern (also allowlisted in the API's CORS policy). The hosting decision, the DNS facts and the `VITE_API_BASE_URL` build-time trap are recorded in [`docs/decisions/web-hosting.md`](docs/decisions/web-hosting.md).
 
-  **Corrected 2026-08-18.** This line previously named `organizational-climate-platform.vercel.app`, which is **not** this project's production URL and is not reachable from this Vercel account at all. Measured, not inferred: `vercel projects ls` reports project `climate`'s Latest Production URL as `web-one-green-86.vercel.app`; `vercel domains ls` shows no custom domain for it, and `vercel alias ls` no alias by the old name. The old URL still answers 200, but serves `<title>web</title>` — the Vite default this repo replaced on 2026-08-07 in `d905c02` — and its bundle does not contain a string added on 2026-08-17, so it is a **legacy deployment in the account `docs/security/rotation-inventory.md` records as not visible from here**, not a stale alias of this project.
+  **Corrected 2026-09-03.** This bullet named `web-one-green-86.vercel.app` — a Vercel-generated name — and the string `climate.timsint.com` appeared nowhere in this file. Measured today: `curl -s -o /dev/null -w '%{http_code} %{remote_ip}' https://climate.timsint.com/` → `200 76.76.21.21`, serving `<title>Organizational Climate Platform</title>`; `dig +noall +answer climate.timsint.com` → `1798 IN A 76.76.21.21`; and the API's `production` environment sets `CORS_ALLOWED_ORIGIN=https://climate.timsint.com` (`gh variable list --env production`, set `2026-08-19T04:15:37Z`). The earlier 2026-08-18 correction — which replaced `organizational-climate-platform.vercel.app` with the generated name — is superseded by this one, not contradicted by it: that host is a stale, unrelated deployment and never served this project.
 
-  **⚠️ Known break, open as of 2026-08-18: the production API's CORS allowlist still names the OLD url, so the real production frontend cannot call the production API.** Measured against `https://bhgrdkd4gt.us-east-1.awsapprunner.com/version`: an `OPTIONS` preflight from `https://organizational-climate-platform.vercel.app` returns that origin in `access-control-allow-origin`, and one from `https://web-one-green-86.vercel.app` returns **no `access-control-allow-origin` header at all**. Fixing it means setting the `CORS_ALLOWED_ORIGIN` (or `CORS_ADDITIONAL_ALLOWED_ORIGIN`) repository variable to whichever URL should be canonical and re-running `deploy-prod`; the better long-term answer is a custom domain on project `climate`, since `web-one-green-86` is a Vercel-generated name that changes if the project is recreated.
+  ~~**⚠️ Known break, open as of 2026-08-18: the production API's CORS allowlist still names the OLD url.**~~ **RESOLVED — verified 2026-09-03.** Preflight measured against `https://bhgrdkd4gt.us-east-1.awsapprunner.com/version`: `OPTIONS` with `Origin: https://climate.timsint.com` → `204` and `access-control-allow-origin: https://climate.timsint.com`; the same preflight with `Origin: https://organizational-climate-platform.vercel.app` → `204` with **no** `access-control-allow-origin` header at all. The canonical origin is the custom domain, and the old URL is no longer allowed. The remaining half of #160 is the **API** side: it still has no custom domain (`aws --profile claude apprunner describe-custom-domains …/climate-project-api-prod` → `"CustomDomains": []`).
+
 - **Backend:** `https://bhgrdkd4gt.us-east-1.awsapprunner.com` — AWS App Runner, see `infra/aws/README.md` for the deploy runbook. `TrackingJwtSecret`, `InternalApiKey`, and the database connection string are supplied via Secrets Manager (`RuntimeEnvironmentSecrets`), not plain env vars. **As of #189, `InternalApiKey` and the connection string are validated at startup: if either is unset the service refuses to start**, rather than starting and 500ing (`/api/internal/*` for the key, every DB-touching route for the connection string) while `/health` still reports `ok`. A deploy that omits either now fails outright instead of coming up half-broken, and `/ready` (#206) covers the remaining case of a connection string that is present but points somewhere unreachable. Note the two failure modes for `InternalApiKey` are different and both matter for rotation: **unset** fails startup, whereas **mismatched** returns a per-request 401 — see `docs/security/rotation-inventory.md`. `GoogleClientId` is deliberately *not* required unless `GoogleAuth:Required` is `true`, so environments without Google sign-in are unaffected.
 - **Email (#100):** off by default and **off in production until the settings below are supplied**. With `Email:Provider` unset (or `none`) the API keeps the logging stubs: notifications and invitations are recorded as `sent` and **no mail leaves the process**. That state is announced by a startup `WARNING` (`ClimateProject.Api.Email`), so a deploy that forgot the mail secrets says so in its first log lines rather than silently. To turn delivery on, supply all four of `Email:Provider=smtp`, `Email:SmtpHost`, `Email:FromAddress` and `Email:AppBaseUrl` — plus `Email:SmtpUsername`/`Email:SmtpPassword` unless the relay accepts anonymous submission (they must be set together or both left empty). A provider selected with any of the required values missing **fails startup**, following #189: a half-configured mail deploy that boots is exactly the "healthy service that delivers nothing" failure this repo has already been bitten by. Optional: `Email:SmtpPort` (default 587), `Email:SmtpUseStartTls` (default `true`), `Email:MaxSendsPerSecond` (default 10, per instance — set it below the provider's account limit divided by the instance count), `Email:TimeoutSeconds` (default 30), `Email:FromName`. For Amazon SES the host is `email-smtp.<region>.amazonaws.com`, the credentials are the **SES SMTP** username/password pair (derived from an IAM key, not the IAM key itself), the `FromAddress` domain must be verified in SES, and the account must be out of the SES sandbox or sending is limited to verified recipients.
 - **Database:** Supabase-hosted Postgres (project `organizational-climate-platform`, `us-east-1`). Both the runtime app and EF Core migrations want the **session pooler** — `aws-0-<region>.pooler.supabase.com`, port **5432**, username `postgres.<project-ref>`. Transaction mode (port 6543) is incompatible with `dotnet ef database update`, and equally incompatible with the runtime app, whose Npgsql pool holds connections open across statements. **The runtime secret was moved from 6543 to 5432 on 2026-08-10 and #220 closed on the evidence** — 20 of 20 consecutive `/ready` probes returned 200 and the transaction-pooler warning is gone from the App Runner logs. The API still logs that startup warning whenever it sees 6543, and `Database:RequireSessionPooler` turns it into a startup failure so the port cannot regress silently; **the flag is armed (`true`) in prod as of 2026-08-17, closing the last step of #220** — see `infra/aws/README.md` ("Connection pooling and the connection budget", then "Arming the guard"). The value itself lives in AWS Secrets Manager, not this repository. The dashboard's "direct connection" (`db.<project-ref>.supabase.co:5432`) also works from a workstation but is **IPv6-only, so it is unreachable from GitHub Actions**; see `infra/aws/README.md` for the full explanation and #212 for the measurements. Local dev and the integration test suite use the `docker-compose` Postgres instead (never Supabase).
