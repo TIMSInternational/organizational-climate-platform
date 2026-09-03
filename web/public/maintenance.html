@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<title>En mantenimiento · Under maintenance</title>
+<!--
+  The page that stands in for the product while the product is down (cutover.md, C8).
+
+  Self-contained on purpose: no script, no stylesheet, no font, no image request. If this
+  file is being served, something else is not, and a page that needs a second request to
+  render is a page that can fail for the same reason the app did. The one asset is the
+  favicon, inlined below as a data URI.
+
+  Colours are the storefront palette copied as literals — src/styles/storefront.css:73-94
+  (light) and :141-155 (dark), each with the contrast ratio measured in that file. The app
+  itself has no prefers-color-scheme block by design (src/styles/tokens.css:833-846: the
+  attribute is written by src/theme/adminTheme.ts). This page has no app to write an
+  attribute for it, so the OS preference is the only signal there is.
+
+  The words are the in-app maintenance copy (web/src/i18n/es.json and en.json,
+  auth.maintenanceTitle / auth.maintenanceDetail) so that the 503 screen the app shows
+  when only the API is down and this page agree with each other. Spanish first: the
+  client is a Costa Rican institution.
+
+  No date, no ETA, no status link: anything with a clock in it goes stale inside the
+  window it describes.
+-->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='46' viewBox='0 0 48 46'%3E%3Ccircle cx='24' cy='23' r='20' fill='%23863bff'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --ground: #f8f7fb;   /* storefront.css:73 */
+    --surface: #ffffff;  /* :74 */
+    --ink: #1f114c;      /* :78  16.90:1 on surface */
+    --heading: #3a3364;  /* :79  11.43:1 on surface */
+    --body: #5b5e74;     /* :80   6.37:1 on surface */
+    --faint: #6e708a;    /* :81   4.53:1 on ground */
+    --accent: #dd0c15;   /* :92   5.08:1 on surface */
+    --border: rgb(31 17 76 / 12%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #120b2b;   /* storefront.css:141 */
+      --surface: #1b1240;  /* :142 */
+      --ink: #dad2f5;      /* :145  12.03:1 on surface */
+      --heading: #dad2f5;  /* :146 */
+      --body: #a1a4b5;     /* :147   7.04:1 */
+      --faint: #8f91a6;    /* :148   5.61:1 */
+      --accent: #f4363e;   /* :154   4.51:1 */
+      --border: rgb(218 210 245 / 14%);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--ground);
+    color: var(--body);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif; /* tokens.css:51 */
+    line-height: 1.5;
+    display: grid;
+    place-items: center;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  main {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    max-width: 560px;
+    width: 100%;
+    padding: 40px 36px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--ink);
+    font-weight: 700; letter-spacing: 0.04em; font-size: 14px;
+    margin-bottom: 28px;
+  }
+  .brand .mark { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); flex: none; }
+  h1 {
+    font-family: Georgia, 'Times New Roman', serif; /* storefront.css:69 — the web font is not loaded here */
+    font-weight: 400; font-size: 32px; line-height: 1.15;
+    color: var(--ink);
+    margin: 0 0 12px;
+  }
+  p { margin: 0 0 8px; font-size: 17px; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 28px 0; }
+  section[lang="en"] h1 { font-size: 24px; color: var(--heading); }
+  section[lang="en"] p { font-size: 15px; color: var(--faint); }
+</style>
+</head>
+<body>
+  <main>
+    <div class="brand" aria-hidden="true"><span class="mark"></span>CLIMATE</div>
+    <section lang="es">
+      <h1>En mantenimiento</h1>
+      <p>La plataforma está en mantenimiento en este momento. Vuelva a intentarlo en breve.</p>
+    </section>
+    <hr>
+    <section lang="en">
+      <h1>Under maintenance</h1>
+      <p>The platform is being worked on right now. Please try again shortly.</p>
+    </section>
+  </main>
+</body>
+</html>
