@@ -44,6 +44,7 @@ import {
   type InvitationCopyField,
   type SurveyInvitationCopy,
 } from '../api/surveyInvitationCopy'
+import ShareLinkQr from '../components/ShareLinkQr'
 import { listDepartments, type Department } from '../../org-structure/api/departments'
 import { listUsers, type User } from '../../org-structure/api/users'
 
@@ -463,31 +464,44 @@ export default function SurveyDistributionPage() {
 
             <section aria-labelledby="distribution-share" className="flex flex-col gap-panel-gap">
               <H2 id="distribution-share">{t('surveys.distribution.shareLinkTitle')}</H2>
-              <div className="rounded-lg border border-line-light bg-surface-panel p-panel">
-                <ShareLinkPanel
+              {/* The link and its QR code side by side, because they are one artefact in
+                  two formats and CLIMA-005 promises both. `ShareLinkQr` renders NOTHING
+                  when `publicLink` is null or the access type is not `public`, so this row
+                  collapses to the link panel alone on an invitation-only survey rather
+                  than reserving an empty column for a code that does not exist. Both are
+                  handed the SAME `publicLink`: whatever the panel reveals is exactly what
+                  the code encodes, and there is no second source for either to drift to. */}
+              <div className="flex flex-col gap-panel-gap md:flex-row md:items-start">
+                <div className="min-w-0 flex-1 rounded-lg border border-line-light bg-surface-panel p-panel">
+                  <ShareLinkPanel
+                    publicLink={distribution.publicLink}
+                    accessType={distribution.accessType}
+                    totalAccesses={distribution.totalAccesses}
+                    uniqueVisitors={distribution.uniqueVisitors}
+                    lastRegeneratedAt={distribution.lastRegeneratedAt}
+                    busy={busy}
+                    onCreate={() =>
+                      void run(async () => {
+                        setDistribution(
+                          await updateSurveyDistribution(baseUrl, surveyId, { accessType: 'public' }),
+                        )
+                      })
+                    }
+                    onRegenerate={() =>
+                      void run(async () => {
+                        setDistribution(await regenerateSurveyLink(baseUrl, surveyId))
+                      })
+                    }
+                    onRevoke={() =>
+                      void run(async () => {
+                        setDistribution(await revokeSurveyLink(baseUrl, surveyId))
+                      })
+                    }
+                  />
+                </div>
+                <ShareLinkQr
                   publicLink={distribution.publicLink}
                   accessType={distribution.accessType}
-                  totalAccesses={distribution.totalAccesses}
-                  uniqueVisitors={distribution.uniqueVisitors}
-                  lastRegeneratedAt={distribution.lastRegeneratedAt}
-                  busy={busy}
-                  onCreate={() =>
-                    void run(async () => {
-                      setDistribution(
-                        await updateSurveyDistribution(baseUrl, surveyId, { accessType: 'public' }),
-                      )
-                    })
-                  }
-                  onRegenerate={() =>
-                    void run(async () => {
-                      setDistribution(await regenerateSurveyLink(baseUrl, surveyId))
-                    })
-                  }
-                  onRevoke={() =>
-                    void run(async () => {
-                      setDistribution(await revokeSurveyLink(baseUrl, surveyId))
-                    })
-                  }
                 />
               </div>
             </section>
