@@ -502,6 +502,7 @@ export default function SurveyDistributionPage() {
                 <ShareLinkQr
                   publicLink={distribution.publicLink}
                   accessType={distribution.accessType}
+                  surveyId={surveyId}
                 />
               </div>
             </section>

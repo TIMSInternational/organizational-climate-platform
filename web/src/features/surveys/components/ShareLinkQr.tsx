@@ -56,7 +56,13 @@ import { Button, H3 } from '../../../components/ui'
  * `SurveyAccessTokens.PublicLinkPrefix` documents that `public_url` is uniquely indexed and
  * "baking a host into it would mean the same link stored under two different origins
  * (staging and production, or before and after a domain change) is two different rows and
- * one broken index", and adds "nothing here may ever concatenate a host."
+ * one broken index" (`SurveyAccessTokens.cs:33-39`).
+ *
+ * The blunter sentence "nothing here may ever concatenate a host" is a *different* member's
+ * doc — `InvitationLinkPath`, at `SurveyAccessTokens.cs:66-75` — and it is scoped to
+ * invitation links, which the mail sender resolves against `EmailOptions.AppBaseUrl`. It is
+ * quoted here only to say where it does and does not apply: this component concatenates a
+ * host, on purpose, to a value that rule does not govern.
  *
  * A camera has no page to resolve a relative path against, so the QR *must* carry an
  * absolute URL. `window.location.origin` is the only honest source available on this
@@ -105,6 +111,26 @@ const QUIET_ZONE_MODULES = 4
 /** Edge length of the exported PNG, in pixels. */
 const DOWNLOAD_PIXELS = 1024
 
+/**
+ * What the saved file is called.
+ *
+ * **Not** named after the link. `publicLink` is `/s/` plus the *whole* token — 43 base64url
+ * characters, `SurveyAccessTokens.EncodedLength` — so `linkPath.split('/').pop()` is the
+ * entire bearer credential, and a download filename is displayed in the browser's download
+ * bubble, its downloads page and every OS file listing. Those are the same screen-share
+ * surfaces this component hides the code behind in the first place, so putting the token
+ * there would undo the reason the reveal is a click.
+ *
+ * The survey id is used instead: it is already in this page's own URL, it opens nothing, and
+ * it is the thing an admin matches a code against. Anything that is not a plain id falls
+ * back to a fixed name rather than being interpolated into a path — a filename is a
+ * filesystem write instruction, and `..` or a slash in it is not something to pass through.
+ */
+export function downloadFileName(surveyId?: string): string {
+  const plainId = (surveyId ?? '').match(/^[A-Za-z0-9-]{1,64}$/)
+  return plainId === null ? 'qr-survey-share-link.png' : `qr-survey-${plainId[0]}.png`
+}
+
 /** The dark-module colour: a Tailwind utility over `--color-accent-blue-fill`. */
 const INK_CLASS = 'text-accent-blue-fill'
 
@@ -128,6 +154,11 @@ export interface ShareLinkQrProps {
   accessType?: string
   /** Absolute origin to resolve `publicLink` against. Defaults to the browsing origin. */
   origin?: string
+  /**
+   * The survey this link belongs to, used only to name the downloaded file. Optional because
+   * the name has a safe fallback and a QR nobody can file is worse than a generic filename.
+   */
+  surveyId?: string
 }
 
 /** The QR grid for `text`, as rows of dark/light modules. */
@@ -290,7 +321,7 @@ export async function qrPngBlob(
   })
 }
 
-export default function ShareLinkQr({ publicLink, accessType, origin }: ShareLinkQrProps) {
+export default function ShareLinkQr({ publicLink, accessType, origin, surveyId }: ShareLinkQrProps) {
   const { t } = useTranslation()
   const svgRef = useRef<SVGSVGElement | null>(null)
   const [shown, setShown] = useState(false)
@@ -307,8 +338,12 @@ export default function ShareLinkQr({ publicLink, accessType, origin }: ShareLin
   const linkPath = publicLink
   const resolvedOrigin = origin ?? (typeof window === 'undefined' ? '' : window.location.origin)
   const target = shareLinkTarget(resolvedOrigin, linkPath)
-  const modules = qrModules(target)
-  const extent = modules.length + QUIET_ZONE_MODULES * 2
+  // Encoded only while the code is on screen. `qrModules` runs the whole encoder --
+  // Reed-Solomon blocks and eight mask evaluations over a 37x37 grid -- and this page
+  // re-renders on every invitation-filter click, every busy flag and every notice, so doing
+  // it for a code nobody has asked for is that work repeated for nothing in the DOM.
+  const modules = shown ? qrModules(target) : null
+  const extent = modules === null ? 0 : modules.length + QUIET_ZONE_MODULES * 2
 
   async function handleDownload(): Promise<void> {
     const svg = svgRef.current
@@ -331,23 +366,40 @@ export default function ShareLinkQr({ publicLink, accessType, origin }: ShareLin
       const href = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = href
-      // Named after the token's tail, not the survey title: a title can be any language and
-      // any punctuation, and two surveys can share one. The tail is short, unique, and
-      // already the thing an admin matches a code against.
-      anchor.download = `qr-${linkPath.split('/').pop() ?? ''}.png`
-      anchor.click()
-      URL.revokeObjectURL(href)
+      anchor.download = downloadFileName(surveyId)
+      // In the document for the click, not clicked while detached. Chromium honours a
+      // detached `<a download>` and that is the only engine installed on the machine this
+      // was built on (`ls ~/Library/Caches/ms-playwright` lists chromium and
+      // chromium_headless_shell only), but Firefox has historically required a
+      // programmatically-clicked download anchor to be in the document. Ship the form that
+      // works in both rather than the form that was measurable here.
+      anchor.style.display = 'none'
+      document.body.append(anchor)
+      try {
+        anchor.click()
+      } finally {
+        anchor.remove()
+        URL.revokeObjectURL(href)
+      }
+    } catch {
+      // Every line in the `try` is a line a browser can throw from: `getComputedStyle`
+      // inside `resolveQrColors`, `createObjectURL` on a blob the browser will not take,
+      // and `click()` itself under a download policy that refuses. Without this clause the
+      // rejection escaped `void handleDownload()` unhandled and the only thing the user saw
+      // was the button un-disable with nothing said -- the exact outcome
+      // `qrDownloadFailed` exists to prevent, reached by the one path that skipped it.
+      setFailed(true)
     } finally {
       setDownloading(false)
     }
   }
 
   return (
-    <div className="flex flex-col gap-panel-gap rounded-lg border border-line-light bg-surface-panel p-panel md:w-[16rem] md:shrink-0">
+    <div className="flex flex-col gap-panel-gap rounded-lg border border-line-light bg-surface-panel p-panel md:w-[20rem] md:shrink-0">
       <H3>{t('surveys.distribution.qrTitle')}</H3>
       <p className="text-sm text-fg-secondary">{t('surveys.distribution.qrHint')}</p>
 
-      {shown ? (
+      {modules !== null ? (
         <>
           {/* The plaque, not the page: `PAPER_CLASS` and `INK_CLASS` are the two tokens
               that are identical in both palettes, so the code never inverts. The white
