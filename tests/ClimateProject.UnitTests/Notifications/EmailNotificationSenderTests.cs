@@ -650,6 +650,27 @@ public class EmailNotificationSenderTests
     /// question and "whose, in which tenant" is the part that stops it being an exfiltration
     /// primitive.
     /// </summary>
+    /// <summary>
+    /// A notification naming a template the sender cannot load -- no database in reach, which
+    /// is the shape every template failure takes from the transport's side -- is still handed
+    /// to the transport, carrying its own title and message. A template is presentation; the
+    /// notification is the thing somebody decided a person needs to be told.
+    /// </summary>
+    [Fact]
+    public async Task A_notification_naming_an_unreachable_template_is_still_sent()
+    {
+        var transport = new RecordingTransport(EmailSendOutcome.Success());
+        var notification = Notification(NotificationChannels.Email);
+        notification.TemplateId = Guid.NewGuid();
+
+        var result = await Sender(transport).SendAsync(notification, Recipient(), CancellationToken.None);
+
+        Assert.True(result.Delivered);
+        var sent = Assert.Single(transport.Sent);
+        Assert.Equal("Title", sent.Subject);
+        Assert.Contains("Message", sent.TextBody, StringComparison.Ordinal);
+    }
+
     private sealed record Lookup(Guid InvitationId, Guid RecipientUserId, Guid CompanyId);
 
     private sealed class RecordingTokens(string? token) : ISurveyInvitationTokens
