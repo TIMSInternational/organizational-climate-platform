@@ -142,12 +142,6 @@ public static class ReportFormats
 
                 pendingSeparator = false;
                 builder.Append(char.ToLowerInvariant(character));
-
-                if (builder.Length >= MaxSlugLength)
-                {
-                    break;
-                }
-
                 continue;
             }
 
@@ -156,6 +150,12 @@ public static class ReportFormats
             pendingSeparator = true;
         }
 
-        return builder.ToString();
+        // Truncated after the loop rather than by breaking out of it. Breaking was the first
+        // version and it is off by one: the separator and the character that earns it are
+        // appended together, so a slug could reach MaxSlugLength + 1. Trimming a trailing
+        // hyphen afterwards also matters -- a cut that lands just after a separator would
+        // otherwise produce "informe-de-clima-.pdf".
+        var slug = builder.ToString();
+        return (slug.Length > MaxSlugLength ? slug[..MaxSlugLength] : slug).TrimEnd('-');
     }
 }

@@ -466,13 +466,32 @@ public partial class ReportRendererTests
     public void A_title_that_slugs_to_nothing_falls_back_to_the_id(string? title)
         => Assert.Equal($"report-{ReportId}.pdf", ReportFormats.FileName(title, ReportId, csv: false));
 
-    [Fact]
-    public void A_long_title_is_capped_so_no_filesystem_refuses_it()
+    /// <summary>
+    /// The cap holds whatever the title is made of, and the cut never lands on a separator.
+    /// </summary>
+    /// <remarks>
+    /// The word-separated case is the one that matters: an earlier version broke out of the
+    /// loop after appending, so a slug whose 60th character arrived together with the hyphen
+    /// that earned it came out 61 long -- and a cut landing just past a separator produced
+    /// <c>informe-de-clima-.pdf</c>. A single-token title cannot exhibit either.
+    /// </remarks>
+    [Theory]
+    [InlineData(400)]
+    [InlineData(61)]
+    [InlineData(60)]
+    public void A_long_title_is_capped_so_no_filesystem_refuses_it(int length)
     {
-        var name = ReportFormats.FileName(new string('a', 400), ReportId, csv: false);
+        var oneToken = ReportFormats.FileName(new string('a', length), ReportId, csv: false);
+        Assert.Equal(Math.Min(length, 60) + 4, oneToken.Length);
+        Assert.EndsWith(".pdf", oneToken, StringComparison.Ordinal);
 
-        Assert.Equal(64, name.Length);
-        Assert.EndsWith(".pdf", name, StringComparison.Ordinal);
+        // "ab ab ab ..." -- every third character is a separator, so a naive cap lands on one.
+        var words = string.Join(" ", Enumerable.Repeat("ab", (length / 2) + 1));
+        var many = ReportFormats.FileName(words, ReportId, csv: false);
+
+        Assert.True(many.Length <= 64, $"'{many}' is longer than 60 characters plus the extension.");
+        Assert.DoesNotContain("-.", many, StringComparison.Ordinal);
+        Assert.DoesNotContain("--", many, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------------
