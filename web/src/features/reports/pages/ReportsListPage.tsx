@@ -9,6 +9,7 @@ import {
 } from '../api/reports'
 import ReportForm, { type ReportFormValues } from '../components/ReportForm'
 import ReportList from '../components/ReportList'
+import ReportSharePanel from '../components/ReportSharePanel'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
@@ -64,6 +65,9 @@ export default function ReportsListPage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | undefined>(undefined)
   const [downloadNotice, setDownloadNotice] = useState<string | null>(null)
+  // The report the share panel is open for, not a boolean plus an id: two pieces of state
+  // that have to agree is how a dialog ends up open against the wrong row.
+  const [sharing, setSharing] = useState<ReportListItem | null>(null)
 
   // `useCallback` rather than a plain function plus a deps-array lie: the web lint
   // budget is `--max-warnings 10` and it is exactly full, so a new
@@ -171,9 +175,24 @@ export default function ReportsListPage() {
               reports={reports}
               downloadingId={downloadingId}
               onDownload={handleDownload}
+              onShare={setSharing}
             />
           )}
         </LoadingRegion>
+      )}
+
+      {/* Mounted only while a report is selected, so the panel's own effect refetches the
+          share list on every opening rather than showing a stale one. */}
+      {sharing && (
+        <ReportSharePanel
+          open
+          onOpenChange={(next) => {
+            if (!next) setSharing(null)
+          }}
+          baseUrl={baseUrl}
+          reportId={sharing.id}
+          reportTitle={sharing.title}
+        />
       )}
     </div>
   )

@@ -17,18 +17,21 @@ import { getSharedReport, type SharedReport } from '../api/sharedReports'
  * it serves a company's climate data to whoever holds the URL, so most of what follows
  * is about what it does *not* do.
  *
- * ## The endpoint behind it does not exist yet
+ * ## The endpoint behind it exists
  *
- * `GET /shared/reports/{token}` is not mapped by the API. #91 closed with export,
- * scheduling and the four `/admin/reports` routes; the token-addressed public route it
- * also scoped did not land, and `Report` has no share-token column for one to read.
- * `api/sharedReports.ts` records how that was checked.
+ * This comment said the opposite for a year — "`GET /shared/reports/{token}` is not mapped
+ * by the API" — and it was already stale when it was written down twice: the sibling
+ * `api/sharedReports.ts` records the route landing, and `router.tsx` says so on the route
+ * declaration. Measured: `ReportShareEndpoints.cs:87` maps
+ * `app.MapGet("/shared/reports/{token}", ResolveAsync)` outside every authorization group,
+ * and `Program.cs:649` registers `MapReportShareEndpoints`. `report_shares` holds the
+ * SHA-256 hash of each token with a finite expiry, and `ReportSharePanel` mints them from
+ * the reports list.
  *
- * Nothing here is speculative about the *shape* of what comes back, though: the document
- * is `ReportOutputDocument`, which exists and is generated today, and the record fields
- * are `ReportDetail`'s. What the page does with a 404 — which is what it gets today — is
- * exactly what it does with an expired token, so this page is correct and safe against
- * the API as it stands, and shows a real report the day the route is mapped.
+ * Nothing here changed when it landed, which was the point of writing it this way. The
+ * document is `ReportOutputDocument` — projected through `PublicReportProjection`, an
+ * allow-list, so a section added to the stored document is not world-readable by default —
+ * and what the page does with a 404 is exactly what it does with an expired token.
  *
  * ## Outside `RequireAuth`, and that is structural
  *

@@ -75,9 +75,24 @@ interface ReportListProps {
   /** `undefined` while a download is in flight for that id, so the row can disable itself. */
   downloadingId?: string
   onDownload: (report: ReportListItem) => void
+  /**
+   * Opens the share panel for that report.
+   *
+   * Offered only for a completed report, on the same rule as Download and for a sharper
+   * reason: `GET /shared/reports/{token}` answers its flat 404 for a report that is not
+   * `completed` (`ReportShareEndpoints.ResolveAsync`), so a link minted against a generating
+   * report is a link that resolves to "not available" — an administrator would forward it and
+   * the recipient would see nothing.
+   */
+  onShare: (report: ReportListItem) => void
 }
 
-export default function ReportList({ reports, downloadingId, onDownload }: ReportListProps) {
+export default function ReportList({
+  reports,
+  downloadingId,
+  onDownload,
+  onShare,
+}: ReportListProps) {
   const { t, locale } = useTranslation()
 
   if (reports.length === 0) {
@@ -121,15 +136,28 @@ export default function ReportList({ reports, downloadingId, onDownload }: Repor
                 {/* Only a completed report can be downloaded -- the backend answers
                     400 otherwise. Disabling the button is not belt-and-braces: the
                     alternative is an admin clicking Download on a generating report
-                    and being shown a raw validation message they cannot act on. */}
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!isCompleted || downloadingId === report.id}
-                  onClick={() => onDownload(report)}
-                >
-                  {t('reports.download')}
-                </Button>
+                    and being shown a raw validation message they cannot act on.
+
+                    Share is ABSENT rather than disabled for a report that is not
+                    completed, which is a deliberate difference from Download. A disabled
+                    Download says "not yet"; a disabled Share would advertise a public link
+                    for a document that does not exist, on the one row where an admin is
+                    most likely to try it. */}
+                <div className="flex flex-wrap gap-inline">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!isCompleted || downloadingId === report.id}
+                    onClick={() => onDownload(report)}
+                  >
+                    {t('reports.download')}
+                  </Button>
+                  {isCompleted && (
+                    <Button type="button" variant="outline" onClick={() => onShare(report)}>
+                      {t('reports.share')}
+                    </Button>
+                  )}
+                </div>
               </td>
             </tr>
           )

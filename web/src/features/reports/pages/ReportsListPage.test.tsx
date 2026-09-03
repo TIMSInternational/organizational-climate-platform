@@ -197,6 +197,46 @@ describe('ReportsListPage', () => {
     expect(vi.mocked(downloadBlobFile)).not.toHaveBeenCalled()
   })
 
+  it('offers Share only for a completed report, and absent rather than disabled', async () => {
+    // A share link to a report that is not `completed` resolves to the public page's flat
+    // 404 (`ReportShareEndpoints.ResolveAsync`), so an admin who minted one would forward a
+    // link that shows the recipient nothing. Absent, not disabled: a disabled Download says
+    // "not yet"; a disabled Share would advertise a public link for a document that does not
+    // exist.
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse([
+        reportRow({ id: 'r1', title: 'Ready', status: 'completed' }),
+        reportRow({ id: 'r2', title: 'Still generating', status: 'generating' }),
+      ]),
+    )
+    renderPage()
+
+    await screen.findByText('Ready')
+    expect(screen.getAllByRole('button', { name: 'Download' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Share' })).toHaveLength(1)
+  })
+
+  it('opens the share panel for the row that was clicked', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse([reportRow({ id: 'r7', title: 'Ready' })]))
+      // The panel's own first call, listing that report's links.
+      .mockResolvedValueOnce(jsonResponse([]))
+    renderPage()
+
+    await screen.findByText('Ready')
+    await userEvent.click(screen.getByRole('button', { name: 'Share' }))
+
+    expect(await screen.findByRole('dialog')).toBeTruthy()
+    // Scoped to r7, not to whatever row the state happened to hold.
+    await waitFor(() =>
+      // `VITE_API_BASE_URL` is unset under vitest, so the page's baseUrl is `undefined` --
+      // the assertion is on the PATH, which is what carries the report id.
+      expect(String(vi.mocked(fetch).mock.calls[1][0])).toContain(
+        '/admin/reports/r7/shares',
+      ),
+    )
+  })
+
   it('no longer claims that rendering is not built', async () => {
     // The banner this page carried for a year (`reports.generationStubbed`) said "no file is
     // produced". A stale disclosure is worse than none: an admin who reads it concludes the
