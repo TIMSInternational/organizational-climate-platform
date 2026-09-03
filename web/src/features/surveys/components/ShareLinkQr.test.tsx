@@ -1,13 +1,19 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import type { ComponentProps } from 'react'
 import qrcode from 'qrcode-generator'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { TranslationProvider } from '../../../i18n'
 import ShareLinkPanel from '../../../components/distribution/ShareLinkPanel'
+import SurveyDistributionPage from '../pages/SurveyDistributionPage'
+import { setToken, clearToken } from '../../../auth/token'
+import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
+import { tokenFor } from '../../../test/jwtFixture'
 import ShareLinkQr, {
+  downloadFileName,
   qrModules,
   qrPathData,
   qrPngBlob,
@@ -409,5 +415,284 @@ describe('ShareLinkQr — the PNG download', () => {
     expect(alert.textContent).toContain('could not produce the PNG')
     // The code stays on screen: it is still valid and still screenshottable.
     expect(screen.getByRole('img', { name: /QR code/ })).toBeTruthy()
+  })
+})
+
+/**
+ * The wiring, asserted on the PAGE.
+ *
+ * Everything above renders `ShareLinkQr` directly, which proves the component and proves
+ * nothing about whether `/surveys/:id/distribution` ever mounts it. That gap was real and
+ * measurable: deleting the `<ShareLinkQr>` element from `SurveyDistributionPage.tsx` left the
+ * whole suite green, so a merge resolution that dropped it — on a file two lanes and every
+ * future distribution change will touch — would have shipped a green CI with the feature
+ * gone. This repo has recorded that exact loss before ("A merge can drop a guarantee").
+ *
+ * These tests render the real page against a stubbed API. `SurveyDistributionPage.test.tsx`
+ * is not a file this lane owns, so the assertion lives here rather than being added there.
+ */
+describe('the distribution page mounts the QR beside the share link', () => {
+  const PAGE_TOKEN = 'aaaabbbbccccddddeeeeffffgggghhhhiiiijjjjkkk'
+  const PAGE_LINK = `/s/${PAGE_TOKEN}`
+
+  function surveyRead() {
+    return {
+      id: 's1',
+      companyId: 'c1',
+      language: 'both',
+      status: 'active',
+      title: 'Team pulse',
+      resolvedLocale: 'en',
+      fallbackFields: [],
+      departmentIds: [],
+      responseCount: 2,
+      settings: { invitationCustomSubject: 'Your invitation', invitationCustomMessage: 'Please answer.' },
+    }
+  }
+
+  const invitationSummary = {
+    total: 1, pending: 0, sent: 1, opened: 0, started: 0, completed: 0, revoked: 0, expired: 0,
+  }
+  const anonymity = {
+    anonymous: false,
+    highestRecordableState: 'completed',
+    suppressedStates: [],
+    guarantee: 'Tracking runs to completion.',
+  }
+
+  function distributionRead(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'd1',
+      surveyId: 's1',
+      accessType: 'public',
+      publicLink: PAGE_LINK,
+      qrCodeUrl: PAGE_LINK,
+      accessRules: {
+        requireLogin: false, allowAnonymous: true, singleResponse: true,
+        activeOutsideSchedule: false, allowedDomains: null, blockedIps: null, maxResponses: null,
+      },
+      qrCustomization: { foregroundColor: '#000', backgroundColor: '#fff', logoUrl: null, size: 256 },
+      tokenizedLinksGenerated: 0,
+      regeneratedCount: 0,
+      lastRegeneratedAt: null,
+      totalAccesses: 0,
+      uniqueVisitors: 0,
+      lastAccessedAt: null,
+      invitations: invitationSummary,
+      anonymity,
+      createdAt: '2026-08-01T00:00:00Z',
+      updatedAt: '2026-08-01T00:00:00Z',
+      ...overrides,
+    }
+  }
+
+  function json(body: unknown): Response {
+    return new Response(JSON.stringify(body), { status: 200 })
+  }
+
+  function stubApi(distribution: Record<string, unknown> = {}) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (String(url).includes('/distribution')) return Promise.resolve(json(distributionRead(distribution)))
+        if (String(url).includes('/invitations')) {
+          return Promise.resolve(json({ invitations: [], summary: invitationSummary, anonymity }))
+        }
+        if (String(url).includes('/admin/departments')) return Promise.resolve(json({ departments: [] }))
+        if (String(url).includes('/admin/users')) return Promise.resolve(json({ users: [] }))
+        return Promise.resolve(json(surveyRead()))
+      }),
+    )
+  }
+
+  function renderPage() {
+    return render(
+      <TranslationProvider initialLocale="en">
+        <CompanyContextProvider>
+          <MemoryRouter initialEntries={['/surveys/s1/distribution']}>
+            <Routes>
+              <Route path="/surveys/:surveyId/distribution" element={<SurveyDistributionPage />} />
+            </Routes>
+          </MemoryRouter>
+        </CompanyContextProvider>
+      </TranslationProvider>,
+    )
+  }
+
+  beforeEach(() => {
+    setToken(tokenFor({ role: 'company_admin', companyId: 'c1' }))
+  })
+
+  afterEach(() => {
+    cleanup()
+    clearToken()
+    localStorage.removeItem(COMPANY_CONTEXT_STORAGE_KEY)
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('offers the QR on a public survey, encoding the same link the panel holds', async () => {
+    stubApi()
+    const { container } = renderPage()
+
+    // Both halves of CLIMA-005 in the one section: the panel's reveal and the code's.
+    await screen.findByRole('button', { name: 'Reveal' })
+    await userEvent.click(screen.getByRole('button', { name: 'Show QR code' }))
+
+    const svg = container.querySelector('svg[data-qr-modules]')
+    expect(svg).not.toBeNull()
+    expect(svg?.getAttribute('data-qr-modules')).toBe('37')
+
+    // Re-derived from the link the FIXTURE served, against the origin the page is browsing.
+    // A page that mounted the component but handed it some other string fails here.
+    const expected = qrPathData(qrModules(`${window.location.origin}${PAGE_LINK}`))
+    expect(expected.length).toBeGreaterThan(0)
+    expect(svg?.querySelector('path')?.getAttribute('d')).toBe(expected)
+  })
+
+  it('offers no QR on an invitation-only survey, while still rendering the section', async () => {
+    stubApi({ accessType: 'tokenized', publicLink: null })
+    renderPage()
+
+    // The section is up -- so a null result here is "no QR", not "page never loaded".
+    await screen.findByRole('button', { name: 'Create an open link' })
+    expect(screen.queryByRole('button', { name: 'Show QR code' })).toBeNull()
+  })
+
+  /**
+   * The whole download, driven through the page, with the browser bits a `happy-dom` cannot
+   * provide stubbed at their real seams — the cascade, the canvas, `Image`, `createObjectURL`
+   * and the anchor's `click`. Three separate guarantees ride on it:
+   *
+   * 1. The saved file is named after the SURVEY. `publicLink` is `/s/` plus the entire
+   *    43-character bearer token, so a name taken from the link's tail puts that credential
+   *    in the download bubble and the downloads page.
+   * 2. The anchor is IN the document when it is clicked. Firefox has historically refused a
+   *    programmatic download from a detached anchor, and no Firefox is installed here.
+   * 3. The page passes its own `surveyId` down, which nothing else asserts.
+   */
+  it('downloads a PNG named after the survey, from an anchor inside the document', async () => {
+    stubApi()
+    renderPage()
+
+    await screen.findByRole('button', { name: 'Reveal' })
+    await userEvent.click(screen.getByRole('button', { name: 'Show QR code' }))
+
+    const blobs: Blob[] = []
+    const clicks: { download: string; connected: boolean; href: string }[] = []
+
+    // happy-dom loads no stylesheet, so the live cascade cannot answer `resolveQrColors`.
+    // The real declaration is kept and only the two properties the component reads are
+    // overlaid: `userEvent` reads `pointer-events` on every ancestor before a click and
+    // `dom-accessibility-api` calls `getPropertyValue` on this object, so a plain literal
+    // here breaks the test harness rather than the code under test.
+    const real = globalThis.getComputedStyle.bind(globalThis)
+    vi.stubGlobal('getComputedStyle', (element: Element, pseudo?: string | null) => {
+      const overrides: Record<string, string> =
+        element instanceof SVGSVGElement
+          ? { color: 'rgb(221, 12, 21)' }
+          : element.getAttribute?.('data-slot') === 'qr-paper'
+            ? { fill: 'rgb(255, 255, 255)' }
+            : {}
+      return new Proxy(real(element, pseudo), {
+        get(target, property) {
+          if (typeof property === 'string' && property in overrides) return overrides[property]
+          const value = Reflect.get(target, property, target) as unknown
+          return typeof value === 'function' ? value.bind(target) : value
+        },
+      })
+    })
+    vi.stubGlobal(
+      'Image',
+      class {
+        onload: (() => void) | null = null
+        onerror: (() => void) | null = null
+        set src(_value: string) {
+          queueMicrotask(() => this.onload?.())
+        }
+      },
+    )
+    // `happy-dom` HAS all four of these; they just answer `null` / do nothing, so they are
+    // spied rather than defined, and `vi.restoreAllMocks()` puts the real ones back.
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage: () => {},
+    } as unknown as CanvasRenderingContext2D)
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(
+      (callback: BlobCallback, type?: string) => {
+        const blob = new Blob(['png-bytes'], { type })
+        blobs.push(blob)
+        callback(blob)
+      },
+    )
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:stub-object-url')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicks.push({ download: this.download, connected: this.isConnected, href: this.href })
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Download PNG' }))
+
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(blobs.map((blob) => blob.type)).toEqual(['image/png'])
+    expect(clicks.length).toBe(1)
+    expect(clicks[0].download).toBe('qr-survey-s1.png')
+    expect(clicks[0].download).not.toContain(PAGE_TOKEN)
+    expect(clicks[0].href).toContain('blob:')
+    expect(clicks[0].connected).toBe(true)
+    // Cleaned up: the anchor is a means, not a thing left lying in the body.
+    expect(document.querySelectorAll('a[download]').length).toBe(0)
+  })
+})
+
+describe('ShareLinkQr — naming the file, and failing out loud', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('names the download after the survey and never after the token', () => {
+    expect(downloadFileName('s1')).toBe('qr-survey-s1.png')
+    expect(downloadFileName('9f6f0e2c-1a4b-4e77-9c1e-0b2f5a3d7e11')).toBe(
+      'qr-survey-9f6f0e2c-1a4b-4e77-9c1e-0b2f5a3d7e11.png',
+    )
+    // No id, and anything that is not a plain id, fall back rather than reach the filesystem.
+    expect(downloadFileName()).toBe('qr-survey-share-link.png')
+    expect(downloadFileName('')).toBe('qr-survey-share-link.png')
+    expect(downloadFileName('../../etc/passwd')).toBe('qr-survey-share-link.png')
+    expect(downloadFileName(`/s/${TOKEN}`)).toBe('qr-survey-share-link.png')
+  })
+
+  /**
+   * `handleDownload` used to have a `finally` and no `catch`, so a throw from
+   * `getComputedStyle`, `createObjectURL` or `click()` escaped `void handleDownload()` as an
+   * unhandled rejection: the button un-disabled and the user was told nothing, which is the
+   * one outcome `qrDownloadFailed` exists to prevent. The two failure tests above cannot see
+   * it — they both drive the `blob === null` path, which returns normally.
+   */
+  it('says the download failed when a browser API throws, rather than going quiet', async () => {
+    renderQr()
+    await reveal()
+
+    // Thrown only for the `<svg>`, which is the element `resolveQrColors` asks about;
+    // `userEvent` reads computed style on the button and its ancestors before every click,
+    // so a blanket throw would fail inside the test's own click rather than inside the
+    // component.
+    const real = globalThis.getComputedStyle.bind(globalThis)
+    vi.stubGlobal('getComputedStyle', (element: Element, pseudo?: string | null) => {
+      if (element instanceof SVGSVGElement) {
+        throw new Error('this browser refuses to compute style here')
+      }
+      return real(element, pseudo)
+    })
+
+    // If the rejection is unhandled this still resolves, so the assertion is the notice.
+    await userEvent.click(screen.getByRole('button', { name: 'Download PNG' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('could not produce the PNG')
+    // And the button is usable again rather than stuck in "Preparing…".
+    expect(screen.getByRole('button', { name: 'Download PNG' })).toBeTruthy()
   })
 })
