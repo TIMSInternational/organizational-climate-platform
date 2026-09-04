@@ -6,6 +6,7 @@ import { TranslationProvider } from '../i18n'
 import { clearToken, setToken } from '../auth/token'
 import { COMPANY_CONTEXT_STORAGE_KEY } from '../company-context'
 import { buildNavSections } from '../navigation/navSections'
+import { isTrackingEnabled } from '../features/tracking/api/config'
 import { expectNoAxeViolations } from '../test/a11y'
 import AdminLayout from './AdminLayout'
 import { tokenFor } from '../test/jwtFixture'
@@ -84,16 +85,36 @@ function railElement(): HTMLElement {
 
 /** The one nav item with children — the group whose flyout the collapsed rail needs. */
 function groupItem() {
-  const item = buildNavSections('company_admin', COMPANY_ID, { trackingEnabled: false })
+  const item = buildNavSections('company_admin', COMPANY_ID, {
+    trackingEnabled: isTrackingEnabled(),
+  })
     .flatMap((section) => section.items)
     .find((entry) => entry.sub?.length)
   expect(item, 'this role has no grouped nav item, so the flyout claim is untestable').toBeDefined()
   return item!
 }
 
-/** Every destination this role's rail is supposed to offer, groups included. */
+/**
+ * Every destination this role's rail is supposed to offer, groups included.
+ *
+ * `trackingEnabled` comes from `isTrackingEnabled()` — the same call `AdminLayout` makes —
+ * and not from a hardcoded `false`. The two disagreed until now, and the disagreement was
+ * invisible on CI and loud on a developer machine: CI sets no `VITE_TRACKING_API_BASE_URL`,
+ * so both sides evaluated to "off" and the test passed. Set it, as `web/.env.local` does
+ * for anyone running the local stack, and the shell renders the tracking rail while this
+ * expectation still described the rail without it — reported as
+ * "no rail Tab stop links to /action-plans", which reads like an accessibility defect and
+ * is not one: with tracking on, `/action-plans` is deliberately REPLACED by
+ * `/tracking/planes` (`navSections.ts`, Federico's ruling of 2026-08-21 — one place to
+ * manage plans, not two that disagree).
+ *
+ * Reading the env here makes the test correct in both configurations, and means the
+ * tracking-enabled rail is now actually exercised by someone, somewhere — it never was.
+ */
 function everyHref(): string[] {
-  const sections = buildNavSections('company_admin', COMPANY_ID, { trackingEnabled: false })
+  const sections = buildNavSections('company_admin', COMPANY_ID, {
+    trackingEnabled: isTrackingEnabled(),
+  })
   const hrefs: string[] = []
   for (const section of sections) {
     for (const item of section.items) {
