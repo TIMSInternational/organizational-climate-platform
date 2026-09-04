@@ -44,11 +44,14 @@ import { KpiRow, SectionHeading } from '../../dashboard/components/dashboardGram
  *
  * ## AI insights are fetched separately, on purpose
  *
- * `/admin/ai-insights` is not registered in `Program.cs` — Task 4 (#86) is still open — so
- * every call 404s today. Fetching both in one `Promise.all` would therefore put the entire
- * page into its error state and hide the benchmarks, which do work. Two independent
- * requests with two independent error states means the insights section degrades on its
- * own, both now and later for any transient failure.
+ * `/admin/ai-insights` IS registered — `Program.cs` calls `app.MapAIInsightEndpoints()`
+ * (#86 closed 2026-08-03) — so the reason this page fetches it separately is no longer
+ * "it 404s". The reason that survives is the general one: fetching both in one
+ * `Promise.all` would put the entire page into its error state on an insights failure and
+ * hide the benchmarks, which are the page's title. Two independent requests with two
+ * independent error states means the insights section degrades on its own for any
+ * transient failure. (An earlier version of this comment said the route did not exist;
+ * measured 2026-09-03, it does.)
  */
 export default function AnalyticsDashboardPage() {
   const { t, locale } = useTranslation()
