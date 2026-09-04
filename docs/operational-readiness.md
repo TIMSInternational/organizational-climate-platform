@@ -226,7 +226,7 @@ achievable before 16 Nov.
 
 ### 4.2 What was authored
 
-- `infra/aws/climate-project-observability.yml` — 19 log metric filters, 21 alarms, two
+- `infra/aws/climate-project-observability.yml` — 20 log metric filters, 22 alarms, two
   SNS topics, and a Lambda translating SNS into a Teams Adaptive Card. Deliberately a
   **separate stack** from the service: alarms are edited far more often than the service
   is, and an alarm typo must never be able to roll the running service. Passes
@@ -294,7 +294,7 @@ not an attack but `RateLimiting__TrustedProxyHopCount` being wrong, making every
 share one bucket.
 
 Routing: two SNS topics (critical/warning) both to the same Teams channel and mailbox,
-split so severity can diverge later without re-pointing 21 alarms.
+split so severity can diverge later without re-pointing 22 alarms.
 `TeamsForwarderFailingAlarm` routes **email only** — every other alarm goes *through* the
 forwarder, so routing a broken-Teams alert through Teams is a loop.
 

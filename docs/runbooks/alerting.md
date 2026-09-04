@@ -7,7 +7,12 @@ state are written out for a human to run and are marked.
 **The one-sentence version.** The application is already well instrumented — every scheduled
 job emits a positive heartbeat, `/ready` round-trips Postgres, `/version` reports its commit,
 `/admin/system/status` grades every component — and **none of it is connected to anything that
-can tell a person.** There are zero CloudWatch alarms and zero SNS topics. #158 is not an
+can tell a person.** [UPDATED 2026-09-04: **three** CloudWatch alarms now exist, not zero —
+`climate-project-api-prod-synthetic-probe-{api-down,api-slow,web-down}`, created when the
+synthetic probe stack was deployed. **Zero SNS topics** is still exact. So production is not
+unwatched; it is watched by three alarms with nowhere to send anything, which is a sharper
+statement of the same problem and the one a reader should carry: the probe DETECTS and cannot
+TELL. The 22 alarms in `climate-project-observability.yml` remain undeployed.] #158 is not an
 instrumentation problem; it is a wiring problem, and the wiring is the last mile.
 
 ---
@@ -151,7 +156,7 @@ That is a cost problem and a GDPR storage-limitation problem at once, because
 **Human runs this** (state-changing; not run by me):
 ```bash
 SVC=climate-project-api-prod
-SID=<32-hex service id>
+SID=126c3f282524450896385975cb3bcba9   # verified 2026-09-04 from the service ARN and the live log group
 aws logs put-retention-policy --region us-east-1 \
   --log-group-name "/aws/apprunner/$SVC/$SID/application" --retention-in-days 90
 aws logs put-retention-policy --region us-east-1 \
@@ -183,7 +188,7 @@ Two outstanding items, both for a human:
 
 ## 4. The alarm set
 
-All of it is in **`infra/aws/climate-project-observability.yml`** — 19 log metric filters, 21
+All of it is in **`infra/aws/climate-project-observability.yml`** — 20 log metric filters, 22
 alarms, two SNS topics, and the Teams forwarder. The template validates
 (`aws cloudformation validate-template` accepted it; it needs `CAPABILITY_NAMED_IAM`).
 
@@ -293,7 +298,7 @@ aws cloudformation create-stack \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameters \
     ParameterKey=ServiceName,ParameterValue=climate-project-api-prod \
-    ParameterKey=ServiceId,ParameterValue=<32-hex service id> \
+    ParameterKey=ServiceId,ParameterValue=126c3f282524450896385975cb3bcba9 \
     ParameterKey=TeamsWebhookUrl,ParameterValue='<webhook url>' \
     ParameterKey=FallbackEmail,ParameterValue='<distribution list>' \
     ParameterKey=AlarmsEnabled,ParameterValue=false
