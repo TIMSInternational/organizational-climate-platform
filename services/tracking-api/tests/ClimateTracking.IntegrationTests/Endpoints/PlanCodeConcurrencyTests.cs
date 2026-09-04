@@ -164,4 +164,90 @@ public class PlanCodeConcurrencyTests : IClassFixture<PostgresFixture>, IAsyncLi
 
         Assert.Equal(20, planCodes.Distinct().Count());
     }
+
+    /// <summary>
+    /// The race the sibling test above is named for, made deterministic.
+    /// </summary>
+    /// <remarks>
+    /// That test fires 20 concurrent creates and hopes the interleaving lands badly; on a fast
+    /// machine it never does -- measured 2026-09-03, the pre-fix code passed it 5 times out of 5
+    /// locally while failing it twice on CI, where a contended runner spreads the window.
+    /// A regression test that only fails on somebody else's hardware is not a regression test.
+    ///
+    /// This one removes the timing. The precondition is the one the seeding block exists for and
+    /// is the state of any database restored from an environment that already has data: plans for
+    /// this year ALREADY EXIST and the sequence does NOT. Pre-fix, the first request to arrive
+    /// won CREATE SEQUENCE and went off to compute max(existing suffix) and setval() it, while
+    /// every other request skipped the seeding block entirely and called nextval() on the fresh,
+    /// unseeded sequence -- drawing 1, 2, 3 ... straight into the codes that already existed, and
+    /// taking a 23505 on IX_planes_de_accion_PlanCode. The fix serialises create-and-seed behind
+    /// an advisory lock, so no caller can reach nextval() until the seeding has committed.
+    /// </remarks>
+    [Fact]
+    public async Task A_year_with_existing_plans_and_no_sequence_never_reissues_an_existing_code()
+    {
+        var year = DateTime.UtcNow.Year;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateTrackingDbContext>();
+            // Drop this year's sequence so the next request takes the create-and-seed path,
+            // and leave behind plans it must not collide with.
+#pragma warning disable EF1002
+            await db.Database.ExecuteSqlRawAsync($"DROP SEQUENCE IF EXISTS plan_code_seq_{year}");
+#pragma warning restore EF1002
+            var config = await db.SemaforoThresholdConfigs.SingleAsync(
+                c => c.Id == SemaforoThresholdConfig.DefaultConfigId);
+            // A high, unused band: the sibling test in this class consumes the low codes from
+            // the same shared database, and seeding 00001..00010 collided with them (measured --
+            // the test passed alone and failed in the full suite). 90001+ is reachable by nothing
+            // else, and seeding it means the sequence is seeded to 90010 for whatever runs next.
+            for (var i = 90_001; i <= 90_010; i++)
+            {
+                var seeded = new PlanDeAccion
+                {
+                    Id = Guid.NewGuid(),
+                    PlanCode = $"PA-{year}-{i:D5}",
+                    NodoExternalId = "ND-CONC",
+                    LiderExternalId = "PER-CONC",
+                    DescripcionQue = $"Pre-existing plan {i}",
+                    MetodologiaComo = "N/A",
+                    ResponsableEjecucionExternalId = "PER-CONC",
+                    FechaCreacion = new DateOnly(year, 1, 1),
+                    FechaCompromiso = new DateOnly(year, 12, 31),
+                };
+                seeded.RegistrarAvance(0m, "PER-CONC", "Seeded", new DateOnly(year, 1, 1), config);
+                db.PlanesDeAccion.Add(seeded);
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var client = CreateAuthenticatedClient("PER-CONC", "company_admin", "ND-CONC");
+        var tasks = Enumerable.Range(0, 10).Select(async i =>
+        {
+            var response = await client.PostAsJsonAsync("/api/planes-accion", new
+            {
+                nodoExternalId = "ND-CONC",
+                hallazgoExternalId = (string?)null,
+                descripcionQue = $"After restore {i}",
+                metodologiaComo = "N/A",
+                responsableEjecucionExternalId = "PER-CONC",
+                fechaCompromiso = new DateOnly(year, 12, 31),
+                involucrados = (string[]?)null,
+            });
+            var raw = await response.Content.ReadAsStringAsync();
+            Assert.True(
+                response.IsSuccessStatusCode,
+                $"Request {i}: POST /api/planes-accion returned {(int)response.StatusCode}. Body: {raw}");
+            using var parsed = JsonDocument.Parse(raw);
+            return parsed.RootElement.GetProperty("planCode").GetString();
+        });
+
+        var issued = await Task.WhenAll(tasks);
+
+        // Nothing issued may be one of the ten that already existed, and none may repeat.
+        var preExisting = Enumerable.Range(90_001, 10).Select(i => $"PA-{year}-{i:D5}").ToHashSet();
+        var reissued = issued.Where(code => preExisting.Contains(code!)).Distinct().ToArray();
+        Assert.True(reissued.Length == 0, $"Reissued codes that already existed: {string.Join(", ", reissued)}");
+        Assert.Equal(10, issued.Distinct().Count());
+    }
 }
