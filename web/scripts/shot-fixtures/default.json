@@ -2121,26 +2121,37 @@
     }
   },
   "GET /microclimates/*": {
-    "id": "66666666-6666-6666-6666-666666666666",
-    "title": "How is this week landing?",
+    "id": "m0000000-0000-0000-0000-000000000001",
+    "companyId": "11111111-1111-1111-1111-111111111111",
+    "title": "How did this week's release land?",
+    "description": null,
     "status": "active",
     "language": "en",
     "resolvedLocale": "en",
     "fallbackFields": [],
+    "startTime": "2026-08-11T10:00:00Z",
+    "endTime": "2026-08-11T18:00:00Z",
+    "responseCount": 18,
+    "targetParticipantCount": 57,
+    "anonymousResponses": true,
+    "showLiveResults": true,
+    "createdBy": "99999999-0000-0000-0000-000000000001",
     "questions": [
       {
-        "id": "aaaaaaa1-0000-0000-0000-000000000001",
-        "text": "How manageable has your workload felt this week?",
+        "id": "mq1",
+        "text": "How did this week's release land with your team?",
         "type": "likert",
+        "order": 1,
         "required": true,
-        "order": 0
+        "options": null
       },
       {
-        "id": "aaaaaaa1-0000-0000-0000-000000000002",
-        "text": "Anything you want to add?",
+        "id": "mq2",
+        "text": "In one word, how does the handover feel right now?",
         "type": "open_ended",
+        "order": 2,
         "required": false,
-        "order": 1
+        "options": null
       }
     ]
   },
@@ -3233,41 +3244,6 @@
       }
     ]
   },
-  "GET /microclimates/*": {
-    "id": "m0000000-0000-0000-0000-000000000001",
-    "companyId": "11111111-1111-1111-1111-111111111111",
-    "title": "How did this week's release land?",
-    "description": null,
-    "status": "active",
-    "language": "en",
-    "resolvedLocale": "en",
-    "fallbackFields": [],
-    "startTime": "2026-08-11T10:00:00Z",
-    "endTime": "2026-08-11T18:00:00Z",
-    "responseCount": 18,
-    "targetParticipantCount": 57,
-    "anonymousResponses": true,
-    "showLiveResults": true,
-    "createdBy": "99999999-0000-0000-0000-000000000001",
-    "questions": [
-      {
-        "id": "mq1",
-        "text": "How did this week's release land with your team?",
-        "type": "likert",
-        "order": 1,
-        "required": true,
-        "options": null
-      },
-      {
-        "id": "mq2",
-        "text": "In one word, how does the handover feel right now?",
-        "type": "open_ended",
-        "order": 2,
-        "required": false,
-        "options": null
-      }
-    ]
-  },
   "GET /admin/benchmarks": [
     {
       "id": "b0000000-0000-0000-0000-000000000002",
@@ -3790,5 +3766,88 @@
       "timezone": "Europe/Madrid",
       "dashboardLayout": "default"
     }
+  },
+  "GET /admin/question-categories": {
+    "categories": [
+      {
+        "id": "cat-1",
+        "companyId": null,
+        "parentCategoryId": null,
+        "nameEn": "Psychological safety",
+        "nameEs": "Seguridad psicológica",
+        "descriptionEn": "Speaking up without fear of reprisal.",
+        "descriptionEs": "Hablar sin temor a represalias.",
+        "order": 0,
+        "icon": null,
+        "color": null,
+        "isActive": true,
+        "itemCount": 2
+      },
+      {
+        "id": "cat-2",
+        "companyId": null,
+        "parentCategoryId": null,
+        "nameEn": "Leadership",
+        "nameEs": "Liderazgo",
+        "descriptionEn": null,
+        "descriptionEs": null,
+        "order": 1,
+        "icon": null,
+        "color": null,
+        "isActive": true,
+        "itemCount": 1
+      }
+    ]
+  },
+  "GET /admin/question-library": {
+    "items": [
+      {
+        "id": "q1",
+        "companyId": null,
+        "questionCategoryId": "cat-1",
+        "textEn": "I can raise a concern without fear of reprisal",
+        "textEs": "Puedo expresar una preocupación sin temor a represalias",
+        "type": "likert",
+        "dimension": "psychological_safety",
+        "usageCount": 12,
+        "lastUsedAt": null,
+        "isActive": true,
+        "version": 1,
+        "tags": [
+          "clima",
+          "confianza"
+        ]
+      },
+      {
+        "id": "q2",
+        "companyId": null,
+        "questionCategoryId": "cat-1",
+        "textEn": "Mistakes are treated as a chance to learn",
+        "textEs": "Los errores se tratan como una oportunidad para aprender",
+        "type": "multiple_choice",
+        "dimension": "psychological_safety",
+        "usageCount": 4,
+        "lastUsedAt": null,
+        "isActive": true,
+        "version": 1,
+        "tags": [
+          "aprendizaje"
+        ]
+      },
+      {
+        "id": "q3",
+        "companyId": null,
+        "questionCategoryId": "cat-2",
+        "textEn": "My manager gives me feedback I can act on",
+        "textEs": "Mi jefatura me da retroalimentación sobre la que puedo actuar",
+        "type": "rating",
+        "dimension": "leadership",
+        "usageCount": 7,
+        "lastUsedAt": null,
+        "isActive": true,
+        "version": 1,
+        "tags": []
+      }
+    ]
   }
 }

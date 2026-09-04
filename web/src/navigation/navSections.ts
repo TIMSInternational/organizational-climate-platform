@@ -17,6 +17,7 @@ import {
   LayoutDashboard,
   LayoutTemplate,
   Library,
+  BookMarked,
   ListChecks,
   Network,
   SquareKanban,
@@ -200,6 +201,21 @@ const QUESTION_BANK_ITEM: NavItem = {
   // Not ListChecks: TRACKING_MIS_TAREAS_ITEM already carries it, and two sidebar rows
   // with one glyph is how a reader learns to stop trusting the glyphs.
   icon: Library,
+}
+
+// The question LIBRARY's authoring screen (#423). Sits beside the bank and is not the
+// bank: this is the repository the survey and microclimate wizards pick from, with a real
+// category hierarchy and both languages mandatory. Same two admin roles for the same
+// reason -- `/admin/question-categories` and `/admin/question-library` gate on
+// `Roles.Admin` and then scope by role, so a super_admin authors the global tree and a
+// company_admin their own; everyone else would get a 403 and is not offered the row.
+const QUESTION_LIBRARY_ITEM: NavItem = {
+  labelKey: 'navigation.questionLibrary',
+  href: '/admin/question-library',
+  // Deliberately NOT Library, which QUESTION_BANK_ITEM above already carries. These two
+  // rows sit next to each other, so sharing a glyph would make the pair unreadable at
+  // exactly the place a reader most needs to tell them apart.
+  icon: BookMarked,
 }
 
 // Departments (#142). Admin-only: `/admin/departments` allows a super_admin
@@ -413,6 +429,7 @@ export function buildNavSections(
             icon: Activity,
           },
           QUESTION_BANK_ITEM,
+          QUESTION_LIBRARY_ITEM,
         ],
       },
       {
@@ -502,6 +519,7 @@ export function buildNavSections(
           },
           DEPARTMENTS_ITEM,
           QUESTION_BANK_ITEM,
+          QUESTION_LIBRARY_ITEM,
         ],
       },
       {

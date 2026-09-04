@@ -439,6 +439,9 @@ describe('leafNavItems', () => {
       // surface an admin visits occasionally is not one of the four things they do
       // most, and every leaf above is unmoved by it.
       '/admin/question-bank',
+      // #423, appended immediately after the bank: the authoring repository beside the
+      // curation surface. Same four-slot reasoning -- every leaf above is unmoved.
+      '/admin/question-library',
       // Last, for the same four-slot reason -- see 'puts Notifications last' above.
       '/notifications',
     ])
@@ -476,6 +479,9 @@ describe('leafNavItems', () => {
       // Both admin branches get the identical entry: no companyId is interpolated,
       // because the endpoint scopes by role rather than by a URL segment.
       '/admin/question-bank',
+      // #423, appended immediately after the bank in this branch too, for the same
+      // reason and with the same shape: no companyId in the href.
+      '/admin/question-library',
       '/notifications',
     ])
   })
