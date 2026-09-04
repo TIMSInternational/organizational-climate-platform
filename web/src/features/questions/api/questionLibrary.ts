@@ -15,9 +15,12 @@ import { authFetch } from '../../../api/authFetch'
  * ## Only the reads
  *
  * The endpoints also accept POST and PUT, and this client deliberately does not.
- * The picker's job ends at making an item readable; authoring belongs to the library
- * admin screens (#113/#114), and a write path smuggled in beside a picker is how one
- * component grows two responsibilities.
+ * The picker's job ends at making an item readable; authoring lives in
+ * `questionLibraryAdmin.ts` behind `/admin/question-library` (#423), and a write path
+ * smuggled in beside a picker is how one component grows two responsibilities.
+ * (This note used to point at #113/#114 for the authoring screens. #113 turned out to be
+ * QuestionPool adaptive behaviour and #114 built the question BANK, so until #423 the
+ * screen it promised did not exist and the endpoints were reachable only by `curl`.)
  */
 
 /** A node of the category tree. `itemCount` is COUNTed server-side, never stored. */

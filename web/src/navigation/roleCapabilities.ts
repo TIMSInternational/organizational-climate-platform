@@ -322,6 +322,20 @@ const ADMIN_SHARED: readonly RoleCapability[] = [
     inNav: true,
   },
   {
+    // #423. The question LIBRARY's authoring screen — the other half of the pair above.
+    // Its endpoints have accepted writes since #112; this route is what finally reaches
+    // them from the product rather than from `curl`.
+    route: '/admin/question-library',
+    labelKey: 'navigation.questionLibrary',
+    authorizedBy:
+      'GET /admin/question-categories and GET /admin/question-library — ' +
+      'QuestionLibraryEndpoints gates both on Roles.Admin, then scopes: a super_admin ' +
+      'reads every tenant plus the global rows, a company_admin the global rows plus ' +
+      'their own. Writing narrows further — CanWrite lets a company_admin create only ' +
+      'rows owned by their own company, and global rows are a super_admin’s alone.',
+    inNav: true,
+  },
+  {
     route: '/surveys/climate-trends',
     labelKey: 'navigation.climateTrends',
     authorizedBy:
