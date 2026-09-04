@@ -82,3 +82,45 @@ invitation RoleSelector so the product stops minting roles that lead nowhere.
 2. If option 2: confirm the floor-of-5 applies to leader-facing counts (the safe default),
    or explicitly accept the current "leader sees raw counts for their own team" behavior.
 3. If option 1 or 3: whether to remove the second role from RoleSelector now.
+
+---
+
+## Measured 2026-09-03
+
+Appended, not edited: everything above stands as written. This block records route counts
+measured at `835bcee` and decides nothing.
+
+**In production, `leader` and `supervisor` reach exactly the same seven routes.**
+
+| Role | Reachable routes in production (tracking off) | With tracking on |
+|---|---|---|
+| `super_admin` | 36 | 40 |
+| `company_admin` | 33 | 37 |
+| `leader` | **7** | 11 |
+| `supervisor` | **7** | 8 |
+| `employee` | 7 | 8 |
+
+Derivation, from `web/src/navigation/roleCapabilities.ts`: the group sizes are
+`SELF_SERVICE` 7 (none tracking-gated), `SUPER_ADMIN_ONLY` 3, `COMPANY_SCOPED` 5,
+`ADMIN_SHARED` 22 (1 tracking-gated), `TRACKING_PLANS` 2 (both gated), `TRACKING_TASKS` 1
+(gated). `supervisor` is declared as `[...SELF_SERVICE, TRACKING_TASKS]`
+(`roleCapabilities.ts:532`); `leader` is `SELF_SERVICE` plus `/tracking/tablero` plus
+`TRACKING_PLANS` plus `TRACKING_TASKS` (`:518-530`) — and every route that separates the two
+carries `requiresTracking: true`. `reachableRoutes(role, trackingEnabled = false)` filters
+those out (`:543-556`, the filter at `:556`), and `isTrackingEnabled()` is false whenever
+`VITE_TRACKING_API_BASE_URL` is blank (`web/src/features/tracking/api/config.ts:55-57`),
+which it is in production. So the one route that distinguishes a leader from a supervisor
+belongs to a module whose service has never been deployed.
+
+Both roles land on the same component. `web/src/features/dashboard/components/DepartmentAdminDashboardView.tsx:65`
+states it in the file's own header: *"`leader` and `supervisor` both land here. This repo has
+no `department_admin` role; those two are its department-scoped roles, and both run a
+team."*
+
+`docs/runbooks/uat-script.md:486` (§8.1) already records the consequence for testing — a leader's
+rail looks identical to a supervisor's, and the script calls that expected today.
+
+**No decision is taken here.** The three options above and the three questions under "What I
+need from Federico" are unchanged and still open.
+
+**Related:** `docs/audits/2026-09-03-functional-gaps.md` §1 and §9 item 13.
