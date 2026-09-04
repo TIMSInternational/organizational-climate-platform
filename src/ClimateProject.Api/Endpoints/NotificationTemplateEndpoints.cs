@@ -298,9 +298,6 @@ public static class NotificationTemplateEndpoints
         if (!CanReadTemplate(currentUser, template.CompanyId)) return Results.Forbid();
 
         var contentLanguage = await ResolveContentLanguageAsync(db, template.CompanyId, cancellationToken);
-        var locale = ContentLanguages.NormaliseLocale(request.Lang)
-                     ?? ContentLanguages.SingleLocaleOf(contentLanguage)
-                     ?? ContentLanguages.FallbackLocale;
 
         var declaredVariables = await db.NotificationTemplateVariables
             .Where(v => v.NotificationTemplateId == id)
@@ -309,25 +306,30 @@ public static class NotificationTemplateEndpoints
             .Where(r => r.NotificationTemplateId == id)
             .ToListAsync(cancellationToken);
 
-        var declared = declaredVariables.ToDictionary(v => v.Name, v => v.DefaultValue, StringComparer.Ordinal);
-        var values = NotificationTemplateRenderer.BuildValues(declared, request.Variables);
-
-        var fallbackFields = new List<string>();
-        var subject = Resolve(template.SubjectEn, template.SubjectEs, locale, contentLanguage, "subject", fallbackFields);
-        var title = Resolve(template.TitleEn, template.TitleEs, locale, contentLanguage, "title", fallbackFields);
-        var content = Resolve(template.ContentEn, template.ContentEs, locale, contentLanguage, "content", fallbackFields);
-        var htmlContent = Resolve(template.HtmlContentEn, template.HtmlContentEs, locale, contentLanguage, "htmlContent", fallbackFields);
+        // The SAME render this template gets when a notification naming it is actually sent
+        // (EmailNotificationSender -> NotificationTemplateDispatch). Locale resolution,
+        // variable resolution and substitution all live in that one function, so a preview
+        // cannot show an admin one body while the mailbox receives another. That drift is not
+        // hypothetical: dispatch ignored templates entirely until it was closed, and the
+        // preview was the only caller of the renderer in the whole solution.
+        var rendering = NotificationTemplateComposition.Render(
+            NotificationTemplateContent.From(
+                template,
+                contentLanguage,
+                declaredVariables.ToDictionary(v => v.Name, v => v.DefaultValue, StringComparer.Ordinal)),
+            request.Variables,
+            request.Lang);
 
         var preview = new NotificationTemplatePreview(
-            NotificationTemplateRenderer.Render(subject, values, escapeHtml: false),
-            NotificationTemplateRenderer.Render(title, values, escapeHtml: false),
-            NotificationTemplateRenderer.Render(content, values, escapeHtml: false),
-            NotificationTemplateRenderer.Render(htmlContent, values, escapeHtml: true),
-            [.. rules.Where(r => NotificationConditionParser.Evaluate(r.Condition, values)).Select(r => r.Id)],
+            rendering.Subject,
+            rendering.Title,
+            rendering.Content,
+            rendering.HtmlContent,
+            [.. rules.Where(r => NotificationConditionParser.Evaluate(r.Condition, rendering.Values)).Select(r => r.Id)],
             NotificationTemplateRenderer.FindMissingRequired(
-                declaredVariables.Where(v => v.Required).Select(v => v.Name), values),
-            locale,
-            fallbackFields);
+                declaredVariables.Where(v => v.Required).Select(v => v.Name), rendering.Values),
+            rendering.ResolvedLocale,
+            rendering.FallbackFields);
 
         return Results.Ok(preview);
     }

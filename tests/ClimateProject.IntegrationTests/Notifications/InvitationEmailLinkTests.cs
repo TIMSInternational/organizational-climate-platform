@@ -37,21 +37,41 @@ namespace ClimateProject.IntegrationTests.Notifications;
 /// </summary>
 public sealed class CapturingMailHostFixture : IDisposable
 {
-    private readonly Lock _gate = new();
-    private CapturingMailFactory? _factory;
+    private static readonly Lock Gate = new();
+    private static CapturingMailFactory? _factory;
+    private static readonly CapturedMailbox SharedMailbox = new();
 
-    /// <summary>Everything the product handed to a transport during this class's tests.</summary>
-    public CapturedMailbox Mailbox { get; } = new();
+    /// <summary>
+    /// Everything the product handed to a transport, for every class that uses this fixture.
+    ///
+    /// <para>
+    /// The host and the mailbox are <b>static</b>, so a second test class asking for a
+    /// capturing host does not build a second one: xUnit constructs a class fixture per class,
+    /// and each host is billed against <see cref="AuthWebApplicationFactory.HostBudget"/>,
+    /// which the assembly is close to. Every class using this filters by its own recipient
+    /// address and every class using it sits in the <c>Postgres</c> collection, which xUnit
+    /// runs one class at a time -- so sharing the record is safe in the only way that matters,
+    /// that no two classes write it concurrently.
+    /// </para>
+    /// </summary>
+    public CapturedMailbox Mailbox => SharedMailbox;
 
     public AuthWebApplicationFactory HostFor(string connectionString)
     {
-        lock (_gate)
+        lock (Gate)
         {
-            return _factory ??= new CapturingMailFactory(connectionString, Mailbox);
+            return _factory ??= new CapturingMailFactory(connectionString, SharedMailbox);
         }
     }
 
-    public void Dispose() => _factory?.Dispose();
+    /// <summary>
+    /// Deliberately empty. The host outlives any one class that uses it -- disposing it when
+    /// the first such class finishes would tear it out from under the next one -- so it lives
+    /// for the test process, exactly as <see cref="PostgresContainerFixture.App"/> does.
+    /// </summary>
+    public void Dispose()
+    {
+    }
 
     private sealed class CapturingMailFactory(string connectionString, CapturedMailbox mailbox)
         : AuthWebApplicationFactory(connectionString)
