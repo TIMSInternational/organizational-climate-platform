@@ -12,10 +12,11 @@ rule cited here is covered by a test in
 which runs inside `dotnet test ClimateProject.slnx` in CI's `build-and-test` job — green on
 `9df7b4c`.
 
-> **What has NOT been done:** this procedure has not been executed end to end against a running
-> API. It is derived from the endpoint source and its CI-green contract tests, not from a
-> performed import. Run §6 (the dry run) against staging or local before pointing it at
-> production. See §8.
+> **Status 2026-09-03:** the procedure is now a script — `scripts/import-question-library.mjs`,
+> §5 — and it **has been executed end to end against a running local API** (branch build on
+> `localhost:5130`, sample instrument, both ownership scopes: first run 18 created, second run
+> 0 created, verify clean). It has **never** been run against production, and PROCOMER's
+> instrument file does not yet exist in this repository. See §8.
 
 ## 1. Why there is no page to do this in
 
@@ -108,106 +109,86 @@ to be picked into both surfaces.
 
 ## 5. The procedure
 
-### 5.1 Get a token
-
 ```bash
-API=https://bhgrdkd4gt.us-east-1.awsapprunner.com   # production
-# API=http://localhost:5000                          # local
+# 1. Put the instrument in the file format below (scripts/fixtures/question-library.sample.json
+#    is a complete, validated example). 2. Decide §3. 3. Dry-run, then run, then verify.
+export CLIMATE_EMAIL=<admin-email> CLIMATE_PASSWORD=<password>     # never as flags
+API=https://bhgrdkd4gt.us-east-1.awsapprunner.com                   # production
+# API=http://localhost:5080                                          # local
 
-TOKEN=$(curl -s -X POST "$API/auth/login" \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"<admin-email>","password":"<password>"}' \
-  | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')
-
-test -n "$TOKEN" && echo "token acquired" || { echo "LOGIN FAILED"; exit 1; }
+node scripts/import-question-library.mjs --api "$API" --file instrument.json --company-id <procomer-guid> --dry-run
+node scripts/import-question-library.mjs --api "$API" --file instrument.json --company-id <procomer-guid>
+node scripts/import-question-library.mjs --api "$API" --file instrument.json --company-id <procomer-guid> --verify-only
 ```
 
-The response is `{"token": "..."}` — `TokenResponse` at `AuthEndpoints.cs:455`, read the same
-way by `web/src/auth/api.ts` and by the integration tests. There is no `accessToken` field.
+Use `--global` instead of `--company-id` if §3 was answered "global". The script refuses to run
+without one of the two (exit 2, nothing sent).
 
-`/auth/login` is rate-limited (`RateLimitPolicies.Authentication`). Acquire the token once and
-reuse it; do not log in per question.
+What the script does, in order, and why each step is there:
 
-### 5.2 Create the categories, parents first
+1. **Validates the whole file before the first request** and lists every problem at once —
+   both languages on every category and item, supported types only (§4), options present and
+   unique for `multiple_choice`, every `parent` and `category` reference declared, no parent
+   cycles, no duplicate `(category, textEn)`.
+2. **Signs in once** (`POST /auth/login` is rate-limited at 20/min; the token is reused).
+3. **Reads what already exists** in the chosen ownership scope and matches by natural key —
+   a category is `(parent, nameEn)`, an item is `(category, textEn)`. Matched rows are skipped.
+   This is what makes the import idempotent and resumable: a second run reports `0 created`;
+   a run that died at item 30 re-runs from the same command and creates only the rest.
+4. **Creates categories parents-first, then items**, one `POST` each (there is no bulk
+   endpoint). Every `2xx` is checked by **body**: an `id` came back and `nameEn`/`textEn`/`type`
+   echo the request. A `200` with the wrong body is a failure.
+5. **Verifies**: re-reads the server and asserts that every category and item in the file
+   resolves to a row; prints the file/server/matched counts. A run that reports 43 of 44 has
+   dropped one — the script exits 1 and names it.
 
-A child needs its parent's id, so the tree is created top-down. Both names are mandatory.
+### The file format
 
-```bash
-curl -s -X POST "$API/admin/question-categories" \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{
-        "nameEn": "Leadership",
-        "nameEs": "Liderazgo",
-        "descriptionEn": null, "descriptionEs": null,
-        "parentCategoryId": null,
-        "companyId": null,
-        "order": 1, "icon": null, "color": null
-      }'
+```jsonc
+{
+  "instrument": "free text, printed in the log",
+  "categories": [
+    { "key": "leadership",          "nameEn": "Leadership", "nameEs": "Liderazgo",
+      "descriptionEn": null, "descriptionEs": null, "parent": null, "order": 1, "icon": null, "color": null },
+    { "key": "leadership.feedback", "nameEn": "Feedback",   "nameEs": "Retroalimentación", "parent": "leadership", "order": 1 }
+  ],
+  "items": [
+    { "category": "leadership.feedback", "type": "likert",
+      "textEn": "My manager gives me useful feedback.", "textEs": "Mi jefatura me da retroalimentación útil.",
+      "scaleMin": 1, "scaleMax": 5,
+      "scaleLabelMinEn": "Strongly disagree", "scaleLabelMinEs": "Muy en desacuerdo",
+      "scaleLabelMaxEn": "Strongly agree",    "scaleLabelMaxEs": "Muy de acuerdo",
+      "dimension": "Liderazgo", "tags": ["feedback"] },
+    { "category": "communication", "type": "multiple_choice",
+      "textEn": "…", "textEs": "…",
+      "options": [ { "value": "email", "labelEn": "Email", "labelEs": "Correo electrónico" } ] }
+  ]
+}
 ```
 
-The response is the created category; keep its `id` for the children and for the items.
+`key`, `parent` and `category` are local references that wire the file together; they are
+never sent to the API. `companyId` is not in the file — it comes from the flag, once, for
+every row. Every field the create endpoints accept (`CreateQuestionCategoryRequest`,
+`CreateQuestionLibraryItemRequest` in `QuestionRepositoryDtos.cs`) is expressible; omitted
+optional fields are sent as `null`.
 
-### 5.3 Create the items
+### If you would rather see the raw requests
 
-```bash
-curl -s -X POST "$API/admin/question-library" \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{
-        "questionCategoryId": "<category-guid>",
-        "textEn":  "My manager gives me useful feedback.",
-        "textEs":  "Mi jefe me da retroalimentación útil.",
-        "type": "likert",
-        "companyId": null,
-        "scaleMin": 1, "scaleMax": 5,
-        "scaleLabelMinEn": "Strongly disagree", "scaleLabelMinEs": "Muy en desacuerdo",
-        "scaleLabelMaxEn": "Strongly agree",    "scaleLabelMaxEs": "Muy de acuerdo",
-        "dimension": "Liderazgo",
-        "tags": ["feedback"],
-        "options": null
-      }'
-```
-
-For `multiple_choice`, supply `options` as `[{ "value": null, "labelEn": "...", "labelEs": "..." }]`.
-`value` may be omitted and is then derived; whatever it resolves to must be unique within the
-question.
-
-`companyId` must match the §3 decision, and must be identical on the categories and the items —
-a company item cannot be filed under another tenant's category.
-
-### 5.4 Verify what landed
-
-```bash
-curl -s "$API/admin/question-library" -H "Authorization: Bearer $TOKEN" \
-  | python3 -c 'import sys,json; d=json.load(sys.stdin)["items"]; print(len(d), "items")'
-
-curl -s "$API/admin/question-categories" -H "Authorization: Bearer $TOKEN" \
-  | python3 -c 'import sys,json
-c=json.load(sys.stdin)["categories"]
-print(len(c), "categories")
-print("items filed:", sum(x["itemCount"] for x in c))'
-```
-
-`itemCount` is computed server-side from what is actually filed under each category, so the two
-numbers disagreeing means items landed under a category you did not intend — not a display bug.
-
-**Assert the count you expected.** The instrument is stated as 44 questions growing to about 50;
-a run that reports 43 has silently dropped one to a `400` nobody read.
+`--dry-run` prints the plan. The request shapes are `toCategoryRequest` / `toItemRequest` in
+the script, one field per line, and the seven routes are listed in §2. The previous version of
+this section — a hand-run `curl` loop — is in git history before 2026-09-03; it was never run.
 
 ## 6. Dry-run first — this is not optional
 
-Run the whole thing against **local or staging** with the real instrument file before pointing
-it at production. There is no bulk endpoint and therefore no transaction: an import that fails
-at question 30 leaves 29 rows behind, and re-running it creates 29 duplicates, because nothing
-here is idempotent and the library has no natural key.
+Run the script with the real instrument file against **local or staging** before pointing it
+at production: `--dry-run` first, then the run, then `--verify-only`. Read every validation
+line; a `ranking` item in the instrument surfaces here (§4) and is a modelling question, not
+something to work around.
 
-If a production run does fail partway:
-
-1. Do **not** re-run it from the top.
-2. `GET /admin/question-library` and diff against the source instrument.
-3. Resume from the first missing question.
-
-Deactivating a bad row (`PUT` with `isActive: false`) is how an item is retired — the picker
-drops inactive rows. There is no delete endpoint.
+If a production run does fail partway, the fix is the same command again: rows that landed are
+matched by natural key and skipped, the rest are created. Do not delete anything — there is no
+delete endpoint; deactivating a bad row (`PUT` with `isActive: false`) is how an item is
+retired, and the picker drops inactive rows.
 
 ## 7. What this procedure does not cover
 
@@ -225,7 +206,9 @@ drops inactive rows. There is no delete endpoint.
 | | |
 |---|---|
 | Contract | **Verified** by reading the endpoints at `9df7b4c` and by 10 CI-green integration tests |
-| Procedure end to end | **Not yet executed.** Do the §6 dry run first |
+| Tool | `scripts/import-question-library.mjs` — 10 `node --test` cases (`node --test 'scripts/*.test.mjs'`), validator / ordering / matcher / request shapes |
+| Procedure end to end | **Executed locally 2026-09-03** against a branch build (sample instrument, both scopes, second run `0 created`, verify clean). **Never against production.** |
+| Instrument file | **Does not exist in this repository.** PROCOMER's 44–50 items must arrive in the §5 format |
 | Global vs company-owned | **Open — §3.** Needs answering before the first import |
 | Ranking items in the instrument | **Unknown** until the instrument arrives — §4 |
 | #423's admin UI | **Deferred deliberately** to after 16 Nov go-live |

@@ -1,0 +1,30 @@
+{
+  "instrument": "Sample climate instrument (format reference — not PROCOMER's)",
+  "categories": [
+    { "key": "leadership", "nameEn": "Leadership", "nameEs": "Liderazgo", "descriptionEn": "How people experience their direct manager.", "descriptionEs": "Cómo las personas viven la relación con su jefatura directa.", "parent": null, "order": 1, "icon": null, "color": null },
+    { "key": "leadership.feedback", "nameEn": "Feedback", "nameEs": "Retroalimentación", "parent": "leadership", "order": 1 },
+    { "key": "communication", "nameEn": "Communication", "nameEs": "Comunicación", "parent": null, "order": 2 },
+    { "key": "recognition", "nameEn": "Recognition", "nameEs": "Reconocimiento", "parent": null, "order": 3 },
+    { "key": "wellbeing", "nameEn": "Well-being", "nameEs": "Bienestar", "parent": null, "order": 4 },
+    { "key": "open", "nameEn": "Open comments", "nameEs": "Comentarios abiertos", "parent": null, "order": 5 }
+  ],
+  "items": [
+    { "category": "leadership", "type": "likert", "textEn": "My manager sets clear expectations.", "textEs": "Mi jefatura establece expectativas claras.", "scaleMin": 1, "scaleMax": 5, "scaleLabelMinEn": "Strongly disagree", "scaleLabelMinEs": "Muy en desacuerdo", "scaleLabelMaxEn": "Strongly agree", "scaleLabelMaxEs": "Muy de acuerdo", "dimension": "Liderazgo", "tags": ["expectations"] },
+    { "category": "leadership", "type": "likert", "textEn": "My manager treats everyone on the team fairly.", "textEs": "Mi jefatura trata a todas las personas del equipo con equidad.", "scaleMin": 1, "scaleMax": 5, "scaleLabelMinEn": "Strongly disagree", "scaleLabelMinEs": "Muy en desacuerdo", "scaleLabelMaxEn": "Strongly agree", "scaleLabelMaxEs": "Muy de acuerdo", "dimension": "Liderazgo", "tags": ["fairness"] },
+    { "category": "leadership.feedback", "type": "likert", "textEn": "My manager gives me useful feedback on my work.", "textEs": "Mi jefatura me da retroalimentación útil sobre mi trabajo.", "scaleMin": 1, "scaleMax": 5, "scaleLabelMinEn": "Strongly disagree", "scaleLabelMinEs": "Muy en desacuerdo", "scaleLabelMaxEn": "Strongly agree", "scaleLabelMaxEs": "Muy de acuerdo", "dimension": "Liderazgo", "tags": ["feedback"] },
+    { "category": "leadership.feedback", "type": "rating", "textEn": "How would you rate the frequency of feedback you receive?", "textEs": "¿Cómo calificaría la frecuencia de la retroalimentación que recibe?", "scaleMin": 1, "scaleMax": 10, "dimension": "Liderazgo", "tags": ["feedback", "frequency"] },
+    { "category": "communication", "type": "likert", "textEn": "I receive the information I need to do my job well.", "textEs": "Recibo la información que necesito para hacer bien mi trabajo.", "scaleMin": 1, "scaleMax": 5, "scaleLabelMinEn": "Strongly disagree", "scaleLabelMinEs": "Muy en desacuerdo", "scaleLabelMaxEn": "Strongly agree", "scaleLabelMaxEs": "Muy de acuerdo", "dimension": "Comunicación" },
+    { "category": "communication", "type": "multiple_choice", "textEn": "Which channel do you rely on most for institutional news?", "textEs": "¿Qué canal utiliza más para enterarse de las noticias institucionales?", "dimension": "Comunicación", "options": [
+      { "value": "email", "labelEn": "Email", "labelEs": "Correo electrónico" },
+      { "value": "meetings", "labelEn": "Team meetings", "labelEs": "Reuniones de equipo" },
+      { "value": "intranet", "labelEn": "Intranet", "labelEs": "Intranet" },
+      { "value": "chat", "labelEn": "Chat", "labelEs": "Chat" }
+    ] },
+    { "category": "recognition", "type": "likert", "textEn": "Good work is recognised here.", "textEs": "Aquí se reconoce el buen trabajo.", "scaleMin": 1, "scaleMax": 5, "scaleLabelMinEn": "Strongly disagree", "scaleLabelMinEs": "Muy en desacuerdo", "scaleLabelMaxEn": "Strongly agree", "scaleLabelMaxEs": "Muy de acuerdo", "dimension": "Reconocimiento" },
+    { "category": "recognition", "type": "yes_no", "textEn": "Have you been recognised for your work in the last three months?", "textEs": "¿Ha recibido reconocimiento por su trabajo en los últimos tres meses?", "dimension": "Reconocimiento" },
+    { "category": "wellbeing", "type": "likert", "textEn": "My workload is manageable.", "textEs": "Mi carga de trabajo es manejable.", "scaleMin": 1, "scaleMax": 5, "scaleLabelMinEn": "Strongly disagree", "scaleLabelMinEs": "Muy en desacuerdo", "scaleLabelMaxEn": "Strongly agree", "scaleLabelMaxEs": "Muy de acuerdo", "dimension": "Bienestar", "tags": ["workload"] },
+    { "category": "wellbeing", "type": "rating", "textEn": "How would you rate your work–life balance?", "textEs": "¿Cómo calificaría su equilibrio entre trabajo y vida personal?", "scaleMin": 1, "scaleMax": 10, "dimension": "Bienestar" },
+    { "category": "open", "type": "open_ended", "textEn": "What is one thing that would make this a better place to work?", "textEs": "¿Qué es lo que más mejoraría este lugar de trabajo?", "dimension": null },
+    { "category": "open", "type": "open_ended", "textEn": "Is there anything else you would like to tell us?", "textEs": "¿Hay algo más que quiera contarnos?", "dimension": null }
+  ]
+}
