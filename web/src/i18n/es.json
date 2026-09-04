@@ -1748,7 +1748,15 @@
       "shareLinkNeverReplaced": "Este enlace nunca se ha reemplazado.",
       "shareLinkLastReplaced": "Reemplazado por última vez el {date}.",
       "linkOpens": "Aperturas del enlace",
-      "linkVisitors": "Visitantes únicos"
+      "linkVisitors": "Visitantes únicos",
+      "qrTitle": "Código QR",
+      "qrHint": "Un código QR es este enlace en forma escaneable, por eso permanece oculto hasta que lo pidas: una cámara puede leerlo desde una pantalla compartida.",
+      "qrShow": "Mostrar código QR",
+      "qrHide": "Ocultar código QR",
+      "qrAlt": "Código QR del enlace público de esta encuesta",
+      "qrDownload": "Descargar PNG",
+      "qrDownloading": "Preparando…",
+      "qrDownloadFailed": "Este navegador no pudo generar el PNG. El código de arriba sigue siendo válido: haz una captura de pantalla o copia el enlace."
     },
     "statusDraft": "Borrador",
     "statusScheduled": "Programada",

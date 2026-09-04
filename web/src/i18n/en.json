@@ -1748,7 +1748,15 @@
       "shareLinkNeverReplaced": "This link has never been replaced.",
       "shareLinkLastReplaced": "Last replaced {date}.",
       "linkOpens": "Link opens",
-      "linkVisitors": "Unique visitors"
+      "linkVisitors": "Unique visitors",
+      "qrTitle": "QR code",
+      "qrHint": "A QR code is this link in scannable form, so it stays hidden until you ask for it — a camera can read one off a shared screen.",
+      "qrShow": "Show QR code",
+      "qrHide": "Hide QR code",
+      "qrAlt": "QR code for this survey’s open share link",
+      "qrDownload": "Download PNG",
+      "qrDownloading": "Preparing…",
+      "qrDownloadFailed": "This browser could not produce the PNG. The code above is still valid — take a screenshot of it, or copy the link instead."
     },
     "statusDraft": "Draft",
     "statusScheduled": "Scheduled",
