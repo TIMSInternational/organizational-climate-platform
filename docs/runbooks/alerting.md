@@ -7,7 +7,12 @@ state are written out for a human to run and are marked.
 **The one-sentence version.** The application is already well instrumented — every scheduled
 job emits a positive heartbeat, `/ready` round-trips Postgres, `/version` reports its commit,
 `/admin/system/status` grades every component — and **none of it is connected to anything that
-can tell a person.** There are zero CloudWatch alarms and zero SNS topics. #158 is not an
+can tell a person.** [UPDATED 2026-09-04: **three** CloudWatch alarms now exist, not zero —
+`climate-project-api-prod-synthetic-probe-{api-down,api-slow,web-down}`, created when the
+synthetic probe stack was deployed. **Zero SNS topics** is still exact. So production is not
+unwatched; it is watched by three alarms with nowhere to send anything, which is a sharper
+statement of the same problem and the one a reader should carry: the probe DETECTS and cannot
+TELL. The 22 alarms in `climate-project-observability.yml` remain undeployed.] #158 is not an
 instrumentation problem; it is a wiring problem, and the wiring is the last mile.
 
 ---
