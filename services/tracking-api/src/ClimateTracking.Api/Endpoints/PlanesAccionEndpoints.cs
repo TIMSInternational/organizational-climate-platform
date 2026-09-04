@@ -285,6 +285,42 @@ public static class PlanesAccionEndpoints
         return Results.Ok(PlanResponse.From(plan));
     }
 
+    /// <summary>
+    /// The advisory-lock key every request takes before it may create or seed a year's plan-code
+    /// sequence. The year is added so two years' first requests never queue behind each other.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The race this closes.</b> The previous implementation used the error from a bare
+    /// <c>CREATE SEQUENCE</c> as its "did I create this?" signal, and only the winner seeded the
+    /// sequence with <c>setval(max(existing suffix))</c>. Every loser skipped the seeding block
+    /// and called <c>nextval()</c> immediately -- so the winner's <c>setval</c> could land AFTER
+    /// losers had already consumed 1..N and committed plans with those codes, REWINDING the
+    /// sequence underneath them. The next <c>nextval()</c> then reissued a code that already
+    /// existed and Postgres refused the insert: <c>23505 duplicate key value violates unique
+    /// constraint "IX_planes_de_accion_PlanCode"</c>, surfacing to the caller as a 500.
+    /// <c>PlanCodeConcurrencyTests.Concurrent_plan_creation_never_produces_duplicate_plan_codes</c>
+    /// is the test written to catch exactly this; it caught it on CI on 2026-09-03.
+    /// </para>
+    /// <para>
+    /// <b>Why the lock rather than a cleverer sequence dance.</b> Creating the sequence and
+    /// seeding it are two statements that must be one act with respect to every other request's
+    /// <c>nextval()</c>. Nothing in Postgres makes that atomic on its own, because
+    /// <c>nextval</c> deliberately ignores transactions. Serialising the create-and-seed is the
+    /// whole fix, and it costs one lock acquisition on the first request of a year; every
+    /// request after that finds the sequence present and does no work inside the lock.
+    /// </para>
+    /// <para>
+    /// <b>Why the transaction-scoped variant.</b> Same reason as
+    /// <c>BenchmarkEndpoints.PriorPeriodLinkLockKey</c>: a session lock outlives the
+    /// transaction, and under a pooled connection "the session" is not a thing that survives.
+    /// <c>pg_advisory_xact_lock</c> is released by commit, by rollback, and by the connection
+    /// dropping, with nothing to clean up. Blocking rather than <c>try</c>, because this is
+    /// somebody waiting on a button: the right answer is "in a moment", not "no".
+    /// </para>
+    /// </remarks>
+    private const long PlanCodeSequenceLockKeyBase = 71_0071_0000;
+
     private static async Task<string> GeneratePlanCodeAsync(ClimateTrackingDbContext db, CancellationToken cancellationToken)
     {
         var year = DateTime.UtcNow.Year;
@@ -294,59 +330,59 @@ public static class PlanesAccionEndpoints
         // than pre-migrated, since future years aren't known in advance.
         var sequenceName = $"plan_code_seq_{year}";
         var prefix = $"PA-{year}-";
-        bool createdNewSequence;
-#pragma warning disable EF1002
-        try
-        {
-            // Deliberately CREATE SEQUENCE without IF NOT EXISTS: this makes Postgres raise
-            // a duplicate-relation error whenever the sequence already exists -- whether it
-            // was created by an earlier call this year or by a concurrent request that won
-            // the race to create it just now -- giving us a definite "did I just create
-            // this?" signal instead of the silent no-op IF NOT EXISTS would give.
-            await db.Database.ExecuteSqlRawAsync($"CREATE SEQUENCE {sequenceName}", cancellationToken);
-            createdNewSequence = true;
-        }
-        catch (Npgsql.PostgresException ex) when (
-            ex.SqlState is Npgsql.PostgresErrorCodes.UniqueViolation
-                or Npgsql.PostgresErrorCodes.DuplicateObject
-                or Npgsql.PostgresErrorCodes.DuplicateTable)
-        {
-            // A plain (non-"IF NOT EXISTS") CREATE SEQUENCE on a name that's already taken
-            // deterministically raises 42P07 (duplicate_table -- sequences are relations in
-            // pg_class, so this is the same error class as re-creating an existing table).
-            // 23505/42710 are kept too for the genuine concurrent-race case: two requests
-            // can both pass Postgres's internal "does this relation exist" check before
-            // either commits, and the loser can surface as a unique-violation on pg_class's
-            // name index instead of the deterministic duplicate_table.
-            // Someone else already created (and, if they won a creation race, is seeding)
-            // this year's sequence -- by the time we observe this, their CREATE has already
-            // committed, so the sequence now exists and is safe to use.
-            createdNewSequence = false;
-        }
 
-        if (createdNewSequence)
+#pragma warning disable EF1002
+        // Everything that can create or move the sequence happens under the lock, so a
+        // concurrent caller either does the work or waits for whoever is doing it -- and by
+        // the time it proceeds the sequence exists AND has been seeded. `nextval` itself is
+        // atomic and is deliberately left outside.
+        await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
         {
-            // We just created a brand-new sequence, which always starts at 1 -- but this
-            // database may already hold plans for this year created before this sequence
-            // existed (the old COUNT(*)-based scheme, a prior deploy, or a database
-            // restored from an environment that already has data, e.g. staging/prod).
-            // Seed it from the highest existing PlanCode suffix so nextval() can't
-            // collide with a pre-existing unique PlanCode.
-            // The suffix-is-all-digits check guards against a legacy/malformed PlanCode that
-            // happens to match the '{prefix}%' LIKE filter but isn't purely numeric after the
-            // prefix -- without it, CAST(... AS bigint) would throw for that row instead of
-            // just being excluded from the max.
-            var maxExisting = await db.Database.SqlQueryRaw<long>(
-                $"""
-                SELECT COALESCE(MAX(CAST(SUBSTRING("PlanCode" FROM {prefix.Length + 1}) AS bigint)), 0) AS "Value"
-                FROM planes_de_accion
-                WHERE "PlanCode" LIKE '{prefix}%'
-                  AND SUBSTRING("PlanCode" FROM {prefix.Length + 1}) ~ '^[0-9]+$'
-                """).SingleAsync(cancellationToken);
-            if (maxExisting > 0)
+            await db.Database.ExecuteSqlRawAsync(
+                "SELECT pg_advisory_xact_lock({0})",
+                [PlanCodeSequenceLockKeyBase + year],
+                cancellationToken);
+
+            // Under the lock this read is trustworthy, which is what lets the whole
+            // CREATE-SEQUENCE-error-as-a-signal dance go away: nobody else can be creating it
+            // between this check and the CREATE below.
+            var exists = await db.Database
+                .SqlQueryRaw<bool>($"SELECT to_regclass('{sequenceName}') IS NOT NULL AS \"Value\"")
+                .SingleAsync(cancellationToken);
+
+            if (!exists)
             {
-                await db.Database.ExecuteSqlRawAsync($"SELECT setval('{sequenceName}', {maxExisting})", cancellationToken);
+                await db.Database.ExecuteSqlRawAsync($"CREATE SEQUENCE {sequenceName}", cancellationToken);
+
+                // A brand-new sequence starts at 1, but this database may already hold plans
+                // for this year created before it existed (the old COUNT(*)-based scheme, a
+                // prior deploy, or a restore from an environment that already has data). Seed
+                // from the highest existing suffix so nextval() cannot collide with one.
+                //
+                // The suffix-is-all-digits check guards a legacy or malformed PlanCode that
+                // matches the '{prefix}%' filter but is not purely numeric after the prefix --
+                // without it CAST(... AS bigint) would throw for that row rather than simply
+                // being excluded from the max.
+                var maxExisting = await db.Database.SqlQueryRaw<long>(
+                    $"""
+                    SELECT COALESCE(MAX(CAST(SUBSTRING("PlanCode" FROM {prefix.Length + 1}) AS bigint)), 0) AS "Value"
+                    FROM planes_de_accion
+                    WHERE "PlanCode" LIKE '{prefix}%'
+                      AND SUBSTRING("PlanCode" FROM {prefix.Length + 1}) ~ '^[0-9]+$'
+                    """).SingleAsync(cancellationToken);
+
+                if (maxExisting > 0)
+                {
+                    await db.Database.ExecuteSqlRawAsync(
+                        $"SELECT setval('{sequenceName}', {maxExisting})",
+                        cancellationToken);
+                }
             }
+
+            // Commit releases the advisory lock and makes the CREATE visible. DDL is
+            // transactional in Postgres, so a rollback here takes the sequence with it and
+            // the next request simply creates it again.
+            await transaction.CommitAsync(cancellationToken);
         }
 
         // EF Core's scalar SqlQueryRaw<T> wraps the raw SQL as
