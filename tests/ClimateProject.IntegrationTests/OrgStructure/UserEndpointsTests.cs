@@ -43,7 +43,7 @@ public class UserEndpointsTests : IAsyncLifetime
     private async Task<(string Token, Guid UserId)> SignUpAndGetTokenAsync(HttpClient client, string role, string emailDomain, Guid companyId)
     {
         var email = $"{Guid.NewGuid():N}@{emailDomain}";
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "A-good-passw0rd"));
         var token = (await signup.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
 
         using var scope = _factory.Services.CreateScope();
@@ -54,7 +54,7 @@ public class UserEndpointsTests : IAsyncLifetime
         user.CompanyId = companyId;
         await db.SaveChangesAsync();
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         token = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
 
         return (token, userId);

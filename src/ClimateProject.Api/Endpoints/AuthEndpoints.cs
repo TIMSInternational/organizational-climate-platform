@@ -111,10 +111,15 @@ public static class AuthEndpoints
             return signupGate;
         }
 
-        var minPasswordLength = await GetMinPasswordLengthAsync(db, cancellationToken);
-        if (request.Password.Length < minPasswordLength)
+        // The whole configured policy, not MinLength alone. Until this change signup read one
+        // of the five knobs and ignored the four complexity flags an administrator can switch
+        // on at /admin/system-settings -- a setting the product persists and does not honour
+        // is worse than an absent one. Same validator, same message shape, as the profile's
+        // change-password and invitation acceptance.
+        var passwordPolicy = await PasswordPolicies.LoadAsync(db, cancellationToken);
+        if (PasswordPolicyValidation.Validate(request.Password, passwordPolicy) is { } passwordError)
         {
-            return Results.Json(new ErrorResponse($"Password must be at least {minPasswordLength} characters long"), statusCode: 400);
+            return Results.Json(new ErrorResponse(passwordError), statusCode: 400);
         }
 
         if (!Regex.IsMatch(request.Email, EmailFormatPattern))
@@ -376,7 +381,10 @@ public static class AuthEndpoints
             return Results.Json(new ErrorResponse("User not found"), statusCode: 404);
         }
 
-        var temporaryPassword = Guid.NewGuid().ToString("N")[..12];
+        // A password the product itself would accept: the old Guid-derived twelve hex
+        // characters failed the default policy (no uppercase) the moment the holder tried to
+        // change it, and never met a tenant policy that required a special character.
+        var temporaryPassword = TemporaryPasswords.Generate(await PasswordPolicies.LoadAsync(db, cancellationToken));
         user.PasswordHash = passwordHasher.Hash(temporaryPassword);
 
         // Every session this account has open ends here (#284). An administrator resetting
@@ -440,13 +448,6 @@ public static class AuthEndpoints
         return null;
     }
 
-    // Falls back to the same default (8) as SystemSettings.PasswordPolicy.MinLength
-    // when no settings row exists yet, matching the hardcoded rule this replaces.
-    private static async Task<int> GetMinPasswordLengthAsync(ClimateProjectDbContext db, CancellationToken cancellationToken)
-    {
-        var settings = await db.SystemSettings.FirstOrDefaultAsync(cancellationToken);
-        return settings?.PasswordPolicy.MinLength ?? 8;
-    }
 }
 
 public sealed record LoginRequest(string Email, string Password);

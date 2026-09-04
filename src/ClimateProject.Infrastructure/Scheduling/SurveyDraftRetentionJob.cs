@@ -18,12 +18,13 @@ namespace ClimateProject.Infrastructure.Scheduling;
 /// SuperAdmin-gated and scheduling it would mean keeping a super-admin token in a runner to
 /// perform a purely internal maintenance action.</para>
 ///
-/// <para><b>Scheduled, not yet running.</b> <c>SurveyDraftRetentionWorker</c> is registered in
-/// <c>ClimateProject.Workers</c>, but that host is built by no workflow and deployed as no
-/// service, so nothing ticks it in production today -- the same is true of the four workers
-/// that preceded it. Until #275 deploys the workers host (or co-hosts these jobs in the API),
-/// the only thing that actually reclaims a row is a human calling
-/// <c>DELETE /surveys/drafts/expired</c>.</para>
+/// <para><b>Running since #275.</b> <c>SurveyDraftRetentionWorker</c> is registered by
+/// <c>SchedulingServiceCollectionExtensions.AddClimateProjectScheduling</c> and the API host
+/// calls that at <c>Program.cs</c> (<c>AddClimateProjectScheduling</c>), so the job ticks in
+/// every API instance, on a Postgres advisory lease so N instances make one scheduler
+/// (<c>Jobs.cs</c>, <c>survey-draft-retention</c>, default interval one hour). An earlier
+/// version of this comment said nothing ticked it in production; measured 2026-09-03, it
+/// does.</para>
 ///
 /// <para><b>Cadence: hourly</b> (<c>Scheduling:SurveyDraftRetentionInterval</c>). Nothing
 /// observable depends on how soon a row goes: the TTL is 30 days and the read filters hide

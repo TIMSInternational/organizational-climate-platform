@@ -70,7 +70,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
     private async Task<(string Token, Guid UserId)> SignUpAndGetTokenAsync(HttpClient client, string role, string? domain = null)
     {
         var email = $"{Guid.NewGuid():N}@{domain ?? _companyDomain}";
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.Created, signup.StatusCode);
 
         Guid userId;
@@ -82,7 +82,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
             userId = user.Id;
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         var token = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
         return (token, userId);
     }
@@ -672,10 +672,10 @@ public class NotificationEndpointsTests : IAsyncLifetime
         var client = Factory.CreateClient();
         Assert.Equal(
             HttpStatusCode.Created,
-            (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Victim", victimEmail, "a-good-password"))).StatusCode);
+            (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Victim", victimEmail, "A-good-passw0rd"))).StatusCode);
         Assert.Equal(
             HttpStatusCode.Created,
-            (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Collider", colliderEmail, "a-good-password"))).StatusCode);
+            (await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Collider", colliderEmail, "A-good-passw0rd"))).StatusCode);
 
         Guid victimId = Guid.Empty;
         Guid colliderId = Guid.Empty;
@@ -695,7 +695,7 @@ public class NotificationEndpointsTests : IAsyncLifetime
         var forCollider = (await (await adminClient.PostAsJsonAsync("/notifications", Request(colliderId, _companyId)))
             .Content.ReadFromJsonAsync<NotificationDetail>())!;
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(colliderEmail, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(colliderEmail, "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer", (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token);

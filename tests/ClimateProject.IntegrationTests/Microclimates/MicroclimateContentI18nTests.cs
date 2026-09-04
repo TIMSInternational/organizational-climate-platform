@@ -52,7 +52,7 @@ public class MicroclimateContentI18nTests : IAsyncLifetime
     private async Task<string> AdminTokenAsync(HttpClient client)
     {
         var email = $"{Guid.NewGuid():N}@{_domain}";
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Admin", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Admin", email, "A-good-passw0rd"));
         var token = (await signup.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
 
         using (var scope = _factory.Services.CreateScope())
@@ -64,7 +64,7 @@ public class MicroclimateContentI18nTests : IAsyncLifetime
             await db.SaveChangesAsync();
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         return (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
     }
 

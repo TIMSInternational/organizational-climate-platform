@@ -65,7 +65,7 @@ public class CrossServiceTokenTests : IAsyncLifetime
     /// </summary>
     private const string SharedTrackingJwtSecret = AuthWebApplicationFactory.TestJwtSecret;
 
-    private const string Password = "a-good-password";
+    private const string Password = "A-good-passw0rd";
 
     /// <summary>Satisfies the default password policy, like <c>SecurityStampRevocationTests</c>'.</summary>
     private const string ReplacementPassword = "Rep1acementPass";

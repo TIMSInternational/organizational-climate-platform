@@ -45,7 +45,7 @@ public class CompanyEndpointsTests : IAsyncLifetime
     private async Task<string> SignUpAndGetTokenAsync(HttpClient client, string role)
     {
         var email = $"{Guid.NewGuid():N}@{_domain}";
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "A-good-passw0rd"));
         var token = (await signup.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
 
         if (role != Roles.Employee)
@@ -57,7 +57,7 @@ public class CompanyEndpointsTests : IAsyncLifetime
             await db.SaveChangesAsync();
 
             // Re-login to get a token carrying the updated role claim.
-            var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+            var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
             token = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
         }
 

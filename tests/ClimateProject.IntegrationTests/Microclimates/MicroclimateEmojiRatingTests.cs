@@ -58,7 +58,7 @@ public class MicroclimateEmojiRatingTests : IAsyncLifetime
     {
         var client = _factory.CreateClient();
         var email = $"{Guid.NewGuid():N}@{_domain}";
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Admin", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Admin", email, "A-good-passw0rd"));
         var token = (await signup.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
 
         using (var scope = _factory.Services.CreateScope())
@@ -70,7 +70,7 @@ public class MicroclimateEmojiRatingTests : IAsyncLifetime
             await db.SaveChangesAsync();
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         var fresh = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", fresh);
         return client;

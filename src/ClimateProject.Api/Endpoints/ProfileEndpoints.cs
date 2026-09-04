@@ -331,7 +331,7 @@ public static class ProfileEndpoints
             return Results.Json(new { message = "Current password is incorrect" }, statusCode: 400);
         }
 
-        var policy = await GetPasswordPolicyAsync(db, cancellationToken);
+        var policy = await PasswordPolicies.LoadAsync(db, cancellationToken);
         if (PasswordPolicyValidation.Validate(request.NewPassword, policy) is { } policyError)
         {
             return Results.Json(new { message = policyError }, statusCode: 400);
@@ -375,13 +375,6 @@ public static class ProfileEndpoints
     /// settings row exists yet, and -- like <c>AuthEndpoints.CheckSystemSettingsGateAsync</c>
     /// -- deliberately does not create one as a side effect of a password change.
     /// </summary>
-    private static async Task<PasswordPolicy> GetPasswordPolicyAsync(
-        ClimateProjectDbContext db,
-        CancellationToken cancellationToken)
-    {
-        var settings = await db.SystemSettings.AsNoTracking().FirstOrDefaultAsync(cancellationToken);
-        return settings?.PasswordPolicy ?? new PasswordPolicy();
-    }
 
     /// <summary>
     /// The caller's own audit trail, most recent first.

@@ -52,7 +52,7 @@ public class ReportShareEndpointsTests : IAsyncLifetime
     {
         var client = _factory.CreateClient();
         var email = $"{Guid.NewGuid():N}@{_companyDomain}";
-        await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Share Admin", email, "a-good-password"));
+        await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Share Admin", email, "A-good-passw0rd"));
 
         using (var scope = _factory.Services.CreateScope())
         {
@@ -63,7 +63,7 @@ public class ReportShareEndpointsTests : IAsyncLifetime
             await db.SaveChangesAsync();
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         var token = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;

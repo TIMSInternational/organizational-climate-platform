@@ -42,11 +42,11 @@ public class AuthFlowEndToEndTests : IAsyncLifetime
         var client = _factory.CreateClient();
         var email = $"flow-user@{_emailDomain}";
 
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Flow User", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Flow User", email, "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.Created, signup.StatusCode);
         var signupToken = (await signup.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         var loginToken = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
 

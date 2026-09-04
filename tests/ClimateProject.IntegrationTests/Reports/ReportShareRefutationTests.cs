@@ -76,7 +76,7 @@ public class ReportShareRefutationTests : IAsyncLifetime
     {
         var client = _factory.CreateClient();
         var email = $"{Guid.NewGuid():N}@{_companyDomain}";
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Refuter", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Refuter", email, "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.Created, signup.StatusCode);
 
         Guid userId;
@@ -90,7 +90,7 @@ public class ReportShareRefutationTests : IAsyncLifetime
             userId = user.Id;
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         var token = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);

@@ -81,7 +81,7 @@ public class SubjectAccessWireShapeTests : IAsyncLifetime
     {
         var client = _factory.CreateClient();
         var email = $"{Guid.NewGuid():N}@{_domain}";
-        await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Wire Shape", email, "a-good-password"));
+        await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Wire Shape", email, "A-good-passw0rd"));
 
         Guid userId;
         await using (var db = NewContext())
@@ -93,7 +93,7 @@ public class SubjectAccessWireShapeTests : IAsyncLifetime
             userId = user.Id;
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         var token = (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return (client, userId, email);

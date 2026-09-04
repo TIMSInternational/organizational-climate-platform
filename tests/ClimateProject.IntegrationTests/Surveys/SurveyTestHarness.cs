@@ -74,7 +74,7 @@ internal sealed class SurveyTestHarness(AuthWebApplicationFactory factory, strin
 
         var client = Factory.CreateClient();
         var email = $"{Guid.NewGuid():N}@{EmailDomain}";
-        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "a-good-password"));
+        var signup = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Test User", email, "A-good-passw0rd"));
         signup.EnsureSuccessStatusCode();
 
         Guid userId;
@@ -89,7 +89,7 @@ internal sealed class SurveyTestHarness(AuthWebApplicationFactory factory, strin
             userId = user.Id;
         }
 
-        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "a-good-password"));
+        var login = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "A-good-passw0rd"));
         return ((await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token, userId);
     }
 

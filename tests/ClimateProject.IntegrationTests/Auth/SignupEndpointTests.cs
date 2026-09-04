@@ -47,7 +47,7 @@ public class SignupEndpointTests : IAsyncLifetime
     {
         var client = _factory.CreateClient();
         var email = $"new-person@{_domain}";
-        var response = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("New Person", email, "a-good-password"));
+        var response = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("New Person", email, "A-good-passw0rd"));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<TokenResponse>();
@@ -64,7 +64,7 @@ public class SignupEndpointTests : IAsyncLifetime
     public async Task Signup_with_no_matching_company_domain_returns_404()
     {
         var client = _factory.CreateClient();
-        var response = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Nobody", "person@unknown-domain.test", "a-good-password"));
+        var response = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Nobody", "person@unknown-domain.test", "A-good-passw0rd"));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -74,10 +74,10 @@ public class SignupEndpointTests : IAsyncLifetime
     {
         var client = _factory.CreateClient();
         var email = $"dupe@{_domain}";
-        var first = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("First", email, "a-good-password"));
+        var first = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("First", email, "A-good-passw0rd"));
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
 
-        var second = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Second", email, "another-password"));
+        var second = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Second", email, "An0ther-password"));
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
     }
 
@@ -90,11 +90,34 @@ public class SignupEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    /// <summary>
+    /// The whole configured policy, not MinLength alone. With no settings row the entity
+    /// defaults apply (min 8, uppercase, lowercase, number), so a password that is long
+    /// enough but has neither an uppercase letter nor a digit is refused, and the message
+    /// names BOTH unmet rules -- the validator's every-rule-at-once contract, which proves
+    /// this is the validator and not the old length check.
+    /// </summary>
+    [Fact]
+    public async Task Signup_enforces_the_full_password_policy_not_only_the_minimum_length()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Weak Pw", $"weak-pw@{_domain}", "a-good-password"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+        Assert.Contains("uppercase", body!.Message);
+        Assert.Contains("number", body.Message);
+        Assert.DoesNotContain("at least", body.Message); // length was fine; the length rule must not be named
+
+        var accepted = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("Strong Pw", $"strong-pw@{_domain}", "A-good-passw0rd"));
+        Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
+    }
+
     [Fact]
     public async Task Signup_with_email_missing_at_sign_returns_400_not_500()
     {
         var client = _factory.CreateClient();
-        var response = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("No At Sign", "noatsign", "a-good-password"));
+        var response = await client.PostAsJsonAsync("/auth/signup", new SignupRequest("No At Sign", "noatsign", "A-good-passw0rd"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();

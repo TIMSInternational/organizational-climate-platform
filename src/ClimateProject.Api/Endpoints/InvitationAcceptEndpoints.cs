@@ -55,9 +55,13 @@ public static class InvitationAcceptEndpoints
             return Results.Json(new { message = "Name and password are required" }, statusCode: 400);
         }
 
-        if (request.Password.Length < 8)
+        // The configured policy -- this used to be a hardcoded 8 that read no setting at all,
+        // so an administrator's MinLength of 12 was honoured on the profile page and ignored
+        // on the one screen where most accounts are created.
+        var passwordPolicy = await PasswordPolicies.LoadAsync(db, cancellationToken);
+        if (PasswordPolicyValidation.Validate(request.Password, passwordPolicy) is { } passwordError)
         {
-            return Results.Json(new { message = "Password must be at least 8 characters long" }, statusCode: 400);
+            return Results.Json(new { message = passwordError }, statusCode: 400);
         }
 
         string email;
