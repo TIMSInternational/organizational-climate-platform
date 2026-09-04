@@ -151,7 +151,7 @@ That is a cost problem and a GDPR storage-limitation problem at once, because
 **Human runs this** (state-changing; not run by me):
 ```bash
 SVC=climate-project-api-prod
-SID=<32-hex service id>
+SID=126c3f282524450896385975cb3bcba9   # verified 2026-09-04 from the service ARN and the live log group
 aws logs put-retention-policy --region us-east-1 \
   --log-group-name "/aws/apprunner/$SVC/$SID/application" --retention-in-days 90
 aws logs put-retention-policy --region us-east-1 \
@@ -183,7 +183,7 @@ Two outstanding items, both for a human:
 
 ## 4. The alarm set
 
-All of it is in **`infra/aws/climate-project-observability.yml`** — 19 log metric filters, 21
+All of it is in **`infra/aws/climate-project-observability.yml`** — 20 log metric filters, 22
 alarms, two SNS topics, and the Teams forwarder. The template validates
 (`aws cloudformation validate-template` accepted it; it needs `CAPABILITY_NAMED_IAM`).
 
@@ -293,7 +293,7 @@ aws cloudformation create-stack \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameters \
     ParameterKey=ServiceName,ParameterValue=climate-project-api-prod \
-    ParameterKey=ServiceId,ParameterValue=<32-hex service id> \
+    ParameterKey=ServiceId,ParameterValue=126c3f282524450896385975cb3bcba9 \
     ParameterKey=TeamsWebhookUrl,ParameterValue='<webhook url>' \
     ParameterKey=FallbackEmail,ParameterValue='<distribution list>' \
     ParameterKey=AlarmsEnabled,ParameterValue=false
