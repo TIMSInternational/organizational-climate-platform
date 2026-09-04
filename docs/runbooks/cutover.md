@@ -95,7 +95,7 @@ something #162's own acceptance criteria or pre-flight checklist assumes is true
 | P6 | **`web/vercel.json` hardcodes the App Runner hostname** in its CSP `connect-src`. If the API ever gets the custom domain of P4, this file must change in the same breath or the browser stops the calls. It is `Content-Security-Policy-Report-Only` today, so the failure would be a console report rather than an outage — that is a mitigation, not an excuse. | `web/vercel.json`, the `Content-Security-Policy-Report-Only` header: `connect-src 'self' https://bhgrdkd4gt.us-east-1.awsapprunner.com`. There is **no** `crons` key in that file. |
 | P7 | **Secret rotation (#70) has not started.** Every credential exposed by the `tailwind.config.js` incident is still live. | `docs/security/rotation-inventory.md:3` — "**Status: NOT STARTED. No credential below has been rotated.**" |
 | P8 | **UAT with real users (#161) has not happened.** | `gh issue view 161` → OPEN, "User acceptance testing with real users before cutover". |
-| P9 | **No maintenance page (#141).** C8 below assumes one exists. | `gh issue view 141` → OPEN, "Operational pages — logs viewer and maintenance mode". |
+| P9 | ~~**No maintenance page (#141).**~~ **MET 2026-09-04.** C8 below assumes one exists, and now it does. | `web/public/maintenance.html` (#430), static and app-independent; 200 observed on the Vercel preview. #141's logs-viewer half is a recorded decision, not a build — `docs/decisions/operational-pages.md`. |
 | P10 | **The tracking service is not deployed in production at all.** D7 cannot be executed as written. | PROD account: `describe-stacks --query "Stacks[?contains(StackName,'tracking')].StackName"` → `[]`. `deploy-tracking-prod.yml` has exactly **one** lifetime run, `2026-08-27T21:21:19Z`, conclusion **failure**. |
 | P11 | **Google OAuth origins are unconfirmed for `climate.timsint.com`.** | [CANNOT VERIFY FROM HERE: Google Cloud console access to the OAuth client.] |
 | P12 | **`#163` (nothing external points at legacy) is partly answered — see `docs/decisions/legacy-dependency-inventory.md`.** The legacy app never ran on Vercel: it ran on a **Coolify host whose address appears in no repository**, so the post-cutover log review (criterion 2) has no target yet. `organizational-climate-platform.vercel.app` still answers 200, but it is an unrelated stale deployment, not the legacy stack. | `curl -o /dev/null -w '%{http_code}' https://organizational-climate-platform.vercel.app` → `200`. `gh issue view 163` → OPEN. |
@@ -530,10 +530,13 @@ is no ETL and no dump. [VERIFIED 2026-09-02: A2 above.]
 
 Maintenance window announced; maintenance page ready (#141, per #162's scope).
 
-- Done: `____` [VERIFIED 2026-09-02: **not done** — `gh issue view 141` → OPEN,
-  "Operational pages — logs viewer and maintenance mode". There is no maintenance page to be
-  ready. Given the amendment above (there is no freeze and no flip), consider whether a
-  maintenance window is still the right shape at all before treating this as a blocker.]
+- Done: `____` [UPDATED 2026-09-04: **the page now exists.** `web/public/maintenance.html`,
+  merged as #430 — static, no JavaScript, no API call, served by Vercel from `public/`, so it
+  does not need the application it covers for. `GET /maintenance.html` → 200 observed on the
+  Vercel preview. The keep/drop decisions #141 asked for are recorded in
+  `docs/decisions/operational-pages.md`. What is still `____` is the human half: announcing
+  the window and deciding, per the amendment above (there is no freeze and no flip), whether
+  a maintenance window is the right shape at all.]
 
 ### C9 — go/no-go
 
