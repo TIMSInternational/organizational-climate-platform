@@ -23,12 +23,12 @@ applied at read time and is the single invariant most of the design bends around
 | `web/` | 67,745 | React 19 + Vite SPA, 56 production routes, en/es at exact key parity |
 | `src/ClimateProject.Api` | 26,590 | Minimal-API endpoint groups, one file per domain area (51 of them, 217 endpoints) |
 | `src/ClimateProject.Application` | 21,492 | Domain services, projections, exports, privacy rules. No EF, no HTTP |
-| `src/ClimateProject.Infrastructure` | 9,442 | EF Core, 55 migrations, persistence configuration, scheduling primitives |
+| `src/ClimateProject.Infrastructure` | 9,442 | EF Core, 56 migrations, persistence configuration, scheduling primitives |
 | `src/ClimateProject.Domain` | 1,821 | Entities only |
 | `src/ClimateProject.Workers` | 1,149 | Nine hosted services and their registration extension |
 | `services/tracking-api/` | 2,082 | A separate solution: Domain, Application, Api. Its own database, its own CI job |
 
-Migrations are excluded from every line count above — there are 55 of them and 227,510
+Migrations are excluded from every line count above — there are 56 of them and 227,510
 generated lines, which would otherwise be three-quarters of the repository.
 
 ## The request path
@@ -116,7 +116,7 @@ changes the navigation: `/action-plans` is **replaced** by `/tracking/planes`, b
 |---|---|
 | `climate-project-api-prod` (App Runner) | **live**, commit `e0896f9` |
 | Web (Vercel) | **live**, `climate.timsint.com` |
-| Postgres (Supabase) | **live**, 55 migrations applied, **no restorable backup** |
+| Postgres (Supabase) | **live**, 56 migrations applied. **Backed up 2026-09-04T22:38Z** — the first restorable copy this project has had |
 | `climate-project-synthetic-probe-prod` | **live** — 3 alarms that notify nobody |
 | `climate-project-observability` | **written, never deployed** — 22 alarms, 20 metric filters |
 | `climate-tracking-api-*` | **written, never deployed** |

@@ -121,5 +121,12 @@ the union — **including the docs lanes**, because prose encodes assumptions no
 already fully built, and a `blocked` label survived the removal of its blocker. Grep the symbol
 before sizing the work.
 
+**Counting migrations with `grep -v Snapshot` is off by one.** The obvious filter for
+"migration files, excluding the model snapshot" is
+`ls Migrations/*.cs | grep -v Designer | grep -v Snapshot`. It also deletes
+`AddDemographicFieldsAndSnapshot**s**Tables.cs`, a real migration. The count is **56**, not 55,
+and the wrong number survived into published documentation before a database disagreed with it.
+Anchor the filter: `grep -v '\.Designer\.cs$' | grep -v 'ModelSnapshot\.cs$'`.
+
 **`xargs -a` does not exist on macOS.** BSD xargs has no `-a`; the command fails and, if you
 redirected stderr, silently does nothing. Use `< file`.
