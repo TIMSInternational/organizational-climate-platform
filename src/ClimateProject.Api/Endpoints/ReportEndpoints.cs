@@ -4,6 +4,7 @@ using ClimateProject.Api.Infrastructure.Auditing;
 using ClimateProject.Application.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Reports;
+using ClimateProject.Application.Reports.Rendering;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +29,15 @@ public static class ReportEndpoints
 
         // Already a POST, so already audited. Left here as the answer to "who exported this
         // data" -- it is audited by the method, not by this comment.
+        //
+        // It stays a POST now that it returns a file, and that is a decision rather than
+        // inertia: it MUTATES (`download_count`), so a GET would be a lie about the verb, and
+        // `AuditWritingMiddleware` audits by method -- a GET would need an explicit
+        // [AuditSensitiveRead] marker to keep the record, which is a coverage claim resting on
+        // an attribute somebody can drop. The cost is that the browser cannot use a plain
+        // <a href>, which it could not anyway: the route is authorized, and an anchor sends
+        // cookies rather than the bearer header (web/src/features/surveys/api/surveyExport.ts
+        // records the same finding for the survey export).
         group.MapPost("/{id:guid}/download", DownloadAsync);
     }
 
@@ -65,6 +75,22 @@ public static class ReportEndpoints
         var title = request.Title?.Trim();
         if (string.IsNullOrWhiteSpace(title)) return Results.Json(new { message = "Title is required" }, statusCode: 400);
 
+        // `format` used to be copied through unfiltered into a 10-character column nothing
+        // branched on, so the row held whatever a caller sent -- "excel", "docx", "" -- and
+        // download handed back JSON regardless. Now that DownloadAsync renders the column, an
+        // unrenderable value stored here is a promise the download cannot keep, so it is
+        // refused at the door rather than downgraded silently. `excel` in particular was
+        // offered by the web for a year and never produced a spreadsheet; see
+        // docs/decisions/report-rendering.md.
+        var format = ReportFormats.Normalise(request.Format);
+        if (format is null)
+        {
+            return Results.Json(
+                new ErrorResponse(
+                    $"Unsupported report format '{request.Format}'. Use '{ReportFormats.Pdf}' or '{ReportFormats.Csv}'."),
+                statusCode: 400);
+        }
+
         var createdBy = await ResolveCurrentUserIdAsync(currentUser, db, cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var report = new Report
@@ -77,7 +103,7 @@ public static class ReportEndpoints
             CreatedBy = createdBy,
             TemplateId = request.TemplateId,
             Status = "generating",
-            Format = request.Format,
+            Format = format,
             GenerationStartedAt = now,
             CreatedAt = now,
             UpdatedAt = now,
@@ -106,7 +132,36 @@ public static class ReportEndpoints
         return Results.Ok(ToDetail(report));
     }
 
-    private static async Task<IResult> DownloadAsync(Guid id, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    /// <summary>
+    /// The report as a file.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Everything before the render is unchanged and deliberately so: the same verb, the same
+    /// 404-then-403 order (missing is 404; another tenant's report is <b>403</b> -- measured,
+    /// not assumed: <c>ReportShareEndpoints</c> answers 404 for a foreign report precisely so a
+    /// 403 cannot confirm the id exists, and this endpoint has never done that. Changing a
+    /// status code is a decision with its own tests, not a side effect of adding a renderer),
+    /// the same 400 for a report that is not
+    /// <c>completed</c>, and the same <c>download_count</c> increment. What used to return
+    /// <c>Results.Ok(ToDetail(report))</c> now returns the rendered document -- so the web's
+    /// download-count toast lost its only source, which is why
+    /// <c>ReportsListPage</c> stopped reporting a count.
+    /// </para>
+    /// <para>
+    /// <b>The increment is committed before the render.</b> A file that reached the reader while
+    /// the counter said nothing happened is the failure worth avoiding here -- #143 wants the
+    /// answer to "who exported this data", and the audit row is written by the middleware off
+    /// the method either way. The render cannot fail: an unreadable stored document produces a
+    /// document that says so (<see cref="ReportRenderer"/>), not an exception.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> DownloadAsync(
+        Guid id,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         var report = await db.Reports.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
@@ -122,7 +177,39 @@ public static class ReportEndpoints
         report.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(ToDetail(report));
+        var logger = loggerFactory.CreateLogger(typeof(ReportEndpoints));
+        var csv = ReportFormats.IsCsv(report.Format);
+
+        // Rows created before CreateAsync validated the column hold values no renderer knows --
+        // the integration suite's own fixtures wrote "type" and "excel" into it. Those render as
+        // the PDF, which is the format the web defaulted to and the one a document reader
+        // expects, and the substitution is logged so the row is findable without an
+        // administrator being the one who finds it. A 500 here would turn a year-old data defect
+        // into an outage on the screen an admin uses to get their report out.
+        if (!csv && !string.Equals(report.Format, ReportFormats.Pdf, StringComparison.Ordinal))
+        {
+            logger.LogWarning(
+                "Report {ReportId} stores format '{StoredFormat}', which no renderer honours; served as {ServedFormat}.",
+                report.Id,
+                report.Format,
+                ReportFormats.Pdf);
+        }
+
+        var context = new ReportRenderContext(
+            report.Id,
+            report.Title,
+            report.Description,
+            report.Type,
+            // The instant the numbers are true as of, not "now": restamping the document on
+            // every download would make two copies of one report disagree about their own date.
+            report.GenerationCompletedAt ?? report.CreatedAt,
+            ReportDocumentReader.Parse(report.ReportOutput));
+
+        var bytes = csv
+            ? ReportRenderer.BuildCsv(context).ToBytes()
+            : ReportRenderer.BuildPdf(context).ToBytes();
+
+        return Results.File(bytes, ReportFormats.ContentType(csv), ReportFormats.FileName(report.Title, report.Id, csv));
     }
 
     private static ReportDetail ToDetail(Report r) => new(

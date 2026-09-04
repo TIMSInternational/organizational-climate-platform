@@ -5,7 +5,13 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import ReportsListPage from './ReportsListPage'
 import { TranslationProvider } from '../../../i18n'
 import { setToken } from '../../../auth/token'
+import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import type { ReportListItem } from '../api/reports'
+
+// The real helper creates an object URL and clicks an anchor; happy-dom has neither a
+// download manager nor `URL.createObjectURL`. Mocked exactly as SurveyResultsPage.test.tsx
+// mocks it, so the assertion is on the (name, blob) pair the page hands over.
+vi.mock('../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
 
 function reportRow(overrides: Partial<ReportListItem> = {}): ReportListItem {
   return {
@@ -40,6 +46,7 @@ describe('ReportsListPage', () => {
   beforeEach(() => {
     setToken('test-token')
     vi.stubGlobal('fetch', vi.fn())
+    vi.mocked(downloadBlobFile).mockClear()
   })
 
   afterEach(() => {
@@ -152,37 +159,94 @@ describe('ReportsListPage', () => {
     expect(buttons[1].disabled).toBe(true)
   })
 
-  it('reports the download count from the response, which the list projection does not carry', async () => {
-    // `ReportListItem` has no `downloadCount` -- only the detail returned by the
-    // download call does -- so reloading the list would throw the number away.
+  it('saves the rendered file and names it for the row format', async () => {
+    // The response body IS the document now. Before this change the download returned a
+    // `ReportDetail` and the page could only report a counter; a test asserting on that
+    // counter went green against an endpoint that produced no file at all.
     vi.mocked(fetch)
-      .mockResolvedValueOnce(jsonResponse([reportRow()]))
-      .mockResolvedValueOnce(
-        jsonResponse({
-          id: 'r1',
-          title: 'Q3 climate summary',
-          description: null,
-          type: 'summary',
-          companyId: 'c1',
-          createdBy: 'u1',
-          templateId: null,
-          status: 'completed',
-          format: 'pdf',
-          reportOutput: '"stub"',
-          downloadCount: 3,
-          generationStartedAt: null,
-          generationCompletedAt: null,
-          createdAt: '2026-07-01T09:00:00Z',
-        }),
-      )
+      .mockResolvedValueOnce(jsonResponse([reportRow({ format: 'csv' })]))
+      .mockResolvedValueOnce(new Response(new Blob(['"section"\r\n']), { status: 200 }))
     renderPage()
 
     await screen.findByText('Q3 climate summary')
     await userEvent.click(screen.getByRole('button', { name: 'Download' }))
 
-    const notice = await screen.findByText(/Download recorded for Q3 climate summary/)
+    await waitFor(() => expect(vi.mocked(downloadBlobFile)).toHaveBeenCalled())
+    const [fileName, blob] = vi.mocked(downloadBlobFile).mock.calls.at(-1)!
+    expect(fileName).toBe('report-r1.csv')
+    expect(await blob.text()).toBe('"section"\r\n')
+
+    const notice = await screen.findByText(/Downloaded Q3 climate summary/)
     expect(notice.getAttribute('role')).toBe('status')
-    expect(notice.textContent).toContain('3')
+    expect(notice.textContent).toContain('report-r1.csv')
+  })
+
+  it('shows the backend refusal and saves nothing when the download fails', async () => {
+    // `authFetch` turns a non-2xx into a throw, so a failed download must not hand
+    // `downloadBlobFile` a blob of the error JSON -- which is what a browser saves as a
+    // .pdf if the page does not check.
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse([reportRow()]))
+      .mockResolvedValueOnce(jsonResponse({ message: 'Report is not ready for download' }, 400))
+    renderPage()
+
+    await screen.findByText('Q3 climate summary')
+    await userEvent.click(screen.getByRole('button', { name: 'Download' }))
+
+    expect(await screen.findByText('Report is not ready for download')).toBeTruthy()
+    expect(vi.mocked(downloadBlobFile)).not.toHaveBeenCalled()
+  })
+
+  it('offers Share only for a completed report, and absent rather than disabled', async () => {
+    // A share link to a report that is not `completed` resolves to the public page's flat
+    // 404 (`ReportShareEndpoints.ResolveAsync`), so an admin who minted one would forward a
+    // link that shows the recipient nothing. Absent, not disabled: a disabled Download says
+    // "not yet"; a disabled Share would advertise a public link for a document that does not
+    // exist.
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse([
+        reportRow({ id: 'r1', title: 'Ready', status: 'completed' }),
+        reportRow({ id: 'r2', title: 'Still generating', status: 'generating' }),
+      ]),
+    )
+    renderPage()
+
+    await screen.findByText('Ready')
+    expect(screen.getAllByRole('button', { name: 'Download' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Share' })).toHaveLength(1)
+  })
+
+  it('opens the share panel for the row that was clicked', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse([reportRow({ id: 'r7', title: 'Ready' })]))
+      // The panel's own first call, listing that report's links.
+      .mockResolvedValueOnce(jsonResponse([]))
+    renderPage()
+
+    await screen.findByText('Ready')
+    await userEvent.click(screen.getByRole('button', { name: 'Share' }))
+
+    expect(await screen.findByRole('dialog')).toBeTruthy()
+    // Scoped to r7, not to whatever row the state happened to hold.
+    await waitFor(() =>
+      // `VITE_API_BASE_URL` is unset under vitest, so the page's baseUrl is `undefined` --
+      // the assertion is on the PATH, which is what carries the report id.
+      expect(String(vi.mocked(fetch).mock.calls[1][0])).toContain(
+        '/admin/reports/r7/shares',
+      ),
+    )
+  })
+
+  it('no longer claims that rendering is not built', async () => {
+    // The banner this page carried for a year (`reports.generationStubbed`) said "no file is
+    // produced". A stale disclosure is worse than none: an admin who reads it concludes the
+    // file they just saved is not real.
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([reportRow()]))
+    renderPage()
+
+    await screen.findByText('Q3 climate summary')
+    expect(screen.queryByText(/rendering is not built/i)).toBeNull()
+    expect(screen.queryByText(/no file is produced/i)).toBeNull()
   })
 
   it('omits an untouched description instead of sending an empty string', async () => {

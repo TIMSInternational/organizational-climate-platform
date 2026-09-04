@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setToken } from '../../../auth/token'
-import { listReports, createReport, getReport, downloadReport } from './reports'
+import {
+  listReports,
+  createReport,
+  getReport,
+  downloadReport,
+  reportFileName,
+  REPORT_FORMATS,
+} from './reports'
 
 const baseUrl = 'http://api.test'
 
@@ -19,7 +26,7 @@ const detail = {
   description: null,
   createdBy: 'u1',
   templateId: null,
-  reportOutput: '"Report generation is stubbed -- no real rendering yet."',
+  reportOutput: '{"generationNote":"","surveys":[],"aiInsights":[],"benchmarks":[]}',
   downloadCount: 0,
   generationStartedAt: '2026-08-01T00:00:00Z',
   generationCompletedAt: '2026-08-01T00:00:01Z',
@@ -64,16 +71,34 @@ describe('reports api client', () => {
     expect(result.reportOutput).toBe(detail.reportOutput)
   })
 
-  it('registers a download and returns the incremented count', async () => {
+  it('downloads the rendered file as a blob, by POST', async () => {
+    // A POST, not a GET: the endpoint increments `download_count`, which is the record
+    // answering "who exported this data" (#143). And a blob, not JSON -- the response body
+    // is the document now.
     vi.mocked(fetch).mockResolvedValueOnce(
-      new Response(JSON.stringify({ ...detail, downloadCount: 1 }), { status: 200 }),
+      new Response(new Blob(['%PDF-1.4'], { type: 'application/pdf' }), { status: 200 }),
     )
     const result = await downloadReport(baseUrl, 'r1')
     expect(fetch).toHaveBeenCalledWith(
       `${baseUrl}/admin/reports/r1/download`,
       expect.objectContaining({ method: 'POST' }),
     )
-    expect(result.downloadCount).toBe(1)
+    expect(await result.text()).toBe('%PDF-1.4')
+  })
+
+  it('names the file from the id and the row format', () => {
+    // Not from `Content-Disposition`: it is not a CORS-safelisted response header and the
+    // API does not expose it, so the browser reads `null` there in the deployed app.
+    expect(reportFileName('r1', 'pdf')).toBe('report-r1.pdf')
+    expect(reportFileName('r1', 'csv')).toBe('report-r1.csv')
+    // A legacy row saying `excel` renders as a PDF server-side, so the name has to agree.
+    expect(reportFileName('r1', 'excel')).toBe('report-r1.pdf')
+  })
+
+  it('offers exactly the formats the server will render', () => {
+    // Mirrors `ReportFormats.Supported` (C#). `excel` was offered here for a year and never
+    // produced a spreadsheet; `CreateAsync` now answers 400 for it.
+    expect(REPORT_FORMATS).toEqual(['pdf', 'csv'])
   })
 
   it('surfaces the backend message when a download is refused', async () => {

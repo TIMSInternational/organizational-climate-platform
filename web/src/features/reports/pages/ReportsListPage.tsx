@@ -4,15 +4,16 @@ import {
   createReport,
   downloadReport,
   listReports,
+  reportFileName,
   type ReportListItem,
 } from '../api/reports'
 import ReportForm, { type ReportFormValues } from '../components/ReportForm'
 import ReportList from '../components/ReportList'
+import ReportSharePanel from '../components/ReportSharePanel'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
+import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import {
-  Alert,
-  AlertDescription,
   Button,
   LoadingRegion,
   NetworkError,
@@ -41,11 +42,18 @@ import {
  * — so there is nothing to interpolate. A SuperAdmin reaches this page from the company they
  * opened, via `CompanyDetailPage`.
  *
- * ## Rendering is stubbed backend-side
+ * ## Download produces a file
  *
- * `CreateAsync` marks a report `completed` immediately and stores a JSON-encoded placeholder
- * string; `DownloadAsync` increments a counter and returns the record. Nothing produces a
- * file. The banner says so rather than letting an admin conclude their download failed.
+ * It did not until now: `DownloadAsync` incremented a counter and handed back the record, and
+ * this page carried a banner (`reports.generationStubbed`) saying so rather than letting an
+ * admin conclude their download had failed. The banner is gone because the statement is no
+ * longer true -- the endpoint renders the stored document as a PDF or a CSV
+ * (`ReportRenderer`), and `handleDownload` saves the blob.
+ *
+ * The notice lost its number along with the banner. `downloadCount` had exactly one source --
+ * the `ReportDetail` the download used to return -- and the response body is now the file, so
+ * "downloaded 3 times in total" is a figure this page can no longer read. It named nothing an
+ * admin acts on; what replaced it names the file that just landed.
  */
 export default function ReportsListPage() {
   const { t } = useTranslation()
@@ -57,6 +65,9 @@ export default function ReportsListPage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | undefined>(undefined)
   const [downloadNotice, setDownloadNotice] = useState<string | null>(null)
+  // The report the share panel is open for, not a boolean plus an id: two pieces of state
+  // that have to agree is how a dialog ends up open against the wrong row.
+  const [sharing, setSharing] = useState<ReportListItem | null>(null)
 
   // `useCallback` rather than a plain function plus a deps-array lie: the web lint
   // budget is `--max-warnings 10` and it is exactly full, so a new
@@ -99,14 +110,12 @@ export default function ReportsListPage() {
     setDownloadingId(report.id)
     setDownloadNotice(null)
     try {
-      // The response is the full `ReportDetail`, and `downloadCount` is the only place it
-      // is observable: the list projection (`ReportListItem`) does not carry it, so a
-      // reload would throw the number away. #93's PR documents that the plan's sketch had
-      // this wrong and typed the list as the detail.
-      const detail = await downloadReport(baseUrl, report.id)
-      setDownloadNotice(
-        t('reports.downloadRecorded', { title: detail.title, count: detail.downloadCount }),
-      )
+      // The blob, then the save. A failure lands in the page's own error banner rather than
+      // in a silent no-op, because a download button that does nothing reads as a broken
+      // build -- the same call SurveyResultsPage makes for the survey PDF.
+      const fileName = reportFileName(report.id, report.format)
+      downloadBlobFile(fileName, await downloadReport(baseUrl, report.id))
+      setDownloadNotice(t('reports.downloaded', { title: report.title, fileName }))
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
@@ -139,14 +148,11 @@ export default function ReportsListPage() {
         }
       />
 
-      <Alert className="mb-panel-gap">
-        <AlertDescription>{t('reports.generationStubbed')}</AlertDescription>
-      </Alert>
-
       {showCreateForm && <ReportForm onSubmit={handleCreate} />}
 
-      {/* `role="status"`, not `alert`: recording a download is not an error, and the
-          count is the only feedback there is, since no file arrives. */}
+      {/* `role="status"`, not `alert`: a completed download is not an error. It is still
+          announced, because a screen-reader user gets no indication at all from the
+          browser's own download chrome that the click did anything. */}
       {downloadNotice && <p role="status">{downloadNotice}</p>}
 
       {error ? (
@@ -169,9 +175,24 @@ export default function ReportsListPage() {
               reports={reports}
               downloadingId={downloadingId}
               onDownload={handleDownload}
+              onShare={setSharing}
             />
           )}
         </LoadingRegion>
+      )}
+
+      {/* Mounted only while a report is selected, so the panel's own effect refetches the
+          share list on every opening rather than showing a stale one. */}
+      {sharing && (
+        <ReportSharePanel
+          open
+          onOpenChange={(next) => {
+            if (!next) setSharing(null)
+          }}
+          baseUrl={baseUrl}
+          reportId={sharing.id}
+          reportTitle={sharing.title}
+        />
       )}
     </div>
   )

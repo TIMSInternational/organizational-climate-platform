@@ -112,11 +112,16 @@ internal static class ReportGeneration
                 //   templates. `reports.template_id` is a free string today with no
                 //   template table behind it, so a report cannot yet be told WHAT to
                 //   include -- every document is the whole company.
-                // TODO(#88 follow-up): `reports.format` is stored and not honoured. This
-                //   document is JSON whatever a caller asked for; there is no PDF or
-                //   spreadsheet renderer, and download hands back the same JSON.
+                //
+                // `reports.format` USED to be the third item here and is no longer:
+                // ReportEndpoints.CreateAsync validates it against ReportFormats and
+                // DownloadAsync renders it through ReportRenderer, so this document is now the
+                // source a real pdf or csv is produced from. The note below says only what is
+                // still true -- a note that keeps claiming a gap it no longer has teaches a
+                // consumer to stop reading it, which is the whole reason it shrinks rather than
+                // accumulating.
                 "Sections not yet generated: period-over-period comparative analysis, report configuration/filters, "
-                + "report templates. The requested `format` is not rendered: this document is JSON whatever was asked for.",
+                + "report templates. The stored `format` IS rendered on download: pdf and csv are produced from this document.",
                 sections,
                 ReportAIInsights.ToSection(insights),
                 benchmarks),

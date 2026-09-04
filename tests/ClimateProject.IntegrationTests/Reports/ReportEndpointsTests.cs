@@ -690,6 +690,17 @@ public class ReportEndpointsTests : IAsyncLifetime
         Assert.DoesNotContain("Other Tenant Engagement", _lastReportOutput, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The counter, and the two halves of "only when completed".
+    /// </summary>
+    /// <remarks>
+    /// The download no longer answers with a <c>ReportDetail</c> -- it answers with the rendered
+    /// file -- so the count is read back through <c>GET /admin/reports/{id}</c>. That is the
+    /// whole reason <c>ReportsListPage</c> stopped reporting a download count in its toast: the
+    /// number had exactly one source and the response body was it. The second half of the name
+    /// was never asserted before this change: generation completes synchronously, so the only
+    /// way to see a non-completed report is to put one back into <c>generating</c>.
+    /// </remarks>
     [Fact]
     public async Task Download_increments_count_only_when_completed()
     {
@@ -703,8 +714,24 @@ public class ReportEndpointsTests : IAsyncLifetime
 
         var downloadResponse = await client.PostAsync($"/admin/reports/{created!.Id}/download", null);
         Assert.Equal(HttpStatusCode.OK, downloadResponse.StatusCode);
-        var downloaded = await downloadResponse.Content.ReadFromJsonAsync<ReportDetail>();
-        Assert.Equal(1, downloaded!.DownloadCount);
+
+        var afterOne = await client.GetFromJsonAsync<ReportDetail>($"/admin/reports/{created.Id}");
+        Assert.Equal(1, afterOne!.DownloadCount);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var report = await db.Reports.FirstAsync(r => r.Id == created.Id);
+            report.Status = "generating";
+            await db.SaveChangesAsync();
+        }
+
+        var refused = await client.PostAsync($"/admin/reports/{created.Id}/download", null);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+
+        // And the counter did not move: a refused download is not a download.
+        var afterRefusal = await client.GetFromJsonAsync<ReportDetail>($"/admin/reports/{created.Id}");
+        Assert.Equal(1, afterRefusal!.DownloadCount);
     }
 
     /// <summary>
