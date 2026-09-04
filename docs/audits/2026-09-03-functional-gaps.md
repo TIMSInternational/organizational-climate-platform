@@ -8,12 +8,16 @@ missing, assembled from four independent audits run this morning (frontend, back
 issues, cutover) and re-verified row by row against the working tree at `835bcee`. Every
 row carries the `file:line` or command output it was derived from. Rows copied from an
 audit were re-opened in this worktree before being written here; a citation nobody opened
-is a rumour, and this document contains none.
+is a rumour. **One exception, stated so the sentence above stays true:** the "criteria
+met/total" column in §5 is carried over from the issues audit and was *not* re-derived
+issue by issue. What was re-run for §5 is the container — 40 open, 15 epic-labelled, 25
+rows — and that reconciles.
 
 **What this is not.** Not a plan, not a priority order for the team, and not a claim that
 any gap will be closed. §5 separates what an agent can build unattended from what only a
-human can supply; §6 lists the twelve lanes launched today so a reader knows which rows are
-in flight, and says nothing about how any of them turns out.
+human can supply (7 BUILDABLE-NOW, 4 NEEDS-RULING, 14 BLOCKED-ON-HUMAN); §10 lists the
+fourteen lanes launched today so a reader knows which rows are in flight, and says nothing
+about how any of them turns out.
 
 ---
 
@@ -40,7 +44,7 @@ bundle. Five `/tracking/*` routes are in the bundle but unreachable, because
 ## 2. Frontend — tests
 
 293 test files under `web/src` (`find web/src -name "*.test.ts*" | wc -l`). Four routed page
-components have no test of any kind — re-verified with
+components have **no component-level test** — re-verified with
 `grep -rl "<Component>" web/src --include='*.test.tsx' --include='*.test.ts' | wc -l`:
 
 | Page component | Route | Test files referencing it |
@@ -49,6 +53,12 @@ components have no test of any kind — re-verified with
 | `web/src/features/org-structure/pages/SystemSettingsPage.tsx` | `/admin/system-settings` | **0** |
 | `web/src/features/org-structure/pages/AcceptInvitationPage.tsx` | `/accept-invitation/:token` — the onboarding entry point for every new user | **0** |
 | `web/src/features/storefront/pages/StorefrontGalleryPage.tsx` | `/dev/storefront` (dev-only, low consequence) | **0** |
+
+Two of the four are nevertheless asserted at the *router* level, so they are declared even
+though nothing renders them in a test: `web/src/app/router.test.ts:36`
+(`expect(paths).toContain('/accept-invitation/:token')`) and `:218` (`'/admin/companies'`).
+What is missing is coverage of the components, not of the route table — a distinction worth
+keeping, because "untested" and "undeclared" have different fixes.
 
 Counter-evidence worth recording beside them: i18n is at exact parity — 2,795 leaf keys in
 each of `web/src/i18n/en.json` and `web/src/i18n/es.json`, zero drift in either direction,
@@ -97,7 +107,7 @@ green over all of it.
 | Self-signup has no gate and no off-switch of its own | `src/ClimateProject.Api/Endpoints/AuthEndpoints.cs:37`, `:133-138`, `:148-149`; kill switches at `:428,:435`. Full treatment in `docs/decisions/self-signup-gate.md` |
 | Signup enforces password *length* only | `AuthEndpoints.cs:448` calls `settings?.PasswordPolicy.MinLength ?? 8`; the four complexity flags at `src/ClimateProject.Domain/Entities/SystemSettings.cs:23-26` are never consulted from signup |
 | `SystemSettings` has no registration switch | `src/ClimateProject.Domain/Entities/SystemSettings.cs:5-17` — `LoginEnabled`, `MaintenanceMode`, `MaxLoginAttempts`, `SessionTimeoutMinutes`, `PasswordPolicy`, `EmailSettings`. No `RegistrationEnabled`, no `AllowSelfSignup` |
-| Dead columns imply a stored file that never exists | `src/ClimateProject.Domain/Entities/Report.cs:16,17,20,25` — `FilePath`, `FileSize`, `GenerationError`, `SharedWith`; nothing populates them |
+| Dead columns imply a stored file that never exists | `src/ClimateProject.Domain/Entities/Report.cs:16,17,20,25` — `FilePath`, `FileSize`, `GenerationError`, `SharedWith`. `FilePath`, `FileSize` and `SharedWith` have **zero writers** in `src/`. `GenerationError` has two — `DeliveringScheduledReportRunner.cs:71` and `ScheduledReportJob.cs:96` — but both sit on the scheduled-report path, which the row above shows is never entered, so no *reachable* code populates any of the four |
 
 ## 5. Open issues — classified
 
@@ -228,14 +238,21 @@ jobs (`retention-cleanup`, `survey-draft-retention`) run against that database o
    current one.** A CSP violation fails in the browser console, not as an HTTP error, so at
    cutover it would not look like a DNS or CORS problem.
 8. **Correct the stale claims in neighbouring documents** — `docs/runbooks/cutover.md`'s own
-   "Errors found in neighbouring documents" section names eight, across `infra/aws/README.md`,
-   `docs/runbooks/legacy-dependencies.md` (rows 5, 8, 9) and the root `README.md`. Two
-   documents currently give opposite answers about a startup-failure guard.
+   "Errors found in neighbouring documents" section (`cutover.md:652`) carries **eight numbered
+   entries, of which seven are errors, spread over four documents**: `infra/aws/README.md:58`
+   (1), `docs/runbooks/legacy-dependencies.md:40,43,44` = rows 5, 8, 9 (2–4), the root
+   `README.md:75` (5), and `docs/runbooks/alerting.md:26,24` (7–8). Entry 6 is
+   `docs/runbooks/rollback.md` and explicitly records *no* error found. An agent reading
+   "eight errors in three files" would look for one more fix than exists and miss the two in a
+   document the sentence never named. Two documents currently give opposite answers about a
+   startup-failure guard.
 9. **Stamp the web build with its commit** (one env var from `VERCEL_GIT_COMMIT_SHA`).
    Nothing can currently assert what commit the front end is at.
 10. **A test pinning the exact worker heartbeat format string.** Every job-absence alarm the
     alerting runbook specifies asserts a literal from `src/`; a reword silences them all with
-    no error anywhere.
+    no error anywhere. **Already built — `test/pin-heartbeat-alarm-literals`, `e4de278`,
+    committed 11:26 on the day of this audit** (see §10). Listed here because the gap was real
+    when the list was ordered; do not start it.
 11. **Tests for the four untested routed pages** in §2 — `CompaniesListPage`,
     `SystemSettingsPage`, `AcceptInvitationPage` first; the third is the onboarding entry
     point for every new user.
@@ -327,29 +344,36 @@ jobs (`retention-cleanup`, `survey-draft-retention`) run against that database o
 
 ## 10. Wave launched 2026-09-03
 
-Twelve lanes were launched against `835bcee` on the day this audit was written. They are
+Fourteen lanes were launched against `835bcee` on the day this audit was written. They are
 listed so a reader can tell which rows above are in flight. **Nothing here is a claim about
 any lane's outcome** — a lane may land, be refuted, or be abandoned, and this document does
 not know which.
 
-**Code lanes (8):**
+The column below is the git ref, not the lane key: `git branch -r --sort=-committerdate`.
+An earlier revision of this section listed twelve lanes under worktree directory names, which
+neither counted the two lanes that had already been built by the time this file was committed
+nor gave a reader anything they could check out.
+
+**Code lanes (10):**
 
 | Branch | Rows above it touches |
 |---|---|
-| `reports-file` | §4 report download; §8 item 1 |
-| `notification-templates` | §4 templates ignored at dispatch |
-| `signup-policy` | §4 self-signup; `docs/decisions/self-signup-gate.md` |
-| `scripts` | §8 items 2, 6, 13 |
-| `microclimate-export` | §1 and §4 microclimate export; §8 item 4 |
-| `survey-qr` | §7 CLIMA-005; §8 item 12 |
-| `web-stamp-tests` | §8 items 9, 11 |
-| `maintenance-page` | §6 P9/C8; §8 item 5 |
+| `feat/reports-file-and-share-ui` | §4 report download; §8 items 1, 3 |
+| `fix/notification-templates-render-at-dispatch` | §4 templates ignored at dispatch |
+| `fix/signup-enforces-password-policy` | §4 self-signup; `docs/decisions/self-signup-gate.md` |
+| `feat/question-library-importer-and-account-rotation` | §8 items 2, 6, 13 |
+| `feat/microclimate-export-button` | §1 and §4 microclimate export; §8 item 4 |
+| `feat/survey-share-link-qr` | §7 CLIMA-005; §8 item 12 |
+| `chore/web-build-stamp-and-page-tests` | §8 items 9, 11 |
+| `feat/static-maintenance-page` | §6 P9/C8; §8 item 5 |
+| `test/pin-heartbeat-alarm-literals` | **§8 item 10** — committed `e4de278` at 11:26, six hours before this file |
+| `fix/plan-code-sequence-rewind-race` | a tracking-module race not in any row above; committed `4b95d5b` at 16:19 |
 
 **Docs lanes (4):**
 
 | Branch | Rows above it touches |
 |---|---|
-| `uat-gaps` | §3 uncovered routes |
-| `stale-docs` | §8 item 8 |
-| `gap-audit` | this document, plus `docs/decisions/self-signup-gate.md` and the dated block in `docs/decisions/leader-supervisor-scope.md` |
-| `claude-md` | §5 #167; §8 item 14 |
+| `docs/uat-script-uncovered-routes` | §3 uncovered routes |
+| `docs/fix-eight-stale-claims` | §8 item 8 |
+| `docs/functional-gap-audit-2026-09-03` | this document, plus `docs/decisions/self-signup-gate.md` and the dated block in `docs/decisions/leader-supervisor-scope.md` |
+| `docs/claude-md-first` | §5 #167; §8 item 14 |
