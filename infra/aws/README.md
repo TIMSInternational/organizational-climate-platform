@@ -55,9 +55,16 @@ error minutes in:
 | `CORS_ADDITIONAL_ALLOWED_ORIGIN` | variable, **optional** | A *second* exact origin, for the custom domain of #160. Leave unset and nothing is wired; the template drops the index-1 variable entirely rather than binding an empty origin. |
 | `CORS_ADDITIONAL_ALLOWED_WILDCARD_ORIGIN` | variable, **optional** | A *second* wildcard pattern. Same rule, and here it is load-bearing: an empty wildcard pattern fails the host at startup, because `CorsOriginMatcher` rejects a pattern with no `*`. |
 | `TRACKING_JWT_SECRET_ARN` | variable | Secrets Manager ARN |
-| `DATABASE_CONNECTION_STRING_SECRET_ARN` | variable | Secrets Manager ARN (runtime). The secret it points at holds a **port 5432** (session pooler) string, same endpoint as the migration string — corrected 2026-08-10, closing #220. Only step 3 of "Arming the guard" is outstanding: `Database__RequireSessionPooler` is still `"false"`, so a regression to 6543 would warn rather than refuse to boot. |
+| `DATABASE_CONNECTION_STRING_SECRET_ARN` | variable | Secrets Manager ARN (runtime). The secret it points at holds a **port 5432** (session pooler) string, same endpoint as the migration string — corrected 2026-08-10, closing #220. **"Arming the guard" is complete: all three steps are done and `Database__RequireSessionPooler` is `"true"`, so a regression to 6543 refuses to boot rather than merely warning.** [CORRECTED 2026-09-03. This row previously read *"Only step 3 of 'Arming the guard' is outstanding: `Database__RequireSessionPooler` is still false"*, which contradicted both this file's own step 3 below and `README.md:82`. Measured today against production `e0896f9`: `infra/aws/climate-project-api-prod-service.yml:230-231` sets the variable to `"true"`, and the **live** service carries it — `aws --profile claude apprunner describe-service --service-arn arn:aws:apprunner:us-east-1:747814092517:service/climate-project-api-prod/126c3f282524450896385975cb3bcba9 --query "Service.SourceConfiguration.ImageRepository.ImageConfiguration.RuntimeEnvironmentVariables"` → `"Database__RequireSessionPooler": "true"`.] |
 | `INTERNAL_API_KEY_SECRET_ARN` | variable | Secrets Manager ARN |
 | `MIGRATION_DATABASE_CONNECTION_STRING` | **secret** | **Session pooler: the same host as the runtime string, port 5432, username `postgres.<project-ref>`.** Not 6543, and **not** `db.<project-ref>.supabase.co` — that host is IPv6-only and unreachable from GitHub Actions. See below. |
+
+[MEASURED 2026-09-03: eight of these nine names are set on the `production` **environment**
+(`gh variable list --env production`); `AWS_ACCOUNT_ID` is set at **repository** scope instead
+(`gh variable list` → `AWS_ACCOUNT_ID  747814092517`, `2026-07-31`). A repository variable is
+visible to the environment, so the deploy works — but do not "fix" its absence from the
+environment listing by adding a second copy. Both optional `CORS_ADDITIONAL_*` rows are unset,
+which is the documented default.]
 
 Passing every parameter explicitly is deliberate. `aws cloudformation deploy` reuses a
 parameter's **previous stack value** when omitted — it does not fall back to the template
@@ -232,7 +239,11 @@ Whether that warning is a warning or a **startup failure** is a per-deployment s
 `Database:RequireSessionPooler`, in the same conditional shape as `GoogleAuth:Required`
 (see `src/ClimateProject.Api/Infrastructure/StartupOptions.cs`). It is passed to App Runner as
 the environment variable `Database__RequireSessionPooler` from
-`infra/aws/climate-project-api-prod-service.yml`, where it is currently `"false"`.
+`infra/aws/climate-project-api-prod-service.yml`, where it is `"true"`.
+[CORRECTED 2026-09-03: this sentence read *"where it is currently `"false"`"* — the third
+stale statement of the same fact in this file. Template: lines 230-231. Live service:
+`aws --profile claude apprunner describe-service … RuntimeEnvironmentVariables` →
+`"Database__RequireSessionPooler": "true"`.]
 
 The flag can only ever **escalate** the warning to a failure. There is no value of it that
 silences the warning, so it is a ratchet rather than a mute button —
@@ -255,10 +266,13 @@ change to this repository. **All three are done — the guard is armed.**
 
 Two notes for whoever takes step 3, neither of which changes the order above:
 
-- The **live stack does not carry this variable at all.** `climate-project-api-prod` was last
-  updated 2026-08-05, before #298 added it, and the app defaults the flag to `false` when the
-  variable is absent — so today's behaviour is correct by accident of the default. The deploy
-  that flips it to `"true"` is also the first deploy that introduces it.
+- ~~The **live stack does not carry this variable at all.**~~ [CORRECTED 2026-09-03: it does
+  now. `climate-project-api-prod` is `UPDATE_COMPLETE` at `2026-09-02T20:34:57Z`
+  (`aws --profile claude cloudformation describe-stacks`), and `describe-service` on that
+  stack's App Runner service reports `"Database__RequireSessionPooler": "true"` among its
+  `RuntimeEnvironmentVariables`. The paragraph below is kept because it explains *why* the
+  flip had to be its own deploy, but the flip has happened: today's behaviour is the armed
+  guard, not the `false` default.]
 - That deploy can now **fail closed**, which is new and is the point. Since #221 the App Runner
   health check probes `/ready`, so a service that refuses to boot fails its health check and
   the rollout is rejected rather than reported successful. Before #221 the note here was the
