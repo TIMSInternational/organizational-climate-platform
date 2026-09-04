@@ -429,8 +429,15 @@ describe('SharedReportPage', () => {
     renderPage()
     await screen.findByRole('heading', { name: 'Informe de clima Q3' })
 
+    // The base comes from the same `import.meta.env` the page reads, not from the literal
+    // string "undefined". Hardcoding that asserted the developer's env was UNSET: on CI,
+    // where `VITE_API_BASE_URL` is absent, `${undefined}` stringifies to "undefined" and
+    // the test passed; set it -- as `web/.env.local` does for anyone running the local
+    // stack -- and this failed while the page was behaving correctly. What the test is
+    // actually for is the `?lang=es`, which is asserted either way.
+    const baseUrl = import.meta.env.VITE_API_BASE_URL as string
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
-      'undefined/shared/reports/sh4r3d-t0k3n?lang=es',
+      `${baseUrl}/shared/reports/sh4r3d-t0k3n?lang=es`,
     )
   })
 
