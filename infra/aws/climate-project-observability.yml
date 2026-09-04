@@ -373,6 +373,18 @@ Resources:
   # WorkerHeartbeatMonitor.Check, logged at Error. The in-process detector for a job that
   # wedges while the host stays up -- the case the absence alarms are worst at, because the
   # other six jobs keep the log busy and every "is anything logging" check stays green.
+  MicroclimateLifecycleHeartbeatFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"Heartbeat: scheduled job microclimate-lifecycle completed a run"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: Heartbeat.MicroclimateLifecycle
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
   JobStaleReportedFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -695,6 +707,29 @@ Resources:
       ComparisonOperator: LessThanThreshold
       TreatMissingData: breaching
       AlarmActions: !If [NotifyingEnabled, [!Ref WarningTopic], !Ref "AWS::NoValue"]
+
+  MicroclimateLifecycleStoppedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-job-microclimate-lifecycle-stopped
+      AlarmDescription: >-
+        microclimate-lifecycle has not completed a run in 15 minutes. Microclimates are not
+        CLOSING on their EndTime, so a session that should have ended keeps accepting responses
+        (#376 is the defect this job exists to prevent).
+      # The eighth job in WorkerJobs.All, and the one this template did not cover until
+      # 2026-09-03 -- HeartbeatAlarmLiteralsTests now fails when a job has no filter here.
+      # Interval 5 min x the 3.0 tolerance = 15 minutes, like survey-lifecycle, for the same
+      # reason: it mutates live customer data on a timer.
+      Namespace: ClimateProject/Prod
+      MetricName: Heartbeat.MicroclimateLifecycle
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
+      OKActions: !If [NotifyingEnabled, [!Ref CriticalTopic], !Ref "AWS::NoValue"]
 
   JobStaleReportedAlarm:
     Type: AWS::CloudWatch::Alarm
