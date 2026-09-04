@@ -36,6 +36,19 @@ PRD, the tech spec and five rounds of client review notes, ported verbatim from 
 Requirements in them are binding; their technical-stack sections are superseded by this stack.
 Read the relevant ones before building a feature, not after.
 
+## Where the knowledge lives
+
+| Document | What it answers |
+|---|---|
+| [`docs/architecture.md`](docs/architecture.md) | What the shipped system **is** — the pieces, the request path, the five roles, the privacy floor, where the workers run, and what the code deliberately does **not** do |
+| [`docs/gotchas.md`](docs/gotchas.md) | Things that cost real time here, each with the symptom it presented as |
+| [`docs/retrospective.md`](docs/retrospective.md) | What worked and what did not, including the measured cost of unsupervised automation |
+| [`CLAUDE.md`](CLAUDE.md) | The subset of the above an agent needs before touching anything |
+| [`docs/runbooks/`](docs/runbooks/) | Procedures: cutover, rollback, alerting, staging, UAT, question-library import |
+| [`docs/decisions/`](docs/decisions/) | Rulings and their reasoning. The ones containing `____` are honestly unresolved |
+| [`docs/security/`](docs/security/) | The rotation inventory and runbook, the exfiltration audit |
+| [`docs/legacy-issues/`](docs/legacy-issues/) | The durable record of the retired tracker |
+
 ## Solution structure
 
 - `src/ClimateProject.Domain` — entities, no dependencies.
