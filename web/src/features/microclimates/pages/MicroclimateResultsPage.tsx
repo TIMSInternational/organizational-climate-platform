@@ -22,6 +22,8 @@ import {
   type LiveResults,
   type MicroclimateDetail,
 } from '../api/microclimates'
+import { getMicroclimateCsv, microclimateCsvFileName } from '../api/microclimateExport'
+import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import MicroclimateContentNotice from '../components/MicroclimateContentNotice'
 import MicroclimateSentimentNotice from '../components/MicroclimateSentimentNotice'
 import MicroclimateWordPanel from '../components/MicroclimateWordPanel'
@@ -37,14 +39,19 @@ import { KpiRow } from '../../dashboard/components/dashboardGrammar'
 /**
  * #129 — what one microclimate found.
  *
- * ## The endpoints the issue names do not exist
+ * ## Which of the endpoints the issue names exist (measured 2026-09-03)
  *
  * #129 lists `/microclimates/{id}/analytics`, `/microclimates/analytics` and
- * `/microclimates/{id}/insights`. None of the three is in
- * `src/ClimateProject.Api/Endpoints/`, and `Program.cs` registers only
- * `MapMicroclimateEndpoints` and `MapMicroclimateTemplateEndpoints`. This page is
- * therefore composed from the two reads that do exist — the detail and the live
- * results — which is also why it is honest about what cannot be shown.
+ * `/microclimates/{id}/insights`. The first two are not in
+ * `src/ClimateProject.Api/Endpoints/`. The third IS — `MicroclimateEndpoints.cs` maps
+ * `GET /{id}/insights` — but it answers `generated: false`,
+ * `reason: "no_insight_generator_configured"` on every call, because no inference client
+ * exists anywhere in `src/`; `MicroclimateSentimentNotice` already says so on this page,
+ * and drawing a panel for a response that is always empty would be a second way of
+ * saying it. This page is composed from the two reads that carry data — the detail and
+ * the live results — plus the one export the server does render:
+ * `GET /{id}/export/csv` (`microclimateExport.ts`), which had no caller in the web until
+ * the Export CSV action below.
  *
  * ## Why there is no per-question breakdown, and why that is said out loud
  *
@@ -108,6 +115,28 @@ export default function MicroclimateResultsPage() {
     void reload()
   }, [reload])
 
+  // The one artefact this page does not build in the browser: the server's CSV, which
+  // carries the suppression decision as a reason code rather than re-deriving it here. A
+  // failure lands in an inline alert on the page, not in a silent no-op — a download button
+  // that does nothing reads as a broken build — and not in the load-error branch, which
+  // would replace a page that loaded fine.
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const downloadCsv = useCallback(async () => {
+    if (!id) return
+    setExporting(true)
+    setExportError(null)
+    try {
+      // The UI locale is a request: the server renders the headings in the locale the
+      // reader is reading, the same contract the detail's `resolvedLocale` carries.
+      downloadBlobFile(microclimateCsvFileName(id), await getMicroclimateCsv(baseUrl, id, locale))
+    } catch {
+      setExportError(t('microclimates.failedToExportData'))
+    } finally {
+      setExporting(false)
+    }
+  }, [baseUrl, id, locale, t])
+
   if (!id) {
     return <p role="alert">{t('errors.notFound')}</p>
   }
@@ -154,15 +183,30 @@ export default function MicroclimateResultsPage() {
           { label: t('microclimates.results') },
         ]}
         actions={
-          microclimate.status === 'active' ? (
-            <Button asChild variant="outline">
-              <Link to={`/microclimates/${microclimate.id}/live`}>
-                {t('microclimates.viewLive')}
-              </Link>
+          <>
+            {microclimate.status === 'active' ? (
+              <Button asChild variant="outline">
+                <Link to={`/microclimates/${microclimate.id}/live`}>
+                  {t('microclimates.viewLive')}
+                </Link>
+              </Button>
+            ) : null}
+            {/* Rendered for every reader of this route on purpose: `roleCapabilities.ts`
+                authorises `/microclimates/:id/results` by `GET /microclimates/{id}/export`
+                itself, so anyone who can see this page is someone the export accepts. */}
+            <Button variant="outline" disabled={exporting} onClick={downloadCsv}>
+              {t('microclimates.exportCsv')}
             </Button>
-          ) : undefined
+          </>
         }
       />
+
+      {exportError ? (
+        <Alert variant="destructive" role="alert" className="mt-panel-gap">
+          <AlertTitle>{t('microclimates.exportCsvFailedTitle')}</AlertTitle>
+          <AlertDescription>{exportError}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <MicroclimateContentNotice
         language={microclimate.language}

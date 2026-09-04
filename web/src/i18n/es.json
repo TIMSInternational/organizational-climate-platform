@@ -1255,7 +1255,9 @@
     "invitationAlreadyCompletedBody": "Sus respuestas fueron recibidas. No hay nada más que hacer, y responder de nuevo no las reemplazaría.",
     "invitationLoadFailedTitle": "No se pudo abrir esta invitación",
     "invitationSignInNote": "Esta sesión registra quién participa, así que se le pedirá iniciar sesión en su cuenta antes de responder.",
-    "invitationSignIn": "Iniciar sesión"
+    "invitationSignIn": "Iniciar sesión",
+    "exportCsv": "Exportar CSV",
+    "exportCsvFailedTitle": "La exportación no se descargó"
   },
   "navigation": {
     "sectionAdministration": "Administración",
