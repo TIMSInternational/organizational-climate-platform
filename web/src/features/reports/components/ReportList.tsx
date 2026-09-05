@@ -60,6 +60,24 @@ const FORMAT_KEYS: Record<string, string> = {
   csv: 'reports.format_csv',
 }
 
+/**
+ * The six recurrences the server accepts (`RecurrenceSchedule.All`).
+ *
+ * Same fallback rule as the maps above, and here it is load-bearing rather than defensive:
+ * `ScheduledReportJob` meets an unrecognised pattern by clearing the schedule and logging that
+ * re-saving a valid one resumes it, so a row CAN legitimately hold a word this build does not
+ * know. Showing the server's own value is what lets an administrator recognise the typo they
+ * have to correct.
+ */
+const RECURRENCE_KEYS: Record<string, string> = {
+  daily: 'reports.recurrence_daily',
+  weekly: 'reports.recurrence_weekly',
+  biweekly: 'reports.recurrence_biweekly',
+  monthly: 'reports.recurrence_monthly',
+  quarterly: 'reports.recurrence_quarterly',
+  yearly: 'reports.recurrence_yearly',
+}
+
 /** `t(key)` when the value is one we ship a label for, otherwise the server's own value. */
 function label(
   translate: (key: string) => string,
@@ -85,6 +103,15 @@ interface ReportListProps {
    * the recipient would see nothing.
    */
   onShare: (report: ReportListItem) => void
+  /**
+   * Opens the schedule panel.
+   *
+   * Offered on EVERY row, including a generating or failed one -- unlike Download and Share.
+   * A schedule is an instruction about future generations, and the runner regenerates the
+   * document from scratch each time (`ReportGeneration.GenerateAsync`), so scheduling a report
+   * whose first attempt failed is a reasonable thing to want and costs nothing to allow.
+   */
+  onSchedule: (report: ReportListItem) => void
 }
 
 export default function ReportList({
@@ -92,6 +119,7 @@ export default function ReportList({
   downloadingId,
   onDownload,
   onShare,
+  onSchedule,
 }: ReportListProps) {
   const { t, locale } = useTranslation()
 
@@ -117,6 +145,7 @@ export default function ReportList({
           <th>{t('reports.format')}</th>
           <th>{t('common.status')}</th>
           <th>{t('reports.createdAt')}</th>
+          <th>{t('reports.schedule')}</th>
           <th>{t('common.actions')}</th>
         </tr>
       </thead>
@@ -132,6 +161,29 @@ export default function ReportList({
                 <Badge variant="secondary">{label(t, STATUS_KEYS, report.status)}</Badge>
               </td>
               <td>{calendarDay(Date.parse(report.createdAt), locale)}</td>
+              <td>
+                {report.isRecurring && report.recurrencePattern ? (
+                  // Stacked, not inline. Side by side the cell is as wide as the pattern plus
+                  // the sentence, and in Spanish ("Mensualmente" + "Proxima ejecucion 1 sept")
+                  // that is wide enough to push the action buttons onto a second row at 1440.
+                  // Measured in both languages with `npm run shot`, which is the only thing in
+                  // this repository that can see a layout at all.
+                  <span data-slot="report-schedule" className="grid justify-items-start gap-inline">
+                    <Badge variant="secondary">
+                      {label(t, RECURRENCE_KEYS, report.recurrencePattern)}
+                    </Badge>
+                    {report.nextGeneration && (
+                      <span className="text-sm text-fg-secondary">
+                        {t('reports.scheduleNextRun', {
+                          date: calendarDay(Date.parse(report.nextGeneration), locale),
+                        })}
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-fg-secondary">{t('reports.scheduleNotRecurring')}</span>
+                )}
+              </td>
               <td>
                 {/* Only a completed report can be downloaded -- the backend answers
                     400 otherwise. Disabling the button is not belt-and-braces: the
@@ -157,6 +209,9 @@ export default function ReportList({
                       {t('reports.share')}
                     </Button>
                   )}
+                  <Button type="button" variant="outline" onClick={() => onSchedule(report)}>
+                    {t('reports.schedule')}
+                  </Button>
                 </div>
               </td>
             </tr>

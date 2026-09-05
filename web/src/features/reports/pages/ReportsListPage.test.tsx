@@ -22,6 +22,11 @@ function reportRow(overrides: Partial<ReportListItem> = {}): ReportListItem {
     status: 'completed',
     format: 'pdf',
     createdAt: '2026-07-01T09:00:00Z',
+    // A report carries no schedule until somebody sets one -- `is_recurring` defaults to
+    // false in the column, which is the state every report in production is in.
+    isRecurring: false,
+    recurrencePattern: null,
+    nextGeneration: null,
     ...overrides,
   }
 }
@@ -267,5 +272,129 @@ describe('ReportsListPage', () => {
     expect(body.title).toBe('Ad hoc')
     expect(body.companyId).toBe('c1')
     expect('description' in body).toBe(false)
+  })
+
+  // -- recurring schedules (#91) --------------------------------------------------------
+  //
+  // The columns these exercise were read by `ScheduledReportJob` and written by nothing, so
+  // the sweep selected no row, ever. The page half of the fix is that a schedule is visible
+  // from the row and changeable without leaving the list.
+
+  /** What the PUT/DELETE hand back -- the whole report, schedule included. */
+  function scheduledReport(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'r1',
+      title: 'Q3 climate summary',
+      description: null,
+      type: 'summary',
+      companyId: 'c1',
+      createdBy: 'u1',
+      templateId: null,
+      status: 'completed',
+      format: 'pdf',
+      reportOutput: null,
+      downloadCount: 0,
+      generationStartedAt: null,
+      generationCompletedAt: null,
+      createdAt: '2026-07-01T09:00:00Z',
+      isRecurring: true,
+      recurrencePattern: 'weekly',
+      nextGeneration: '2026-07-08T09:00:00Z',
+      ...overrides,
+    }
+  }
+
+  it('says a report is not scheduled, and names the pattern once it is', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse([
+        reportRow(),
+        reportRow({
+          id: 'r2',
+          title: 'Monthly board pack',
+          isRecurring: true,
+          recurrencePattern: 'monthly',
+          nextGeneration: '2026-08-01T09:00:00Z',
+        }),
+      ]),
+    )
+    renderPage()
+
+    expect(await screen.findByText('Not scheduled')).toBeTruthy()
+    // The pattern reads as the word the form offers, not as the wire value `monthly`.
+    expect(screen.getByText('Monthly')).toBeTruthy()
+  })
+
+  it('saves the chosen pattern and updates the row without refetching the list', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([reportRow()]))
+    renderPage()
+    await screen.findByText('Q3 climate summary')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Schedule' }))
+    await userEvent.selectOptions(screen.getByLabelText('Repeats'), 'weekly')
+
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(scheduledReport()))
+    await userEvent.click(screen.getByRole('button', { name: 'Save schedule' }))
+
+    await waitFor(() => expect(screen.getByText('Weekly')).toBeTruthy())
+
+    const [url, init] = vi.mocked(fetch).mock.calls[1]
+    expect(String(url)).toContain('/admin/reports/r1/schedule')
+    expect(init?.method).toBe('PUT')
+    const body = JSON.parse(init?.body as string) as Record<string, unknown>
+    expect(body.pattern).toBe('weekly')
+    // No first run was typed, so none is sent -- the server then computes one period ahead in
+    // the COMPANY's timezone, which this browser does not know.
+    expect('startAt' in body).toBe(false)
+
+    // Two calls total: the list, then the PUT. The response carries the new schedule, so a
+    // third request to re-read what was just returned would be a spinner for nothing.
+    expect(vi.mocked(fetch).mock.calls).toHaveLength(2)
+  })
+
+  it('stops a recurring report and the row goes back to not scheduled', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse([
+        reportRow({ isRecurring: true, recurrencePattern: 'weekly', nextGeneration: '2026-07-08T09:00:00Z' }),
+      ]),
+    )
+    renderPage()
+    await screen.findByText('Weekly')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Schedule' }))
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse(scheduledReport({ isRecurring: false, recurrencePattern: null, nextGeneration: null })),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Stop recurring' }))
+
+    await waitFor(() => expect(screen.getByText('Not scheduled')).toBeTruthy())
+    expect(vi.mocked(fetch).mock.calls[1][1]?.method).toBe('DELETE')
+  })
+
+  it('offers Stop only for a report that is actually recurring', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([reportRow()]))
+    renderPage()
+    await screen.findByText('Q3 climate summary')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Schedule' }))
+
+    // Present, it would answer 200 and change nothing on every report in the company.
+    expect(screen.queryByRole('button', { name: 'Stop recurring' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Save schedule' })).toBeTruthy()
+  })
+
+  it("surfaces the server's own refusal rather than a generic message", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([reportRow()]))
+    renderPage()
+    await screen.findByText('Q3 climate summary')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Schedule' }))
+    // The two refusals the endpoint can send both name what to do about them; replacing them
+    // with "Something went wrong" would throw away the only actionable part.
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({ message: 'The first occurrence must be in the future.' }, 400),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Save schedule' }))
+
+    expect(await screen.findByText('The first occurrence must be in the future.')).toBeTruthy()
   })
 })

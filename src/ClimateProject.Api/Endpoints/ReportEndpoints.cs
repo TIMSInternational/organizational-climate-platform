@@ -5,6 +5,7 @@ using ClimateProject.Application.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Reports;
 using ClimateProject.Application.Reports.Rendering;
+using ClimateProject.Application.Scheduling;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -39,6 +40,28 @@ public static class ReportEndpoints
         // cookies rather than the bearer header (web/src/features/surveys/api/surveyExport.ts
         // records the same finding for the survey export).
         group.MapPost("/{id:guid}/download", DownloadAsync);
+
+        // The writer for `is_recurring` / `recurrence_pattern` / `next_generation` (#91).
+        //
+        // Until this existed, `ScheduledReportJob` swept every fifteen minutes against a
+        // predicate nothing could satisfy: the three columns were on the entity, mapped by
+        // `ReportConfiguration`, read by the job and delivered by
+        // `DeliveringScheduledReportRunner` -- and set by no endpoint and no screen, with
+        // `is_recurring` defaulting to false. The feature was complete at both ends and joined
+        // at neither, so "schedule this report monthly" was a promise the product could not
+        // keep and no test could catch, because every piece it was made of worked.
+        //
+        // A sub-resource rather than a PATCH on the report: `/admin/reports` has no update
+        // verb at all, the legacy surface being replaced was `reports/[id]/schedule`
+        // (RecurrenceSchedule's own summary says so), and a schedule has a lifecycle of its
+        // own -- DELETE means "stop recurring", which is not the same as clearing two fields
+        // on a report somebody is also editing.
+        //
+        // Both are mutating methods, so `AuditWritingMiddleware` records them off the verb and
+        // `AuditCoverageTests` picks them up from the live route table without anyone adding
+        // them to a list.
+        group.MapPut("/{id:guid}/schedule", SetScheduleAsync);
+        group.MapDelete("/{id:guid}/schedule", ClearScheduleAsync);
     }
 
     private static bool CanAccessCompany(CurrentUser currentUser, Guid companyId)
@@ -61,7 +84,9 @@ public static class ReportEndpoints
         var reports = await db.Reports
             .Where(r => r.CompanyId == companyId)
             .OrderByDescending(r => r.CreatedAt)
-            .Select(r => new ReportListItem(r.Id, r.Title, r.Type, r.CompanyId, r.Status, r.Format, r.CreatedAt))
+            .Select(r => new ReportListItem(
+                r.Id, r.Title, r.Type, r.CompanyId, r.Status, r.Format, r.CreatedAt,
+                r.IsRecurring, r.RecurrencePattern, r.NextGeneration))
             .ToListAsync(cancellationToken);
 
         return Results.Ok(reports);
@@ -212,7 +237,137 @@ public static class ReportEndpoints
         return Results.File(bytes, ReportFormats.ContentType(csv), ReportFormats.FileName(report.Title, report.Id, csv));
     }
 
+    /// <summary>
+    /// Sets, or replaces, a report's recurring schedule.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The timezone is the company's, not the caller's</b> -- the same resolution
+    /// <c>ScheduledReportJob</c> performs when it advances the schedule. If the two disagreed,
+    /// a monthly report would land on a different day than the one the admin chose, and it
+    /// would drift by an hour twice a year: the arithmetic in <see cref="RecurrenceSchedule"/>
+    /// runs on the local wall clock precisely so that it does not. A report is an
+    /// organisational artefact, so "the monthly report" means the tenant's month.</para>
+    ///
+    /// <para><b>A <c>startAt</c> in the past is refused, and that deliberately differs from the
+    /// job's catch-up rule.</b> <see cref="RecurrenceSchedule.AdvancePast"/> skips a dormant
+    /// schedule forward because the alternatives -- generating a hundred missed reports, or
+    /// firing forever on a past date -- are both worse for a schedule that was already running.
+    /// Silently applying that here would answer 200 to "start on the 1st" and schedule the 1st
+    /// of some later month, and the admin would find out a month later. Refusing states the
+    /// disagreement while they are still looking at the form. A start time that goes stale in
+    /// the seconds between validation and the first sweep is still handled -- by the job, whose
+    /// rule that is.</para>
+    ///
+    /// <para><b>This is the "re-saving" the job already promises.</b> When the sweep meets an
+    /// unrecognised pattern it clears <c>next_generation</c> and deliberately leaves
+    /// <c>is_recurring</c> alone, so the admin's intent survives, and its log line tells them
+    /// re-saving a valid pattern resumes it. Nothing could re-save. This endpoint is what makes
+    /// that sentence true.</para>
+    /// </remarks>
+    private static async Task<IResult> SetScheduleAsync(
+        Guid id,
+        SetReportScheduleRequest request,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        var report = await db.Reports.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+        if (report is null) return Results.Json(new { message = "Report not found" }, statusCode: 404);
+        if (!CanAccessCompany(currentUser, report.CompanyId)) return Results.Forbid();
+
+        // Named values, not a free string: the column is the job's only instruction and an
+        // unrecognised one costs a sweep, an error log and a cleared schedule. The message
+        // lists the vocabulary because a caller who guessed "fortnightly" cannot discover
+        // "biweekly" from a bare 400 -- the same reasoning CreateAsync applies to `format`.
+        var pattern = request.Pattern?.Trim();
+        if (!RecurrenceSchedule.IsValid(pattern))
+        {
+            return Results.Json(
+                new ErrorResponse(
+                    $"Unsupported recurrence pattern '{request.Pattern}'. Use one of: {string.Join(", ", RecurrenceSchedule.All)}."),
+                statusCode: 400);
+        }
+
+        var timezoneId = await db.Companies
+            .Where(c => c.Id == report.CompanyId)
+            .Select(c => c.Settings.Timezone)
+            .FirstOrDefaultAsync(cancellationToken);
+        var zone = SchedulingTimeZone.Resolve(timezoneId);
+
+        var now = DateTimeOffset.UtcNow;
+        DateTimeOffset firstOccurrence;
+
+        if (request.StartAt is { } startAt)
+        {
+            if (startAt <= now)
+            {
+                return Results.Json(
+                    new ErrorResponse("The first occurrence must be in the future."),
+                    statusCode: 400);
+            }
+
+            firstOccurrence = startAt;
+        }
+        else
+        {
+            // One period from now. `Next` cannot return null here -- IsValid passed above and
+            // that is its only null arm -- but the schedule is not written from a value the
+            // compiler thinks might be absent: a recurring report with a null next_generation
+            // is exactly the dormant row the job's error path produces, and reaching it from a
+            // 200 would be indistinguishable from that failure.
+            var computed = RecurrenceSchedule.Next(pattern, now, zone);
+            if (computed is null)
+            {
+                return Results.Json(
+                    new ErrorResponse($"Could not compute the first occurrence for '{pattern}'."),
+                    statusCode: 400);
+            }
+
+            firstOccurrence = computed.Value;
+        }
+
+        report.IsRecurring = true;
+        report.RecurrencePattern = pattern;
+        report.NextGeneration = firstOccurrence;
+        report.UpdatedAt = now;
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(ToDetail(report));
+    }
+
+    /// <summary>
+    /// Stops a report recurring.
+    /// </summary>
+    /// <remarks>
+    /// All three columns are cleared, not just <c>is_recurring</c>. Clearing the flag alone
+    /// would satisfy the job's due-query -- it filters on both -- but would leave a
+    /// <c>next_generation</c> in the past attached to the row, so re-enabling the schedule
+    /// months later would fire an occurrence dated to whenever it was switched off. The
+    /// schedule goes away as a unit because that is what "stop recurring" means.
+    /// </remarks>
+    private static async Task<IResult> ClearScheduleAsync(
+        Guid id,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        var report = await db.Reports.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+        if (report is null) return Results.Json(new { message = "Report not found" }, statusCode: 404);
+        if (!CanAccessCompany(currentUser, report.CompanyId)) return Results.Forbid();
+
+        report.IsRecurring = false;
+        report.RecurrencePattern = null;
+        report.NextGeneration = null;
+        report.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(ToDetail(report));
+    }
+
     private static ReportDetail ToDetail(Report r) => new(
         r.Id, r.Title, r.Description, r.Type, r.CompanyId, r.CreatedBy, r.TemplateId,
-        r.Status, r.Format, r.ReportOutput, r.DownloadCount, r.GenerationStartedAt, r.GenerationCompletedAt, r.CreatedAt);
+        r.Status, r.Format, r.ReportOutput, r.DownloadCount, r.GenerationStartedAt, r.GenerationCompletedAt, r.CreatedAt,
+        r.IsRecurring, r.RecurrencePattern, r.NextGeneration);
 }

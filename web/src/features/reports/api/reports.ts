@@ -20,6 +20,17 @@ export interface ReportListItem {
   status: string
   format: string
   createdAt: string
+  /**
+   * The recurring schedule, on the LIST and not only on the detail.
+   *
+   * A recurring report is invisible from its own row otherwise, and "which of these mails
+   * itself every month" is the question this screen is opened to answer. Fetching each
+   * report to find out would be one request per row.
+   */
+  isRecurring: boolean
+  recurrencePattern: string | null
+  /** ISO 8601, UTC. `null` whenever `isRecurring` is false. */
+  nextGeneration: string | null
 }
 
 /** The full record returned by create/get/download -- see `ReportDetail` in ReportDtos.cs. */
@@ -45,6 +56,9 @@ export interface Report {
   generationStartedAt: string | null
   generationCompletedAt: string | null
   createdAt: string
+  isRecurring: boolean
+  recurrencePattern: string | null
+  nextGeneration: string | null
 }
 
 export interface CreateReportInput {
@@ -78,6 +92,57 @@ export async function getReport(baseUrl: string, id: string): Promise<Report> {
 export const REPORT_FORMATS = ['pdf', 'csv'] as const
 
 export type ReportFormat = (typeof REPORT_FORMATS)[number]
+
+/**
+ * Every recurrence the server will accept. Mirrors `RecurrenceSchedule.All` (C#).
+ *
+ * A named set rather than a cron field, and the C# side records why: the audience for this
+ * screen cannot write a cron expression correctly, and "every 5 minutes" is expressible in
+ * cron and is not a thing a climate report should ever be. Sending anything outside this list
+ * earns a 400 that names the six values.
+ */
+export const REPORT_RECURRENCE_PATTERNS = [
+  'daily',
+  'weekly',
+  'biweekly',
+  'monthly',
+  'quarterly',
+  'yearly',
+] as const
+
+export type ReportRecurrencePattern = (typeof REPORT_RECURRENCE_PATTERNS)[number]
+
+export interface SetReportScheduleInput {
+  pattern: ReportRecurrencePattern
+  /**
+   * ISO 8601 instant for the first run. Omit and the server schedules one period from now,
+   * computed in the COMPANY's timezone rather than this browser's — a report is an
+   * organisational artefact, so "the monthly report" means the tenant's month.
+   *
+   * The server refuses a value in the past (400) rather than advancing it, so that "start on
+   * the 1st" cannot silently become a different date.
+   */
+  startAt?: string
+}
+
+/** Sets or replaces the recurring schedule. Returns the whole report, schedule included. */
+export async function setReportSchedule(
+  baseUrl: string,
+  id: string,
+  input: SetReportScheduleInput,
+): Promise<Report> {
+  const response = await authFetch(`${baseUrl}/admin/reports/${id}/schedule`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+  return response.json() as Promise<Report>
+}
+
+/** Stops the report recurring, clearing all three schedule columns. */
+export async function clearReportSchedule(baseUrl: string, id: string): Promise<Report> {
+  const response = await authFetch(`${baseUrl}/admin/reports/${id}/schedule`, { method: 'DELETE' })
+  return response.json() as Promise<Report>
+}
 
 /**
  * Downloads the rendered report.
