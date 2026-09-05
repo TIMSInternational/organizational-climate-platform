@@ -200,9 +200,15 @@ gets created, and it is filed here rather than under a role because no role owns
 
 ### 3.4 Google sign-in — the page that creates the session (walk once, not per role)
 
-**Read §8.7 before running this step.** Whether it can be run at all is build-time and
-console state this repository cannot read. If the button described in row 1 is not on the login
-page, every row here is **blocked, blocked-by §8.7** — that is a one-line record, not five.
+**SKIP THIS SECTION — measured 2026-09-05, see §8.7.** Google sign-in is configured on none of
+the three sides it needs: `VITE_GOOGLE_CLIENT_ID` is unset on Vercel, the live login page renders
+no Google button, and `GoogleClientId` is absent from the production API. Record §3.4 once as
+**`n/a`, reason §8.7** — not `blocked`, because nothing is waiting on anyone. Do not spend a
+tester's session here.
+
+**If the button is on `/login` when you look**, something changed after that measurement: run the
+section as written below, and say so in the sign-off. Whether it can be run at all is build-time
+and console state, and row 1 is the check that decides it.
 
 `/auth/loading` is the Google OAuth `redirect_uri` itself — `GOOGLE_REDIRECT_PATH =
 '/auth/loading'` (`googleOAuth.ts:68`), sent to Google as `` `${origin}${GOOGLE_REDIRECT_PATH}` ``
@@ -738,7 +744,27 @@ API-only checks for a TIMS operator, not client-facing UAT steps.
 and the endpoints that exist are not those. Read that comment before writing a defect about a
 microclimate analytics gap.
 
-### 8.7 Google sign-in (§3.4) may not be runnable at all, and this repository cannot tell you
+### 8.7 Google sign-in (§3.4) is NOT runnable — measured 2026-09-05, so no tester need find out
+
+**Skip §3.4. Record it once as `n/a`, not `blocked`, and move on.** This section used to say the
+repository could not tell you; it was read from a browser and an AWS describe instead, and the
+answer is settled. **Google sign-in is not configured on any of the three sides it needs**, so a
+tester cannot reach `/auth/loading` and there is nothing there for them to discover:
+
+| Side | State | How it was measured |
+|---|---|---|
+| **Browser build** — `VITE_GOOGLE_CLIENT_ID` | **unset** | Vercel project `climate` → Environment Variables: exactly **two** variables, both `VITE_API_BASE_URL` (Preview + Production). *Shared* tab: "No shared variables linked" |
+| **The deployed page** | **no button** | `https://climate.timsint.com/login` renders email, password and Sign In only — no "Continue with Google", no `auth.or` divider. `LoginPage.tsx:164` gates the block on `googleClientId()`. This confirms the row above from the shipped bundle rather than from a console |
+| **API** — `GoogleClientId` | **absent** | `aws apprunner describe-service` (read-only): 15 runtime environment variables, 5 secrets, no key matching `google` in either. Not in `infra/` or `.github/workflows/` either; `appsettings.json:10` ships `""` |
+| **Google** — the redirect allowlist | **not allowlisted** | The `nodelabz` project holds one OAuth client, belonging to a different application (`762494443119-8u4u…`, Supabase Auth callback on a different project ref). `https://climate.timsint.com/auth/loading` appears nowhere |
+
+Because the first row is false, the last row cannot bite: no user can be sent to Google, so
+`redirect_uri_mismatch` is unreachable. Cutover **B5/P11** are correspondingly **not blockers** —
+they are a scope question for Federico (*is Google sign-in in scope for go-live?*), and if the
+answer is yes it is **three coordinated changes**, not one paste. See `cutover.md` B5.
+
+The original framing is kept below, because it is still the right decision procedure if any of
+those three values changes before the walk — **re-check the button before trusting this section.**
 
 §3.4 walks `/auth/loading`, the page that creates the session on the Google path. Whether it can
 be reached depends on two things this repository does not contain, and a tester must know which
@@ -747,7 +773,7 @@ of the two stopped them before writing anything down.
 | What decides it | Where it lives | What this repo can and cannot say |
 |---|---|---|
 | **Is the button there?** `VITE_GOOGLE_CLIENT_ID` is read at build time (`googleOAuth.ts:89`) and `LoginPage.tsx:164` renders nothing without it | Vercel project environment variables | **In-repo: nothing.** "Every one is read from `import.meta.env` at build time; **none has an in-repo default**" (`docs/decisions/legacy-dependency-inventory.md:325`). `docs/runbooks/staging-provisioning.md:329` records the same for staging: *"optional; omit and the Google button is simply not rendered."* So an absent button is a **configuration state, not a defect** |
-| **Does Google accept the round trip?** The redirect is `` `${origin}/auth/loading` `` (`googleOAuth.ts:68,130`) and must be on the OAuth client's authorized origins / redirect URIs | Google Cloud console | **UNCONFIRMED**, and it is a named cutover blocker. `docs/runbooks/cutover.md` **B5** (line 322): the value to allowlist is exactly `https://climate.timsint.com/auth/loading`, verified from the repo half; *"[CANNOT VERIFY FROM HERE: Google Cloud console.]"* Precondition **P11** (line 100) says the same: *"Google OAuth origins are unconfirmed for `climate.timsint.com`."* Both are **HUMAN-ONLY, one paste** |
+| **Does Google accept the round trip?** The redirect is `` `${origin}/auth/loading` `` (`googleOAuth.ts:68,130`) and must be on the OAuth client's authorized origins / redirect URIs | Google Cloud console | **MEASURED 2026-09-05 — not allowlisted, and no longer a blocker.** `docs/runbooks/cutover.md` **B5** and precondition **P11** carried *"[CANNOT VERIFY FROM HERE: Google Cloud console.]"* until 2026-09-04; both have since been rewritten against a browser. The value that would need allowlisting is exactly `https://climate.timsint.com/auth/loading`, and it is on no OAuth client visible from this account. **This row is moot while the row above is `unset`:** with no client id in the build, nobody is sent to Google, so the allowlist cannot fail. Not "one paste" — enabling Google sign-in is three coordinated changes (B5) |
 
 **How to record it.** One line, once, not eight:
 
