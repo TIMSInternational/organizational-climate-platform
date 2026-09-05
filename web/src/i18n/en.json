@@ -747,7 +747,11 @@
     "noDepartmentReadings": "No department can be measured yet",
     "noDepartmentReadingsBody": "Response rate is measured per person, so a department with nobody in it has no reading to plot.",
     "teamClimate": "Your team's climate",
-    "yourTeam": "Your team"
+    "yourTeam": "Your team",
+    "exportCsv": "Export CSV",
+    "exportPdf": "Export PDF",
+    "exportFailedTitle": "The download did not start",
+    "exportFailed": "The dashboard could not be exported. Check your connection and try again."
   },
   "departments": {
     "structureOverview": "Structure Overview",

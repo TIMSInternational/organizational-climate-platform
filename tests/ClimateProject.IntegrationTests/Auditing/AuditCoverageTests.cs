@@ -81,6 +81,12 @@ public class AuditCoverageTests : IAsyncLifetime
     [
         "GET /admin/reports/{id:guid}",
         "GET /audit/export",
+        // #134. A dashboard export hands over a company's or a department's figures as a
+        // file to keep, which is the same disclosure the survey exports below are marked
+        // for. The screens themselves stay unmarked: they are polled on every navigation,
+        // and a trail full of dashboard reads is a trail nobody can find an incident in.
+        "GET /dashboard/company-admin/export",
+        "GET /dashboard/department-admin/export",
         // The widest read of employee-opinion content in the product: dimension scores per
         // department across up to twelve surveys. Marked for the same reason
         // /surveys/{id}/results is, more so.

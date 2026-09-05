@@ -1,7 +1,12 @@
+using System.Globalization;
 using System.Net.Mime;
 using System.Security.Claims;
+using ClimateProject.Api.Infrastructure.Auditing;
+using ClimateProject.Application.Auditing;
+using ClimateProject.Application.Reports.Rendering;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Dashboard;
+using ClimateProject.Application.Dashboard.Rendering;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Infrastructure.Persistence;
@@ -99,6 +104,25 @@ public static class DashboardEndpoints
         group.MapGet("/department-admin", DepartmentAdminAsync);
         group.MapGet("/employee", EmployeeAsync);
         group.MapGet("/employee/last-outcome", EmployeeLastOutcomeAsync);
+
+        // #134. Two export routes, one per dashboard that carries figures worth taking away.
+        //
+        // Audited as an EXPORT, not a read, for the reason SurveyExportEndpoints gives: #143
+        // names "who exported this data" as a different question from "who looked at it",
+        // because a read leaves the data on the server and an export hands the caller a copy
+        // to keep and forward. The verb is what tells them apart afterwards.
+        //
+        // There is deliberately no /super-admin/export and no /employee/export. The platform
+        // overview is cross-tenant and is TIMS-internal rather than a client feature, so an
+        // exportable copy of it is a wider disclosure than any client asked for; the employee
+        // dashboard is three counters and a list of the caller's own pending surveys, which is
+        // nothing to take away. Neither omission is a stub -- if either is wanted it is a new
+        // decision, not an unfinished one.
+        group.MapGet("/company-admin/export", CompanyAdminExportAsync)
+            .WithMetadata(new AuditSensitiveReadAttribute(AuditVerbs.Export));
+
+        group.MapGet("/department-admin/export", DepartmentAdminExportAsync)
+            .WithMetadata(new AuditSensitiveReadAttribute(AuditVerbs.Export));
     }
 
     /// <summary>
@@ -164,7 +188,156 @@ public static class DashboardEndpoints
     // CompanyAdmin — one tenant
     // ------------------------------------------------------------------
 
+    /// <summary>
+    /// The outcome of loading a dashboard: either the payload, or the <see cref="IResult"/>
+    /// that refused it. Same shape, and the same reason, as
+    /// <c>SurveyResultsEndpoints.LoadOutcome</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>Why the loader is separate from the handler at all.</b> The export routes have to
+    /// resolve the tenant, authorize the caller and build the payload in exactly the way the
+    /// screen does, because an export that loaded even slightly differently is an export that
+    /// can disagree with the screen it was taken from -- including about a suppression
+    /// decision. Sharing the loader makes that impossible rather than merely unlikely: there
+    /// is no second copy of the role checks to drift.
+    /// </remarks>
+    private sealed record CompanyAdminLoad(IResult? Failure, CompanyAdminDashboard? Dashboard);
+
+    /// <inheritdoc cref="CompanyAdminLoad"/>
+    private sealed record DepartmentAdminLoad(IResult? Failure, DepartmentAdminDashboard? Dashboard);
+
     private static async Task<IResult> CompanyAdminAsync(
+        Guid? companyId,
+        string? lang,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var loaded = await LoadCompanyAdminAsync(companyId, lang, principal, db, cancellationToken);
+        return loaded.Failure ?? Results.Ok(loaded.Dashboard);
+    }
+
+    private static async Task<IResult> DepartmentAdminAsync(
+        Guid? departmentId,
+        string? lang,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var loaded = await LoadDepartmentAdminAsync(departmentId, lang, principal, db, cancellationToken);
+        return loaded.Failure ?? Results.Ok(loaded.Dashboard);
+    }
+
+    /// <summary>
+    /// The company dashboard as a file (#134). <c>?format=csv</c> (the default) or
+    /// <c>?format=pdf</c>.
+    /// </summary>
+    private static async Task<IResult> CompanyAdminExportAsync(
+        Guid? companyId,
+        string? lang,
+        string? format,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        if (ResolveFormat(format) is not string resolved)
+        {
+            return UnsupportedFormat(format);
+        }
+
+        var loaded = await LoadCompanyAdminAsync(companyId, lang, principal, db, cancellationToken);
+        if (loaded.Failure is not null)
+        {
+            return loaded.Failure;
+        }
+
+        var document = DashboardExport.ForCompanyAdmin(loaded.Dashboard!, lang, DateTimeOffset.UtcNow);
+        return File(document, resolved);
+    }
+
+    /// <inheritdoc cref="CompanyAdminExportAsync"/>
+    private static async Task<IResult> DepartmentAdminExportAsync(
+        Guid? departmentId,
+        string? lang,
+        string? format,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        if (ResolveFormat(format) is not string resolved)
+        {
+            return UnsupportedFormat(format);
+        }
+
+        var loaded = await LoadDepartmentAdminAsync(departmentId, lang, principal, db, cancellationToken);
+        if (loaded.Failure is not null)
+        {
+            return loaded.Failure;
+        }
+
+        var document = DashboardExport.ForDepartmentAdmin(loaded.Dashboard!, lang, DateTimeOffset.UtcNow);
+        return File(document, resolved);
+    }
+
+    /// <summary>
+    /// <c>csv</c> when nothing was asked for, the normalised value when it is one this
+    /// endpoint can actually produce, and null when it is not.
+    /// </summary>
+    /// <remarks>
+    /// Refused rather than downgraded, matching <c>SurveyExportEndpoints.ExportAsync</c> and
+    /// <c>ReportEndpoints</c>: a caller who asked for <c>xlsx</c> and silently received a CSV
+    /// has a file whose contents do not match its name, which is worse than an error they can
+    /// read. <c>excel</c> in particular was offered by the web for a year and never produced a
+    /// spreadsheet.
+    /// </remarks>
+    private static string? ResolveFormat(string? format)
+        => string.IsNullOrWhiteSpace(format) ? ReportFormats.Csv : ReportFormats.Normalise(format);
+
+    private static IResult UnsupportedFormat(string? format)
+        => Results.Json(
+            new
+            {
+                message =
+                    $"Unsupported export format '{format}'. "
+                    + $"Use '{ReportFormats.Pdf}' or '{ReportFormats.Csv}'.",
+            },
+            statusCode: 400);
+
+    /// <summary>Serialises a built document in the resolved format.</summary>
+    private static IResult File(DashboardExportDocument document, string format)
+    {
+        var csv = ReportFormats.IsCsv(format);
+        var bytes = csv
+            ? DashboardExport.BuildCsv(document).ToBytes()
+            : DashboardExport.BuildPdf(document).ToBytes();
+
+        return Results.File(bytes, ReportFormats.ContentType(csv), FileName(document, csv));
+    }
+
+    /// <summary>
+    /// A filename a person can find again: the dashboard, what it is of, and the day.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not <c>ReportFormats.FileName</c>, which takes a report id -- a dashboard
+    /// has none, and passing <see cref="Guid.Empty"/> to borrow the helper would put a row of
+    /// zeroes in every downloaded filename.
+    /// </remarks>
+    private static string FileName(DashboardExportDocument document, bool csv)
+    {
+        var slug = new string([.. document.Subtitle
+            .Select(c => char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-')])
+            .Trim('-');
+
+        if (slug.Length == 0)
+        {
+            slug = "dashboard";
+        }
+
+        var day = document.GeneratedAt.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
+        return $"{slug}-{day}.{(csv ? ReportFormats.Csv : ReportFormats.Pdf)}";
+    }
+
+    private static async Task<CompanyAdminLoad> LoadCompanyAdminAsync(
         Guid? companyId,
         string? lang,
         ClaimsPrincipal principal,
@@ -181,7 +354,7 @@ public static class DashboardEndpoints
             // this endpoint two completely different meanings depending on a query string.
             if (companyId is not Guid requested)
             {
-                return CompanyIdRequired();
+                return new CompanyAdminLoad(CompanyIdRequired(), null);
             }
 
             scopedCompanyId = requested;
@@ -190,7 +363,7 @@ public static class DashboardEndpoints
         {
             if (OwnCompanyId(currentUser) is not Guid own)
             {
-                return Results.Forbid();
+                return new CompanyAdminLoad(Results.Forbid(), null);
             }
 
             // Refused rather than silently ignored. A CompanyAdmin who asked for another
@@ -198,14 +371,14 @@ public static class DashboardEndpoints
             // caller believe the figures on screen are the ones they requested.
             if (companyId.HasValue && companyId.Value != own)
             {
-                return Results.Forbid();
+                return new CompanyAdminLoad(Results.Forbid(), null);
             }
 
             scopedCompanyId = own;
         }
         else
         {
-            return Results.Forbid();
+            return new CompanyAdminLoad(Results.Forbid(), null);
         }
 
         var company = await db.Companies
@@ -214,7 +387,9 @@ public static class DashboardEndpoints
             .FirstOrDefaultAsync(cancellationToken);
         if (company is null)
         {
-            return Results.Json(new { message = "Company not found" }, statusCode: 404);
+            return new CompanyAdminLoad(
+                Results.Json(new { message = "Company not found" }, statusCode: 404),
+                null);
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -241,7 +416,7 @@ public static class DashboardEndpoints
             .DepartmentSummaries(db.Departments, db.Users, db.Responses, scopedCompanyId, DepartmentRowLimit)
             .ToListAsync(cancellationToken);
 
-        return Results.Ok(new CompanyAdminDashboard(
+        return new CompanyAdminLoad(null, new CompanyAdminDashboard(
             company.Id,
             company.Name,
             users.Total,
@@ -264,7 +439,7 @@ public static class DashboardEndpoints
     // DepartmentAdmin — one department
     // ------------------------------------------------------------------
 
-    private static async Task<IResult> DepartmentAdminAsync(
+    private static async Task<DepartmentAdminLoad> LoadDepartmentAdminAsync(
         Guid? departmentId,
         string? lang,
         ClaimsPrincipal principal,
@@ -278,7 +453,7 @@ public static class DashboardEndpoints
         var runsADepartment = currentUser.Role is Roles.Leader or Roles.Supervisor;
         if (!runsADepartment && currentUser.Role != Roles.SuperAdmin && currentUser.Role != Roles.CompanyAdmin)
         {
-            return Results.Forbid();
+            return new DepartmentAdminLoad(Results.Forbid(), null);
         }
 
         Guid scopedDepartmentId;
@@ -287,7 +462,7 @@ public static class DashboardEndpoints
             var actingUserId = await SurveyEndpoints.ResolveActingUserIdAsync(currentUser, db, cancellationToken);
             if (actingUserId is null)
             {
-                return SurveyEndpoints.ActingUserRequired();
+                return new DepartmentAdminLoad(SurveyEndpoints.ActingUserRequired(), null);
             }
 
             var me = await db.Users
@@ -298,15 +473,17 @@ public static class DashboardEndpoints
             // Read from the row, not the token: people move teams.
             if (me.DepartmentId is not Guid mine)
             {
-                return Results.Json(
-                    new { message = "The authenticated user is not assigned to a department" },
-                    statusCode: 400);
+                return new DepartmentAdminLoad(
+                    Results.Json(
+                        new { message = "The authenticated user is not assigned to a department" },
+                        statusCode: 400),
+                    null);
             }
 
             // Narrowing only. Naming someone else's department is a denial, not a lookup.
             if (departmentId.HasValue && departmentId.Value != mine)
             {
-                return Results.Forbid();
+                return new DepartmentAdminLoad(Results.Forbid(), null);
             }
 
             scopedDepartmentId = mine;
@@ -315,7 +492,7 @@ public static class DashboardEndpoints
         {
             if (departmentId is not Guid requested)
             {
-                return DepartmentIdRequired();
+                return new DepartmentAdminLoad(DepartmentIdRequired(), null);
             }
 
             scopedDepartmentId = requested;
@@ -327,7 +504,9 @@ public static class DashboardEndpoints
             .FirstOrDefaultAsync(cancellationToken);
         if (department is null)
         {
-            return Results.Json(new { message = "Department not found" }, statusCode: 404);
+            return new DepartmentAdminLoad(
+                Results.Json(new { message = "Department not found" }, statusCode: 404),
+                null);
         }
 
         // The tenant check for the two admin roles, applied AFTER the row is loaded because
@@ -337,7 +516,7 @@ public static class DashboardEndpoints
         if (currentUser.Role == Roles.CompanyAdmin
             && (OwnCompanyId(currentUser) is not Guid ownCompanyId || ownCompanyId != department.CompanyId))
         {
-            return Results.Forbid();
+            return new DepartmentAdminLoad(Results.Forbid(), null);
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -375,7 +554,7 @@ public static class DashboardEndpoints
         var climate = await TeamClimateAsync(
             db, department.CompanyId, scopedDepartmentId, lang, cancellationToken);
 
-        return Results.Ok(new DepartmentAdminDashboard(
+        return new DepartmentAdminLoad(null, new DepartmentAdminDashboard(
             department.Id,
             department.Name,
             department.CompanyId,

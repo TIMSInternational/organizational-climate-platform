@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ClimateProject.Api.Endpoints;
+using ClimateProject.Application.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Dashboard;
 using ClimateProject.Application.Notifications;
@@ -244,6 +245,173 @@ public class DashboardEndpointsTests : IAsyncLifetime
     // ------------------------------------------------------------------
     // Auth helpers
     // ------------------------------------------------------------------
+
+    // ------------------------------------------------------------------
+    // Export (#134)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The export is a real file, not JSON with a filename.
+    /// </summary>
+    [Fact]
+    public async Task The_company_export_returns_a_csv_and_a_pdf()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+
+        var csv = await client.GetAsync("/dashboard/company-admin/export");
+        Assert.Equal(HttpStatusCode.OK, csv.StatusCode);
+        Assert.Equal("text/csv", csv.Content.Headers.ContentType?.MediaType);
+        var csvBytes = await csv.Content.ReadAsByteArrayAsync();
+        Assert.NotEmpty(csvBytes);
+
+        var pdf = await client.GetAsync("/dashboard/company-admin/export?format=pdf");
+        Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
+        Assert.Equal("application/pdf", pdf.Content.Headers.ContentType?.MediaType);
+        var pdfBytes = await pdf.Content.ReadAsByteArrayAsync();
+
+        // A PDF, asserted by its magic number rather than by its length -- an empty document
+        // would also be "not empty".
+        Assert.Equal("%PDF-"u8.ToArray(), pdfBytes.AsSpan(0, 5).ToArray());
+    }
+
+    /// <summary>
+    /// <b>The guarantee this slice owns.</b> The export and the screen go through one loader,
+    /// so the file cannot carry a figure the screen would not show.
+    /// </summary>
+    /// <remarks>
+    /// Asserted by comparing the file against the JSON for the same caller in the same state,
+    /// rather than against a constant: a hard-coded expectation would keep passing if the
+    /// export grew its own query and both happened to agree on this fixture. The company here
+    /// is company A, whose figures company B's rows would visibly change if the scope leaked.
+    /// </remarks>
+    [Fact]
+    public async Task The_export_reports_exactly_what_the_screen_reports()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+
+        var json = (await (await client.GetAsync("/dashboard/company-admin"))
+            .Content.ReadFromJsonAsync<CompanyAdminDashboard>())!;
+
+        var csv = await (await client.GetAsync("/dashboard/company-admin/export")).Content.ReadAsStringAsync();
+
+        Assert.Contains($"\"Users\",\"{json.UserCount}\"", csv, StringComparison.Ordinal);
+        Assert.Contains($"\"Active users\",\"{json.ActiveUserCount}\"", csv, StringComparison.Ordinal);
+        Assert.Contains($"\"Active surveys\",\"{json.ActiveSurveyCount}\"", csv, StringComparison.Ordinal);
+        Assert.Contains($"\"Completed responses\",\"{json.CompletedResponseCount}\"", csv, StringComparison.Ordinal);
+        Assert.Contains(json.CompanyName, csv, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Every refusal the screen makes, the export makes -- because there is one set of role
+    /// checks, not two.
+    /// </summary>
+    /// <remarks>
+    /// The pairing is the assertion: a test that only checked the export returns 403 would
+    /// still pass if the export refused everybody, which is not the guarantee. Requiring the
+    /// two routes to agree, status for status, is what makes a drifted second copy of the
+    /// guards fail here.
+    /// </remarks>
+    [Fact]
+    public async Task The_export_refuses_exactly_who_the_screen_refuses()
+    {
+        foreach (var role in new[] { Roles.Employee, Roles.Leader, Roles.Supervisor })
+        {
+            var client = await ClientAsync(role, _companyADomain, _companyAId);
+
+            var screen = await client.GetAsync("/dashboard/company-admin");
+            var export = await client.GetAsync("/dashboard/company-admin/export");
+
+            Assert.Equal(HttpStatusCode.Forbidden, screen.StatusCode);
+            Assert.Equal(screen.StatusCode, export.StatusCode);
+        }
+
+        // A company admin reaching for another tenant is refused on both routes too -- the
+        // case #207 and #256 were each a version of.
+        var admin = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var screenForeign = await admin.GetAsync($"/dashboard/company-admin?companyId={_companyBId}");
+        var exportForeign = await admin.GetAsync($"/dashboard/company-admin/export?companyId={_companyBId}");
+        Assert.Equal(HttpStatusCode.Forbidden, screenForeign.StatusCode);
+        Assert.Equal(screenForeign.StatusCode, exportForeign.StatusCode);
+    }
+
+    /// <summary>
+    /// A format this endpoint cannot produce is refused, not silently downgraded to CSV.
+    /// </summary>
+    /// <remarks>
+    /// <c>excel</c> specifically: the web offered it for a year on the report surface and never
+    /// produced a spreadsheet. A file whose contents do not match its name is worse than an
+    /// error a caller can read.
+    /// </remarks>
+    [Fact]
+    public async Task An_unproducible_format_is_refused_rather_than_downgraded()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+
+        foreach (var format in new[] { "excel", "xlsx", "docx", "json" })
+        {
+            var response = await client.GetAsync($"/dashboard/company-admin/export?format={format}");
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        // The refusal is on the format, and it happens for a caller who would otherwise have
+        // been served -- so this is not passing because of an authorization failure.
+        var ok = await client.GetAsync("/dashboard/company-admin/export?format=pdf");
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+    }
+
+    /// <summary>
+    /// A department lead exports their own department, and is refused another one.
+    /// </summary>
+    [Fact]
+    public async Task The_department_export_is_scoped_to_the_leaders_own_department()
+    {
+        var client = await ClientAsync(Roles.Leader, _companyADomain, _companyAId, _engineeringId);
+
+        var own = await client.GetAsync("/dashboard/department-admin/export");
+        Assert.Equal(HttpStatusCode.OK, own.StatusCode);
+
+        var screenForeign = await client.GetAsync($"/dashboard/department-admin?departmentId={_salesId}");
+        var exportForeign = await client.GetAsync($"/dashboard/department-admin/export?departmentId={_salesId}");
+        Assert.Equal(HttpStatusCode.Forbidden, screenForeign.StatusCode);
+        Assert.Equal(screenForeign.StatusCode, exportForeign.StatusCode);
+    }
+
+    /// <summary>
+    /// "Who exported this data" is a different question from "who looked at it" (#143), and
+    /// only the verb tells them apart when the trail is queried after an incident.
+    /// </summary>
+    [Fact]
+    public async Task Every_dashboard_export_is_audited_under_the_export_verb()
+    {
+        var (client, email) = await ClientWithEmailAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+
+        Guid userId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            userId = (await db.Users.FirstAsync(u => u.Email == email)).Id;
+        }
+
+        // The screen itself is an UNMARKED route: it must leave nothing behind, so the rows
+        // counted below are the exports and not the traffic around them.
+        await client.GetAsync("/dashboard/company-admin");
+        Assert.Empty(await AuditRowsAsync(userId));
+
+        await client.GetAsync("/dashboard/company-admin/export");
+        await client.GetAsync("/dashboard/company-admin/export?format=pdf");
+
+        var rows = await AuditRowsAsync(userId);
+        Assert.Equal(2, rows.Count);
+        Assert.All(rows, row => Assert.True(row.Success));
+        Assert.All(rows, row => Assert.EndsWith($".{AuditVerbs.Export}", row.Action, StringComparison.Ordinal));
+    }
+
+    private async Task<List<AuditLog>> AuditRowsAsync(Guid userId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        return await db.AuditLogs.AsNoTracking().Where(a => a.UserId == userId).ToListAsync();
+    }
 
     private async Task<HttpClient> ClientAsync(
         string role,
