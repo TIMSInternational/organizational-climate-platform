@@ -543,10 +543,40 @@ staging front end renders admin navigation rather than employee navigation.
 **8.5 — populate beyond the first user.** With an admin in hand, Decision box 2 option A
 (synthetic only) is reachable entirely through the product's own APIs: create departments
 and demographic fields, then use the bulk import (`src/ClimateProject.Api/Endpoints/BulkImportEndpoints.cs`)
-to create the population, then create and run a survey. **There is no seed script in this
-repository** — `find . -iname "*seed*"` returns only test fixtures and one design note —
-so this is manual work, or a script somebody still has to write. Budget it as real work
-rather than as a footnote to step 7.
+to create the population, then create and run a survey.
+
+**CORRECTED 2026-09-05. This step used to say "there is no seed script in this repository
+… budget it as real work". Two exist, and they already do this job.** `CLAUDE.md` names
+both as the sanctioned way to seed:
+
+| Script | Fills | Host argument |
+|---|---|---|
+| `scripts/seed-local.mjs` | the **tracking** module — nodos, personas, action plans in all three semáforo states | `--api` (default `http://127.0.0.1:5080`), `--tracking` (default `http://localhost:5091`), plus `--email` / `--password` |
+| `scripts/seed-surveys.mjs` | the **climate** side — three closed waves with real per-department scores, one open survey, a distribution and a template | `--api` (same default) |
+
+Neither is local-only. Every request in both goes through one helper whose URL is built
+from `${API}` / `${TRACKING}`; `grep -n '127\.0\.0\.1\|localhost'` over the two files
+returns **only the `parseArgs` defaults and the usage comments** — no hardcoded host in any
+call site. So pointing them at staging is `--api https://<staging-host>`, not a rewrite.
+
+They also already satisfy Decision box 2 option A on their own terms: both create every row
+**through the endpoints the UI calls**, never by `INSERT`, which is the property that makes
+the seeded data a shape the application can actually produce. And `seed-local.mjs` is
+idempotent by design — plans carry a marker in the description and are matched on it before
+anything is created — so a re-run does not pile up duplicates.
+
+**What is genuinely left here, and it is smaller than a script:**
+
+1. **Neither has ever been run against a non-localhost origin.** Origin-agnostic by reading
+   is not the same as exercised over TLS against a remote host; expect the first run to be
+   the test. `seed-surveys.mjs` signs in as twenty-four respondents and is paced by the
+   **20/min auth rate limit**, so budget ~2 minutes and do not assume a stall is a hang.
+2. **The tracking half has no staging target.** `--tracking` needs a deployed tracking
+   service, and there is none in any environment (Step 9). Until then `seed-local.mjs`'s
+   tracking rows cannot be seeded anywhere but a local stack.
+3. **The account arguments must change.** Both default to `@acme.test` / `Local1234!`,
+   which are local-stack credentials. Staging gets its own — and per step 3, never a
+   password reused from production.
 
 Two things are known to make a synthetic seed *look* successful while leaving every
 dashboard empty, and both are worth re-deriving before seeding rather than after:
@@ -558,34 +588,57 @@ nothing on it.
 
 ## Step 9 — the parity gap this runbook cannot close: `services/tracking-api`
 
-**Verified 2026-08-24. Staging cannot honestly claim "production parity" while this is
-true — though the reason is that *production* has no parity with the repository either.**
+**Staging cannot honestly claim "production parity" while this is true — though the reason
+is that *production* has no parity with the repository either.**
+
+**CORRECTED 2026-09-05. The table below used to read "no deployment path to any
+environment at all", verified 2026-08-24. Every artifact it listed as missing was created
+two days later**, by `8463027a` (`infra(219): a production deployment path for
+services/tracking-api`, 2026-08-26). The gap is real but it is no longer an authoring gap:
+
+| Artifact | 2026-08-24 | Now | The check |
+|---|---|---|---|
+| Deploy workflow | No | **`deploy-tracking-prod.yml`** | `grep -rln "tracking-api\|ClimateTracking" .github/workflows/*.yml` → `ci.yml`, `deploy-tracking-prod.yml` |
+| Dockerfile | No | **`services/tracking-api/Dockerfile`** | `find . -name "Dockerfile*"` → also `./Dockerfile`, `./Dockerfile.workers` |
+| CloudFormation | No | **`climate-tracking-api-bootstrap.yml` + `climate-tracking-api-prod-service.yml`** | both in `infra/aws/` — the "sibling template" option below, taken |
 
 `services/tracking-api` is a second .NET service with its own solution
-(`ClimateTracking.slnx`), five projects and its own test suite. It has **no deployment
-path to any environment at all**:
+(`ClimateTracking.slnx`), five projects and its own test suite.
 
-| Artifact | Exists? | The check |
-|---|---|---|
-| Deploy workflow | **No** | `grep -rn "tracking-api\|ClimateTracking" .github/workflows/*.yml` → no matches |
-| Dockerfile | **No** | `find . -name "Dockerfile*"` → only `./Dockerfile` and `./Dockerfile.workers`, both for the main API |
-| CloudFormation | **No** | no template in `infra/aws/` names a tracking service |
+**What is still true, and it is now a provisioning gap rather than a missing artifact.**
+The service is deployed in **no** environment. `deploy-tracking-prod.yml` has exactly
+**one lifetime run** — `2026-08-27T21:21:19Z`, conclusion **failure** — and it failed at its
+**third step, `Verify deploy configuration is present`**, the first gate in the file.
+**Thirteen of the fourteen steps after it are recorded as `skipped`**, including
+`Test tracking API`, `Build and push tracking API image` and `Apply EF Core migrations`;
+the fourteenth, `Upload the migration SQL`, is an always-run artifact step that succeeded
+with nothing to upload. Nothing was compiled, built or deployed — the run never got past
+checking that its configuration existed. So the blocker is **values, not code**: see
+`project_tracking_deploy_blockers` and #219.
 
-This is not a staging oversight — it is missing for **production too**, and the
-consequence is current: a Procomer `.xlsx` export has merged into that service and
-therefore ships to nobody. #157's ETL dry run cannot exercise the tracking side of the
-product against staging, because there is no staging tracking side to exercise.
+The consequence is unchanged and still current: a Procomer `.xlsx` export has merged into
+that service and therefore ships to nobody.
 
-Closing it needs three artifacts that do not exist, and all three are **out of scope for
-this runbook**, which provisions the *API's* staging environment:
+**Two of the three artifacts this section asked for now exist. What remains:**
 
-1. `services/tracking-api/Dockerfile`
-2. a CloudFormation service stack for it — most cheaply by parameterising
-   `infra/aws/climate-project-api-prod-service.yml` further, or by a sibling template
-3. `.github/workflows/deploy-tracking-staging.yml` and a prod counterpart, mirroring
-   `deploy-staging.yml`'s preflight, canary and deployed-commit assertion closely enough
-   that `scripts/verify-prod-deploy-invariants.py` can pin them the same way it pins
-   these two
+1. ~~`services/tracking-api/Dockerfile`~~ — **done**, `8463027a`
+2. ~~a CloudFormation service stack~~ — **done**, `8463027a`, as a sibling template pair
+   rather than by further parameterising `climate-project-api-prod-service.yml`
+3. **`deploy-tracking-staging.yml` does not exist** — only the prod counterpart does. And
+   the acceptance condition this list attached to it is **unmet even for prod**:
+   `scripts/verify-prod-deploy-invariants.py` pins `deploy-prod.yml` and
+   `deploy-staging.yml` **only** (`WORKFLOW`, `STAGING_WORKFLOW`, lines 79–80). No
+   invariant guards `deploy-tracking-prod.yml`, so its preflight, canary and
+   deployed-commit assertion can drift from the pair they were written to mirror and
+   `deploy-path-lint` will stay green. That is the same shape as the defect where the
+   tracking Docker build sat broken on `main` under a green CI, because only a deploy job
+   ever builds that image.
+
+> **#157's ETL dry run is no longer a reason for any of this.** #157 and #155 are both
+> **CLOSED / not planned** — there is no data migration (`no-data-migration.md`). The
+> earlier text here cited the dry run as the thing this gap blocked; it blocks nothing of
+> the sort, and #156's own acceptance criterion 5 ("usable as the target for the ETL dry
+> run") is dead for the same reason.
 
 **One constraint that must not be discovered late.** #219 records that when the tracking
 service is first deployed, **`InternalApiKey` must be wired on BOTH sides in the same
