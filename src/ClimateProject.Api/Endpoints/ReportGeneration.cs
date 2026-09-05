@@ -65,6 +65,14 @@ internal static class ReportGeneration
             .ToListAsync(cancellationToken);
 
         var sections = new List<ReportSurveySection>(surveys.Count);
+
+        // Collected in the same pass, from the SAME aggregate each section is built from, so
+        // the comparison cannot disagree with the sections above it and costs no extra query.
+        // Closed and archived only, which is the window `GET /surveys/climate-trends` itself
+        // reads: an open survey's reading is not final, and a movement measured against a wave
+        // still collecting answers would change between two generations of one report.
+        var trendInputs = new List<SurveyClimateTrends.Input>();
+
         foreach (var survey in surveys)
         {
             // A report is a company document, not a browser request: content resolves
@@ -79,7 +87,28 @@ internal static class ReportGeneration
             var aggregate = await SurveyAggregateLoader.ComputeAsync(db, survey, locale, fallbackFields, cancellationToken);
             var surveyTitle = SurveyContent.Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language, "title", fallbackFields);
             sections.Add(ReportSurveySections.ToSection(survey.Id, surveyTitle, survey.Status, locale, aggregate));
+
+            if (survey.Status == SurveyStatuses.Closed || survey.Status == SurveyStatuses.Archived)
+            {
+                trendInputs.Add(new SurveyClimateTrends.Input(
+                    survey.Id, surveyTitle, survey.Status, survey.EndDate, aggregate));
+            }
         }
+
+        // The period-over-period section (#88 follow-up): the two most recent closed waves,
+        // and only those. `SurveyClimateTrends.Build` sorts oldest-first and aligns every row
+        // positionally, so handing it exactly the pair keeps the dimension union to the
+        // dimensions the comparison is about -- and keeps a twelve-survey time series off a
+        // document `ReportShareEndpoints` serves to anonymous readers. Every floor is the
+        // matrix's own; `ReportComparison` can only narrow what it publishes, never widen it.
+        var comparison = ReportComparison.Build(SurveyClimateTrends.Build(
+            report.CompanyId,
+            groupBy: null,
+            trendInputs
+                .OrderByDescending(i => i.EndDate)
+                .ThenByDescending(i => i.SurveyId)
+                .Take(ReportComparison.RequiredSurveys),
+            now));
 
         // The benchmark section (#88): the company's own benchmarks plus the global rows
         // every tenant compares against, each with the year-over-year reading #89 computes.
@@ -103,11 +132,10 @@ internal static class ReportGeneration
                 // because a note that keeps claiming a gap it no longer has teaches a
                 // consumer to stop reading it. Each remaining item is issue-sized on its
                 // own; none may be faked in the meantime.
-                // TODO(#88 follow-up): period-over-period comparative analysis -- the same
-                //   survey, or the same dimension, across two windows. Every input exists
-                //   (SurveyClimateTrends already computes the matrix); nothing projects it
-                //   into this document yet, and the delta must come from there rather than
-                //   from a subtraction written here.
+                // Period-over-period comparative analysis USED to be the first item here.
+                // It is now built, by `ReportComparison` off `SurveyClimateTrends`' matrix --
+                // the delta comes from there, as this note required, so no floor the matrix
+                // applies can be bypassed by a subtraction written in the report layer.
                 // TODO(#88 follow-up): report configuration, the filter model and report
                 //   templates. `reports.template_id` is a free string today with no
                 //   template table behind it, so a report cannot yet be told WHAT to
@@ -120,11 +148,13 @@ internal static class ReportGeneration
                 // still true -- a note that keeps claiming a gap it no longer has teaches a
                 // consumer to stop reading it, which is the whole reason it shrinks rather than
                 // accumulating.
-                "Sections not yet generated: period-over-period comparative analysis, report configuration/filters, "
-                + "report templates. The stored `format` IS rendered on download: pdf and csv are produced from this document.",
+                "Sections not yet generated: report configuration/filters, report templates. "
+                + "The stored `format` IS rendered on download: pdf and csv are produced from this document. "
+                + "Period-over-period comparison IS generated, across the two most recent closed surveys.",
                 sections,
                 ReportAIInsights.ToSection(insights),
-                benchmarks),
+                benchmarks,
+                comparison),
             JsonSerializerOptions.Web);
         report.UpdatedAt = DateTimeOffset.UtcNow;
     }

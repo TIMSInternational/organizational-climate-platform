@@ -401,6 +401,27 @@ public static class PublicReportProjection
         nameof(ReportOutputDocument.Surveys),
         nameof(ReportOutputDocument.AiInsights),
         nameof(ReportOutputDocument.Benchmarks),
+
+        // WITHHELD, and named here so the tripwire stops firing rather than because it is
+        // published: `Comparison` is absent from `PublicReportDocument`, so no anonymous
+        // holder of a share URL can reach it.
+        //
+        // Why withheld rather than published. The section is whole-company and every reading
+        // in it is already gated by `SurveyClimateTrends`' floors, so publishing it would
+        // probably be safe -- "probably" is the problem. A delta is the one figure in this
+        // document that states a RELATIONSHIP between two waves rather than a reading of one,
+        // and a share URL is forwardable to anyone. Deciding that a government client's
+        // wave-over-wave movement may be read by whoever holds a link is a privacy boundary,
+        // and this codebase's boundaries are the client's owner's to set, not a default an
+        // implementer picks while wiring a section up.
+        //
+        // Reversing it is a deliberate three-part change, exactly as the remarks above
+        // require: declare a `PublicReportComparison` on `PublicReportDocument`, project it in
+        // `ToPublic`, and rule on each of its fields in `ShapeRulings`.
+        //
+        // The section IS delivered today -- in the authorized report's stored document and in
+        // the PDF and CSV an administrator downloads. Only the anonymous link is without it.
+        nameof(ReportOutputDocument.Comparison),
     };
 
     /// <summary>
@@ -479,7 +500,15 @@ public static class PublicReportProjection
     /// </remarks>
     public static IReadOnlyList<PublicShapeRuling> ShapeRulings { get; } =
     [
-        new(typeof(ReportOutputDocument), typeof(PublicReportDocument), Nothing, Nothing),
+        // `Comparison` is withheld, not published -- see StoredSectionsRuledOn for the
+        // reasoning and for the three-part change that would reverse it. Named here so the
+        // field-level tripwire stops firing on a decision that HAS been made, rather than
+        // going quiet on one that has not.
+        new(
+            typeof(ReportOutputDocument),
+            typeof(PublicReportDocument),
+            Withhold(nameof(ReportOutputDocument.Comparison)),
+            Nothing),
         new(
             typeof(ReportSurveySection),
             typeof(PublicSurveySection),

@@ -51,7 +51,15 @@ public sealed record ReportOutputDocument(
     string GenerationNote,
     IReadOnlyList<ReportSurveySection> Surveys,
     IReadOnlyList<ReportAIInsightItem> AiInsights,
-    IReadOnlyList<ReportBenchmarkComparison> Benchmarks);
+    IReadOnlyList<ReportBenchmarkComparison> Benchmarks,
+    /// <summary>
+    /// Period-over-period movement across the two most recent closed surveys (#88 follow-up),
+    /// or null when the company has not closed two. Built by <see cref="ReportComparison"/>
+    /// from the trends matrix, so every floor that matrix applies is carried into this
+    /// document -- which matters more here than elsewhere, because
+    /// <c>ReportShareEndpoints</c> serves this document to anonymous readers.
+    /// </summary>
+    ReportComparisonSection? Comparison = null);
 
 /// <summary>
 /// The single path by which a generated report reads AI insights.
