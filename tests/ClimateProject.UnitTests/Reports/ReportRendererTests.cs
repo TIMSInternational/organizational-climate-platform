@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using ClimateProject.Application.Exports;
+using ClimateProject.UnitTests.Exports;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Questions;
 using ClimateProject.Application.Reports;
@@ -34,7 +34,7 @@ namespace ClimateProject.UnitTests.Reports;
 /// removed.
 /// </para>
 /// </summary>
-public partial class ReportRendererTests
+public class ReportRendererTests
 {
     private static readonly Guid ReportId = Guid.Parse("7e5000aa-0000-0000-0000-000000000001");
     private static readonly Guid HealthySurvey = Guid.Parse("5e2b1d1a-0000-0000-0000-000000000001");
@@ -737,71 +737,9 @@ public partial class ReportRendererTests
     // ------------------------------------------------------------------
     // Reading the output back
     // ------------------------------------------------------------------
+    private static IReadOnlyList<string> DrawnStrings(PdfDocument document) => PdfText.DrawnStrings(document);
 
-    /// <summary>
-    /// Every string the content streams actually DRAW, decoded from the PDF literals.
-    /// </summary>
-    /// <remarks>
-    /// A substring search over the whole file cannot express "no cell is the string 0", which is
-    /// the one assertion the suppression branch is provable by: a PDF's cross-reference table,
-    /// its object numbers and its coordinates are full of zeros. Reading the literals back also
-    /// means an accented label is compared as the character rather than as the octal escape the
-    /// serialiser emitted.
-    /// </remarks>
-    private static IReadOnlyList<string> DrawnStrings(PdfDocument document)
-    {
-        var content = Encoding.Latin1.GetString(document.ToBytes());
-
-        // `Tm (` anchors on the text-positioning operator, so /Info's /Title -- a literal too,
-        // and not drawn on any page -- is excluded by construction rather than by an index.
-        return [.. TjPattern().Matches(content).Select(match => Unescape(match.Groups["literal"].Value))];
-    }
-
-    /// <summary>
-    /// The drawn strings rejoined into prose.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="PdfDocument.WrapText"/> breaks a paragraph on whitespace, so rejoining the
-    /// lines with a single space reconstructs the sentence exactly -- which is what lets a test
-    /// assert on a sentence rather than on wherever the wrapper happened to break it. A test
-    /// that searched one drawn line for a sentence would go green or red depending on the
-    /// content width, which is not the guarantee.
-    /// </remarks>
-    private static string Prose(PdfDocument document) => string.Join(" ", DrawnStrings(document));
-
-    /// <summary>Reverses <c>PdfDocument.LiteralString</c>: the escapes back into characters.</summary>
-    private static string Unescape(string literal)
-    {
-        var builder = new StringBuilder(literal.Length);
-        for (var i = 0; i < literal.Length; i++)
-        {
-            if (literal[i] != '\\')
-            {
-                builder.Append(literal[i]);
-                continue;
-            }
-
-            i++;
-            if (i >= literal.Length)
-            {
-                break;
-            }
-
-            if (char.IsAsciiDigit(literal[i]))
-            {
-                // WinAnsi is Latin-1 over the range this product's Spanish uses, which is what
-                // makes the octal escape decodable back to a char at all.
-                var octal = literal.Substring(i, Math.Min(3, literal.Length - i));
-                builder.Append((char)Convert.ToInt32(octal, 8));
-                i += octal.Length - 1;
-                continue;
-            }
-
-            builder.Append(literal[i]);
-        }
-
-        return builder.ToString();
-    }
+    private static string Prose(PdfDocument document) => PdfText.Prose(document);
 
     private sealed record CsvRow(
         string Section,
@@ -847,6 +785,4 @@ public partial class ReportRendererTests
             && r.Metric == metric
             && (survey is null || r.Survey == survey)).Value;
 
-    [GeneratedRegex(@"Tm \((?<literal>(?:\\.|[^\\)])*)\) Tj")]
-    private static partial Regex TjPattern();
 }

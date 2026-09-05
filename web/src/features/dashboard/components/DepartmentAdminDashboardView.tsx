@@ -9,6 +9,8 @@ import {
   type DashboardTeamClimate,
 } from '../api/dashboard'
 import { useDashboardData } from '../useDashboardData'
+import { getDepartmentDashboardExport } from '../api/dashboardExport'
+import DashboardExportControl from './DashboardExportControl'
 import DashboardState from './DashboardState'
 import DashboardSurveyTable from './DashboardSurveyTable'
 import EmployeeDashboardView from './EmployeeDashboardView'
@@ -122,6 +124,13 @@ export default function DepartmentAdminDashboardView() {
 
   const data = result?.kind === 'department' ? result.dashboard : null
 
+  // No department id: the server reads the caller's own row, the same narrowing the screen
+  // gets. A leader naming another department is a 403 on both routes.
+  const exportDashboard = useCallback(
+    (format: 'csv' | 'pdf') => getDepartmentDashboardExport(baseUrl, format, { lang: locale }),
+    [baseUrl, locale],
+  )
+
   // Responses per 100 members, or null where there is nobody to divide by. Rounded, because
   // a rate quoted to a decimal implies a precision a headcount this small does not have.
   const rate =
@@ -214,12 +223,18 @@ export default function DepartmentAdminDashboardView() {
         // against `canReach` for BOTH roles that see it — the guard that caught the
         // `/action-plans` button this page used to carry.
         actions={
-          <Button asChild size="sm" variant="primary">
-            <Link to="/surveys/my">
-              <Inbox aria-hidden="true" />
-              {t('navigation.mySurveys')}
-            </Link>
-          </Button>
+          <>
+            <DashboardExportControl
+              subject={data?.departmentName ?? null}
+              fetchExport={exportDashboard}
+            />
+            <Button asChild size="sm" variant="primary">
+              <Link to="/surveys/my">
+                <Inbox aria-hidden="true" />
+                {t('navigation.mySurveys')}
+              </Link>
+            </Button>
+          </>
         }
       />
 

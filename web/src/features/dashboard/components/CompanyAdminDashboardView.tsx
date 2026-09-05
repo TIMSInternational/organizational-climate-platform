@@ -2,6 +2,8 @@ import { useCallback } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { AlertTriangle, CheckCircle2, ClipboardList, FileText, Gauge, Lock, Plus, Radio } from 'lucide-react'
 import { getCompanyAdminDashboard, type CompanyAdminDashboard } from '../api/dashboard'
+import { getCompanyDashboardExport } from '../api/dashboardExport'
+import DashboardExportControl from './DashboardExportControl'
 import { useDashboardData } from '../useDashboardData'
 import {
   belowTarget,
@@ -89,6 +91,13 @@ export default function CompanyAdminDashboardView({ companyId }: CompanyAdminDas
   )
   const { data, loading, failed, error, reload } = useDashboardData(load)
 
+  // The export shares the screen's loader on the server, so it shares its scoping: `companyId`
+  // is required for a SuperAdmin and ignored for a CompanyAdmin, exactly as the payload above.
+  const exportDashboard = useCallback(
+    (format: 'csv' | 'pdf') => getCompanyDashboardExport(baseUrl, format, { companyId, lang: locale }),
+    [baseUrl, companyId, locale],
+  )
+
   const readings = readDepartments(data?.departments ?? [])
   const measurable = measurableDepartments(readings)
   const unmeasurable = readings.length - measurable.length
@@ -136,6 +145,10 @@ export default function CompanyAdminDashboardView({ companyId }: CompanyAdminDas
         description={t('dashboard.organizationInsights')}
         actions={
           <>
+            <DashboardExportControl
+              subject={data?.companyName ?? null}
+              fetchExport={exportDashboard}
+            />
             {data && (
               <Button asChild size="sm" variant="default">
                 <Link to={`/admin/companies/${data.companyId}/reports`}>
