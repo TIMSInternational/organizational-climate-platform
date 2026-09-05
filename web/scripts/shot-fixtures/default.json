@@ -3861,5 +3861,12 @@
         "tags": []
       }
     ]
+  },
+  "GET /shared/reports/*": {
+    "title": "Informe de clima Q3 2026",
+    "description": null,
+    "type": "comparison",
+    "generatedAt": "2026-09-30T12:00:00Z",
+    "reportOutput": "{\"generationNote\": \"Sections not yet generated: report configuration/filters, report templates.\", \"surveys\": [], \"aiInsights\": [], \"benchmarks\": []}"
   }
 }

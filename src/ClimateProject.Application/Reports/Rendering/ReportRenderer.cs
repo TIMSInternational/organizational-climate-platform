@@ -113,6 +113,9 @@ public static class ReportRenderer
     public const string BenchmarkSection = "benchmark";
 
     /// <inheritdoc cref="ReportSection"/>
+    public const string ComparisonSection = "comparison";
+
+    /// <inheritdoc cref="ReportSection"/>
     public const string BenchmarkMetricSection = "benchmark_metric";
 
     /// <inheritdoc cref="ReportSection"/>
@@ -175,6 +178,7 @@ public static class ReportRenderer
 
         WriteInsights(document, copy, stored.AiInsights);
         WriteBenchmarks(document, copy, stored.Benchmarks);
+        WriteComparison(document, copy, stored.Comparison);
 
         return document;
     }
@@ -419,6 +423,57 @@ public static class ReportRenderer
         }
     }
 
+    /// <summary>
+    /// The period-over-period section (#88 follow-up).
+    /// </summary>
+    /// <remarks>
+    /// Three states, and they must not print the same. <b>Null</b> is "fewer than two closed
+    /// surveys" -- nothing to compare. <b>Suppressed</b> is "two waves, one below the floor" --
+    /// something to compare and a promise not to. Printing either as an empty table would say
+    /// "no movement", which is the absent-count-as-zero reading this codebase already forbids
+    /// for a suppressed segment.
+    /// </remarks>
+    private static void WriteComparison(
+        PdfDocument document,
+        ReportRenderCopy copy,
+        ReportComparisonSection? comparison)
+    {
+        document.Heading(copy.Comparison);
+
+        if (comparison is null)
+        {
+            document.Paragraph(copy.NoComparison);
+            return;
+        }
+
+        document.KeyValues(
+        [
+            (copy.EarlierSurvey, $"{comparison.EarlierSurveyTitle ?? copy.UntitledSurvey} ({copy.Day(comparison.EarlierEndDate)})"),
+            (copy.LaterSurvey, $"{comparison.LaterSurveyTitle ?? copy.UntitledSurvey} ({copy.Day(comparison.LaterEndDate)})"),
+        ]);
+
+        if (comparison.IsSuppressed)
+        {
+            document.Paragraph(copy.ComparisonWithheld);
+            return;
+        }
+
+        document.Table(
+            [
+                new PdfTableColumn(copy.Dimension, 3),
+                new PdfTableColumn(copy.EarlierSurvey, 1.4, RightAligned: true),
+                new PdfTableColumn(copy.LaterSurvey, 1.4, RightAligned: true),
+                new PdfTableColumn(copy.Change, 1.4, RightAligned: true),
+            ],
+            [.. comparison.Dimensions.Select(d => new string?[]
+            {
+                d.Dimension,
+                copy.Decimal(d.EarlierScore),
+                copy.Decimal(d.LaterScore),
+                copy.Decimal(d.Delta),
+            })]);
+    }
+
     private static void WriteBenchmarks(
         PdfDocument document,
         ReportRenderCopy copy,
@@ -557,6 +612,28 @@ public static class ReportRenderer
             foreach (var action in insight.RecommendedActions)
             {
                 Row(InsightSection, null, null, id, null, "recommended_action", action);
+            }
+        }
+
+        // The comparison, as machine-readable rows. `group` carries the dimension key, the
+        // same column the dimension rows use, so a consumer joining the two does not have to
+        // know which section a dimension name came from.
+        if (context.Document.Comparison is { } comparison)
+        {
+            Row(ComparisonSection, comparison.EarlierSurveyId.ToString(), null, null, null, "earlier_survey_title", comparison.EarlierSurveyTitle);
+            Row(ComparisonSection, comparison.EarlierSurveyId.ToString(), null, null, null, "earlier_end_date", comparison.EarlierEndDate.ToString("O"));
+            Row(ComparisonSection, comparison.LaterSurveyId.ToString(), null, null, null, "later_survey_title", comparison.LaterSurveyTitle);
+            Row(ComparisonSection, comparison.LaterSurveyId.ToString(), null, null, null, "later_end_date", comparison.LaterEndDate.ToString("O"));
+
+            // Stated as a value rather than implied by absent rows: a consumer must be able to
+            // tell "withheld" from "no movement", and an empty section says the second.
+            Row(ComparisonSection, null, null, null, null, "is_suppressed", comparison.IsSuppressed ? "true" : "false");
+
+            foreach (var movement in comparison.Dimensions)
+            {
+                Row(ComparisonSection, null, null, movement.Dimension, null, "earlier_score", Optional(movement.EarlierScore));
+                Row(ComparisonSection, null, null, movement.Dimension, null, "later_score", Optional(movement.LaterScore));
+                Row(ComparisonSection, null, null, movement.Dimension, null, "delta", Optional(movement.Delta));
             }
         }
 
