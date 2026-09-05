@@ -46,7 +46,7 @@ Read the relevant ones before building a feature, not after.
 | [`CLAUDE.md`](CLAUDE.md) | The subset of the above an agent needs before touching anything |
 | [`docs/runbooks/`](docs/runbooks/) | Procedures: cutover, rollback, alerting, staging, UAT, question-library import |
 | [`docs/decisions/`](docs/decisions/) | Rulings and their reasoning. The ones containing `____` are honestly unresolved |
-| [`docs/security/`](docs/security/) | The rotation inventory and runbook, the exfiltration audit |
+| [`docs/security/`](docs/security/) | The rotation inventory and runbook, the exfiltration audit, the agent's AWS permissions |
 | [`docs/legacy-issues/`](docs/legacy-issues/) | The durable record of the retired tracker |
 
 ## Solution structure

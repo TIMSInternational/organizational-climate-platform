@@ -89,7 +89,8 @@ the runner and the result is meaningless — kill it, rebuild, re-run.
 |---|---|
 | `docs/runbooks/` | cutover, rollback, alerting, staging, UAT, question-library import |
 | `docs/decisions/` | rulings, each with the reasoning and an owner; open ones say so |
-| `docs/security/` | the rotation inventory and runbook, the exfiltration audit |
+| `docs/audits/` | dated, measured records of what the app **is**. Additive: a later audit supersedes an earlier one by date, never by editing it. Read the newest first |
+| `docs/security/` | the rotation inventory and runbook, the exfiltration audit, the agent's AWS permissions |
 | `web/docs/` | screenshots, accessibility |
 | `infra/aws/` | CloudFormation for the API, the probe and observability |
 
@@ -100,3 +101,14 @@ Unauthenticated `GET /version` and `/health` are fine. AWS is read-only for an a
 (describe/list/get). The seeded production role accounts are for a dry run and must not be used
 for anything a client will see (`docs/runbooks/uat-script.md` §8.4). Local development uses the
 `climate_project` Postgres database and `@acme.test` accounts.
+
+**Production CloudWatch Logs are readable** — ruled 2026-09-05, logs only, and it is the one
+carve-out from the line above. Filter for the literal you are testing
+(`aws logs filter-log-events --filter-pattern '"…"'`); do not dump a log group, because
+application logs carry request paths, ids and exception text that obey neither the floor of 5
+nor the never-return-verbatim-text rule.
+
+**The read-only rule above is a convention, not a permission.** The agent's IAM user on the
+production account carries `AdministratorAccess` with no `Deny` anywhere, so nothing enforces
+it — measured, with the remediation and its trap, in `docs/security/agent-aws-permissions.md`.
+Honour it anyway, and never make it a reason to test the boundary.

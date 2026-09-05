@@ -111,7 +111,7 @@ written against `1219dc6` and has been **re-measured today**; six of the ten row
 
 | # | Gate | Tracking | Status re-measured 2026-09-02 |
 |---|---|---|---|
-| A1 | Worker hosting decided **and deployed** | #275 | **CLOSED** [VERIFIED 2026-09-02: `gh issue view 275` → CLOSED. `src/ClimateProject.Api/ClimateProject.Api.csproj` carries a `ProjectReference` to `ClimateProject.Workers`, so the API host runs the jobs.] [STALE — was: "all six jobs reporting heartbeats"; now: **eight** jobs — `WorkerJobs.All` at `src/ClimateProject.Application/Scheduling/WorkerJobs.cs:74-84` lists `notification-dispatch`, `invitation-reminders`, `digests`, `scheduled-reports`, `survey-draft-retention`, `retention-cleanup`, `survey-lifecycle`, `microclimate-lifecycle`, and `src/ClimateProject.Workers/Jobs.cs` defines eight matching `*Worker` classes at lines 28, 72, 111, 151, 207, 274, 331, 390.] |
+| A1 | Worker hosting decided **and deployed** | #275 | **CLOSED** [VERIFIED 2026-09-02: `gh issue view 275` → CLOSED. `src/ClimateProject.Api/ClimateProject.Api.csproj` carries a `ProjectReference` to `ClimateProject.Workers`, so the API host runs the jobs.] [STALE — was: "all six jobs reporting heartbeats"; now: **eight** jobs — `WorkerJobs.All` at `src/ClimateProject.Application/Scheduling/WorkerJobs.cs:74-84` lists `notification-dispatch`, `invitation-reminders`, `digests`, `scheduled-reports`, `survey-draft-retention`, `retention-cleanup`, `survey-lifecycle`, `microclimate-lifecycle`, and `src/ClimateProject.Workers/Jobs.cs` defines eight matching `*Worker` classes at lines 28, 72, 111, 151, 207, 274, 331, 390.] [EXIT CRITERION NOW MET, 2026-09-05: all eight observed emitting heartbeats in the production log group — 2,528 lines over a continuous 24 h, each at its designed cadence. See `docs/audits/2026-09-05-gap-closures.md` §2.1. C4 below is still the on-the-day re-check and is still open.] |
 | A2 | ~~ETL tool built, reconciliation harness included~~ | ~~#154~~ | **VOID — there is no data migration.** [VERIFIED 2026-09-02: `git ls-files \| grep -iE 'etl\|mongo'` returns nothing.] See [`no-data-migration.md`](../decisions/no-data-migration.md) |
 | A3 | Staging environment with production parity | #156 | **Open — bootstrap only.** [STALE — was: "Open"; now: partially advanced. The DEV account holds `climate-project-api-staging-bootstrap` (`CREATE_COMPLETE`, created today `2026-09-02T19:21:34Z`) and the GitHub OIDC provider, but **no staging service stack and no staging database**, and `deploy-staging.yml` has 0 lifetime runs.] |
 | A4 | Monitoring/alerting live, worker heartbeats scraped | #158 | **Open — half built, nothing deployed.** [STALE — was: "`WorkerHeartbeats` exists, nothing scrapes it"; now: an outside-in prober **does** exist and runs (`.github/workflows/ops-synthetic-probe.yml`, last success `2026-09-02T17:53:50Z`), but **zero CloudWatch alarms exist** (P3) and `infra/aws/climate-project-observability.yml` has never been deployed.] [CANNOT VERIFY FROM HERE: whether the `TEAMS_WEBHOOK_URL` secret has been set — the workflow guards every posting step on it (`ops-synthetic-probe.yml:20-23`), so alerts may be silently unrouted. Reading repository secrets is not possible read-only.] This now has its own precondition row, **P13**, because it is what stands underneath D9's "someone actually watching". |
@@ -476,7 +476,20 @@ and `microclimate-lifecycle`, and both matter more than the other six on a cutov
 A checklist of six would have silently omitted both.]
 
 - Eight seen: `____` Duration: `____`
-  [CANNOT VERIFY FROM HERE: production CloudWatch Logs access.]
+  [NO LONGER UNVERIFIABLE — 2026-09-05. Production CloudWatch Logs access was ruled permitted
+  (logs only; `CLAUDE.md`, `docs/security/agent-aws-permissions.md`), and the check was run
+  once: **all eight jobs seen, 2,528 heartbeat lines over a continuous 24 h**, each at its
+  designed cadence — `notification-dispatch` 1,441, `survey-lifecycle` / `scheduled-reports` /
+  `microclimate-lifecycle` 289 each, `digests` / `invitation-reminders` 97 each,
+  `survey-draft-retention` 24, `retention-cleanup` 1. Full table in
+  `docs/audits/2026-09-05-gap-closures.md` §2.1.
+  **The `____` above stays blank**: this is C4, the re-check *on the day*, and a run from
+  5 September does not discharge it. What the 5 September run does discharge is **A1's standing
+  exit criterion**, which had read "eight heartbeat lines never observed in production". The
+  command to re-run here:
+  `aws logs filter-log-events --region us-east-1 --log-group-name`
+  `/aws/apprunner/climate-project-api-prod/126c3f282524450896385975cb3bcba9/application`
+  `--start-time <now-1h> --filter-pattern '"Heartbeat: scheduled job"'`]
 
 ### C5 — tracking service configuration read back
 

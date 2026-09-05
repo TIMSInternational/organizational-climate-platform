@@ -58,7 +58,7 @@ downstream, and each has been deferred at least once already.
 |---|---|---|---|
 | 13 | [C] | **Review and merge the four branches** (§2). All four are additive — new files, new templates, new workflows, docs. No existing deploy workflow was edited by any lane, so no current dispatch behaves differently after the merge. | 1 |
 | 14 | | **#158 step 1:** create the observability stack with `AlarmsEnabled=false`. Watch 48 h. | 2, 13 |
-| 15 | | **#158 step 2 — verify the instrument before trusting it.** Confirm the heartbeat text really appears in CloudWatch; correct or **delete** the guessed `"Health check failed"` filter rather than leaving one that can never fire; send one real `aws sns publish` and **look at the Teams channel with your eyes**. A 200 from a webhook is not evidence. | 11, 14 |
+| 15 | | **#158 step 2 — verify the instrument before trusting it.** **[HEARTBEAT HALF DONE, 2026-09-05: confirmed in CloudWatch — all eight jobs, 2,528 lines over 24 h, cadences as designed; `docs/audits/2026-09-05-gap-closures.md` §2.1. The `"Health check failed"` filter and the real `aws sns publish` are still unverified.]** Confirm the heartbeat text really appears in CloudWatch; correct or **delete** the guessed `"Health check failed"` filter rather than leaving one that can never fire; send one real `aws sns publish` and **look at the Teams channel with your eyes**. A 200 from a webhook is not evidence. | 11, 14 |
 | 16 | | **#158 step 3:** `AlarmsEnabled=true`, set log retention, set `TEAMS_WEBHOOK_URL`. | 12, 15 |
 | 17 | [H] | **Arm production mail, or accept a standing red alarm.** The service template sets zero `Email__` variables, so every email notification is currently recorded as failed and `mail-not-configured` will fire immediately and correctly. §6.3 — this is bigger than an alarm. | 13 |
 | 18 | [C] | **One `web/vercel.json` change covering both lanes' findings** (§6.5): the CSP `connect-src` hardcodes production's API host and is inherited by every Vercel project rooted at `web/`, staging included; and it will need the tracking origin later. Do **not** promote it from Report-Only to enforcing until both are settled. | web lane |
@@ -793,7 +793,11 @@ each re-checked on 2026-08-25 from this worktree:
   invitation batch and the first real survey launch.
 - **90-day log retention** is a proposal, not a derived number — item 12.
 - **The heartbeat text itself.** Every job-absence alarm asserts a specific log line
-  appears. Confirm the text really appears in CloudWatch before enabling notification.
+  appears. ~~Confirm the text really appears in CloudWatch before enabling notification.~~
+  **CONFIRMED 2026-09-05** — all eight literals matched in the production application log
+  group over a continuous 24 h. The alarms' *filters* are therefore keyed to text that
+  really exists; what remains unverified is that a firing alarm reaches a human, which is
+  the `aws sns publish` half of item 15.
 
 ### 7.4 Money and plan limits
 
