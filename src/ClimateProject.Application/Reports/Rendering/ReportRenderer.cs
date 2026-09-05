@@ -165,6 +165,22 @@ public static class ReportRenderer
         document.Heading(copy.Scope);
         document.Paragraph(stored.GenerationNote);
 
+        // What the author chose to include. Printed only for documents that carry a scope --
+        // the ones written before filters existed meant "everything", and inventing the
+        // sentence for them would be a claim about a decision nobody made. Without this an
+        // excluded section and an empty one look identical, which is the absent-versus-withheld
+        // confusion the rest of this renderer works to avoid.
+        if (stored.Scope is { } scope)
+        {
+            document.KeyValues(
+            [
+                (copy.Surveys, scope.AllSurveys ? copy.AllSurveysIncluded : copy.SurveysSelected),
+                (copy.AiInsights, scope.AiInsightsIncluded ? copy.IncludedSections : copy.ExcludedSections),
+                (copy.Benchmarks, scope.BenchmarksIncluded ? copy.IncludedSections : copy.ExcludedSections),
+                (copy.Comparison, scope.ComparisonIncluded ? copy.IncludedSections : copy.ExcludedSections),
+            ]);
+        }
+
         document.Heading(copy.Surveys);
         if (stored.Surveys.Count == 0)
         {
@@ -613,6 +629,15 @@ public static class ReportRenderer
             {
                 Row(InsightSection, null, null, id, null, "recommended_action", action);
             }
+        }
+
+        if (context.Document.Scope is { } scope)
+        {
+            Row(ReportSection, null, null, "scope", null, "all_surveys", scope.AllSurveys ? "true" : "false");
+            Row(ReportSection, null, null, "scope", null, "survey_count", Number(scope.SurveyCount));
+            Row(ReportSection, null, null, "scope", null, "ai_insights_included", scope.AiInsightsIncluded ? "true" : "false");
+            Row(ReportSection, null, null, "scope", null, "benchmarks_included", scope.BenchmarksIncluded ? "true" : "false");
+            Row(ReportSection, null, null, "scope", null, "comparison_included", scope.ComparisonIncluded ? "true" : "false");
         }
 
         // The comparison, as machine-readable rows. `group` carries the dimension key, the

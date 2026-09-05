@@ -40,9 +40,20 @@ internal static class ReportGeneration
 
         // The AI insights section is read through ReportAIInsights, the one path (#152)
         // so that a report never silently omits insights by reading the wrong entity.
-        var insights = await ReportAIInsights
-            .ForCompany(db.AIInsights.AsNoTracking(), report.CompanyId, now)
-            .ToListAsync(cancellationToken);
+        // The filter is read from the ROW, not passed in, so the scheduled runner regenerates
+        // a recurring report against its own filter without the sweep knowing filters exist.
+        //
+        // A filter that cannot be parsed falls back to "everything", and that is the safe
+        // direction here -- unlike the comparison's public ruling, where failing open would
+        // publish. A filter only ever NARROWS a document every floor already governs, so the
+        // fallback is precisely the behaviour every report had before filters existed.
+        var filters = ParseFilters(report.Filters);
+
+        var insights = filters.IncludeAiInsights
+            ? await ReportAIInsights
+                .ForCompany(db.AIInsights.AsNoTracking(), report.CompanyId, now)
+                .ToListAsync(cancellationToken)
+            : [];
 
         // The survey sections (#88): one per non-draft survey, each the SAME aggregation
         // the results screens serve, loaded through the shared SurveyAggregateLoader and
@@ -57,9 +68,19 @@ internal static class ReportGeneration
         // with enough surveys and responses for that to hurt is the trigger for making
         // generation a background job (the status column already models "generating"),
         // not for a cheaper aggregation.
-        var surveys = await db.Surveys
+        // The company clause stays first and is never relaxed by a filter: a named survey is
+        // intersected with this company's own, so an id from another tenant selects nothing
+        // rather than reaching across.
+        var surveyQuery = db.Surveys
             .AsNoTracking()
-            .Where(s => s.CompanyId == report.CompanyId && s.Status != SurveyStatuses.Draft)
+            .Where(s => s.CompanyId == report.CompanyId && s.Status != SurveyStatuses.Draft);
+
+        if (filters.SurveyIds is { Count: > 0 } chosen)
+        {
+            surveyQuery = surveyQuery.Where(s => chosen.Contains(s.Id));
+        }
+
+        var surveys = await surveyQuery
             .OrderByDescending(s => s.CreatedAt)
             .ThenBy(s => s.Id)
             .ToListAsync(cancellationToken);
@@ -101,7 +122,7 @@ internal static class ReportGeneration
         // dimensions the comparison is about -- and keeps a twelve-survey time series off a
         // document `ReportShareEndpoints` serves to anonymous readers. Every floor is the
         // matrix's own; `ReportComparison` can only narrow what it publishes, never widen it.
-        var comparison = ReportComparison.Build(SurveyClimateTrends.Build(
+        var comparison = !filters.IncludeComparison ? null : ReportComparison.Build(SurveyClimateTrends.Build(
             report.CompanyId,
             groupBy: null,
             trendInputs
@@ -114,7 +135,19 @@ internal static class ReportGeneration
         // every tenant compares against, each with the year-over-year reading #89 computes.
         // Loaded through BenchmarkPriorPeriod -- the benchmarks route's own code -- so the
         // number a report prints is the number that route serves, byte for byte.
-        var benchmarks = await ReportBenchmarks.LoadAsync(db, report.CompanyId, cancellationToken);
+        var benchmarks = filters.IncludeBenchmarks
+            ? await ReportBenchmarks.LoadAsync(db, report.CompanyId, cancellationToken)
+            : [];
+
+        // Recorded in the document because an absent section and an excluded one are different
+        // statements, and a section that is simply missing makes neither. Same rule the
+        // anonymity floor forces everywhere else here.
+        var scope = new ReportScope(
+            AllSurveys: filters.SurveyIds is null,
+            SurveyCount: sections.Count,
+            AiInsightsIncluded: filters.IncludeAiInsights,
+            BenchmarksIncluded: filters.IncludeBenchmarks,
+            ComparisonIncluded: filters.IncludeComparison);
 
         report.Status = "completed";
         report.GenerationCompletedAt = DateTimeOffset.UtcNow;
@@ -136,10 +169,10 @@ internal static class ReportGeneration
                 // It is now built, by `ReportComparison` off `SurveyClimateTrends`' matrix --
                 // the delta comes from there, as this note required, so no floor the matrix
                 // applies can be bypassed by a subtraction written in the report layer.
-                // TODO(#88 follow-up): report configuration, the filter model and report
-                //   templates. `reports.template_id` is a free string today with no
-                //   template table behind it, so a report cannot yet be told WHAT to
-                //   include -- every document is the whole company.
+                // The filter model and report configuration USED to be the second item here.
+                // A report can now be told what to include -- `ReportFilters`, stored in the
+                // `filters` jsonb column and read back above. Report TEMPLATES are deliberately
+                // not built: see docs/decisions/report-templates.md for what would trigger it.
                 //
                 // `reports.format` USED to be the third item here and is no longer:
                 // ReportEndpoints.CreateAsync validates it against ReportFormats and
@@ -154,8 +187,34 @@ internal static class ReportGeneration
                 sections,
                 ReportAIInsights.ToSection(insights),
                 benchmarks,
-                comparison),
+                comparison,
+                scope),
             JsonSerializerOptions.Web);
         report.UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// The stored filter, or an all-inclusive one when the column is empty or unreadable.
+    /// </summary>
+    private static ReportFilters ParseFilters(string? stored)
+    {
+        if (string.IsNullOrWhiteSpace(stored))
+        {
+            return new ReportFilters();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<ReportFilters>(stored, JsonSerializerOptions.Web)
+                   ?? new ReportFilters();
+        }
+        catch (JsonException)
+        {
+            // Every report written before filters existed has a null column, and a row holding
+            // something else is a data defect rather than a request. Neither may stop an
+            // administrator getting their report, and neither can widen one: see the note at
+            // the call site.
+            return new ReportFilters();
+        }
     }
 }

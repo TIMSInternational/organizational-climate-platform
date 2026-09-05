@@ -422,6 +422,13 @@ public static class PublicReportProjection
         // The section IS delivered today -- in the authorized report's stored document and in
         // the PDF and CSV an administrator downloads. Only the anonymous link is without it.
         nameof(ReportOutputDocument.Comparison),
+
+        // WITHHELD, on the same reasoning and as the same single decision: `Scope` states what
+        // a report was told to include, which is a fact about how an administrator configured
+        // their document rather than a climate reading. Publishing it is very likely harmless
+        // and it is still not a default an implementer picks. Ruled together with `Comparison`
+        // so one conversation settles both.
+        nameof(ReportOutputDocument.Scope),
     };
 
     /// <summary>
@@ -507,7 +514,7 @@ public static class PublicReportProjection
         new(
             typeof(ReportOutputDocument),
             typeof(PublicReportDocument),
-            Withhold(nameof(ReportOutputDocument.Comparison)),
+            Withhold(nameof(ReportOutputDocument.Comparison), nameof(ReportOutputDocument.Scope)),
             Nothing),
         new(
             typeof(ReportSurveySection),
