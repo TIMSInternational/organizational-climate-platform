@@ -59,7 +59,14 @@ public sealed record ReportOutputDocument(
     /// document -- which matters more here than elsewhere, because
     /// <c>ReportShareEndpoints</c> serves this document to anonymous readers.
     /// </summary>
-    ReportComparisonSection? Comparison = null);
+    ReportComparisonSection? Comparison = null,
+    /// <summary>
+    /// What the generator was told to include (#88's filter model), or null for a document
+    /// written before filters existed. Present so a reader can tell an EMPTY section from an
+    /// EXCLUDED one -- the same absent-versus-withheld distinction the anonymity floor forces
+    /// everywhere else in this document.
+    /// </summary>
+    ReportScope? Scope = null);
 
 /// <summary>
 /// The single path by which a generated report reads AI insights.

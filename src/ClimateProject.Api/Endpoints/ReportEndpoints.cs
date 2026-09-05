@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using ClimateProject.Api.Infrastructure;
 using ClimateProject.Api.Infrastructure.Auditing;
 using ClimateProject.Application.Auditing;
@@ -116,6 +117,38 @@ public static class ReportEndpoints
                 statusCode: 400);
         }
 
+        // The filter model (#88). Validated here rather than in the generator because a
+        // caller who named a survey that is not theirs deserves a 400 while they are still
+        // looking at the request -- the generator would simply intersect it away and hand back
+        // a document that is silently narrower than what was asked for.
+        if (request.Filters is { } requested)
+        {
+            if (requested.SurveyIds is { Count: 0 })
+            {
+                return Results.Json(
+                    new ErrorResponse(
+                        "filters.surveyIds cannot be empty. Name at least one survey, or omit the field to include them all."),
+                    statusCode: 400);
+            }
+
+            if (requested.SurveyIds is { } ids)
+            {
+                var known = await db.Surveys
+                    .Where(s => s.CompanyId == request.CompanyId && ids.Contains(s.Id))
+                    .Select(s => s.Id)
+                    .ToListAsync(cancellationToken);
+
+                var unknown = ids.Distinct().Where(id => !known.Contains(id)).ToList();
+                if (unknown.Count > 0)
+                {
+                    return Results.Json(
+                        new ErrorResponse(
+                            $"filters.surveyIds names {unknown.Count} survey(s) that do not belong to this company: {string.Join(", ", unknown)}."),
+                        statusCode: 400);
+                }
+            }
+        }
+
         var createdBy = await ResolveCurrentUserIdAsync(currentUser, db, cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var report = new Report
@@ -129,6 +162,13 @@ public static class ReportEndpoints
             TemplateId = request.TemplateId,
             Status = "generating",
             Format = format,
+            // Stored as the JSON the column is typed for (jsonb), and read back by
+            // ReportGeneration rather than passed as an argument -- so the SCHEDULED runner
+            // regenerates a recurring report against its own filter without the sweep having
+            // to know filters exist.
+            Filters = request.Filters is null
+                ? null
+                : JsonSerializer.Serialize(request.Filters, JsonSerializerOptions.Web),
             GenerationStartedAt = now,
             CreatedAt = now,
             UpdatedAt = now,

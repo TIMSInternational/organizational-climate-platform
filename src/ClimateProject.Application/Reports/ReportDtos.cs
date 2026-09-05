@@ -187,7 +187,62 @@ public sealed record ReportDetail(
     DateTimeOffset? GenerationStartedAt, DateTimeOffset? GenerationCompletedAt, DateTimeOffset CreatedAt,
     bool IsRecurring, string? RecurrencePattern, DateTimeOffset? NextGeneration);
 
-public sealed record CreateReportRequest(string Title, string? Description, string Type, Guid CompanyId, string Format, string? TemplateId);
+/// <summary>
+/// What a report is told to include (#88's "report configuration and filter model").
+///
+/// <para><b>Every field narrows and none widens.</b> A filter chooses among the sections the
+/// generator would have produced anyway; it cannot lower an anonymity floor, add a breakdown,
+/// or reach a survey outside the report's own company. That is a property of the shape, not a
+/// promise in a comment: the only survey field is a list of ids that is intersected with the
+/// company's own surveys, and the rest are booleans that can turn a section off.</para>
+///
+/// <para><b>Why one model rather than the legacy two.</b> The surface being replaced had both
+/// <c>reports/filters</c> and <c>reports/configuration</c>, and the schema still carries a
+/// <c>config</c> jsonb column beside <c>filters</c>. Two records describing one question are
+/// two places to disagree, and a reader would have to know which one won. This is stored whole
+/// in <c>filters</c>; <c>config</c> stays unused, and dropping it is a migration nobody needs
+/// today.</para>
+/// </summary>
+/// <param name="SurveyIds">
+/// The surveys to cover, or <see langword="null"/> for all of them -- which is what every
+/// report written before this existed carries, so an absent filter must keep generating exactly
+/// what it generated yesterday. An <b>empty list</b> is refused rather than read as "none":
+/// a document with no survey sections is far more likely to be a caller mistake than a request,
+/// and "omit the field" already says "all" unambiguously.
+/// </param>
+public sealed record ReportFilters(
+    IReadOnlyList<Guid>? SurveyIds = null,
+    bool IncludeAiInsights = true,
+    bool IncludeBenchmarks = true,
+    bool IncludeComparison = true);
+
+/// <summary>
+/// What the generator actually included, recorded in the document itself.
+///
+/// <para><b>This exists so a reader can tell an empty section from an excluded one.</b> It is
+/// the same distinction the anonymity floor forces everywhere else in this document: absent and
+/// withheld are different statements, and a section that is simply missing says neither. A PDF
+/// with no benchmarks should not leave an auditor deciding whether the company has none or
+/// whether somebody filtered them out.</para>
+/// </summary>
+/// <param name="AllSurveys">True when no survey filter was applied.</param>
+/// <param name="SurveyCount">How many survey sections the document carries.</param>
+public sealed record ReportScope(
+    bool AllSurveys,
+    int SurveyCount,
+    bool AiInsightsIncluded,
+    bool BenchmarksIncluded,
+    bool ComparisonIncluded);
+
+public sealed record CreateReportRequest(
+    string Title,
+    string? Description,
+    string Type,
+    Guid CompanyId,
+    string Format,
+    string? TemplateId,
+    /// <summary>Optional. Absent means the whole company, which is the pre-existing behaviour.</summary>
+    ReportFilters? Filters = null);
 
 /// <summary>
 /// Body of <c>PUT /admin/reports/{id}/schedule</c> -- the writer for the three columns
