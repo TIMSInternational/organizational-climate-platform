@@ -5,10 +5,12 @@ import {
   downloadReport,
   listReports,
   reportFileName,
+  type Report,
   type ReportListItem,
 } from '../api/reports'
 import ReportForm, { type ReportFormValues } from '../components/ReportForm'
 import ReportList from '../components/ReportList'
+import ReportSchedulePanel from '../components/ReportSchedulePanel'
 import ReportSharePanel from '../components/ReportSharePanel'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
@@ -68,6 +70,9 @@ export default function ReportsListPage() {
   // The report the share panel is open for, not a boolean plus an id: two pieces of state
   // that have to agree is how a dialog ends up open against the wrong row.
   const [sharing, setSharing] = useState<ReportListItem | null>(null)
+  // Same shape and the same reason as `sharing`: the report the schedule panel is open for,
+  // not a boolean plus an id.
+  const [scheduling, setScheduling] = useState<ReportListItem | null>(null)
 
   // `useCallback` rather than a plain function plus a deps-array lie: the web lint
   // budget is `--max-warnings 10` and it is exactly full, so a new
@@ -123,6 +128,28 @@ export default function ReportsListPage() {
     }
   }
 
+  /**
+   * Folds the saved schedule back into the row in place rather than refetching the list.
+   *
+   * The `PUT`/`DELETE` return the whole report, so the three columns this page displays are
+   * already in hand. Reloading would also collapse the create form and clear the download
+   * notice, both of which are unrelated to having changed a schedule.
+   */
+  function handleScheduleSaved(saved: Report) {
+    setReports((current) =>
+      current.map((row) =>
+        row.id === saved.id
+          ? {
+              ...row,
+              isRecurring: saved.isRecurring,
+              recurrencePattern: saved.recurrencePattern,
+              nextGeneration: saved.nextGeneration,
+            }
+          : row,
+      ),
+    )
+  }
+
   if (!companyId) {
     return <p role="alert">{t('common.noCompanyAssociated')}</p>
   }
@@ -176,6 +203,7 @@ export default function ReportsListPage() {
               downloadingId={downloadingId}
               onDownload={handleDownload}
               onShare={setSharing}
+              onSchedule={setScheduling}
             />
           )}
         </LoadingRegion>
@@ -183,6 +211,18 @@ export default function ReportsListPage() {
 
       {/* Mounted only while a report is selected, so the panel's own effect refetches the
           share list on every opening rather than showing a stale one. */}
+      {scheduling && (
+        <ReportSchedulePanel
+          open
+          onOpenChange={(next) => {
+            if (!next) setScheduling(null)
+          }}
+          baseUrl={baseUrl}
+          report={scheduling}
+          onSaved={handleScheduleSaved}
+        />
+      )}
+
       {sharing && (
         <ReportSharePanel
           open

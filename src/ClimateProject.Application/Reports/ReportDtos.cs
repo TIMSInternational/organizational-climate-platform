@@ -1,8 +1,28 @@
+using ClimateProject.Application.Scheduling;
 using ClimateProject.Application.Surveys;
 
 namespace ClimateProject.Application.Reports;
 
-public sealed record ReportListItem(Guid Id, string Title, string Type, Guid CompanyId, string Status, string Format, DateTimeOffset CreatedAt);
+/// <summary>
+/// A row of <c>GET /admin/reports</c>.
+///
+/// <para>The three schedule columns are on the LIST and not only on the detail on purpose. A
+/// recurring report is invisible from its own row otherwise, and "which of these forty reports
+/// mails itself every month" is the question an administrator opens this screen to answer.
+/// Making them fetch each report to find out would also be forty requests to render one
+/// table.</para>
+/// </summary>
+public sealed record ReportListItem(
+    Guid Id,
+    string Title,
+    string Type,
+    Guid CompanyId,
+    string Status,
+    string Format,
+    DateTimeOffset CreatedAt,
+    bool IsRecurring,
+    string? RecurrencePattern,
+    DateTimeOffset? NextGeneration);
 
 /// <summary>
 /// One department's participation as a report prints it.
@@ -164,6 +184,24 @@ public sealed record ReportBenchmarkComparison(
 public sealed record ReportDetail(
     Guid Id, string Title, string? Description, string Type, Guid CompanyId, Guid CreatedBy,
     string? TemplateId, string Status, string Format, string? ReportOutput, int DownloadCount,
-    DateTimeOffset? GenerationStartedAt, DateTimeOffset? GenerationCompletedAt, DateTimeOffset CreatedAt);
+    DateTimeOffset? GenerationStartedAt, DateTimeOffset? GenerationCompletedAt, DateTimeOffset CreatedAt,
+    bool IsRecurring, string? RecurrencePattern, DateTimeOffset? NextGeneration);
 
 public sealed record CreateReportRequest(string Title, string? Description, string Type, Guid CompanyId, string Format, string? TemplateId);
+
+/// <summary>
+/// Body of <c>PUT /admin/reports/{id}/schedule</c> -- the writer for the three columns
+/// <c>ScheduledReportJob</c> has always read and nothing has ever set.
+/// </summary>
+/// <param name="Pattern">
+/// One of <see cref="RecurrenceSchedule.All"/>. Nullable so that a body omitting it, or
+/// sending <c>null</c>, is refused by the endpoint's own validation with a message naming the
+/// six accepted values -- rather than by the serializer, which would answer a bare 400 the
+/// caller cannot act on.
+/// </param>
+/// <param name="StartAt">
+/// When the FIRST occurrence should fire, UTC. Optional: omitted means one period from now,
+/// computed in the company's timezone. A value in the past is refused rather than advanced --
+/// see the endpoint for why that differs from the job's catch-up rule.
+/// </param>
+public sealed record SetReportScheduleRequest(string? Pattern, DateTimeOffset? StartAt);
