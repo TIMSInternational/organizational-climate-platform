@@ -1,3 +1,4 @@
+using ClimateProject.Application.Localization;
 using System.Security.Claims;
 using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
@@ -113,7 +114,7 @@ public static partial class BenchmarkEndpoints
         return benchmarkCompanyId is not null && currentUser.CompanyId == benchmarkCompanyId.Value.ToString();
     }
 
-    private static async Task<IResult> ListAsync(Guid? companyId, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> ListAsync(Guid? companyId, string? lang, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         if (!Roles.Admin.Contains(currentUser.Role)) return Results.Forbid();
@@ -134,30 +135,43 @@ public static partial class BenchmarkEndpoints
             query = query.Where(b => b.CompanyId == companyId.Value);
         }
 
-        var benchmarks = await query
-            .OrderBy(b => b.Name)
+        // #210: resolved for the reader, then ordered by the name they can see; Id second
+        // so two same-named benchmarks cannot swap places between reads.
+        var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
+        var benchmarks = (await query
+                .Select(b => new { b.Id, b.NameEn, b.NameEs, b.Type, b.Category, b.CompanyId, b.IsActive, b.QualityScore, b.PriorPeriodStatus })
+                .ToListAsync(cancellationToken))
             .Select(b => new BenchmarkListItem(
-                b.Id, b.Name, b.Type, b.Category, b.CompanyId, b.IsActive, b.QualityScore, b.PriorPeriodStatus))
-            .ToListAsync(cancellationToken);
+                b.Id, AuthoredContent.ResolveRequired(b.NameEn, b.NameEs, locale), b.Type, b.Category, b.CompanyId, b.IsActive, b.QualityScore, b.PriorPeriodStatus))
+            .OrderBy(b => b.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(b => b.Id)
+            .ToList();
 
         return Results.Ok(benchmarks);
     }
 
-    private static async Task<IResult> CreateAsync(CreateBenchmarkRequest request, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> CreateAsync(CreateBenchmarkRequest request, string? lang, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         if (!CanWriteBenchmark(currentUser, request.CompanyId)) return Results.Forbid();
 
-        var name = request.Name?.Trim();
-        var description = request.Description?.Trim();
         var type = request.Type?.Trim();
         var category = request.Category?.Trim();
         var source = request.Source?.Trim();
-        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(description)
+        if (request.Name is null || request.Description is null
             || string.IsNullOrWhiteSpace(type) || string.IsNullOrWhiteSpace(category) || string.IsNullOrWhiteSpace(source))
         {
             return Results.Json(new { message = "Name, Description, Type, Category, and Source are required" }, statusCode: 400);
         }
+
+        // #210: a bare name lands in the company's language, or the author's for a global
+        // benchmark -- never refused; { "en": ..., "es": ... } is explicit.
+        const string RequiredMessage = "Name, Description, Type, Category, and Source are required";
+        var attribution = await AuthoredWrites.AttributionLocaleAsync(db, currentUser, request.CompanyId, null, cancellationToken);
+        var name = AuthoredWrites.Apply(request.Name, attribution, "name", RequiredMessage, required: true, null, null);
+        if (name.Error is not null) return name.Error;
+        var description = AuthoredWrites.Apply(request.Description, attribution, "description", RequiredMessage, required: true, null, null);
+        if (description.Error is not null) return description.Error;
 
         // A link supplied at create time goes through exactly the checks the dedicated
         // prior-period route applies. It used to be checked only for existence, which let a
@@ -177,8 +191,10 @@ public static partial class BenchmarkEndpoints
         var benchmark = new Benchmark
         {
             Id = Guid.NewGuid(),
-            Name = name,
-            Description = description,
+            NameEn = name.En,
+            NameEs = name.Es,
+            DescriptionEn = description.En,
+            DescriptionEs = description.Es,
             Type = type,
             Category = category,
             Source = source,
@@ -202,42 +218,50 @@ public static partial class BenchmarkEndpoints
         db.Benchmarks.Add(benchmark);
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Json(await LoadDetailAsync(db, benchmark.Id, currentUser, cancellationToken), statusCode: 201);
+        return Results.Json(await LoadDetailAsync(db, benchmark.Id, currentUser, lang, cancellationToken), statusCode: 201);
     }
 
-    private static async Task<IResult> GetAsync(Guid id, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> GetAsync(Guid id, string? lang, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         var benchmark = await db.Benchmarks.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
         if (benchmark is null) return Results.Json(new { message = "Benchmark not found" }, statusCode: 404);
         if (!CanReadBenchmark(currentUser, benchmark.CompanyId)) return Results.Forbid();
 
-        return Results.Ok(await LoadDetailAsync(db, id, currentUser, cancellationToken));
+        return Results.Ok(await LoadDetailAsync(db, id, currentUser, lang, cancellationToken));
     }
 
-    private static async Task<IResult> UpdateAsync(Guid id, UpdateBenchmarkRequest request, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> UpdateAsync(Guid id, UpdateBenchmarkRequest request, string? lang, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         var benchmark = await db.Benchmarks.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
         if (benchmark is null) return Results.Json(new { message = "Benchmark not found" }, statusCode: 404);
         if (!CanWriteBenchmark(currentUser, benchmark.CompanyId)) return Results.Forbid();
 
-        var name = request.Name?.Trim();
-        var description = request.Description?.Trim();
-        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(description))
+        if (request.Name is null || request.Description is null)
         {
             return Results.Json(new { message = "Name and Description are required" }, statusCode: 400);
         }
 
-        benchmark.Name = name;
-        benchmark.Description = description;
+        // #210: bare strings keep writing the language the benchmark is already named in.
+        var attribution = await AuthoredWrites.AttributionLocaleAsync(
+            db, currentUser, benchmark.CompanyId, AuthoredContent.LanguageOf(benchmark.NameEn, benchmark.NameEs), cancellationToken);
+        var name = AuthoredWrites.Apply(request.Name, attribution, "name", "Name and Description are required", required: true, benchmark.NameEn, benchmark.NameEs);
+        if (name.Error is not null) return name.Error;
+        var description = AuthoredWrites.Apply(request.Description, attribution, "description", "Name and Description are required", required: true, benchmark.DescriptionEn, benchmark.DescriptionEs);
+        if (description.Error is not null) return description.Error;
+
+        benchmark.NameEn = name.En;
+        benchmark.NameEs = name.Es;
+        benchmark.DescriptionEn = description.En;
+        benchmark.DescriptionEs = description.Es;
         benchmark.Industry = request.Industry;
         benchmark.CompanySize = request.CompanySize;
         benchmark.Region = request.Region;
         benchmark.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(await LoadDetailAsync(db, id, currentUser, cancellationToken));
+        return Results.Ok(await LoadDetailAsync(db, id, currentUser, lang, cancellationToken));
     }
 
     /// <summary>
@@ -250,7 +274,7 @@ public static partial class BenchmarkEndpoints
     /// out. It runs the same <c>MetricProblem</c> the import path runs, because a rule enforced
     /// on one of two doors is not enforced.
     /// </remarks>
-    private static async Task<IResult> AddMetricAsync(Guid id, AddBenchmarkMetricRequest request, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> AddMetricAsync(Guid id, AddBenchmarkMetricRequest request, string? lang, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         var benchmark = await db.Benchmarks.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
@@ -273,7 +297,7 @@ public static partial class BenchmarkEndpoints
         db.BenchmarkMetrics.Add(metric);
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Json(await LoadDetailAsync(db, id, currentUser, cancellationToken), statusCode: 201);
+        return Results.Json(await LoadDetailAsync(db, id, currentUser, lang, cancellationToken), statusCode: 201);
     }
 
     /// <summary>
@@ -295,7 +319,7 @@ public static partial class BenchmarkEndpoints
     /// </para>
     /// </remarks>
     private static async Task<IResult> SetPriorPeriodAsync(
-        Guid id, SetPriorPeriodRequest request, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+        Guid id, SetPriorPeriodRequest request, string? lang, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         var benchmark = await db.Benchmarks.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
@@ -359,7 +383,7 @@ public static partial class BenchmarkEndpoints
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return Results.Ok(await LoadDetailAsync(db, id, currentUser, cancellationToken));
+        return Results.Ok(await LoadDetailAsync(db, id, currentUser, lang, cancellationToken));
     }
 
     /// <summary>
@@ -371,7 +395,7 @@ public static partial class BenchmarkEndpoints
     /// backfill below -- is allowed to treat as an answer rather than as a shortlist.
     /// </remarks>
     private static async Task<IResult> ListPriorPeriodCandidatesAsync(
-        Guid id, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+        Guid id, string? lang, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         var benchmark = await db.Benchmarks.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
@@ -387,7 +411,8 @@ public static partial class BenchmarkEndpoints
             .Select(b => new
             {
                 b.Id,
-                b.Name,
+                b.NameEn,
+                b.NameEs,
                 b.Category,
                 b.Type,
                 b.CreatedAt,
@@ -395,9 +420,11 @@ public static partial class BenchmarkEndpoints
             })
             .ToListAsync(cancellationToken);
 
+        var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
         var unambiguous = candidates.Count == 1;
         return Results.Ok(candidates
-            .Select(c => new PriorPeriodCandidateDto(c.Id, c.Name, c.Category, c.Type, c.CreatedAt, c.MetricCount, unambiguous))
+            .Select(c => new PriorPeriodCandidateDto(
+                c.Id, AuthoredContent.ResolveRequired(c.NameEn, c.NameEs, locale), c.Category, c.Type, c.CreatedAt, c.MetricCount, unambiguous))
             .ToList());
     }
 
@@ -427,7 +454,7 @@ public static partial class BenchmarkEndpoints
     /// </para>
     /// </remarks>
     private static async Task<IResult> BackfillPriorPeriodsAsync(
-        bool? apply, Guid? companyId, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+        bool? apply, Guid? companyId, string? lang, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         if (!Roles.Admin.Contains(currentUser.Role)) return Results.Forbid();
@@ -483,8 +510,10 @@ public static partial class BenchmarkEndpoints
         var ambiguous = 0;
         var noCandidate = 0;
 
+        var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
         foreach (var subject in subjects)
         {
+            var subjectName = AuthoredContent.ResolveRequired(subject.NameEn, subject.NameEs, locale);
             var candidates = await BenchmarkPriorPeriod.CandidatesQuery(db.Benchmarks, subject)
                 .OrderByDescending(b => b.CreatedAt)
                 .Select(b => b.Id)
@@ -493,14 +522,14 @@ public static partial class BenchmarkEndpoints
             if (candidates.Count == 0)
             {
                 noCandidate++;
-                decisions.Add(new PriorPeriodBackfillDecision(subject.Id, subject.Name, "no-candidate", null, 0));
+                decisions.Add(new PriorPeriodBackfillDecision(subject.Id, subjectName, "no-candidate", null, 0));
                 continue;
             }
 
             if (candidates.Count > 1)
             {
                 ambiguous++;
-                decisions.Add(new PriorPeriodBackfillDecision(subject.Id, subject.Name, "ambiguous", null, candidates.Count));
+                decisions.Add(new PriorPeriodBackfillDecision(subject.Id, subjectName, "ambiguous", null, candidates.Count));
                 continue;
             }
 
@@ -508,12 +537,12 @@ public static partial class BenchmarkEndpoints
             if (await BenchmarkPriorPeriod.WouldCreateCycleAsync(db, subject.Id, priorId, cancellationToken))
             {
                 ambiguous++;
-                decisions.Add(new PriorPeriodBackfillDecision(subject.Id, subject.Name, "ambiguous", null, candidates.Count));
+                decisions.Add(new PriorPeriodBackfillDecision(subject.Id, subjectName, "ambiguous", null, candidates.Count));
                 continue;
             }
 
             linked++;
-            decisions.Add(new PriorPeriodBackfillDecision(subject.Id, subject.Name, "linked", priorId, 1));
+            decisions.Add(new PriorPeriodBackfillDecision(subject.Id, subjectName, "linked", priorId, 1));
 
             if (apply == true)
             {
@@ -601,7 +630,7 @@ public static partial class BenchmarkEndpoints
     private static async Task<Guid> ResolveCurrentUserIdAsync(CurrentUser currentUser, ClimateProjectDbContext db, CancellationToken cancellationToken)
         => await ActingUserResolver.ResolveIdAsync(currentUser, db, cancellationToken) ?? Guid.Empty;
 
-    private static async Task<BenchmarkDetail> LoadDetailAsync(ClimateProjectDbContext db, Guid id, CurrentUser currentUser, CancellationToken cancellationToken)
+    private static async Task<BenchmarkDetail> LoadDetailAsync(ClimateProjectDbContext db, Guid id, CurrentUser currentUser, string? lang, CancellationToken cancellationToken)
     {
         var b = await db.Benchmarks.FirstAsync(x => x.Id == id, cancellationToken);
         var metrics = await db.BenchmarkMetrics
@@ -616,8 +645,9 @@ public static partial class BenchmarkEndpoints
         // `metrics` is handed over rather than re-read: this benchmark's readings are already
         // in hand and LoadPriorPeriodAsync would otherwise issue the identical query, with the
         // identical ORDER BY, on every read of a linked benchmark.
+        var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
         var priorPeriod = await BenchmarkPriorPeriod.LoadPriorPeriodAsync(
-            db, b, metrics, companyId => CanReadBenchmark(currentUser, companyId), cancellationToken);
+            db, b, metrics, companyId => CanReadBenchmark(currentUser, companyId), locale, cancellationToken);
 
         // The POINTER is withheld on the same terms as the comparison it points at. Omitting
         // the rich DTO while returning the id kept the promise only in the part a reader would
@@ -629,9 +659,14 @@ public static partial class BenchmarkEndpoints
         // tenant's.
         var visiblePriorPeriodId = priorPeriod?.Id;
 
+        // #210: name and description resolved for the reader, never nameEn/nameEs.
+        var fallbackFields = new List<string>();
+        var name = AuthoredContent.Resolve(b.NameEn, b.NameEs, locale, "name", fallbackFields) ?? string.Empty;
+        var description = AuthoredContent.Resolve(b.DescriptionEn, b.DescriptionEs, locale, "description", fallbackFields) ?? string.Empty;
+
         return new BenchmarkDetail(
-            b.Id, b.Name, b.Description, b.Type, b.Category, b.Source, b.Industry, b.CompanySize,
+            b.Id, name, description, b.Type, b.Category, b.Source, b.Industry, b.CompanySize,
             b.Region, b.CompanyId, b.IsActive, b.ValidationStatus, b.QualityScore, visiblePriorPeriodId, metrics,
-            b.PriorPeriodStatus, priorPeriod);
+            b.PriorPeriodStatus, priorPeriod, fallbackFields);
     }
 }

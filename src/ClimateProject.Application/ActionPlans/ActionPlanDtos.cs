@@ -1,3 +1,5 @@
+using ClimateProject.Application.Localization;
+
 namespace ClimateProject.Application.ActionPlans;
 
 public sealed record KpiDto(Guid Id, string Name, decimal TargetValue, decimal CurrentValue, string Unit, string MeasurementFrequency);
@@ -28,14 +30,18 @@ public sealed record ActionPlanDetail(
     string[] Tags,
     Guid? TemplateId,
     List<KpiDto> Kpis,
-    List<ObjectiveDto> Objectives);
+    List<ObjectiveDto> Objectives,
+    // #210: Title, Description and every KPI/objective text arrive resolved for the
+    // request's locale; the paths below ("title", "kpis[0].unit", ...) name the ones that
+    // had to reach for the other language.
+    IReadOnlyList<string> FallbackFields);
 
-public sealed record CreateKpiInput(string Name, decimal TargetValue, string Unit, string MeasurementFrequency);
-public sealed record CreateObjectiveInput(string Description, string SuccessCriteria);
+public sealed record CreateKpiInput(LocalizedInput? Name, decimal TargetValue, LocalizedInput? Unit, string MeasurementFrequency);
+public sealed record CreateObjectiveInput(LocalizedInput? Description, LocalizedInput? SuccessCriteria);
 
 public sealed record CreateActionPlanRequest(
-    string Title,
-    string Description,
+    LocalizedInput? Title,
+    LocalizedInput? Description,
     Guid CompanyId,
     Guid? DepartmentId,
     DateTimeOffset DueDate,
@@ -48,8 +54,8 @@ public sealed record CreateActionPlanRequest(
     List<CreateObjectiveInput>? Objectives);
 
 public sealed record UpdateActionPlanRequest(
-    string? Title,
-    string? Description,
+    LocalizedInput? Title,
+    LocalizedInput? Description,
     DateTimeOffset? DueDate,
     string? Status,
     string? Priority,

@@ -726,8 +726,8 @@ public class MicroclimateLifecycleEndpointsTests : IAsyncLifetime
         var template = new MicroclimateTemplate
         {
             Id = Guid.NewGuid(),
-            Name = name,
-            Description = "A weekly pulse",
+            NameEn = name,
+            DescriptionEn = "A weekly pulse",
             Category = "pulse",
             CompanyId = companyId,
             IsSystemTemplate = companyId is null,

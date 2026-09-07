@@ -1,3 +1,4 @@
+using ClimateProject.Application.Localization;
 using System.Security.Claims;
 using System.Text.Json;
 using ClimateProject.Api.Infrastructure;
@@ -77,29 +78,43 @@ public static class ReportEndpoints
     private static async Task<Guid> ResolveCurrentUserIdAsync(CurrentUser currentUser, ClimateProjectDbContext db, CancellationToken cancellationToken)
         => await ActingUserResolver.ResolveIdAsync(currentUser, db, cancellationToken) ?? Guid.Empty;
 
-    private static async Task<IResult> ListAsync(Guid companyId, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> ListAsync(Guid companyId, string? lang, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         if (!CanAccessCompany(currentUser, companyId)) return Results.Forbid();
 
-        var reports = await db.Reports
-            .Where(r => r.CompanyId == companyId)
-            .OrderByDescending(r => r.CreatedAt)
+        var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
+        var reports = (await db.Reports
+                .Where(r => r.CompanyId == companyId)
+                .OrderByDescending(r => r.CreatedAt)
+                .Select(r => new
+                {
+                    r.Id, r.TitleEn, r.TitleEs, r.Type, r.CompanyId, r.Status, r.Format, r.CreatedAt,
+                    r.IsRecurring, r.RecurrencePattern, r.NextGeneration,
+                })
+                .ToListAsync(cancellationToken))
             .Select(r => new ReportListItem(
-                r.Id, r.Title, r.Type, r.CompanyId, r.Status, r.Format, r.CreatedAt,
+                r.Id, AuthoredContent.ResolveRequired(r.TitleEn, r.TitleEs, locale), r.Type, r.CompanyId, r.Status, r.Format, r.CreatedAt,
                 r.IsRecurring, r.RecurrencePattern, r.NextGeneration))
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         return Results.Ok(reports);
     }
 
-    private static async Task<IResult> CreateAsync(CreateReportRequest request, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> CreateAsync(CreateReportRequest request, string? lang, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         if (!CanAccessCompany(currentUser, request.CompanyId)) return Results.Forbid();
 
-        var title = request.Title?.Trim();
-        if (string.IsNullOrWhiteSpace(title)) return Results.Json(new { message = "Title is required" }, statusCode: 400);
+        if (request.Title is null) return Results.Json(new { message = "Title is required" }, statusCode: 400);
+
+        // #210: a bare title lands in the company's language; { "en": ..., "es": ... } is
+        // explicit. Never refused -- see AuthoredContent.
+        var attribution = await AuthoredWrites.AttributionLocaleAsync(db, currentUser, request.CompanyId, null, cancellationToken);
+        var title = AuthoredWrites.Apply(request.Title, attribution, "title", "Title is required", required: true, null, null);
+        if (title.Error is not null) return title.Error;
+        var description = AuthoredWrites.Apply(request.Description, attribution, "description", string.Empty, required: false, null, null);
+        if (description.Error is not null) return description.Error;
 
         // `format` used to be copied through unfiltered into a 10-character column nothing
         // branched on, so the row held whatever a caller sent -- "excel", "docx", "" -- and
@@ -154,8 +169,10 @@ public static class ReportEndpoints
         var report = new Report
         {
             Id = Guid.NewGuid(),
-            Title = title,
-            Description = request.Description,
+            TitleEn = title.En,
+            TitleEs = title.Es,
+            DescriptionEn = description.En,
+            DescriptionEs = description.Es,
             Type = request.Type,
             CompanyId = request.CompanyId,
             CreatedBy = createdBy,
@@ -184,17 +201,17 @@ public static class ReportEndpoints
         await ReportGeneration.GenerateAsync(db, report, now, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Json(ToDetail(report), statusCode: 201);
+        return Results.Json(ToDetail(report, lang), statusCode: 201);
     }
 
-    private static async Task<IResult> GetAsync(Guid id, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> GetAsync(Guid id, string? lang, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         var report = await db.Reports.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
         if (report is null) return Results.Json(new { message = "Report not found" }, statusCode: 404);
         if (!CanAccessCompany(currentUser, report.CompanyId)) return Results.Forbid();
 
-        return Results.Ok(ToDetail(report));
+        return Results.Ok(ToDetail(report, lang));
     }
 
     /// <summary>
@@ -209,7 +226,7 @@ public static class ReportEndpoints
     /// status code is a decision with its own tests, not a side effect of adding a renderer),
     /// the same 400 for a report that is not
     /// <c>completed</c>, and the same <c>download_count</c> increment. What used to return
-    /// <c>Results.Ok(ToDetail(report))</c> now returns the rendered document -- so the web's
+    /// <c>Results.Ok(ToDetail(report, lang))</c> now returns the rendered document -- so the web's
     /// download-count toast lost its only source, which is why
     /// <c>ReportsListPage</c> stopped reporting a count.
     /// </para>
@@ -223,6 +240,7 @@ public static class ReportEndpoints
     /// </remarks>
     private static async Task<IResult> DownloadAsync(
         Guid id,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         ILoggerFactory loggerFactory,
@@ -260,10 +278,14 @@ public static class ReportEndpoints
                 ReportFormats.Pdf);
         }
 
+        // #210: the heading and the file name in the reader's language, falling back to
+        // whichever language the report was named in.
+        var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
+        var title = AuthoredContent.ResolveRequired(report.TitleEn, report.TitleEs, locale);
         var context = new ReportRenderContext(
             report.Id,
-            report.Title,
-            report.Description,
+            title,
+            AuthoredContent.ResolveText(report.DescriptionEn, report.DescriptionEs, locale),
             report.Type,
             // The instant the numbers are true as of, not "now": restamping the document on
             // every download would make two copies of one report disagree about their own date.
@@ -274,7 +296,7 @@ public static class ReportEndpoints
             ? ReportRenderer.BuildCsv(context).ToBytes()
             : ReportRenderer.BuildPdf(context).ToBytes();
 
-        return Results.File(bytes, ReportFormats.ContentType(csv), ReportFormats.FileName(report.Title, report.Id, csv));
+        return Results.File(bytes, ReportFormats.ContentType(csv), ReportFormats.FileName(title, report.Id, csv));
     }
 
     /// <summary>
@@ -307,6 +329,7 @@ public static class ReportEndpoints
     private static async Task<IResult> SetScheduleAsync(
         Guid id,
         SetReportScheduleRequest request,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -373,7 +396,7 @@ public static class ReportEndpoints
         report.UpdatedAt = now;
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(ToDetail(report));
+        return Results.Ok(ToDetail(report, lang));
     }
 
     /// <summary>
@@ -388,6 +411,7 @@ public static class ReportEndpoints
     /// </remarks>
     private static async Task<IResult> ClearScheduleAsync(
         Guid id,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -403,11 +427,19 @@ public static class ReportEndpoints
         report.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(ToDetail(report));
+        return Results.Ok(ToDetail(report, lang));
     }
 
-    private static ReportDetail ToDetail(Report r) => new(
-        r.Id, r.Title, r.Description, r.Type, r.CompanyId, r.CreatedBy, r.TemplateId,
-        r.Status, r.Format, r.ReportOutput, r.DownloadCount, r.GenerationStartedAt, r.GenerationCompletedAt, r.CreatedAt,
-        r.IsRecurring, r.RecurrencePattern, r.NextGeneration);
+    private static ReportDetail ToDetail(Report r, string? lang)
+    {
+        // #210: title and description resolved for the reader, never titleEn/titleEs.
+        var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
+        var fallbackFields = new List<string>();
+        var title = AuthoredContent.Resolve(r.TitleEn, r.TitleEs, locale, "title", fallbackFields) ?? string.Empty;
+        var description = AuthoredContent.Resolve(r.DescriptionEn, r.DescriptionEs, locale, "description", fallbackFields);
+        return new(
+            r.Id, title, description, r.Type, r.CompanyId, r.CreatedBy, r.TemplateId,
+            r.Status, r.Format, r.ReportOutput, r.DownloadCount, r.GenerationStartedAt, r.GenerationCompletedAt, r.CreatedAt,
+            r.IsRecurring, r.RecurrencePattern, r.NextGeneration, fallbackFields);
+    }
 }

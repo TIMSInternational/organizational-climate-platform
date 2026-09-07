@@ -64,7 +64,7 @@ public class NotificationTemplateTests(PostgresContainerFixture postgres)
             Name = "survey_name",
             Type = "string",
             Required = true,
-            Description = "The name of the survey being sent",
+            DescriptionEn = "The name of the survey being sent",
             DefaultValue = """{"fallback": "Climate Survey"}""",
         };
         var rule = new NotificationPersonalizationRule
@@ -114,7 +114,7 @@ public class NotificationTemplateTests(PostgresContainerFixture postgres)
         var minimalVariableId = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO notification_template_variables ("Id", notification_template_id, name, type, description)
+             INSERT INTO notification_template_variables ("Id", notification_template_id, name, type, description_en)
              VALUES ({minimalVariableId}, {minimalTemplateId}, {"user_name"}, {"string"}, {"The recipient's display name"})
              """);
 

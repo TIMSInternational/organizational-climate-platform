@@ -294,13 +294,13 @@ public class CompanyLessSuperAdminTests : IAsyncLifetime
             // a perfectly valid FK target for the rest of the schema.
             var globalBenchmark = new Benchmark
             {
-                Id = Guid.NewGuid(), Name = "Industry Average", Description = "Cross-industry baseline",
+                Id = Guid.NewGuid(), NameEn = "Industry Average", DescriptionEn = "Cross-industry baseline",
                 Type = "industry", Category = "engagement", Source = "test", CreatedBy = superAdminId,
                 CompanyId = null, IsActive = true, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
             };
             var companyBenchmark = new Benchmark
             {
-                Id = Guid.NewGuid(), Name = "Co A Internal", Description = "Company A baseline",
+                Id = Guid.NewGuid(), NameEn = "Co A Internal", DescriptionEn = "Company A baseline",
                 Type = "internal", Category = "engagement", Source = "test", CreatedBy = superAdminId,
                 CompanyId = _companyAId, IsActive = true, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
             };

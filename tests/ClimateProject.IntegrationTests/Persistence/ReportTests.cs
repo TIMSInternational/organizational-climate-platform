@@ -42,8 +42,8 @@ public class ReportTests(PostgresContainerFixture postgres)
         var report = new Report
         {
             Id = Guid.NewGuid(),
-            Title = "Q3 Survey Analysis",
-            Description = "Quarterly survey analysis report",
+            TitleEn = "Q3 Survey Analysis",
+            DescriptionEn = "Quarterly survey analysis report",
             Type = "survey_analysis",
             CompanyId = company.Id,
             CreatedBy = user.Id,
@@ -91,7 +91,7 @@ public class ReportTests(PostgresContainerFixture postgres)
         var now = DateTimeOffset.UtcNow;
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO reports ("Id", title, type, company_id, created_by, format, created_at, updated_at)
+             INSERT INTO reports ("Id", title_en, type, company_id, created_by, format, created_at, updated_at)
              VALUES ({minimalReportId}, {"Minimal Report"}, {"custom"}, {company.Id}, {user.Id}, {"json"}, {now}, {now})
              """);
 

@@ -193,13 +193,16 @@ public static class SearchQueries
         var scoped = scope.CompanyId is Guid company ? actionPlans.Where(a => a.CompanyId == company) : actionPlans;
 
         return TopMatches(scoped, tsQuery, limit)
+            // ContentLanguage is null: an action plan declares no language, so the
+            // endpoint infers it from the pair (AuthoredContent.LanguageOf), exactly as it
+            // does for every other #210 field.
             .Select(a => new SearchHitRow(
                 SearchEntityTypes.ActionPlan,
                 a.Id,
-                a.Title,
-                null,
-                a.Description,
-                null,
+                a.TitleEn,
+                a.TitleEs,
+                a.DescriptionEn,
+                a.DescriptionEs,
                 null,
                 a.CompanyId,
                 null));
@@ -213,10 +216,10 @@ public static class SearchQueries
             .Select(r => new SearchHitRow(
                 SearchEntityTypes.Report,
                 r.Id,
-                r.Title,
-                null,
-                r.Description,
-                null,
+                r.TitleEn,
+                r.TitleEs,
+                r.DescriptionEn,
+                r.DescriptionEs,
                 null,
                 r.CompanyId,
                 null));

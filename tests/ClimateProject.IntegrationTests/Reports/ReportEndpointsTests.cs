@@ -797,4 +797,64 @@ public class ReportEndpointsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         return (colliderId, (await login.Content.ReadFromJsonAsync<TokenResponse>())!.Token);
     }
+
+
+    // ------------------------------------------------------------------
+    // #210 -- title and description are paired columns
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_bilingual_report_reads_and_downloads_under_the_title_of_the_readers_locale()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync("/admin/reports", new CreateReportRequest(
+            LocalizedInput.FromLocales(new Dictionary<string, string?> { ["en"] = "Q3 climate report", ["es"] = "Informe de clima Q3" }),
+            LocalizedInput.FromLocales(new Dictionary<string, string?> { ["en"] = "Quarterly summary", ["es"] = "Resumen trimestral" }),
+            "climate_summary", _companyId, "csv", null));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<ReportDetail>();
+
+        var spanish = await (await client.GetAsync($"/admin/reports/{created!.Id}?lang=es")).Content.ReadFromJsonAsync<ReportDetail>();
+        Assert.Equal("Informe de clima Q3", spanish!.Title);
+        Assert.Equal("Resumen trimestral", spanish.Description);
+        Assert.Empty(spanish.FallbackFields);
+
+        var english = await (await client.GetAsync($"/admin/reports/{created.Id}?lang=en")).Content.ReadFromJsonAsync<ReportDetail>();
+        Assert.Equal("Q3 climate report", english!.Title);
+
+        var listed = await (await client.GetAsync($"/admin/reports?companyId={_companyId}&lang=es")).Content.ReadFromJsonAsync<List<ReportListItem>>();
+        Assert.Equal("Informe de clima Q3", listed!.Single(r => r.Id == created.Id).Title);
+
+        // The rendered file carries the heading in the reader's language too.
+        var download = await client.PostAsync($"/admin/reports/{created.Id}/download?lang=es", null);
+        Assert.Equal(HttpStatusCode.OK, download.StatusCode);
+        var csv = await download.Content.ReadAsStringAsync();
+        Assert.Contains("Informe de clima Q3", csv);
+        Assert.DoesNotContain("Q3 climate report", csv);
+    }
+
+    [Fact]
+    public async Task A_bare_title_lands_in_the_companys_language_and_a_Spanish_reader_is_told_it_fell_back()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync("/admin/reports", new CreateReportRequest(
+            "Q3 Climate Report", "Quarterly summary", "climate_summary", _companyId, "pdf", null));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<ReportDetail>();
+
+        var spanish = await (await client.GetAsync($"/admin/reports/{created!.Id}?lang=es")).Content.ReadFromJsonAsync<ReportDetail>();
+        Assert.Equal("Q3 Climate Report", spanish!.Title);
+        Assert.Equal(["title", "description"], spanish.FallbackFields);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var row = await db.Reports.AsNoTracking().SingleAsync(r => r.Id == created.Id);
+        Assert.Equal(("Q3 Climate Report", null, "Quarterly summary", null), (row.TitleEn, row.TitleEs, row.DescriptionEn, row.DescriptionEs));
+    }
 }

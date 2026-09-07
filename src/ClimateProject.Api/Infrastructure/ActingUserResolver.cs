@@ -130,6 +130,23 @@ public static class ActingUserResolver
         => (await ResolveAsync(currentUser, db.Users.AsNoTracking(), cancellationToken))?.Id;
 
     /// <summary>
+    /// The language the acting user reads the product in (<c>User.Preferences.Language</c>,
+    /// a display preference), or null when the <c>sub</c> matches nothing.
+    /// </summary>
+    /// <remarks>
+    /// Added for #210: it is the last signal a write has about which language an
+    /// administrator typed a bare string in, consulted only when neither the request nor
+    /// the owning company names a single language -- see
+    /// <c>AuthoredContent.AttributionLocale</c>. Untracked, for the reason
+    /// <see cref="ResolveIdAsync"/> gives, and sharing the one ordering.
+    /// </remarks>
+    public static async Task<string?> ResolveDisplayLanguageAsync(
+        CurrentUser currentUser,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+        => (await ResolveAsync(currentUser, db.Users.AsNoTracking(), cancellationToken))?.Preferences.Language;
+
+    /// <summary>
     /// The acting user's row id and the company it belongs to, or null when the <c>sub</c>
     /// matches nothing.
     /// </summary>

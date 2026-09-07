@@ -57,8 +57,8 @@ public class MicroclimateTemplateDeleteBehaviourTests(PostgresContainerFixture p
         var template = new MicroclimateTemplate
         {
             Id = Guid.NewGuid(),
-            Name = "Pulse check",
-            Description = "A short weekly pulse",
+            NameEn = "Pulse check",
+            DescriptionEn = "A short weekly pulse",
             Category = "engagement",
             CompanyId = company.Id,
             CreatedBy = null,

@@ -297,13 +297,18 @@ public static class SearchEndpoints
     /// </summary>
     private static SearchResultItem? ToItem(SearchHitRow row, string? lang)
     {
-        var title = LocalizedContent.ResolveText(row.TitleEn, row.TitleEs, lang, row.ContentLanguage);
+        // A row with no declared language (#210's action plans and reports) resolves
+        // against the language its own columns are authored in, so a Spanish-only title
+        // searched from an English session is returned in Spanish rather than dropped.
+        var title = LocalizedContent.ResolveText(
+            row.TitleEn, row.TitleEs, lang, row.ContentLanguage ?? AuthoredContent.LanguageOf(row.TitleEn, row.TitleEs));
         if (string.IsNullOrWhiteSpace(title))
         {
             return null;
         }
 
-        var subtitle = LocalizedContent.ResolveText(row.SubtitleEn, row.SubtitleEs, lang, row.ContentLanguage);
+        var subtitle = LocalizedContent.ResolveText(
+            row.SubtitleEn, row.SubtitleEs, lang, row.ContentLanguage ?? AuthoredContent.LanguageOf(row.SubtitleEn, row.SubtitleEs));
         return new SearchResultItem(row.Type, row.Id, title, subtitle, row.CompanyId, row.ParentId);
     }
 

@@ -40,8 +40,8 @@ public class ActionPlanTemplateTests(PostgresContainerFixture postgres)
         var scoped = new ActionPlanTemplate
         {
             Id = Guid.NewGuid(),
-            Name = "Engagement Boost",
-            Description = "Standard playbook for low engagement scores.",
+            NameEn = "Engagement Boost",
+            DescriptionEn = "Standard playbook for low engagement scores.",
             Category = "engagement",
             CompanyId = company.Id,
             CreatedBy = user.Id,
@@ -54,8 +54,8 @@ public class ActionPlanTemplateTests(PostgresContainerFixture postgres)
         var global = new ActionPlanTemplate
         {
             Id = Guid.NewGuid(),
-            Name = "Generic Improvement",
-            Description = "Global default template.",
+            NameEn = "Generic Improvement",
+            DescriptionEn = "Global default template.",
             Category = "general",
             CompanyId = null,
             CreatedBy = user.Id,
@@ -87,7 +87,7 @@ public class ActionPlanTemplateTests(PostgresContainerFixture postgres)
         var minimalId = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO action_plan_templates ("Id", name, description, category, created_by, created_at, updated_at)
+             INSERT INTO action_plan_templates ("Id", name_en, description_en, category, created_by, created_at, updated_at)
              VALUES ({minimalId}, {"Minimal Template"}, {"desc"}, {"general"}, {user.Id}, {DateTimeOffset.UtcNow}, {DateTimeOffset.UtcNow})
              """);
 
@@ -109,7 +109,7 @@ public class ActionPlanTemplateTests(PostgresContainerFixture postgres)
 
         db.ActionPlanTemplates.Add(new ActionPlanTemplate
         {
-            Id = Guid.NewGuid(), Name = "T", Description = "d", Category = "general",
+            Id = Guid.NewGuid(), NameEn = "T", DescriptionEn = "d", Category = "general",
             CreatedBy = user.Id, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         });
         await db.SaveChangesAsync();

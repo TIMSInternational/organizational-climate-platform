@@ -550,7 +550,7 @@ public class GdprEndpointsTests : IAsyncLifetime
             Id = Guid.NewGuid(),
             CompanyId = _otherCompanyId,
             CreatedBy = foreignAdminId,
-            Title = ForeignReportMarker,
+            TitleEn = ForeignReportMarker,
             Type = "custom",
             Format = "pdf",
             SharedWith = [subjectEmail],

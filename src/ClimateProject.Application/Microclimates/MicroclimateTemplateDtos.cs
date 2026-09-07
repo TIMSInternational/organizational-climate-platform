@@ -2,6 +2,12 @@ using ClimateProject.Application.Localization;
 
 namespace ClimateProject.Application.Microclimates;
 
+/// <summary>
+/// Read shape. <c>Name</c> and <c>Description</c> are #210 paired columns, already
+/// resolved for the request's locale -- never <c>nameEn</c>/<c>nameEs</c> -- with
+/// <c>FallbackFields</c> naming the ones that had to reach for the other language.
+/// <c>Category</c> is a facet key, not content; see docs/decisions/author-content-i18n.md.
+/// </summary>
 public sealed record MicroclimateTemplateDetail(
     Guid Id,
     string Name,
@@ -10,13 +16,18 @@ public sealed record MicroclimateTemplateDetail(
     Guid? CompanyId,
     bool IsSystemTemplate,
     int UsageCount,
-    bool IsActive);
+    bool IsActive,
+    IReadOnlyList<string> FallbackFields);
 
 public sealed record MicroclimateTemplateListResponse(IReadOnlyList<MicroclimateTemplateDetail> Templates);
 
+/// <summary>
+/// <c>Name</c>/<c>Description</c> accept a bare string (attributed, never refused -- see
+/// <c>AuthoredContent</c>) or a locale-keyed object.
+/// </summary>
 public sealed record CreateMicroclimateTemplateRequest(
-    string Name,
-    string Description,
+    LocalizedInput? Name,
+    LocalizedInput? Description,
     string Category,
     Guid? CompanyId);
 

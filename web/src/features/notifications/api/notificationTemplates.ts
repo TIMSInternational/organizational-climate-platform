@@ -113,7 +113,11 @@ export interface NotificationTemplateVariableInput {
   name: string
   type: string
   required: boolean
-  description?: string
+  /**
+   * A #210 paired column. A bare string is attributed to the template's single language
+   * (or the author's own for a global template) and never refused; `{ en, es }` is explicit.
+   */
+  description?: LocalizedInput
   /** A JSON document, not a bare value — see `NotificationTemplateVariable.defaultValue`. */
   defaultValue?: string
 }

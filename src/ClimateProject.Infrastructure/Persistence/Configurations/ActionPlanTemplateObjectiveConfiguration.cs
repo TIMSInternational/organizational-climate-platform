@@ -11,8 +11,10 @@ public class ActionPlanTemplateObjectiveConfiguration : IEntityTypeConfiguration
         builder.ToTable("action_plan_template_objectives");
         builder.HasKey(o => o.Id);
         builder.Property(o => o.TemplateId).HasColumnName("template_id").IsRequired();
-        builder.Property(o => o.Description).HasColumnName("description").HasColumnType("text").IsRequired();
-        builder.Property(o => o.SuccessCriteria).HasColumnName("success_criteria").HasColumnType("text").IsRequired();
+        builder.Property(o => o.DescriptionEn).HasColumnName("description_en").HasColumnType("text");
+        builder.Property(o => o.DescriptionEs).HasColumnName("description_es").HasColumnType("text");
+        builder.Property(o => o.SuccessCriteriaEn).HasColumnName("success_criteria_en").HasColumnType("text");
+        builder.Property(o => o.SuccessCriteriaEs).HasColumnName("success_criteria_es").HasColumnType("text");
 
         builder.HasOne<ActionPlanTemplate>().WithMany().HasForeignKey(o => o.TemplateId);
     }

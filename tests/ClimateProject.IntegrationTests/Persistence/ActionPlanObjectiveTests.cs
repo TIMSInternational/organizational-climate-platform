@@ -26,7 +26,7 @@ public class ActionPlanObjectiveTests(PostgresContainerFixture postgres)
         };
         var plan = new ActionPlan
         {
-            Id = Guid.NewGuid(), Title = "P", Description = "d", CompanyId = company.Id,
+            Id = Guid.NewGuid(), TitleEn = "P", DescriptionEn = "d", CompanyId = company.Id,
             CreatedBy = user.Id, DueDate = DateTimeOffset.UtcNow.AddDays(30),
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };
@@ -47,7 +47,7 @@ public class ActionPlanObjectiveTests(PostgresContainerFixture postgres)
         var minimalId = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO action_plan_objectives ("Id", action_plan_id, description, success_criteria)
+             INSERT INTO action_plan_objectives ("Id", action_plan_id, description_en, success_criteria_en)
              VALUES ({minimalId}, {plan.Id}, {"Improve onboarding"}, {"New hires rate onboarding 8+/10"})
              """);
 
@@ -67,7 +67,7 @@ public class ActionPlanObjectiveTests(PostgresContainerFixture postgres)
         var objectiveId = Guid.NewGuid();
         db.ActionPlanObjectives.Add(new ActionPlanObjective
         {
-            Id = objectiveId, ActionPlanId = plan.Id, Description = "d", SuccessCriteria = "s",
+            Id = objectiveId, ActionPlanId = plan.Id, DescriptionEn = "d", SuccessCriteriaEn = "s",
         });
         await db.SaveChangesAsync();
 

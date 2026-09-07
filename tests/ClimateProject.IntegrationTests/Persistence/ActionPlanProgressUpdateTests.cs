@@ -26,7 +26,7 @@ public class ActionPlanProgressUpdateTests(PostgresContainerFixture postgres)
         };
         var plan = new ActionPlan
         {
-            Id = Guid.NewGuid(), Title = "P", Description = "d", CompanyId = company.Id,
+            Id = Guid.NewGuid(), TitleEn = "P", DescriptionEn = "d", CompanyId = company.Id,
             CreatedBy = user.Id, DueDate = DateTimeOffset.UtcNow.AddDays(30),
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };

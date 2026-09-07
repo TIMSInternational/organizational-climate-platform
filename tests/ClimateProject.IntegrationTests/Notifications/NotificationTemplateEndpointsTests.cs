@@ -623,4 +623,43 @@ public class NotificationTemplateEndpointsTests : IAsyncLifetime
 
         Assert.Equal(colliderId, created!.CreatedBy);
     }
+
+
+    // ------------------------------------------------------------------
+    // #210 -- a variable's description is a paired column
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_variables_description_is_resolved_for_the_reader_and_a_bare_one_follows_the_templates_language()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyEsDomain, _companyEsId);
+
+        var response = await client.PostAsJsonAsync("/notification-templates", new CreateNotificationTemplateRequest(
+            "Con variables", "survey_reminder", "email",
+            LocalizedInput.FromBare("Recordatorio"),
+            LocalizedInput.FromBare("Recordatorio de encuesta"),
+            LocalizedInput.FromBare("Hola {{name}}"),
+            null, _companyEsId, false,
+            [
+                new NotificationTemplateVariableInput("name", "string", true, Bilingual("The recipient's name", "El nombre del destinatario"), null),
+                new NotificationTemplateVariableInput("deadline", "string", false, LocalizedInput.FromBare("Fecha límite de la encuesta"), null),
+            ],
+            null));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<NotificationTemplateDetail>();
+
+        var english = await (await client.GetAsync($"/notification-templates/{created!.Id}?lang=en")).Content.ReadFromJsonAsync<NotificationTemplateDetail>();
+        Assert.Equal("The recipient's name", english!.Variables.Single(v => v.Name == "name").Description);
+        // The bare description followed the Spanish company; read in English it falls back.
+        Assert.Equal("Fecha límite de la encuesta", english.Variables.Single(v => v.Name == "deadline").Description);
+
+        var spanish = await (await client.GetAsync($"/notification-templates/{created.Id}?lang=es")).Content.ReadFromJsonAsync<NotificationTemplateDetail>();
+        Assert.Equal("El nombre del destinatario", spanish!.Variables.Single(v => v.Name == "name").Description);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var deadline = await db.NotificationTemplateVariables.AsNoTracking().SingleAsync(v => v.NotificationTemplateId == created.Id && v.Name == "deadline");
+        Assert.Null(deadline.DescriptionEn);
+        Assert.Equal("Fecha límite de la encuesta", deadline.DescriptionEs);
+    }
 }

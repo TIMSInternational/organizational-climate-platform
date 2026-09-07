@@ -1,3 +1,4 @@
+using ClimateProject.Application.Localization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -85,7 +86,7 @@ public class MicroclimateTemplateEndpointsTests : IAsyncLifetime
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
-        return await db.MicroclimateTemplates.CountAsync(t => t.CompanyId == null && t.Name == name);
+        return await db.MicroclimateTemplates.CountAsync(t => t.CompanyId == null && t.NameEn == name);
     }
 
     [Fact]
@@ -187,5 +188,44 @@ public class MicroclimateTemplateEndpointsTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Forbidden, ownScope.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, globalScope.StatusCode);
+    }
+
+
+    // ------------------------------------------------------------------
+    // #210 -- name and description are paired columns
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_bilingual_template_lists_in_the_readers_locale_and_a_monolingual_one_reports_its_fallback()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin);
+
+        var bilingual = await client.PostAsJsonAsync("/microclimate-templates", new CreateMicroclimateTemplateRequest(
+            LocalizedInput.FromLocales(new Dictionary<string, string?> { ["en"] = "Weekly pulse", ["es"] = "Pulso semanal" }),
+            LocalizedInput.FromLocales(new Dictionary<string, string?> { ["en"] = "Five minutes", ["es"] = "Cinco minutos" }),
+            "pulse", _companyId));
+        Assert.Equal(HttpStatusCode.Created, bilingual.StatusCode);
+        var bilingualId = (await bilingual.Content.ReadFromJsonAsync<MicroclimateTemplateDetail>())!.Id;
+
+        // A Spanish-only template in an English company, sent explicitly as Spanish.
+        var spanishOnly = await client.PostAsJsonAsync("/microclimate-templates", new CreateMicroclimateTemplateRequest(
+            LocalizedInput.FromLocales(new Dictionary<string, string?> { ["es"] = "Sólo español" }),
+            LocalizedInput.FromLocales(new Dictionary<string, string?> { ["es"] = "Sin traducción" }),
+            "pulse", _companyId));
+        Assert.Equal(HttpStatusCode.Created, spanishOnly.StatusCode);
+        var spanishOnlyId = (await spanishOnly.Content.ReadFromJsonAsync<MicroclimateTemplateDetail>())!.Id;
+
+        var inSpanish = await (await client.GetAsync($"/microclimate-templates?companyId={_companyId}&lang=es")).Content.ReadFromJsonAsync<MicroclimateTemplateListResponse>();
+        var inEnglish = await (await client.GetAsync($"/microclimate-templates?companyId={_companyId}&lang=en")).Content.ReadFromJsonAsync<MicroclimateTemplateListResponse>();
+
+        Assert.Equal("Pulso semanal", inSpanish!.Templates.Single(t => t.Id == bilingualId).Name);
+        Assert.Equal("Weekly pulse", inEnglish!.Templates.Single(t => t.Id == bilingualId).Name);
+        Assert.Empty(inEnglish.Templates.Single(t => t.Id == bilingualId).FallbackFields);
+
+        // Never a blank: the Spanish-only row comes back in Spanish from an English session
+        // and names the fields that fell back.
+        var fallen = inEnglish.Templates.Single(t => t.Id == spanishOnlyId);
+        Assert.Equal("Sólo español", fallen.Name);
+        Assert.Equal(["name", "description"], fallen.FallbackFields);
     }
 }

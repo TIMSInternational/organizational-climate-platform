@@ -10,8 +10,10 @@ public class SurveyTemplateConfiguration : IEntityTypeConfiguration<SurveyTempla
     {
         builder.ToTable("survey_templates");
         builder.HasKey(t => t.Id);
-        builder.Property(t => t.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
-        builder.Property(t => t.Description).HasColumnName("description").HasMaxLength(1000).IsRequired();
+        builder.Property(t => t.NameEn).HasColumnName("name_en").HasMaxLength(200);
+        builder.Property(t => t.NameEs).HasColumnName("name_es").HasMaxLength(200);
+        builder.Property(t => t.DescriptionEn).HasColumnName("description_en").HasMaxLength(1000);
+        builder.Property(t => t.DescriptionEs).HasColumnName("description_es").HasMaxLength(1000);
         builder.Property(t => t.Category).HasColumnName("category").HasMaxLength(20).IsRequired();
         builder.Property(t => t.Industry).HasColumnName("industry").HasMaxLength(100);
         builder.Property(t => t.CompanySize).HasColumnName("company_size").HasMaxLength(20);

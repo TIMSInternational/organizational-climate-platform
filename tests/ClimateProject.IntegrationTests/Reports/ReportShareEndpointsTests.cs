@@ -186,7 +186,7 @@ public class ReportShareEndpointsTests : IAsyncLifetime
         var deleted = await MintAsync(admin, await CreateReportAsync(admin, _companyId, "Doomed"));
         await WithDbAsync(async db =>
         {
-            await db.Reports.Where(r => r.Title == "Doomed").ExecuteDeleteAsync();
+            await db.Reports.Where(r => r.TitleEn == "Doomed").ExecuteDeleteAsync();
         });
 
         var client = AnonymousClient();

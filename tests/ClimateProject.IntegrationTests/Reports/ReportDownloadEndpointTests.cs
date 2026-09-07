@@ -225,7 +225,7 @@ public class ReportDownloadEndpointTests : IAsyncLifetime
             var foreign = new Report
             {
                 Id = Guid.NewGuid(),
-                Title = "Not yours",
+                TitleEn = "Not yours",
                 Type = "climate_summary",
                 CompanyId = foreignCompanyId,
                 CreatedBy = owner.Id,
@@ -286,7 +286,7 @@ public class ReportDownloadEndpointTests : IAsyncLifetime
         // Nothing was written. A 400 that still left a row would be worse than a 201.
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
-        Assert.False(await db.Reports.AnyAsync(r => r.CompanyId == _companyId && r.Title == "Bad format"));
+        Assert.False(await db.Reports.AnyAsync(r => r.CompanyId == _companyId && r.TitleEn == "Bad format"));
     }
 
     [Theory]

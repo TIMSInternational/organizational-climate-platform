@@ -129,7 +129,10 @@ public static class NotificationTemplateEndpoints
             return Results.Json(new { message = bodyError }, statusCode: 400);
         }
 
-        if (!TryPrepareChildren(request.Variables, request.Rules, out var variables, out var rules, out var childError))
+        // #210: a variable's description is admin-facing; a bare string is attributed to the
+        // template's single language, or the author's own for a global template.
+        var attribution = await AuthoredWrites.AttributionLocaleForLanguagesAsync(db, currentUser, null, contentLanguage, cancellationToken);
+        if (!TryPrepareChildren(request.Variables, request.Rules, attribution, out var variables, out var rules, out var childError))
         {
             return Results.Json(new { message = childError }, statusCode: 400);
         }
@@ -214,7 +217,8 @@ public static class NotificationTemplateEndpoints
             return Results.Json(new { message = bodyError }, statusCode: 400);
         }
 
-        if (!TryPrepareChildren(request.Variables, request.Rules, out var variables, out var rules, out var childError))
+        var attribution = await AuthoredWrites.AttributionLocaleForLanguagesAsync(db, currentUser, null, contentLanguage, cancellationToken);
+        if (!TryPrepareChildren(request.Variables, request.Rules, attribution, out var variables, out var rules, out var childError))
         {
             return Results.Json(new { message = childError }, statusCode: 400);
         }
@@ -418,6 +422,7 @@ public static class NotificationTemplateEndpoints
     private static bool TryPrepareChildren(
         IReadOnlyList<NotificationTemplateVariableInput>? variableInputs,
         IReadOnlyList<NotificationPersonalizationRuleInput>? ruleInputs,
+        string attributionLocale,
         out List<NotificationTemplateVariable> variables,
         out List<NotificationPersonalizationRule> rules,
         out string? error)
@@ -451,6 +456,14 @@ public static class NotificationTemplateEndpoints
                 return false;
             }
 
+            string? descriptionEn = null;
+            string? descriptionEs = null;
+            if (!AuthoredContent.TryApply(input.Description, attributionLocale, $"variables[{index}].description", ref descriptionEn, ref descriptionEs, out var descriptionError))
+            {
+                error = descriptionError;
+                return false;
+            }
+
             variables.Add(new NotificationTemplateVariable
             {
                 Id = Guid.NewGuid(),
@@ -458,7 +471,8 @@ public static class NotificationTemplateEndpoints
                 Name = name,
                 Type = type,
                 Required = input.Required,
-                Description = input.Description?.Trim() ?? string.Empty,
+                DescriptionEn = descriptionEn,
+                DescriptionEs = descriptionEs,
                 DefaultValue = input.DefaultValue,
             });
             index++;
@@ -533,11 +547,14 @@ public static class NotificationTemplateEndpoints
                      ?? ContentLanguages.SingleLocaleOf(contentLanguage)
                      ?? ContentLanguages.FallbackLocale;
 
-        var variables = await db.NotificationTemplateVariables
-            .Where(v => v.NotificationTemplateId == id)
-            .OrderBy(v => v.Name)
-            .Select(v => new NotificationTemplateVariableDto(v.Id, v.Name, v.Type, v.Required, v.Description, v.DefaultValue))
-            .ToListAsync(cancellationToken);
+        // #210: the description resolved for the reader, never descriptionEn/descriptionEs.
+        var variables = (await db.NotificationTemplateVariables
+                .Where(v => v.NotificationTemplateId == id)
+                .OrderBy(v => v.Name)
+                .ToListAsync(cancellationToken))
+            .Select(v => new NotificationTemplateVariableDto(
+                v.Id, v.Name, v.Type, v.Required, AuthoredContent.ResolveText(v.DescriptionEn, v.DescriptionEs, locale) ?? string.Empty, v.DefaultValue))
+            .ToList();
 
         var rules = await db.NotificationPersonalizationRules
             .Where(r => r.NotificationTemplateId == id)

@@ -36,8 +36,17 @@ public static class MicroclimateTemplateEndpoints
         return templateCompanyId is null || currentUser.CompanyId == templateCompanyId.Value.ToString();
     }
 
-    private static MicroclimateTemplateDetail ToDetail(MicroclimateTemplate t)
-        => new(t.Id, t.Name, t.Description, t.Category, t.CompanyId, t.IsSystemTemplate, t.UsageCount, t.IsActive);
+    private static MicroclimateTemplateDetail ToDetail(MicroclimateTemplate t, string? lang)
+    {
+        // #210: resolved for the reader, never nameEn/nameEs. The content language is
+        // inferred from the pair itself, so a Spanish-only template read in English comes
+        // back in Spanish and says so in FallbackFields.
+        var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
+        var fallbackFields = new List<string>();
+        var name = AuthoredContent.Resolve(t.NameEn, t.NameEs, locale, "name", fallbackFields) ?? string.Empty;
+        var description = AuthoredContent.Resolve(t.DescriptionEn, t.DescriptionEs, locale, "description", fallbackFields) ?? string.Empty;
+        return new(t.Id, name, description, t.Category, t.CompanyId, t.IsSystemTemplate, t.UsageCount, t.IsActive, fallbackFields);
+    }
 
     /// <summary>
     /// A company admin may WRITE only templates scoped to their own company. In this
@@ -63,6 +72,7 @@ public static class MicroclimateTemplateEndpoints
 
     private static async Task<IResult> ListAsync(
         Guid companyId,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -73,17 +83,24 @@ public static class MicroclimateTemplateEndpoints
             return Results.Forbid();
         }
 
-        var templates = await db.MicroclimateTemplates
+        var rows = await db.MicroclimateTemplates
             .Where(t => (t.CompanyId == companyId || t.CompanyId == null) && t.IsActive)
-            .OrderBy(t => t.Name)
-            .Select(t => new MicroclimateTemplateDetail(t.Id, t.Name, t.Description, t.Category, t.CompanyId, t.IsSystemTemplate, t.UsageCount, t.IsActive))
             .ToListAsync(cancellationToken);
+
+        // Ordered by the name the reader can see (#210), which depends on their locale;
+        // Id second so two same-named templates cannot swap places between reads.
+        var templates = rows
+            .Select(t => ToDetail(t, lang))
+            .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(t => t.Id)
+            .ToList();
 
         return Results.Ok(new MicroclimateTemplateListResponse(templates));
     }
 
     private static async Task<IResult> CreateAsync(
         CreateMicroclimateTemplateRequest request,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -94,18 +111,28 @@ public static class MicroclimateTemplateEndpoints
             return Results.Forbid();
         }
 
-        if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Description) || string.IsNullOrWhiteSpace(request.Category))
+        if (request.Name is null || request.Description is null || string.IsNullOrWhiteSpace(request.Category))
         {
             return Results.Json(new { message = "Name, description, and category are required" }, statusCode: 400);
         }
+
+        // #210: a bare name lands in the company's language, or the author's for a global
+        // template -- never refused; { "en": ..., "es": ... } is explicit. See AuthoredContent.
+        var attribution = await AuthoredWrites.AttributionLocaleAsync(db, currentUser, request.CompanyId, null, cancellationToken);
+        var name = AuthoredWrites.Apply(request.Name, attribution, "name", "Name is required", required: true, null, null);
+        if (name.Error is not null) return name.Error;
+        var description = AuthoredWrites.Apply(request.Description, attribution, "description", "Description is required", required: true, null, null);
+        if (description.Error is not null) return description.Error;
 
         var actingUser = await db.Users.FirstOrDefaultAsync(u => u.Email == currentUser.Email, cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var template = new MicroclimateTemplate
         {
             Id = Guid.NewGuid(),
-            Name = request.Name.Trim(),
-            Description = request.Description.Trim(),
+            NameEn = name.En,
+            NameEs = name.Es,
+            DescriptionEn = description.En,
+            DescriptionEs = description.Es,
             Category = request.Category,
             CompanyId = request.CompanyId,
             CreatedBy = actingUser?.Id,
@@ -119,7 +146,7 @@ public static class MicroclimateTemplateEndpoints
         db.MicroclimateTemplates.Add(template);
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Json(ToDetail(template), statusCode: 201);
+        return Results.Json(ToDetail(template, lang), statusCode: 201);
     }
 
     // ------------------------------------------------------------------
@@ -226,10 +253,29 @@ public static class MicroclimateTemplateEndpoints
                        ?? ContentLanguages.NormaliseLanguage(company.Settings.Language)
                        ?? ContentLanguages.FallbackLocale;
 
-        var titleInput = request?.Title ?? LocalizedInput.FromBare(template.Name);
-        if (!titleInput.TryResolve(language, "title", out var titleEn, out var titleEs, out var titleError))
+        // Falls back to the template's name. Since #210 that name is a pair, and the pair
+        // crosses over verbatim -- BOTH halves, as the questions do. For a microclimate
+        // authored in 'both' the template must actually be named in both; the 400 tells the
+        // caller to send { "en": ..., "es": ... } rather than have one half filed as both.
+        string? titleEn;
+        string? titleEs;
+        if (request?.Title is { } titleInput)
         {
-            return Results.Json(new { message = titleError }, statusCode: 400);
+            if (!titleInput.TryResolve(language, "title", out titleEn, out titleEs, out var titleError))
+            {
+                return Results.Json(new { message = titleError }, statusCode: 400);
+            }
+        }
+        else
+        {
+            titleEn = template.NameEn;
+            titleEs = template.NameEs;
+            if (language == ContentLanguages.Both && (string.IsNullOrWhiteSpace(titleEn) || string.IsNullOrWhiteSpace(titleEs)))
+            {
+                return Results.Json(
+                    new { message = "'title' was not supplied and this template's name is not authored in both languages. Send { \"en\": ..., \"es\": ... }" },
+                    statusCode: 400);
+            }
         }
 
         if (string.IsNullOrWhiteSpace(titleEn) && string.IsNullOrWhiteSpace(titleEs))
@@ -237,8 +283,8 @@ public static class MicroclimateTemplateEndpoints
             return Results.Json(new { message = "Title is required" }, statusCode: 400);
         }
 
-        string? descriptionEn = null;
-        string? descriptionEs = null;
+        string? descriptionEn;
+        string? descriptionEs;
         if (request?.Description is not null)
         {
             if (!request.Description.TryResolve(language, "description", out descriptionEn, out descriptionEs, out var descriptionError))
@@ -246,19 +292,12 @@ public static class MicroclimateTemplateEndpoints
                 return Results.Json(new { message = descriptionError }, statusCode: 400);
             }
         }
-        else if (ContentLanguages.SingleLocaleOf(language) is string singleLocale)
+        else
         {
-            // Description is optional, so an un-attributable template description is left out
-            // rather than 400'd: refusing to create the microclimate over a field the caller
-            // never asked for would be the validation getting in its own way.
-            if (singleLocale == ContentLanguages.Spanish)
-            {
-                descriptionEs = template.Description;
-            }
-            else
-            {
-                descriptionEn = template.Description;
-            }
+            // Optional, so the template's pair simply crosses over rather than being
+            // refused over a field the caller never mentioned.
+            descriptionEn = template.DescriptionEn;
+            descriptionEs = template.DescriptionEs;
         }
 
         var startTime = request?.StartTime ?? DateTimeOffset.UtcNow;

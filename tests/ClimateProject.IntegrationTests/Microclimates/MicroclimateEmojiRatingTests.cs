@@ -720,8 +720,8 @@ public class MicroclimateEmojiRatingTests : IAsyncLifetime
             var template = new MicroclimateTemplate
             {
                 Id = Guid.NewGuid(),
-                Name = "Faces template",
-                Description = "A weekly pulse",
+                NameEn = "Faces template",
+                DescriptionEn = "A weekly pulse",
                 Category = "pulse",
                 CompanyId = _companyId,
                 IsSystemTemplate = false,

@@ -9,11 +9,13 @@ namespace ClimateProject.Application.Surveys;
 // En/Es-shaped. Template question text arrives already resolved for the request's
 // locale, with ResolvedLocale and FallbackFields saying so.
 //
-// Name/Description/Category are NOT localized here because the columns are not paired
-// -- survey_templates.name and .description are single `text` columns and #195 gave
-// paired treatment to template_questions only. Adding a pair would be a migration, and
-// this wave adds none. Reported as a parity gap rather than faked: a template's
-// catalogue metadata is currently monolingual whatever the questions are authored in.
+// Name and Description are paired columns since #210 (Tier 2 of #195) and arrive
+// resolved like the questions do, reporting "name"/"description" in FallbackFields when
+// they had to reach for the other language. Category is NOT a translated field: it is a
+// facet key -- the list filters on it by equality, the web builds its dropdown from the
+// distinct values, and instantiation copies it into Survey.Type -- and a key that changed
+// with the reader's locale would split every filter it feeds. See
+// docs/decisions/author-content-i18n.md.
 // ---------------------------------------------------------------------------
 
 /// <summary>
@@ -131,8 +133,8 @@ public sealed record CreateSurveyTemplateQuestionInput(
 /// global template.
 /// </param>
 public sealed record CreateSurveyTemplateRequest(
-    string Name,
-    string Description,
+    LocalizedInput? Name,
+    LocalizedInput? Description,
     string Category,
     Guid? CompanyId = null,
     string? Industry = null,
@@ -152,8 +154,8 @@ public sealed record CreateSurveyTemplateRequest(
 /// recreate instead.
 /// </summary>
 public sealed record UpdateSurveyTemplateRequest(
-    string? Name = null,
-    string? Description = null,
+    LocalizedInput? Name = null,
+    LocalizedInput? Description = null,
     string? Category = null,
     string? Industry = null,
     string? CompanySize = null,

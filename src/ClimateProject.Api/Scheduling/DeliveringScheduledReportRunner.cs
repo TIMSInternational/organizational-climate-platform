@@ -1,4 +1,5 @@
 using ClimateProject.Api.Endpoints;
+using ClimateProject.Application.Localization;
 using ClimateProject.Application.Notifications;
 using ClimateProject.Application.Scheduling;
 using ClimateProject.Domain.Entities;
@@ -113,8 +114,12 @@ internal sealed class DeliveringScheduledReportRunner(
             Priority = NotificationPriorities.Low,
             Status = NotificationStatuses.Pending,
             Title = ScheduledNotificationCopy.ReportReadyTitleFor(creator.Preferences.Language),
+            // #210: the title in the language the mail is written in, falling back to the
+            // language the report was named in.
             Message = ScheduledNotificationCopy.ReportReadyBodyFor(
-                creator.Preferences.Language, report.Title, occurrence.OccurrenceUtc),
+                creator.Preferences.Language,
+                AuthoredContent.ResolveRequired(report.TitleEn, report.TitleEs, creator.Preferences.Language),
+                occurrence.OccurrenceUtc),
 
             // The occurrence's own instant, so every instance computes the same value and the
             // stored row says when the report was owed rather than when a tick fired.

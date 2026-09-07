@@ -49,7 +49,7 @@ public class MicroclimateTests(PostgresContainerFixture postgres)
 
         var template = new MicroclimateTemplate
         {
-            Id = Guid.NewGuid(), Name = "Weekly Pulse", Description = "desc", Category = "pulse_check",
+            Id = Guid.NewGuid(), NameEn = "Weekly Pulse", DescriptionEn = "desc", Category = "pulse_check",
             CompanyId = company.Id, CreatedBy = creator.Id,
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };
@@ -103,7 +103,7 @@ public class MicroclimateTests(PostgresContainerFixture postgres)
 
         var template = new MicroclimateTemplate
         {
-            Id = Guid.NewGuid(), Name = "Temp", Description = "desc", Category = "custom",
+            Id = Guid.NewGuid(), NameEn = "Temp", DescriptionEn = "desc", Category = "custom",
             CompanyId = company.Id, CreatedBy = creator.Id,
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };

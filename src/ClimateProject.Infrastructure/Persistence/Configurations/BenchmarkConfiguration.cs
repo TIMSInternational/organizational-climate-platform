@@ -10,8 +10,10 @@ public class BenchmarkConfiguration : IEntityTypeConfiguration<Benchmark>
     {
         builder.ToTable("benchmarks");
         builder.HasKey(b => b.Id);
-        builder.Property(b => b.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
-        builder.Property(b => b.Description).HasColumnName("description").HasMaxLength(2000).IsRequired();
+        builder.Property(b => b.NameEn).HasColumnName("name_en").HasMaxLength(200);
+        builder.Property(b => b.NameEs).HasColumnName("name_es").HasMaxLength(200);
+        builder.Property(b => b.DescriptionEn).HasColumnName("description_en").HasMaxLength(2000);
+        builder.Property(b => b.DescriptionEs).HasColumnName("description_es").HasMaxLength(2000);
         builder.Property(b => b.Type).HasColumnName("type").HasMaxLength(20).IsRequired();
         builder.Property(b => b.Category).HasColumnName("category").HasMaxLength(100).IsRequired();
         builder.Property(b => b.Source).HasColumnName("source").HasMaxLength(200).IsRequired();

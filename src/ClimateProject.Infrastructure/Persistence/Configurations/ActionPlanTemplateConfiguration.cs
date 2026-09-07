@@ -10,8 +10,10 @@ public class ActionPlanTemplateConfiguration : IEntityTypeConfiguration<ActionPl
     {
         builder.ToTable("action_plan_templates");
         builder.HasKey(t => t.Id);
-        builder.Property(t => t.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
-        builder.Property(t => t.Description).HasColumnName("description").HasColumnType("text").IsRequired();
+        builder.Property(t => t.NameEn).HasColumnName("name_en").HasMaxLength(200);
+        builder.Property(t => t.NameEs).HasColumnName("name_es").HasMaxLength(200);
+        builder.Property(t => t.DescriptionEn).HasColumnName("description_en").HasColumnType("text");
+        builder.Property(t => t.DescriptionEs).HasColumnName("description_es").HasColumnType("text");
         builder.Property(t => t.Category).HasColumnName("category").HasMaxLength(100).IsRequired();
         builder.Property(t => t.CompanyId).HasColumnName("company_id");
         builder.Property(t => t.CreatedBy).HasColumnName("created_by").IsRequired();

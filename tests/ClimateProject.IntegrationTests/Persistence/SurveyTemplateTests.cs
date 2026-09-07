@@ -25,8 +25,8 @@ public class SurveyTemplateTests(PostgresContainerFixture postgres)
         var template = new SurveyTemplate
         {
             Id = Guid.NewGuid(),
-            Name = "Standard Climate Survey",
-            Description = "A general climate survey template",
+            NameEn = "Standard Climate Survey",
+            DescriptionEn = "A general climate survey template",
             Category = "climate",
             IsPublic = true,
             Tags = ["climate", "annual"],
@@ -73,7 +73,7 @@ public class SurveyTemplateTests(PostgresContainerFixture postgres)
 
         var template = new SurveyTemplate
         {
-            Id = Guid.NewGuid(), Name = "Custom", Description = "Custom template", Category = "custom",
+            Id = Guid.NewGuid(), NameEn = "Custom", DescriptionEn = "Custom template", Category = "custom",
             CreatedBy = user.Id, CompanyId = company.Id,
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };
@@ -99,7 +99,7 @@ public class SurveyTemplateTests(PostgresContainerFixture postgres)
         var now = DateTimeOffset.UtcNow;
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO survey_templates ("Id", name, description, category, created_at, updated_at)
+             INSERT INTO survey_templates ("Id", name_en, description_en, category, created_at, updated_at)
              VALUES ({minimalTemplateId}, {"Minimal"}, {"Minimal desc"}, {"custom"}, {now}, {now})
              """);
 

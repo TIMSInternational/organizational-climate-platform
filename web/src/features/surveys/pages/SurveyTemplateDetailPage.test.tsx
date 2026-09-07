@@ -156,9 +156,10 @@ describe('SurveyTemplateDetailPage', () => {
     expect(screen.getByRole('heading', { name: 'Quarterly climate' })).toBeTruthy()
   })
 
-  it('reports the questions’ fallback, which is the only localized content on the page', async () => {
-    // The name and description are single unpaired `text` columns, so they are
-    // monolingual whatever locale is asked for. `language` describes the questions.
+  it('reports the questions’ fallback and renders the name the server resolved', async () => {
+    // The name and description arrive resolved (#210); the page renders what it is given
+    // and the one notice covers heading and questions alike. `language` describes the
+    // questions.
     setToken(tokenFor({ role: 'company_admin', companyId: 'c1' }))
     vi.stubGlobal(
       'fetch',
@@ -171,7 +172,7 @@ describe('SurveyTemplateDetailPage', () => {
     expect(
       await screen.findByText('Showing content in Spanish because it is not available in English.'),
     ).toBeTruthy()
-    // The unlocalized name is still rendered as stored, not hidden or marked up.
+    // The resolved name is rendered as given, not hidden or marked up.
     expect(screen.getByRole('heading', { name: 'Quarterly climate' })).toBeTruthy()
   })
 

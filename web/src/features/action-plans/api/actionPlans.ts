@@ -42,6 +42,13 @@ export interface ActionPlanDetail {
   templateId: string | null
   kpis: Kpi[]
   objectives: Objective[]
+  /**
+   * Fields that had to reach for the other language -- `title`, `kpis[0].unit`, ... .
+   * Every authored field on a plan is a #210 paired column resolved server-side; a bare
+   * string on write is attributed to the company's language and never refused, and
+   * `{ en, es }` is the explicit form. Always sent since #210.
+   */
+  fallbackFields?: string[]
 }
 
 export interface CreateKpiInput {

@@ -1,3 +1,4 @@
+using ClimateProject.Application.Localization;
 using ClimateProject.Application.Reports;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
@@ -148,6 +149,7 @@ public static class BenchmarkPriorPeriod
         Benchmark benchmark,
         IReadOnlyList<BenchmarkMetricDto> currentMetrics,
         Func<Guid?, bool> canRead,
+        string locale,
         CancellationToken cancellationToken)
     {
         if (benchmark.PriorPeriodStatus != PriorPeriodStatuses.Linked || !benchmark.PriorPeriodBenchmarkId.HasValue)
@@ -161,7 +163,7 @@ public static class BenchmarkPriorPeriod
 
         var priorMetrics = await LoadMetricsAsync(db, prior.Id, cancellationToken);
 
-        return new BenchmarkPriorPeriodDto(prior.Id, prior.Name, BuildChanges(currentMetrics, priorMetrics));
+        return new BenchmarkPriorPeriodDto(prior.Id, AuthoredContent.ResolveRequired(prior.NameEn, prior.NameEs, locale), BuildChanges(currentMetrics, priorMetrics));
     }
 
     /// <summary>

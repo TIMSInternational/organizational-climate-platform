@@ -31,12 +31,12 @@ import {
  * implementation of a rule the server owns, and would break the moment the catalogue is
  * paginated.
  *
- * ## No name/description language notice here, deliberately
+ * ## No language notice on the list, deliberately
  *
- * `survey_templates.name` and `.description` are single `text` columns -- #195 paired
- * only `template_questions` -- so catalogue metadata is monolingual and there is no
- * per-row locale to report. The detail page carries the notice, because that is where
- * the localized content (the questions) actually appears.
+ * `name` and `description` are paired columns since #210 and arrive resolved for the
+ * requested locale, but the list item does not carry `fallbackFields` -- a notice per row
+ * would be noise on a catalogue. The detail page carries it, for the heading and the
+ * questions alike.
  */
 export default function SurveyTemplatesPage() {
   const { t, locale } = useTranslation()

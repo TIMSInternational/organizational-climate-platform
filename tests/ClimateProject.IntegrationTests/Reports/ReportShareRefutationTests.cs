@@ -628,8 +628,8 @@ public class ReportShareRefutationTests : IAsyncLifetime
             var benchmark = new Benchmark
             {
                 Id = Guid.NewGuid(),
-                Name = name,
-                Description = "Seeded by the refutation fixture",
+                NameEn = name,
+                DescriptionEn = "Seeded by the refutation fixture",
                 Type = companyId is null ? BenchmarkTypes.Industry : BenchmarkTypes.Internal,
                 Category = "engagement",
                 Source = "fixture",

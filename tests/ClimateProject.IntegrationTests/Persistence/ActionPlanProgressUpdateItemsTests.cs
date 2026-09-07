@@ -28,7 +28,7 @@ public class ActionPlanProgressUpdateItemsTests(PostgresContainerFixture postgre
         };
         var plan = new ActionPlan
         {
-            Id = Guid.NewGuid(), Title = "P", Description = "d", CompanyId = company.Id,
+            Id = Guid.NewGuid(), TitleEn = "P", DescriptionEn = "d", CompanyId = company.Id,
             CreatedBy = user.Id, DueDate = DateTimeOffset.UtcNow.AddDays(30),
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };
@@ -39,11 +39,11 @@ public class ActionPlanProgressUpdateItemsTests(PostgresContainerFixture postgre
 
         var kpi = new ActionPlanKpi
         {
-            Id = Guid.NewGuid(), ActionPlanId = plan.Id, Name = "eNPS", TargetValue = 50m, Unit = "points", MeasurementFrequency = "quarterly",
+            Id = Guid.NewGuid(), ActionPlanId = plan.Id, NameEn = "eNPS", TargetValue = 50m, UnitEn = "points", MeasurementFrequency = "quarterly",
         };
         var objective = new ActionPlanObjective
         {
-            Id = Guid.NewGuid(), ActionPlanId = plan.Id, Description = "d", SuccessCriteria = "s",
+            Id = Guid.NewGuid(), ActionPlanId = plan.Id, DescriptionEn = "d", SuccessCriteriaEn = "s",
         };
         db.ActionPlanKpis.Add(kpi);
         db.ActionPlanObjectives.Add(objective);
