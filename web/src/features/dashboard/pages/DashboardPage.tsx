@@ -1,6 +1,6 @@
 import DepartmentAdminDashboardView from '../components/DepartmentAdminDashboardView'
 import EmployeeDashboardView from '../components/EmployeeDashboardView'
-import SuperAdminDashboardView from '../components/SuperAdminDashboardView'
+import PlatformDashboardView from '../next/super/PlatformDashboardView'
 import DashboardState from '../components/DashboardState'
 import AdminDashboardNextView, { AdminDashboardNextSkeleton } from '../next/AdminDashboardNextView'
 import { useAdminDashboardModel } from '../next/useAdminDashboardModel'
@@ -50,7 +50,10 @@ import { useCompanyScope } from '../../../company-context'
  *
  * ## The SuperAdmin's two dashboards
  *
- * A SuperAdmin with no company selected gets the platform overview: their subject really is
+ * A SuperAdmin with no company selected gets the platform overview — the per-role canvas's
+ * *Panel de la plataforma* (`../next/super/PlatformDashboardView`), which replaced
+ * `SuperAdminDashboardView` on this branch; the old view stays in the tree, unrouted, as the
+ * wiring reference. Their subject really is
  * "all tenants", and `useCompanyScope` reports `needs-selection` rather than guessing one
  * (#124). Once they pick a tenant in the header switcher, the company dashboard for *that*
  * tenant is the more useful answer, and the selection is handed to `useAdminDashboardModel`
@@ -66,7 +69,7 @@ export default function DashboardPage() {
     return scope.status === 'ready' && scope.companyId ? (
       <CompanyDashboard companyId={scope.companyId} />
     ) : (
-      <SuperAdminDashboardView />
+      <PlatformDashboardView />
     )
   }
 

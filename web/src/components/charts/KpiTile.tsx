@@ -77,6 +77,24 @@ export interface KpiTileProps {
   changeLabel?: string
   /** BCP-47 locale. Defaults to the document's language. */
   locale?: string
+  /**
+   * A word or phrase set after the reading, on its baseline — the per-role canvas's
+   * "3 en la plataforma". Prose, so it stays in the sans face; the reading stays mono.
+   */
+  unit?: React.ReactNode
+  /**
+   * The reading as text, for a tile whose reading is a name rather than a number — the
+   * canvas's "Q3" under *Última encuesta cerrada*. Wins over `value` when given, and is
+   * still set in the instrument face.
+   */
+  valueText?: string
+  /**
+   * `recessed` (the default) is the redesign's flat strip on the icon-box surface.
+   * `card` is the per-role canvas's tile: a white card on the hairline with the reading
+   * at regular weight — the super administrator's screens draw theirs this way. The
+   * default markup is unchanged, so every existing caller renders exactly as before.
+   */
+  surface?: 'recessed' | 'card'
   className?: string
 }
 
@@ -89,6 +107,9 @@ export default function KpiTile({
   sub,
   changeLabel,
   locale,
+  unit,
+  valueText,
+  surface = 'recessed',
   className,
 }: KpiTileProps) {
   // A tile with no reading has no change either: there is no number to have moved.
@@ -113,7 +134,9 @@ export default function KpiTile({
         // badge `secondary` variant sits on it too), which is the role the
         // design's `--panel-2` plays. Reused rather than adding a near-duplicate
         // token for a shade nobody could tell apart.
-        'rounded-lg border border-line-light bg-surface-icon-box p-3',
+        surface === 'card'
+          ? 'rounded-xl border border-line-default bg-surface-card px-4 py-3.5 shadow-sm'
+          : 'rounded-lg border border-line-light bg-surface-icon-box p-3',
         className,
       )}
     >
@@ -132,11 +155,30 @@ export default function KpiTile({
       <div className="text-2xs font-semibold uppercase tracking-label text-fg-secondary">
         {label}
       </div>
-      <div className="mt-0.5 font-mono text-3xl font-semibold tracking-tight tabular-nums">
-        {value === null ? EM_DASH : formatMetric(value, format, locale)}
-      </div>
+      {unit === undefined && valueText === undefined && surface === 'recessed' ? (
+        <div className="mt-0.5 font-mono text-3xl font-semibold tracking-tight tabular-nums">
+          {value === null ? EM_DASH : formatMetric(value, format, locale)}
+        </div>
+      ) : (
+        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
+          <span
+            className={cn(
+              'font-mono text-3xl leading-none tracking-tight tabular-nums',
+              surface === 'card' ? 'font-normal' : 'font-semibold',
+            )}
+          >
+            {valueText ?? (value === null ? EM_DASH : formatMetric(value, format, locale))}
+          </span>
+          {unit !== undefined && <span className="text-xs text-fg-secondary">{unit}</span>}
+        </div>
+      )}
       {/* Same measurement as the label above; this line is 11px. */}
-      <div className="mt-px flex items-center gap-1 text-xs text-fg-secondary">
+      <div
+        className={cn(
+          'flex items-center gap-1 text-xs text-fg-secondary',
+          surface === 'card' ? 'mt-1.5' : 'mt-px',
+        )}
+      >
         {hasChange && (
           <span
             className={cn(
