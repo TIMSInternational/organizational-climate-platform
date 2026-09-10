@@ -243,9 +243,10 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
               onClick={() => toggleExpand(item.labelKey)}
               aria-expanded={isExpanded}
               // See the `title` note on the leaf row below. A group row is the
-              // tightest of the lot: it carries the longest label in the nav,
-              // `navigation.systemAdministration` ("Administración del Sistema",
-              // 26 characters), in the 180px a 236px rail leaves a label.
+              // tightest of the lot: the chevron and its gap take another 24px,
+              // leaving the label 156px of the 236px rail — while carrying the
+              // longest label in the nav, `navigation.systemAdministration`
+              // ("Administración del Sistema", 26 characters).
               title={label}
               style={rowStyle}
             >
@@ -281,7 +282,7 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
               // in `rowContent` above sets `overflow: hidden` + `textOverflow:
               // ellipsis` + `whiteSpace: nowrap`, so anything wider than its box
               // is cut with no way to read the rest, and the box is narrow while
-              // the rail is expanded: the rail is 236px, the canvas's
+              // the rail is expanded: the rail is 236px
               // (`--admin-size-sidebar`), of which 16px goes to the `<nav>`'s own
               // `4px 8px 8px 8px` gutter, 16px to this row's `var(--admin-space-4)
               // var(--admin-space-8)` padding, 16px to the icon

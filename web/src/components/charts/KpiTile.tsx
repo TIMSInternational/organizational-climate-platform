@@ -146,7 +146,9 @@ export default function KpiTile({
       )}
     >
       {/* The artboards' tile eyebrow (Dashboard and SurveyResults, 10 Sep): 10px, bold,
-          uppercase, spaced .12em (`tracking-tile`), in the label ink `text-fg-label`.
+          uppercase, in the label ink `text-fg-label`, spaced per `size`: .12em by default
+          (`tracking-tile`, SurveyResults' `.eyebrow`), .06em for `hero` (Dashboard's `.label`),
+          .12em for `large` (ClimateTrends' `.eyebrow`).
 
           Never `text-fg-tertiary`, and that is a contrast rule, not a preference:
           `--admin-font-tertiary` #818181 measured 3.42:1 (light) and 3.68:1 (dark) on

@@ -158,18 +158,19 @@ describe('PageTopBar', () => {
       return element!
     }
 
-    it('closes itself with a hairline rule, 16px under the content', () => {
+    it('closes itself with a hairline rule, 16px under the content, as every artboard does', () => {
       const { container } = renderTopBar({ title: 'Companies' })
       const classes = topBar(container).className.split(/\s+/)
       expect(classes).toContain('border-b')
       expect(classes).toContain('border-line-light')
+      // The artboards' `padding-bottom: 16px` (10 Sep). UI-0 had 14px.
       expect(classes).toContain('pb-4')
     })
 
-    it('leaves 24px between the rule and whatever the page puts next, as every artboard does', () => {
+    it('leaves 24px between the rule and whatever the page puts next', () => {
       const { container } = renderTopBar({ title: 'Companies' })
-      // `mb-section` is --admin-size-section-gap, 24px: the artboards lay the header and the
-      // first section in a `gap: 24px` column (SurveysList.dc.html, ClimateTrends.dc.html).
+      // `mb-section` is --admin-size-section-gap, 24px: the gap every artboard of
+      // 10 Sep leaves under the header's hairline. UI-0 had narrowed it to 16px.
       const classes = topBar(container).className.split(/\s+/)
       expect(classes).toContain('mb-section')
       expect(classes).not.toContain('mb-panel')
@@ -196,10 +197,10 @@ describe('PageTopBar', () => {
       expect(container.querySelector('[data-slot="separator"]')).toBeNull()
     })
 
-    it('sets the title at the canvas size, 24px', () => {
-      // The approved canvas (10 Sep) draws every page title in the serif at 24px —
-      // `--admin-text-3xl`. The first cut stepped it down to 20px (`text-2xl`), which
-      // read as a smaller header than every artboard; this pins the canvas's step.
+    it('sets the title at 24px, the size every artboard draws it at', () => {
+      // --admin-text-3xl. UI-0 set the header a step down, at 20px; the approved
+      // canvas (10 Sep) draws every page title at 24px, and the class says so rather
+      // than leaning on index.css's bare-`h1` size.
       const { container } = renderTopBar({ title: 'Companies' })
       const classes = container.querySelector('h1')!.className.split(/\s+/)
       expect(classes).toContain('text-3xl')
