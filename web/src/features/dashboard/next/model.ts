@@ -53,6 +53,12 @@ export interface PlanRef {
   owner?: string
   /** ISO date. */
   dueAt?: string
+  /**
+   * The tracking node the plan belongs to (`PlanResponse.NodoExternalId`) — only a
+   * tracking plan carries one, and it is what decides whether this viewer may record
+   * progress on it (`viewerCapabilities.canRecordProgress`). Absent on an action plan.
+   */
+  nodoExternalId?: string
 }
 
 export interface OpenSurvey {

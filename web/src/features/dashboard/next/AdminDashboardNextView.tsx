@@ -14,6 +14,7 @@ import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { ANONYMITY_FLOOR, ClimateMap, KpiTile } from '../../../components/charts'
 import { Button, Chip } from '../../../components/ui'
+import { useViewerCapabilities, type ViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { KpiRow, SectionHeading } from '../components/dashboardGrammar'
@@ -49,6 +50,9 @@ import CycleTimeline, { type CycleStep } from './CycleTimeline'
  */
 export default function AdminDashboardNextView({ model }: { model: AdminDashboardModel }) {
   const { t, locale } = useTranslation()
+  // Every action below shows only when the server would answer it with something other
+  // than 403 — see `auth/viewerCapabilities.ts` for the rule each one mirrors.
+  const capabilities = useViewerCapabilities()
   const { target } = model
   const latest = latestAverage(model)
   const previous = previousAverage(model)
@@ -71,24 +75,32 @@ export default function AdminDashboardNextView({ model }: { model: AdminDashboar
         // numbers as measurements while `isSample` holds.
         badge={model.isSample ? { text: t('dashboard.next.sampleChip'), variant: 'warning' } : undefined}
         actions={
-          <>
-            <Button size="sm" variant="default" type="button">
-              <Download aria-hidden="true" />
-              {t('dashboard.next.export')}
-            </Button>
-            <Button asChild size="sm" variant="default">
-              <Link to="/microclimates/new">
-                <Radio aria-hidden="true" />
-                {t('dashboard.next.launchMicroclimate')}
-              </Link>
-            </Button>
-            <Button asChild size="sm" variant="primary">
-              <Link to="/surveys/new">
-                <Plus aria-hidden="true" />
-                {t('dashboard.next.newSurvey')}
-              </Link>
-            </Button>
-          </>
+          capabilities.canExport || capabilities.canLaunchMicroclimate || capabilities.canAuthorSurveys ? (
+            <>
+              {capabilities.canExport && (
+                <Button size="sm" variant="default" type="button">
+                  <Download aria-hidden="true" />
+                  {t('dashboard.next.export')}
+                </Button>
+              )}
+              {capabilities.canLaunchMicroclimate && (
+                <Button asChild size="sm" variant="default">
+                  <Link to="/microclimates/new">
+                    <Radio aria-hidden="true" />
+                    {t('dashboard.next.launchMicroclimate')}
+                  </Link>
+                </Button>
+              )}
+              {capabilities.canAuthorSurveys && (
+                <Button asChild size="sm" variant="primary">
+                  <Link to="/surveys/new">
+                    <Plus aria-hidden="true" />
+                    {t('dashboard.next.newSurvey')}
+                  </Link>
+                </Button>
+              )}
+            </>
+          ) : undefined
         }
       />
 
@@ -317,7 +329,14 @@ export default function AdminDashboardNextView({ model }: { model: AdminDashboar
               className="m-0 list-none divide-y divide-line-light rounded-lg border border-line-default bg-surface-card p-0"
             >
               {model.attention.map((item, index) => (
-                <AttentionRow key={index} item={item} model={model} t={t} locale={locale} />
+                <AttentionRow
+                  key={index}
+                  item={item}
+                  model={model}
+                  t={t}
+                  locale={locale}
+                  capabilities={capabilities}
+                />
               ))}
             </ul>
           </section>
@@ -448,11 +467,13 @@ function AttentionRow({
   model,
   t,
   locale,
+  capabilities,
 }: {
   item: AttentionItem
   model: AdminDashboardModel
   t: TranslateFn
   locale: string
+  capabilities: ViewerCapabilities
 }) {
   const progressOf = (progress: number) =>
     progress === 0 ? t('dashboard.next.noProgress') : percentReading(progress, locale)
@@ -480,8 +501,13 @@ function AttentionRow({
           plan: item.plan.name,
           progress: progressOf(item.plan.progress),
         })}
-        action={t('dashboard.next.openPlan')}
-        href={`/action-plans/${item.plan.id}`}
+        // Reading an action plan is `CanAccessCompany` (`ActionPlanEndpoints.cs:276-279`):
+        // the whole-company viewer, and nobody else.
+        action={
+          capabilities.seesWholeCompany
+            ? { label: t('dashboard.next.openPlan'), href: `/action-plans/${item.plan.id}` }
+            : undefined
+        }
       />
     )
   }
@@ -503,8 +529,13 @@ function AttentionRow({
           owner: item.plan.owner ?? '—',
           progress: progressOf(item.plan.progress),
         })}
-        action={t('dashboard.next.logProgress')}
-        href={`/tracking/planes/${item.plan.id}`}
+        // `avance` is the node leader's or an admin's (`PlanAccessHandler`); a plan the
+        // model knows no node for is offered to admins only, never widened.
+        action={
+          capabilities.canRecordProgress({ nodoExternalId: item.plan.nodoExternalId ?? '' })
+            ? { label: t('dashboard.next.logProgress'), href: `/tracking/planes/${item.plan.id}` }
+            : undefined
+        }
       />
     )
   }
@@ -538,8 +569,12 @@ function AttentionRow({
           count: item.remindersSent,
         },
       )}
-      action={t('dashboard.next.sendReminder')}
-      href={`/surveys/${survey.id}`}
+      // A reminder is a distribution write on the survey, gated like authoring it.
+      action={
+        capabilities.canAuthorSurveys
+          ? { label: t('dashboard.next.sendReminder'), href: `/surveys/${survey.id}` }
+          : undefined
+      }
     />
   )
 }
@@ -550,14 +585,13 @@ function AttentionItemRow({
   headline,
   detail,
   action,
-  href,
 }: {
   icon: ReactNode
   tone: 'critical' | 'warning'
   headline: ReactNode
   detail: string
-  action: string
-  href: string
+  /** Absent when the viewer may not take it: the row still informs, it just offers nothing. */
+  action?: { label: string; href: string }
 }) {
   return (
     <li data-slot="attention-item" className="flex items-center gap-panel-gap p-3">
@@ -576,9 +610,11 @@ function AttentionItemRow({
         <div className="text-sm text-fg-primary">{headline}</div>
         <div className="text-xs text-fg-secondary">{detail}</div>
       </div>
-      <Button asChild size="sm" variant="default" className="shrink-0">
-        <Link to={href}>{action}</Link>
-      </Button>
+      {action && (
+        <Button asChild size="sm" variant="default" className="shrink-0">
+          <Link to={action.href}>{action.label}</Link>
+        </Button>
+      )}
     </li>
   )
 }

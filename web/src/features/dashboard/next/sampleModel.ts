@@ -89,6 +89,7 @@ export const sampleModel: AdminDashboardModel = {
         progress: 0,
         owner: 'Adriana Marín',
         dueAt: '2026-08-20',
+        nodoExternalId: 'nodo-finanzas',
       },
     },
     { kind: 'low-participation', surveyId: 's-q4', remindersSent: 0 },
