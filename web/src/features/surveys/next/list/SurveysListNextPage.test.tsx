@@ -153,6 +153,23 @@ describe('SurveysListNextPage', () => {
     expect(chevron?.getAttribute('aria-hidden')).toBe('true')
   })
 
+  it('lays each table on the canvas grid from xl: its fixed columns carry the 12px gap, and every cell after the first starts at its column edge', async () => {
+    // happy-dom does no layout, so the classes are what can be pinned; the geometry is
+    // read on the 1440 shot (ESTADO / RESPUESTAS / PARTICIPACIÓN / CIERRE at 583 / 705 / 837 / 1059).
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
+    const table = document.querySelector('table') as HTMLTableElement
+    const widths = [...table.querySelectorAll('col')].slice(1).map((col) => col.className.match(/xl:w-(\S+)/)?.[1])
+    // 110 + 12, 120 + 12, 210 + 12, 130 + 12, 190 + 12, in 4px spacing units.
+    expect(widths).toEqual(['30.5', '33', '55.5', '35.5', '50.5'])
+    const heads = [...table.querySelectorAll('thead th')]
+    expect(heads[0].className).not.toContain('xl:pl-0')
+    for (const head of heads.slice(1)) expect(head.className).toContain('xl:pl-0')
+    const cells = [...(table.querySelector('tbody tr') as HTMLTableRowElement).children]
+    expect(cells[0].className).not.toContain('xl:pl-0')
+    for (const cell of cells.slice(1)) expect(cell.className).toContain('xl:pl-0')
+  })
+
   it('narrows to a status on the client, without a second request, from pills that show only what exists', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })

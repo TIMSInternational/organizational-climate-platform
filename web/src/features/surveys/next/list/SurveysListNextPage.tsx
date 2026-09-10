@@ -62,6 +62,8 @@ const FACET_KEY: Record<string, string> = {
 }
 
 const HEAD = 'px-3 pt-2 pb-2 text-left text-2xs font-bold uppercase tracking-label text-fg-secondary whitespace-nowrap'
+/** Every cell after the first, from xl: its column's left edge is the canvas's gap. */
+const GAP_CELL = 'xl:pl-0'
 
 /** "Encuesta periódica": the type in sentence case, as a meta line reads. */
 function sentenceCase(text: string, locale: string): string {
@@ -290,22 +292,27 @@ function SurveySectionBlock({
         <Table className="min-w-180 table-fixed xl:min-w-240">
           <colgroup>
             <col />
-            <col className="w-24 xl:w-27.5" />
-            <col className="w-26 xl:w-30" />
-            <col className="w-30 xl:w-52.5" />
-            <col className="w-27.5 xl:w-32.5" />
-            <col className="w-40 xl:w-47.5" />
+            {/* From xl, the canvas's grid: `minmax(0,1fr) 110px 120px 210px 130px 190px`
+                with 12px between columns. A table has no column gap, so each fixed
+                column carries the gap before its neighbour (+12px) and its cells drop
+                their left padding (`GAP_CELL`): every head and value then starts where
+                the artboard starts it (583 / 705 / 837 / 1059 at 1440). */}
+            <col className="w-24 xl:w-30.5" />
+            <col className="w-26 xl:w-33" />
+            <col className="w-30 xl:w-55.5" />
+            <col className="w-27.5 xl:w-35.5" />
+            <col className="w-40 xl:w-50.5" />
           </colgroup>
           {/* The archived block draws no header row, as the canvas does; the header
               stays in the tree for assistive technology. */}
           <thead className={archived ? 'sr-only' : undefined}>
             <tr className="border-b border-line-default">
               <th className={HEAD}>{t('surveys.next.list.colSurvey')}</th>
-              <th className={HEAD}>{t('common.status')}</th>
-              <th className={HEAD}>{t('surveys.responses')}</th>
-              <th className={HEAD}>{t('surveys.participation')}</th>
-              <th className={HEAD}>{t('surveys.next.list.colClose')}</th>
-              <th className={cn(HEAD, 'text-right')}>
+              <th className={cn(HEAD, GAP_CELL)}>{t('common.status')}</th>
+              <th className={cn(HEAD, GAP_CELL)}>{t('surveys.responses')}</th>
+              <th className={cn(HEAD, GAP_CELL)}>{t('surveys.participation')}</th>
+              <th className={cn(HEAD, GAP_CELL)}>{t('surveys.next.list.colClose')}</th>
+              <th className={cn(HEAD, GAP_CELL, 'text-right')}>
                 <span className="sr-only">{t('common.actions')}</span>
               </th>
             </tr>
@@ -403,10 +410,10 @@ function SurveyTableRow({
           <span className="truncate text-xs text-fg-label">{meta}</span>
         </div>
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-3 xl:pl-0">
         <Chip tone={running ? 'good' : 'neutral'} label={statusLabel(t, row.status)} className="w-full justify-start" />
       </td>
-      <td className="px-3 py-3 whitespace-nowrap">
+      <td className="px-3 py-3 xl:pl-0 whitespace-nowrap">
         <span className={cn('font-mono text-lg tabular-nums', ink)}>{counts.count}</span>
         {section === 'closed' ? (
           <span className="ml-1.5 text-sm text-fg-secondary">{t('surveys.next.list.completedUnit')}</span>
@@ -416,7 +423,7 @@ function SurveyTableRow({
           </span>
         ) : null}
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-3 xl:pl-0">
         {counts.percent === null ? (
           <span data-slot="no-invite-list" className="text-sm text-fg-label">
             {archived && counts.count === 0 ? t('surveys.next.list.noSubmissions') : t('surveys.next.list.noInviteList')}
@@ -439,7 +446,7 @@ function SurveyTableRow({
           </span>
         )}
       </td>
-      <td className="px-3 py-3 whitespace-nowrap">
+      <td className="px-3 py-3 xl:pl-0 whitespace-nowrap">
         {archived ? (
           <span aria-hidden="true" className="text-base text-fg-label">
             —
@@ -457,7 +464,7 @@ function SurveyTableRow({
           </span>
         )}
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-3 xl:pl-0">
         <div className="flex items-center justify-end gap-2">
           {action && (
             <Button asChild variant="outline">
