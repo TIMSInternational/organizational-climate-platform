@@ -64,9 +64,10 @@ interface SurveyResultsNextViewProps {
  * Reads top to bottom the way the design does: four tiles, "where to look first",
  * the map as the hero with a whole-company row and per-group means, then the opened
  * cell with its question, the same dimension in the other groups and the plan that
- * covers the group. Every action is gated by `capabilities` — `canExport` for the
- * exports, `canCreateActionPlan` for the "create a plan" link — so nothing here is
- * offered to a viewer the server would refuse.
+ * covers the group. The one action `capabilities` gates is the "create a plan" link
+ * (`canCreateActionPlan`); the exports are gated by suppression alone, for the reason
+ * given at `actions` below, so nothing here is offered to a viewer the server would
+ * refuse.
  *
  * ## The four-layer privacy rule, kept
  *
@@ -173,8 +174,17 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
           { label: t('surveys.results') },
         ]}
         badge={sample.isSample ? { text: t('dashboard.next.sampleChip'), variant: 'warning' } : undefined}
+        // `!isSuppressed` alone gates the exports. The page admits a viewer through
+        // `seesWholeCompany` (SurveyResultsNextPage.tsx), and `capabilitiesFor` derives
+        // `canExport` from the same "admin with a company" shape
+        // (viewerCapabilities.ts:163), so `canExport` is true for everyone who reaches
+        // this line — a term no test could turn false, so it is not written here.
+        // The suppression half is not cosmetic: below the whole-survey floor
+        // `questions` and `breakdowns` arrive empty (the current page's guard says the
+        // same), and a download holding a header row and nothing else invites the
+        // reader to conclude the data was lost rather than withheld.
         actions={
-          capabilities.canExport && !model.isSuppressed ? (
+          !model.isSuppressed ? (
             <>
               <Button variant="primary" disabled={exporting} onClick={downloadPdf}>
                 <Download aria-hidden="true" />
@@ -312,10 +322,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
           <>
             <section aria-labelledby="results-next-where" className="flex flex-col gap-panel-gap">
               <div className="flex flex-wrap items-baseline justify-between gap-inline">
-                <H2 id="results-next-where">
-                  {t('surveyResults.next.whereHeading')}{' '}
-                  <span className="text-sm font-normal text-fg-secondary">{findings.length}</span>
-                </H2>
+                <H2 id="results-next-where">{t('surveyResults.next.whereHeading')}</H2>
                 <p className="text-sm text-fg-secondary">
                   {t('surveyResults.next.whereSub', { count: findings.length })}
                 </p>

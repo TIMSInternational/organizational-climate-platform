@@ -162,7 +162,8 @@ describe('SurveyResultsNextPage', () => {
     expect(urls.some((url) => /\/action-plans\?companyId=c1&lang=en$/.test(url))).toBe(true)
 
     // "Where to look first": the worst disclosed cell is Operaciones, and a plan covers it.
-    expect(screen.getByRole('heading', { level: 2, name: new RegExp(copy.whereHeading) })).toBeTruthy()
+    // The heading is the words alone: the count lives in the subtitle beside it, once.
+    expect(screen.getByRole('heading', { level: 2, name: copy.whereHeading })).toBeTruthy()
     const findings = screen.getAllByRole('listitem').filter((item) => within(item).queryByText(copy.viewQuestion))
     expect(findings.length).toBeGreaterThan(0)
     expect(findings[0].textContent).toContain('Operaciones')
@@ -209,6 +210,32 @@ describe('SurveyResultsNextPage', () => {
     await userEvent.click(screen.getByRole('button', { name: copy.exportPdf }))
     await waitFor(() => expect(vi.mocked(downloadBlobFile)).toHaveBeenCalledTimes(1))
     expect(vi.mocked(downloadBlobFile).mock.calls[0][0]).toBe('survey-s1-results.pdf')
+  })
+
+  it('offers no export and draws no map when the whole survey is under the floor', async () => {
+    // The server's shape below the whole-survey floor: `questions` and `breakdowns`
+    // arrive empty (surveyResults.ts:123). A download of that would be a header row.
+    const suppressed: SurveyAnalyticsResponse = {
+      ...payload(),
+      isSuppressed: true,
+      suppressionReason: 'below_minimum_group_size',
+      questions: [],
+      breakdowns: [],
+    }
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/analytics')) return Promise.resolve(jsonResponse(suppressed))
+      if (url.includes('/action-plans')) return Promise.resolve(jsonResponse(plans))
+      return Promise.resolve(new Response('{}', { status: 404 }))
+    })
+    renderAt({ role: 'company_admin' })
+    await screen.findByRole('heading', { level: 1 })
+    expect(screen.getByText(en.surveyResults.suppressedTitle)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: copy.exportPdf })).toBeNull()
+    expect(screen.queryByRole('button', { name: copy.exportCsv })).toBeNull()
+    expect(screen.queryByRole('heading', { level: 2, name: copy.mapHeading })).toBeNull()
+    expect(screen.queryByTestId('group-row-d-eng')).toBeNull()
+    expect(vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes('/export/pdf'))).toBe(false)
   })
 
   it.each(['leader', 'supervisor', 'employee'])('sends a %s to /dashboard without fetching', async (role) => {

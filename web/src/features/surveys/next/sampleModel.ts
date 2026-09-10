@@ -15,9 +15,12 @@ import type { ResultsSampleWave } from './model'
  * |                                          | per segment question, never a distribution           |
  *
  * The figures are the approved artboard's Grupo Meridiano numbers, so the screen can
- * be compared against the design. The dimension keys are the product's own slugs
- * (`dimensionLabel.ts`); a survey whose questions carry other categories simply gets
- * no delta on those columns, which the view prints as "no Q2" rather than as 0.
+ * be compared against the design. The dimension keys are the product's own slugs —
+ * the keys of `surveyRespond.dimensions` in both catalogues, which `dimensionLabel.ts`
+ * reads (`growth`, not `development`, is the product's word). A survey whose questions
+ * carry other categories simply gets no delta on those columns, which the view prints
+ * as "no Q2" rather than as 0 — so a shot fixture must carry the slugs, or the delta
+ * cells are never drawn.
  */
 export const sampleWave: ResultsSampleWave = {
   isSample: true,
@@ -28,7 +31,7 @@ export const sampleWave: ResultsSampleWave = {
     workload: 0.3,
     trust: 0.4,
     recognition: 0.3,
-    development: 0.3,
+    growth: 0.3,
     belonging: 0.3,
   },
   risesInARow: 3,
