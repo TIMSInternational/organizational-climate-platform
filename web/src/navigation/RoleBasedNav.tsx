@@ -281,18 +281,16 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
               // in `rowContent` above sets `overflow: hidden` + `textOverflow:
               // ellipsis` + `whiteSpace: nowrap`, so anything wider than its box
               // is cut with no way to read the rest, and the box is narrow while
-              // the rail is expanded: the rail is 220px
+              // the rail is expanded: the rail is 236px, the canvas's
               // (`--admin-size-sidebar`), of which 16px goes to the `<nav>`'s own
               // `4px 8px 8px 8px` gutter, 16px to this row's `var(--admin-space-4)
               // var(--admin-space-8)` padding, 16px to the icon
               // (`--admin-size-icon`) and 8px to the gap
-              // (`--admin-size-inline-gap`) — 164px for the label, less again on a
+              // (`--admin-size-inline-gap`) — 180px for the label, less again on a
               // row carrying a badge. Whether a given label survives that depends
               // on the locale and on the reader's font settings, neither of which
               // this component can see, so the tooltip is set for all of them
-              // rather than guessed at. Widening the rail means changing
-              // `--admin-size-sidebar`, which is shared token surface (#208 is
-              // queued on tokens.css).
+              // rather than guessed at.
               title={label}
               style={rowStyle}
             >
