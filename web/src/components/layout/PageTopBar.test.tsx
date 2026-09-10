@@ -180,11 +180,10 @@ describe('PageTopBar', () => {
       expect(container.querySelector('[data-slot="separator"]')).toBeNull()
     })
 
-    it('sets the title at the header size, not at the bare h1 size', () => {
-      // index.css gives a bare `h1` --admin-text-3xl (24px). The redesign's page
-      // header is a step down from that; without the class it inherits 24px.
+    it('sets the title at the canvas size, 24px, through the scale class', () => {
+      // The per-role canvas draws every page title at 24px — the scale's --admin-text-3xl.
       const { container } = renderTopBar({ title: 'Companies' })
-      expect(container.querySelector('h1')!.className.split(/\s+/)).toContain('text-2xl')
+      expect(container.querySelector('h1')!.className.split(/\s+/)).toContain('text-3xl')
     })
 
     it('caps the description and nothing else', () => {

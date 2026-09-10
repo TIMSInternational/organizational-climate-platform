@@ -14,7 +14,9 @@ export function Switch({ className, ...props }: SwitchProps) {
     <SwitchPrimitive.Root
       data-slot="switch"
       className={cn(
-        'peer inline-flex h-[18px] w-[32px] shrink-0 items-center rounded-full border border-transparent',
+        // `p-0`: Radix renders the track as a <button>, and index.css pads every bare button as a
+        // carded control — the padding squeezed the knob to nothing inside the 32px track.
+        'peer inline-flex h-4.5 w-8 shrink-0 items-center rounded-full border border-transparent p-0',
         'transition-colors ease-out',
         'bg-line-default data-[state=checked]:bg-accent-blue',
         'disabled:cursor-not-allowed disabled:opacity-50',
@@ -25,9 +27,9 @@ export function Switch({ className, ...props }: SwitchProps) {
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
         className={cn(
-          'pointer-events-none block size-[14px] rounded-full bg-fg-on-accent shadow-sm ring-0',
+          'pointer-events-none block size-3.5 rounded-full bg-fg-on-accent shadow-sm ring-0',
           'transition-transform ease-out',
-          'translate-x-[2px] data-[state=checked]:translate-x-[14px]',
+          'translate-x-0.5 data-[state=checked]:translate-x-3.5',
         )}
       />
     </SwitchPrimitive.Root>

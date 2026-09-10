@@ -2104,7 +2104,15 @@
           "openLead": "Las respuestas abiertas nunca se muestran tal cual",
           "openText": ": solo las palabras más frecuentes, y tampoco en grupos protegidos."
         },
-        "loadFailed": "No se pudieron leer los campos demográficos"
+        "loadFailed": "No se pudieron leer los campos demográficos",
+        "starter": {
+          "label": "Antigüedad",
+          "key": "antiguedad",
+          "under1": "Menos de 1 año",
+          "oneToThree": "1–3 años",
+          "threeToFive": "3–5 años",
+          "overFive": "Más de 5 años"
+        }
       },
       "analytics": {
         "description": "Las referencias y los hallazgos de IA de esta empresa: solo lo que tiene activado, una empresa a la vez.",

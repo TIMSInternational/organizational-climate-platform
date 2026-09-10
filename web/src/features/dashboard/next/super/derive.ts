@@ -43,10 +43,12 @@ export function plainTitle(title: string | null): string | null {
 }
 
 const LEGAL_FORM =
-  /[\s,]+(s\.?\s?a\.?(\s?de\s?c\.?\s?v\.?)?|s\.?\s?a\.?\s?s\.?|s\.?\s?r\.?\s?l\.?|ltda\.?|inc\.?|corp\.?|corporation|co\.?|llc|ltd\.?|limited|gmbh|plc)$/i
+  /[\s,]+(s\.\s?a\.(\s?de\s?c\.\s?v\.)?|s\.\s?a\.\s?s\.|s\.\s?r\.\s?l\.|ltda\.?|inc\.?|corp\.|llc|ltd\.?|gmbh|plc)$/i
+/** The spelled-out corporate words a sentence drops too ("Acme Corporation" → "Acme"). */
+const CORPORATE_WORD = /\s+(corporation|company|co\.?)$/i
 const GENERIC_LEAD = /^(grupo|group|compañía|compania|corporación|corporacion|empresa)\s+/i
 
-/** The name without its legal form: "Grupo Meridiano S.A." → "Grupo Meridiano". */
+/** The name without its abbreviated legal form: "Grupo Meridiano S.A." → "Grupo Meridiano"; "Acme Corporation" stays. */
 export function withoutLegalForm(name: string): string {
   const short = name.trim().replace(LEGAL_FORM, '').trim()
   return short || name.trim()
@@ -59,7 +61,8 @@ export function withoutLegalForm(name: string): string {
  */
 export function shortCompanyName(name: string): string {
   const base = withoutLegalForm(name)
-  return base.replace(GENERIC_LEAD, '').trim() || base
+  const plain = base.replace(CORPORATE_WORD, '').trim() || base
+  return plain.replace(GENERIC_LEAD, '').trim() || plain
 }
 
 export function mixNote(rows: readonly PlatformCompanyRow[], surveys: readonly SurveyListItem[] | null): MixNote | null {

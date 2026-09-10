@@ -109,15 +109,22 @@ describe('SuperDemographicFieldsView', () => {
     expect(screen.getByText(copy.tiles.fieldsNone)).toBeTruthy()
   })
 
-  it('states the verdict before the field exists: 42 people across 4 values is 10.5 each, and 9 values would tip it', async () => {
+  it('opens an empty catalogue on the canvas’s first field, its verdict on screen before anything is typed: 42 people across 4 values is 10.5 each, and 9 values would tip it', async () => {
     serve()
     const { container } = renderPage()
-    await userEvent.type(await screen.findByLabelText(new RegExp(`^${copy.form.label}`)), 'Antigüedad')
-    expect((screen.getByLabelText(new RegExp(`^${copy.form.key}`)) as HTMLInputElement).value).toBe('antiguedad')
-    await addValues(4)
+    const label = (await screen.findByLabelText(new RegExp(`^${copy.form.label}`))) as HTMLInputElement
+    expect(label.value).toBe(copy.starter.label)
+    expect((screen.getByLabelText(new RegExp(`^${copy.form.key}`)) as HTMLInputElement).value).toBe(copy.starter.key)
+    for (const band of [copy.starter.under1, copy.starter.oneToThree, copy.starter.threeToFive, copy.starter.overFive]) {
+      expect(screen.getByText(band)).toBeTruthy()
+    }
     expect(container.querySelector('[data-verdict]')?.getAttribute('data-verdict')).toBe('usable')
     expect(container.querySelector('[data-verdict]')?.textContent).toContain('10.5')
     expect(screen.getByText(/With/).textContent).toMatch(/9\D+4\.7/)
+    // The key still follows a label the operator types.
+    await userEvent.clear(label)
+    await userEvent.type(label, 'Antigüedad')
+    expect((screen.getByLabelText(new RegExp(`^${copy.form.key}`)) as HTMLInputElement).value).toBe('antiguedad')
   })
 
   it('calls nine values too narrow, and offers no tipping point past it', async () => {
@@ -134,7 +141,9 @@ describe('SuperDemographicFieldsView', () => {
   it('creates the field through the same client, with the values as labels', async () => {
     serve()
     renderPage()
-    await userEvent.type(await screen.findByLabelText(new RegExp(`^${copy.form.label}`)), 'Antigüedad')
+    const label = await screen.findByLabelText(new RegExp(`^${copy.form.label}`))
+    await userEvent.clear(label)
+    await userEvent.type(label, 'Antigüedad')
     await addValues(2)
     await userEvent.click(screen.getByRole('button', { name: copy.form.create }))
     await waitFor(() => expect(calls.some((call) => call.method === 'POST')).toBe(true))
@@ -144,7 +153,9 @@ describe('SuperDemographicFieldsView', () => {
       field: 'antiguedad',
       label: 'Antigüedad',
       type: 'select',
-      options: [{ label: 'Tramo 1' }, { label: 'Tramo 2' }],
+      options: [copy.starter.under1, copy.starter.oneToThree, copy.starter.threeToFive, copy.starter.overFive, 'Tramo 1', 'Tramo 2'].map(
+        (text) => ({ label: text }),
+      ),
       required: false,
       order: 1,
     })

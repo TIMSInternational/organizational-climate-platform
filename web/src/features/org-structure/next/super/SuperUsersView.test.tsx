@@ -74,10 +74,10 @@ function serve({ invitations = 'ok' as 'ok' | 'fail' } = {}) {
   })
 }
 
-function renderPage() {
+function renderPage(entry = `/admin/companies/${C}/users`) {
   return render(
     <TranslationProvider>
-      <MemoryRouter initialEntries={[`/admin/companies/${C}/users`]}>
+      <MemoryRouter initialEntries={[entry]}>
         <CompanyContextProvider>
           <Routes>
             <Route path="/admin/companies/:companyId/users" element={<UsersListPage />} />
@@ -169,5 +169,16 @@ describe('SuperUsersView', () => {
     await screen.findByText('Ana Rojas')
     expect(screen.getByText(en.superadmin.next.unavailable)).toBeTruthy()
     expect(screen.queryByText(copy.invitations.noneMeta)).toBeNull()
+  })
+
+  it('opens the edit panel on the person the link names (?editar=), and on nobody for an id outside the tenant', async () => {
+    serve()
+    const first = renderPage(`/admin/companies/${C}/users?editar=luis`)
+    expect(await screen.findByDisplayValue('Luis Mora')).toBeTruthy()
+    expect(document.querySelector('[data-user-id="luis"]')?.getAttribute('aria-selected') ?? document.querySelector('[data-user-id="luis"]')?.className).toBeTruthy()
+    first.unmount()
+    renderPage(`/admin/companies/${C}/users?editar=nobody`)
+    await screen.findAllByRole('row')
+    expect(screen.queryByDisplayValue('Luis Mora')).toBeNull()
   })
 })

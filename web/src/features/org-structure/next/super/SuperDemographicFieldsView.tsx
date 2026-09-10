@@ -120,6 +120,7 @@ export default function SuperDemographicFieldsView() {
                       field={editing}
                       people={state.people}
                       nextOrder={state.fields.length + 1}
+                      seedExample={state.fields.length === 0}
                       onDone={() => {
                         setEditing(null)
                         state.reload()
@@ -152,11 +153,20 @@ interface ValueDraft {
   text: string
 }
 
+/** The canvas's first field's bands, in order. */
+const STARTER_VALUES = [
+  'superadmin.next.demographics.starter.under1',
+  'superadmin.next.demographics.starter.oneToThree',
+  'superadmin.next.demographics.starter.threeToFive',
+  'superadmin.next.demographics.starter.overFive',
+] as const
+
 function FieldForm({
   companyId,
   field,
   people,
   nextOrder,
+  seedExample = false,
   onDone,
   onCancel,
 }: {
@@ -164,19 +174,28 @@ function FieldForm({
   field: DemographicField | null
   people: number | undefined
   nextOrder: number
+  /**
+   * An empty catalogue opens the form on the canvas's first field — tenure, four bands — so the
+   * verdict against the floor is on screen before anything is typed. Nothing is created until
+   * "Crear campo"; every value can be edited or removed.
+   */
+  seedExample?: boolean
   onDone: () => void
   onCancel: () => void
 }) {
   const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const editing = field !== null
-  const [label, setLabel] = useState(field?.label ?? '')
-  const [key, setKey] = useState(field?.field ?? '')
+  const seed = !editing && seedExample
+  const [label, setLabel] = useState(field?.label ?? (seed ? t('superadmin.next.demographics.starter.label') : ''))
+  const [key, setKey] = useState(field?.field ?? (seed ? t('superadmin.next.demographics.starter.key') : ''))
   const [keyTouched, setKeyTouched] = useState(editing)
   const [type, setType] = useState(field?.type ?? 'select')
   const [order, setOrder] = useState(String(field?.order ?? nextOrder))
   const [values, setValues] = useState<ValueDraft[]>(
-    [...(field?.options ?? [])]
+    seed
+      ? STARTER_VALUES.map((valueKey) => ({ text: t(valueKey) }))
+      : [...(field?.options ?? [])]
       .sort((a, b) => a.order - b.order)
       .map((option) => ({ value: option.value, text: option.label ?? option.value })),
   )

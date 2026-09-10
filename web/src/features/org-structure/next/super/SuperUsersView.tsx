@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import { useParams } from 'react-router'
+import { useParams, useSearchParams } from 'react-router'
 import { ArrowRight, Check, Link2, Mail, Search, Shield, Upload, UserPlus } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
@@ -69,6 +69,15 @@ type OpenPanel = 'none' | 'invite' | 'import'
  * /admin/users/{id}/role` refuses every caller but a super administrator, who may assign
  * any of the five roles, company administrator included.
  */
+/** The query parameter that opens the edit panel on one person: `?editar=<userId>`. */
+export const EDIT_PARAM = 'editar'
+
+/**
+ * The row action stays in view while the columns scroll under it below `xl` (1280), as on
+ * Empresas; from `xl` up every column fits and the cell is ordinary.
+ */
+const STICKY_ACTION = 'sticky right-0 z-[1] bg-surface-card border-l border-line-light xl:static xl:border-l-0 xl:bg-transparent'
+
 export default function SuperUsersView() {
   const { t } = useTranslation()
   const { companyId } = useParams<{ companyId: string }>()
@@ -78,7 +87,7 @@ export default function SuperUsersView() {
   const [role, setRole] = useState('')
   const [department, setDepartment] = useState('')
   const [search, setSearch] = useState('')
-  const [editing, setEditing] = useState<User | null>(null)
+  const [params, setParams] = useSearchParams()
   const [open, setOpen] = useState<OpenPanel>('none')
   const [expanded, setExpanded] = useState(false)
   const searchId = useId()
@@ -89,6 +98,20 @@ export default function SuperUsersView() {
   const shown = expanded ? visible : visible.slice(0, VISIBLE_ROWS)
   const counts = roleCounts(state.users)
   const departmentName = new Map(state.departments.map((unit) => [unit.id, unit.name]))
+  // `?editar=<id>` names the person in the edit panel. An id that is not in this tenant's
+  // roster opens nothing.
+  const editingId = params.get(EDIT_PARAM)
+  const editing = editingId ? (state.users.find((user) => user.id === editingId) ?? null) : null
+  const setEditing = (user: User | null) =>
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        if (user) next.set(EDIT_PARAM, user.id)
+        else next.delete(EDIT_PARAM)
+        return next
+      },
+      { replace: true },
+    )
 
   async function handleCreateInvitation(values: InvitationFormValues) {
     if (!companyId) return
@@ -179,7 +202,7 @@ export default function SuperUsersView() {
       )}
 
       <div className="flex flex-wrap items-center gap-2.5">
-        <div role="group" aria-label={t('superadmin.next.users.filterLabel')} className="flex flex-wrap gap-1.5">
+        <div role="group" aria-label={t('superadmin.next.users.filterLabel')} className="flex w-full flex-wrap gap-1.5 xl:w-auto">
           {['', ...ROLE_ORDER.filter((facet) => (counts.get(facet) ?? 0) > 0)].map((facet) => {
             const selected = role === facet
             return (
@@ -204,7 +227,7 @@ export default function SuperUsersView() {
             )
           })}
         </div>
-        <label className="m-0 sm:ml-auto">
+        <label className="m-0 xl:ml-auto">
           <span className="sr-only">{t('superadmin.next.users.departmentFilterLabel')}</span>
           <select className="w-52" value={department} onChange={(event) => setDepartment(event.target.value)}>
             <option value="">{t('superadmin.next.users.allDepartments')}</option>
@@ -215,7 +238,7 @@ export default function SuperUsersView() {
             ))}
           </select>
         </label>
-        <label htmlFor={searchId} className="relative m-0 w-full sm:w-60">
+        <label htmlFor={searchId} className="relative m-0 min-w-0 flex-1 sm:w-60 sm:flex-none">
           <span className="sr-only">{t('superadmin.next.users.searchPlaceholder')}</span>
           <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-fg-tertiary" />
           <Input
@@ -260,7 +283,10 @@ export default function SuperUsersView() {
             <div className="overflow-hidden rounded-xl border border-line-default bg-surface-card pt-2 shadow-sm">
               {/* The table's minimum sits on a div for the reason the Empresas list gives. */}
               <div className="overflow-x-auto">
-              <div className="min-w-[56rem]">
+              {/* The Table primitive wraps its <table> in its own overflow-x-auto container; left as a scroller it
+                  becomes the sticky Editar/Abrir cell's containing box, 70rem wide and never scrolled, so the cell
+                  never pins. Visible here, the scroller above is the one it pins to. */}
+              <div className="min-w-[56rem] [&_[data-slot=table-container]]:overflow-visible">
               <Table
                 aria-label={t('superadmin.next.users.tableLabel', { company: companyName ?? '' })}
                 className="table-fixed"
@@ -280,7 +306,7 @@ export default function SuperUsersView() {
                     <th className={TH}>{t('superadmin.next.users.colDepartment')}</th>
                     <th className={TH}>{t('superadmin.next.users.colStatus')}</th>
                     <th className={TH}>{t('superadmin.next.users.colLastActivity')}</th>
-                    <th className={TH}>
+                    <th className={cn(TH, STICKY_ACTION)}>
                       <span className="sr-only">{t('common.actions')}</span>
                     </th>
                   </tr>
@@ -396,7 +422,7 @@ function PersonRow({
           <span className="text-xs text-accent-amber-ink">{t('superadmin.next.users.neverSignedIn')}</span>
         )}
       </td>
-      <td className="px-3 py-3 text-right">
+      <td className={cn('px-3 py-3 text-right', STICKY_ACTION)}>
         <Button
           type="button"
           variant="outline"

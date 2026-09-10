@@ -24,7 +24,7 @@ const TH =
  * the nine columns cannot fit the card, and a clipped "Abrir" behind a scroller with no edge
  * is the defect the 1024 shot showed. From `xl` up every column fits and the cell is ordinary.
  */
-const STICKY_ACTION = 'sticky right-0 z-[1] bg-surface-card border-l border-line-light xl:static xl:border-l-0'
+const STICKY_ACTION = 'sticky right-0 z-[1] bg-surface-card border-l border-line-light xl:static xl:border-l-0 xl:bg-transparent'
 
 /**
  * `/admin/companies` — the canvas's *Empresas* (`CompaniesList` artboard), which replaced
@@ -176,7 +176,10 @@ export default function CompaniesListNextPage() {
                   `<table>` and treats a width with a percentage in `max()` as `auto` — so the minimum
                   sits on a div inside our own scroller, and the table fills that div. At 1024 the columns squeezed and the card clipped the last ones. */}
               <div className="overflow-x-auto">
-              <div className="min-w-[70rem]">
+              {/* The Table primitive wraps its <table> in its own overflow-x-auto container; left as a scroller it
+                  becomes the sticky Editar/Abrir cell's containing box, 70rem wide and never scrolled, so the cell
+                  never pins. Visible here, the scroller above is the one it pins to. */}
+              <div className="min-w-[70rem] [&_[data-slot=table-container]]:overflow-visible">
               <Table aria-label={t('superadmin.next.companies.tableLabel')} className="table-fixed">
                 <colgroup>
                   <col />

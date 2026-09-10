@@ -2104,7 +2104,15 @@
           "openLead": "Open answers are never shown as written",
           "openText": ": only the most frequent words, and not for protected groups either."
         },
-        "loadFailed": "The demographic fields could not be read"
+        "loadFailed": "The demographic fields could not be read",
+        "starter": {
+          "label": "Tenure",
+          "key": "tenure",
+          "under1": "Less than 1 year",
+          "oneToThree": "1–3 years",
+          "threeToFive": "3–5 years",
+          "overFive": "More than 5 years"
+        }
       },
       "analytics": {
         "description": "This company's benchmarks and AI findings: only what it has switched on, one company at a time.",

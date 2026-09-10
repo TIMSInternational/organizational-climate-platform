@@ -1,5 +1,5 @@
 {
-  "_comment": "The platform as the local API answered on 10 Sep 2026, verbatim: the super-admin endpoints from the session's capture, and Grupo Meridiano S.A.'s own reads from GETs as its company administrator. Acme's and Verify Co's settings are deliberately absent (never captured). Shoot the super administrator's screens with --role super_admin --company '' --lang es --name 'Rebeca Solís' (the platform overview needs no tenant selected), or --company 16c97c29-07f8-4522-86fc-e6cc56298829 for a tenant's pages.",
+  "_comment": "The platform as the local API answered on 10 Sep 2026, verbatim: the super-admin endpoints from the session's capture, and Grupo Meridiano S.A.'s own reads from GETs as its company administrator. Only Grupo Meridiano S.A.'s settings are here (its detail page's read): the Empresas list no longer reads any tenant's settings, because that read is an audited PUT. GET /admin/benchmarks is keyed ?lang=es with the Spanish body the real API returns for that request. Shoot the super administrator's screens with --role super_admin --company '' --lang es --name 'Rebeca Solís' (the platform overview needs no tenant selected), or --company 16c97c29-07f8-4522-86fc-e6cc56298829 for a tenant's pages.",
   "GET /notifications/mine": {
     "notifications": []
   },

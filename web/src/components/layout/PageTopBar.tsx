@@ -92,13 +92,10 @@ import {
  *   already has an `<h1>` in the caption above the shell; here the page title is
  *   the document's heading, every caller renders exactly one of them, and demoting
  *   it would break the heading outline for AT.
- * - **20px, not 19px.** `text-2xl` is the type scale's step here, and the scale
- *   is a checked port (`styles/tokens.test.ts` pins it at eight `rem` sizes). A
- *   ninth token for a 1px difference buys nothing; the change that matters is
- *   away from the bare `h1`'s 24px, which is 26% too heavy for this header.
- *   `tracking-tight` is -0.025em against the prototype's -0.02em, and
- *   `font-semibold` is 600 against its 640 — which no static Poppins weight can
- *   render anyway, `styles/fonts.css` loading 400/500/600/700.
+ * - **24px, as every artboard of the 10 Sep per-role canvas draws it** (`font-size: 24px` on
+ *   the `<h1>` of SuperDashboard.dc.html and SupervisorDashboard.dc.html): `text-3xl`, the
+ *   scale's `--admin-text-3xl` (1.5rem). It was `text-2xl` (20px); the fidelity refuter measured
+ *   every redesigned screen's title 4px under its artboard.
  * - **The description's cap is `max-w-measure`, not `max-w-prose`.** The design
  *   caps prose at 70ch; Tailwind v4 emits `max-w-prose` as a static utility with
  *   a literal 65ch rather than from a theme key, so it cannot be re-pointed, and
@@ -232,7 +229,7 @@ export function PageTopBar({
           <div className="flex flex-wrap items-center gap-inline">
             {/* No bottom margin: index.css gives every `h1` `margin-bottom: 8px`,
                 which would double up with this container's `gap`. */}
-            <h1 className="mb-0 min-w-0 break-words text-2xl">{title}</h1>
+            <h1 className="mb-0 min-w-0 break-words text-3xl">{title}</h1>
             {badge && <Badge variant={badge.variant}>{badge.text}</Badge>}
           </div>
           {/* `text-fg-secondary`, not `text-fg-tertiary`. Measured in Chrome:

@@ -38,7 +38,8 @@ describe('the names a sentence carries', () => {
     expect(shortCompanyName('Acme Corporation')).toBe('Acme')
     expect(shortCompanyName('Verify Co')).toBe('Verify')
     expect(withoutLegalForm('Grupo Meridiano S.A.')).toBe('Grupo Meridiano')
-    expect(withoutLegalForm('Acme Corporation')).toBe('Acme')
+    expect(withoutLegalForm('Acme Corporation')).toBe('Acme Corporation')
+    expect(withoutLegalForm('Verify Co')).toBe('Verify Co')
   })
 
   it('never empties a name that is only those words', () => {
