@@ -10,6 +10,7 @@ import UsersListPage from '../features/org-structure/pages/UsersListPage'
 import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
 import AnalyticsDashboardPage from '../features/analytics/pages/AnalyticsDashboardPage'
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
+import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
 
 /**
  * A construction guard for the router.
@@ -271,7 +272,7 @@ describe('router', () => {
    * them; the `/next` siblings the first cut mounted are gone with the ruling. Asserted
    * on the element, not the path: a path alone would pass with the old page behind it.
    */
-  it('mounts the redesigned list and Clima en el tiempo on the real routes, and no /next sibling', () => {
+  it('mounts the redesigned list, Clima en el tiempo and the results on the real routes, and no /next sibling', () => {
     const byPath = new Map<string, unknown>()
     function walk(routes: typeof router.routes): void {
       for (const route of routes) {
@@ -283,13 +284,18 @@ describe('router', () => {
     const componentAt = (path: string) => (byPath.get(path) as { type?: unknown } | undefined)?.type
     expect(componentAt('/surveys')).toBe(SurveysListNextPage)
     expect(componentAt('/surveys/climate-trends')).toBe(ClimateTrendsNextPage)
+    // #468 swapped the results the same way: pinned on the element here, not only by a
+    // source regex in the page's own test.
+    expect(componentAt('/surveys/:id/results')).toBe(SurveyResultsNextPage)
     expect(byPath.has('/surveys/next')).toBe(false)
     expect(byPath.has('/surveys/climate-trends/next')).toBe(false)
+    expect(byPath.has('/surveys/:id/results/next')).toBe(false)
 
     // Unrouted means unreferenced: the router imports neither old page for any route.
     const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
     expect(source).not.toMatch(/pages\/SurveysListPage'/)
     expect(source).not.toMatch(/pages\/ClimateTrendsPage'/)
+    expect(source).not.toMatch(/pages\/SurveyResultsPage'/)
   })
 
   /**

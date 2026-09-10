@@ -70,7 +70,7 @@ export default function CompaniesListNextPage() {
   }
 
   const header = (
-    <PageTopBar rhythm="canvas"
+    <PageTopBar
       eyebrow={t('navigation.systemAdministration')}
       title={t('navigation.companies')}
       description={t('superadmin.next.companies.description')}
@@ -99,8 +99,8 @@ export default function CompaniesListNextPage() {
 
   return (
     <div className="flex flex-col gap-section">
-      {/* `PageTopBar` keeps 16px under its rule; the canvas has 24 before the filters. */}
-      <div className="-mb-2">
+      {/* `PageTopBar` keeps 24px under its rule (`mb-section`) and this column adds its 24px gap; the canvas has 24 in all before the filters. */}
+      <div className="-mb-6">
         {header}
         {creating && (
           <Panel

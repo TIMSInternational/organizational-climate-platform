@@ -74,7 +74,7 @@ export default function SuperAnalyticsView() {
       />
       <div className="flex flex-col gap-section">
         <div className="-mb-2">
-          <PageTopBar rhythm="canvas"
+          <PageTopBar
             eyebrow={t('navigation.systemAdministration')}
             title={t('navigation.analytics')}
             description={t('superadmin.next.analytics.description')}
@@ -101,7 +101,7 @@ export default function SuperAnalyticsView() {
             <div className="flex flex-col gap-section">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 <KpiTile
-                  surface="card"
+                 
                   label={t('superadmin.next.analytics.tiles.own')}
                   value={state.own ? state.own.length : null}
                   unit={t('superadmin.next.analytics.tiles.ownUnit')}
@@ -109,7 +109,7 @@ export default function SuperAnalyticsView() {
                   sub={ownSub ? <span>{ownSub}</span> : undefined}
                 />
                 <KpiTile
-                  surface="card"
+                 
                   label={t('superadmin.next.analytics.tiles.insights')}
                   value={state.insights ? state.insights.length : null}
                   unit={t('superadmin.next.analytics.tiles.insightsUnit')}
@@ -117,7 +117,7 @@ export default function SuperAnalyticsView() {
                   sub={insightsSub ? <span>{insightsSub}</span> : undefined}
                 />
                 <KpiTile
-                  surface="card"
+                 
                   label={t('superadmin.next.analytics.tiles.lastClosed')}
                   value={null}
                   valueText={closed ? closed.code : undefined}

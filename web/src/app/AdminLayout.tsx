@@ -178,7 +178,11 @@ function AdminShell() {
           </header>
 
           {/* The scroll container. */}
-          <main id="main" className="min-w-0 flex-1 overflow-y-auto p-gutter">
+          {/* Flush against the rail and under the bar from `md` — every artboard of the
+              10 Sep canvas draws the card at x=236 (the rail's edge) and y=52 (the bar's
+              foot), with the 12px gutter only on the right and the bottom. Below `md` the
+              rail is gone and the gutter keeps the card off the screen's edge. */}
+          <main id="main" className="min-w-0 flex-1 overflow-y-auto p-gutter md:pt-0 md:pl-0">
           {/* Legacy AppShell inset its content by 12px and put it on a panel:
               `background: var(--admin-bg-panel)`, `1px solid
               var(--admin-border-panel)`, `borderRadius: 8`.
@@ -190,7 +194,7 @@ function AdminShell() {
               growing with the viewport on a large monitor. Measured across eleven
               viewports, that cap did something worse than what it prevented: it
               bites from 1516px up — which is a 1728 MacBook Pro and a 1920 monitor,
-              not an exotic size — and because the column starts *after* the 220px
+              not an exotic size — and because the column starts *after* the
               rail, centring the capped card inside it pushed the card away from the
               rail. At 2560 there were 530px of empty surface between them and at
               3440 there were 970px, so the navigation read as belonging to nothing

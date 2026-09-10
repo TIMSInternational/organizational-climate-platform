@@ -157,8 +157,8 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
                 {name ?? t('shell.account')}
               </span>
               {/* Truncated like the name above it. Without this the role wrapped to
-                  two lines in Spanish -- "Administrador de Empresa" is wider than
-                  the 150px this column has in a 220px rail -- which grew the block
+                  two lines in Spanish -- "Administrador de Empresa" was wider than
+                  the 150px this column had in a 220px rail -- which grew the block
                   and pushed it into the Settings/Sign-out row beneath. Rendered in
                   Chrome at 1440x900 with `preferredLocale=es`. */}
               {roleKey ? (
@@ -186,17 +186,21 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
         // ForMaps' Settings/Sign-out row, with one thing theirs does not need. Their
         // two labels are "Settings" and "Sign out"; the Spanish pair is
         // "Configuración" and "Cerrar sesión", which at 12px plus two 14px glyphs
-        // and their gaps overruns the 212px this row has and wrapped each control
-        // onto its own line, straight through the user block above. Both labels now
-        // shrink and ellipsise, with `title` making the full text recoverable — the
-        // same treatment `RoleBasedNav` gives its rows, and for the same reason.
+        // and their gaps overran this row and wrapped each control onto its own
+        // line, straight through the user block above. Both labels shrink and
+        // ellipsise, with `title` making the full text recoverable — the same
+        // treatment `RoleBasedNav` gives its rows, and for the same reason. Since the
+        // canvas (10 Sep) the rail is 236px and each control carries 2px of padding
+        // and a 4px gap, as the artboards draw the pair flush: both fit whole at
+        // 1440 (measured: "Cerrar sesión" wants 78px), and the ellipsis is for a
+        // longer label or a wider font.
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '4px 4px 0' }}>
           <Link
             to="/settings/notifications"
             title={t('shell.settings')}
-            style={{ ...ROW, width: 'auto', minWidth: 0, gap: 5, height: 28, padding: '0 4px', fontSize: 12, textDecoration: 'none' }}
+            style={{ ...ROW, width: 'auto', minWidth: 0, gap: 4, height: 28, padding: '0 2px', fontSize: 12, textDecoration: 'none' }}
           >
-            <Settings aria-hidden="true" style={{ width: 12, height: 12, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
+            <Settings aria-hidden="true" style={{ width: 14, height: 14, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {t('shell.settings')}
             </span>
@@ -205,9 +209,9 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
             type="button"
             onClick={onSignOut}
             title={t('shell.signOut')}
-            style={{ ...ROW, width: 'auto', minWidth: 0, gap: 5, height: 28, padding: '0 4px', fontSize: 12, marginLeft: 'auto' }}
+            style={{ ...ROW, width: 'auto', minWidth: 0, gap: 4, height: 28, padding: '0 2px', fontSize: 12, marginLeft: 'auto' }}
           >
-            <LogOut aria-hidden="true" style={{ width: 12, height: 12, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
+            <LogOut aria-hidden="true" style={{ width: 14, height: 14, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {t('shell.signOut')}
             </span>

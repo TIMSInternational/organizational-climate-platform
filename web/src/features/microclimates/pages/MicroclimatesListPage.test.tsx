@@ -80,7 +80,7 @@ afterEach(() => {
 function tile(label: string): HTMLElement {
   const heading = screen
     .getAllByText(label)
-    .find((node) => node.className.includes('tracking-label'))
+    .find((node) => node.getAttribute('data-slot') === 'kpi-label')
   if (!heading?.parentElement) throw new Error(`no KPI tile labelled ${label}`)
   return heading.parentElement
 }

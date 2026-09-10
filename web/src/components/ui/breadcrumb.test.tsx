@@ -68,16 +68,24 @@ describe('Breadcrumb', () => {
   })
 })
 
-describe('BreadcrumbList geometry', () => {
-  // The element layer indents every `ol` (index.css, "Lists") for the classless pages. A
-  // trail indented 20px in from the page title it sits over is the defect the per-role
-  // canvas's screenshots showed; every artboard draws it flush.
-  it('resets the element layer’s list indent and bullets, so the trail sits flush with the title', () => {
-    render(<BreadcrumbList data-testid="trail" />)
-    const trail = screen.getByTestId('trail')
-    expect(trail.className).toContain('p-0')
-    expect(trail.className).toContain('m-0')
-    expect(trail.className).toContain('list-none')
+describe('the breadcrumb trail sits flush', () => {
+  it('drops the list margin, indent and bullets index.css gives every ol and li, at 13px', () => {
+    const { container } = render(
+      <Breadcrumb aria-label="Ruta">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink href="/surveys">Encuestas</BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>Resultados</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>,
+    )
+    // The artboards (10 Sep) draw the trail at the title's own x, one 13px line tall.
+    const list = container.querySelector('ol')!
+    expect(list.className.split(/\s+/)).toEqual(expect.arrayContaining(['m-0', 'p-0', 'list-none', 'text-base']))
+    for (const item of container.querySelectorAll('li')) expect(item.className.split(/\s+/)).toContain('mb-0')
   })
 })
-

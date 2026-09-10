@@ -217,6 +217,20 @@ describe('the respond page reads in both themes', () => {
    */
   const LOW_CONTRAST_INKS = ['text-fg-tertiary', 'text-accent-red']
 
+  /**
+   * The utility in a className position, and only that utility: `(?![\w-])` after it
+   * rather than a closing `\b`, because `\b` also fires between `red` and `-ink`, and
+   * `text-accent-red-ink` is the AA-measured red a page is meant to reach for instead.
+   */
+  const banned = (utility: string) => new RegExp(`className=(?:"|\\{)[^\`]*?\\b${utility}(?![\\w-])`, 's')
+
+  it('the sweep catches the bare utility and not its AA-measured ink sibling', () => {
+    expect(banned('text-accent-red').test('<p className="m-0 text-accent-red">')).toBe(true)
+    expect(banned('text-accent-red').test("<p className={cn('m-0', 'text-accent-red')}>")).toBe(true)
+    expect(banned('text-accent-red').test('<p className="m-0 text-accent-red-ink">')).toBe(false)
+    expect(banned('text-fg-tertiary').test('<p className="text-fg-tertiary">')).toBe(true)
+  })
+
   it.each(LOW_CONTRAST_INKS)('never writes %s, which fails AA on this page', (utility) => {
     const swept = [
       ...globSync('**/*.tsx', { cwd: FEATURE })
@@ -232,7 +246,7 @@ describe('the respond page reads in both themes', () => {
       .filter((file) => {
         const source = readFileSync(file, 'utf8')
         // Only className positions, not the prose explaining why the class is absent.
-        return new RegExp(`className=(?:"|\\{)[^\`]*?\\b${utility}\\b`, 's').test(source)
+        return banned(utility).test(source)
       })
       .map((file) => file.replace(`${process.cwd()}/`, ''))
 

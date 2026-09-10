@@ -92,10 +92,13 @@ import {
  *   already has an `<h1>` in the caption above the shell; here the page title is
  *   the document's heading, every caller renders exactly one of them, and demoting
  *   it would break the heading outline for AT.
- * - **24px, as every artboard of the 10 Sep per-role canvas draws it** (`font-size: 24px` on
- *   the `<h1>` of SuperDashboard.dc.html and SupervisorDashboard.dc.html): `text-3xl`, the
- *   scale's `--admin-text-3xl` (1.5rem). It was `text-2xl` (20px); the fidelity refuter measured
- *   every redesigned screen's title 4px under its artboard.
+ * - **20px, not 19px.** `text-2xl` is the type scale's step here, and the scale
+ *   is a checked port (`styles/tokens.test.ts` pins it at eight `rem` sizes). A
+ *   ninth token for a 1px difference buys nothing; the change that matters is
+ *   away from the bare `h1`'s 24px, which is 26% too heavy for this header.
+ *   `tracking-tight` is -0.025em against the prototype's -0.02em, and
+ *   `font-semibold` is 600 against its 640 — which no static Poppins weight can
+ *   render anyway, `styles/fonts.css` loading 400/500/600/700.
  * - **The description's cap is `max-w-measure`, not `max-w-prose`.** The design
  *   caps prose at 70ch; Tailwind v4 emits `max-w-prose` as a static utility with
  *   a literal 65ch rather than from a theme key, so it cannot be re-pointed, and
@@ -141,13 +144,6 @@ export interface PageTopBarProps {
   }
   /** Buttons, links, filters — whatever the page acts with. */
   actions?: ReactNode
-  /**
-   * `'canvas'`: the header rhythm of the 10 Sep per-role canvas — 38px from the breadcrumb
-   * to the eyebrow (the artboards' `margin-bottom: 14px` inside a `gap: 24px` column), 6px
-   * between eyebrow, title and description (`gap: 6px`), 16px of pad over the rule.
-   * `'default'` keeps the `.ptb` rhythm every other screen was drawn with.
-   */
-  rhythm?: 'default' | 'canvas'
 }
 
 export function PageTopBar({
@@ -158,7 +154,6 @@ export function PageTopBar({
   breadcrumbLabel,
   badge,
   actions,
-  rhythm = 'default',
 }: PageTopBarProps) {
   const { t } = useTranslation()
   const derivedEyebrow = useSectionEyebrow()
@@ -166,19 +161,17 @@ export function PageTopBar({
   const eyebrowText = eyebrow === undefined ? derivedEyebrow : eyebrow
 
   return (
-    // `.ptb`: 14px of pad, then the hairline, then 16px before the KPI row.
-    // `pb-3.5` is 3.5 x the 4px `--spacing` token; `mb-panel` is the 16px
-    // `--admin-size-panel-padding`.
+    // The artboards' header — all 22 admin boards of 10 Sep draw the same one: the
+    // breadcrumb, then 38px (its own 14px margin plus the page's 24px gap), the
+    // header, 16px of pad, the hairline, and 24px before the KPI row. `gap-9.5` is
+    // 9.5 x the 4px `--spacing` token, `pb-4` is 16px and `mb-section` the 24px
+    // `--admin-size-section-gap`. UI-0 had it at 8px / 14px / 16px.
     <div
       data-slot="page-top-bar"
-      data-rhythm={rhythm}
-      className={`mb-panel flex flex-col gap-inline border-b border-line-light ${rhythm === 'canvas' ? 'pb-4' : 'pb-3.5'}`}
+      className="mb-section flex flex-col gap-9.5 border-b border-line-light pb-4"
     >
       {breadcrumbs && breadcrumbs.length > 0 && (
-        <Breadcrumb
-          aria-label={breadcrumbLabel ?? t('shell.breadcrumb')}
-          className={rhythm === 'canvas' ? 'mb-7.5' : undefined}
-        >
+        <Breadcrumb aria-label={breadcrumbLabel ?? t('shell.breadcrumb')}>
           <BreadcrumbList>
             {breadcrumbs.map((crumb, index) => {
               const isLast = index === breadcrumbs.length - 1
@@ -218,7 +211,8 @@ export function PageTopBar({
           the actions take the next line at full width.
           See the docstring above; happy-dom cannot see any of this. */}
       <div className="flex flex-wrap items-start justify-between gap-panel">
-        <div className={`min-w-0 grow basis-header-text${rhythm === 'canvas' ? ' flex flex-col gap-1.5' : ''}`}>
+        {/* One column, 6px between eyebrow, title and description — the artboards'. */}
+        <div className="flex min-w-0 grow basis-header-text flex-col gap-1.5">
       {/* `feat/ui-4-admin` found this same defect independently and fixed it with
           `basis-64` instead: it measured the description on
           /admin/companies/:id/users at 390px coming out one word per line. Same
@@ -241,6 +235,7 @@ export function PageTopBar({
           <div className="flex flex-wrap items-center gap-inline">
             {/* No bottom margin: index.css gives every `h1` `margin-bottom: 8px`,
                 which would double up with this container's `gap`. */}
+            {/* 24px, `--admin-text-3xl`: every artboard's page title. */}
             <h1 className="mb-0 min-w-0 break-words text-3xl">{title}</h1>
             {badge && <Badge variant={badge.variant}>{badge.text}</Badge>}
           </div>

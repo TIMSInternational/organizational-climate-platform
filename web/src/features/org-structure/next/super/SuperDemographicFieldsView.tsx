@@ -54,7 +54,7 @@ export default function SuperDemographicFieldsView() {
   return (
     <div className="flex flex-col gap-section">
       <div className="-mb-2">
-        <PageTopBar rhythm="canvas"
+        <PageTopBar
           eyebrow={companyName ?? t('navigation.systemAdministration')}
           title={t('navigation.demographicFields')}
           description={t('superadmin.next.demographics.description', { floor: ANONYMITY_FLOOR })}
@@ -77,7 +77,7 @@ export default function SuperDemographicFieldsView() {
             <div className="flex flex-col gap-section">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 <KpiTile
-                  surface="card"
+                 
                   label={t('superadmin.next.demographics.tiles.fields')}
                   value={state.fields.length}
                   unit={t('superadmin.next.demographics.tiles.fieldsUnit')}
@@ -94,7 +94,7 @@ export default function SuperDemographicFieldsView() {
                   }
                 />
                 <KpiTile
-                  surface="card"
+                 
                   label={t('superadmin.next.demographics.tiles.people')}
                   value={state.people ?? null}
                   unit={t('superadmin.next.demographics.tiles.peopleUnit')}
@@ -102,7 +102,7 @@ export default function SuperDemographicFieldsView() {
                   sub={<span>{t('superadmin.next.demographics.tiles.peopleSub')}</span>}
                 />
                 <KpiTile
-                  surface="card"
+                 
                   label={t('superadmin.next.demographics.tiles.usable')}
                   value={usable}
                   unit={t('superadmin.next.demographics.tiles.usableUnit', { count: state.fields.length })}

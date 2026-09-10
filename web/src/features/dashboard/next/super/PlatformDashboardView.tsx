@@ -102,7 +102,7 @@ export default function PlatformDashboardView() {
   return (
     <div>
       <CompanyContextBar mode="platform" companies={state.model?.rows ?? []} value={null} onChange={selectCompany} />
-      <PageTopBar rhythm="canvas"
+      <PageTopBar
         eyebrow={t('dashboard.platform')}
         title={t('superadmin.next.dashboard.title')}
         description={t('superadmin.next.dashboard.description')}
@@ -142,11 +142,11 @@ function PlatformBody({ model, onOpen }: { model: PlatformModel; onOpen: (compan
   const mix = model.mix
 
   return (
-    // `pt-2`: `PageTopBar` keeps 16px under its rule; the canvas has 24 before the tiles.
-    <div className="flex flex-col gap-section pt-2">
+    // `PageTopBar` keeps the canvas's 24px under its rule (`mb-section`); nothing to add.
+    <div className="flex flex-col gap-section">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiTile
-          surface="card"
+         
           label={t('superadmin.next.dashboard.tiles.companiesLabel')}
           value={model.companyCount}
           unit={t('superadmin.next.dashboard.tiles.companiesUnit')}
@@ -160,7 +160,7 @@ function PlatformBody({ model, onOpen }: { model: PlatformModel; onOpen: (compan
           }
         />
         <KpiTile
-          surface="card"
+         
           label={t('superadmin.next.dashboard.tiles.peopleLabel')}
           value={model.userCount}
           unit={t('superadmin.next.dashboard.tiles.peopleUnit')}
@@ -175,7 +175,7 @@ function PlatformBody({ model, onOpen }: { model: PlatformModel; onOpen: (compan
           }
         />
         <KpiTile
-          surface="card"
+         
           label={t('superadmin.next.dashboard.tiles.openLabel')}
           value={model.activeSurveyCount}
           unit={t('superadmin.next.dashboard.tiles.openUnit', { total: model.surveyCount })}
@@ -191,7 +191,7 @@ function PlatformBody({ model, onOpen }: { model: PlatformModel; onOpen: (compan
           }
         />
         <KpiTile
-          surface="card"
+         
           label={t('superadmin.next.dashboard.tiles.responsesLabel')}
           value={model.completedResponseCount}
           unit={t('superadmin.next.dashboard.tiles.responsesUnit', { started: model.responseCount })}

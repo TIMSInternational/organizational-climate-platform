@@ -139,7 +139,7 @@ export default function SuperUsersView() {
   return (
     <div className="flex flex-col gap-section">
       <div className="-mb-2">
-        <PageTopBar rhythm="canvas"
+        <PageTopBar
           eyebrow={companyName ?? t('navigation.systemAdministration')}
           title={t('navigation.users')}
           description={t('superadmin.next.users.description')}

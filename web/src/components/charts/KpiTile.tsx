@@ -75,26 +75,22 @@ export interface KpiTileProps {
   sub?: React.ReactNode
   /** Already-translated period name for the change indicator, e.g. "since Q1". */
   changeLabel?: string
-  /** BCP-47 locale. Defaults to the document's language. */
-  locale?: string
   /**
-   * A word or phrase set after the reading, on its baseline — the per-role canvas's
-   * "3 en la plataforma". Prose, so it stays in the sans face; the reading stays mono.
+   * The unit or denominator printed on the value's own baseline — "de 5 · meta 3,7",
+   * "respuestas · 100 % completadas". Already translated. The artboards (Dashboard
+   * and SurveyResults, 10 Sep) put the unit beside the number and keep `sub` for
+   * the one coloured sentence under it; a caller that has only a sentence leaves
+   * this off.
    */
   unit?: React.ReactNode
   /**
    * The reading as text, for a tile whose reading is a name rather than a number — the
-   * canvas's "Q3" under *Última encuesta cerrada*. Wins over `value` when given, and is
-   * still set in the instrument face.
+   * per-role canvas's "Q3" under *Última encuesta cerrada*. Wins over `value` when
+   * given, and is still set in the instrument face.
    */
   valueText?: string
-  /**
-   * `recessed` (the default) is the redesign's flat strip on the icon-box surface.
-   * `card` is the per-role canvas's tile: a white card on the hairline with the reading
-   * at regular weight — the super administrator's screens draw theirs this way. The
-   * default markup is unchanged, so every existing caller renders exactly as before.
-   */
-  surface?: 'recessed' | 'card'
+  /** BCP-47 locale. Defaults to the document's language. */
+  locale?: string
   className?: string
 }
 
@@ -106,10 +102,9 @@ export default function KpiTile({
   higherIsBetter = true,
   sub,
   changeLabel,
-  locale,
   unit,
   valueText,
-  surface = 'recessed',
+  locale,
   className,
 }: KpiTileProps) {
   // A tile with no reading has no change either: there is no number to have moved.
@@ -130,55 +125,42 @@ export default function KpiTile({
       // so a test asserting the strip needs a handle that is not the label text.
       data-slot="kpi-tile"
       className={cn(
-        // `surface-icon-box` is this project's existing recessed surface (the
-        // badge `secondary` variant sits on it too), which is the role the
-        // design's `--panel-2` plays. Reused rather than adding a near-duplicate
-        // token for a shade nobody could tell apart.
-        surface === 'card'
-          ? 'rounded-xl border border-line-default bg-surface-card px-4 py-3.5 shadow-sm'
-          : 'rounded-lg border border-line-light bg-surface-icon-box p-3',
+        // The canvas's `.card`: the card surface with the default hairline, 14px
+        // by 16px of padding, 8px radius. It shipped first on the recessed
+        // `surface-icon-box`, which read as a tinted block beside the Dashboard
+        // and SurveyResults artboards' white cards (10 Sep); both screens draw
+        // this one primitive, so the surface is corrected here once.
+        'rounded-lg border border-line-default bg-surface-card px-4 py-3.5',
         className,
       )}
     >
-      {/* `text-fg-secondary`, not `text-fg-tertiary`, and it is a contrast fix rather
-          than a preference. Measured against `styles/tokens.css` on this tile's own
-          recessed surface: `--admin-font-tertiary` #818181 over `--admin-bg-icon-box`
-          is **3.42:1** in light and **3.68:1** in dark. This line is 10px, so WCAG AA
-          1.4.3 wants 4.5:1 in both. `--admin-font-secondary` is 8.15:1 and 6.85:1.
+      {/* The artboards' tile eyebrow (Dashboard and SurveyResults, 10 Sep): 10px, bold,
+          uppercase, spaced .12em (`tracking-tile`), in the label ink `text-fg-label`.
 
-          Failing in BOTH themes is what let it survive: this project's usual contrast
-          bug is light-only, so a reviewer who checked dark saw nothing wrong either
-          way. Two lanes found it independently, with the same numbers, and both
+          Never `text-fg-tertiary`, and that is a contrast rule, not a preference:
+          `--admin-font-tertiary` #818181 measured 3.42:1 (light) and 3.68:1 (dark) on
+          the recessed surface this tile first sat on, where WCAG AA 1.4.3 wants 4.5:1
+          for a 10px line. Failing in BOTH themes is what let it survive, and two lanes
           pinned it — `features/surveys/respondContrast.test.ts` and
           `features/surveys/resultsContrast.test.ts` each ban `text-fg-tertiary` from
-          this file by name. */}
-      <div className="text-2xs font-semibold uppercase tracking-label text-fg-secondary">
+          this file by name. The label ink on the card is measured there too ("the KPI
+          tile label"): 5.44:1 in light.
+
+          `data-slot="kpi-label"` is how a test finds a tile by its label: "Completed"
+          is also a badge and a filter option on the list pages, so text alone is not. */}
+      <div data-slot="kpi-label" className="text-2xs font-bold uppercase tracking-tile text-fg-label">
         {label}
       </div>
-      {unit === undefined && valueText === undefined && surface === 'recessed' ? (
-        <div className="mt-0.5 font-mono text-3xl font-semibold tracking-tight tabular-nums">
-          {value === null ? EM_DASH : formatMetric(value, format, locale)}
-        </div>
-      ) : (
-        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
-          <span
-            className={cn(
-              'font-mono text-3xl leading-none tracking-tight tabular-nums',
-              surface === 'card' ? 'font-normal' : 'font-semibold',
-            )}
-          >
-            {valueText ?? (value === null ? EM_DASH : formatMetric(value, format, locale))}
-          </span>
-          {unit !== undefined && <span className="text-xs text-fg-secondary">{unit}</span>}
-        </div>
-      )}
-      {/* Same measurement as the label above; this line is 11px. */}
-      <div
-        className={cn(
-          'flex items-center gap-1 text-xs text-fg-secondary',
-          surface === 'card' ? 'mt-1.5' : 'mt-px',
-        )}
-      >
+      {/* The unit shares the value's baseline, as the artboards draw it — never a
+          second line, which is what `sub` is for. */}
+      <div className="mt-1.5 flex flex-wrap items-baseline gap-2">
+        <span className="font-mono text-3xl font-medium tracking-tight tabular-nums">
+          {valueText ?? (value === null ? EM_DASH : formatMetric(value, format, locale))}
+        </span>
+        {unit && <span className="text-sm text-fg-secondary">{unit}</span>}
+      </div>
+      {/* Same measurement as the label above; this line is 12px, the canvas's sentence size. */}
+      <div className="mt-1.5 flex items-center gap-1 text-sm text-fg-secondary">
         {hasChange && (
           <span
             className={cn(

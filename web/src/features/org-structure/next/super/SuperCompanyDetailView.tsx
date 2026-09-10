@@ -63,7 +63,7 @@ export default function SuperCompanyDetailView() {
   if (state.status === 'error') {
     return (
       <div>
-        <PageTopBar rhythm="canvas"
+        <PageTopBar
           eyebrow={t('navigation.systemAdministration')}
           title={t('superadmin.next.companyDetail.title')}
           breadcrumbs={[{ label: t('navigation.companies'), href: '/admin/companies' }, { label: t('superadmin.next.companyDetail.title') }]}
@@ -80,7 +80,7 @@ export default function SuperCompanyDetailView() {
   if (!state.model) {
     return (
       <div>
-        <PageTopBar rhythm="canvas" eyebrow={t('navigation.systemAdministration')} title={t('superadmin.next.companyDetail.title')} />
+        <PageTopBar eyebrow={t('navigation.systemAdministration')} title={t('superadmin.next.companyDetail.title')} />
         <SkeletonText lines={8} />
       </div>
     )
@@ -140,7 +140,7 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
 
   return (
     <div className="flex flex-col gap-section">
-      <PageTopBar rhythm="canvas"
+      <PageTopBar
         eyebrow={t('navigation.systemAdministration')}
         title={t('superadmin.next.companyDetail.title')}
         description={t('superadmin.next.companyDetail.description')}
@@ -199,9 +199,9 @@ function OnlyFromHere({ model }: { model: SuperCompanyDetailModel }) {
   const unread = t('superadmin.next.unavailable')
 
   return (
-    // `-mt-4`: `PageTopBar` keeps 16px under its rule and the page column adds its 24px gap;
+    // `-mt-6`: `PageTopBar` keeps 24px under its rule and the page column adds its 24px gap;
     // the canvas has 24 in all between the rule and this strip.
-    <section aria-labelledby="detail-only-here" className="-mt-4 flex flex-col gap-2">
+    <section aria-labelledby="detail-only-here" className="-mt-6 flex flex-col gap-2">
       <p id="detail-only-here" className="m-0 text-xs text-fg-tertiary">
         <span className="font-semibold">{t('superadmin.next.companyDetail.onlyHereLead')}</span>{' '}
         {t('superadmin.next.companyDetail.onlyHereNote')}
