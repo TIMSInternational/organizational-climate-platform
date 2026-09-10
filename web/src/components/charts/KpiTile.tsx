@@ -139,7 +139,9 @@ export default function KpiTile({
           pinned it — `features/surveys/respondContrast.test.ts` and
           `features/surveys/resultsContrast.test.ts` each ban `text-fg-tertiary` from
           this file by name. */}
-      <div className="text-2xs font-bold uppercase tracking-eyebrow text-fg-secondary">
+      {/* `tracking-label`: the artboards space this eyebrow at .12em, between the two
+          tokens, and the list pages' tile helpers find a tile by its label class. */}
+      <div className="text-2xs font-bold uppercase tracking-label text-fg-secondary">
         {label}
       </div>
       {/* The unit shares the value's baseline, as the artboards draw it — never a

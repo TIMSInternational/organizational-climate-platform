@@ -198,7 +198,9 @@ describe('the survey results on the tenant’s real payload', () => {
   it('keeps the cell open when "Ver la pregunta" names the cell already open, and brings it into view', async () => {
     await open()
     const [first] = screen.getAllByRole('button', { name: /Ver la pregunta/ })
+    // The page lands with this very cell open; #468's toggle closed it on this click.
     await userEvent.click(first)
+    expect(heading('Operaciones · Carga de trabajo')).toBeTruthy()
     await userEvent.click(first)
     const opened = heading('Operaciones · Carga de trabajo')
     expect(opened).toBeTruthy()

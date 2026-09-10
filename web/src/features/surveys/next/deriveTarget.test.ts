@@ -122,6 +122,19 @@ describe('against the climate target, on the tenant’s real payload', () => {
     expect(findings[2].plan).toBeNull()
   })
 
+  it('measures the findings against the target, not the survey’s own mean', () => {
+    // The tenant's payload with every group lifted 1.3: every cell now clears 3,7,
+    // while the map's own mean (what #468 measured against) climbs past 4.
+    const payload = structuredClone(fixture['GET /surveys/*/analytics'])
+    for (const segment of payload.breakdowns[0].segments) {
+      for (const entry of segment.questions) entry.average = Math.min(5, (entry.average ?? 0) + 1.3)
+    }
+    const lifted = composeResultsModel(payload, [], null)
+    expect(lifted.climate!.target).toBeGreaterThan(4)
+    // Half the cells sit under that mean; none sits under the target.
+    expect(whereToLookFirst(lifted)).toEqual([])
+  })
+
   it('says "plans could not be loaded" rather than "no plan" when the plans request failed', () => {
     const model = composeResultsModel(fixture['GET /surveys/*/analytics'], null, null)
     expect(whereToLookFirst(model).every((f) => f.plan === undefined)).toBe(true)
