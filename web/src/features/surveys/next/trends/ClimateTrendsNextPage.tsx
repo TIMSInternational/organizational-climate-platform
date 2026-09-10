@@ -404,8 +404,11 @@ function TrendCard({
         <span className="min-w-0 truncate text-base font-semibold text-fg-primary">{dimension.name}</span>
         {stand && <Chip tone={STANDING_TONE[stand]} label={t(`surveys.next.trends.standing.${stand}`)} />}
       </div>
+      {/* `leading-normal` is the canvas's line box: the artboard sets this 22px reading in a
+          body of `line-height: 1.5`, so the row is 33px and the card 254px tall
+          (ClimateTrends.dc.html, `.card` with `padding: 14px 16px 12px; gap: 8px`). */}
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="font-mono text-reading tabular-nums text-fg-primary">
+        <span data-slot="trend-reading" className="font-mono text-reading leading-normal tabular-nums text-fg-primary">
           {value === null ? t('surveys.next.trends.withheld') : reading(value, locale)}
         </span>
         {sincePrevious !== null && previousWave && <Move value={sincePrevious} />}

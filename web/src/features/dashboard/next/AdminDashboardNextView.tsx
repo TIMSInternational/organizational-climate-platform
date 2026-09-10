@@ -127,7 +127,9 @@ export default function AdminDashboardNextView({
         }
       />
 
-      <div className="flex flex-col gap-section">
+      {/* `-mt-1`: PageTopBar leaves the 24px the list and trends artboards carry under the
+          rule, but Dashboard.dc.html opens its first section at `margin-top: 20px`. */}
+      <div data-slot="dashboard-sections" className="-mt-1 flex flex-col gap-section">
         <section aria-labelledby="next-where">
           <SectionHeading>
             <span id="next-where">{t('dashboard.next.whereHeading')}</span>

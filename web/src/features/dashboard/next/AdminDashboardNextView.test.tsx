@@ -87,6 +87,15 @@ describe('AdminDashboardNextView', () => {
     )
   })
 
+  it('opens its first section 20px under the rule, as Dashboard.dc.html does (margin-top: 20px)', () => {
+    // PageTopBar leaves 24px, the list's and the trends' gap; the dashboard pulls up 4px.
+    // happy-dom has no layout, so the class is what can be pinned; the 1440 shot reads the
+    // tiles at y=237 against the artboard's 238.
+    renderView()
+    const sections = document.querySelector('[data-slot="dashboard-sections"]')
+    expect(sections?.className.split(/\s+/)).toContain('-mt-1')
+  })
+
   it('prints no digit anywhere on a protected map row', () => {
     renderView()
     const header = screen.getByRole('rowheader', { name: /Finanzas/ })

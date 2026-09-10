@@ -185,6 +185,17 @@ describe('ClimateTrendsNextPage', () => {
    * "Clima · Encuesta de Clima Q4 (abierta) (Copia)" over an em dash, the closed count said
    * 4, and every chart grew a withheld fourth point.
    */
+  it('sets every card reading in the canvas line box, so each card is as tall as the artboard draws it', async () => {
+    // ClimateTrends.dc.html sets the 22px reading in a `line-height: 1.5` body: a 33px row,
+    // a 254px card. With the reading's own tight leading the card measured 245.5px on the shot.
+    renderAt('company_admin')
+    await waitFor(() => expect(document.querySelectorAll('[data-slot="trend-card"]')).toHaveLength(2))
+    for (const card of document.querySelectorAll('[data-slot="trend-card"]')) {
+      const reading = card.querySelector('[data-slot="trend-reading"]')
+      expect(reading?.className.split(/\s+/)).toContain('leading-normal')
+    }
+  })
+
   it('never counts an archived survey: the tiles, the charts and the table read the closed waves only', async () => {
     vi.mocked(getClimateTrends).mockImplementation(async (_base, query) =>
       withArchivedCopy(query?.groupBy === 'department' ? byDepartment() : whole()),
