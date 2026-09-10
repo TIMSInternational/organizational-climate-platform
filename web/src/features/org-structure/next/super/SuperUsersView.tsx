@@ -283,7 +283,7 @@ export default function SuperUsersView() {
             <div className="overflow-hidden rounded-xl border border-line-default bg-surface-card pt-2 shadow-sm">
               {/* The table's minimum sits on a div for the reason the Empresas list gives. */}
               <div className="overflow-x-auto">
-              {/* The Table primitive wraps its <table> in its own overflow-x-auto container; left as a scroller it
+              {/* The Table primitive wraps its table element in its own overflow-x-auto container; left as a scroller it
                   becomes the sticky Editar/Abrir cell's containing box, 70rem wide and never scrolled, so the cell
                   never pins. Visible here, the scroller above is the one it pins to. */}
               <div className="min-w-[56rem] [&_[data-slot=table-container]]:overflow-visible">

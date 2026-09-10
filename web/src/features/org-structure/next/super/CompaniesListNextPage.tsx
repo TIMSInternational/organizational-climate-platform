@@ -176,7 +176,7 @@ export default function CompaniesListNextPage() {
                   `<table>` and treats a width with a percentage in `max()` as `auto` — so the minimum
                   sits on a div inside our own scroller, and the table fills that div. At 1024 the columns squeezed and the card clipped the last ones. */}
               <div className="overflow-x-auto">
-              {/* The Table primitive wraps its <table> in its own overflow-x-auto container; left as a scroller it
+              {/* The Table primitive wraps its table element in its own overflow-x-auto container; left as a scroller it
                   becomes the sticky Editar/Abrir cell's containing box, 70rem wide and never scrolled, so the cell
                   never pins. Visible here, the scroller above is the one it pins to. */}
               <div className="min-w-[70rem] [&_[data-slot=table-container]]:overflow-visible">
