@@ -295,4 +295,11 @@ describe('AdminDashboardNextView', () => {
     expect(items[1].textContent).toContain('August 20')
     expect(items[1].textContent).toContain('0%')
   })
+  it('draws the six sparklines on one scale, so their slopes compare', () => {
+    renderView()
+    const rules = [...document.querySelectorAll('[data-slot="trend-card"] line[data-slot="trend-target"]')]
+    expect(rules).toHaveLength(6)
+    // Fitted one by one, each target rule would sit at its own height.
+    expect(new Set(rules.map((rule) => rule.getAttribute('y1'))).size).toBe(1)
+  })
 })

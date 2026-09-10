@@ -1,5 +1,5 @@
 import { useTranslation } from '../../../../i18n'
-import { ProtectedCell, divergingPair } from '../../../../components/charts'
+import { DIVERGING_COLORS, ProtectedCell, divergingPair } from '../../../../components/charts'
 import { Table } from '../../../../components/ui'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
@@ -125,6 +125,9 @@ export default function TrendsNumbersTable({
                 <td key={dimension.key} className="p-0">
                   <span
                     data-slot="trends-cell"
+                    // Which of the five steps, for a reader of the DOM: the fill itself is a
+                    // `var()` reference a test cannot resolve.
+                    data-tint={(DIVERGING_COLORS as readonly string[]).indexOf(fill)}
                     className="flex h-10 items-center justify-center rounded font-mono text-sm tabular-nums"
                     style={{ backgroundColor: fill, color: ink }}
                   >

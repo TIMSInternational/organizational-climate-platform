@@ -276,14 +276,18 @@ function SurveySectionBlock({
           archived ? 'border-dashed' : 'shadow-xs',
         )}
       >
-        <Table className="min-w-240 table-fixed">
+        {/* The canvas's columns from `xl`; below it they tighten and the participation bar
+            steps aside for its percentage, so at 1024 the row's actions stay on screen
+            instead of behind a horizontal scroll. Narrower than that, the table scrolls
+            inside this card and never pushes the page. */}
+        <Table className="min-w-180 table-fixed xl:min-w-240">
           <colgroup>
             <col />
-            <col className="w-27.5" />
-            <col className="w-30" />
-            <col className="w-52.5" />
-            <col className="w-32.5" />
-            <col className="w-47.5" />
+            <col className="w-24 xl:w-27.5" />
+            <col className="w-26 xl:w-30" />
+            <col className="w-30 xl:w-52.5" />
+            <col className="w-27.5 xl:w-32.5" />
+            <col className="w-40 xl:w-47.5" />
           </colgroup>
           {/* The archived block draws no header row, as the canvas does; the header
               stays in the tree for assistive technology. */}
@@ -413,7 +417,7 @@ function SurveyTableRow({
           </span>
         ) : (
           <span className="flex items-center gap-2">
-            <span aria-hidden="true" className="h-1.5 w-27.5 shrink-0 overflow-hidden rounded-full bg-line-light">
+            <span aria-hidden="true" className="hidden h-1.5 w-27.5 shrink-0 overflow-hidden rounded-full bg-line-light xl:block">
               <span
                 className="block h-full rounded-full bg-accent-blue"
                 style={{ width: `${Math.min(counts.percent, 100)}%` }}
