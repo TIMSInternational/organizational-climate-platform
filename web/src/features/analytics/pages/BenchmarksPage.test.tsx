@@ -103,7 +103,7 @@ describe('BenchmarksPage scope handling', () => {
   it('offers no edit affordance to a company_admin on a global benchmark, and says why', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [/\/admin\/benchmarks\/g$/, () => detail('g', 'Industry average', null)],
+      [/\/admin\/benchmarks\/g(\?|$)/, () => detail('g', 'Industry average', null)],
       [/\/admin\/benchmarks(\?|$)/, () => [listRow('g', 'Industry average', null)]],
     ])
 
@@ -118,7 +118,7 @@ describe('BenchmarksPage scope handling', () => {
   it('offers edit and add-metric on a company_admin\'s own benchmark', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [/\/admin\/benchmarks\/o$/, () => detail('o', 'Our 2026 baseline', OWN)],
+      [/\/admin\/benchmarks\/o(\?|$)/, () => detail('o', 'Our 2026 baseline', OWN)],
       [/\/admin\/benchmarks(\?|$)/, () => [listRow('o', 'Our 2026 baseline', OWN)]],
     ])
 
@@ -214,7 +214,7 @@ describe('BenchmarksPage headline counts', () => {
         minimumGroupSize: 5,
       })],
       [/\/surveys(\?|$)/, () => ({ surveys: [{ id: 's1', title: 'Q3 Climate Survey', status: 'closed', endDate: '2026-08-05T00:00:00Z' }] })],
-      [/\/admin\/benchmarks\/g1$/, () => ({
+      [/\/admin\/benchmarks\/g1(\?|$)/, () => ({
         ...detail('g1', 'Manufacturing cohort', null),
         metrics: [
           { id: 'm1', benchmarkId: 'g1', metricName: 'safety', value: 69, unit: 'index', percentile: null, sampleSize: 42 },
@@ -243,6 +243,15 @@ describe('BenchmarksPage headline counts', () => {
     const rows = container.querySelectorAll('[data-slot="cohort-dimension-row"]')
     expect(rows.length).toBe(2)
     expect(container.querySelectorAll('[data-slot="cohort-median-tick"]').length).toBe(2)
+    // Each bar is headed the way the results page heads the same dimension: a product
+    // slug by its catalogued label, an author's own key as authored.
+    const labels = [...rows].map((row) => row.textContent)
+    expect(labels.some((text) => text?.includes('Workload'))).toBe(true)
+    expect(labels.some((text) => text?.includes('safety'))).toBe(true)
+    // The survey the read-out names is fetched in the reader's language, like the list page.
+    const surveyRequests = vi.mocked(fetch).mock.calls.map((call) => String(call[0])).filter((url) => url.includes('/surveys?'))
+    expect(surveyRequests.length).toBeGreaterThan(0)
+    expect(surveyRequests.every((url) => new URL(url, 'http://test.local').searchParams.get('lang') === 'en')).toBe(true)
   })
 })
 
@@ -257,9 +266,9 @@ describe('BenchmarksPage comparison and trend', () => {
   it('reads a selected benchmark against the cohort, by metric name', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [/\/admin\/benchmarks\/g$/, () => detail('g', 'Industry average', null)],
+      [/\/admin\/benchmarks\/g(\?|$)/, () => detail('g', 'Industry average', null)],
       [
-        /\/admin\/benchmarks\/o$/,
+        /\/admin\/benchmarks\/o(\?|$)/,
         () =>
           detail('o', 'Our 2026 baseline', OWN, {
             metrics: [{ id: 'o-m', metricName: 'engagement', value: 65, unit: '%', percentile: null, sampleSize: null }],
@@ -299,10 +308,10 @@ describe('BenchmarksPage comparison and trend', () => {
       return { metrics: [{ id: `m-${value}`, metricName: 'engagement', value, unit: '%', percentile: null, sampleSize: null }] }
     }
     routeFetch([
-      [/\/admin\/benchmarks\/subject$/, () => detail('subject', 'Ours', OWN, metricsOf(72))],
-      [/\/admin\/benchmarks\/c1$/, () => detail('c1', 'Cohort one', null, metricsOf(60))],
-      [/\/admin\/benchmarks\/c2$/, () => detail('c2', 'Cohort two', null, metricsOf(80))],
-      [/\/admin\/benchmarks\/c3$/, () => detail('c3', 'Cohort three', null, metricsOf(200))],
+      [/\/admin\/benchmarks\/subject(\?|$)/, () => detail('subject', 'Ours', OWN, metricsOf(72))],
+      [/\/admin\/benchmarks\/c1(\?|$)/, () => detail('c1', 'Cohort one', null, metricsOf(60))],
+      [/\/admin\/benchmarks\/c2(\?|$)/, () => detail('c2', 'Cohort two', null, metricsOf(80))],
+      [/\/admin\/benchmarks\/c3(\?|$)/, () => detail('c3', 'Cohort three', null, metricsOf(200))],
       [
         /\/admin\/benchmarks(\?|$)/,
         () => [
@@ -339,14 +348,14 @@ describe('BenchmarksPage comparison and trend', () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
       [
-        /\/admin\/benchmarks\/g$/,
+        /\/admin\/benchmarks\/g(\?|$)/,
         () =>
           detail('g', 'Industry average', null, {
             metrics: [{ id: 'g-m', metricName: 'responseTime', value: 1.2, unit: 's', percentile: null, sampleSize: null }],
           }),
       ],
       [
-        /\/admin\/benchmarks\/o$/,
+        /\/admin\/benchmarks\/o(\?|$)/,
         () =>
           detail('o', 'Our 2026 baseline', OWN, {
             metrics: [{ id: 'o-m', metricName: 'responseTime', value: 1200, unit: 'ms', percentile: null, sampleSize: null }],
@@ -366,7 +375,7 @@ describe('BenchmarksPage comparison and trend', () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
       [
-        /\/admin\/benchmarks\/q2$/,
+        /\/admin\/benchmarks\/q2(\?|$)/,
         () =>
           detail('q2', 'Q2 2026', OWN, {
             priorPeriodBenchmarkId: 'q1',
@@ -374,7 +383,7 @@ describe('BenchmarksPage comparison and trend', () => {
           }),
       ],
       [
-        /\/admin\/benchmarks\/q1$/,
+        /\/admin\/benchmarks\/q1(\?|$)/,
         () =>
           detail('q1', 'Q1 2026', OWN, {
             metrics: [{ id: 'q1-m', metricName: 'engagement', value: 70, unit: '%', percentile: null, sampleSize: null }],
@@ -402,7 +411,7 @@ describe('BenchmarksPage comparison and trend', () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
       [
-        /\/admin\/benchmarks\/subject$/,
+        /\/admin\/benchmarks\/subject(\?|$)/,
         () =>
           detail('subject', 'Ours', OWN, {
             metrics: [
@@ -412,7 +421,7 @@ describe('BenchmarksPage comparison and trend', () => {
           }),
       ],
       [
-        /\/admin\/benchmarks\/cohort$/,
+        /\/admin\/benchmarks\/cohort(\?|$)/,
         () =>
           detail('cohort', 'Theirs', null, {
             metrics: [
@@ -456,8 +465,8 @@ describe('BenchmarksPage comparison and trend', () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
       [/\/prior-period\/candidates$/, () => []],
-      [/\/admin\/benchmarks\/first$/, () => detail('first', 'Our first measurement', OWN, { priorPeriodStatus: 'none' })],
-      [/\/admin\/benchmarks\/backlog$/, () => detail('backlog', 'Our 2026 baseline', OWN)],
+      [/\/admin\/benchmarks\/first(\?|$)/, () => detail('first', 'Our first measurement', OWN, { priorPeriodStatus: 'none' })],
+      [/\/admin\/benchmarks\/backlog(\?|$)/, () => detail('backlog', 'Our 2026 baseline', OWN)],
       [
         /\/admin\/benchmarks(\?|$)/,
         () => [listRow('first', 'Our first measurement', OWN), listRow('backlog', 'Our 2026 baseline', OWN)],
@@ -488,7 +497,7 @@ describe('BenchmarksPage comparison and trend', () => {
     routeFetch([
       [/\/prior-period\/candidates$/, () => []],
       [
-        /\/admin\/benchmarks\/o$/,
+        /\/admin\/benchmarks\/o(\?|$)/,
         () => detail('o', 'Our 2026 baseline', OWN, { priorPeriodStatus: 'linked', priorPeriodBenchmarkId: 'hidden', priorPeriod: null }),
       ],
       [/\/admin\/benchmarks(\?|$)/, () => [listRow('o', 'Our 2026 baseline', OWN)]],
@@ -518,7 +527,7 @@ describe('BenchmarksPage comparison and trend', () => {
     routeFetch([
       [/\/prior-period\/candidates$/, () => []],
       [
-        /\/admin\/benchmarks\/o$/,
+        /\/admin\/benchmarks\/o(\?|$)/,
         () =>
           detail('o', 'Our 2026 baseline', OWN, {
             priorPeriodStatus: 'linked',
@@ -540,7 +549,7 @@ describe('BenchmarksPage comparison and trend', () => {
           }),
       ],
       [
-        /\/admin\/benchmarks\/p$/,
+        /\/admin\/benchmarks\/p(\?|$)/,
         () =>
           detail('p', 'Our 2025 baseline', OWN, {
             metrics: [{ id: 'p-m', metricName: 'engagement', value: 70, unit: '%', percentile: null, sampleSize: null }],
@@ -579,7 +588,7 @@ describe('BenchmarksPage comparison and trend', () => {
     routeFetch([
       [/\/prior-period\/candidates$/, () => []],
       [
-        /\/admin\/benchmarks\/q2$/,
+        /\/admin\/benchmarks\/q2(\?|$)/,
         () =>
           detail('q2', 'Q2 2026', OWN, {
             priorPeriodStatus: 'linked',
@@ -589,7 +598,7 @@ describe('BenchmarksPage comparison and trend', () => {
           }),
       ],
       [
-        /\/admin\/benchmarks\/q1$/,
+        /\/admin\/benchmarks\/q1(\?|$)/,
         () =>
           detail('q1', 'Q1 2026', OWN, {
             metrics: [{ id: 'q1-m', metricName: 'engagement', value: 70, unit: 'percent', percentile: null, sampleSize: null }],
@@ -634,7 +643,7 @@ describe('BenchmarksPage comparison and trend', () => {
           ),
         )
       }
-      if (/\/admin\/benchmarks\/o$/.test(url)) {
+      if (/\/admin\/benchmarks\/o(\?|$)/.test(url)) {
         return Promise.resolve(new Response(JSON.stringify(detail('o', 'Our 2026 baseline', OWN)), { status: 200 }))
       }
       return Promise.resolve(new Response(JSON.stringify([listRow('o', 'Our 2026 baseline', OWN)]), { status: 200 }))
@@ -695,7 +704,7 @@ describe('BenchmarksPage single-selection readings', () => {
   it('sets the detail panel readings in mono with tabular figures, and only the readings', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [/\/admin\/benchmarks\/o$/, () => withMetrics('o', 'Our 2026 baseline')],
+      [/\/admin\/benchmarks\/o(\?|$)/, () => withMetrics('o', 'Our 2026 baseline')],
       [/\/admin\/benchmarks(\?|$)/, () => [listRow('o', 'Our 2026 baseline', OWN)]],
     ])
 
@@ -733,7 +742,7 @@ describe('BenchmarksPage single-selection readings', () => {
   it('prints the quality score at two decimals in both the list and the panel, and localises it', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [/\/admin\/benchmarks\/o$/, () => withMetrics('o', 'Our 2026 baseline', { qualityScore: 0.92 })],
+      [/\/admin\/benchmarks\/o(\?|$)/, () => withMetrics('o', 'Our 2026 baseline', { qualityScore: 0.92 })],
       [
         /\/admin\/benchmarks(\?|$)/,
         () => [
@@ -762,7 +771,7 @@ describe('BenchmarksPage single-selection readings', () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
       [
-        /\/admin\/benchmarks\/q2$/,
+        /\/admin\/benchmarks\/q2(\?|$)/,
         () =>
           detail('q2', 'Q2 2026', OWN, {
             priorPeriodBenchmarkId: 'q1',
@@ -770,7 +779,7 @@ describe('BenchmarksPage single-selection readings', () => {
           }),
       ],
       [
-        /\/admin\/benchmarks\/q1$/,
+        /\/admin\/benchmarks\/q1(\?|$)/,
         () =>
           detail('q1', 'Q1 2026', OWN, {
             metrics: [{ id: 'q1-m', metricName: 'engagement', value: 70, unit: 'pts', percentile: null, sampleSize: null }],

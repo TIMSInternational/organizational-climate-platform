@@ -123,6 +123,33 @@ public class MicroclimateEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Signed_in_employee_of_another_company_cannot_read_a_live_anonymous_microclimate_through_the_respond_route()
+    {
+        // A live, anonymous pulse is exactly what a stranger holding the link may read (the
+        // anonymous-visitor test below), so this is the one case where "treat a signed-in
+        // outsider as a stranger" and "keep the tenant boundary" give different answers. The
+        // boundary wins: 403, not the reduced public payload. The company's OWN signed-in
+        // employee is the caller the respond route does fall through for
+        // (MicroclimateEmojiRatingTests).
+        var client = _factory.CreateClient();
+        var tokenB = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyBDomain, _companyBId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenB);
+        var created = await (await client.PostAsJsonAsync("/microclimates", new CreateMicroclimateRequest(
+                "B's live pulse", null, _companyBId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 5, true, null,
+                new List<CreateQuestionInput> { new("How are you feeling?", "open_ended", null, true, 1) })))
+            .Content.ReadFromJsonAsync<MicroclimateDetail>();
+        var activate = await client.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
+        Assert.Equal(HttpStatusCode.OK, activate.StatusCode);
+
+        var outsider = _factory.CreateClient();
+        var tokenA = await SignUpAndGetTokenAsync(outsider, Roles.Employee, _companyADomain, _companyAId);
+        outsider.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenA);
+
+        var response = await outsider.GetAsync($"/microclimates/{created.Id}");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Anonymous_visitor_can_read_reduced_details_of_an_active_microclimate_configured_for_anonymous_responses()
     {
         var client = _factory.CreateClient();

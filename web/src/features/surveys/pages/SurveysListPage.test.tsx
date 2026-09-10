@@ -86,6 +86,21 @@ describe('SurveysListPage', () => {
     expect(lastUrl(fetchMock)).not.toContain('companyId')
   })
 
+  it('asks for the titles in the reader\'s language, as the detail page does', async () => {
+    // The list is the one survey screen that used to omit `lang`, so a Spanish reader
+    // saw the English half of every bilingual title here and the Spanish half on the
+    // page behind it.
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row())),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+
+    await screen.findByText('Q3 climate survey')
+    // Relative on CI (no VITE_API_BASE_URL), absolute on a laptop with `.env.local`; parse both.
+    expect(new URL(lastUrl(fetchMock), 'http://test.local').searchParams.get('lang')).toBe('en')
+  })
+
   it('keeps status off the wire, because the chips count statuses the response would not contain', async () => {
     // The chip row states a count per status. A response to `?status=active` holds no
     // scheduled surveys, so those counts cannot be derived from it — which is why this

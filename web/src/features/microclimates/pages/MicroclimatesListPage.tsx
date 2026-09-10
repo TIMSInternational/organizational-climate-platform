@@ -53,13 +53,13 @@ export default function MicroclimatesListPage() {
     setLoading(true)
     setError(null)
     try {
-      setMicroclimates(await listMicroclimates(baseUrl, companyId))
+      setMicroclimates(await listMicroclimates(baseUrl, companyId, locale))
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setLoading(false)
     }
-  }, [baseUrl, companyId, t])
+  }, [baseUrl, companyId, locale, t])
 
   useEffect(() => {
     void reload()

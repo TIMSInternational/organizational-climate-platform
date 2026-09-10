@@ -168,20 +168,20 @@ public static class MicroclimateInvitationEndpoints
             .RequireRateLimiting(RateLimitPolicies.PublicToken);
 
         byToken.MapGet("/{token}", ValidateInvitationTokenAsync);
-        byToken.MapPost("/{token}/opened", (string token, ClimateProjectDbContext db, CancellationToken ct)
-            => RecordStateAsync(token, MicroclimateInvitationStatuses.Opened, db, ct));
-        byToken.MapPost("/{token}/started", (string token, ClimateProjectDbContext db, CancellationToken ct)
-            => RecordStateAsync(token, MicroclimateInvitationStatuses.Started, db, ct));
-        byToken.MapPost("/{token}/completed", (string token, ClimateProjectDbContext db, CancellationToken ct)
-            => RecordStateAsync(token, MicroclimateInvitationStatuses.Completed, db, ct));
+        byToken.MapPost("/{token}/opened", (string token, string? lang, ClimateProjectDbContext db, CancellationToken ct)
+            => RecordStateAsync(token, MicroclimateInvitationStatuses.Opened, lang, db, ct));
+        byToken.MapPost("/{token}/started", (string token, string? lang, ClimateProjectDbContext db, CancellationToken ct)
+            => RecordStateAsync(token, MicroclimateInvitationStatuses.Started, lang, db, ct));
+        byToken.MapPost("/{token}/completed", (string token, string? lang, ClimateProjectDbContext db, CancellationToken ct)
+            => RecordStateAsync(token, MicroclimateInvitationStatuses.Completed, lang, db, ct));
 
         // The legacy verb for the same rung, mapped onto the same handler and writing the
         // same `completed` status. Not an alias for its own sake: the legacy surface this
         // replaces named the route `invitations/[id]/participated`, so anything still
         // pointing at that word reaches the ladder instead of the 404 boundary. One handler
         // means the two cannot ever mean different things.
-        byToken.MapPost("/{token}/participated", (string token, ClimateProjectDbContext db, CancellationToken ct)
-            => RecordStateAsync(token, MicroclimateInvitationStatuses.Completed, db, ct));
+        byToken.MapPost("/{token}/participated", (string token, string? lang, ClimateProjectDbContext db, CancellationToken ct)
+            => RecordStateAsync(token, MicroclimateInvitationStatuses.Completed, lang, db, ct));
     }
 
     // ------------------------------------------------------------------
@@ -191,6 +191,7 @@ public static class MicroclimateInvitationEndpoints
     private static async Task<IResult> ListInvitationsAsync(
         Guid microclimateId,
         string? status,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -224,7 +225,7 @@ public static class MicroclimateInvitationEndpoints
         return Results.Ok(new MicroclimateInvitationListResponse(
             rows.Select(i => ToDetail(i, now)).ToList(),
             await SummariseAsync(db, microclimateId, now, cancellationToken),
-            AnonymityOf(microclimate!)));
+            AnonymityOf(microclimate!, MicroclimateContent.ResolveRequestLocale(lang, microclimate!.Language))));
     }
 
     /// <summary>
@@ -698,7 +699,7 @@ public static class MicroclimateInvitationEndpoints
             microclimate.Scheduling.StartTime,
             microclimate.Scheduling.EndTime,
             invitation.ExpiresAt,
-            AnonymityOf(microclimate)));
+            AnonymityOf(microclimate, locale)));
     }
 
     /// <summary>
@@ -730,6 +731,7 @@ public static class MicroclimateInvitationEndpoints
     private static async Task<IResult> RecordStateAsync(
         string token,
         string targetState,
+        string? lang,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
@@ -739,7 +741,7 @@ public static class MicroclimateInvitationEndpoints
             return error;
         }
 
-        var anonymity = AnonymityOf(microclimate!);
+        var anonymity = AnonymityOf(microclimate!, MicroclimateContent.ResolveRequestLocale(lang, microclimate!.Language));
         var anonymous = microclimate!.RealtimeSettings.AnonymousResponses;
 
         if (!MicroclimateInvitationStatuses.IsRecordable(targetState, anonymous))
@@ -1016,21 +1018,18 @@ public static class MicroclimateInvitationEndpoints
         => LocalizedContent.Resolve(microclimate.TitleEn, microclimate.TitleEs, locale, microclimate.Language).ResolvedLocale
            ?? locale;
 
-    private static MicroclimateAnonymityGuaranteeDto AnonymityOf(Microclimate microclimate)
+    /// <param name="locale">
+    /// The locale the guarantee sentence is written in; see the survey twin in
+    /// <c>SurveyDistributionEndpoints.AnonymityOf</c>.
+    /// </param>
+    private static MicroclimateAnonymityGuaranteeDto AnonymityOf(Microclimate microclimate, string locale)
     {
         var anonymous = microclimate.RealtimeSettings.AnonymousResponses;
         return new MicroclimateAnonymityGuaranteeDto(
             anonymous,
             MicroclimateInvitationStatuses.HighestRecordableState(anonymous),
             anonymous ? MicroclimateInvitationStatuses.SuppressedWhenAnonymous : [],
-            anonymous
-                ? "This microclimate is anonymous. Invitation tracking records that a person was invited and "
-                  + "opened the invitation, and stops there. Neither 'started' nor 'completed' is stored against "
-                  + "an individual, because a per-person timestamp asserting a response exists can be lined up "
-                  + "against the live response count -- which this product publishes while the session runs -- "
-                  + "and re-identifies the respondent. Participation is only ever available as an aggregate count."
-                : "This microclimate is not anonymous; it already requires respondents to sign in. The full "
-                  + "invitation lifecycle is recorded per invitee.");
+            InvitationGuaranteeCopy.Microclimate(anonymous, locale));
     }
 
     private static MicroclimateInvitationDetail ToDetail(MicroclimateInvitation invitation, DateTimeOffset now)

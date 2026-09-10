@@ -172,8 +172,13 @@ export interface LiveResults {
   targetParticipantCount: number
 }
 
-export async function listMicroclimates(baseUrl: string, companyId: string): Promise<Microclimate[]> {
-  const response = await authFetch(`${baseUrl}/microclimates?companyId=${companyId}`)
+export async function listMicroclimates(
+  baseUrl: string,
+  companyId: string,
+  lang?: string,
+): Promise<Microclimate[]> {
+  const query = lang ? `&lang=${encodeURIComponent(lang)}` : ''
+  const response = await authFetch(`${baseUrl}/microclimates?companyId=${companyId}${query}`)
   const body = (await response.json()) as { microclimates: Microclimate[] }
   return body.microclimates
 }

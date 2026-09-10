@@ -475,7 +475,7 @@ describe('DashboardPage', () => {
     // `textContent`, not `getByText`: the readings inside the sentence are now their
     // own mono spans, so the sentence is several nodes rather than one text node.
     expect(finding.parentElement?.textContent).toContain(
-      '5 of 6 people in Engineering have completed a survey',
+      '5 completed responses across the 6 people in Engineering',
     )
     expect(screen.getByRole('link', { name: 'Create Action Plan' }).getAttribute('href')).toBe(
       '/action-plans',
@@ -547,7 +547,7 @@ describe('DashboardPage', () => {
     ).toEqual(['5', '6', '83', '150'])
     // The sentence still reads as one sentence, and the marker never reaches the page.
     expect(evidence.textContent).toBe(
-      '5 of 6 people in Engineering have completed a survey — 83 responses per 100 people, against 150 across the organisation.',
+      '5 completed responses across the 6 people in Engineering, over every survey — 83 per 100 people, against 150 across the organisation.',
     )
   })
 

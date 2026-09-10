@@ -173,6 +173,9 @@ const QUESTIONS = [
 const WAVES = [
   { title: 'Q1 Climate Survey', endOffset: -210, drift: -0.6 },
   { title: 'Q2 Climate Survey', endOffset: -120, drift: -0.3 },
+  // Q3 at the profile's own numbers. Acme already has a Q3 by this title and is skipped by
+  // name; a fresh tenant (`seed-demo-company.mjs`) gets all three columns.
+  { title: 'Q3 Climate Survey', endOffset: -35, drift: 0 },
 ]
 
 /**
@@ -189,11 +192,14 @@ const WAVES = [
  * seed is worth more than a fixture.
  */
 const DEPARTMENTS = [
-  { name: 'Engineering', respondents: 6, base: [4.2, 3.6, 4.0, 3.3, 4.1, 4.3] },
-  { name: 'Finance', respondents: 3, base: [3.6, 3.2, 3.4, 3.0, 3.5, 3.7] },
-  { name: 'Operations', respondents: 5, base: [2.6, 2.4, 2.9, 2.8, 3.0, 3.2] },
-  { name: 'People', respondents: 5, base: [4.4, 3.9, 4.0, 3.6, 4.2, 4.4] },
-  { name: 'Sales', respondents: 5, base: [3.9, 3.3, 3.7, 3.5, 3.8, 4.0] },
+  // `names` lists every name a tenant may give the department: the Acme seed uses the
+  // English ones, `seed-demo-company.mjs` the Spanish ones. The profile is the same either
+  // way, so both tenants tell the same story.
+  { name: 'Engineering', names: ['Engineering', 'Ingeniería'], respondents: 6, base: [4.2, 3.6, 4.0, 3.3, 4.1, 4.3] },
+  { name: 'Finance', names: ['Finance', 'Finanzas'], respondents: 3, base: [3.6, 3.2, 3.4, 3.0, 3.5, 3.7] },
+  { name: 'Operations', names: ['Operations', 'Operaciones'], respondents: 5, base: [2.6, 2.4, 2.9, 2.8, 3.0, 3.2] },
+  { name: 'People', names: ['People', 'Personas'], respondents: 5, base: [4.4, 3.9, 4.0, 3.6, 4.2, 4.4] },
+  { name: 'Sales', names: ['Sales', 'Ventas'], respondents: 5, base: [3.9, 3.3, 3.7, 3.5, 3.8, 4.0] },
 ]
 
 /**
@@ -229,8 +235,8 @@ async function main() {
   // time is what makes a series a series rather than five unrelated samples.
   const roster = []
   for (const spec of DEPARTMENTS) {
-    const department = byName.get(spec.name)
-    if (!department) throw new Error(`no department named ${spec.name}`)
+    const department = spec.names.map((name) => byName.get(name)).find(Boolean)
+    if (!department) throw new Error(`no department named ${spec.names.join(' / ')}`)
     // Employees only, and never a `fede.*` account.
     //
     // Both halves matter. This script RESETS each respondent's password in order to sign
@@ -325,7 +331,8 @@ async function seedWave(adminToken, companyId, wave, roster, tokens) {
   const survey = await json(`${API}/surveys`, {
     method: 'POST',
     body: JSON.stringify({
-      title: { en: wave.title, es: wave.title.replace('Climate Survey', 'Encuesta de Clima') },
+      // "Encuesta de Clima Q1", not "Q1 Encuesta de Clima": the quarter goes last in Spanish.
+      title: { en: wave.title, es: `Encuesta de Clima ${wave.title.split(' ')[0]}` },
       companyId,
       type: 'periodic',
       language: 'both',
@@ -507,12 +514,18 @@ async function seedDistribution(adminToken, survey) {
  *
  * Matched by name before anything is created. Returns true when it created one.
  */
-const TEMPLATE_NAME = 'Standard climate instrument (seeded)'
+const TEMPLATE_NAME = {
+  en: 'Standard climate instrument (6 dimensions)',
+  es: 'Instrumento de clima estándar (6 dimensiones)',
+}
+// A tenant seeded before 10 September 2026 carries the English-only name; the list resolves
+// to English without `lang`, so match either spelling and a rerun never mints a twin.
+const TEMPLATE_NAMES_SEEN = [TEMPLATE_NAME.en, 'Standard climate instrument (seeded)']
 
 async function seedTemplate(adminToken, companyId) {
   const { templates } = await json(`${API}/survey-templates?companyId=${companyId}`, {}, adminToken)
-  if ((templates ?? []).some((template) => template.name === TEMPLATE_NAME)) {
-    log(`seed-surveys: template "${TEMPLATE_NAME}" already exists.`)
+  if ((templates ?? []).some((template) => TEMPLATE_NAMES_SEEN.includes(template.name))) {
+    log(`seed-surveys: template "${TEMPLATE_NAME.en}" already exists.`)
     return false
   }
 
@@ -520,7 +533,10 @@ async function seedTemplate(adminToken, companyId) {
     method: 'POST',
     body: JSON.stringify({
       name: TEMPLATE_NAME,
-      description: 'The six-dimension climate instrument the seeded waves use. Start here.',
+      description: {
+        en: 'The six-dimension climate instrument the seeded waves use. Start here.',
+        es: 'El instrumento de clima de seis dimensiones que usan las olas sembradas. Empiece aquí.',
+      },
       category: 'climate',
       companyId,
       industry: 'Logistics',

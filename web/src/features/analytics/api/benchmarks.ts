@@ -178,8 +178,16 @@ export interface AddBenchmarkMetricInput {
  * CompanyAdmin the backend ignores it entirely and always returns global benchmarks plus
  * that admin's own company's -- passing another company's id does not widen the result.
  */
-export async function listBenchmarks(baseUrl: string, companyId?: string): Promise<BenchmarkListItem[]> {
-  const query = companyId ? `?companyId=${encodeURIComponent(companyId)}` : ''
+export async function listBenchmarks(
+  baseUrl: string,
+  companyId?: string,
+  lang?: string,
+): Promise<BenchmarkListItem[]> {
+  // `name` is a paired column since #210, resolved server-side for `lang`.
+  const params = new URLSearchParams()
+  if (companyId) params.set('companyId', companyId)
+  if (lang) params.set('lang', lang)
+  const query = params.size > 0 ? `?${params.toString()}` : ''
   const response = await authFetch(`${baseUrl}/admin/benchmarks${query}`)
   return response.json() as Promise<BenchmarkListItem[]>
 }
@@ -192,8 +200,9 @@ export async function createBenchmark(baseUrl: string, input: CreateBenchmarkInp
   return response.json() as Promise<Benchmark>
 }
 
-export async function getBenchmark(baseUrl: string, id: string): Promise<Benchmark> {
-  const response = await authFetch(`${baseUrl}/admin/benchmarks/${id}`)
+export async function getBenchmark(baseUrl: string, id: string, lang?: string): Promise<Benchmark> {
+  const query = lang ? `?lang=${encodeURIComponent(lang)}` : ''
+  const response = await authFetch(`${baseUrl}/admin/benchmarks/${id}${query}`)
   return response.json() as Promise<Benchmark>
 }
 

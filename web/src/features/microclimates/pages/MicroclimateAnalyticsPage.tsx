@@ -81,13 +81,13 @@ export default function MicroclimateAnalyticsPage() {
     setLoading(true)
     setLoadError(null)
     try {
-      setMicroclimates(await listMicroclimates(baseUrl, companyId))
+      setMicroclimates(await listMicroclimates(baseUrl, companyId, locale))
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setLoading(false)
     }
-  }, [baseUrl, companyId, t])
+  }, [baseUrl, companyId, locale, t])
 
   useEffect(() => {
     void reload()

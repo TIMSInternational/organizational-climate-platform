@@ -121,7 +121,7 @@ export default function SurveyDistributionPage() {
 
       const [distributionDetail, invitationList] = await Promise.all([
         getSurveyDistribution(baseUrl, surveyId),
-        listSurveyInvitations(baseUrl, surveyId),
+        listSurveyInvitations(baseUrl, surveyId, {}, locale),
       ])
       setDistribution(distributionDetail)
       setInvitations(invitationList)
@@ -256,6 +256,7 @@ export default function SurveyDistributionPage() {
       baseUrl,
       surveyId,
       statusFilter === '' ? {} : { status: statusFilter as SurveyInvitationStatus },
+      locale,
     )
   }
 

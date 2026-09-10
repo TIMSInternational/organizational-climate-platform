@@ -705,7 +705,7 @@
     "mapTargetNote": "Each department against the organisation's own {target} responses per 100 people.",
     "departmentsWithoutMembers": "Departments with no members yet, and so no reading:",
     "attentionFinding": "{department} is behind the organisation's response rate",
-    "attentionEvidence": "{completed} of {members} people in {department} have completed a survey — {rate} responses per 100 people, against {target} across the organisation.",
+    "attentionEvidence": "{completed} completed responses across the {members} people in {department}, over every survey — {rate} per 100 people, against {target} across the organisation.",
     "attentionClear": "No department is behind the organisation's response rate",
     "attentionClearEvidence": "Every department that can be published is at or above {target} responses per 100 people.",
     "viewResponses": "View responses",

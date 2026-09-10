@@ -60,6 +60,10 @@ const { values } = parseArgs({
     out: { type: 'string', default: '.e2e' },
     password: { type: 'string', default: 'Local1234!' },
     domain: { type: 'string', default: 'acme.test' },
+    /** Override the account local-parts per role, e.g. company_admin=ana.rojas,employee=diego.solano. */
+    accounts: { type: 'string' },
+    /** The super admin's own password when `--password` belongs to another tenant's accounts. */
+    superPassword: { type: 'string' },
     help: { type: 'boolean', default: false },
   },
 })
@@ -94,6 +98,13 @@ const ACCOUNT = {
   supervisor: 'fede.supervisor',
   employee: 'fede.employee',
 }
+for (const pair of (values.accounts ?? '').split(',').filter(Boolean)) {
+  const [role, local] = pair.split('=')
+  if (!(role in ACCOUNT) || !local) throw new Error(`--accounts: expected role=local, got "${pair}"`)
+  ACCOUNT[role] = local
+}
+/** The super admin has no company and lives on the seeded Acme domain whatever tenant is driven. */
+const SUPER_DOMAIN = values.accounts ? 'acme.test' : values.domain
 
 /**
  * Routes that belong to no role, because they render outside the authenticated shell.
@@ -173,11 +184,11 @@ const log = (line) => process.stdout.write(`${line}\n`)
 const record = (entry) => appendFileSync(JOURNAL_PARTIAL, `${JSON.stringify(entry)}\n`)
 
 async function login(role) {
-  const email = `${ACCOUNT[role]}@${values.domain}`
+  const email = `${ACCOUNT[role]}@${role === 'super_admin' ? SUPER_DOMAIN : values.domain}`
   const response = await fetch(`${API}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: values.password }),
+    body: JSON.stringify({ email, password: role === 'super_admin' ? (values.superPassword ?? values.password) : values.password }),
   })
   if (!response.ok) throw new Error(`login failed for ${email}: ${response.status}`)
   const { token } = await response.json()

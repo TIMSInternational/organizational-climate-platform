@@ -71,6 +71,22 @@ describe('reports api client', () => {
     expect(result.reportOutput).toBe(detail.reportOutput)
   })
 
+  it('asks for the titles in the reader\'s language when given a locale', async () => {
+    // The list and the share dialog that repeats its title printed the English half of
+    // every bilingual title on a Spanish screen; the API resolved `lang` all along.
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify([row]), { status: 200 }))
+    await listReports(baseUrl, 'c1', 'es')
+    const [listUrl] = vi.mocked(fetch).mock.calls[0]
+    expect(new URL(String(listUrl), 'http://test.local').searchParams.get('lang')).toBe('es')
+    expect(new URL(String(listUrl), 'http://test.local').searchParams.get('companyId')).toBe('c1')
+
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }))
+    await getReport(baseUrl, 'r1', 'es')
+    const [detailUrl] = vi.mocked(fetch).mock.calls[1]
+    expect(new URL(String(detailUrl), 'http://test.local').pathname).toBe('/admin/reports/r1')
+    expect(new URL(String(detailUrl), 'http://test.local').searchParams.get('lang')).toBe('es')
+  })
+
   it('downloads the rendered file as a blob, by POST', async () => {
     // A POST, not a GET: the endpoint increments `download_count`, which is the record
     // answering "who exported this data" (#143). And a blob, not JSON -- the response body

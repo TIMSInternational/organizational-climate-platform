@@ -705,7 +705,7 @@
     "mapTargetNote": "Cada departamento frente a las {target} respuestas por cada 100 personas de la propia organización.",
     "departmentsWithoutMembers": "Departamentos aún sin personas y por tanto sin lectura:",
     "attentionFinding": "{department} está por debajo de la tasa de respuesta de la organización",
-    "attentionEvidence": "{completed} de {members} personas de {department} han completado una encuesta: {rate} respuestas por cada 100 personas, frente a {target} en toda la organización.",
+    "attentionEvidence": "{completed} respuestas completadas entre las {members} personas de {department} en todas las encuestas: {rate} por cada 100 personas, frente a {target} en toda la organización.",
     "attentionClear": "Ningún departamento está por debajo de la tasa de respuesta de la organización",
     "attentionClearEvidence": "Todos los departamentos que se pueden publicar están en {target} respuestas por cada 100 personas o por encima.",
     "viewResponses": "Ver respuestas",

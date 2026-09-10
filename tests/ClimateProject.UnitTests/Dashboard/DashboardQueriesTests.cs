@@ -129,10 +129,12 @@ public class DashboardQueriesTests
     /// full argument.
     /// </para>
     /// <para>
-    /// Asserted as the absence of <c>is_active</c> anywhere in the rendered SQL: this
-    /// projection selects no flag column from any table, so the fragment can only appear
-    /// if someone adds the active filter — verified by routing the member count through
-    /// <c>DepartmentHeadcount.Population</c>, which fails this test.
+    /// Asserted on the rendered SQL: the users subquery (alias <c>u</c>) must carry no
+    /// <c>is_active</c> predicate — the fragment can only appear there if someone routes
+    /// the member count through <c>DepartmentHeadcount.Population</c>, which fails this
+    /// test. The departments themselves ARE filtered to active ones (alias <c>d</c>): a
+    /// deactivated department is a retired row, not a department still waiting for people,
+    /// and that filter is pinned here too so the two rules are never confused for one.
     /// </para>
     /// </summary>
     [Fact]
@@ -144,7 +146,13 @@ public class DashboardQueriesTests
             .DepartmentSummaries(db.Departments, db.Users, db.Responses, CompanyId, 12)
             .ToQueryString();
 
-        Assert.DoesNotContain("is_active", sql, StringComparison.Ordinal);
+        // The alias assumptions, stated so a renamed alias fails loudly instead of letting
+        // the two assertions below pass on text that no longer exists.
+        Assert.Contains("FROM users AS u", sql, StringComparison.Ordinal);
+        Assert.Contains("FROM departments AS d", sql, StringComparison.Ordinal);
+
+        Assert.False(sql.Contains("u.is_active", StringComparison.Ordinal), sql);
+        Assert.True(sql.Contains("d.is_active", StringComparison.Ordinal), sql);
     }
 
     [Fact]

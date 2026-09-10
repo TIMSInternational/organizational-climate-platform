@@ -148,6 +148,7 @@ export async function listActionPlans(
   baseUrl: string,
   companyId: string,
   filters: ActionPlanListFilters = {},
+  lang?: string,
 ): Promise<ActionPlan[]> {
   const query = new URLSearchParams({ companyId })
   // Empty strings are dropped rather than sent: the server treats a whitespace
@@ -155,6 +156,9 @@ export async function listActionPlans(
   // `Guid?` and an empty one is a 400 from model binding, not an absent filter.
   if (filters.status) query.set('status', filters.status)
   if (filters.departmentId) query.set('departmentId', filters.departmentId)
+  // Titles are paired columns since #210 and the server resolves them for `lang`;
+  // without it a Spanish reader got the English half of every bilingual title.
+  if (lang) query.set('lang', lang)
 
   const response = await authFetch(`${baseUrl}/action-plans?${query.toString()}`)
   const body = (await response.json()) as { actionPlans: ActionPlan[] }
@@ -169,8 +173,9 @@ export async function createActionPlan(baseUrl: string, input: CreateActionPlanI
   return response.json() as Promise<ActionPlanDetail>
 }
 
-export async function getActionPlan(baseUrl: string, id: string): Promise<ActionPlanDetail> {
-  const response = await authFetch(`${baseUrl}/action-plans/${id}`)
+export async function getActionPlan(baseUrl: string, id: string, lang?: string): Promise<ActionPlanDetail> {
+  const query = lang ? `?lang=${encodeURIComponent(lang)}` : ''
+  const response = await authFetch(`${baseUrl}/action-plans/${id}${query}`)
   return response.json() as Promise<ActionPlanDetail>
 }
 

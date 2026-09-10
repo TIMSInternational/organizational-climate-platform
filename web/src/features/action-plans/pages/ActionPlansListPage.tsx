@@ -99,13 +99,13 @@ export default function ActionPlansListPage() {
     setLoading(true)
     setLoadError(null)
     try {
-      setPlans(await listActionPlans(baseUrl, companyId, { status: statusFilter }))
+      setPlans(await listActionPlans(baseUrl, companyId, { status: statusFilter }, locale))
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setLoading(false)
     }
-  }, [baseUrl, companyId, statusFilter, t])
+  }, [baseUrl, companyId, statusFilter, locale, t])
 
   useEffect(() => {
     void reload()

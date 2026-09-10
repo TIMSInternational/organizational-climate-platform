@@ -97,13 +97,13 @@ export default function ActionPlanDetailPage() {
     setLoading(true)
     setLoadError(null)
     try {
-      setPlan(await getActionPlan(baseUrl, id))
+      setPlan(await getActionPlan(baseUrl, id, locale))
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setLoading(false)
     }
-  }, [baseUrl, id, t])
+  }, [baseUrl, id, locale, t])
 
   useEffect(() => {
     void reload()

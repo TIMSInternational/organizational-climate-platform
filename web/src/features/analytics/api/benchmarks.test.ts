@@ -58,6 +58,18 @@ describe('benchmarks api client', () => {
     expect(fetch).toHaveBeenCalledWith(`${baseUrl}/admin/benchmarks?companyId=c1`, expect.anything())
   })
 
+  it('passes lang through so names come back in the reader\'s language', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+    await listBenchmarks(baseUrl, 'c1', 'es')
+    expect(fetch).toHaveBeenCalledWith(`${baseUrl}/admin/benchmarks?companyId=c1&lang=es`, expect.anything())
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+    await listBenchmarks(baseUrl, undefined, 'es')
+    expect(fetch).toHaveBeenCalledWith(`${baseUrl}/admin/benchmarks?lang=es`, expect.anything())
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }))
+    await getBenchmark(baseUrl, 'b1', 'es')
+    expect(fetch).toHaveBeenCalledWith(`${baseUrl}/admin/benchmarks/b1?lang=es`, expect.anything())
+  })
+
   it('keeps a null companyId distinguishable from a company-scoped one', async () => {
     // A global benchmark (companyId === null) is readable by every tenant but writable
     // only by a SuperAdmin. If this collapsed to `undefined` or to an empty string, a page

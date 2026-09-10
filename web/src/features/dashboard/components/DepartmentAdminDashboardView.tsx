@@ -19,6 +19,7 @@ import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { ClimateMap, KpiTile } from '../../../components/charts'
 import { climateScale } from '../../surveys/surveyResultsMap'
+import { dimensionLabel } from '../../surveys/dimensionLabel'
 import { Alert, AlertDescription, AlertTitle, Button } from '../../../components/ui'
 
 /**
@@ -307,7 +308,10 @@ export default function DepartmentAdminDashboardView() {
               <section>
                 <SectionHeading>{t('dashboard.teamClimate')}</SectionHeading>
                 <ClimateMap
-                  dimensions={climateColumns(data.climate).map((key) => ({ key, label: key }))}
+                  dimensions={climateColumns(data.climate).map((key) => ({
+                    key,
+                    label: dimensionLabel(key, t),
+                  }))}
                   rows={[
                     {
                       id: data.departmentId,

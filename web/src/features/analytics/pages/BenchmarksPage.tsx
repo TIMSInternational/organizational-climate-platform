@@ -102,7 +102,7 @@ export default function BenchmarksPage() {
     setLoading(true)
     setError(null)
     try {
-      const result = await listBenchmarks(baseUrl)
+      const result = await listBenchmarks(baseUrl, undefined, locale)
       // Rebuilt here rather than closing over `scope`, which is a fresh object on
       // every render and would make this callback -- and the effect that runs it
       // -- change identity every time.
@@ -112,7 +112,7 @@ export default function BenchmarksPage() {
     } finally {
       setLoading(false)
     }
-  }, [baseUrl, role, companyId, t])
+  }, [baseUrl, role, companyId, locale, t])
 
   useEffect(() => {
     void reload()
@@ -134,7 +134,7 @@ export default function BenchmarksPage() {
     let cancelled = false
     void (async () => {
       const loaded = await Promise.all(
-        missing.map((id) => getBenchmark(baseUrl, id).catch(() => null)),
+        missing.map((id) => getBenchmark(baseUrl, id, locale).catch(() => null)),
       )
       if (cancelled) return
       const next: Record<string, Benchmark> = {}
@@ -146,7 +146,7 @@ export default function BenchmarksPage() {
     return () => {
       cancelled = true
     }
-  }, [selectedIds, details, baseUrl])
+  }, [selectedIds, details, baseUrl, locale])
 
   const selectedDetails = selectedIds
     .map((id) => details[id])
@@ -163,13 +163,13 @@ export default function BenchmarksPage() {
     }
     let cancelled = false
     void (async () => {
-      const walked = await followPriorPeriodChain(single, (id) => getBenchmark(baseUrl, id))
+      const walked = await followPriorPeriodChain(single, (id) => getBenchmark(baseUrl, id, locale))
       if (!cancelled) setChain(walked)
     })()
     return () => {
       cancelled = true
     }
-  }, [single, baseUrl])
+  }, [single, baseUrl, locale])
 
   function toggle(id: string) {
     setSelectedIds((current) =>
@@ -178,7 +178,7 @@ export default function BenchmarksPage() {
   }
 
   async function refreshDetail(id: string) {
-    const refreshed = await getBenchmark(baseUrl, id)
+    const refreshed = await getBenchmark(baseUrl, id, locale)
     setDetails((current) => ({ ...current, [id]: refreshed }))
   }
 
