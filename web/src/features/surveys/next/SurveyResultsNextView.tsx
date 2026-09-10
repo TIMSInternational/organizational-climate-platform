@@ -19,6 +19,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   H2,
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '../../../components/ui'
 import type { ViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
@@ -369,56 +376,56 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
               </div>
 
               {/* The whole-company row: one mean per column, with the sample delta under it. */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <caption className="sr-only">{t('surveyResults.next.wholeCompany')}</caption>
-                  <thead>
-                    <tr className="text-left text-xs uppercase tracking-wide text-fg-secondary">
-                      <th scope="col" className="py-1 pr-3 font-medium">
+              <div>
+                <Table className="text-sm">
+                  <TableCaption className="sr-only">{t('surveyResults.next.wholeCompany')}</TableCaption>
+                  <TableHeader>
+                    <TableRow className="text-left text-xs uppercase tracking-wide text-fg-secondary">
+                      <TableHead scope="col" className="py-1 pr-3 font-medium">
                         {t('surveyResults.next.wholeCompany')}
-                      </th>
+                      </TableHead>
                       {climate.dimensions.map((dimension) => (
-                        <th key={dimension.key} scope="col" className="px-2 py-1 text-center font-medium">
+                        <TableHead key={dimension.key} scope="col" className="px-2 py-1 text-center font-medium">
                           {dimensionName(dimension.key)}
-                        </th>
+                        </TableHead>
                       ))}
-                      <th scope="col" className="px-2 py-1 text-center font-medium">
+                      <TableHead scope="col" className="px-2 py-1 text-center font-medium">
                         {t('surveyResults.next.groupMean')}
-                      </th>
-                      <th scope="col" className="px-2 py-1 text-center font-medium">
+                      </TableHead>
+                      <TableHead scope="col" className="px-2 py-1 text-center font-medium">
                         <span className="inline-flex items-center gap-1">
                           {t('surveyResults.next.vsWave', { wave: sample.previousCode })}
                           {sampleChip}
                         </span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="font-semibold">
-                      <th scope="row" className="py-2 pr-3 text-left">
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow className="font-semibold">
+                      <TableHead scope="row" className="py-2 pr-3 text-left">
                         {t('surveyResults.next.wholeCompany')}
-                      </th>
+                      </TableHead>
                       {climate.dimensions.map((dimension, index) => {
                         const value = company[index]
                         const delta = sample.dimensionDeltas[dimension.key]
                         return (
-                          <td key={dimension.key} className="px-2 py-2 text-center font-mono tabular-nums">
+                          <TableCell key={dimension.key} className="px-2 py-2 text-center font-mono tabular-nums">
                             {value === null ? '—' : score(value)}
                             {value !== null && delta !== undefined && (
                               <span className="block text-xs font-normal text-fg-secondary">{signed(delta)}</span>
                             )}
-                          </td>
+                          </TableCell>
                         )
                       })}
-                      <td className="px-2 py-2 text-center font-mono tabular-nums">
+                      <TableCell className="px-2 py-2 text-center font-mono tabular-nums">
                         {reference === null ? '—' : score(reference)}
-                      </td>
-                      <td className="px-2 py-2 text-center font-mono tabular-nums">
+                      </TableCell>
+                      <TableCell className="px-2 py-2 text-center font-mono tabular-nums">
                         {reference === null ? '—' : signed(sample.averageDelta)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
               </div>
 
               <ClimateMap
@@ -435,40 +442,40 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
               />
 
               {/* Per-group mean and "vs Q2", protected rows hatched exactly as the map hatches them. */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm" data-testid="group-means">
-                  <caption className="sr-only">{t('surveyResults.next.groupMean')}</caption>
-                  <thead>
-                    <tr className="text-left text-xs uppercase tracking-wide text-fg-secondary">
-                      <th scope="col" className="py-1 pr-3 font-medium">
+              <div>
+                <Table className="text-sm" data-testid="group-means">
+                  <TableCaption className="sr-only">{t('surveyResults.next.groupMean')}</TableCaption>
+                  <TableHeader>
+                    <TableRow className="text-left text-xs uppercase tracking-wide text-fg-secondary">
+                      <TableHead scope="col" className="py-1 pr-3 font-medium">
                         {t('surveyResults.next.groupHeading')}
-                      </th>
-                      <th scope="col" className="px-2 py-1 text-center font-medium">
+                      </TableHead>
+                      <TableHead scope="col" className="px-2 py-1 text-center font-medium">
                         {t('surveyResults.next.groupMean')}
-                      </th>
-                      <th scope="col" className="px-2 py-1 text-center font-medium">
+                      </TableHead>
+                      <TableHead scope="col" className="px-2 py-1 text-center font-medium">
                         {t('surveyResults.next.vsWave', { wave: sample.previousCode })}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {rows.map((row) => (
-                      <tr key={row.id} data-testid={`group-row-${row.id}`}>
-                        <th scope="row" className="py-2 pr-3 text-left font-medium">
+                      <TableRow key={row.id} data-testid={`group-row-${row.id}`}>
+                        <TableHead scope="row" className="py-2 pr-3 text-left font-medium">
                           {row.name}
-                        </th>
-                        <td className="px-2 py-2 text-center font-mono tabular-nums">
+                        </TableHead>
+                        <TableCell className="px-2 py-2 text-center font-mono tabular-nums">
                           <ProtectedCell responses={row.isProtected ? 0 : row.responses} threshold={climate.threshold}>
                             {row.mean === null ? '—' : score(row.mean)}
                           </ProtectedCell>
-                        </td>
-                        <td className="px-2 py-2 text-center text-fg-secondary">
+                        </TableCell>
+                        <TableCell className="px-2 py-2 text-center text-fg-secondary">
                           {row.isProtected ? '—' : t('surveyResults.next.noPrevious', { wave: sample.previousCode })}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
               <p className="max-w-prose text-xs text-fg-secondary">
                 {t('surveyResults.next.deltaNote', { wave: sample.previousCode })}
