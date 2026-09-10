@@ -26,7 +26,7 @@ public class ActionPlanKpiTests(PostgresContainerFixture postgres)
         };
         var plan = new ActionPlan
         {
-            Id = Guid.NewGuid(), Title = "P", Description = "d", CompanyId = company.Id,
+            Id = Guid.NewGuid(), TitleEn = "P", DescriptionEn = "d", CompanyId = company.Id,
             CreatedBy = user.Id, DueDate = DateTimeOffset.UtcNow.AddDays(30),
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };
@@ -46,8 +46,8 @@ public class ActionPlanKpiTests(PostgresContainerFixture postgres)
 
         var kpi = new ActionPlanKpi
         {
-            Id = Guid.NewGuid(), ActionPlanId = plan.Id, Name = "Response rate",
-            TargetValue = 90m, CurrentValue = 42.5m, Unit = "%", MeasurementFrequency = "monthly",
+            Id = Guid.NewGuid(), ActionPlanId = plan.Id, NameEn = "Response rate",
+            TargetValue = 90m, CurrentValue = 42.5m, UnitEn = "%", MeasurementFrequency = "monthly",
         };
         db.ActionPlanKpis.Add(kpi);
         await db.SaveChangesAsync();
@@ -55,10 +55,10 @@ public class ActionPlanKpiTests(PostgresContainerFixture postgres)
         await using var readDb = CreateContext();
         var loaded = await readDb.ActionPlanKpis.SingleAsync(k => k.Id == kpi.Id);
         Assert.Equal(plan.Id, loaded.ActionPlanId);
-        Assert.Equal("Response rate", loaded.Name);
+        Assert.Equal("Response rate", loaded.NameEn);
         Assert.Equal(90m, loaded.TargetValue);
         Assert.Equal(42.5m, loaded.CurrentValue);
-        Assert.Equal("%", loaded.Unit);
+        Assert.Equal("%", loaded.UnitEn);
         Assert.Equal("monthly", loaded.MeasurementFrequency);
     }
 
@@ -72,7 +72,7 @@ public class ActionPlanKpiTests(PostgresContainerFixture postgres)
         var minimalId = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO action_plan_kpis ("Id", action_plan_id, name, target_value, unit, measurement_frequency)
+             INSERT INTO action_plan_kpis ("Id", action_plan_id, name_en, target_value, unit_en, measurement_frequency)
              VALUES ({minimalId}, {plan.Id}, {"Minimal KPI"}, {10m}, {"count"}, {"weekly"})
              """);
 
@@ -91,7 +91,7 @@ public class ActionPlanKpiTests(PostgresContainerFixture postgres)
         var kpiId = Guid.NewGuid();
         db.ActionPlanKpis.Add(new ActionPlanKpi
         {
-            Id = kpiId, ActionPlanId = plan.Id, Name = "K", TargetValue = 1m, Unit = "count", MeasurementFrequency = "weekly",
+            Id = kpiId, ActionPlanId = plan.Id, NameEn = "K", TargetValue = 1m, UnitEn = "count", MeasurementFrequency = "weekly",
         });
         await db.SaveChangesAsync();
 

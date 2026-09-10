@@ -58,12 +58,13 @@ public sealed class SearchIndexConfiguration :
     /// <c>SearchQueries</c>. The two must agree or the index matches nothing.
     ///
     /// <c>simple</c> -- no stemming -- rather than <c>english</c>/<c>spanish</c>, and the
-    /// reason is that half of what is searched carries no language marker at all. A
-    /// department name, an action-plan title, a report title and a user's name are single
-    /// columns with no companion <c>_es</c>, so any stemmer chosen for them is chosen
-    /// blind, and a Spanish stemmer applied to English text (or the reverse) produces
-    /// lexemes that match nothing anyone will type -- silently, with no error and no empty
-    /// index to notice.
+    /// reason is that part of what is searched carries no language marker at all. A
+    /// department name and a user's name are single columns with no companion <c>_es</c>
+    /// (deliberately: a department has one real name, see #210), so any stemmer chosen for
+    /// them is chosen blind, and a Spanish stemmer applied to English text (or the reverse)
+    /// produces lexemes that match nothing anyone will type -- silently, with no error and
+    /// no empty index to notice. Action-plan and report titles were single columns too
+    /// until #210 paired them; both halves now feed their vectors, as the survey ones do.
     ///
     /// <c>simple</c> never produces a *wrong* lexeme, and the prefix matching in
     /// <c>SearchQueryText</c> recovers most of what stemming would have given for
@@ -112,13 +113,13 @@ public sealed class SearchIndexConfiguration :
         => AddSearchVector(
             builder,
             "action_plans",
-            "to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(description, ''))");
+            "to_tsvector('simple', coalesce(title_en, '') || ' ' || coalesce(title_es, '') || ' ' || coalesce(description_en, '') || ' ' || coalesce(description_es, ''))");
 
     public void Configure(EntityTypeBuilder<Report> builder)
         => AddSearchVector(
             builder,
             "reports",
-            "to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(description, ''))");
+            "to_tsvector('simple', coalesce(title_en, '') || ' ' || coalesce(title_es, '') || ' ' || coalesce(description_en, '') || ' ' || coalesce(description_es, ''))");
 
     // The table name is passed in rather than read off builder.Metadata: EF gives no
     // ordering guarantee between two configurations for the same entity, so if this one

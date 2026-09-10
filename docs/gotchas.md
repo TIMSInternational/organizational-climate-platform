@@ -121,6 +121,32 @@ the union — **including the docs lanes**, because prose encodes assumptions no
 already fully built, and a `blocked` label survived the removal of its blocker. Grep the symbol
 before sizing the work.
 
+**`dotnet ef migrations add` empties every renamed column.** On a diff that renames
+`name` to `name_en` and adds `name_es`, the scaffold pairs dropped and added columns
+positionally: `DropColumn("name")` then `AddColumn("name_en")`, and one guessed
+`RenameColumn` pointing at the wrong half. Both content-i18n migrations
+(`AddContentI18n`, `AddAuthorContentI18n`) keep the generated Designer and snapshot and
+hand-write `Up`/`Down`: rename to `_en`, drop NOT NULL, add `_es`. Check the scaffold's
+`Up` before trusting it with a table that has rows.
+
+**A rename does not follow a generated column into its index.** `action_plans.search_vector`
+and `reports.search_vector` are `GENERATED ALWAYS AS (to_tsvector(... title ...)) STORED`.
+Renaming `title` carries the expression along, but the vector then indexes only the `_en`
+half and `SearchIndexConfiguration` says something else. Drop the index and the column
+first, rename, add the `_es` halves, then re-add both over the new expression.
+
+**After a rename, a joined UPDATE is ambiguous.** `UPDATE action_plan_kpis x SET name_es =
+name_en ... FROM action_plans p` fails with `42702: column reference "description_en" is
+ambiguous` once the parent carries the same `_en` columns. Qualify the right-hand side
+(`x.name_en`); the left-hand side must stay bare. This one cost a full 18-minute suite that
+failed 1,526 of 1,616 tests at the fixture's `ApplyMigrationsAsync` -- which is the next item.
+
+**Prove a migration on a scratch database before the suite.** `createdb`, then
+`dotnet ef database update --connection "Host=localhost;Database=<scratch>;Username=postgres"`
+up, down to the previous migration, and up again -- about two minutes -- and read the
+columns back from `information_schema`. A migration that fails inside Testcontainers takes
+the whole "Postgres" collection down with it and the log reads as 1,500 unrelated failures.
+
 **Counting migrations with `grep -v Snapshot` is off by one.** The obvious filter for
 "migration files, excluding the model snapshot" is
 `ls Migrations/*.cs | grep -v Designer | grep -v Snapshot`. It also deletes

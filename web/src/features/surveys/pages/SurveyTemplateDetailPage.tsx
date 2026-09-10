@@ -40,13 +40,13 @@ import { languageLabel } from '../surveyVocabulary'
  * listings and the survey detail page are all scoped by the server from the caller's
  * role, and send no company id.
  *
- * ## The notice covers the questions, not the name
+ * ## The notice covers the heading and the questions
  *
- * `survey_templates.name`/`.description` are single `text` columns -- #195 paired only
- * `template_questions` -- so the heading above is monolingual whatever locale is asked
- * for, while the questions below are resolved and self-report their fallback. Reporting
- * one locale for the whole page would therefore be wrong in a way that is easy to miss,
- * which is why `language` here is documented as describing the questions.
+ * `name`/`description` are paired columns since #210, resolved like the questions and
+ * reported in `fallbackFields` as `name` / `description` when they reached for the other
+ * language, so the one notice below speaks for the whole page. `language` still
+ * describes the questions: it is inferred from their rows and is what the publish gate
+ * reads when the template becomes a survey.
  */
 export default function SurveyTemplateDetailPage() {
   const { t, locale } = useTranslation()

@@ -1,3 +1,4 @@
+using ClimateProject.Application.Localization;
 using System.Security.Claims;
 using System.Text.Json;
 using ClimateProject.Api.Infrastructure;
@@ -222,10 +223,10 @@ public static class ReportShareEndpoints
     /// Resolves a share token into the report it opens, for a caller with no session (#139).
     /// </summary>
     /// <param name="lang">
-    /// Accepted because the shipped client sends it, and ignored on purpose: the document was
+    /// Honoured for the report's own title and description, which are #210 paired columns
+    /// resolved here for the holder of the link. The document body is not re-resolved: it was
     /// localized once by <c>ReportGeneration</c>, in each survey's own language, and there is
-    /// nothing left here to resolve. Declared rather than silently dropped so that a reader
-    /// asking "does this honour ?lang" gets an answer instead of a grep.
+    /// nothing left in it to resolve.
     /// </param>
     private static async Task<IResult> ResolveAsync(
         string token,
@@ -235,7 +236,6 @@ public static class ReportShareEndpoints
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
-        _ = lang;
         var logger = loggerFactory.CreateLogger(typeof(ReportShareEndpoints));
 
         // Hash and query unconditionally -- no length check, no charset check, no early return
@@ -336,9 +336,10 @@ public static class ReportShareEndpoints
         // -- and a section added to ReportOutputDocument later is withheld until someone rules
         // on it. Returning the stored document verbatim is what made #413's word clouds,
         // demographic breakdowns and benchmarks anonymously readable with nobody deciding.
+        var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
         return Results.Ok(new SharedReportResponse(
-            match.Report.Title,
-            match.Report.Description,
+            AuthoredContent.ResolveRequired(match.Report.TitleEn, match.Report.TitleEs, locale),
+            AuthoredContent.ResolveText(match.Report.DescriptionEn, match.Report.DescriptionEs, locale),
             match.Report.Type,
             match.Report.GenerationCompletedAt,
             PublicReportProjection.ToPublicJson(match.Report.ReportOutput)));

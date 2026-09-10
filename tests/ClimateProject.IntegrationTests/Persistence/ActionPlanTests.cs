@@ -32,7 +32,7 @@ public class ActionPlanTests(PostgresContainerFixture postgres)
         };
         var template = new ActionPlanTemplate
         {
-            Id = Guid.NewGuid(), Name = "T", Description = "d", Category = "general", CompanyId = company.Id,
+            Id = Guid.NewGuid(), NameEn = "T", DescriptionEn = "d", Category = "general", CompanyId = company.Id,
             CreatedBy = user.Id, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };
         db.Companies.Add(company);
@@ -72,8 +72,8 @@ public class ActionPlanTests(PostgresContainerFixture postgres)
         var plan = new ActionPlan
         {
             Id = Guid.NewGuid(),
-            Title = "Improve engineering morale",
-            Description = "Quarterly follow-up on the last engagement survey.",
+            TitleEn = "Improve engineering morale",
+            DescriptionEn = "Quarterly follow-up on the last engagement survey.",
             CompanyId = company.Id,
             DepartmentId = department.Id,
             CreatedBy = user.Id,
@@ -112,7 +112,7 @@ public class ActionPlanTests(PostgresContainerFixture postgres)
         var minimalId = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO action_plans ("Id", title, description, company_id, created_by, due_date, created_at, updated_at)
+             INSERT INTO action_plans ("Id", title_en, description_en, company_id, created_by, due_date, created_at, updated_at)
              VALUES ({minimalId}, {"Minimal Plan"}, {"desc"}, {company.Id}, {user.Id}, {DateTimeOffset.UtcNow.AddDays(30)}, {DateTimeOffset.UtcNow}, {DateTimeOffset.UtcNow})
              """);
 
@@ -135,7 +135,7 @@ public class ActionPlanTests(PostgresContainerFixture postgres)
 
         var plan = new ActionPlan
         {
-            Id = Guid.NewGuid(), Title = "P", Description = "d", CompanyId = company.Id, DepartmentId = department.Id,
+            Id = Guid.NewGuid(), TitleEn = "P", DescriptionEn = "d", CompanyId = company.Id, DepartmentId = department.Id,
             CreatedBy = user.Id, DueDate = DateTimeOffset.UtcNow.AddDays(30),
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };
@@ -159,7 +159,7 @@ public class ActionPlanTests(PostgresContainerFixture postgres)
 
         var plan = new ActionPlan
         {
-            Id = Guid.NewGuid(), Title = "P", Description = "d", CompanyId = company.Id, TemplateId = template.Id,
+            Id = Guid.NewGuid(), TitleEn = "P", DescriptionEn = "d", CompanyId = company.Id, TemplateId = template.Id,
             CreatedBy = user.Id, DueDate = DateTimeOffset.UtcNow.AddDays(30),
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };
@@ -199,7 +199,7 @@ public class ActionPlanTests(PostgresContainerFixture postgres)
         var planId = Guid.NewGuid();
         db.ActionPlans.Add(new ActionPlan
         {
-            Id = planId, Title = "P", Description = "d", CompanyId = company.Id,
+            Id = planId, TitleEn = "P", DescriptionEn = "d", CompanyId = company.Id,
             CreatedBy = user.Id, DueDate = DateTimeOffset.UtcNow.AddDays(30),
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         });

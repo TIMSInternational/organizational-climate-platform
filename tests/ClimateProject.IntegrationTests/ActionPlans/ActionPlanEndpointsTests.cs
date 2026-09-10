@@ -1,3 +1,4 @@
+using ClimateProject.Application.Localization;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
@@ -284,7 +285,7 @@ public class ActionPlanEndpointsTests : IAsyncLifetime
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
-        Assert.False(await db.ActionPlans.AnyAsync(p => p.Title == "Cross-tenant template plan"));
+        Assert.False(await db.ActionPlans.AnyAsync(p => p.TitleEn == "Cross-tenant template plan"));
     }
 
     [Fact]
@@ -408,4 +409,112 @@ public class ActionPlanEndpointsTests : IAsyncLifetime
         Assert.Contains("different company", await response.Content.ReadAsStringAsync());
     }
 
+
+    // ------------------------------------------------------------------
+    // #210 -- every authored field on a plan is a paired column
+    // ------------------------------------------------------------------
+
+    private static LocalizedInput Both(string en, string es)
+        => LocalizedInput.FromLocales(new Dictionary<string, string?> { ["en"] = en, ["es"] = es });
+
+    [Fact]
+    public async Task A_bilingual_plan_reads_every_field_in_the_requested_locale_with_nothing_fallen_back()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            Title: Both("Improve onboarding", "Mejorar la incorporación"),
+            Description: Both("Reduce ramp-up", "Reducir el tiempo de adaptación"),
+            CompanyId: _companyAId,
+            DepartmentId: null,
+            DueDate: DateTimeOffset.UtcNow.AddDays(30),
+            Priority: "high",
+            Tags: null,
+            TemplateId: null,
+            SourceSurveyId: null,
+            SourceInsightId: null,
+            Kpis: [new CreateKpiInput(Both("Time to productivity", "Tiempo hasta productividad"), 30, Both("days", "días"), "weekly")],
+            Objectives: [new CreateObjectiveInput(Both("Buddy every hire", "Un compañero por contratación"), Both("100% paired", "100% emparejados"))]));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var created = await createResponse.Content.ReadFromJsonAsync<ActionPlanDetail>();
+
+        var spanish = await (await client.GetAsync($"/action-plans/{created!.Id}?lang=es")).Content.ReadFromJsonAsync<ActionPlanDetail>();
+        Assert.Equal("Mejorar la incorporación", spanish!.Title);
+        Assert.Equal("Reducir el tiempo de adaptación", spanish.Description);
+        Assert.Equal("Tiempo hasta productividad", spanish.Kpis.Single().Name);
+        Assert.Equal("días", spanish.Kpis.Single().Unit);
+        Assert.Equal("Un compañero por contratación", spanish.Objectives.Single().Description);
+        Assert.Equal("100% emparejados", spanish.Objectives.Single().SuccessCriteria);
+        Assert.Empty(spanish.FallbackFields);
+
+        var english = await (await client.GetAsync($"/action-plans/{created.Id}?lang=en")).Content.ReadFromJsonAsync<ActionPlanDetail>();
+        Assert.Equal("Improve onboarding", english!.Title);
+        Assert.Equal("days", english.Kpis.Single().Unit);
+
+        var listed = await (await client.GetAsync($"/action-plans?companyId={_companyAId}&lang=es")).Content.ReadFromJsonAsync<ActionPlanListResponse>();
+        Assert.Equal("Mejorar la incorporación", listed!.ActionPlans.Single(p => p.Id == created.Id).Title);
+    }
+
+    [Fact]
+    public async Task A_bare_plan_lands_in_the_companys_language_and_a_Spanish_reader_is_told_which_fields_fell_back()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            Title: "Improve onboarding",
+            Description: "Reduce ramp-up",
+            CompanyId: _companyAId,
+            DepartmentId: null,
+            DueDate: DateTimeOffset.UtcNow.AddDays(30),
+            Priority: "high",
+            Tags: null,
+            TemplateId: null,
+            SourceSurveyId: null,
+            SourceInsightId: null,
+            Kpis: [new CreateKpiInput("Time to productivity", 30, "days", "weekly")],
+            Objectives: [new CreateObjectiveInput("Buddy every hire", "100% paired")]));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var created = await createResponse.Content.ReadFromJsonAsync<ActionPlanDetail>();
+
+        var spanish = await (await client.GetAsync($"/action-plans/{created!.Id}?lang=es")).Content.ReadFromJsonAsync<ActionPlanDetail>();
+        Assert.Equal("Improve onboarding", spanish!.Title);
+        Assert.Equal(
+            ["title", "description", "kpis[0].name", "kpis[0].unit", "objectives[0].description", "objectives[0].successCriteria"],
+            spanish.FallbackFields);
+
+        // The company is English, so the bare strings are English columns.
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var kpi = await db.ActionPlanKpis.AsNoTracking().SingleAsync(k => k.ActionPlanId == created.Id);
+        Assert.Equal(("Time to productivity", null, "days", null), (kpi.NameEn, kpi.NameEs, kpi.UnitEn, kpi.UnitEs));
+    }
+
+    [Fact]
+    public async Task Updating_with_a_bare_title_keeps_the_other_half_and_a_blank_bare_title_is_still_ignored()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var createResponse = await client.PostAsJsonAsync("/action-plans", new CreateActionPlanRequest(
+            Both("Improve onboarding", "Mejorar la incorporación"), Both("Reduce ramp-up", "Reducir"), _companyAId, null,
+            DateTimeOffset.UtcNow.AddDays(30), "high", null, null, null, null, null, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<ActionPlanDetail>();
+
+        var updated = await client.PutAsJsonAsync($"/action-plans/{created!.Id}", new UpdateActionPlanRequest("Improve onboarding v2", null, null, null, null, null));
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+
+        var ignored = await client.PutAsJsonAsync($"/action-plans/{created.Id}", new UpdateActionPlanRequest("   ", null, null, null, null, null));
+        Assert.Equal(HttpStatusCode.OK, ignored.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var row = await db.ActionPlans.AsNoTracking().SingleAsync(p => p.Id == created.Id);
+        Assert.Equal("Improve onboarding v2", row.TitleEn);
+        Assert.Equal("Mejorar la incorporación", row.TitleEs);
+    }
 }

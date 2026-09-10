@@ -96,8 +96,8 @@ public class SurveyForeignKeyDeleteBehaviourTests(PostgresContainerFixture postg
         var plan = new ActionPlan
         {
             Id = Guid.NewGuid(),
-            Title = "Follow up on Q3",
-            Description = "Plan drawn from the Q3 engagement survey.",
+            TitleEn = "Follow up on Q3",
+            DescriptionEn = "Plan drawn from the Q3 engagement survey.",
             CompanyId = company.Id,
             CreatedBy = user.Id,
             DueDate = DateTimeOffset.UtcNow.AddMonths(1),
@@ -115,7 +115,7 @@ public class SurveyForeignKeyDeleteBehaviourTests(PostgresContainerFixture postg
         Assert.NotNull(loaded);
         Assert.Null(loaded.SourceSurveyId);
         // The plan itself is untouched -- SET NULL drops the pointer, not the work.
-        Assert.Equal("Follow up on Q3", loaded.Title);
+        Assert.Equal("Follow up on Q3", loaded.TitleEn);
     }
 
     [Fact]
@@ -258,8 +258,8 @@ public class SurveyForeignKeyDeleteBehaviourTests(PostgresContainerFixture postg
         db.ActionPlans.Add(new ActionPlan
         {
             Id = Guid.NewGuid(),
-            Title = "Plan pointing nowhere",
-            Description = "Names a survey id that was never issued.",
+            TitleEn = "Plan pointing nowhere",
+            DescriptionEn = "Names a survey id that was never issued.",
             CompanyId = company.Id,
             CreatedBy = user.Id,
             DueDate = DateTimeOffset.UtcNow.AddMonths(1),
@@ -317,8 +317,8 @@ public class SurveyForeignKeyDeleteBehaviourTests(PostgresContainerFixture postg
         var plan = new ActionPlan
         {
             Id = Guid.NewGuid(),
-            Title = "Plan from an insight",
-            Description = "source_insight_id has no declared parent table.",
+            TitleEn = "Plan from an insight",
+            DescriptionEn = "source_insight_id has no declared parent table.",
             CompanyId = company.Id,
             CreatedBy = user.Id,
             DueDate = DateTimeOffset.UtcNow.AddMonths(1),

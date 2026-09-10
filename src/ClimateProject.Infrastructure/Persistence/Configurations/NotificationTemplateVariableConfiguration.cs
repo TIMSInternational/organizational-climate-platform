@@ -14,7 +14,8 @@ public class NotificationTemplateVariableConfiguration : IEntityTypeConfiguratio
         builder.Property(v => v.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
         builder.Property(v => v.Type).HasColumnName("type").HasMaxLength(20).IsRequired();
         builder.Property(v => v.Required).HasColumnName("required").IsRequired().HasDefaultValue(false);
-        builder.Property(v => v.Description).HasColumnName("description").HasMaxLength(1000).IsRequired();
+        builder.Property(v => v.DescriptionEn).HasColumnName("description_en").HasMaxLength(1000);
+        builder.Property(v => v.DescriptionEs).HasColumnName("description_es").HasMaxLength(1000);
         builder.Property(v => v.DefaultValue).HasColumnName("default_value").HasColumnType("jsonb");
 
         builder.HasOne<NotificationTemplate>().WithMany().HasForeignKey(v => v.NotificationTemplateId);

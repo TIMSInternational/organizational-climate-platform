@@ -47,8 +47,8 @@ public class MicroclimateTemplateTests(PostgresContainerFixture postgres)
         var template = new MicroclimateTemplate
         {
             Id = Guid.NewGuid(),
-            Name = "Weekly Pulse",
-            Description = "A short weekly pulse check",
+            NameEn = "Weekly Pulse",
+            DescriptionEn = "A short weekly pulse check",
             Category = "pulse_check",
             CompanyId = company.Id,
             CreatedBy = creator.Id,
@@ -101,8 +101,8 @@ public class MicroclimateTemplateTests(PostgresContainerFixture postgres)
         var systemTemplate = new MicroclimateTemplate
         {
             Id = Guid.NewGuid(),
-            Name = "System Team Mood",
-            Description = "Built-in team mood template",
+            NameEn = "System Team Mood",
+            DescriptionEn = "Built-in team mood template",
             Category = "team_mood",
             IsSystemTemplate = true,
             CreatedAt = DateTimeOffset.UtcNow,
@@ -132,7 +132,7 @@ public class MicroclimateTemplateTests(PostgresContainerFixture postgres)
         var now = DateTimeOffset.UtcNow;
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO microclimate_templates ("Id", name, description, category, created_at, updated_at)
+             INSERT INTO microclimate_templates ("Id", name_en, description_en, category, created_at, updated_at)
              VALUES ({minimalTemplateId}, {"Minimal Template"}, {"desc"}, {"custom"}, {now}, {now})
              """);
 

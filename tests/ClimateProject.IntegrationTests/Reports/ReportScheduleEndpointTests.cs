@@ -356,7 +356,7 @@ public class ReportScheduleEndpointTests : IAsyncLifetime
             var report = new Report
             {
                 Id = Guid.NewGuid(),
-                Title = "Someone else's report",
+                TitleEn = "Someone else's report",
                 Type = "climate_summary",
                 CompanyId = other.Id,
                 CreatedBy = creator.Id,

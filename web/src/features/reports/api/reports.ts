@@ -59,6 +59,13 @@ export interface Report {
   isRecurring: boolean
   recurrencePattern: string | null
   nextGeneration: string | null
+  /**
+   * Fields that had to reach for the other language (`title`, `description`). Both are
+   * #210 paired columns resolved server-side; a bare string on write is attributed to the
+   * company's language and never refused, and `{ en, es }` is the explicit form. Always
+   * sent since #210.
+   */
+  fallbackFields?: string[]
 }
 
 export interface CreateReportInput {

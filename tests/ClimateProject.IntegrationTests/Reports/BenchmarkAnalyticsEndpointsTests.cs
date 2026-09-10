@@ -1249,7 +1249,7 @@ public class BenchmarkAnalyticsEndpointsTests : IAsyncLifetime
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
-        Assert.Empty(await db.Benchmarks.AsNoTracking().Where(b => b.Name == name || b.Category == category).ToListAsync());
+        Assert.Empty(await db.Benchmarks.AsNoTracking().Where(b => b.NameEn == name || b.Category == category).ToListAsync());
     }
 
     // ===================================================================================

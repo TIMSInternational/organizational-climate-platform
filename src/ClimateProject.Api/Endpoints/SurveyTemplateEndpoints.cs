@@ -97,6 +97,7 @@ public static class SurveyTemplateEndpoints
         Guid? companyId,
         string? category,
         string? q,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -143,12 +144,23 @@ public static class SurveyTemplateEndpoints
         if (!string.IsNullOrWhiteSpace(q))
         {
             var pattern = $"%{SurveyQueries.EscapeLike(q.Trim())}%";
+            // Both halves of both fields (#210): a template is findable by whichever
+            // language its catalogue metadata was written in, as its questions already are.
             query = query.Where(t =>
-                EF.Functions.ILike(t.Name, pattern, LikeEscapeCharacter)
-                || EF.Functions.ILike(t.Description, pattern, LikeEscapeCharacter));
+                EF.Functions.ILike(t.NameEn ?? string.Empty, pattern, LikeEscapeCharacter)
+                || EF.Functions.ILike(t.NameEs ?? string.Empty, pattern, LikeEscapeCharacter)
+                || EF.Functions.ILike(t.DescriptionEn ?? string.Empty, pattern, LikeEscapeCharacter)
+                || EF.Functions.ILike(t.DescriptionEs ?? string.Empty, pattern, LikeEscapeCharacter));
         }
 
-        var rows = await query.OrderBy(t => t.Name).ToListAsync(cancellationToken);
+        // Ordered after resolution rather than by one column: the reader sorts by the name
+        // they can see, and which half that is depends on the locale they asked for. Id
+        // second so two same-named templates cannot swap places between two reads.
+        var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
+        var rows = (await query.ToListAsync(cancellationToken))
+            .OrderBy(t => AuthoredContent.ResolveRequired(t.NameEn, t.NameEs, locale), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(t => t.Id)
+            .ToList();
         var ids = rows.Select(t => t.Id).ToList();
 
         // Counted in a second query rather than as a correlated subquery in the projection.
@@ -166,8 +178,8 @@ public static class SurveyTemplateEndpoints
         var templates = rows
             .Select(t => new SurveyTemplateListItem(
                 t.Id,
-                t.Name,
-                t.Description,
+                AuthoredContent.ResolveRequired(t.NameEn, t.NameEs, locale),
+                AuthoredContent.ResolveRequired(t.DescriptionEn, t.DescriptionEs, locale),
                 t.Category,
                 t.Industry,
                 t.CompanySize,
@@ -202,10 +214,8 @@ public static class SurveyTemplateEndpoints
             return Results.Forbid();
         }
 
-        var name = request.Name?.Trim();
-        var description = request.Description?.Trim();
         var category = request.Category?.Trim();
-        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(description) || string.IsNullOrWhiteSpace(category))
+        if (request.Name is null || request.Description is null || string.IsNullOrWhiteSpace(category))
         {
             return Results.Json(new { message = "Name, description, and category are required" }, statusCode: 400);
         }
@@ -224,6 +234,16 @@ public static class SurveyTemplateEndpoints
         var language = ContentLanguages.NormaliseLanguage(request.Language)
                        ?? ContentLanguages.NormaliseLanguage(companyLanguage)
                        ?? ContentLanguages.FallbackLocale;
+
+        // #210: the name and description are attributed by the same rule as the questions
+        // -- the declared language, then the company's -- with one difference: a bare
+        // string under 'both' is filed under the author's own language rather than
+        // refused, because these fields reach no respondent. See AuthoredContent.
+        var attribution = await AuthoredWrites.AttributionLocaleForLanguagesAsync(db, currentUser, language, companyLanguage, cancellationToken);
+        var name = AuthoredWrites.Apply(request.Name, attribution, "name", "Name is required", required: true, null, null);
+        if (name.Error is not null) return name.Error;
+        var description = AuthoredWrites.Apply(request.Description, attribution, "description", "Description is required", required: true, null, null);
+        if (description.Error is not null) return description.Error;
 
         if (request.SourceSurveyId.HasValue)
         {
@@ -245,8 +265,10 @@ public static class SurveyTemplateEndpoints
         var template = new SurveyTemplate
         {
             Id = templateId,
-            Name = name,
-            Description = description,
+            NameEn = name.En,
+            NameEs = name.Es,
+            DescriptionEn = description.En,
+            DescriptionEs = description.Es,
             Category = category,
             Industry = request.Industry?.Trim(),
             CompanySize = request.CompanySize?.Trim(),
@@ -328,26 +350,26 @@ public static class SurveyTemplateEndpoints
             return InvalidLanguage(request.Language);
         }
 
-        if (request.Name is not null)
+        if (request.Name is not null || request.Description is not null)
         {
-            var name = request.Name.Trim();
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                return Results.Json(new { message = "Name is required" }, statusCode: 400);
-            }
+            // Bare strings keep writing the language the template is already named in
+            // (#210), the same default the questions below use.
+            var attribution = await AuthoredWrites.AttributionLocaleAsync(
+                db,
+                currentUser,
+                template.CompanyId,
+                request.Language ?? AuthoredContent.LanguageOf(template.NameEn, template.NameEs),
+                cancellationToken);
 
-            template.Name = name;
-        }
+            var name = AuthoredWrites.Apply(request.Name, attribution, "name", "Name is required", required: true, template.NameEn, template.NameEs);
+            if (name.Error is not null) return name.Error;
+            var description = AuthoredWrites.Apply(request.Description, attribution, "description", "Description is required", required: true, template.DescriptionEn, template.DescriptionEs);
+            if (description.Error is not null) return description.Error;
 
-        if (request.Description is not null)
-        {
-            var description = request.Description.Trim();
-            if (string.IsNullOrWhiteSpace(description))
-            {
-                return Results.Json(new { message = "Description is required" }, statusCode: 400);
-            }
-
-            template.Description = description;
+            template.NameEn = name.En;
+            template.NameEs = name.Es;
+            template.DescriptionEn = description.En;
+            template.DescriptionEs = description.Es;
         }
 
         if (request.Category is not null)
@@ -516,14 +538,31 @@ public static class SurveyTemplateEndpoints
                        ?? ContentLanguages.NormaliseLanguage(companyLanguage)
                        ?? ContentLanguages.FallbackLocale;
 
-        // Falls back to the template's name, attributed by the ordinary bare-string rule.
-        // For a survey authored in 'both' that attribution is refused, and the 400 tells
-        // the caller to send { "en": ..., "es": ... } -- which is right: filing one
-        // monolingual name into both columns is the content-mangling #195 exists to stop.
-        var titleInput = request?.Title ?? LocalizedInput.FromBare(template.Name);
-        if (!titleInput.TryResolve(language, "title", out var titleEn, out var titleEs, out var titleError))
+        // Falls back to the template's name. Since #210 that name is a pair, and the pair
+        // crosses over verbatim -- BOTH halves, as the questions do -- rather than being
+        // attributed as one bare string was. For a survey authored in 'both' the template
+        // must actually be named in both, and the 400 tells the caller to send
+        // { "en": ..., "es": ... }: filing one half into both columns is the
+        // content-mangling #195 exists to stop.
+        string? titleEn;
+        string? titleEs;
+        if (request?.Title is { } titleInput)
         {
-            return Results.Json(new { message = titleError }, statusCode: 400);
+            if (!titleInput.TryResolve(language, "title", out titleEn, out titleEs, out var titleError))
+            {
+                return Results.Json(new { message = titleError }, statusCode: 400);
+            }
+        }
+        else
+        {
+            titleEn = template.NameEn;
+            titleEs = template.NameEs;
+            if (language == ContentLanguages.Both && (string.IsNullOrWhiteSpace(titleEn) || string.IsNullOrWhiteSpace(titleEs)))
+            {
+                return Results.Json(
+                    new { message = "'title' was not supplied and this template's name is not authored in both languages. Send { \"en\": ..., \"es\": ... }" },
+                    statusCode: 400);
+            }
         }
 
         if (string.IsNullOrWhiteSpace(titleEn) && string.IsNullOrWhiteSpace(titleEs))
@@ -531,8 +570,8 @@ public static class SurveyTemplateEndpoints
             return Results.Json(new { message = "Title is required" }, statusCode: 400);
         }
 
-        string? descriptionEn = null;
-        string? descriptionEs = null;
+        string? descriptionEn;
+        string? descriptionEs;
         if (request?.Description is not null)
         {
             if (!request.Description.TryResolve(language, "description", out descriptionEn, out descriptionEs, out var descriptionError))
@@ -540,19 +579,13 @@ public static class SurveyTemplateEndpoints
                 return Results.Json(new { message = descriptionError }, statusCode: 400);
             }
         }
-        else if (ContentLanguages.SingleLocaleOf(language) is string singleLocale)
+        else
         {
-            // Description is optional, so an un-attributable template description is left
-            // out rather than 400'd: refusing to create the survey over a field the caller
-            // never asked for would be the validation getting in its own way.
-            if (singleLocale == ContentLanguages.Spanish)
-            {
-                descriptionEs = template.Description;
-            }
-            else
-            {
-                descriptionEn = template.Description;
-            }
+            // Optional, so the template's pair simply crosses over. A bilingual survey made
+            // from a template described in one language is a draft the publish gate will
+            // ask to finish, not a refusal over a field the caller never mentioned.
+            descriptionEn = template.DescriptionEn;
+            descriptionEs = template.DescriptionEs;
         }
 
         var type = request?.Type?.Trim();
@@ -691,6 +724,12 @@ public static class SurveyTemplateEndpoints
         var locale = SurveyContent.ResolveRequestLocale(lang, contentLanguage);
         var fallbackFields = new List<string>();
 
+        // The catalogue metadata first (#210), then the questions: a reader who sees
+        // "name" in FallbackFields knows the heading, not only the questions, reached for
+        // the other language.
+        var name = AuthoredContent.Resolve(template.NameEn, template.NameEs, locale, "name", fallbackFields) ?? string.Empty;
+        var description = AuthoredContent.Resolve(template.DescriptionEn, template.DescriptionEs, locale, "description", fallbackFields) ?? string.Empty;
+
         var questionDtos = questions.Select(question =>
         {
             var path = $"questions[{question.Order}]";
@@ -724,8 +763,8 @@ public static class SurveyTemplateEndpoints
 
         return new SurveyTemplateDetail(
             template.Id,
-            template.Name,
-            template.Description,
+            name,
+            description,
             template.Category,
             template.Industry,
             template.CompanySize,

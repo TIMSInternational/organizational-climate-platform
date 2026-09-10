@@ -42,8 +42,8 @@ public class BenchmarkTests(PostgresContainerFixture postgres)
         var priorPeriod = new Benchmark
         {
             Id = Guid.NewGuid(),
-            Name = "2025 Engagement Benchmark",
-            Description = "Prior period industry benchmark",
+            NameEn = "2025 Engagement Benchmark",
+            DescriptionEn = "Prior period industry benchmark",
             Type = "industry",
             Category = "engagement",
             Source = "external-survey-2025",
@@ -57,8 +57,8 @@ public class BenchmarkTests(PostgresContainerFixture postgres)
         var current = new Benchmark
         {
             Id = Guid.NewGuid(),
-            Name = "2026 Engagement Benchmark",
-            Description = "Current period industry benchmark",
+            NameEn = "2026 Engagement Benchmark",
+            DescriptionEn = "Current period industry benchmark",
             Type = "industry",
             Category = "engagement",
             Source = "external-survey-2026",
@@ -134,7 +134,7 @@ public class BenchmarkTests(PostgresContainerFixture postgres)
         var now = DateTimeOffset.UtcNow;
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO benchmarks ("Id", name, description, type, category, source, created_by, created_at, updated_at)
+             INSERT INTO benchmarks ("Id", name_en, description_en, type, category, source, created_by, created_at, updated_at)
              VALUES ({minimalBenchmarkId}, {"Minimal"}, {"Minimal desc"}, {"internal"}, {"engagement"}, {"survey"}, {user.Id}, {now}, {now})
              """);
 

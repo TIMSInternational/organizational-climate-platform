@@ -889,7 +889,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
         Guid companyId, Guid createdBy, string? pattern, DateTimeOffset nextGeneration) => new()
         {
             Id = Guid.NewGuid(),
-            Title = "Monthly climate report",
+            TitleEn = "Monthly climate report",
             Type = "climate",
             CompanyId = companyId,
             CreatedBy = createdBy,

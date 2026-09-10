@@ -28,8 +28,8 @@ public class SurveyTemplateInstantiationTests
         var template = new SurveyTemplate
         {
             Id = TemplateId,
-            Name = "Standard Climate Instrument",
-            Description = "The 2026 baseline",
+            NameEn = "Standard Climate Instrument",
+            DescriptionEn = "The 2026 baseline",
             Category = "general_climate",
             CompanyId = null,
             UsageCount = 12,

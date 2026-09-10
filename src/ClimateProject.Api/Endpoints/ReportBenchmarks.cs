@@ -1,3 +1,4 @@
+using ClimateProject.Application.Localization;
 using ClimateProject.Application.Reports;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -51,19 +52,31 @@ internal static class ReportBenchmarks
     {
         ArgumentNullException.ThrowIfNull(db);
 
-        var benchmarks = await BenchmarkEndpoints
-            .ReadableBy(db.Benchmarks.AsNoTracking(), companyId)
-            .Where(b => b.IsActive)
+        // The report is generated once, in the company's own language (#210): a benchmark
+        // named only in the other language falls back and is printed as it is, rather than
+        // as a blank. Company rows are read by everyone who reads the report, so this is the
+        // one locale that fits every reader.
+        var companyLanguage = await db.Companies
+            .Where(c => c.Id == companyId)
+            .Select(c => c.Settings.Language)
+            .FirstOrDefaultAsync(cancellationToken);
+        var locale = ContentLanguages.SingleLocaleOf(companyLanguage) ?? ContentLanguages.FallbackLocale;
+
+        var benchmarks = (await BenchmarkEndpoints
+                .ReadableBy(db.Benchmarks.AsNoTracking(), companyId)
+                .Where(b => b.IsActive)
+                .ToListAsync(cancellationToken))
             // Name then Id: the list route orders by name alone, which leaves two
             // same-named benchmarks free to swap places between two generations of the
             // same report. A document that gets diffed against last month's copy must not
             // move its own rows around.
-            .OrderBy(b => b.Name)
-            .ThenBy(b => b.Id)
-            .ToListAsync(cancellationToken);
+            .Select(b => (Benchmark: b, Name: AuthoredContent.ResolveRequired(b.NameEn, b.NameEs, locale)))
+            .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.Benchmark.Id)
+            .ToList();
 
         var sections = new List<ReportBenchmarkComparison>(benchmarks.Count);
-        foreach (var benchmark in benchmarks)
+        foreach (var (benchmark, name) in benchmarks)
         {
             var metrics = (await BenchmarkPriorPeriod.LoadMetricsAsync(db, benchmark.Id, cancellationToken))
                 .ToList();
@@ -76,11 +89,12 @@ internal static class ReportBenchmarks
                 benchmark,
                 metrics,
                 priorCompanyId => BenchmarkEndpoints.CanCompanyReadBenchmark(companyId, priorCompanyId),
+                locale,
                 cancellationToken);
 
             sections.Add(new ReportBenchmarkComparison(
                 benchmark.Id,
-                benchmark.Name,
+                name,
                 benchmark.Category,
                 benchmark.Type,
                 benchmark.CompanyId,

@@ -10,8 +10,10 @@ public class ReportConfiguration : IEntityTypeConfiguration<Report>
     {
         builder.ToTable("reports");
         builder.HasKey(r => r.Id);
-        builder.Property(r => r.Title).HasColumnName("title").HasMaxLength(200).IsRequired();
-        builder.Property(r => r.Description).HasColumnName("description").HasMaxLength(1000);
+        builder.Property(r => r.TitleEn).HasColumnName("title_en").HasMaxLength(200);
+        builder.Property(r => r.TitleEs).HasColumnName("title_es").HasMaxLength(200);
+        builder.Property(r => r.DescriptionEn).HasColumnName("description_en").HasMaxLength(1000);
+        builder.Property(r => r.DescriptionEs).HasColumnName("description_es").HasMaxLength(1000);
         builder.Property(r => r.Type).HasColumnName("type").HasMaxLength(30).IsRequired();
         builder.Property(r => r.CompanyId).HasColumnName("company_id").IsRequired();
         builder.Property(r => r.CreatedBy).HasColumnName("created_by").IsRequired();

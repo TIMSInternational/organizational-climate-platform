@@ -1,3 +1,4 @@
+using ClimateProject.Application.Localization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -83,7 +84,7 @@ public class ActionPlanTemplateEndpointsTests : IAsyncLifetime
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
-        Assert.False(await db.ActionPlanTemplates.AnyAsync(t => t.Name == "Malicious system template"));
+        Assert.False(await db.ActionPlanTemplates.AnyAsync(t => t.NameEn == "Malicious system template"));
     }
 
     [Fact]
@@ -100,8 +101,8 @@ public class ActionPlanTemplateEndpointsTests : IAsyncLifetime
             db.ActionPlanTemplates.Add(new ActionPlanTemplate
             {
                 Id = Guid.NewGuid(),
-                Name = "System template",
-                Description = "Built-in",
+                NameEn = "System template",
+                DescriptionEn = "Built-in",
                 Category = "general",
                 CompanyId = null,
                 CreatedBy = systemUserId,
@@ -119,5 +120,45 @@ public class ActionPlanTemplateEndpointsTests : IAsyncLifetime
         var listResponse = await client.GetAsync($"/action-plan-templates?companyId={_companyId}");
         var list = await listResponse.Content.ReadFromJsonAsync<ActionPlanTemplateListResponse>();
         Assert.Contains(list!.Templates, t => t.Name == "System template");
+    }
+
+
+    // ------------------------------------------------------------------
+    // #210 -- name and description are paired columns
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_bilingual_template_lists_in_the_readers_locale_and_a_bare_one_is_attributed_to_the_company()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var bilingual = await client.PostAsJsonAsync("/action-plan-templates", new CreateActionPlanTemplateRequest(
+            LocalizedInput.FromLocales(new Dictionary<string, string?> { ["en"] = "Onboarding", ["es"] = "Incorporación" }),
+            LocalizedInput.FromLocales(new Dictionary<string, string?> { ["en"] = "Standard plan", ["es"] = "Plan estándar" }),
+            "hr", _companyId, null));
+        Assert.Equal(HttpStatusCode.Created, bilingual.StatusCode);
+        var bilingualId = (await bilingual.Content.ReadFromJsonAsync<ActionPlanTemplateDetail>())!.Id;
+
+        var bare = await client.PostAsJsonAsync("/action-plan-templates", new CreateActionPlanTemplateRequest(
+            "Retention", "Keep the people we have", "hr", _companyId, null));
+        Assert.Equal(HttpStatusCode.Created, bare.StatusCode);
+        var bareId = (await bare.Content.ReadFromJsonAsync<ActionPlanTemplateDetail>())!.Id;
+
+        var inSpanish = await (await client.GetAsync($"/action-plan-templates?companyId={_companyId}&lang=es")).Content.ReadFromJsonAsync<ActionPlanTemplateListResponse>();
+        Assert.Equal("Incorporación", inSpanish!.Templates.Single(t => t.Id == bilingualId).Name);
+
+        // The bare one landed in the company's language (English here), so a Spanish reader
+        // gets the English text and is told so.
+        var fallen = inSpanish.Templates.Single(t => t.Id == bareId);
+        Assert.Equal("Retention", fallen.Name);
+        Assert.Contains("name", fallen.FallbackFields);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var row = await db.ActionPlanTemplates.AsNoTracking().SingleAsync(t => t.Id == bareId);
+        Assert.Equal("Retention", row.NameEn);
+        Assert.Null(row.NameEs);
     }
 }

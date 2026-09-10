@@ -1,3 +1,5 @@
+using ClimateProject.Api.Infrastructure;
+using ClimateProject.Application.Localization;
 using System.Security.Claims;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Reports;
@@ -78,11 +80,12 @@ public static partial class BenchmarkEndpoints
     /// not a way to read one the caller could not read alone.
     /// </remarks>
     private static async Task<IResult> CompareAsync(
-        string? ids, Guid? baselineId, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+        string? ids, Guid? baselineId, string? lang, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         if (!Roles.Admin.Contains(currentUser.Role)) return Results.Forbid();
 
+        var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
         var requested = new List<Guid>();
         foreach (var raw in (ids ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
@@ -137,10 +140,10 @@ public static partial class BenchmarkEndpoints
             // The one subtraction, from #89's function, so the no-delta-across-units rule
             // holds here without being written a second time.
             var changes = BenchmarkPriorPeriod.BuildChanges(metricsById[id], baselineMetrics);
-            comparisons.Add(new BenchmarkComparisonEntry(Member(byId[id]), changes.Select(ToComparison).ToList()));
+            comparisons.Add(new BenchmarkComparisonEntry(Member(byId[id], locale), changes.Select(ToComparison).ToList()));
         }
 
-        return Results.Ok(new BenchmarkComparisonResult(Member(byId[baseline]), baselineMetrics, comparisons));
+        return Results.Ok(new BenchmarkComparisonResult(Member(byId[baseline], locale), baselineMetrics, comparisons));
     }
 
     /// <summary>
@@ -154,8 +157,8 @@ public static partial class BenchmarkEndpoints
     private static BenchmarkMetricComparisonDto ToComparison(BenchmarkMetricChangeDto change)
         => new(change.MetricName, change.Value, change.Unit, change.PriorValue, change.PriorUnit, change.Delta, change.ChangeRatio);
 
-    private static BenchmarkComparisonMember Member(Benchmark benchmark)
-        => new(benchmark.Id, benchmark.Name, benchmark.Category, benchmark.Type, benchmark.CompanyId,
+    private static BenchmarkComparisonMember Member(Benchmark benchmark, string locale)
+        => new(benchmark.Id, AuthoredContent.ResolveRequired(benchmark.NameEn, benchmark.NameEs, locale), benchmark.Category, benchmark.Type, benchmark.CompanyId,
             benchmark.Industry, benchmark.CompanySize, benchmark.Region);
 
     // -----------------------------------------------------------------------------------
@@ -182,7 +185,7 @@ public static partial class BenchmarkEndpoints
     /// </para>
     /// </remarks>
     private static async Task<IResult> TrendsAsync(
-        Guid id, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+        Guid id, string? lang, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         var subject = await db.Benchmarks.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
@@ -292,10 +295,12 @@ public static partial class BenchmarkEndpoints
             series.Add(new BenchmarkTrendSeries(name, points));
         }
 
+        var locale = ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale;
         return Results.Ok(new BenchmarkTrendResult(
             subject.Id,
-            subject.Name,
-            chain.Select(b => new BenchmarkTrendPeriod(b.Id, b.Name, b.CreatedAt, b.PriorPeriodStatus)).ToList(),
+            AuthoredContent.ResolveRequired(subject.NameEn, subject.NameEs, locale),
+            chain.Select(b => new BenchmarkTrendPeriod(
+                b.Id, AuthoredContent.ResolveRequired(b.NameEn, b.NameEs, locale), b.CreatedAt, b.PriorPeriodStatus)).ToList(),
             series,
             stopReason));
     }
@@ -341,6 +346,7 @@ public static partial class BenchmarkEndpoints
         string? category,
         string? type,
         Guid? benchmarkId,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -468,7 +474,7 @@ public static partial class BenchmarkEndpoints
         return Results.Ok(new BenchmarkIndustryResult(
             new BenchmarkIndustryFilters(industry, companySize, region, category, type),
             peerIds.Count,
-            subject is null ? null : Member(subject),
+            subject is null ? null : Member(subject, ContentLanguages.NormaliseLocale(lang) ?? ContentLanguages.FallbackLocale),
             aggregates,
             // The subject's own readings, whether or not the sector has anything in it. Without
             // them a company that is the first in its sector -- and every tenant on a fresh
@@ -789,6 +795,34 @@ public static partial class BenchmarkEndpoints
         var createdBy = await ResolveCurrentUserIdAsync(currentUser, db, cancellationToken);
         var now = DateTimeOffset.UtcNow;
 
+        // #210: a vendor file carries one string per field and no language, so each row is
+        // attributed the way a bare string on POST /admin/benchmarks is -- the owning
+        // company's language, or the importer's own for a global row. One lookup per
+        // distinct company rather than one per row.
+        var companyLanguages = new Dictionary<Guid, string?>();
+        foreach (var companyId in items.Select(i => i.CompanyId).OfType<Guid>().Distinct())
+        {
+            companyLanguages[companyId] = await db.Companies
+                .Where(c => c.Id == companyId)
+                .Select(c => c.Settings.Language)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        string? importerLanguage = null;
+        var importerLanguageResolved = false;
+        async Task<string> AttributionLocaleAsync(Guid? companyId)
+        {
+            var companyLanguage = companyId is Guid id ? companyLanguages.GetValueOrDefault(id) : null;
+            if (ContentLanguages.SingleLocaleOf(companyLanguage) is string single) return single;
+            if (!importerLanguageResolved)
+            {
+                importerLanguage = await ActingUserResolver.ResolveDisplayLanguageAsync(currentUser, db, cancellationToken);
+                importerLanguageResolved = true;
+            }
+
+            return AuthoredContent.AttributionLocale(null, companyLanguage, importerLanguage);
+        }
+
         var summaries = new List<ImportedBenchmarkSummary>(items.Count);
         var benchmarks = new List<Benchmark>(items.Count);
         var metrics = new List<BenchmarkMetric>();
@@ -812,11 +846,17 @@ public static partial class BenchmarkEndpoints
                 itemMetrics.Select(m => new BenchmarkMetricDto(m.Id, m.MetricName, m.Value, m.Unit, m.Percentile, m.SampleSize)).ToList(),
                 item.Industry, item.CompanySize, item.Region);
 
+            var attribution = await AttributionLocaleAsync(item.CompanyId);
+            var name = AuthoredWrites.Apply(LocalizedInput.FromBare(item.Name), attribution, "name", string.Empty, required: false, null, null);
+            var description = AuthoredWrites.Apply(LocalizedInput.FromBare(item.Description), attribution, "description", string.Empty, required: false, null, null);
+
             benchmarks.Add(new Benchmark
             {
                 Id = id,
-                Name = item.Name.Trim(),
-                Description = item.Description.Trim(),
+                NameEn = name.En,
+                NameEs = name.Es,
+                DescriptionEn = description.En,
+                DescriptionEs = description.Es,
                 Type = item.Type.Trim(),
                 Category = item.Category.Trim(),
                 Source = item.Source.Trim(),

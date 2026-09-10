@@ -138,8 +138,13 @@ public class SurveyTemplateEndpointsTests : IAsyncLifetime
         var template = (await response.Content.ReadFromJsonAsync<SurveyTemplateDetail>())!;
 
         Assert.Equal(ContentLanguages.Spanish, template.ResolvedLocale);
-        Assert.Empty(template.FallbackFields);
         Assert.Equal("Estas satisfecho?", template.Questions.Single(q => q.Order == 0).Text);
+
+        // The fixture's QUESTIONS are bilingual and none of them falls back. Its NAME and
+        // description were sent as bare strings under 'both', which #210 files under the
+        // company's language (English here) rather than refusing -- so the heading, and only
+        // the heading, reports that it reached for the other language.
+        Assert.Equal(["name", "description"], template.FallbackFields);
     }
 
     [Fact]
@@ -267,7 +272,7 @@ public class SurveyTemplateEndpointsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
         var stored = await _harness.WithDbAsync(db => db.SurveyTemplates.FirstAsync(t => t.Id == global.Id));
-        Assert.Equal("Standard Climate Instrument", stored.Name);
+        Assert.Equal("Standard Climate Instrument", stored.NameEn);
     }
 
     [Fact]
@@ -631,5 +636,135 @@ public class SurveyTemplateEndpointsTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("not found", await response.Content.ReadAsStringAsync());
+    }
+
+
+    // ------------------------------------------------------------------
+    // #210 -- the template's own name and description are paired columns
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_bare_name_in_a_Spanish_company_is_filed_as_Spanish_and_reads_back_in_Spanish_from_both_locales()
+    {
+        var spanishCompany = await _harness.SeedCompanyAsync("ES Template Co", ContentLanguages.Spanish);
+        var client = await _harness.ClientAsync(Roles.CompanyAdmin, spanishCompany);
+
+        var created = await CreateAsync(client, new CreateSurveyTemplateRequest(
+            Name: "Instrumento de clima",
+            Description: "La línea base",
+            Category: "general_climate",
+            CompanyId: spanishCompany));
+
+        // Filed under the company's language, never under English by default.
+        var row = await _harness.WithDbAsync(db => db.SurveyTemplates.AsNoTracking().SingleAsync(t => t.Id == created.Id));
+        Assert.Null(row.NameEn);
+        Assert.Equal("Instrumento de clima", row.NameEs);
+        Assert.Null(row.DescriptionEn);
+        Assert.Equal("La línea base", row.DescriptionEs);
+
+        var spanish = await (await client.GetAsync($"/survey-templates/{created.Id}?lang=es")).Content.ReadFromJsonAsync<SurveyTemplateDetail>();
+        Assert.Equal("Instrumento de clima", spanish!.Name);
+        Assert.DoesNotContain("name", spanish.FallbackFields);
+
+        // Asked for in English, the heading falls back to its own Spanish and SAYS so --
+        // the requirement's "no untranslated strings" is a statement, not a substitution.
+        var english = await (await client.GetAsync($"/survey-templates/{created.Id}?lang=en")).Content.ReadFromJsonAsync<SurveyTemplateDetail>();
+        Assert.Equal("Instrumento de clima", english!.Name);
+        Assert.Equal("La línea base", english.Description);
+        Assert.Contains("name", english.FallbackFields);
+        Assert.Contains("description", english.FallbackFields);
+    }
+
+    [Fact]
+    public async Task A_locale_keyed_name_stores_both_halves_and_each_locale_reads_and_searches_its_own()
+    {
+        var client = await AdminAsync();
+        var created = await CreateAsync(client, new CreateSurveyTemplateRequest(
+            Name: Both("Climate instrument", "Instrumento de clima"),
+            Description: Both("The baseline", "La línea base"),
+            Category: "general_climate",
+            CompanyId: _companyId));
+
+        var english = await (await client.GetAsync($"/survey-templates/{created.Id}?lang=en")).Content.ReadFromJsonAsync<SurveyTemplateDetail>();
+        var spanish = await (await client.GetAsync($"/survey-templates/{created.Id}?lang=es")).Content.ReadFromJsonAsync<SurveyTemplateDetail>();
+        Assert.Equal("Climate instrument", english!.Name);
+        Assert.Equal("Instrumento de clima", spanish!.Name);
+        Assert.Empty(english.FallbackFields);
+        Assert.Empty(spanish.FallbackFields);
+
+        // The list resolves too, and the free-text search reaches the Spanish half.
+        var listed = await (await client.GetAsync("/survey-templates?lang=es&q=Instrumento%20de")).Content.ReadFromJsonAsync<SurveyTemplateListResponse>();
+        var item = Assert.Single(listed!.Templates, t => t.Id == created.Id);
+        Assert.Equal("Instrumento de clima", item.Name);
+        Assert.Equal("La línea base", item.Description);
+    }
+
+    [Fact]
+    public async Task Updating_with_a_bare_string_rewrites_one_half_and_leaves_the_other_alone()
+    {
+        var client = await AdminAsync();
+        var created = await CreateAsync(client, new CreateSurveyTemplateRequest(
+            Name: Both("Climate instrument", "Instrumento de clima"),
+            Description: Both("The baseline", "La línea base"),
+            Category: "general_climate",
+            CompanyId: _companyId));
+
+        // The template is authored in both, so a bare string falls through to the company's
+        // language -- English for this tenant -- and the Spanish half is untouched.
+        var response = await client.PutAsJsonAsync($"/survey-templates/{created.Id}", new UpdateSurveyTemplateRequest(Name: "Climate instrument v2"));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var row = await _harness.WithDbAsync(db => db.SurveyTemplates.AsNoTracking().SingleAsync(t => t.Id == created.Id));
+        Assert.Equal("Climate instrument v2", row.NameEn);
+        Assert.Equal("Instrumento de clima", row.NameEs);
+
+        // And un-authoring the last language is refused, the way a blank name always was.
+        var blanked = await client.PutAsJsonAsync($"/survey-templates/{created.Id}", new UpdateSurveyTemplateRequest(Name: Both("", "")));
+        Assert.Equal(HttpStatusCode.BadRequest, blanked.StatusCode);
+        Assert.Contains("Name is required", await blanked.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task A_bare_name_is_attributed_not_refused_when_the_company_is_bilingual()
+    {
+        // Tier 1 refuses a bare question under 'both'. The template's own name is admin-facing
+        // and every existing form sends it bare, so it lands in the author's own language
+        // instead -- the English this test account reads the product in.
+        var bilingualCompany = await _harness.SeedCompanyAsync("Both Co", ContentLanguages.Both);
+        var client = await _harness.ClientAsync(Roles.CompanyAdmin, bilingualCompany);
+
+        var response = await client.PostAsJsonAsync("/survey-templates", new CreateSurveyTemplateRequest(
+            Name: "Named once",
+            Description: "Described once",
+            Category: "general_climate",
+            CompanyId: bilingualCompany,
+            Language: ContentLanguages.Both));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<SurveyTemplateDetail>();
+        var row = await _harness.WithDbAsync(db => db.SurveyTemplates.AsNoTracking().SingleAsync(t => t.Id == created!.Id));
+        Assert.Equal("Named once", row.NameEn);
+        Assert.Null(row.NameEs);
+    }
+
+    [Fact]
+    public async Task Instantiating_carries_the_templates_name_pair_over_verbatim()
+    {
+        var client = await AdminAsync();
+        var created = await CreateAsync(client, new CreateSurveyTemplateRequest(
+            Name: Both("Climate instrument", "Instrumento de clima"),
+            Description: Both("The baseline", "La línea base"),
+            Category: "general_climate",
+            CompanyId: _companyId,
+            Questions: [new CreateSurveyTemplateQuestionInput(Both("Are you satisfied?", "Estas satisfecho?"), QuestionTypes.YesNo)]));
+
+        // No title sent: both halves of the name become both halves of the title, so a
+        // bilingual survey is not refused and nothing is filed under the wrong language.
+        var survey = await UseAsync(client, created.Id, new UseSurveyTemplateRequest(Language: ContentLanguages.Both));
+        var row = await _harness.WithDbAsync(db => db.Surveys.AsNoTracking().SingleAsync(s => s.Id == survey.Id));
+        Assert.Equal("Climate instrument", row.TitleEn);
+        Assert.Equal("Instrumento de clima", row.TitleEs);
+        Assert.Equal("The baseline", row.DescriptionEn);
+        Assert.Equal("La línea base", row.DescriptionEs);
     }
 }

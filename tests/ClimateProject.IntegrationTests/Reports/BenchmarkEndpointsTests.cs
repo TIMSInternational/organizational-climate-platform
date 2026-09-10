@@ -1,3 +1,4 @@
+using ClimateProject.Application.Localization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -319,5 +320,47 @@ public class BenchmarkEndpointsTests : IAsyncLifetime
             var stored = await db.Benchmarks.AsNoTracking().FirstAsync(b => b.Id == created!.Id);
             Assert.Equal(colliderId, stored.CreatedBy);
         }
+    }
+
+
+    // ------------------------------------------------------------------
+    // #210 -- name and description are paired columns
+    // ------------------------------------------------------------------
+
+    private static LocalizedInput Both(string en, string es)
+        => LocalizedInput.FromLocales(new Dictionary<string, string?> { ["en"] = en, ["es"] = es });
+
+    [Fact]
+    public async Task The_list_is_ordered_by_the_name_the_reader_sees_and_a_bare_update_keeps_the_other_half()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // Cross-ordered on purpose: first in English is last in Spanish.
+        var zulu = await (await client.PostAsJsonAsync("/admin/benchmarks", new CreateBenchmarkRequest(
+            Both("Zulu engagement", "Alfa compromiso"), Both("d", "d"), "industry", "engagement", "internal", null, null, null, _companyAId, null)))
+            .Content.ReadFromJsonAsync<BenchmarkDetail>();
+        var alpha = await (await client.PostAsJsonAsync("/admin/benchmarks", new CreateBenchmarkRequest(
+            Both("Alpha engagement", "Zeta compromiso"), Both("d", "d"), "industry", "engagement", "internal", null, null, null, _companyAId, null)))
+            .Content.ReadFromJsonAsync<BenchmarkDetail>();
+
+        var english = await (await client.GetAsync("/admin/benchmarks?lang=en")).Content.ReadFromJsonAsync<List<BenchmarkListItem>>();
+        var spanish = await (await client.GetAsync("/admin/benchmarks?lang=es")).Content.ReadFromJsonAsync<List<BenchmarkListItem>>();
+        var ours = new[] { zulu!.Id, alpha!.Id };
+
+        Assert.Equal(["Alpha engagement", "Zulu engagement"], english!.Where(b => ours.Contains(b.Id)).Select(b => b.Name).ToList());
+        Assert.Equal(["Alfa compromiso", "Zeta compromiso"], spanish!.Where(b => ours.Contains(b.Id)).Select(b => b.Name).ToList());
+
+        var updated = await client.PutAsJsonAsync($"/admin/benchmarks/{zulu.Id}", new UpdateBenchmarkRequest("Zulu engagement 2026", "d", null, null, null));
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        var detail = await (await client.GetAsync($"/admin/benchmarks/{zulu.Id}?lang=es")).Content.ReadFromJsonAsync<BenchmarkDetail>();
+        Assert.Equal("Alfa compromiso", detail!.Name);
+        Assert.Empty(detail.FallbackFields);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+        var row = await db.Benchmarks.AsNoTracking().SingleAsync(b => b.Id == zulu.Id);
+        Assert.Equal(("Zulu engagement 2026", "Alfa compromiso"), (row.NameEn, row.NameEs));
     }
 }

@@ -1,3 +1,5 @@
+using ClimateProject.Application.Localization;
+
 namespace ClimateProject.Application.Reports;
 
 public sealed record BenchmarkMetricDto(Guid Id, string MetricName, double Value, string Unit, double? Percentile, int? SampleSize);
@@ -24,7 +26,10 @@ public sealed record BenchmarkDetail(
     // Null unless PriorPeriodStatus is `linked` AND the caller may read the linked row. A
     // CompanyAdmin can only ever link within their own tenant, but a SuperAdmin-authored
     // global chain is readable by everyone, so the read check still runs.
-    BenchmarkPriorPeriodDto? PriorPeriod);
+    BenchmarkPriorPeriodDto? PriorPeriod,
+    // #210: Name and Description arrive resolved for the request's locale; this names the
+    // ones that had to reach for the other language.
+    IReadOnlyList<string> FallbackFields);
 
 /// <summary>
 /// The prior period a benchmark links to, with this benchmark's metrics already read against
@@ -73,7 +78,7 @@ public sealed record BenchmarkMetricChangeDto(
     double? ChangeRatio);
 
 public sealed record CreateBenchmarkRequest(
-    string Name, string Description, string Type, string Category, string Source,
+    LocalizedInput? Name, LocalizedInput? Description, string Type, string Category, string Source,
     string? Industry, string? CompanySize, string? Region, Guid? CompanyId, Guid? PriorPeriodBenchmarkId);
 
 // Deliberately narrower than CreateBenchmarkRequest: Type, Category, Source, CompanyId, and
@@ -86,7 +91,7 @@ public sealed record CreateBenchmarkRequest(
 // own route (PUT /admin/benchmarks/{id}/prior-period) rather than being folded in here,
 // because linking has validation this request has no business carrying: scope, category,
 // type and cycle checks, plus the third state that has no pointer to put in a field.
-public sealed record UpdateBenchmarkRequest(string Name, string Description, string? Industry, string? CompanySize, string? Region);
+public sealed record UpdateBenchmarkRequest(LocalizedInput? Name, LocalizedInput? Description, string? Industry, string? CompanySize, string? Region);
 
 public sealed record AddBenchmarkMetricRequest(string MetricName, double Value, string Unit, double? Percentile, int? SampleSize);
 

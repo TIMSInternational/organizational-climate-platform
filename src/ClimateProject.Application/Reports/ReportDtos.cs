@@ -1,3 +1,4 @@
+using ClimateProject.Application.Localization;
 using ClimateProject.Application.Scheduling;
 using ClimateProject.Application.Surveys;
 
@@ -185,7 +186,10 @@ public sealed record ReportDetail(
     Guid Id, string Title, string? Description, string Type, Guid CompanyId, Guid CreatedBy,
     string? TemplateId, string Status, string Format, string? ReportOutput, int DownloadCount,
     DateTimeOffset? GenerationStartedAt, DateTimeOffset? GenerationCompletedAt, DateTimeOffset CreatedAt,
-    bool IsRecurring, string? RecurrencePattern, DateTimeOffset? NextGeneration);
+    bool IsRecurring, string? RecurrencePattern, DateTimeOffset? NextGeneration,
+    // #210: Title and Description arrive resolved for the request's locale; this names the
+    // ones that had to reach for the other language.
+    IReadOnlyList<string> FallbackFields);
 
 /// <summary>
 /// What a report is told to include (#88's "report configuration and filter model").
@@ -235,8 +239,8 @@ public sealed record ReportScope(
     bool ComparisonIncluded);
 
 public sealed record CreateReportRequest(
-    string Title,
-    string? Description,
+    LocalizedInput? Title,
+    LocalizedInput? Description,
     string Type,
     Guid CompanyId,
     string Format,

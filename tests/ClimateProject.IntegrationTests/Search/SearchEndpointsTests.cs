@@ -176,8 +176,8 @@ public class SearchEndpointsTests : IAsyncLifetime
             Id = Guid.NewGuid(),
             CompanyId = companyId,
             CreatedBy = ownerId,
-            Title = $"{tag} onboarding overhaul",
-            Description = "Rework the first week",
+            TitleEn = $"{tag} onboarding overhaul",
+            DescriptionEn = "Rework the first week",
             DueDate = now.AddDays(30),
             CreatedAt = now,
             UpdatedAt = now,
@@ -187,7 +187,7 @@ public class SearchEndpointsTests : IAsyncLifetime
             Id = Guid.NewGuid(),
             CompanyId = companyId,
             CreatedBy = ownerId,
-            Title = $"{tag} quarterly summary",
+            TitleEn = $"{tag} quarterly summary",
             Type = "summary",
             Format = "pdf",
             CreatedAt = now,
@@ -774,5 +774,50 @@ public class SearchEndpointsTests : IAsyncLifetime
         }
 
         return string.Join('\n', lines);
+    }
+
+
+    // ------------------------------------------------------------------
+    // #210 -- a plan or report titled in one language is still findable and never blank
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_plan_titled_only_in_Spanish_is_found_from_an_English_session_and_returned_in_Spanish()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var tag = $"solamente{Guid.NewGuid():N}";
+
+        Guid planId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var creator = await db.Users.Where(u => u.CompanyId == _companyAId).OrderByDescending(u => u.CreatedAt).FirstAsync();
+            var now = DateTimeOffset.UtcNow;
+            var plan = new ActionPlan
+            {
+                Id = Guid.NewGuid(),
+                TitleEs = $"{tag} plan de acción",
+                DescriptionEs = "Sólo en español",
+                CompanyId = _companyAId,
+                CreatedBy = creator.Id,
+                DueDate = now.AddDays(30),
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            db.ActionPlans.Add(plan);
+            await db.SaveChangesAsync();
+            planId = plan.Id;
+        }
+
+        // The vector is generated over both halves, so the Spanish-only title is indexed;
+        // and with no declared language the endpoint infers Spanish from the pair, so the
+        // hit is returned rather than dropped as "absent in English".
+        var response = await client.GetAsync($"/search?q={tag}&lang=en");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = (await response.Content.ReadFromJsonAsync<SearchResponse>())!;
+
+        var hit = Assert.Single(Group(body, SearchEntityTypes.ActionPlan), i => i.Id == planId);
+        Assert.Equal($"{tag} plan de acción", hit.Title);
+        Assert.Equal("Sólo en español", hit.Subtitle);
     }
 }

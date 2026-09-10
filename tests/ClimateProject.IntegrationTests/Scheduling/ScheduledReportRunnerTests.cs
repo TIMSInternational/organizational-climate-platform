@@ -124,7 +124,7 @@ public class ScheduledReportRunnerTests(PostgresContainerFixture postgres)
         var report = new Report
         {
             Id = Guid.NewGuid(),
-            Title = "Monthly climate report",
+            TitleEn = "Monthly climate report",
             Type = "climate_summary",
             CompanyId = company.Id,
             CreatedBy = creator.Id,

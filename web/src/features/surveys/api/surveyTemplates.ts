@@ -20,16 +20,19 @@ import type { SurveyDetail } from './surveys'
  * Template *questions* are localized the usual #195 way: already resolved, with
  * `resolvedLocale` naming the language the text is actually in.
  *
- * `name`, `description` and `category` are **not**. `survey_templates.name` and
- * `.description` are single `text` columns -- #195 gave paired `_en`/`_es` treatment to
- * `template_questions` only -- so a template's catalogue metadata is currently
- * monolingual however its questions are authored. That is a real parity gap the
- * endpoint documents rather than fakes, and it is why `SurveyTemplateDetail.language`
- * describes the *questions* and not the name above them.
+ * `name` and `description` are localized the same way since #210 (`name_en`/`name_es`,
+ * `description_en`/`description_es`), resolved server-side and reported in
+ * `fallbackFields` as `name` / `description` when the heading had to reach for the other
+ * language. A bare string on write is attributed -- to the declared `language`, else the
+ * company's, else the author's own -- and `{ en, es }` is explicit; see
+ * `docs/decisions/author-content-i18n.md`. `category` is deliberately **not** localized:
+ * it is a facet key (the list filters on it, and instantiation copies it into
+ * `Survey.Type`), and a key that changed with the reader's locale would split its filter.
  *
  * `language` is **inferred from the question rows**, not stored: `survey_templates` has
  * no language column. So declaring one language at create time and supplying another's
- * text cannot produce a template that lies about itself.
+ * text cannot produce a template that lies about itself. It still describes the
+ * questions, which is what the publish gate reads; the name reports its own fallback.
  */
 
 export interface SurveyTemplateQuestionOption {

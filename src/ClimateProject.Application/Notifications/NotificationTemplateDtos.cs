@@ -85,7 +85,9 @@ public sealed record NotificationTemplateVariableInput(
     string? Name,
     string? Type,
     bool Required,
-    string? Description,
+    // #210: a bare string is attributed to the template's single language (or the author's
+    // display language for a global template); a locale-keyed object is explicit.
+    LocalizedInput? Description,
     string? DefaultValue);
 
 public sealed record NotificationPersonalizationRuleInput(string? Condition, string? Modifications);

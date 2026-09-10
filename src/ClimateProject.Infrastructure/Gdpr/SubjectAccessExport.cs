@@ -1,4 +1,5 @@
 using ClimateProject.Application.Gdpr;
+using ClimateProject.Application.Localization;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using ClimateProject.Infrastructure.Persistence.Configurations;
@@ -153,29 +154,31 @@ public static class SubjectAccessExport
             await MixedInvitationsAsync(db, id, email, companyScope, cancellationToken),
 
             // --- Actor: the subject as author, approver or manager ---------------------------
+            // Paired-column labels (#195/#210) are whichever half exists, English first: an
+            // access export has no reader locale, and a label is attribution, not content.
             await ReferencesAsync("Survey", "CreatedBy",
                 db.Surveys.Where(s => s.CreatedBy == id).Select(s => new Reference(s.Id, s.TitleEn)), cancellationToken),
             await ReferencesAsync("SurveyVersion", "CreatedBy",
                 db.SurveyVersions.Where(v => v.CreatedBy == id)
                     .Select(v => new Reference(v.Id, "version " + v.VersionNumber)), cancellationToken),
             await ReferencesAsync("SurveyTemplate", "CreatedBy",
-                db.SurveyTemplates.Where(t => t.CreatedBy == id).Select(t => new Reference(t.Id, t.Name)), cancellationToken),
+                db.SurveyTemplates.Where(t => t.CreatedBy == id).Select(t => new Reference(t.Id, t.NameEn ?? t.NameEs)), cancellationToken),
             await ReferencesAsync("SurveyDistribution", "LastRegeneratedBy",
                 db.SurveyDistributions.Where(d => d.LastRegeneratedBy == id)
                     .Select(d => new Reference(d.Id, d.AccessType)), cancellationToken),
             await ReferencesAsync("Microclimate", "CreatedBy",
                 db.Microclimates.Where(m => m.CreatedBy == id).Select(m => new Reference(m.Id, m.TitleEn)), cancellationToken),
             await ReferencesAsync("MicroclimateTemplate", "CreatedBy",
-                db.MicroclimateTemplates.Where(t => t.CreatedBy == id).Select(t => new Reference(t.Id, t.Name)), cancellationToken),
+                db.MicroclimateTemplates.Where(t => t.CreatedBy == id).Select(t => new Reference(t.Id, t.NameEn ?? t.NameEs)), cancellationToken),
             await ReferencesAsync("ActionPlan", "CreatedBy",
-                db.ActionPlans.Where(p => p.CreatedBy == id).Select(p => new Reference(p.Id, p.Title)), cancellationToken),
+                db.ActionPlans.Where(p => p.CreatedBy == id).Select(p => new Reference(p.Id, p.TitleEn ?? p.TitleEs)), cancellationToken),
             await ReferencesAsync("ActionPlanTemplate", "CreatedBy",
-                db.ActionPlanTemplates.Where(t => t.CreatedBy == id).Select(t => new Reference(t.Id, t.Name)), cancellationToken),
+                db.ActionPlanTemplates.Where(t => t.CreatedBy == id).Select(t => new Reference(t.Id, t.NameEn ?? t.NameEs)), cancellationToken),
             await ReferencesAsync("ActionPlanProgressUpdate", "UpdatedBy",
                 db.ActionPlanProgressUpdates.Where(u => u.UpdatedBy == id)
                     .Select(u => new Reference(u.Id, u.OverallNotes)), cancellationToken),
             await ReferencesAsync("Benchmark", "CreatedBy",
-                db.Benchmarks.Where(b => b.CreatedBy == id).Select(b => new Reference(b.Id, b.Name)), cancellationToken),
+                db.Benchmarks.Where(b => b.CreatedBy == id).Select(b => new Reference(b.Id, b.NameEn ?? b.NameEs)), cancellationToken),
             await ReferencesAsync("QuestionCategory", "CreatedBy",
                 db.QuestionCategories.Where(c => c.CreatedBy == id).Select(c => new Reference(c.Id, c.NameEn)), cancellationToken),
             await ReferencesAsync("QuestionBankItem", "CreatedBy",
@@ -393,11 +396,15 @@ public static class SubjectAccessExport
             reports = reports.Where(r => r.CompanyId == company);
         }
 
-        var authored = await reports.Where(r => r.CreatedBy == id)
-            .Select(r => new Reference(r.Id, r.Title)).ToListAsync(cancellationToken);
-        var shared = await reports
-            .Where(r => r.CreatedBy != id && (r.SharedWith.Contains(idText) || r.SharedWith.Contains(email)))
-            .Select(r => new Reference(r.Id, r.Title)).ToListAsync(cancellationToken);
+        // #210: the title is a pair; labelled in whichever language it was written, English
+        // first when both -- an access export has no reader locale of its own.
+        var authored = (await reports.Where(r => r.CreatedBy == id)
+                .Select(r => new { r.Id, r.TitleEn, r.TitleEs }).ToListAsync(cancellationToken))
+            .Select(r => new Reference(r.Id, AuthoredContent.ResolveText(r.TitleEn, r.TitleEs, null))).ToList();
+        var shared = (await reports
+                .Where(r => r.CreatedBy != id && (r.SharedWith.Contains(idText) || r.SharedWith.Contains(email)))
+                .Select(r => new { r.Id, r.TitleEn, r.TitleEs }).ToListAsync(cancellationToken))
+            .Select(r => new Reference(r.Id, AuthoredContent.ResolveText(r.TitleEn, r.TitleEs, null))).ToList();
 
         var records = authored.Select(r => ReferenceRecord(r, "CreatedBy"))
             .Concat(shared.Select(r => ReferenceRecord(r, "SharedWith")))
@@ -436,7 +443,8 @@ public static class SubjectAccessExport
             {
                 s.Id,
                 Minted = s.CreatedBy == id,
-                r.Title,
+                r.TitleEn,
+                r.TitleEs,
             })
             .ToListAsync(cancellationToken);
 
@@ -444,7 +452,7 @@ public static class SubjectAccessExport
         // person reading their export. A subject who both minted and revoked a link is filed
         // under minting, the stronger of the two facts about them.
         var records = shares
-            .Select(s => ReferenceRecord(new Reference(s.Id, s.Title), s.Minted ? "CreatedBy" : "RevokedBy"))
+            .Select(s => ReferenceRecord(new Reference(s.Id, AuthoredContent.ResolveText(s.TitleEn, s.TitleEs, null)), s.Minted ? "CreatedBy" : "RevokedBy"))
             .ToList();
 
         return Section("ReportShare", ExportTreatment.Reference, records);
