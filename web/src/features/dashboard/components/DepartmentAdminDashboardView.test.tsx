@@ -187,8 +187,9 @@ describe('DepartmentAdminDashboardView', () => {
       const headers = within(table)
         .getAllByRole('columnheader')
         .map((cell) => cell.textContent?.trim())
-      expect(headers).toContain('psychological_safety')
-      expect(headers).toContain('workload')
+      // Product slugs print their catalogued heading, as on the results page.
+      expect(headers).toContain('Psychological safety')
+      expect(headers).toContain('Workload')
 
       // The reading itself, to one decimal like every score in this product.
       expect(within(table).getByText('2.4')).toBeTruthy()
@@ -283,7 +284,7 @@ describe('DepartmentAdminDashboardView', () => {
         .getAllByRole('columnheader')
         .map((cell) => cell.textContent?.trim())
 
-      expect(headers).toContain('psychological_safety')
+      expect(headers).toContain('Psychological safety')
       expect(headers).not.toContain('workload')
       // And no zero anywhere in the grid, which is what `?? 0` would have put there.
       expect(within(table).queryByText('0.0')).toBeNull()

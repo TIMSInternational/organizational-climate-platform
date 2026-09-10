@@ -1410,4 +1410,40 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
         Assert.Contains("encuesta", notification.Title, StringComparison.OrdinalIgnoreCase);
         Assert.NotEmpty(notification.Message);
     }
+
+    [Fact]
+    public async Task The_guarantee_sentence_follows_the_lang_the_reader_asked_for()
+    {
+        // The sentence is authored by the server and rendered verbatim by the distribution
+        // page, so it has to follow `?lang` like every other string in the payload. It used to
+        // exist in English only, and a Spanish administrator read an English sentence over an
+        // otherwise Spanish screen. The machine-readable half does not move with the locale.
+        var client = await AdminAAsync();
+        var anonymousSurvey = await CreateActiveSurveyAsync(client, anonymous: true);
+        var employee = await SeedEmployeeAsync(_companyAId);
+        var result = await InviteAsync(client, anonymousSurvey.Id, new CreateSurveyInvitationsRequest(UserIds: [employee]));
+        var token = await TokenOfAsync(result.InvitationIds[0]);
+
+        var spanish = await client.GetFromJsonAsync<SurveyInvitationListResponse>(
+            $"/surveys/{anonymousSurvey.Id}/invitations?lang=es");
+        Assert.True(spanish!.Anonymity.Anonymous);
+        Assert.Contains("Esta encuesta es anónima", spanish.Anonymity.Guarantee);
+        Assert.DoesNotContain("anonymous", spanish.Anonymity.Guarantee);
+        Assert.Equal(SurveyInvitationStatuses.Opened, spanish.Anonymity.HighestRecordableState);
+
+        var english = await client.GetFromJsonAsync<SurveyInvitationListResponse>(
+            $"/surveys/{anonymousSurvey.Id}/invitations?lang=en");
+        Assert.Contains("This survey is anonymous", english!.Anonymity.Guarantee);
+
+        // The respondent-facing token surface follows the same `lang`.
+        var byToken = await Anonymous().GetFromJsonAsync<SurveyInvitationTokenDetail>($"/survey-invitations/{token}?lang=es");
+        Assert.Contains("Esta encuesta es anónima", byToken!.Anonymity.Guarantee);
+
+        // A named survey says so, in the reader's language too.
+        var namedSurvey = await CreateActiveSurveyAsync(client, anonymous: false);
+        var named = await client.GetFromJsonAsync<SurveyInvitationListResponse>(
+            $"/surveys/{namedSurvey.Id}/invitations?lang=es");
+        Assert.False(named!.Anonymity.Anonymous);
+        Assert.Contains("Esta encuesta no es anónima", named.Anonymity.Guarantee);
+    }
 }

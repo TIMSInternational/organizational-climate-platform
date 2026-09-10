@@ -78,13 +78,13 @@ export default function AnalyticsDashboardPage() {
     setBenchmarksLoading(true)
     setBenchmarksError(null)
     try {
-      setBenchmarks(await listBenchmarks(baseUrl, companyId))
+      setBenchmarks(await listBenchmarks(baseUrl, companyId, locale))
     } catch (err) {
       setBenchmarksError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setBenchmarksLoading(false)
     }
-  }, [baseUrl, companyId, t])
+  }, [baseUrl, companyId, locale, t])
 
   const reloadInsights = useCallback(async () => {
     if (!companyId) return

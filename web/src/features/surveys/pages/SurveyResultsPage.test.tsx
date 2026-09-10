@@ -615,7 +615,9 @@ describe('SurveyResultsPage', () => {
       ).getByRole('table', { name: 'Chart data as a table' })
 
       expect(within(map).getByRole('columnheader', { name: 'safety' })).toBeTruthy()
-      expect(within(map).getByRole('columnheader', { name: 'workload' })).toBeTruthy()
+      // `workload` is a product slug, so the heading is its catalogued English label;
+      // `safety` is not catalogued and prints as authored.
+      expect(within(map).getByRole('columnheader', { name: 'Workload' })).toBeTruthy()
       expect(within(map).getByRole('rowheader', { name: 'Operations' })).toBeTruthy()
       expect(within(map).getByRole('rowheader', { name: 'Legal' })).toBeTruthy()
     })
@@ -643,7 +645,7 @@ describe('SurveyResultsPage', () => {
       const findings = screen.getAllByRole('button', { name: /below the survey average/ })
       // Support/workload at 2.1 is 1.2 under the average of 3.3; Support/safety at
       // 3.1 is 0.2 under it. Operations is above on both and is not a finding.
-      expect(findings[0].textContent).toContain('Support — workload')
+      expect(findings[0].textContent).toContain('Support — Workload')
       expect(findings[0].textContent).toContain('1.2 below the survey average')
       expect(findings.map((finding) => finding.textContent)).not.toContain(
         expect.stringContaining('Operations'),
@@ -672,7 +674,7 @@ describe('SurveyResultsPage', () => {
       // workload 2.8 then safety 3.7, against their own mean of 3.3 -- a baseline
       // separate from the map's, and named as such.
       expect(rows.map((row) => within(row).getByRole('rowheader').textContent)).toEqual([
-        'workload',
+        'Workload',
         'safety',
       ])
       expect(within(rows[0]).getByText('Below')).toBeTruthy()

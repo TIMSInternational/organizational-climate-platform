@@ -89,9 +89,14 @@ describe('survey distribution API client', () => {
 
     await listSurveyInvitations(BASE_URL, 's1')
     await listSurveyInvitations(BASE_URL, 's1', { status: 'opened' })
+    await listSurveyInvitations(BASE_URL, 's1', { status: 'opened' }, 'es')
+    await listSurveyInvitations(BASE_URL, 's1', {}, 'es')
 
     expect(fetchMock.mock.calls[0][0]).toBe(`${BASE_URL}/surveys/s1/invitations`)
     expect(fetchMock.mock.calls[1][0]).toBe(`${BASE_URL}/surveys/s1/invitations?status=opened`)
+    // `lang` chooses the language of the server-authored guarantee sentence.
+    expect(fetchMock.mock.calls[2][0]).toBe(`${BASE_URL}/surveys/s1/invitations?status=opened&lang=es`)
+    expect(fetchMock.mock.calls[3][0]).toBe(`${BASE_URL}/surveys/s1/invitations?lang=es`)
   })
 
   it('sends exactly the selector it was given, and nothing else', async () => {

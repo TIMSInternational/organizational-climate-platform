@@ -23,6 +23,14 @@ describe('microclimates api client', () => {
     expect(result).toEqual([detail])
   })
 
+  it('passes lang through so the list titles come back in the reader\'s language', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ microclimates: [] }), { status: 200 }),
+    )
+    await listMicroclimates(baseUrl, 'c1', 'es')
+    expect(fetch).toHaveBeenCalledWith(`${baseUrl}/microclimates?companyId=c1&lang=es`, expect.anything())
+  })
+
   it('creates a microclimate', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 201 }))
     const result = await createMicroclimate(baseUrl, { title: 'Pulse', companyId: 'c1', startTime: '2026-01-01', endTime: '2026-01-02', targetParticipantCount: 10, anonymousResponses: true })

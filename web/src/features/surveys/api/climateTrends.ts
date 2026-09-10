@@ -115,6 +115,8 @@ export interface ClimateTrendsQuery {
   limit?: number
   /** SuperAdmin only. A CompanyAdmin naming another company is refused, not rescoped. */
   companyId?: string
+  /** The reader's locale: survey titles come back resolved for it, like every other list. */
+  lang?: string
 }
 
 export async function getClimateTrends(
@@ -125,6 +127,7 @@ export async function getClimateTrends(
   if (query.groupBy) params.set('groupBy', query.groupBy)
   if (query.limit !== undefined) params.set('limit', String(query.limit))
   if (query.companyId) params.set('companyId', query.companyId)
+  if (query.lang) params.set('lang', query.lang)
 
   const suffix = params.size > 0 ? `?${params}` : ''
   const response = await authFetch(`${baseUrl}/surveys/climate-trends${suffix}`)

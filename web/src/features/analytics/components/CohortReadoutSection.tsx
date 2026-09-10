@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router'
 import { getBenchmark, type Benchmark, type BenchmarkListItem } from '../api/benchmarks'
 import { listSurveys } from '../../surveys/api/surveys'
 import { getSurveyAnalytics } from '../../surveys/api/surveyResults'
+import { dimensionLabel } from '../../surveys/dimensionLabel'
 import { buildCohortReadout, type CohortReadout } from '../cohortReadout'
 import CohortDimensionBars from './CohortDimensionBars'
 import { KpiTile } from '../../../components/charts'
@@ -82,8 +83,8 @@ export default function CohortReadoutSection({
     ;(async () => {
       try {
         const [detail, surveys] = await Promise.all([
-          getBenchmark(baseUrl, chosenId),
-          listSurveys(baseUrl, { companyId, status: 'closed' }),
+          getBenchmark(baseUrl, chosenId, locale),
+          listSurveys(baseUrl, { companyId, status: 'closed' }, locale),
         ])
         // Most recently closed. `listSurveys` returns newest first for every other caller
         // on this screen's routes, but the order is sorted here rather than assumed.
@@ -109,7 +110,7 @@ export default function CohortReadoutSection({
     return () => {
       cancelled = true
     }
-  }, [baseUrl, chosenId, companyId])
+  }, [baseUrl, chosenId, companyId, locale])
 
   if (loading) return <SkeletonText lines={4} />
 
@@ -125,9 +126,9 @@ export default function CohortReadoutSection({
   const percentile = readout.percentile
   const dimensions = readout.dimensions.map((dimension) => ({
     key: dimension.key,
-    // The author's own wording, exactly as `SurveyResultsPage` treats a dimension key:
-    // these are not ours to translate.
-    label: dimension.key,
+    // Exactly as `SurveyResultsPage` prints a dimension key: the catalogued heading
+    // for the product's own slugs, the author's own wording otherwise.
+    label: dimensionLabel(dimension.key, t),
     score: dimension.score,
     cohortMedian: dimension.cohortMedian,
   }))

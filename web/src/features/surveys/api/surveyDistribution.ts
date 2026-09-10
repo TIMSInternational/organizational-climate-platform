@@ -269,8 +269,15 @@ export function listSurveyInvitations(
   baseUrl: string,
   surveyId: string,
   options: { status?: SurveyInvitationStatus } = {},
+  lang?: string,
 ): Promise<SurveyInvitationList> {
-  const query = options.status ? `?status=${encodeURIComponent(options.status)}` : ''
+  // `lang` decides the language of `anonymity.guarantee`, the sentence the server
+  // authors about how far invitation tracking goes. Without it the server answers in
+  // English, and the distribution page printed that sentence over a Spanish screen.
+  const params = new URLSearchParams()
+  if (options.status) params.set('status', options.status)
+  if (lang) params.set('lang', lang)
+  const query = params.size > 0 ? `?${params.toString()}` : ''
   return authFetch(`${baseUrl}/surveys/${surveyId}/invitations${query}`).then(
     (response) => response.json() as Promise<SurveyInvitationList>,
   )

@@ -48,7 +48,7 @@ import { Button, LoadingRegion, NetworkError, SkeletonText } from '../../../comp
  * closed `SurveyStatuses.All` set. `surveyListView.ts` carries the argument in full.
  */
 export default function SurveysListPage() {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const companyName = useCompanyName()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [surveys, setSurveys] = useState<SurveyListItem[]>([])
@@ -71,13 +71,16 @@ export default function SurveysListPage() {
     setError(null)
     try {
       // No `status` is sent, deliberately — see the block above.
-      setSurveys(await listSurveys(baseUrl, appliedFilters))
+      // `lang` rides along so the titles come back in the reader's language, as the
+      // detail page and the dashboard already ask; without it a Spanish reader saw the
+      // English half of every bilingual title on this list alone.
+      setSurveys(await listSurveys(baseUrl, appliedFilters, locale))
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setLoading(false)
     }
-  }, [baseUrl, appliedFilters, t])
+  }, [baseUrl, appliedFilters, locale, t])
 
   useEffect(() => {
     reload()

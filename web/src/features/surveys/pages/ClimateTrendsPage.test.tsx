@@ -96,7 +96,8 @@ describe('ClimateTrendsPage', () => {
     const columnHeaders = within(table)
       .getAllByRole('columnheader')
       .map((cell) => cell.textContent?.trim())
-    expect(columnHeaders).toContain('trust')
+    // A product slug prints its catalogued heading; an author's own key prints as authored.
+    expect(columnHeaders).toContain('Trust')
     expect(columnHeaders).toContain('wellbeing')
   })
 
@@ -133,7 +134,7 @@ describe('ClimateTrendsPage', () => {
     // withheld rather than a grid of identical "protected". The floor is named too, and
     // the sub-threshold count deliberately is not.
     expect(protectedCells.map((cell) => cell.getAttribute('aria-label'))).toEqual([
-      'January, trust: protected — withheld below 5 responses',
+      'January, Trust: protected — withheld below 5 responses',
       'January, wellbeing: protected — withheld below 5 responses',
     ])
 
@@ -186,7 +187,7 @@ describe('ClimateTrendsPage', () => {
     // The resolved company travels on every request, a company_admin's included. Relying
     // on the server's implicit default would make the request ambiguous about what it is
     // asking for; sent explicitly, a wrong one is refused rather than quietly rescoped.
-    expect(vi.mocked(getClimateTrends).mock.calls[0][1]).toEqual({ companyId: OWN })
+    expect(vi.mocked(getClimateTrends).mock.calls[0][1]).toEqual({ companyId: OWN, lang: 'en' })
 
     await userEvent.selectOptions(screen.getByLabelText(/Break down by/), 'department')
 
@@ -194,6 +195,8 @@ describe('ClimateTrendsPage', () => {
     expect(vi.mocked(getClimateTrends).mock.calls[1][1]).toEqual({
       groupBy: 'department',
       companyId: OWN,
+      // The reader's locale rides on every request; titles come back resolved for it.
+      lang: 'en',
     })
   })
 
@@ -229,7 +232,7 @@ describe('ClimateTrendsPage', () => {
     renderPage()
 
     await screen.findByRole('table')
-    expect(vi.mocked(getClimateTrends).mock.calls[0][1]).toEqual({ companyId: 'company-9' })
+    expect(vi.mocked(getClimateTrends).mock.calls[0][1]).toEqual({ companyId: 'company-9', lang: 'en' })
   })
 
   /** Same guarantee as every other load-and-fail screen: recoverable in place. */

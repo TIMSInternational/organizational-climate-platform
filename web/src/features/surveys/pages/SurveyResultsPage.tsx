@@ -23,6 +23,7 @@ import { cn } from '../../../lib/cn'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import { downloadTextFile } from '../../../lib/downloadTextFile'
 import { getSurveyResultsPdf, surveyResultsPdfFileName } from '../api/surveyExport'
+import { dimensionLabel } from '../dimensionLabel'
 import { getSurveyAnalytics, type SurveyAnalyticsResponse } from '../api/surveyResults'
 import ClimateDetailPanel from '../components/ClimateDetailPanel'
 import QuestionDistributionRow from '../components/QuestionDistributionRow'
@@ -224,10 +225,16 @@ export default function SurveyResultsPage() {
 
   // The sentinel `UNCATEGORISED_DIMENSION` is the one dimension key that is not
   // already display text: it is the empty string, deliberately, so it cannot
-  // collide with a real category. Everything else is the author's own wording and
-  // is not ours to translate.
+  // collide with a real category. Everything else goes through `dimensionLabel`,
+  // the same lookup the respond page and the survey detail already use: the
+  // product's own slugs (`psychological_safety`, `workload`…) get their catalogued
+  // heading in the reader's language, and an author's own wording is printed as
+  // authored. Before this the grid printed the raw slug, so the same survey read
+  // "Seguridad psicológica" on its detail page and "PSYCHOLOGICAL_SAFETY" on its
+  // results. The CSV exports keep the key; only the heading changes.
   const dimensionName = useCallback(
-    (key: string) => (key === UNCATEGORISED_DIMENSION ? t('surveyResults.uncategorised') : key),
+    (key: string) =>
+      key === UNCATEGORISED_DIMENSION ? t('surveyResults.uncategorised') : dimensionLabel(key, t),
     [t],
   )
 

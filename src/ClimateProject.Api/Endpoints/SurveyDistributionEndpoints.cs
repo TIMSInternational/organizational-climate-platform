@@ -143,12 +143,12 @@ public static class SurveyDistributionEndpoints
         var byToken = app.MapGroup("/survey-invitations")
             .RequireRateLimiting(RateLimitPolicies.PublicToken);
         byToken.MapGet("/{token}", ValidateInvitationTokenAsync);
-        byToken.MapPost("/{token}/opened", (string token, ClimateProjectDbContext db, CancellationToken ct)
-            => RecordStateAsync(token, SurveyInvitationStatuses.Opened, db, ct));
-        byToken.MapPost("/{token}/started", (string token, ClimateProjectDbContext db, CancellationToken ct)
-            => RecordStateAsync(token, SurveyInvitationStatuses.Started, db, ct));
-        byToken.MapPost("/{token}/completed", (string token, ClimateProjectDbContext db, CancellationToken ct)
-            => RecordStateAsync(token, SurveyInvitationStatuses.Completed, db, ct));
+        byToken.MapPost("/{token}/opened", (string token, string? lang, ClimateProjectDbContext db, CancellationToken ct)
+            => RecordStateAsync(token, SurveyInvitationStatuses.Opened, lang, db, ct));
+        byToken.MapPost("/{token}/started", (string token, string? lang, ClimateProjectDbContext db, CancellationToken ct)
+            => RecordStateAsync(token, SurveyInvitationStatuses.Started, lang, db, ct));
+        byToken.MapPost("/{token}/completed", (string token, string? lang, ClimateProjectDbContext db, CancellationToken ct)
+            => RecordStateAsync(token, SurveyInvitationStatuses.Completed, lang, db, ct));
 
         // Keyed by caller, NOT by the token in the path (#146). One survey has one share link
         // and every respondent uses it, so a token-keyed bucket would be a bucket shared by a
@@ -164,6 +164,7 @@ public static class SurveyDistributionEndpoints
 
     private static async Task<IResult> GetDistributionAsync(
         Guid surveyId,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -181,7 +182,7 @@ public static class SurveyDistributionEndpoints
             return Results.Json(new { message = "This survey has no distribution configured yet." }, statusCode: 404);
         }
 
-        return Results.Ok(await ToDistributionDetailAsync(distribution, survey!, db, cancellationToken));
+        return Results.Ok(await ToDistributionDetailAsync(distribution, survey!, SurveyContent.ResolveRequestLocale(lang, survey!.Language), db, cancellationToken));
     }
 
     /// <summary>
@@ -190,6 +191,7 @@ public static class SurveyDistributionEndpoints
     /// </summary>
     private static async Task<IResult> UpsertDistributionAsync(
         Guid surveyId,
+        string? lang,
         UpsertSurveyDistributionRequest request,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
@@ -263,12 +265,13 @@ public static class SurveyDistributionEndpoints
 
         await db.SaveChangesAsync(cancellationToken);
 
-        var detail = await ToDistributionDetailAsync(distribution, survey!, db, cancellationToken);
+        var detail = await ToDistributionDetailAsync(distribution, survey!, SurveyContent.ResolveRequestLocale(lang, survey!.Language), db, cancellationToken);
         return isNew ? Results.Json(detail, statusCode: 201) : Results.Ok(detail);
     }
 
     private static async Task<IResult> RegenerateLinkAsync(
         Guid surveyId,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -301,11 +304,12 @@ public static class SurveyDistributionEndpoints
         distribution.UpdatedAt = now;
 
         await db.SaveChangesAsync(cancellationToken);
-        return Results.Ok(await ToDistributionDetailAsync(distribution, survey!, db, cancellationToken));
+        return Results.Ok(await ToDistributionDetailAsync(distribution, survey!, SurveyContent.ResolveRequestLocale(lang, survey!.Language), db, cancellationToken));
     }
 
     private static async Task<IResult> RevokeLinkAsync(
         Guid surveyId,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -336,7 +340,7 @@ public static class SurveyDistributionEndpoints
             await db.SaveChangesAsync(cancellationToken);
         }
 
-        return Results.Ok(await ToDistributionDetailAsync(distribution, survey!, db, cancellationToken));
+        return Results.Ok(await ToDistributionDetailAsync(distribution, survey!, SurveyContent.ResolveRequestLocale(lang, survey!.Language), db, cancellationToken));
     }
 
     private static void RevokeLink(SurveyDistribution distribution, Guid? actingUserId, DateTimeOffset now)
@@ -354,6 +358,7 @@ public static class SurveyDistributionEndpoints
     private static async Task<IResult> ListInvitationsAsync(
         Guid surveyId,
         string? status,
+        string? lang,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
@@ -388,7 +393,7 @@ public static class SurveyDistributionEndpoints
         return Results.Ok(new SurveyInvitationListResponse(
             invitations,
             await SummariseAsync(db, surveyId, now, cancellationToken),
-            AnonymityOf(survey!)));
+            AnonymityOf(survey!, SurveyContent.ResolveRequestLocale(lang, survey!.Language))));
     }
 
     private static async Task<IResult> CreateInvitationsAsync(
@@ -939,7 +944,7 @@ public static class SurveyDistributionEndpoints
             survey.StartDate,
             survey.EndDate,
             invitation.ExpiresAt,
-            AnonymityOf(survey)));
+            AnonymityOf(survey, locale)));
     }
 
     /// <summary>
@@ -960,6 +965,7 @@ public static class SurveyDistributionEndpoints
     private static async Task<IResult> RecordStateAsync(
         string token,
         string targetState,
+        string? lang,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
@@ -969,7 +975,7 @@ public static class SurveyDistributionEndpoints
             return error;
         }
 
-        var anonymity = AnonymityOf(survey!);
+        var anonymity = AnonymityOf(survey!, SurveyContent.ResolveRequestLocale(lang, survey!.Language));
         var anonymous = survey!.Settings.Anonymous;
 
         if (!SurveyInvitationStatuses.IsRecordable(targetState, anonymous))
@@ -1426,20 +1432,20 @@ public static class SurveyDistributionEndpoints
 
     private static string SurveyPath(Guid surveyId) => $"/surveys/{surveyId}";
 
-    private static SurveyAnonymityGuaranteeDto AnonymityOf(Survey survey)
+    /// <param name="locale">
+    /// The locale the guarantee sentence is written in -- the request's <c>?lang</c> resolved
+    /// against the survey's own content language, like every other string in the payload.
+    /// The machine-readable half (<c>Anonymous</c>, the recordable state, the suppressed
+    /// states) is locale-free; only the sentence a person reads changes.
+    /// </param>
+    private static SurveyAnonymityGuaranteeDto AnonymityOf(Survey survey, string locale)
     {
         var anonymous = survey.Settings.Anonymous;
         return new SurveyAnonymityGuaranteeDto(
             anonymous,
             SurveyInvitationStatuses.HighestRecordableState(anonymous),
             anonymous ? SurveyInvitationStatuses.SuppressedWhenAnonymous : [],
-            anonymous
-                ? "This survey is anonymous. Invitation tracking records that a person was invited and opened "
-                  + "the invitation, and stops there. Neither 'started' nor 'completed' is stored against an "
-                  + "individual, because a per-person timestamp asserting a response exists can be joined on "
-                  + "time against the responses themselves and re-identifies the respondent. Completion is "
-                  + "only ever available as an aggregate count."
-                : "This survey is not anonymous. The full invitation lifecycle is recorded per invitee.");
+            InvitationGuaranteeCopy.Survey(anonymous, locale));
     }
 
     /// <summary>
@@ -1500,6 +1506,7 @@ public static class SurveyDistributionEndpoints
     private static async Task<SurveyDistributionDetail> ToDistributionDetailAsync(
         SurveyDistribution distribution,
         Survey survey,
+        string locale,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
         => new(
@@ -1528,7 +1535,7 @@ public static class SurveyDistributionEndpoints
             distribution.UniqueVisitors,
             distribution.LastAccessedAt,
             await SummariseAsync(db, distribution.SurveyId, UtcNow(), cancellationToken),
-            AnonymityOf(survey),
+            AnonymityOf(survey, locale),
             distribution.CreatedAt,
             distribution.UpdatedAt);
 

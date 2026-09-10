@@ -11,6 +11,7 @@ import {
   type ClimateTrendsResponse,
 } from '../api/climateTrends'
 import { buildClimateTrendMap } from '../climateTrendsMap'
+import { dimensionLabel } from '../dimensionLabel'
 
 /**
  * Climate over time — the same dimension scores the results screens show, read across
@@ -77,6 +78,7 @@ export default function ClimateTrendsPage() {
       // climate. `undefined` only before the scope resolves, and the effect returns early
       // in that case.
       ...(scope.companyId ? { companyId: scope.companyId } : {}),
+      lang: locale,
     })
       .then((result) => {
         if (!cancelled) setPayload(result)
@@ -88,7 +90,7 @@ export default function ClimateTrendsPage() {
     return () => {
       cancelled = true
     }
-  }, [baseUrl, groupBy, attempt, scope.companyId, scope.status])
+  }, [baseUrl, groupBy, attempt, scope.companyId, scope.status, locale])
 
   // The reader's locale, through Intl, exactly as every other figure on this product's
   // screens is formatted. A survey with no title falls back to this date, so a hand-rolled
@@ -215,7 +217,13 @@ export default function ClimateTrendsPage() {
               ) : (
                 <>
                   <ClimateMap
-                    dimensions={model.dimensions}
+                    dimensions={model.dimensions.map((dimension) => ({
+                      ...dimension,
+                      // The catalogued heading for the product's own slugs, the
+                      // author's wording otherwise -- as the results page and the
+                      // respond page already print them. The model keeps the key.
+                      label: dimensionLabel(dimension.key, t),
+                    }))}
                     rows={model.rows}
                     target={model.target}
                     deadBandAt={model.deadBandAt}
