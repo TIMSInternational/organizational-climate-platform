@@ -118,11 +118,12 @@ export default function ActionPlansListPage() {
   const loadTemplates = useCallback(async () => {
     if (!companyId) return
     try {
-      setTemplates(await listActionPlanTemplates(baseUrl, companyId))
+      // `lang` rides along so the picker names each template in the reader's language.
+      setTemplates(await listActionPlanTemplates(baseUrl, companyId, locale))
     } catch {
       setTemplates([])
     }
-  }, [baseUrl, companyId])
+  }, [baseUrl, companyId, locale])
 
   useEffect(() => {
     void loadTemplates()

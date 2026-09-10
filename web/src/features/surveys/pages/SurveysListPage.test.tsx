@@ -89,7 +89,9 @@ describe('SurveysListPage', () => {
   it('asks for the titles in the reader\'s language, as the detail page does', async () => {
     // The list is the one survey screen that used to omit `lang`, so a Spanish reader
     // saw the English half of every bilingual title here and the Spanish half on the
-    // page behind it.
+    // page behind it. A *stored* choice, not the provider's default: a hardcoded 'en'
+    // would pass a test rendered in English.
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) =>
       Promise.resolve(String(input).includes('/profile') ? profileResponse() : ok(row())),
     )
@@ -98,7 +100,7 @@ describe('SurveysListPage', () => {
 
     await screen.findByText('Q3 climate survey')
     // Relative on CI (no VITE_API_BASE_URL), absolute on a laptop with `.env.local`; parse both.
-    expect(new URL(lastUrl(fetchMock), 'http://test.local').searchParams.get('lang')).toBe('en')
+    expect(new URL(lastUrl(fetchMock), 'http://test.local').searchParams.get('lang')).toBe('es')
   })
 
   it('keeps status off the wire, because the chips count statuses the response would not contain', async () => {

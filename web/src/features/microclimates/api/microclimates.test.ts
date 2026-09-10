@@ -53,6 +53,12 @@ describe('microclimates api client', () => {
     expect(result.status).toBe('active')
   })
 
+  it('asks for the updated session in the reader\'s language, because the page renders the response', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }))
+    await updateMicroclimate(baseUrl, 'm1', { status: 'active' }, 'es')
+    expect(fetch).toHaveBeenCalledWith(`${baseUrl}/microclimates/m1?lang=es`, expect.objectContaining({ method: 'PUT' }))
+  })
+
   it('gets live results', async () => {
     const live = { sentimentScore: 0, engagementLevel: 'medium', wordCloud: [], responseCount: 2, targetParticipantCount: 10 }
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(live), { status: 200 }))

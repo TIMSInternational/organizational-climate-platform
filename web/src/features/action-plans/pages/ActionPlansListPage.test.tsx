@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import ActionPlansListPage from './ActionPlansListPage'
 import type { ActionPlan } from '../api/actionPlans'
-import { TranslationProvider } from '../../../i18n'
+import { TranslationProvider, LanguageSwitcher, LOCALE_STORAGE_KEY } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import {
 
@@ -71,9 +71,11 @@ function CompanySwitcherHarness() {
   )
 }
 
-function renderPage() {
+/** `switcher` mounts the real language control beside the page, in the same provider. */
+function renderPage({ switcher = false } = {}) {
   return render(
     <TranslationProvider>
+      {switcher && <LanguageSwitcher compact />}
       <MemoryRouter>
         <CompanyContextProvider>
           <ActionPlansListPage />
@@ -92,6 +94,7 @@ afterEach(() => {
   cleanup()
   clearToken()
   localStorage.removeItem(COMPANY_CONTEXT_STORAGE_KEY)
+  localStorage.removeItem(LOCALE_STORAGE_KEY)
   vi.unstubAllGlobals()
 })
 
@@ -524,5 +527,40 @@ describe('the company-name eyebrow', () => {
     await waitFor(() => {
       expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe('Acme Corporation')
     })
+  })
+})
+
+describe('ActionPlansListPage locale on the wire', () => {
+  const templateUrls = () => dataRequestUrls().filter((url) => url.includes('/action-plan-templates'))
+  const langOf = (url: string) => new URL(url, 'http://test.local').searchParams.get('lang')
+
+  it('asks for the templates in the reader\'s language, as it asks for the plans', async () => {
+    // The plans list carried `lang` since the 9 September rehearsal; the template picker
+    // beside it did not, so a Spanish reader chose from English names. A *stored* choice,
+    // not the provider's default: a hardcoded 'en' would pass a test rendered in English.
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    setToken(tokenFor({ role: 'company_admin', companyId: 'their-co' }))
+    renderPage()
+
+    await waitFor(() => expect(templateUrls()).toHaveLength(1))
+    const url = new URL(templateUrls()[0], 'http://test.local')
+    expect(url.searchParams.get('companyId')).toBe('their-co')
+    expect(url.searchParams.get('lang')).toBe('es')
+  })
+
+  it('asks for the templates again when the reader switches locale', async () => {
+    // `loadTemplates` keys on `locale`: the names on screen are in the language they were
+    // asked in, so a switch has to ask again rather than keep the old catalogue.
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    setToken(tokenFor({ role: 'company_admin', companyId: 'their-co' }))
+    renderPage({ switcher: true })
+
+    await waitFor(() => expect(templateUrls()).toHaveLength(1))
+    expect(langOf(templateUrls()[0])).toBe('en')
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Switch Language' }), 'es')
+
+    await waitFor(() => expect(templateUrls()).toHaveLength(2))
+    expect(langOf(templateUrls()[1])).toBe('es')
   })
 })

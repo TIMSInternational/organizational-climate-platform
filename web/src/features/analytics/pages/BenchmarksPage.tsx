@@ -121,8 +121,8 @@ export default function BenchmarksPage() {
   // Stable across renders because the panel fetches inside an effect keyed on it; an inline
   // arrow would re-run that fetch on every keystroke anywhere on the page.
   const loadCandidates = useCallback(
-    (id: string) => listPriorPeriodCandidates(baseUrl, id),
-    [baseUrl],
+    (id: string) => listPriorPeriodCandidates(baseUrl, id, locale),
+    [baseUrl, locale],
   )
 
   // Load the detail for anything selected that is not cached yet. Selection is a

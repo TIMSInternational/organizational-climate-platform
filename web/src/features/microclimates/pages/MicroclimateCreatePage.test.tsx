@@ -3,7 +3,7 @@ import { render, screen, cleanup, act, fireEvent, waitFor } from '@testing-libra
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import MicroclimateCreatePage from './MicroclimateCreatePage'
-import { TranslationProvider } from '../../../i18n'
+import { TranslationProvider, LanguageSwitcher } from '../../../i18n'
 import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
@@ -24,9 +24,11 @@ function routeFetch(created: Record<string, unknown> = { id: 'm-new' }) {
   })
 }
 
-function renderPage() {
+/** `switcher` mounts the real language control beside the page, in the same provider. */
+function renderPage({ switcher = false } = {}) {
   return render(
     <TranslationProvider>
+      {switcher && <LanguageSwitcher compact />}
       <MemoryRouter initialEntries={['/microclimates/new']}>
         <CompanyContextProvider>
           <Routes>
@@ -321,5 +323,42 @@ describe('MicroclimateCreatePage', () => {
     expect(screen.getByRole('alert').textContent).toContain(
       'Enter the title in English and in Spanish.',
     )
+  })
+})
+
+describe('MicroclimateCreatePage locale on the wire', () => {
+  it('asks for the templates in the reader\'s language', async () => {
+    // The wizard seeds its content language from the reader's locale, but the picker
+    // beside it fetched the templates without `lang`, so a Spanish reader chose from the
+    // English half of every bilingual name.
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    renderPage()
+
+    await waitFor(() =>
+      expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes('/microclimate-templates'))).toBe(true),
+    )
+    const url = new URL(
+      vi.mocked(fetch).mock.calls.map(([input]) => String(input)).find((entry) => entry.includes('/microclimate-templates'))!,
+      'http://test.local',
+    )
+    expect(url.searchParams.get('companyId')).toBe('company-1')
+    expect(url.searchParams.get('lang')).toBe('es')
+  })
+
+  it('asks for the templates again when the reader switches locale', async () => {
+    // `loadTemplates` keys on `locale`: the names in the picker are in the language they
+    // were asked in, so a switch has to ask again rather than keep the old catalogue.
+    const templateUrls = () =>
+      vi.mocked(fetch).mock.calls.map(([input]) => String(input)).filter((url) => url.includes('/microclimate-templates'))
+    const langOf = (url: string) => new URL(url, 'http://test.local').searchParams.get('lang')
+    renderPage({ switcher: true })
+
+    await waitFor(() => expect(templateUrls()).toHaveLength(1))
+    expect(langOf(templateUrls()[0])).toBe('en')
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Switch Language' }), 'es')
+
+    await waitFor(() => expect(templateUrls()).toHaveLength(2))
+    expect(langOf(templateUrls()[1])).toBe('es')
   })
 })

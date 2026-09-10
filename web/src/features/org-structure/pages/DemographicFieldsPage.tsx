@@ -87,10 +87,18 @@ export default function DemographicFieldsPage() {
     setLoading(true)
     setError(null)
     const [list, dashboard] = await Promise.allSettled([
+      // No `lang` on the list, on purpose. The edit form below prefills `label` from
+      // this response and saves it back as a bare string, which the server files under
+      // the company's own language (`DemographicFieldEndpoints.UpdateAsync` ->
+      // `LocalizedInput.TryResolve(companyLanguage)`). Asking for the reader's language
+      // here would show an English-UI admin the English half of a bilingual field on a
+      // Spanish company, and the save would then overwrite the Spanish column with
+      // English text. Until the form carries both halves, the list and the form have
+      // to address the same column: the company's. The client accepts `lang`; this
+      // page must not pass it.
       listDemographicFields(baseUrl, companyId),
-      // No `lang`: the only thing read off this response is `activeUserCount`, and
-      // a headcount has no language. Asking for one would make the effect's
-      // dependency list wrong the moment the reader switched locale.
+      // No `lang` here either: the only thing read off this response is
+      // `activeUserCount`, and a headcount has no language.
       getCompanyAdminDashboard(baseUrl, { companyId }),
     ])
 
@@ -110,6 +118,8 @@ export default function DemographicFieldsPage() {
 
   useEffect(() => {
     reload()
+    // Not `locale`: the list is fetched for the company's language (see `reload`), so
+    // a language switch changes nothing on the wire and must not refetch.
   }, [companyId])
 
   // Each entry becomes an option whose stable value is derived server-side from the
