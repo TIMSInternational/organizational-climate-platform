@@ -4,11 +4,11 @@ import { AlertCircle, AlertTriangle, Check, Columns2, EyeOff, Filter, Plus, Shie
 import { useTranslation } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { ANONYMITY_FLOOR, KpiTile } from '../../../../components/charts'
-import { Alert, AlertDescription, Button, Chip, Input, LoadingRegion, NetworkError, SkeletonText, Switch } from '../../../../components/ui'
+import { Alert, AlertDescription, Button, Input, LoadingRegion, NetworkError, SkeletonText, Switch } from '../../../../components/ui'
 import { MonoReadings } from '../../../dashboard/components/dashboardGrammar'
 import { createDemographicField, updateDemographicField, type DemographicField } from '../../api/demographicFields'
 import { fieldVerdict, isUsableCut, keyFromLabel, meanPerValue, tippingPoint, usableCuts } from './demographics'
-import { EmptyNote, Field, IconBox, Panel } from './parts'
+import { CanvasChip, CanvasSelect, EmptyNote, Field, IconBox, Panel } from './parts'
 import { useSuperDemographicsModel } from './useSuperDemographicsModel'
 
 const TYPES = ['select', 'text', 'number', 'date'] as const
@@ -54,7 +54,7 @@ export default function SuperDemographicFieldsView() {
   return (
     <div className="flex flex-col gap-section">
       <div className="-mb-2">
-        <PageTopBar
+        <PageTopBar rhythm="canvas"
           eyebrow={companyName ?? t('navigation.systemAdministration')}
           title={t('navigation.demographicFields')}
           description={t('superadmin.next.demographics.description', { floor: ANONYMITY_FLOOR })}
@@ -325,13 +325,13 @@ function FieldForm({
           htmlFor={ids.type}
           helper={t('superadmin.next.demographics.form.typeHelper')}
         >
-          <select id={ids.type} className="w-full" value={type} disabled={editing} onChange={(event) => setType(event.target.value)}>
+          <CanvasSelect id={ids.type} className="w-full" value={type} disabled={editing} onChange={(event) => setType(event.target.value)}>
             {TYPES.map((option) => (
               <option key={option} value={option}>
                 {t(TYPE_KEY[option])}
               </option>
             ))}
-          </select>
+          </CanvasSelect>
         </Field>
         <Field
           fieldLabel={t('superadmin.next.demographics.form.order')}
@@ -543,12 +543,12 @@ function Catalogue({
                     {name} <span className="font-mono text-2xs font-normal text-fg-tertiary">{field.field}</span>
                   </p>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <Chip
+                    <CanvasChip
                       tone={field.isActive ? 'good' : 'neutral'}
                       label={field.isActive ? t('superadmin.next.demographics.catalogue.active') : t('superadmin.next.demographics.catalogue.inactive')}
                     />
                     {verdict !== 'unknown' && (
-                      <Chip
+                      <CanvasChip
                         tone={verdict === 'usable' ? 'good' : verdict === 'narrow' ? 'critical' : 'neutral'}
                         label={
                           verdict === 'usable'

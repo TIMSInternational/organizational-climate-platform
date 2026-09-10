@@ -1850,9 +1850,9 @@
         "open": "Open",
         "openNamed": "Open {name}",
         "languageLead": "Language",
-        "languageNote": "is each company's setting, inherited by every new survey with its invitations and reports. It is read and changed in the company's detail: this list does not request it.",
-        "unsetLead": "“No sector” and “no plan”",
-        "unsetNote": "mark a company created and never configured, not an error.",
+        "languageNote": "is each company's setting, inherited by every new survey with its invitations and reports. It is changed in the company's detail.",
+        "unsetLead": "“No sector”",
+        "unsetNote": "is a company created and never configured, not an error.",
         "unsetExample": "{company} was created on {date} and nobody completed it.",
         "newLead": "New company",
         "newNote": "asks for a name, email domain, sector, size and country. The first person joins through an administrator invitation.",
@@ -2145,7 +2145,8 @@
           "unscored": "not scored",
           "quality": "quality {score}",
           "active": "Active",
-          "inactive": "Inactive"
+          "inactive": "Inactive",
+          "emptyGlobalOneCompared": "The platform's only benchmark is global: {name}, with a quality score of {score}. It is not compared with this company ({profile}), so it is not shown here."
         },
         "insights": {
           "meta": "about the closed surveys",

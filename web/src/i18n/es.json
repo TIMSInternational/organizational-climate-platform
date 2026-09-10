@@ -1850,9 +1850,9 @@
         "open": "Abrir",
         "openNamed": "Abrir {name}",
         "languageLead": "Idioma",
-        "languageNote": "es el de la configuración de cada empresa y lo hereda cada encuesta nueva, con sus invitaciones e informes. Se lee y se cambia en el detalle de la empresa: esta lista no lo pide.",
-        "unsetLead": "«Sin sector» y «sin plan»",
-        "unsetNote": "señalan una empresa creada sin configurar, no un error.",
+        "languageNote": "es el de la configuración de cada empresa y lo hereda cada encuesta nueva, con sus invitaciones e informes. Se cambia en el detalle de la empresa.",
+        "unsetLead": "«Sin sector»",
+        "unsetNote": "es una empresa creada sin configurar, no un error.",
         "unsetExample": "{company} se creó el {date} y nadie la completó.",
         "newLead": "Nueva empresa",
         "newNote": "pide nombre, dominio de correo, sector, tamaño y país. La primera persona entra por una invitación de administrador.",
@@ -2145,7 +2145,8 @@
           "unscored": "sin puntaje",
           "quality": "calidad {score}",
           "active": "Activa",
-          "inactive": "Inactiva"
+          "inactive": "Inactiva",
+          "emptyGlobalOneCompared": "La única referencia de la plataforma es global: {name}, con un puntaje de calidad de {score}. No se compara con esta empresa ({profile}), así que no se muestra aquí."
         },
         "insights": {
           "meta": "sobre las encuestas cerradas",

@@ -31,7 +31,7 @@ import {
   type SettingsDraft,
 } from './companyDetail'
 import { STATUS_COUNT_KEYS, countText, dayWithYear, languageText, sizeText, tierText } from './labels'
-import { Field, IconBox, LinkCard, Panel } from './parts'
+import { CanvasSelect, Field, IconBox, LinkCard, Panel } from './parts'
 import { useSuperCompanyDetailModel, type SuperCompanyDetailModel } from './useSuperCompanyDetailModel'
 
 const FREQUENCIES = ['daily', 'weekly', 'monthly', 'quarterly']
@@ -63,7 +63,7 @@ export default function SuperCompanyDetailView() {
   if (state.status === 'error') {
     return (
       <div>
-        <PageTopBar
+        <PageTopBar rhythm="canvas"
           eyebrow={t('navigation.systemAdministration')}
           title={t('superadmin.next.companyDetail.title')}
           breadcrumbs={[{ label: t('navigation.companies'), href: '/admin/companies' }, { label: t('superadmin.next.companyDetail.title') }]}
@@ -80,7 +80,7 @@ export default function SuperCompanyDetailView() {
   if (!state.model) {
     return (
       <div>
-        <PageTopBar eyebrow={t('navigation.systemAdministration')} title={t('superadmin.next.companyDetail.title')} />
+        <PageTopBar rhythm="canvas" eyebrow={t('navigation.systemAdministration')} title={t('superadmin.next.companyDetail.title')} />
         <SkeletonText lines={8} />
       </div>
     )
@@ -140,7 +140,7 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
 
   return (
     <div className="flex flex-col gap-section">
-      <PageTopBar
+      <PageTopBar rhythm="canvas"
         eyebrow={t('navigation.systemAdministration')}
         title={t('superadmin.next.companyDetail.title')}
         description={t('superadmin.next.companyDetail.description')}
@@ -284,7 +284,6 @@ function SurveysCard({
     anonymity: useId(),
     retention: useId(),
     microclimates: useId(),
-    ai: useId(),
   }
   const heading = (
     <h2 id="detail-surveys" className="m-0 text-2xl">
@@ -314,20 +313,20 @@ function SurveysCard({
           required
           helper={t('superadmin.next.companyDetail.surveys.languageHelper')}
         >
-          <select id={ids.language} className="w-full" value={draft.language} onChange={(event) => set({ language: event.target.value })}>
+          <CanvasSelect id={ids.language} className="w-full" value={draft.language} onChange={(event) => set({ language: event.target.value })}>
             {languages.map((language) => (
               <option key={language} value={language}>
                 {languageText(t, language)}
               </option>
             ))}
-          </select>
+          </CanvasSelect>
         </Field>
         <Field
           fieldLabel={t('superadmin.next.companyDetail.surveys.frequency')}
           htmlFor={ids.frequency}
           helper={cadenceHelper(t, draft.surveyFrequency, model, locale) ?? undefined}
         >
-          <select
+          <CanvasSelect
             id={ids.frequency}
             className="w-full"
             value={draft.surveyFrequency}
@@ -341,7 +340,7 @@ function SurveysCard({
                 </option>
               )
             })}
-          </select>
+          </CanvasSelect>
         </Field>
         <Field
           fieldLabel={t('superadmin.next.companyDetail.surveys.anonymity')}
@@ -357,7 +356,7 @@ function SurveysCard({
               : t('superadmin.next.companyDetail.surveys.anonymityHelper')
           }
         >
-          <select
+          <CanvasSelect
             id={ids.anonymity}
             className="w-full"
             value={draft.anonymousSurveys ? 'yes' : 'no'}
@@ -365,7 +364,7 @@ function SurveysCard({
           >
             <option value="yes">{t('superadmin.next.companyDetail.surveys.anonymous')}</option>
             <option value="no">{t('superadmin.next.companyDetail.surveys.identified')}</option>
-          </select>
+          </CanvasSelect>
         </Field>
         <Field
           fieldLabel={t('superadmin.next.companyDetail.surveys.retention')}
@@ -386,7 +385,7 @@ function SurveysCard({
               value={draft.dataRetentionDays}
               aria-invalid={retention === null}
               onChange={(event) => set({ dataRetentionDays: event.target.value })}
-              style={{ width: `${Math.max(String(draft.dataRetentionDays).length, 1) + 1}ch` }}
+              style={{ width: `${Math.max(String(draft.dataRetentionDays).length, 1)}ch` }}
               className="w-auto min-w-0 flex-none border-0 bg-transparent px-0 font-mono tabular-nums shadow-none"
             />
           </InputAffix>
@@ -410,18 +409,6 @@ function SurveysCard({
             checked={draft.microclimateEnabled}
             onChange={(microclimateEnabled) => set({ microclimateEnabled })}
             text={draft.microclimateEnabled ? t('superadmin.next.companyDetail.surveys.on') : t('superadmin.next.companyDetail.surveys.off')}
-          />
-        </Field>
-        <Field
-          fieldLabel={t('superadmin.next.companyDetail.surveys.aiInsights')}
-          htmlFor={ids.ai}
-          helper={t('superadmin.next.companyDetail.surveys.aiInsightsHelper')}
-        >
-          <ToggleRow
-            id={ids.ai}
-            checked={draft.aiInsightsEnabled}
-            onChange={(aiInsightsEnabled) => set({ aiInsightsEnabled })}
-            text={draft.aiInsightsEnabled ? t('superadmin.next.companyDetail.surveys.on') : t('superadmin.next.companyDetail.surveys.off')}
           />
         </Field>
       </div>
@@ -623,27 +610,27 @@ function CompanyCard({
           <Input id={ids.sector} value={profile.industry} onChange={(event) => set({ industry: event.target.value })} className="w-full" />
         </Field>
         <Field fieldLabel={t('superadmin.next.companyDetail.company.size')} htmlFor={ids.size}>
-          <select id={ids.size} className="w-full" value={profile.size} onChange={(event) => set({ size: event.target.value })}>
+          <CanvasSelect id={ids.size} className="w-full" value={profile.size} onChange={(event) => set({ size: event.target.value })}>
             {profile.size === '' && <option value="">{t('superadmin.next.companyDetail.company.selectSize')}</option>}
             {sizes.map((size) => (
               <option key={size} value={size}>
                 {sizeText(t, size)}
               </option>
             ))}
-          </select>
+          </CanvasSelect>
         </Field>
         <Field fieldLabel={t('superadmin.next.companyDetail.company.country')} htmlFor={ids.country}>
           <Input id={ids.country} value={profile.country} onChange={(event) => set({ country: event.target.value })} className="w-full" />
         </Field>
         <Field fieldLabel={t('superadmin.next.companyDetail.company.plan')} htmlFor={ids.plan}>
-          <select id={ids.plan} className="w-full" value={profile.subscriptionTier} onChange={(event) => set({ subscriptionTier: event.target.value })}>
+          <CanvasSelect id={ids.plan} className="w-full" value={profile.subscriptionTier} onChange={(event) => set({ subscriptionTier: event.target.value })}>
             {profile.subscriptionTier === '' && <option value="">{t('superadmin.next.companies.noPlan')}</option>}
             {(tiers.includes(profile.subscriptionTier) || profile.subscriptionTier === '' ? tiers : [profile.subscriptionTier, ...tiers]).map((tier) => (
               <option key={tier} value={tier}>
                 {tierText(t, tier)}
               </option>
             ))}
-          </select>
+          </CanvasSelect>
         </Field>
         <Field fieldLabel={t('superadmin.next.companyDetail.company.added')}>
           <div className="flex h-control-lg items-center gap-2 rounded-md border border-line-default bg-surface-input px-2.5">

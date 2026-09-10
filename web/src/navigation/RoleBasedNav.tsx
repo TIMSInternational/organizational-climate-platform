@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { ChevronRight } from 'lucide-react'
 import { useTranslation } from '../i18n'
@@ -129,13 +129,26 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
     setFlyout({ key, top: rect.top, left: rect.right })
   }
 
-  function renderItem(item: NavItemType) {
+  function renderItem(item: NavItemType, options?: { neverSelected?: boolean }) {
+    // A `flat` group (the super administrator's "Administración del Sistema") is drawn
+    // as the 10 Sep per-role canvas draws it: the group's own row, then its children as
+    // plain rows beside it — no chevron, no elbow, nothing to expand. Its row links to its
+    // `href` and is never the selected one: that `href` is its first child's, and the
+    // child's row carries the selection. Collapsed, it keeps the flyout below.
+    if (item.flat && item.sub?.length && !collapsed) {
+      return (
+        <Fragment key={item.labelKey}>
+          {renderItem({ ...item, sub: undefined, flat: undefined }, { neverSelected: true })}
+          {item.sub.map((sub) => renderItem(sub))}
+        </Fragment>
+      )
+    }
     const hasChildren = Boolean(item.sub?.length)
     // While collapsed a grouped row is a plain link with a flyout (see `collapsed`
     // above), so it gets a leaf's selected styling too.
     const hasSub = hasChildren && !collapsed
     const hasFlyout = hasChildren && collapsed
-    const isActive = item.href === selectedHref
+    const isActive = !options?.neverSelected && item.href === selectedHref
     const childSelected = item.sub?.some((sub) => sub.href === selectedHref) ?? false
     // A collapsed group stands in for its whole sub-tree — the children are not
     // rendered in the rail at all — so it carries the selection when one of them
@@ -416,7 +429,7 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
           {section.titleKey && !collapsed && (
             <div className="nav-section-title">{t(section.titleKey)}</div>
           )}
-          {section.items.map(renderItem)}
+          {section.items.map((item) => renderItem(item))}
         </div>
       ))}
     </nav>

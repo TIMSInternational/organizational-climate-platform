@@ -141,6 +141,13 @@ export interface PageTopBarProps {
   }
   /** Buttons, links, filters — whatever the page acts with. */
   actions?: ReactNode
+  /**
+   * `'canvas'`: the header rhythm of the 10 Sep per-role canvas — 38px from the breadcrumb
+   * to the eyebrow (the artboards' `margin-bottom: 14px` inside a `gap: 24px` column), 6px
+   * between eyebrow, title and description (`gap: 6px`), 16px of pad over the rule.
+   * `'default'` keeps the `.ptb` rhythm every other screen was drawn with.
+   */
+  rhythm?: 'default' | 'canvas'
 }
 
 export function PageTopBar({
@@ -151,6 +158,7 @@ export function PageTopBar({
   breadcrumbLabel,
   badge,
   actions,
+  rhythm = 'default',
 }: PageTopBarProps) {
   const { t } = useTranslation()
   const derivedEyebrow = useSectionEyebrow()
@@ -163,10 +171,14 @@ export function PageTopBar({
     // `--admin-size-panel-padding`.
     <div
       data-slot="page-top-bar"
-      className="mb-panel flex flex-col gap-inline border-b border-line-light pb-3.5"
+      data-rhythm={rhythm}
+      className={`mb-panel flex flex-col gap-inline border-b border-line-light ${rhythm === 'canvas' ? 'pb-4' : 'pb-3.5'}`}
     >
       {breadcrumbs && breadcrumbs.length > 0 && (
-        <Breadcrumb aria-label={breadcrumbLabel ?? t('shell.breadcrumb')}>
+        <Breadcrumb
+          aria-label={breadcrumbLabel ?? t('shell.breadcrumb')}
+          className={rhythm === 'canvas' ? 'mb-7.5' : undefined}
+        >
           <BreadcrumbList>
             {breadcrumbs.map((crumb, index) => {
               const isLast = index === breadcrumbs.length - 1
@@ -206,7 +218,7 @@ export function PageTopBar({
           the actions take the next line at full width.
           See the docstring above; happy-dom cannot see any of this. */}
       <div className="flex flex-wrap items-start justify-between gap-panel">
-        <div className="min-w-0 grow basis-header-text">
+        <div className={`min-w-0 grow basis-header-text${rhythm === 'canvas' ? ' flex flex-col gap-1.5' : ''}`}>
       {/* `feat/ui-4-admin` found this same defect independently and fixed it with
           `basis-64` instead: it measured the description on
           /admin/companies/:id/users at 390px coming out one word per line. Same

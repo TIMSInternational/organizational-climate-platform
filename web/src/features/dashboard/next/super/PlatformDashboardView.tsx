@@ -4,12 +4,12 @@ import { AlertCircle, ArrowRight, Building2, Check, Clock, FileText, Mail, Plus 
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { KpiTile } from '../../../../components/charts'
-import { Button, Chip, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../../components/ui'
+import { Button, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../../components/ui'
 import { useCompanyContext } from '../../../../company-context'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import CompanyContextBar from '../../../org-structure/next/super/CompanyContextBar'
-import { IconBox, MiniBar, Panel, SectionHead } from '../../../org-structure/next/super/parts'
+import { CanvasChip, IconBox, MiniBar, Panel, SectionHead } from '../../../org-structure/next/super/parts'
 import {
   PERSON_COUNT_KEYS,
   STATUS_COUNT_KEYS,
@@ -102,7 +102,7 @@ export default function PlatformDashboardView() {
   return (
     <div>
       <CompanyContextBar mode="platform" companies={state.model?.rows ?? []} value={null} onChange={selectCompany} />
-      <PageTopBar
+      <PageTopBar rhythm="canvas"
         eyebrow={t('dashboard.platform')}
         title={t('superadmin.next.dashboard.title')}
         description={t('superadmin.next.dashboard.description')}
@@ -431,7 +431,7 @@ function AttentionRow({ item, onOpen }: { item: PlatformAttention; onOpen: (comp
             }
             sub={t('superadmin.next.dashboard.attention.behindPaceSub', {
               date: calendarDay(Date.parse(item.survey.startDate), locale),
-              company: item.companyName,
+              company: shortCompanyName(item.companyName),
             })}
           />
           <Button type="button" variant="outline" onClick={() => onOpen(item.companyId)}>
@@ -551,7 +551,7 @@ function SystemRow({
         <span className="text-base font-medium text-fg-primary">{name}</span>
         <span className="text-2xs text-fg-tertiary">{sub}</span>
       </div>
-      <Chip
+      <CanvasChip
         tone={tone}
         icon={tone === 'good' ? <Check className="size-3" /> : <Clock className="size-3" />}
         label={statusText(t, status)}
@@ -635,7 +635,7 @@ function SystemPanel({ system }: { system: SystemStatusResponse | null }) {
               status={system.dispatcher.status}
             />
           </ul>
-          <Link to="/admin/system" className="inline-flex items-center gap-1 self-start text-xs">
+          <Link to="/admin/system" className="inline-flex items-center gap-1 self-start text-xs text-fg-secondary hover:text-fg-primary">
             {t('superadmin.next.dashboard.system.viewSystem')}
             <ArrowRight aria-hidden="true" className="size-3" />
           </Link>

@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, ChevronDown } from 'lucide-react'
 import { cn } from '../../../../lib/cn'
+import { Chip, type ChipTone } from '../../../../components/ui'
 
 /**
  * The per-role canvas's building blocks for the super administrator's screens, drawn
@@ -222,4 +223,51 @@ export function MiniBar({
       />
     </span>
   )
+}
+
+/**
+ * The canvas's select: a 32px field on the hairline with a lucide chevron, as every
+ * artboard of the per-role canvas draws it (`.select` — `height: 32px; padding: 0 10px;
+ * border: 1px solid #e0dbee; border-radius: 4px`, a 14px chevron in `#8a82a5`).
+ *
+ * Still a native `<select>` underneath — `appearance-none` only drops the browser's own
+ * chevron — so it keeps the platform's keyboard and screen-reader behaviour and every
+ * test that drives it with `selectOptions`. `className` sizes the wrapper (`w-full`,
+ * `w-40`…); every other prop goes to the `<select>`.
+ */
+export function CanvasSelect({ className, children, ...props }: ComponentProps<'select'>) {
+  return (
+    <span data-slot="canvas-select" className={cn('relative inline-flex min-w-0 max-w-full', className)}>
+      <select
+        {...props}
+        className="h-control-lg w-full min-w-0 appearance-none truncate rounded-md border border-line-default bg-surface-input py-0 pl-2.5 pr-8 text-base text-fg-primary"
+      >
+        {children}
+      </select>
+      <ChevronDown
+        aria-hidden="true"
+        data-slot="canvas-select-chevron"
+        className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-light"
+      />
+    </span>
+  )
+}
+
+/** Each tone's hairline, as the canvas's `.chip.<tone>` draws it: the ink at 20%. */
+const CHIP_BORDER: Record<ChipTone, string> = {
+  good: 'border-chip-good-ink/20',
+  warning: 'border-chip-warning-ink/20',
+  critical: 'border-chip-critical-ink/20',
+  accent: 'border-chip-accent-ink/20',
+  neutral: 'border-line-default',
+}
+
+/**
+ * The canvas's chip: the app's `Chip` with the hairline every `.chip` in the artboards
+ * carries (`border: 1px solid` the tone's ink at 20%, `#e0dbee` when neutral). A
+ * variant local to these screens, so the `Chip` primitive every other screen uses is
+ * untouched.
+ */
+export function CanvasChip({ tone = 'neutral', className, ...props }: ComponentProps<typeof Chip> & { tone?: ChipTone }) {
+  return <Chip tone={tone} data-canvas-chip={tone} className={cn(CHIP_BORDER[tone], className)} {...props} />
 }

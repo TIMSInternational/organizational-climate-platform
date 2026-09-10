@@ -128,7 +128,7 @@ describe('SuperCompanyDetailView', () => {
     expect((screen.getByLabelText(new RegExp(`^${copy.surveys.language}`)) as HTMLSelectElement).value).toBe('es')
     expect((screen.getByLabelText(copy.surveys.retention) as HTMLInputElement).value).toBe('2555')
     // As wide as its digits (monospace), so the unit follows the value instead of the field's edge.
-    expect((screen.getByLabelText(copy.surveys.retention) as HTMLInputElement).style.width).toBe('5ch')
+    expect((screen.getByLabelText(copy.surveys.retention) as HTMLInputElement).style.width).toBe('4ch')
   })
 
   it('offers both actions from the start, and a save with nothing changed sends nothing and says so', async () => {

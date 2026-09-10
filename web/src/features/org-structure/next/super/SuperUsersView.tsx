@@ -8,7 +8,6 @@ import {
   Alert,
   AlertDescription,
   Button,
-  Chip,
   EmptyState,
   Input,
   LoadingRegion,
@@ -28,7 +27,7 @@ import InvitationForm, { type InvitationFormValues } from '../../components/Invi
 import InvitationList from '../../components/InvitationList'
 import ShareableLinkPanel from '../../components/ShareableLinkPanel'
 import { roleText } from './labels'
-import { Field, Panel } from './parts'
+import { CanvasChip, CanvasSelect, Field, Panel } from './parts'
 import {
   ROLE_ORDER,
   VISIBLE_ROWS,
@@ -140,7 +139,7 @@ export default function SuperUsersView() {
   return (
     <div className="flex flex-col gap-section">
       <div className="-mb-2">
-        <PageTopBar
+        <PageTopBar rhythm="canvas"
           eyebrow={companyName ?? t('navigation.systemAdministration')}
           title={t('navigation.users')}
           description={t('superadmin.next.users.description')}
@@ -229,14 +228,14 @@ export default function SuperUsersView() {
         </div>
         <label className="m-0 xl:ml-auto">
           <span className="sr-only">{t('superadmin.next.users.departmentFilterLabel')}</span>
-          <select className="w-52" value={department} onChange={(event) => setDepartment(event.target.value)}>
+          <CanvasSelect className="w-52" value={department} onChange={(event) => setDepartment(event.target.value)}>
             <option value="">{t('superadmin.next.users.allDepartments')}</option>
             {state.departments.map((unit) => (
               <option key={unit.id} value={unit.id}>
                 {unit.name}
               </option>
             ))}
-          </select>
+          </CanvasSelect>
         </label>
         <label htmlFor={searchId} className="relative m-0 min-w-0 flex-1 sm:w-60 sm:flex-none">
           <span className="sr-only">{t('superadmin.next.users.searchPlaceholder')}</span>
@@ -399,7 +398,7 @@ function PersonRow({
         </div>
       </td>
       <td className="px-3 py-3">
-        <Chip
+        <CanvasChip
           tone="neutral"
           icon={user.role === 'company_admin' || user.role === 'super_admin' ? <Shield className="size-3" /> : undefined}
           label={roleText(t, user.role)}
@@ -410,9 +409,9 @@ function PersonRow({
       </td>
       <td className="px-3 py-3">
         {user.isActive ? (
-          <Chip tone="good" label={t('superadmin.next.users.statusActive')} />
+          <CanvasChip tone="good" label={t('superadmin.next.users.statusActive')} />
         ) : (
-          <Chip tone="neutral" label={t('superadmin.next.users.statusInactive')} />
+          <CanvasChip tone="neutral" label={t('superadmin.next.users.statusInactive')} />
         )}
       </td>
       <td className="px-3 py-3">
@@ -566,27 +565,27 @@ function EditPerson({
           htmlFor={ids.role}
           helper={canAssignRoles ? t('superadmin.next.users.roleHelper') : undefined}
         >
-          <select id={ids.role} className="w-full" value={role} disabled={!canAssignRoles} onChange={(event) => setRole(event.target.value)}>
+          <CanvasSelect id={ids.role} className="w-full" value={role} disabled={!canAssignRoles} onChange={(event) => setRole(event.target.value)}>
             {ROLE_ORDER.map((option) => (
               <option key={option} value={option}>
                 {roleText(t, option)}
               </option>
             ))}
-          </select>
+          </CanvasSelect>
         </Field>
         <Field
           fieldLabel={t('superadmin.next.users.department')}
           htmlFor={ids.department}
           helper={t('superadmin.next.users.departmentHelper', { floor: ANONYMITY_FLOOR })}
         >
-          <select id={ids.department} className="w-full" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
+          <CanvasSelect id={ids.department} className="w-full" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
             {!user.departmentId && <option value="">{t('superadmin.next.users.noDepartment')}</option>}
             {options.map((unit) => (
               <option key={unit.id} value={unit.id}>
                 {unit.name}
               </option>
             ))}
-          </select>
+          </CanvasSelect>
         </Field>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-2.5">

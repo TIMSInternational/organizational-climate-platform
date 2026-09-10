@@ -1,8 +1,7 @@
 import { useId } from 'react'
-import { Building2, Check } from 'lucide-react'
+import { Check, Copy } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
-import { Chip } from '../../../../components/ui'
-import { IconBox } from './parts'
+import { CanvasChip, CanvasSelect, IconBox } from './parts'
 
 /**
  * The canvas's "Contexto de empresa" strip — the tenant switcher where it matters, at
@@ -40,7 +39,7 @@ export default function CompanyContextBar({
       className="mb-panel flex flex-wrap items-center gap-3 border-b border-line-light pb-3"
     >
       <IconBox size="sm">
-        <Building2 />
+        <Copy />
       </IconBox>
       <label
         htmlFor={selectId}
@@ -48,7 +47,7 @@ export default function CompanyContextBar({
       >
         {t('companyContext.label')}
       </label>
-      <select
+      <CanvasSelect
         id={selectId}
         className="w-64 max-w-full"
         value={value ?? ''}
@@ -60,13 +59,13 @@ export default function CompanyContextBar({
             {company.name}
           </option>
         ))}
-      </select>
+      </CanvasSelect>
       {mode === 'platform' ? (
-        <Chip tone="neutral" label={t('superadmin.next.context.unchosen')} />
+        <CanvasChip tone="neutral" label={t('superadmin.next.context.unchosen')} />
       ) : isActive ? (
-        <Chip tone="good" icon={<Check className="size-3" />} label={t('superadmin.next.context.active')} />
+        <CanvasChip tone="good" icon={<Check className="size-3" />} label={t('superadmin.next.context.active')} />
       ) : (
-        <Chip tone="neutral" label={t('superadmin.next.context.notActive')} />
+        <CanvasChip tone="neutral" label={t('superadmin.next.context.notActive')} />
       )}
       <p className="m-0 max-w-measure text-xs leading-snug text-fg-tertiary sm:ml-auto sm:text-right">
         {mode === 'platform' ? t('superadmin.next.context.platformNote') : t('superadmin.next.context.tenantNote')}

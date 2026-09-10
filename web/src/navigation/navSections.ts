@@ -46,6 +46,13 @@ export interface NavItem {
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
   badge?: string
   sub?: NavItem[]
+  /**
+   * Draw this group flat: its own row and its children as plain rows beside it, with no
+   * chevron and nothing to expand — the super administrator's "Administración del Sistema",
+   * which the 10 Sep per-role canvas draws as four flat rows. Presentational only: the
+   * data (and so `leafNavItems` and the mobile tab bar) is the same as any group's.
+   */
+  flat?: boolean
 }
 
 export interface NavSection {
@@ -359,6 +366,7 @@ export function buildNavSections(
             labelKey: 'navigation.systemAdministration',
             href: '/admin/companies',
             icon: Shield,
+            flat: true,
             sub: [
               { labelKey: 'navigation.companies', href: '/admin/companies', icon: Building2 },
               { labelKey: 'navigation.systemSettings', href: '/admin/system-settings', icon: Settings },

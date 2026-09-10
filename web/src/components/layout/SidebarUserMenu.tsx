@@ -194,7 +194,7 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
           <Link
             to="/settings/notifications"
             title={t('shell.settings')}
-            style={{ ...ROW, width: 'auto', minWidth: 0, gap: 6, height: 28, padding: '0 8px', fontSize: 12, textDecoration: 'none' }}
+            style={{ ...ROW, width: 'auto', minWidth: 0, gap: 6, height: 28, padding: '0 4px', fontSize: 12, textDecoration: 'none' }}
           >
             <Settings aria-hidden="true" style={{ width: 14, height: 14, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -205,7 +205,7 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
             type="button"
             onClick={onSignOut}
             title={t('shell.signOut')}
-            style={{ ...ROW, width: 'auto', minWidth: 0, gap: 6, height: 28, padding: '0 8px', fontSize: 12, marginLeft: 'auto' }}
+            style={{ ...ROW, width: 'auto', minWidth: 0, gap: 6, height: 28, padding: '0 4px', fontSize: 12, marginLeft: 'auto' }}
           >
             <LogOut aria-hidden="true" style={{ width: 14, height: 14, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

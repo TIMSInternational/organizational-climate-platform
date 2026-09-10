@@ -211,7 +211,7 @@ describe('foldCommonPrefix', () => {
 
 describe('reportWave', () => {
   it('reads the one quarter every report is of, in either language', () => {
-    expect(reportWave([{ title: 'Datos de clima — T3 2026' }, { title: 'Clima organizacional — T3 2026' }])).toBe('T3')
+    expect(reportWave([{ title: 'Datos de clima — T3 2026' }, { title: 'Clima organizacional — T3 2026' }])).toBe('Q3')
     expect(reportWave([{ title: 'Climate — Q3' }, { title: 'Pulse Q3' }])).toBe('Q3')
   })
 

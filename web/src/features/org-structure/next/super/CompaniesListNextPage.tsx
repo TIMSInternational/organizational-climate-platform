@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { Info, Languages, Plus, Search } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
-import { Button, Chip, EmptyState, Input, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../../components/ui'
+import { Button, EmptyState, Input, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { useCompanyContext } from '../../../../company-context'
 import { calendarDay } from '../../../../lib/calendarDay'
@@ -13,7 +13,7 @@ import CompanyForm, { type CompanyFormValues } from '../../components/CompanyFor
 import { CompanyValidation } from '../../components/companyValidation'
 import { NO_PLAN, filterCompanyRows, isUnconfigured, type CompanyListRow } from './companiesList'
 import { dayWithYear, longDay, sizeText, tierText } from './labels'
-import { Note, Panel } from './parts'
+import { CanvasChip, CanvasSelect, Note, Panel } from './parts'
 import { useCompaniesListModel } from './useCompaniesListModel'
 
 const TH =
@@ -70,7 +70,7 @@ export default function CompaniesListNextPage() {
   }
 
   const header = (
-    <PageTopBar
+    <PageTopBar rhythm="canvas"
       eyebrow={t('navigation.systemAdministration')}
       title={t('navigation.companies')}
       description={t('superadmin.next.companies.description')}
@@ -136,7 +136,7 @@ export default function CompaniesListNextPage() {
         </label>
         <label className="m-0">
           <span className="sr-only">{t('superadmin.next.companies.planFilterLabel')}</span>
-          <select className="w-40" value={plan} onChange={(event) => setPlan(event.target.value)}>
+          <CanvasSelect className="w-40" value={plan} onChange={(event) => setPlan(event.target.value)}>
             <option value="">{t('superadmin.next.companies.allPlans')}</option>
             {CompanyValidation.subscriptionTiers.map((tier) => (
               <option key={tier} value={tier}>
@@ -144,7 +144,7 @@ export default function CompaniesListNextPage() {
               </option>
             ))}
             <option value={NO_PLAN}>{t('superadmin.next.companies.noPlan')}</option>
-          </select>
+          </CanvasSelect>
         </label>
         {state.status === 'ready' && (
           <p className="m-0 text-xs text-fg-tertiary sm:ml-auto">
@@ -286,7 +286,7 @@ function CompanyRow({ row }: { row: CompanyListRow }) {
       </td>
       <td className="px-3 py-3">
         {tier ? (
-          <Chip tone="neutral" label={tier} />
+          <CanvasChip tone="neutral" label={tier} />
         ) : (
           <span className="text-xs text-fg-tertiary">{t('superadmin.next.companies.noPlan')}</span>
         )}

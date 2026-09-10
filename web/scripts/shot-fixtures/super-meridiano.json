@@ -1,5 +1,5 @@
 {
-  "_comment": "The platform as the local API answered on 10 Sep 2026, verbatim: the super-admin endpoints from the session's capture, and Grupo Meridiano S.A.'s own reads from GETs as its company administrator. Only Grupo Meridiano S.A.'s settings are here (its detail page's read): the Empresas list no longer reads any tenant's settings, because that read is an audited PUT. GET /admin/benchmarks is keyed ?lang=es with the Spanish body the real API returns for that request. Shoot the super administrator's screens with --role super_admin --company '' --lang es --name 'Rebeca Solís' (the platform overview needs no tenant selected), or --company 16c97c29-07f8-4522-86fc-e6cc56298829 for a tenant's pages.",
+  "_comment": "The platform as the local API answered on 10 Sep 2026, verbatim: the super-admin endpoints from the session's capture, and Grupo Meridiano S.A.'s own reads from GETs as its company administrator. Only Grupo Meridiano S.A.'s settings are here (its detail page's read): the Empresas list no longer reads any tenant's settings, because that read is an audited PUT. GET /admin/benchmarks is keyed ?lang=es with the Spanish body the real API returns for that request. Shoot the super administrator's screens with --role super_admin --company '' --lang es --name 'Rebeca Solís' (the platform overview needs no tenant selected), or --company 16c97c29-07f8-4522-86fc-e6cc56298829 for a tenant's pages. GET /surveys/4c9c8c8c-03e1-4033-8224-8c80b242c558 is the open Q4 wave's detail, captured 10 Sep 2026 as ana.rojas (company administrator) with GET /surveys/4c9c8c8c-03e1-4033-8224-8c80b242c558?lang=es; the detail page reads the wave's own anonymity from its settings.anonymous (false).",
   "GET /notifications/mine": {
     "notifications": []
   },
@@ -466,6 +466,145 @@
         "createdAt": "2026-09-10T02:02:44.947694+00:00"
       }
     ]
+  },
+  "GET /surveys/4c9c8c8c-03e1-4033-8224-8c80b242c558": {
+    "id": "4c9c8c8c-03e1-4033-8224-8c80b242c558",
+    "title": "Encuesta de Clima Q4 (abierta)",
+    "description": "Abierta a respuestas. Sembrada para que las pantallas de respuesta y distribución tengan una encuesta viva.",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "createdBy": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+    "type": "periodic",
+    "status": "active",
+    "language": "both",
+    "resolvedLocale": "es",
+    "fallbackFields": [],
+    "startDate": "2026-09-03T02:03:39.148+00:00",
+    "endDate": "2026-10-10T02:03:39.148+00:00",
+    "responseCount": 3,
+    "targetAudienceCount": 24,
+    "version": 1,
+    "departmentIds": [
+      "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+      "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+      "5bfdb04e-8847-4baa-89c8-d4411654a129",
+      "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+      "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9"
+    ],
+    "questions": [
+      {
+        "id": "bdca477a-e031-4a51-87b3-c762151dbb46",
+        "text": "Puedo plantear preocupaciones sin miedo a represalias.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 0,
+        "category": "psychological_safety"
+      },
+      {
+        "id": "4c133f33-8be3-4b0c-83a0-02af8c25e0d6",
+        "text": "Mi carga de trabajo es sostenible a largo plazo.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 1,
+        "category": "workload"
+      },
+      {
+        "id": "633bafd9-f254-4490-8c12-7e7690e0b4b3",
+        "text": "Confío en las decisiones que toma la dirección.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 2,
+        "category": "trust"
+      },
+      {
+        "id": "8dfa854f-ae7a-4c6f-b4aa-87970ffabdd1",
+        "text": "Aquí se reconoce el buen trabajo.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 3,
+        "category": "recognition"
+      },
+      {
+        "id": "2f0169a2-28a7-4fee-9101-7fb217bda38e",
+        "text": "Veo un camino para crecer en esta organización.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 4,
+        "category": "growth"
+      },
+      {
+        "id": "c5664edb-3234-42c3-ba89-494ecf145661",
+        "text": "Siento que pertenezco a mi equipo.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 5,
+        "category": "belonging"
+      }
+    ],
+    "settings": {
+      "anonymous": false,
+      "allowPartialResponses": true,
+      "randomizeQuestions": false,
+      "showProgress": true,
+      "autoSave": true,
+      "timeLimitMinutes": null,
+      "responseLimit": null,
+      "notificationSendInvitations": true,
+      "notificationSendReminders": true,
+      "notificationReminderFrequencyDays": 3,
+      "invitationCustomMessage": null,
+      "invitationCustomSubject": null,
+      "invitationIncludeCredentials": false,
+      "invitationSendImmediately": false,
+      "invitationBrandingEnabled": false
+    },
+    "allowedStatusTransitions": [
+      "closed"
+    ],
+    "isContentEditable": false,
+    "createdAt": "2026-09-10T02:03:39.158774+00:00",
+    "updatedAt": "2026-09-10T02:03:39.181241+00:00"
   },
   "GET /dashboard/company-admin": {
     "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",

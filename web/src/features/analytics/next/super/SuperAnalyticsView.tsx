@@ -3,12 +3,12 @@ import { ArrowRight, Gauge, Sparkles } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { ANONYMITY_FLOOR, KpiTile } from '../../../../components/charts'
-import { Button, Chip, LoadingRegion, SkeletonText } from '../../../../components/ui'
+import { Button, LoadingRegion, SkeletonText } from '../../../../components/ui'
 import { useCompanyContext } from '../../../../company-context'
 import { calendarDay } from '../../../../lib/calendarDay'
 import CompanyContextBar from '../../../org-structure/next/super/CompanyContextBar'
-import { EmptyNote, Panel } from '../../../org-structure/next/super/parts'
-import { globalBenchmarks, isUnscored, lastClosedSurvey } from './derive'
+import { CanvasChip, EmptyNote, Panel } from '../../../org-structure/next/super/parts'
+import { companyProfile, globalBenchmarks, isUnscored, lastClosedSurvey } from './derive'
 import { useSuperAnalyticsModel } from './useSuperAnalyticsModel'
 
 const SCORE = { minimumFractionDigits: 2, maximumFractionDigits: 2 } as const
@@ -32,6 +32,8 @@ export default function SuperAnalyticsView() {
   const navigate = useNavigate()
   const state = useSuperAnalyticsModel(companyId)
   const company = state.companies?.find((candidate) => candidate.id === companyId) ?? null
+  // "(servicios, mediana)": the tenant's own sector and size, as its record holds them.
+  const profile = companyProfile(company, t, locale)
   const closed = state.surveys ? lastClosedSurvey(state.surveys) : null
   const globals = state.all ? globalBenchmarks(state.all) : null
   const unreviewed = state.insights?.filter((insight) => !insight.isAcknowledged).length ?? 0
@@ -72,7 +74,7 @@ export default function SuperAnalyticsView() {
       />
       <div className="flex flex-col gap-section">
         <div className="-mb-2">
-          <PageTopBar
+          <PageTopBar rhythm="canvas"
             eyebrow={t('navigation.systemAdministration')}
             title={t('navigation.analytics')}
             description={t('superadmin.next.analytics.description')}
@@ -156,7 +158,13 @@ export default function SuperAnalyticsView() {
                         : globals.length === 0
                           ? t('superadmin.next.analytics.refs.emptyNone')
                           : globals.length === 1
-                            ? isUnscored(globals[0])
+                            ? profile
+                              ? t('superadmin.next.analytics.refs.emptyGlobalOneCompared', {
+                                  name: globals[0].name,
+                                  score: score(globals[0].qualityScore),
+                                  profile,
+                                })
+                              : isUnscored(globals[0])
                               ? t('superadmin.next.analytics.refs.emptyGlobalOneUnscored', { name: globals[0].name })
                               : t('superadmin.next.analytics.refs.emptyGlobalOne', { name: globals[0].name, score: score(globals[0].qualityScore) })
                             : t('superadmin.next.analytics.refs.emptyGlobalMany', { count: globals.length })}
@@ -175,7 +183,7 @@ export default function SuperAnalyticsView() {
                                 ? t('superadmin.next.analytics.refs.unscored')
                                 : t('superadmin.next.analytics.refs.quality', { score: score(benchmark.qualityScore) })}
                             </span>
-                            <Chip
+                            <CanvasChip
                               tone={benchmark.isActive ? 'good' : 'neutral'}
                               label={benchmark.isActive ? t('superadmin.next.analytics.refs.active') : t('superadmin.next.analytics.refs.inactive')}
                             />
@@ -217,7 +225,7 @@ export default function SuperAnalyticsView() {
                             className={`m-0 flex items-center justify-between gap-3 py-2 ${index > 0 ? 'border-t border-line-light' : ''}`}
                           >
                             <span className="min-w-0 truncate text-fg-primary">{insight.title}</span>
-                            <Chip
+                            <CanvasChip
                               tone={insight.isAcknowledged ? 'neutral' : 'warning'}
                               label={
                                 insight.isAcknowledged
@@ -244,7 +252,7 @@ export default function SuperAnalyticsView() {
 function InsightsLink() {
   const { t } = useTranslation()
   return (
-    <Link to="/analytics/ai-insights" className="inline-flex items-center gap-1 self-start text-xs">
+    <Link to="/analytics/ai-insights" className="inline-flex items-center gap-1 self-start text-xs text-fg-secondary hover:text-fg-primary">
       {t('superadmin.next.analytics.insights.open')}
       <ArrowRight aria-hidden="true" className="size-3" />
     </Link>

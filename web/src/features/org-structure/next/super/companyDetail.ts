@@ -171,11 +171,20 @@ export function foldCommonPrefix(names: readonly string[]): string[] {
 }
 
 /** A quarter as report titles write it: "Q3" or, in Spanish, "T3" (trimestre). */
-const REPORT_WAVE = /\b[QT][1-4]\b/i
+const REPORT_WAVE = /\b[QT]([1-4])\b/i
 
-/** The one quarter every report is of ("Clima organizacional — T3 2026" → "T3"), or `null`. */
+/**
+ * The one quarter every report is of, or `null` — printed the way the canvas and the
+ * tenant's own waves name a quarter ("Clima Q4"): "Clima organizacional — T3 2026" → "Q3".
+ * The number is the reports' own; only the letter follows the board.
+ */
 export function reportWave(reports: readonly { title: string }[]): string | null {
-  const codes = new Set(reports.map((report) => report.title.match(REPORT_WAVE)?.[0].toUpperCase() ?? null))
+  const codes = new Set(
+    reports.map((report) => {
+      const quarter = report.title.match(REPORT_WAVE)?.[1]
+      return quarter ? `Q${quarter}` : null
+    }),
+  )
   const [code] = [...codes]
   return reports.length > 0 && codes.size === 1 && code ? code : null
 }

@@ -118,11 +118,16 @@ describe('SuperAnalyticsView', () => {
     expect(screen.getByRole('link', { name: 'Northwind Logistics' }).getAttribute('href')).toBe('/admin/companies/c1')
   })
 
-  it('names the global reference a super administrator’s filter leaves out, and prints no score for an unscored one', async () => {
+  it('names the global reference the filter leaves out as the board writes it: its real score and the tenant it is not compared with', async () => {
     serve({ own: [], all: [benchmark()] })
     renderPage()
-    expect(await screen.findByText(copy.refs.emptyGlobalOneUnscored.replace('{name}', 'Manufacturing · 500–1000 staff'))).toBeTruthy()
-    expect(document.body.textContent).not.toMatch(/0[.,]00/)
+    // The payload's own qualityScore (0), printed at two decimals, and the tenant's own
+    // sector and size from its record ('Services', 'medium') — never the board's numbers.
+    const sentence = copy.refs.emptyGlobalOneCompared
+      .replace('{name}', 'Manufacturing · 500–1000 staff')
+      .replace('{score}', '0.00')
+      .replace('{profile}', `services, ${en.superadmin.next.sizes.medium.toLowerCase()}`)
+    expect(await screen.findByText(sentence)).toBeTruthy()
     expect(screen.getByText(copy.tiles.globalOnlyOne)).toBeTruthy()
   })
 

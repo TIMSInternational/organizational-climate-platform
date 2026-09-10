@@ -1,6 +1,9 @@
 import { waveCode } from '../../../dashboard/next/compose'
 import type { SurveyListItem } from '../../../surveys/api/surveys'
 import type { BenchmarkListItem } from '../../api/benchmarks'
+import type { TranslateFn } from '../../../../i18n'
+import type { Company } from '../../../org-structure/api/companies'
+import { sizeText } from '../../../org-structure/next/super/labels'
 
 /**
  * The pure half of the super administrator's Analítica for one tenant. Pinned by
@@ -40,4 +43,22 @@ export function globalBenchmarks(all: readonly BenchmarkListItem[]): BenchmarkLi
  */
 export function isUnscored(benchmark: Pick<BenchmarkListItem, 'qualityScore'>): boolean {
   return benchmark.qualityScore === 0
+}
+
+/**
+ * The tenant as a sentence names it — "servicios, mediana" — from its own record's sector
+ * and size (`GET /admin/companies`), lower-cased mid-sentence in the reader's language.
+ * Empty when the record carries neither, so the caller can fall back to a sentence that
+ * does not name them.
+ */
+export function companyProfile(
+  company: Pick<Company, 'industry' | 'size'> | null,
+  t: TranslateFn,
+  locale: string,
+): string {
+  if (!company) return ''
+  return [company.industry?.trim() || null, sizeText(t, company.size)]
+    .filter((part): part is string => Boolean(part))
+    .map((part) => part.toLocaleLowerCase(locale))
+    .join(', ')
 }
