@@ -2,6 +2,7 @@ import { canDistribute } from '../../api/surveyInvitationCopy'
 import { WHOLE_COMPANY_KEY, type ClimateTrendsResponse } from '../../api/climateTrends'
 import type { SurveyStatusFacet } from '../../surveyListView'
 import { waveCode } from '../../../dashboard/next/compose'
+import { printedMove } from '../../../dashboard/next/derive'
 import { withoutArchived } from '../trends/derive'
 import type { SurveyRow, SurveySection, WaveReading } from './model'
 
@@ -147,7 +148,9 @@ export function waveReadings(trends: ClimateTrendsResponse): Map<string, WaveRea
     const before = index > 0 ? (means[index - 1] ?? null) : null
     readings.set(survey.surveyId, {
       first: index === 0,
-      delta: here !== null && before !== null ? here - before : null,
+      // At the two decimals the row prints, as the CLIMA tile and Clima en el tiempo do: the
+      // difference of the printed readings, never the rounding of the raw difference.
+      delta: here !== null && before !== null ? printedMove(here, before, 2) : null,
       previousCode: previous ? waveCode(previous.title, previous.surveyId.slice(0, 8)) : null,
       completedCount: survey.completedCount,
     })

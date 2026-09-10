@@ -108,3 +108,28 @@ describe('the chip row and the row menu', () => {
     expect(menuItemsFor({ canAuthorSurveys: false })).toEqual(['view'])
   })
 })
+
+describe('a closed row move, as printed', () => {
+  it('is the difference of the two readings at the two decimals the row prints them', () => {
+    // Q1 reads 3,3349 and prints 3,33; Q2 reads 3,656 and prints 3,66. The raw difference,
+    // 0,3211, would print +0,32 beside two numbers a reader subtracts to 0,33.
+    const base = trends()
+    const company = base.groups[0]
+    const payload: ClimateTrendsResponse = {
+      ...base,
+      groups: [
+        {
+          ...company,
+          points: company.points.map((point) =>
+            point.surveyId === 'q1'
+              ? { ...point, scores: [3.3349, 3.3349] }
+              : point.surveyId === 'q2'
+                ? { ...point, scores: [3.656, 3.656] }
+                : point,
+          ),
+        },
+      ],
+    }
+    expect(waveReadings(payload).get('q2')?.delta).toBeCloseTo(0.33, 10)
+  })
+})
