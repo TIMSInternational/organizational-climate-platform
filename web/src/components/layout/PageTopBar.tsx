@@ -160,14 +160,14 @@ export function PageTopBar({
   const eyebrowText = eyebrow === undefined ? derivedEyebrow : eyebrow
 
   return (
-    // `.ptb`: 16px of pad, then the hairline, then 16px before the KPI row.
-    // `pb-4` is the canvas's 16px under the header (every artboard: `padding-bottom:
-    // 16px`), and the text column's `gap-1.5` its 6px between eyebrow, title and
-    // description; `mb-section` is the canvas's 24px under the rule (SurveysList.dc.html and
-    // ClimateTrends.dc.html set the header inside `flex-direction: column; gap: 24px`).
+    // The artboards' header — all 22 admin boards of 10 Sep draw the same one: the
+    // breadcrumb, then 38px (its own 14px margin plus the page's 24px gap), the
+    // header, 16px of pad, the hairline, and 24px before the KPI row. `gap-9.5` is
+    // 9.5 x the 4px `--spacing` token, `pb-4` is 16px and `mb-section` the 24px
+    // `--admin-size-section-gap`. UI-0 had it at 8px / 14px / 16px.
     <div
       data-slot="page-top-bar"
-      className="mb-section flex flex-col gap-inline border-b border-line-light pb-4"
+      className="mb-section flex flex-col gap-9.5 border-b border-line-light pb-4"
     >
       {breadcrumbs && breadcrumbs.length > 0 && (
         <Breadcrumb aria-label={breadcrumbLabel ?? t('shell.breadcrumb')}>
@@ -210,6 +210,7 @@ export function PageTopBar({
           the actions take the next line at full width.
           See the docstring above; happy-dom cannot see any of this. */}
       <div className="flex flex-wrap items-start justify-between gap-panel">
+        {/* One column, 6px between eyebrow, title and description — the artboards'. */}
         <div className="flex min-w-0 grow basis-header-text flex-col gap-1.5">
       {/* `feat/ui-4-admin` found this same defect independently and fixed it with
           `basis-64` instead: it measured the description on
@@ -233,6 +234,7 @@ export function PageTopBar({
           <div className="flex flex-wrap items-center gap-inline">
             {/* No bottom margin: index.css gives every `h1` `margin-bottom: 8px`,
                 which would double up with this container's `gap`. */}
+            {/* 24px, `--admin-text-3xl`: every artboard's page title. */}
             <h1 className="mb-0 min-w-0 break-words text-3xl">{title}</h1>
             {badge && <Badge variant={badge.variant}>{badge.text}</Badge>}
           </div>

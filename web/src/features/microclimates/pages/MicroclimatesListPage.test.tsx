@@ -80,9 +80,7 @@ afterEach(() => {
 function tile(label: string): HTMLElement {
   const heading = screen
     .getAllByText(label)
-    // By the tile's own slot, not a class: the label's letter-spacing is styling, and
-    // the canvas restyle (tracking-label → tracking-eyebrow) broke a class match once.
-    .find((node) => node.parentElement?.getAttribute('data-slot') === 'kpi-tile')
+    .find((node) => node.getAttribute('data-slot') === 'kpi-label')
   if (!heading?.parentElement) throw new Error(`no KPI tile labelled ${label}`)
   return heading.parentElement
 }

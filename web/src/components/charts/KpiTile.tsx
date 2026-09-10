@@ -100,7 +100,7 @@ export type KpiTileSize = 'default' | 'hero' | 'large'
 
 /** The reading's size and weight and the label's tracking, per `size`. */
 const SIZES: Record<KpiTileSize, { value: string; label: string }> = {
-  default: { value: 'text-3xl font-medium tracking-tight', label: 'tracking-label' },
+  default: { value: 'text-3xl font-medium tracking-tight', label: 'tracking-tile' },
   hero: { value: 'text-kpi-hero font-normal tracking-normal', label: 'tracking-label' },
   large: { value: 'text-kpi-lg font-normal tracking-normal', label: 'tracking-kpi' },
 }
@@ -145,19 +145,21 @@ export default function KpiTile({
         className,
       )}
     >
-      {/* `text-fg-secondary`, not `text-fg-tertiary`, and it is a contrast fix rather
-          than a preference. Measured against `styles/tokens.css` on this tile's own
-          recessed surface: `--admin-font-tertiary` #818181 over `--admin-bg-icon-box`
-          is **3.42:1** in light and **3.68:1** in dark. This line is 10px, so WCAG AA
-          1.4.3 wants 4.5:1 in both. `--admin-font-secondary` is 8.15:1 and 6.85:1.
+      {/* The artboards' tile eyebrow (Dashboard and SurveyResults, 10 Sep): 10px, bold,
+          uppercase, spaced .12em (`tracking-tile`), in the label ink `text-fg-label`.
 
-          Failing in BOTH themes is what let it survive: this project's usual contrast
-          bug is light-only, so a reviewer who checked dark saw nothing wrong either
-          way. Two lanes found it independently, with the same numbers, and both
+          Never `text-fg-tertiary`, and that is a contrast rule, not a preference:
+          `--admin-font-tertiary` #818181 measured 3.42:1 (light) and 3.68:1 (dark) on
+          the recessed surface this tile first sat on, where WCAG AA 1.4.3 wants 4.5:1
+          for a 10px line. Failing in BOTH themes is what let it survive, and two lanes
           pinned it — `features/surveys/respondContrast.test.ts` and
           `features/surveys/resultsContrast.test.ts` each ban `text-fg-tertiary` from
-          this file by name. */}
-      <div data-slot="kpi-label" className={cn('text-2xs font-bold uppercase text-fg-secondary', SIZES[size].label)}>
+          this file by name. The label ink on the card is measured there too ("the KPI
+          tile label"): 5.44:1 in light.
+
+          `data-slot="kpi-label"` is how a test finds a tile by its label: "Completed"
+          is also a badge and a filter option on the list pages, so text alone is not. */}
+      <div data-slot="kpi-label" className={cn('text-2xs font-bold uppercase text-fg-label', SIZES[size].label)}>
         {label}
       </div>
       {/* The unit shares the value's baseline, as the artboards draw it — never a

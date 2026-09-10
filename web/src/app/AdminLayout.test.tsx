@@ -112,6 +112,16 @@ describe('AdminLayout', () => {
     expect(skip.getAttribute('href')).toBe('#main')
   })
 
+  it('sets the content card flush on the rail and under the bar from md, as the canvas draws it', () => {
+    // Every artboard of the 10 Sep canvas draws the card at x=236 (the rail's edge) and
+    // y=52 (the bar's foot), with the 12px gutter on the right and the bottom only. The
+    // suite has no layout engine, so this pins the classes that place it; the shots
+    // measure the pixels (`npm run shot`).
+    renderShell()
+    const classes = document.getElementById('main')!.className.split(/\s+/)
+    expect(classes).toEqual(expect.arrayContaining(['p-gutter', 'md:pt-0', 'md:pl-0']))
+  })
+
   it('puts the skip link before the navigation in DOM order', () => {
     // A skip link that comes after the sidebar it exists to skip is decoration.
     renderShell()

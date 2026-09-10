@@ -157,8 +157,8 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
                 {name ?? t('shell.account')}
               </span>
               {/* Truncated like the name above it. Without this the role wrapped to
-                  two lines in Spanish -- "Administrador de Empresa" is wider than
-                  the 150px this column has in a 220px rail -- which grew the block
+                  two lines in Spanish -- "Administrador de Empresa" was wider than
+                  the 150px this column had in a 220px rail -- which grew the block
                   and pushed it into the Settings/Sign-out row beneath. Rendered in
                   Chrome at 1440x900 with `preferredLocale=es`. */}
               {roleKey ? (

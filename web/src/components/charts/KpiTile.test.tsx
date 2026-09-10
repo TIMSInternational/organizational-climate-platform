@@ -146,3 +146,15 @@ describe('KpiTile sizes', () => {
     expect(screen.getByText('7').className).toContain('text-3xl')
   })
 })
+
+describe('KpiTile eyebrow', () => {
+  it('sets its label as the artboards do: the label ink, spaced .12em, findable by its slot', () => {
+    const { container } = render(<KpiTile label="Clima · Q3" value={3.65} />)
+    const label = container.querySelector('[data-slot="kpi-label"]')!
+    expect(label.textContent).toBe('Clima · Q3')
+    // Dashboard and SurveyResults artboards (10 Sep): 10px, bold, uppercase, .12em, #6e648b.
+    expect(label.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['text-2xs', 'font-bold', 'uppercase', 'tracking-tile', 'text-fg-label']),
+    )
+  })
+})

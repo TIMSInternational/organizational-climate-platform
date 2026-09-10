@@ -158,7 +158,7 @@ describe('PageTopBar', () => {
       return element!
     }
 
-    it('closes itself with a hairline rule, 16px under the content, as every artboard does', () => {
+    it('closes itself with a hairline rule, 16px under the content', () => {
       const { container } = renderTopBar({ title: 'Companies' })
       const classes = topBar(container).className.split(/\s+/)
       expect(classes).toContain('border-b')
@@ -175,8 +175,22 @@ describe('PageTopBar', () => {
       expect(classes).not.toContain('mb-panel')
     })
 
+    it('keeps 38px between the breadcrumb and the header, and 6px between its lines', () => {
+      const { container } = renderTopBar({
+        title: 'Companies',
+        eyebrow: 'Administration',
+        description: 'Every company on the platform',
+        breadcrumbs: [{ label: 'Admin', href: '/admin' }, { label: 'Companies' }],
+      })
+      // The artboards: the breadcrumb's own 14px margin plus the page's 24px gap.
+      expect(topBar(container).className.split(/\s+/)).toContain('gap-9.5')
+      // Eyebrow, title and description: one column, 6px apart.
+      const column = container.querySelector('[data-slot="page-eyebrow"]')!.parentElement!
+      expect(column.className.split(/\s+/)).toEqual(expect.arrayContaining(['flex', 'flex-col', 'gap-1.5']))
+    })
+
     it('draws the rule itself rather than delegating to a Separator element', () => {
-      // A separator is a sibling with margins of its own, so the 14px/16px split
+      // A separator is a sibling with margins of its own, so the 16px/24px split
       // above cannot be expressed with one. Its absence is the assertion.
       const { container } = renderTopBar({ title: 'Companies' })
       expect(container.querySelector('[data-slot="separator"]')).toBeNull()

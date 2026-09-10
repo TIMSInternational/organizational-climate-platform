@@ -102,6 +102,17 @@ export interface ProtectedCellProps {
    * box it asked for and the word lays out next to it.
    */
   suppressedClassName?: string
+  /**
+   * What the hatched box carries: the shield (the default), or the word itself,
+   * set small inside the box.
+   *
+   * The SurveyResults artboard (10 Sep) prints *protegido* inside a withheld
+   * group's "Media del grupo" cell: that column holds one reading per row, and in
+   * it the hatched box stands in for the number, so the word goes where the number
+   * would have been. With `'word'` the box already says it, so `showWord` has
+   * nothing left to add beside it and is ignored.
+   */
+  mark?: 'shield' | 'word'
 }
 
 export default function ProtectedCell({
@@ -112,6 +123,7 @@ export default function ProtectedCell({
   children,
   className,
   suppressedClassName,
+  mark = 'shield',
 }: ProtectedCellProps) {
   const { t } = useTranslation()
 
@@ -158,11 +170,18 @@ export default function ProtectedCell({
       {/* The shield, not a padlock: the canvas draws a shield in every withheld
           cell and in the privacy note beside the opened cell, so the one glyph
           means "the floor is enforced here" wherever it appears. */}
-      <Shield aria-hidden="true" className="size-3" />
+      {mark === 'word' ? (
+        // `aria-hidden`: the box's own label already says it, in a full sentence.
+        <span aria-hidden="true" className="font-mono text-2xs lowercase">
+          {t('charts.protectedWord')}
+        </span>
+      ) : (
+        <Shield aria-hidden="true" className="size-3" />
+      )}
     </span>
   )
 
-  if (!showWord) return box
+  if (!showWord || mark === 'word') return box
 
   return (
     <span className="inline-flex items-center gap-1.5">
