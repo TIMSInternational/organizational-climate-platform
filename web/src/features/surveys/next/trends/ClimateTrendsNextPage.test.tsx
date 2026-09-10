@@ -132,6 +132,11 @@ describe('ClimateTrendsNextPage', () => {
     const belonging = document.querySelector('[data-slot="trend-card"][data-dimension="belonging"]') as HTMLElement
     expect(within(belonging).getByRole('img').getAttribute('aria-label')).toContain(`3.1 → ${copy.withheld} → 3.9`)
     expect(belonging.querySelectorAll('[data-slot="trend-withheld"]')).toHaveLength(1)
+    // Q2 is withheld for Finanzas: no "since Q2" delta (it would reconstruct Q2), while
+    // "since Q1" spans the withheld wave from two disclosed readings and is printed.
+    expect(within(belonging).queryByText(copy.sinceWave.replace('{wave}', 'Q2'))).toBeNull()
+    expect(within(belonging).getByText(copy.sinceWave.replace('{wave}', 'Q1'))).toBeTruthy()
+    expect(within(belonging).getByText('+0.8')).toBeTruthy()
     // No second request: the department series was already in hand.
     expect(vi.mocked(getClimateTrends)).toHaveBeenCalledTimes(2)
   })

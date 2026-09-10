@@ -36,8 +36,11 @@ export function latestValue(dimension: TrendDimension): number | null {
 }
 
 /**
- * The change from the reading at `fromIndex` to the latest one. `null` when either
- * end is withheld — a delta across a suppressed wave would reconstruct it.
+ * The change from the reading at `fromIndex` to the latest disclosed one. `null` when
+ * either endpoint is withheld: `latest − from` printed beside one disclosed endpoint
+ * would reconstruct the other. A withheld wave *between* the endpoints does not void
+ * the delta — both readings are already on the page, and the difference of two
+ * disclosed numbers says nothing about the wave between them.
  */
 export function deltaSince(values: readonly (number | null)[], fromIndex: number): number | null {
   const to = latestIndex(values)
