@@ -1,65 +1,63 @@
-import { useCallback, useMemo, useState } from 'react'
-import { Link } from 'react-router'
-import { ArrowRight, Check, ChevronDown, Download, ShieldCheck, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowRight, Check, ChevronDown, Download, MoreHorizontal } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
+import { KpiTile, WordCloud, formatMetric, type ClimateMapSelection } from '../../../components/charts'
 import {
-  ClimateMap,
-  KpiTile,
-  ProtectedCell,
-  WordCloud,
-  formatMetric,
-  type ClimateMapSelection,
-  type MetricFormat,
-} from '../../../components/charts'
-import {
-  Badge,
   Button,
+  Chip,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  H2,
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
 } from '../../../components/ui'
 import type { ViewerCapabilities } from '../../../auth/viewerCapabilities'
+import { calendarDayLong } from '../../../lib/calendarDay'
+import { cn } from '../../../lib/cn'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import { downloadTextFile } from '../../../lib/downloadTextFile'
 import { dimensionLabel } from '../dimensionLabel'
-import { getSurveyResultsPdf, surveyResultsPdfFileName } from '../api/surveyExport'
+import {
+  getSurveyResultsCsv,
+  getSurveyResultsPdf,
+  surveyResultsCsvFileName,
+  surveyResultsPdfFileName,
+} from '../api/surveyExport'
 import { UNCATEGORISED_DIMENSION } from '../surveyResultsMap'
 import { buildBreakdownCsv, buildQuestionResultsCsv, resultsFileName, type CsvLabels } from '../surveyResultsCsv'
 import ResultsContentLanguageNotice from '../components/ResultsContentLanguageNotice'
 import ResultsSuppressionNotice from '../components/ResultsSuppressionNotice'
 import type { SurveyResultsNextModel } from './model'
+import ResultsCellPanel from './ResultsCellPanel'
+import ResultsClimateGrid from './ResultsClimateGrid'
 import SurveyResultsQuestions from './SurveyResultsQuestions'
 import {
-  belowReference,
+  CLIMATE_TARGET,
+  belowTarget,
   cellDetail,
+  companyMean,
   companyScores,
   groupRows,
   hasOpenText,
   legibleGroups,
-  lowShare,
   openTextWords,
   whereToLookFirst,
   withheldWords,
-  type ResultsDistributionPoint,
+  type ResultsFinding,
 } from './derive'
+import { tintOf } from './tint'
 
-const SCORE: MetricFormat = { kind: 'number', decimals: 1 }
-const PANEL = 'rounded-lg border border-line-light bg-surface-panel p-panel'
+/** The id the open cell's `aria-controls` names. */
+const PANEL_ID = 'results-next-cell-panel'
+/** The artboard's `.card`: the card surface, the default hairline, 8px radius, a faint lift. */
+const CARD = 'rounded-lg border border-line-default bg-surface-card shadow-sm'
+/** Closed states the header says "cerró" for; anything else is still to close. */
+const CLOSED_STATUSES = new Set(['closed', 'archived'])
 
 interface SurveyResultsNextViewProps {
   model: SurveyResultsNextModel
   capabilities: ViewerCapabilities
-  /** The API base, for the one export the browser cannot build. */
+  /** The API base, for the exports the browser cannot build. */
   baseUrl: string
   onError: (message: string) => void
 }
@@ -68,37 +66,36 @@ interface SurveyResultsNextViewProps {
  * The redesigned survey results, after the `SurveyResults` artboard.
  *
  * Reads top to bottom the way the design does: four tiles, "where to look first",
- * the map as the hero with a whole-company row and per-group means, then the opened
- * cell with its question, the same dimension in the other groups and the plan that
- * covers the group. The one action `capabilities` gates is the "create a plan" link
- * (`canCreateActionPlan`); the exports are gated by suppression alone, for the reason
- * given at `actions` below, so nothing here is offered to a viewer the server would
- * refuse.
+ * the map as the hero — ONE grid with the whole company first and a mean and a delta
+ * per group — then the opened cell with its question, the same dimension in the
+ * other groups and the plan that covers the group. Every figure is measured against
+ * the climate target `CLIMATE_TARGET` (3,7), the one the Panel de Control reads, never
+ * against the survey's own mean.
+ *
+ * ## Why the opened cell always opens, and comes into view
+ *
+ * Measured on #468 against the tenant's real payload (the drill-in "never opened"):
+ * `cellDetail` answered for every disclosed cell, so the panel was rendered — but (1)
+ * "Ver la pregunta" TOGGLED, so on the finding that is already open (the lowest cell,
+ * the one the page lands on, the first card a reader clicks) it closed the panel; and
+ * (2) the panel sat under three stacked tables, below the fold, and nothing brought it
+ * up — the cell outlined and the reader saw no panel. So a cell or a finding now only
+ * ever *opens* its cell (the × closes it), the panel sits directly under the map, and
+ * opening scrolls it into view; opened from a finding, focus moves to its heading.
  *
  * ## Three things the artboard did not draw and the page it replaced did
  *
- * This view took over `/surveys/:id/results` from `pages/SurveyResultsPage.tsx`
- * (ruled 10 Sep), and the artboard was drawn for one survey — Grupo Meridiano's, one
- * scale question per dimension, authored in Spanish, no open text. Three things that
- * page rendered for every *other* survey are kept here, because the swap must not
- * lose them silently (`docs/decisions/survey-results-route-swap.md`):
- *
- * 1. **The content-language notice**, first: a Spanish administrator opening an
- *    English-only survey is told the questions are in English before quoting them.
- * 2. **The open-text themes**, after the opened cell: the word cloud is the one
- *    surface the open-ended answers have — word frequencies per language, never a
- *    quote — and the artboard's own drill-in says that is what is shown.
- * 3. **Every question, one row each, with its filters**, last: a multiple-choice,
- *    ranking or open-ended question never reaches the map, and a dimension with more
- *    than one question shows them all only here (`SurveyResultsQuestions`).
+ * Kept below the artboard's end, as `docs/decisions/survey-results-route-swap.md`
+ * records: the content-language notice (first), the open-text themes, and every
+ * question with its filters (`SurveyResultsQuestions`).
  *
  * ## The four-layer privacy rule, kept
  *
- * A withheld group never yields a number: (1) `ClimateMap` hatches its row, (2) the
- * per-group means table and the "other groups" list print `ProtectedCell` for it,
- * (3) `whereToLookFirst` and `cellDetail` come from `surveyResultsMap.ts`, which
- * produces nothing for a withheld row, and (4) the exports are the current page's
- * builders over the same payload, which the server already floored.
+ * A withheld group never yields a number: (1) the grid hatches its row in every cell,
+ * mean and delta included, (2) the "other groups" list hatches it, (3) `whereToLookFirst`
+ * and `cellDetail` come from `surveyResultsMap.ts`, which produces nothing for a
+ * withheld row, and (4) the exports are the page's builders over the same payload,
+ * which the server already floored, or the server's own files.
  */
 export default function SurveyResultsNextView({ model, capabilities, baseUrl, onError }: SurveyResultsNextViewProps) {
   const { t, locale } = useTranslation()
@@ -108,32 +105,29 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
     const first = whereToLookFirst(model)[0]
     return first ? { rowId: first.rowId, dimensionKey: first.dimensionKey } : null
   })
+  // A new object per request, so asking for the cell that is already open still
+  // brings it back into view.
+  const [reveal, setReveal] = useState<{ focus: boolean } | null>(null)
   const [exporting, setExporting] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
 
   const climate = model.climate
-  const reference = climate?.target ?? null
-  const score = useCallback((value: number) => formatMetric(value, SCORE, locale), [locale])
+  const sample = model.sample
+  const score = useCallback((value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale), [locale])
   const signed = useCallback(
-    (value: number) => `${value > 0 ? '+' : ''}${formatMetric(value, SCORE, locale)}`,
+    (value: number, decimals: number) =>
+      `${value > 0 ? '+' : ''}${formatMetric(value, { kind: 'number', decimals }, locale)}`,
     [locale],
   )
   const dimensionName = useCallback(
     (key: string) => (key === UNCATEGORISED_DIMENSION ? t('surveyResults.uncategorised') : dimensionLabel(key, t)),
     [t],
   )
-  const shortDate = useCallback(
-    // A date-only ISO string is a calendar day, not an instant: format it in UTC so a
-    // due date of the 15th does not print as the 14th west of Greenwich.
-    (iso: string) =>
-      new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', timeZone: iso.length === 10 ? 'UTC' : undefined }).format(
-        new Date(iso),
-      ),
-    [locale],
-  )
 
   const rows = useMemo(() => groupRows(model), [model])
-  const company = useMemo(() => companyScores(model), [model])
-  const below = useMemo(() => belowReference(model), [model])
+  const company = useMemo(() => ({ scores: companyScores(model), mean: companyMean(model) }), [model])
+  const below = useMemo(() => belowTarget(model), [model])
   const groups = useMemo(() => legibleGroups(model), [model])
   const findings = useMemo(() => whereToLookFirst(model), [model])
   const detail = useMemo(() => (selection ? cellDetail(model, selection) : null), [model, selection])
@@ -141,22 +135,33 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   const themes = useMemo(() => openTextWords(model), [model])
   const withheld = withheldWords(model)
 
-  const openCell = useCallback((rowId: string, dimensionKey: string) => {
-    setSelection((current) =>
-      current && current.rowId === rowId && current.dimensionKey === dimensionKey ? null : { rowId, dimensionKey },
-    )
+  // Opening is idempotent: a cell or a finding only ever OPENS its cell. The × is
+  // the one way to close it (see the module note on the toggle this replaced).
+  const openCell = useCallback((rowId: string, dimensionKey: string, focus: boolean) => {
+    setSelection({ rowId, dimensionKey })
+    setReveal({ focus })
   }, [])
 
-  const downloadPdf = useCallback(async () => {
-    setExporting(true)
-    try {
-      downloadBlobFile(surveyResultsPdfFileName(model.surveyId), await getSurveyResultsPdf(baseUrl, model.surveyId, locale))
-    } catch (err) {
-      onError(err instanceof Error ? err.message : t('errors.generic'))
-    } finally {
-      setExporting(false)
-    }
-  }, [baseUrl, model.surveyId, locale, onError, t])
+  useEffect(() => {
+    if (!reveal) return
+    // `?.`: the suite's DOM has no layout engine and no `scrollIntoView`.
+    panelRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+    if (reveal.focus) headingRef.current?.focus({ preventScroll: true })
+  }, [reveal])
+
+  const download = useCallback(
+    async (fetchFile: () => Promise<Blob>, fileName: string) => {
+      setExporting(true)
+      try {
+        downloadBlobFile(fileName, await fetchFile())
+      } catch (err) {
+        onError(err instanceof Error ? err.message : t('errors.generic'))
+      } finally {
+        setExporting(false)
+      }
+    },
+    [onError, t],
+  )
 
   const csvLabels: CsvLabels = {
     questionOrder: t('surveyResults.csvQuestionOrder'),
@@ -178,41 +183,53 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   const csvPayload = { surveyId: model.surveyId }
 
   const name = model.name ?? t('surveyResults.untitled')
+  const target = score(CLIMATE_TARGET)
+  const isClosed = CLOSED_STATUSES.has(model.status)
+  // The closing day, off `GET /surveys/{id}`'s `endDate` — a calendar day, read in UTC.
+  const closingDay = model.closesAt ? calendarDayLong(Date.parse(model.closesAt), locale) : null
   const lastResponse = model.summary.lastResponseAt
-  const sample = model.sample
-  const sampleChip = sample.isSample ? <Badge variant="warning">{t('dashboard.next.sampleChip')}</Badge> : null
+  const eyebrow = closingDay
+    ? t(isClosed ? 'surveyResults.next.eyebrowClosedOn' : 'surveyResults.next.eyebrowClosesOn', { name, date: closingDay })
+    : lastResponse
+      ? t('surveyResults.next.eyebrowClosed', { name, date: calendarDayLong(Date.parse(lastResponse), locale) })
+      : t('surveyResults.next.eyebrowOpen', { name })
+  const sampleChip = sample.isSample ? <Chip tone="warning" label={t('dashboard.next.sampleChip')} /> : null
   const protectedGroups = rows.filter((row) => row.isProtected).map((row) => row.name)
   const completedPercent = Math.round(model.summary.completionRate)
+  const deltaInk = (value: number) => (value >= 0 ? 'text-accent-green-ink' : 'text-accent-red-ink')
 
   return (
     <div>
       <PageTopBar
         title={t('surveyResults.next.title', { name })}
-        eyebrow={
-          lastResponse
-            ? t('surveyResults.next.eyebrowClosed', { name, date: shortDate(lastResponse) })
-            : t('surveyResults.next.eyebrowOpen', { name })
-        }
-        description={t('surveyResults.next.description')}
+        eyebrow={eyebrow}
+        description={t('surveyResults.next.descriptionWave', { wave: sample.previousCode })}
         breadcrumbs={[
           { label: t('surveys.title'), href: '/surveys' },
           { label: name, href: `/surveys/${model.surveyId}` },
           { label: t('surveys.results') },
         ]}
-        badge={sample.isSample ? { text: t('dashboard.next.sampleChip'), variant: 'warning' } : undefined}
         // `!isSuppressed` alone gates the exports. The page admits a viewer through
         // `seesWholeCompany` (SurveyResultsNextPage.tsx), and `capabilitiesFor` derives
         // `canExport` from the same "admin with a company" shape
         // (viewerCapabilities.ts:163), so `canExport` is true for everyone who reaches
         // this line — a term no test could turn false, so it is not written here.
         // The suppression half is not cosmetic: below the whole-survey floor
-        // `questions` and `breakdowns` arrive empty (the current page's guard says the
-        // same), and a download holding a header row and nothing else invites the
-        // reader to conclude the data was lost rather than withheld.
+        // `questions` and `breakdowns` arrive empty, and a download holding a header
+        // row and nothing else invites the reader to conclude the data was lost.
         actions={
           !model.isSuppressed ? (
             <>
-              <Button variant="primary" disabled={exporting} onClick={downloadPdf}>
+              <Button
+                variant="primary"
+                disabled={exporting}
+                onClick={() =>
+                  download(
+                    () => getSurveyResultsPdf(baseUrl, model.surveyId, locale),
+                    surveyResultsPdfFileName(model.surveyId),
+                  )
+                }
+              >
                 <Download aria-hidden="true" />
                 {t('surveyResults.next.exportPdf')}
               </Button>
@@ -251,6 +268,28 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              {/* "···": the rest of `surveyExport.ts` — the server's long-format CSV,
+                  through the same authorized fetch + Blob as the PDF. */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" aria-label={t('surveyResults.next.moreExports')}>
+                    <MoreHorizontal aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    disabled={exporting}
+                    onSelect={() =>
+                      download(
+                        () => getSurveyResultsCsv(baseUrl, model.surveyId, locale),
+                        surveyResultsCsvFileName(model.surveyId),
+                      )
+                    }
+                  >
+                    {t('surveyResults.next.exportServerCsv')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           ) : undefined
         }
@@ -266,43 +305,48 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
           fallbackFields={model.fallbackFields}
         />
 
-        <section aria-labelledby="results-next-tiles" className="grid gap-panel-gap sm:grid-cols-2 xl:grid-cols-4">
+        <section aria-labelledby="results-next-tiles" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <h2 id="results-next-tiles" className="sr-only">
             {t('surveyResults.next.tilesHeading')}
           </h2>
           <KpiTile
-            label={t('surveyResults.next.climateLabel')}
-            value={reference}
-            format={SCORE}
+            label={t('surveyResults.next.climateLabelWave', { wave: model.code })}
+            value={company.mean}
+            format={{ kind: 'number', decimals: 2 }}
             locale={locale}
+            unit={t('surveyResults.next.climateUnit', { target })}
             sub={
-              <span className="flex flex-col gap-1">
-                <span>{t('surveyResults.next.climateSub')}</span>
-                {reference !== null && (
-                  <span className="flex flex-wrap items-center gap-1">
-                    {t('surveyResults.next.climateVs', {
-                      delta: signed(sample.averageDelta),
+              company.mean !== null && (
+                <span className="flex flex-wrap items-center gap-1.5" data-testid="climate-delta">
+                  <span className={deltaInk(sample.averageDelta)}>
+                    {t('surveyResults.next.climateVsWave', {
+                      delta: signed(sample.averageDelta, 2),
                       wave: sample.previousCode,
-                      count: sample.risesInARow,
                     })}
-                    {sampleChip}
+                    {sample.risesInARow >= 2 &&
+                      ` · ${t('dashboard.next.risesInARow', { count: sample.risesInARow })}`}
                   </span>
-                )}
-              </span>
+                  {sampleChip}
+                </span>
+              )
             }
           />
           <KpiTile
             label={t('surveyResults.next.participationLabel')}
             value={model.summary.responseCount}
             locale={locale}
+            unit={t('surveyResults.next.participationSub', { percent: completedPercent })}
             sub={
-              <span className="flex flex-col gap-1">
-                <span>{t('surveyResults.next.participationSub', { percent: completedPercent })}</span>
-                <span>
-                  {model.summary.invitedCount === null
+              <span className="text-fg-label">
+                {[
+                  closingDay &&
+                    t(isClosed ? 'surveyResults.next.closedOn' : 'surveyResults.next.closesOn', { date: closingDay }),
+                  model.summary.invitedCount === null
                     ? t('surveyResults.next.participationNoInvited')
-                    : t('surveyResults.next.participationInvited', { invited: model.summary.invitedCount })}
-                </span>
+                    : t('surveyResults.next.participationInvited', { invited: model.summary.invitedCount }),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </span>
             }
           />
@@ -310,33 +354,31 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
             label={t('surveyResults.next.groupsLabel')}
             value={groups.legible}
             locale={locale}
+            unit={t('surveyResults.next.groupsSub', { total: groups.total })}
             sub={
-              <span className="flex flex-col gap-1">
-                <span>{t('surveyResults.next.groupsSub', { total: groups.total })}</span>
-                <span>
-                  {protectedGroups.length === 0
-                    ? t('surveyResults.next.groupsAllReadable', { floor: model.minimumGroupSize })
-                    : t('surveyResults.next.groupsProtected', {
-                        groups: protectedGroups.join(', '),
-                        floor: model.minimumGroupSize,
-                      })}
-                </span>
+              <span className="text-fg-label">
+                {protectedGroups.length === 0
+                  ? t('surveyResults.next.groupsAllReadable', { floor: model.minimumGroupSize })
+                  : t('surveyResults.next.groupsProtected', {
+                      groups: protectedGroups.join(', '),
+                      floor: model.minimumGroupSize,
+                    })}
               </span>
             }
           />
           <KpiTile
-            label={t('surveyResults.next.belowLabel')}
-            value={below.length}
+            label={t('surveyResults.next.belowTargetLabel')}
+            value={climate ? below.length : null}
             locale={locale}
+            unit={t('surveyResults.next.belowSub')}
             sub={
-              <span className="flex flex-col gap-1">
-                <span>{t('surveyResults.next.belowSub')}</span>
-                <span>
-                  {below.length === 0
-                    ? t('surveyResults.next.belowNone')
-                    : below.map((entry) => `${dimensionName(entry.key)} ${score(entry.score)}`).join(' · ')}
+              below.length === 0 ? (
+                <span className="text-fg-label">{t('surveyResults.next.belowTargetNone', { target })}</span>
+              ) : (
+                <span className="text-accent-red-ink" data-testid="below-target">
+                  {below.map((entry) => `${dimensionName(entry.key)} ${score(entry.score)}`).join(' · ')}
                 </span>
-              </span>
+              )
             }
           />
         </section>
@@ -345,48 +387,67 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
           <ResultsSuppressionNotice reason={null} minimumGroupSize={model.minimumGroupSize} />
         ) : (
           <>
-            <section aria-labelledby="results-next-where" className="flex flex-col gap-panel-gap">
-              <div className="flex flex-wrap items-baseline justify-between gap-inline">
-                <H2 id="results-next-where">{t('surveyResults.next.whereHeading')}</H2>
-                <p className="text-sm text-fg-secondary">
-                  {t('surveyResults.next.whereSub', { count: findings.length })}
-                </p>
+            <section aria-labelledby="results-next-where" className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <div className="flex items-baseline gap-2.5">
+                  <h2 id="results-next-where" className="mb-0 text-2xl">
+                    {t('surveyResults.next.whereHeading')}
+                  </h2>
+                  <span className="font-mono text-sm tabular-nums text-fg-label">{findings.length}</span>
+                </div>
+                {findings.length > 0 && (
+                  <p className="m-0 text-sm text-fg-label">
+                    {findings.length === 1
+                      ? t('surveyResults.next.whereSubOne')
+                      : findings.length === 2
+                        ? t('surveyResults.next.whereSubTwo')
+                        : t('surveyResults.next.whereSubThree')}
+                  </p>
+                )}
               </div>
               {findings.length === 0 ? (
-                <p className="text-sm text-fg-secondary">{t('surveyResults.next.whereNone')}</p>
+                <p className="m-0 text-sm text-fg-secondary">{t('surveyResults.next.whereNoneTarget', { target })}</p>
               ) : (
-                <ul className="grid list-none gap-panel-gap p-0 md:grid-cols-3">
-                  {findings.map((finding, index) => (
-                    <li key={`${finding.rowId}:${finding.dimensionKey}`} className={`${PANEL} flex flex-col gap-2`}>
-                      <div className="flex items-start gap-3">
-                        <span className="rounded-md bg-current/10 px-2 py-1 font-mono text-sm tabular-nums">
+                <ul className="m-0 grid list-none gap-3 p-0 md:grid-cols-3" data-testid="findings">
+                  {findings.map((finding) => (
+                    <li
+                      key={`${finding.rowId}:${finding.dimensionKey}`}
+                      className={cn(CARD, 'flex min-w-0 flex-col gap-2 px-3.5 py-3')}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span
+                          className="flex h-7 w-11 shrink-0 items-center justify-center rounded font-mono text-sm tabular-nums"
+                          style={tintOf(finding.band)}
+                        >
                           {score(finding.score)}
                         </span>
                         <span className="flex min-w-0 flex-col">
-                          <span className="font-semibold">
+                          <span className="truncate text-base font-semibold text-fg-primary">
                             {finding.rowName} · {dimensionName(finding.dimensionKey)}
                           </span>
-                          <span className="text-sm text-fg-secondary">
-                            {index === 0
-                              ? t('surveyResults.next.findingLowest', { shortfall: score(finding.shortfall) })
-                              : t('surveyResults.next.findingShortfall', { shortfall: score(finding.shortfall) })}
-                          </span>
+                          <span className="text-xs text-fg-label">{reasonOf(finding, t, score)}</span>
                         </span>
                       </div>
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                        <span className="flex items-center gap-1 text-fg-secondary">
-                          {finding.plan === undefined
-                            ? t('surveyResults.next.plansUnavailable')
-                            : finding.plan === null
-                              ? t('surveyResults.next.planNone')
-                              : (
-                                  <>
-                                    <Check aria-hidden="true" className="size-4" />
-                                    {t('surveyResults.next.planCovers')}
-                                  </>
-                                )}
-                        </span>
-                        <Button variant="link" size="sm" onClick={() => openCell(finding.rowId, finding.dimensionKey)}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        {finding.plan === undefined ? (
+                          <span className="text-xs text-fg-light">{t('surveyResults.next.plansUnavailable')}</span>
+                        ) : finding.plan === null ? (
+                          <span className="text-xs text-fg-light">{t('surveyResults.next.planNone')}</span>
+                        ) : (
+                          // Plans carry a department, not a dimension: the plan covers
+                          // the GROUP, and the sentence says no more than that.
+                          <span className="inline-flex items-center gap-1 text-xs text-accent-green-ink">
+                            <Check aria-hidden="true" className="size-3" />
+                            {t('surveyResults.next.planCovers')}
+                            {finding.plan.status === 'not_started' && ` · ${t('surveyResults.next.planNoProgress')}`}
+                          </span>
+                        )}
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0 text-sm"
+                          onClick={() => openCell(finding.rowId, finding.dimensionKey, true)}
+                        >
                           {t('surveyResults.next.viewQuestion')}
                           <ArrowRight aria-hidden="true" />
                         </Button>
@@ -397,268 +458,64 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
               )}
             </section>
 
-            <section aria-labelledby="results-next-map" className={`${PANEL} flex flex-col gap-panel-gap`}>
-              <div className="flex flex-wrap items-baseline justify-between gap-inline">
-                <H2 id="results-next-map">{t('surveyResults.next.mapHeading')}</H2>
-                <p className="text-sm text-fg-secondary">
-                  {reference === null
+            <section aria-labelledby="results-next-map" className={cn(CARD, 'flex min-w-0 flex-col gap-3 px-5 pt-4 pb-4.5')}>
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <h2 id="results-next-map" className="mb-0 text-2xl">
+                  {t('surveyResults.next.mapHeadingWave', { wave: model.code })}
+                </h2>
+                <p className="m-0 text-sm text-fg-label">
+                  {climate.target === null
                     ? t('surveyResults.climateAllProtected', { minimum: climate.threshold })
-                    : t('surveyResults.next.mapSub', { target: score(reference) })}
+                    : t('surveyResults.next.mapSubTarget', { target })}
                 </p>
               </div>
-
-              {/* The whole-company row: one mean per column, with the sample delta under it. */}
-              <div>
-                <Table className="text-sm">
-                  <TableCaption className="sr-only">{t('surveyResults.next.wholeCompany')}</TableCaption>
-                  <TableHeader>
-                    <TableRow className="text-left text-xs uppercase tracking-wide text-fg-secondary">
-                      <TableHead scope="col" className="py-1 pr-3 font-medium">
-                        {t('surveyResults.next.wholeCompany')}
-                      </TableHead>
-                      {climate.dimensions.map((dimension) => (
-                        <TableHead key={dimension.key} scope="col" className="px-2 py-1 text-center font-medium">
-                          {dimensionName(dimension.key)}
-                        </TableHead>
-                      ))}
-                      <TableHead scope="col" className="px-2 py-1 text-center font-medium">
-                        {t('surveyResults.next.groupMean')}
-                      </TableHead>
-                      <TableHead scope="col" className="px-2 py-1 text-center font-medium">
-                        <span className="inline-flex items-center gap-1">
-                          {t('surveyResults.next.vsWave', { wave: sample.previousCode })}
-                          {sampleChip}
-                        </span>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <TableRow className="font-semibold">
-                      <TableHead scope="row" className="py-2 pr-3 text-left">
-                        {t('surveyResults.next.wholeCompany')}
-                      </TableHead>
-                      {climate.dimensions.map((dimension, index) => {
-                        const value = company[index]
-                        const delta = sample.dimensionDeltas[dimension.key]
-                        return (
-                          <TableCell key={dimension.key} className="px-2 py-2 text-center font-mono tabular-nums">
-                            {value === null ? '—' : score(value)}
-                            {value !== null && delta !== undefined && (
-                              <span className="block text-xs font-normal text-fg-secondary">{signed(delta)}</span>
-                            )}
-                          </TableCell>
-                        )
-                      })}
-                      <TableCell className="px-2 py-2 text-center font-mono tabular-nums">
-                        {reference === null ? '—' : score(reference)}
-                      </TableCell>
-                      <TableCell className="px-2 py-2 text-center font-mono tabular-nums">
-                        {reference === null ? '—' : signed(sample.averageDelta)}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-
-              <ClimateMap
-                dimensions={climate.dimensions.map((entry) => ({ key: entry.key, label: dimensionName(entry.key) }))}
-                rows={climate.rows}
-                target={climate.target}
-                deadBandAt={climate.deadBandAt}
-                extremeAt={climate.extremeAt}
+              <ResultsClimateGrid
+                dimensions={climate.dimensions.map((entry) => ({ key: entry.key, name: dimensionName(entry.key) }))}
+                rows={rows}
+                company={company}
+                sample={sample}
                 threshold={climate.threshold}
-                decimals={1}
-                size="large"
-                onSelectCell={reference === null ? undefined : openCell}
                 selection={selection}
+                panelId={PANEL_ID}
+                onSelectCell={(rowId, dimensionKey) => openCell(rowId, dimensionKey, false)}
               />
-
-              {/* Per-group mean and "vs Q2", protected rows hatched exactly as the map hatches them. */}
-              <div>
-                <Table className="text-sm" data-testid="group-means">
-                  <TableCaption className="sr-only">{t('surveyResults.next.groupMean')}</TableCaption>
-                  <TableHeader>
-                    <TableRow className="text-left text-xs uppercase tracking-wide text-fg-secondary">
-                      <TableHead scope="col" className="py-1 pr-3 font-medium">
-                        {t('surveyResults.next.groupHeading')}
-                      </TableHead>
-                      <TableHead scope="col" className="px-2 py-1 text-center font-medium">
-                        {t('surveyResults.next.groupMean')}
-                      </TableHead>
-                      <TableHead scope="col" className="px-2 py-1 text-center font-medium">
-                        {t('surveyResults.next.vsWave', { wave: sample.previousCode })}
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.map((row) => (
-                      <TableRow key={row.id} data-testid={`group-row-${row.id}`}>
-                        <TableHead scope="row" className="py-2 pr-3 text-left font-medium">
-                          {row.name}
-                        </TableHead>
-                        <TableCell className="px-2 py-2 text-center font-mono tabular-nums">
-                          <ProtectedCell responses={row.isProtected ? 0 : row.responses} threshold={climate.threshold}>
-                            {row.mean === null ? '—' : score(row.mean)}
-                          </ProtectedCell>
-                        </TableCell>
-                        <TableCell className="px-2 py-2 text-center text-fg-secondary">
-                          {row.isProtected ? '—' : t('surveyResults.next.noPrevious', { wave: sample.previousCode })}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <p className="max-w-prose text-xs text-fg-secondary">
+              <p className="m-0 text-xs text-fg-light">
                 {t('surveyResults.next.deltaNote', { wave: sample.previousCode })}
               </p>
             </section>
 
             {detail && (
-              <section aria-labelledby="results-next-cell" className={`${PANEL} flex flex-col gap-panel-gap`}>
-                <div className="flex items-start justify-between gap-inline">
-                  <div className="flex flex-col gap-1">
-                    <p className="text-xs uppercase tracking-wide text-fg-secondary">
-                      {t('surveyResults.next.cellHeading')}
-                    </p>
-                    <H2 id="results-next-cell">
-                      {detail.rowName} · {dimensionName(detail.dimensionKey)}
-                    </H2>
-                    {detail.score !== null && reference !== null && (
-                      <p className="text-sm text-fg-secondary">
-                        {detail.score < reference
-                          ? t('surveyResults.next.cellBelow', {
-                              score: score(detail.score),
-                              shortfall: score(reference - detail.score),
-                            })
-                          : t('surveyResults.next.cellAbove', {
-                              score: score(detail.score),
-                              excess: score(detail.score - reference),
-                            })}
-                      </p>
-                    )}
-                  </div>
-                  <Button variant="outline" size="sm" aria-label={t('common.close')} onClick={() => setSelection(null)}>
-                    <X aria-hidden="true" />
-                  </Button>
-                </div>
-
-                <div className="grid gap-panel-gap xl:grid-cols-[2fr_1fr_1fr]">
-                  <div className="flex flex-col gap-panel-gap">
-                    {detail.questions.map((question) => (
-                      <div key={question.questionId} className="flex flex-col gap-3">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-baseline justify-between gap-2">
-                            <span className="flex flex-wrap items-center gap-1 font-semibold">
-                              {t('surveyResults.next.groupDistribution', {
-                                dimension: dimensionName(detail.dimensionKey),
-                                group: detail.rowName,
-                              })}
-                              {sampleChip}
-                            </span>
-                            <span className="font-mono tabular-nums">
-                              {question.groupScore === null ? '—' : score(question.groupScore)}
-                            </span>
-                          </div>
-                          <DistributionStrip points={sample.groupDistribution} />
-                          <p className="text-xs text-fg-secondary">
-                            {t('surveyResults.next.groupDistributionSub', { low: lowShare(sample.groupDistribution) })}
-                          </p>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-baseline justify-between gap-2">
-                            <span className="font-semibold">{t('surveyResults.next.companyDistribution')}</span>
-                            <span className="font-mono tabular-nums">{score(question.surveyScore)}</span>
-                          </div>
-                          <DistributionStrip points={question.surveyDistribution} />
-                          <p className="text-xs text-fg-secondary">
-                            {t('surveyResults.next.companyDistributionSub', {
-                              responses: question.surveyAnswered,
-                              low: lowShare(question.surveyDistribution),
-                            })}
-                          </p>
-                          {question.text && <p className="text-sm text-fg-secondary">{question.text}</p>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs uppercase tracking-wide text-fg-secondary">
-                      {t('surveyResults.next.othersHeading', { dimension: dimensionName(detail.dimensionKey) })}
-                    </p>
-                    <ul className="flex list-none flex-col gap-1 p-0 text-sm" data-testid="others-in-dimension">
-                      {detail.others.map((other) => (
-                        <li key={other.id} className="flex items-center justify-between gap-2" data-testid={`other-${other.id}`}>
-                          <span>{other.name}</span>
-                          <span className="font-mono tabular-nums">
-                            <ProtectedCell responses={other.isProtected ? 0 : climate.threshold} threshold={climate.threshold}>
-                              {other.score === null ? '—' : score(other.score)}
-                            </ProtectedCell>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                    {detail.others.some((other) => other.isProtected) && (
-                      <p className="text-xs text-fg-secondary">
-                        {t('surveyResults.next.othersProtected', {
-                          groups: detail.others.filter((other) => other.isProtected).map((other) => other.name).join(', '),
-                          floor: climate.threshold,
-                        })}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs uppercase tracking-wide text-fg-secondary">
-                      {t('surveyResults.next.doingHeading')}
-                    </p>
-                    {detail.plan === undefined ? (
-                      <p className="text-sm text-fg-secondary">{t('surveyResults.next.plansUnavailable')}</p>
-                    ) : detail.plan === null ? (
-                      <p className="text-sm text-fg-secondary">{t('surveyResults.next.doingNone')}</p>
-                    ) : (
-                      <p className="text-sm">
-                        {t('surveyResults.next.doingPlan', { plan: detail.plan.name, date: shortDate(detail.plan.dueAt) })}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap gap-2">
-                      {detail.plan ? (
-                        <Button variant="outline" size="sm" asChild>
-                          <Link to={`/action-plans/${detail.plan.id}`}>{t('surveyResults.next.openPlan')}</Link>
-                        </Button>
-                      ) : (
-                        capabilities.canCreateActionPlan &&
-                        detail.plan === null && (
-                          <Button variant="outline" size="sm" asChild>
-                            <Link to="/action-plans/new">{t('surveyResults.next.createPlan')}</Link>
-                          </Button>
-                        )
-                      )}
-                    </div>
-                    <p className="flex items-start gap-2 rounded-md border border-line-light p-3 text-xs text-fg-secondary">
-                      <ShieldCheck aria-hidden="true" className="size-4 shrink-0" />
-                      {t('surveyResults.next.openTextNote', { group: detail.rowName, floor: climate.threshold })}
-                    </p>
-                  </div>
-                </div>
-              </section>
+              <div ref={panelRef} className="scroll-mt-4">
+                <ResultsCellPanel
+                  id={PANEL_ID}
+                  headingRef={headingRef}
+                  detail={detail}
+                  dimensionName={dimensionName}
+                  code={model.code}
+                  threshold={climate.threshold}
+                  sample={sample}
+                  capabilities={capabilities}
+                  onClose={() => setSelection(null)}
+                />
+              </div>
             )}
 
             {/* Gated on the survey HAVING open-text questions, not on the themes being
                 non-empty: a survey whose every word fell under the word floor keeps the
                 section and says so — withheld rendered as absent is the familiar mistake. */}
             {openText && (
-              <section aria-labelledby="results-next-themes" className={`${PANEL} flex flex-col gap-panel-gap`}>
+              <section aria-labelledby="results-next-themes" className={cn(CARD, 'flex flex-col gap-3 p-panel')}>
                 <div className="flex flex-wrap items-baseline justify-between gap-inline">
-                  <H2 id="results-next-themes">{t('surveyResults.themesTitle')}</H2>
-                  <p className="max-w-prose text-sm text-fg-secondary">{t('surveyResults.themesIntro')}</p>
+                  <h2 id="results-next-themes" className="mb-0 text-2xl">
+                    {t('surveyResults.themesTitle')}
+                  </h2>
+                  <p className="m-0 max-w-prose text-sm text-fg-secondary">{t('surveyResults.themesIntro')}</p>
                 </div>
                 {themes.length > 0 && (
                   <WordCloud data={themes} colorBy="category" title={t('surveyResults.themesChartTitle')} />
                 )}
                 {withheld > 0 && (
-                  <p className="max-w-prose text-sm text-fg-secondary">
+                  <p className="m-0 max-w-prose text-sm text-fg-secondary">
                     {t('surveyResults.wordsWithheld', { count: withheld })}
                   </p>
                 )}
@@ -673,24 +530,22 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   )
 }
 
-/**
- * A 1–5 distribution as one stacked bar, low to high, darker toward the high end.
- * Built on `currentColor` so it takes the theme from its container rather than
- * naming a colour of its own.
- */
-function DistributionStrip({ points }: { points: readonly ResultsDistributionPoint[] }) {
-  const max = Math.max(1, ...points.map((point) => point.position))
-  return (
-    <div className="flex h-5 w-full overflow-hidden rounded-sm text-fg-secondary" role="img" aria-hidden="true">
-      {points.map((point) => (
-        <span
-          key={point.position}
-          className="flex items-center justify-center bg-current text-[10px] font-mono tabular-nums"
-          style={{ width: `${point.percentage}%`, opacity: 0.25 + 0.7 * ((point.position - 1) / Math.max(1, max - 1)) }}
-        >
-          {point.percentage >= 12 && <span className="text-surface-panel">{Math.round(point.percentage)}</span>}
-        </span>
-      ))}
-    </div>
-  )
+type Translate = (key: string, params?: Record<string, string | number>) => string
+
+/** The one-line reason under a finding's name — derived in `whereToLookFirst`, worded here. */
+function reasonOf(finding: ResultsFinding, t: Translate, score: (value: number) => string): string {
+  switch (finding.reason) {
+    case 'lowest':
+      return t('surveyResults.next.reasonLowest', { shortfall: score(finding.shortfall) })
+    case 'second-same-group':
+      return t('surveyResults.next.reasonSecond')
+    case 'third-same-group':
+      return t('surveyResults.next.reasonThird')
+    case 'only-red-outside':
+      return t('surveyResults.next.reasonOnlyRedOutside', { group: finding.outsideOf ?? '' })
+    case 'lowest-outside':
+      return t('surveyResults.next.reasonLowestOutside', { group: finding.outsideOf ?? '' })
+    default:
+      return t('surveyResults.next.reasonShortfall', { shortfall: score(finding.shortfall) })
+  }
 }

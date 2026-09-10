@@ -1,0 +1,696 @@
+{
+  "GET /surveys/*/analytics": {
+    "surveyId": "38b2002f-66da-468d-b136-ec112ba3204b",
+    "title": "Encuesta de Clima Q3",
+    "status": "closed",
+    "language": "both",
+    "resolvedLocale": "es",
+    "fallbackFields": [],
+    "summary": {
+      "invitedCount": null,
+      "responseCount": 24,
+      "completedCount": 24,
+      "partialCount": 0,
+      "participationRate": null,
+      "completionRate": 100,
+      "averageCompletionSeconds": null,
+      "firstResponseAt": "2026-09-10T02:05:22.969968+00:00",
+      "lastResponseAt": "2026-09-10T02:05:48.757944+00:00",
+      "byLanguage": [
+        {
+          "language": "en",
+          "count": 24
+        }
+      ]
+    },
+    "questions": [
+      {
+        "questionId": "2233394c-b0c6-4f74-a3fb-7014c53c0d08",
+        "order": 0,
+        "type": "likert",
+        "text": "Puedo plantear preocupaciones sin miedo a represalias.",
+        "category": "psychological_safety",
+        "answeredCount": 24,
+        "distribution": [
+          {
+            "value": "2",
+            "label": null,
+            "count": 2,
+            "percentage": 8.33,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": null,
+            "count": 7,
+            "percentage": 29.17,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": null,
+            "count": 10,
+            "percentage": 41.67,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": null,
+            "count": 5,
+            "percentage": 20.83,
+            "averageRank": null
+          }
+        ],
+        "average": 3.75,
+        "median": 4,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "c1efba3e-646c-4f35-b6ca-7b3b094755be",
+        "order": 1,
+        "type": "likert",
+        "text": "Mi carga de trabajo es sostenible a largo plazo.",
+        "category": "workload",
+        "answeredCount": 24,
+        "distribution": [
+          {
+            "value": "2",
+            "label": null,
+            "count": 4,
+            "percentage": 16.67,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": null,
+            "count": 9,
+            "percentage": 37.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": null,
+            "count": 10,
+            "percentage": 41.67,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": null,
+            "count": 1,
+            "percentage": 4.17,
+            "averageRank": null
+          }
+        ],
+        "average": 3.33,
+        "median": 3,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "a2eea1d5-3237-481f-95e9-ddbc3d2419bd",
+        "order": 2,
+        "type": "likert",
+        "text": "Confío en las decisiones que toma la dirección.",
+        "category": "trust",
+        "answeredCount": 24,
+        "distribution": [
+          {
+            "value": "2",
+            "label": null,
+            "count": 1,
+            "percentage": 4.17,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": null,
+            "count": 9,
+            "percentage": 37.5,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": null,
+            "count": 11,
+            "percentage": 45.83,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": null,
+            "count": 3,
+            "percentage": 12.5,
+            "averageRank": null
+          }
+        ],
+        "average": 3.67,
+        "median": 4,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "a09ad6f7-c073-421e-8b5d-f514eaddaee5",
+        "order": 3,
+        "type": "likert",
+        "text": "Aquí se reconoce el buen trabajo.",
+        "category": "recognition",
+        "answeredCount": 24,
+        "distribution": [
+          {
+            "value": "2",
+            "label": null,
+            "count": 2,
+            "percentage": 8.33,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": null,
+            "count": 11,
+            "percentage": 45.83,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": null,
+            "count": 11,
+            "percentage": 45.83,
+            "averageRank": null
+          }
+        ],
+        "average": 3.38,
+        "median": 3,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "c2ea4e23-3d22-4021-9bad-186cd3dff0c4",
+        "order": 4,
+        "type": "likert",
+        "text": "Veo un camino para crecer en esta organización.",
+        "category": "growth",
+        "answeredCount": 24,
+        "distribution": [
+          {
+            "value": "2",
+            "label": null,
+            "count": 1,
+            "percentage": 4.17,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": null,
+            "count": 8,
+            "percentage": 33.33,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": null,
+            "count": 10,
+            "percentage": 41.67,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": null,
+            "count": 5,
+            "percentage": 20.83,
+            "averageRank": null
+          }
+        ],
+        "average": 3.79,
+        "median": 4,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "words": [],
+        "suppressedWordCount": 0
+      },
+      {
+        "questionId": "274c312f-0e97-4a27-9edf-63d695b38953",
+        "order": 5,
+        "type": "likert",
+        "text": "Siento que pertenezco a mi equipo.",
+        "category": "belonging",
+        "answeredCount": 24,
+        "distribution": [
+          {
+            "value": "2",
+            "label": null,
+            "count": 1,
+            "percentage": 4.17,
+            "averageRank": null
+          },
+          {
+            "value": "3",
+            "label": null,
+            "count": 4,
+            "percentage": 16.67,
+            "averageRank": null
+          },
+          {
+            "value": "4",
+            "label": null,
+            "count": 13,
+            "percentage": 54.17,
+            "averageRank": null
+          },
+          {
+            "value": "5",
+            "label": null,
+            "count": 6,
+            "percentage": 25,
+            "averageRank": null
+          }
+        ],
+        "average": 4,
+        "median": 4,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "words": [],
+        "suppressedWordCount": 0
+      }
+    ],
+    "breakdowns": [
+      {
+        "dimension": "department",
+        "segments": [
+          {
+            "dimension": "department",
+            "key": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+            "label": "Finanzas",
+            "respondentCount": 0,
+            "participationRate": null,
+            "headcount": null,
+            "isSuppressed": true,
+            "questions": []
+          },
+          {
+            "dimension": "department",
+            "key": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+            "label": "Ingeniería",
+            "respondentCount": 6,
+            "participationRate": 42.86,
+            "headcount": 14,
+            "isSuppressed": false,
+            "questions": [
+              {
+                "questionId": "2233394c-b0c6-4f74-a3fb-7014c53c0d08",
+                "answeredCount": 6,
+                "average": 4
+              },
+              {
+                "questionId": "c1efba3e-646c-4f35-b6ca-7b3b094755be",
+                "answeredCount": 6,
+                "average": 3.67
+              },
+              {
+                "questionId": "a2eea1d5-3237-481f-95e9-ddbc3d2419bd",
+                "answeredCount": 6,
+                "average": 4
+              },
+              {
+                "questionId": "a09ad6f7-c073-421e-8b5d-f514eaddaee5",
+                "answeredCount": 6,
+                "average": 3.5
+              },
+              {
+                "questionId": "c2ea4e23-3d22-4021-9bad-186cd3dff0c4",
+                "answeredCount": 6,
+                "average": 4.17
+              },
+              {
+                "questionId": "274c312f-0e97-4a27-9edf-63d695b38953",
+                "answeredCount": 6,
+                "average": 4.33
+              }
+            ]
+          },
+          {
+            "dimension": "department",
+            "key": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+            "label": "Operaciones",
+            "respondentCount": 5,
+            "participationRate": 71.43,
+            "headcount": 7,
+            "isSuppressed": false,
+            "questions": [
+              {
+                "questionId": "2233394c-b0c6-4f74-a3fb-7014c53c0d08",
+                "answeredCount": 5,
+                "average": 2.6
+              },
+              {
+                "questionId": "c1efba3e-646c-4f35-b6ca-7b3b094755be",
+                "answeredCount": 5,
+                "average": 2.4
+              },
+              {
+                "questionId": "a2eea1d5-3237-481f-95e9-ddbc3d2419bd",
+                "answeredCount": 5,
+                "average": 3
+              },
+              {
+                "questionId": "a09ad6f7-c073-421e-8b5d-f514eaddaee5",
+                "answeredCount": 5,
+                "average": 2.8
+              },
+              {
+                "questionId": "c2ea4e23-3d22-4021-9bad-186cd3dff0c4",
+                "answeredCount": 5,
+                "average": 3
+              },
+              {
+                "questionId": "274c312f-0e97-4a27-9edf-63d695b38953",
+                "answeredCount": 5,
+                "average": 3.2
+              }
+            ]
+          },
+          {
+            "dimension": "department",
+            "key": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+            "label": "Personas",
+            "respondentCount": 5,
+            "participationRate": 71.43,
+            "headcount": 7,
+            "isSuppressed": false,
+            "questions": [
+              {
+                "questionId": "2233394c-b0c6-4f74-a3fb-7014c53c0d08",
+                "answeredCount": 5,
+                "average": 4.4
+              },
+              {
+                "questionId": "c1efba3e-646c-4f35-b6ca-7b3b094755be",
+                "answeredCount": 5,
+                "average": 4
+              },
+              {
+                "questionId": "a2eea1d5-3237-481f-95e9-ddbc3d2419bd",
+                "answeredCount": 5,
+                "average": 4
+              },
+              {
+                "questionId": "a09ad6f7-c073-421e-8b5d-f514eaddaee5",
+                "answeredCount": 5,
+                "average": 3.6
+              },
+              {
+                "questionId": "c2ea4e23-3d22-4021-9bad-186cd3dff0c4",
+                "answeredCount": 5,
+                "average": 4.2
+              },
+              {
+                "questionId": "274c312f-0e97-4a27-9edf-63d695b38953",
+                "answeredCount": 5,
+                "average": 4.4
+              }
+            ]
+          },
+          {
+            "dimension": "department",
+            "key": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+            "label": "Ventas",
+            "respondentCount": 5,
+            "participationRate": 71.43,
+            "headcount": 7,
+            "isSuppressed": false,
+            "questions": [
+              {
+                "questionId": "2233394c-b0c6-4f74-a3fb-7014c53c0d08",
+                "answeredCount": 5,
+                "average": 4
+              },
+              {
+                "questionId": "c1efba3e-646c-4f35-b6ca-7b3b094755be",
+                "answeredCount": 5,
+                "average": 3.4
+              },
+              {
+                "questionId": "a2eea1d5-3237-481f-95e9-ddbc3d2419bd",
+                "answeredCount": 5,
+                "average": 3.8
+              },
+              {
+                "questionId": "a09ad6f7-c073-421e-8b5d-f514eaddaee5",
+                "answeredCount": 5,
+                "average": 3.6
+              },
+              {
+                "questionId": "c2ea4e23-3d22-4021-9bad-186cd3dff0c4",
+                "answeredCount": 5,
+                "average": 3.8
+              },
+              {
+                "questionId": "274c312f-0e97-4a27-9edf-63d695b38953",
+                "answeredCount": 5,
+                "average": 4
+              }
+            ]
+          }
+        ],
+        "suppressedSegmentCount": 1,
+        "suppressedRespondentCount": 3,
+        "unsegmentedRespondentCount": 0
+      }
+    ],
+    "isSuppressed": false,
+    "suppressionReason": null,
+    "minimumGroupSize": 5,
+    "generatedAt": "2026-09-10T19:53:27.159882+00:00"
+  },
+  "GET /surveys/*": {
+    "id": "38b2002f-66da-468d-b136-ec112ba3204b",
+    "title": "Encuesta de Clima Q3",
+    "description": "Cómo se sintió la organización este trimestre, en seis dimensiones.",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "createdBy": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+    "type": "periodic",
+    "status": "closed",
+    "language": "both",
+    "resolvedLocale": "es",
+    "fallbackFields": [],
+    "startDate": "2026-07-16T02:05:22.92+00:00",
+    "endDate": "2026-08-06T02:05:22.922+00:00",
+    "responseCount": 24,
+    "targetAudienceCount": null,
+    "version": 1,
+    "departmentIds": [],
+    "questions": [
+      {
+        "id": "2233394c-b0c6-4f74-a3fb-7014c53c0d08",
+        "text": "Puedo plantear preocupaciones sin miedo a represalias.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 0,
+        "category": "psychological_safety"
+      },
+      {
+        "id": "c1efba3e-646c-4f35-b6ca-7b3b094755be",
+        "text": "Mi carga de trabajo es sostenible a largo plazo.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 1,
+        "category": "workload"
+      },
+      {
+        "id": "a2eea1d5-3237-481f-95e9-ddbc3d2419bd",
+        "text": "Confío en las decisiones que toma la dirección.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 2,
+        "category": "trust"
+      },
+      {
+        "id": "a09ad6f7-c073-421e-8b5d-f514eaddaee5",
+        "text": "Aquí se reconoce el buen trabajo.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 3,
+        "category": "recognition"
+      },
+      {
+        "id": "c2ea4e23-3d22-4021-9bad-186cd3dff0c4",
+        "text": "Veo un camino para crecer en esta organización.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 4,
+        "category": "growth"
+      },
+      {
+        "id": "274c312f-0e97-4a27-9edf-63d695b38953",
+        "text": "Siento que pertenezco a mi equipo.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 5,
+        "category": "belonging"
+      }
+    ],
+    "settings": {
+      "anonymous": false,
+      "allowPartialResponses": true,
+      "randomizeQuestions": false,
+      "showProgress": true,
+      "autoSave": true,
+      "timeLimitMinutes": null,
+      "responseLimit": null,
+      "notificationSendInvitations": true,
+      "notificationSendReminders": true,
+      "notificationReminderFrequencyDays": 3,
+      "invitationCustomMessage": null,
+      "invitationCustomSubject": null,
+      "invitationIncludeCredentials": false,
+      "invitationSendImmediately": false,
+      "invitationBrandingEnabled": false
+    },
+    "allowedStatusTransitions": [
+      "archived"
+    ],
+    "isContentEditable": false,
+    "createdAt": "2026-09-10T02:05:22.928985+00:00",
+    "updatedAt": "2026-09-10T02:05:49.880883+00:00"
+  },
+  "GET /action-plans": {
+    "actionPlans": [
+      {
+        "id": "1164cd20-3605-4c46-9297-6fc9ab6bb868",
+        "title": "Programa de reconocimiento entre pares",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "dueDate": "2026-09-30T02:05:50.251+00:00",
+        "status": "not_started",
+        "priority": "high",
+        "createdAt": "2026-09-10T02:05:50.263923+00:00"
+      },
+      {
+        "id": "433a542b-de20-4b71-9ff2-e8ab3cb3d625",
+        "title": "Buzón anónimo de sugerencias",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": null,
+        "dueDate": "2026-10-10T00:00:00+00:00",
+        "status": "cancelled",
+        "priority": "medium",
+        "createdAt": "2026-09-10T02:12:06.466863+00:00"
+      },
+      {
+        "id": "f5227d88-fd88-428f-a971-a109ee18ff32",
+        "title": "Almuerzos mensuales por departamento",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": null,
+        "dueDate": "2026-10-10T00:00:00+00:00",
+        "status": "cancelled",
+        "priority": "medium",
+        "createdAt": "2026-09-10T02:13:38.941573+00:00"
+      },
+      {
+        "id": "dec1b555-22e9-4519-8c43-c74c9615ea05",
+        "title": "Piloto de horario flexible en Ventas",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": null,
+        "dueDate": "2026-10-10T00:00:00+00:00",
+        "status": "cancelled",
+        "priority": "medium",
+        "createdAt": "2026-09-10T02:14:40.726189+00:00"
+      },
+      {
+        "id": "4f973f47-4ab2-4a5b-9606-af5db05670b8",
+        "title": "Reducir la carga de trabajo en Operaciones",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "dueDate": "2026-10-15T02:05:50.278+00:00",
+        "status": "not_started",
+        "priority": "high",
+        "createdAt": "2026-09-10T02:05:50.280646+00:00"
+      },
+      {
+        "id": "1276d432-b001-46e6-920d-08fa96618d52",
+        "title": "Reuniones abiertas con la dirección",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": null,
+        "dueDate": "2026-10-25T02:05:50.292+00:00",
+        "status": "not_started",
+        "priority": "medium",
+        "createdAt": "2026-09-10T02:05:50.294635+00:00"
+      },
+      {
+        "id": "b3797ec7-780c-4ca2-b5e6-ceb015855560",
+        "title": "Plan de desarrollo de carrera en Ingeniería",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "dueDate": "2026-11-09T03:05:50.285+00:00",
+        "status": "not_started",
+        "priority": "medium",
+        "createdAt": "2026-09-10T02:05:50.287727+00:00"
+      }
+    ]
+  },
+  "GET /notifications/mine": {
+    "notifications": []
+  }
+}

@@ -1,3 +1,4 @@
+import type { Ref } from 'react'
 import { Link } from 'react-router'
 import { Plus, Shield, Target, TrendingUp, X } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
@@ -9,17 +10,24 @@ import { lowShare, type ResultsCellDetail, type ResultsDistributionPoint } from 
 import type { ResultsSampleWave } from './model'
 import { tintOf } from './tint'
 
+/** The artboard's `.label`: 10px, bold, uppercase, 0.06em, the tertiary ink. */
 const LABEL = 'm-0 text-2xs font-bold uppercase tracking-label text-fg-label'
 
 export interface ResultsCellPanelProps {
   detail: ResultsCellDetail
   /** Already-translated display name of a dimension key — the view's own lookup. */
   dimensionName: (key: string) => string
+  /** This survey's wave code — "Q3" — which the company's strip belongs to. */
+  code: string
   /** The anonymity floor, per company. */
   threshold: number
   /** The group's own 1–5 distribution is a sample until phase 2 — the chip says so. */
   sample: ResultsSampleWave
   capabilities: ViewerCapabilities
+  /** The panel's id, for `aria-controls` on the cell that opened it. */
+  id: string
+  /** The heading, so the view can move focus to it when a finding opens the cell. */
+  headingRef?: Ref<HTMLHeadingElement>
   onClose: () => void
 }
 
@@ -38,17 +46,17 @@ export interface ResultsCellPanelProps {
 export default function ResultsCellPanel({
   detail,
   dimensionName,
+  code,
   threshold,
   sample,
   capabilities,
+  id,
+  headingRef,
   onClose,
 }: ResultsCellPanelProps) {
   const { t, locale } = useTranslation()
   const score = (value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale)
   const dimension = dimensionName(detail.dimensionKey)
-  const sampleChip = sample.isSample ? (
-    <Chip tone="warning" label={t('dashboard.next.sampleChip')} />
-  ) : null
 
   // "1,3 bajo la meta · la celda más baja del mapa · una pregunta por dimensión en
   // esta encuesta" — each clause derived, joined with the artboard's separator.
@@ -56,10 +64,10 @@ export default function ResultsCellPanel({
   if (detail.shortfall !== null) {
     clauses.push(
       detail.shortfall > 0
-        ? t('surveyResults.next.cellBelow', { shortfall: score(detail.shortfall) })
+        ? t('surveyResults.next.cellBelowTarget', { shortfall: score(detail.shortfall) })
         : detail.shortfall < 0
-          ? t('surveyResults.next.cellAbove', { excess: score(-detail.shortfall) })
-          : t('surveyResults.next.cellOn'),
+          ? t('surveyResults.next.cellAboveTarget', { excess: score(-detail.shortfall) })
+          : t('surveyResults.next.cellOnTarget'),
     )
   }
   if (detail.isLowest) clauses.push(t('surveyResults.next.cellLowest'))
@@ -73,16 +81,19 @@ export default function ResultsCellPanel({
 
   return (
     <section
+      id={id}
       aria-labelledby="results-next-cell"
       data-testid="cell-panel"
-      className="flex flex-col gap-3.5 rounded-lg border border-line-default border-l-3 border-l-fg-primary bg-surface-card px-5 py-4"
+      className="flex flex-col gap-3.5 rounded-lg border border-l-3 border-line-default border-l-fg-primary bg-surface-card px-5 pt-4 pb-4.5 shadow-sm"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-0.5">
           <p className="m-0 text-2xs font-bold uppercase tracking-eyebrow text-fg-label">
             {t('surveyResults.next.cellHeading')}
           </p>
-          <h2 id="results-next-cell" className="mb-0 text-2xl">
+          {/* `tabIndex={-1}` so "Ver la pregunta" can move focus here: the reader
+              who opened the cell from a finding lands on what it opened. */}
+          <h2 id="results-next-cell" ref={headingRef} tabIndex={-1} className="mb-0 text-2xl">
             {detail.rowName} · {dimension}
           </h2>
           <p className="m-0 text-sm text-fg-secondary">
@@ -102,14 +113,15 @@ export default function ResultsCellPanel({
       </div>
 
       <div className="grid gap-7 lg:grid-cols-[1.3fr_0.7fr_1fr]">
-        <div className="flex min-w-0 flex-col gap-3.5">
+        <div className="flex min-w-0 flex-col gap-3.5" data-testid="cell-question">
           {detail.questions.map((question) => (
             <div key={question.questionId} className="flex flex-col gap-3.5">
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-fg-primary">
                     {t('surveyResults.next.groupDistribution', { dimension, group: detail.rowName })}
-                    {sampleChip}
+                    {/* The group's own distribution is the sample on this panel. */}
+                    {sample.isSample && <Chip tone="warning" label={t('dashboard.next.sampleChip')} />}
                   </span>
                   <span className="font-mono text-lg tabular-nums text-fg-primary">
                     {question.groupScore === null ? '—' : score(question.groupScore)}
@@ -123,19 +135,19 @@ export default function ResultsCellPanel({
                   max={question.scaleMax}
                   segments={segmentsOf(sample.groupDistribution, t)}
                 />
-                <p className="m-0 text-xs text-fg-label">
+                <p className="m-0 text-xs text-fg-light">
                   {t('surveyResults.next.groupDistributionSub', { low: lowShare(sample.groupDistribution) })}
                 </p>
               </div>
 
               {/* One axis for the two strips, in the author's own anchor words. */}
-              <div aria-hidden="true" className="flex justify-between gap-2 font-mono text-2xs text-fg-label">
+              <div aria-hidden="true" className="flex justify-between gap-2 font-mono text-2xs text-fg-light">
                 {axisOf(question, t).map((tick) => (
                   <span key={tick}>{tick}</span>
                 ))}
               </div>
 
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5" data-testid="company-distribution">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-sm font-semibold text-fg-primary">
                     {t('surveyResults.next.companyDistribution')}
@@ -150,9 +162,9 @@ export default function ResultsCellPanel({
                   max={question.scaleMax}
                   segments={segmentsOf(question.surveyDistribution, t)}
                 />
-                <p className="m-0 text-xs text-fg-label">
-                  {t('surveyResults.next.companyDistributionSub', {
-                    wave: sample.previousCode === '' ? '' : detailWave(t),
+                <p className="m-0 text-xs text-fg-light">
+                  {t('surveyResults.next.companyDistributionSubWave', {
+                    wave: code,
                     responses: question.surveyAnswered,
                     low: lowShare(question.surveyDistribution),
                   })}
@@ -171,11 +183,7 @@ export default function ResultsCellPanel({
           <p className={LABEL}>{t('surveyResults.next.othersHeading', { dimension })}</p>
           <ul className="m-0 flex list-none flex-col gap-1.5 p-0" data-testid="others-in-dimension">
             {detail.others.map((other) => (
-              <li
-                key={other.id}
-                data-testid={`other-${other.id}`}
-                className="grid grid-cols-[1fr_56px] items-center gap-2"
-              >
+              <li key={other.id} data-testid={`other-${other.id}`} className="grid grid-cols-[1fr_56px] items-center gap-2">
                 <span className="text-sm text-fg-secondary">{other.name}</span>
                 {other.isProtected || other.score === null || other.band === null ? (
                   <ProtectedCell
@@ -199,7 +207,7 @@ export default function ResultsCellPanel({
             ))}
           </ul>
           {protectedOthers.length > 0 && (
-            <p className="m-0 text-xs text-fg-label">
+            <p className="m-0 text-xs text-fg-light">
               {t('surveyResults.next.othersProtected', {
                 groups: protectedOthers.map((other) => other.name).join(', '),
                 floor: threshold,
@@ -208,7 +216,7 @@ export default function ResultsCellPanel({
           )}
         </div>
 
-        <div className="flex min-w-0 flex-col gap-2.5">
+        <div className="flex min-w-0 flex-col gap-2.5" data-testid="cell-doing">
           <p className={LABEL}>{t('surveyResults.next.doingHeading')}</p>
           {detail.plan === undefined ? (
             <p className="m-0 text-sm text-fg-secondary">{t('surveyResults.next.plansUnavailable')}</p>
@@ -220,7 +228,7 @@ export default function ResultsCellPanel({
               <strong className="font-semibold text-fg-primary">{detail.plan.name}</strong>
               {' · '}
               {t('surveyResults.next.doingPlanDue', { date: calendarDay(Date.parse(detail.plan.dueAt), locale) })}
-              {detail.plan.status === 'not_started' && <>{' · '}{t('surveyResults.next.planNoProgress')}</>}.
+              {detail.plan.status === 'not_started' && ` · ${t('surveyResults.next.planNoProgress')}`}.
             </p>
           )}
           <div className="flex flex-wrap gap-2">
@@ -234,10 +242,13 @@ export default function ResultsCellPanel({
                 </Link>
               </Button>
             ) : (
+              // `/action-plans`, not `/action-plans/new`: there is no such route
+              // (`router.tsx` mounts the list and `:id`, and `new` would be read as
+              // a plan id). The list is where "new action plan" lives.
               capabilities.canCreateActionPlan &&
               detail.plan === null && (
                 <Button variant="outline" asChild>
-                  <Link to="/action-plans/new">
+                  <Link to="/action-plans">
                     <Plus aria-hidden="true" />
                     {t('surveyResults.next.createPlan')}
                   </Link>
@@ -273,7 +284,7 @@ function segmentsOf(points: readonly ResultsDistributionPoint[], t: Translate) {
   }))
 }
 
-/** "1 · nunca", "2", "3", "4", "5 · siempre" — the author's anchor words on the ends. */
+/** "1 · Muy en desacuerdo", "2", "3", "4", "5 · Muy de acuerdo" — the author's anchor words on the ends. */
 function axisOf(
   question: { scaleMin: number; scaleMax: number; scaleLabelMin: string | null; scaleLabelMax: string | null },
   t: Translate,
@@ -289,9 +300,4 @@ function axisOf(
     }
   }
   return ticks
-}
-
-/** The wave the company's distribution belongs to — this survey's own. */
-function detailWave(t: Translate): string {
-  return t('surveyResults.next.thisWave')
 }

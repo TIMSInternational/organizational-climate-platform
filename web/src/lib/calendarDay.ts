@@ -67,3 +67,22 @@ export function calendarDay(value: number | Date, locale: string, now: number | 
     ...(sameYear ? {} : { year: 'numeric' }),
   })
 }
+
+/**
+ * The same calendar day with the month written out — `6 de agosto`, `August 6` — for
+ * a sentence that names the day rather than a table that lists it: the survey
+ * results header says "cerró el 6 de agosto" (SurveyResults artboard, 10 Sep).
+ *
+ * The same UTC reading and the same year rule as `calendarDay`, for the same
+ * reasons; only the month's spelling differs.
+ */
+export function calendarDayLong(value: number | Date, locale: string, now: number | Date = Date.now()): string {
+  const date = new Date(value)
+  const sameYear = date.getUTCFullYear() === new Date(now).getUTCFullYear()
+  return date.toLocaleDateString(locale, {
+    timeZone: 'UTC',
+    day: 'numeric',
+    month: 'long',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  })
+}
