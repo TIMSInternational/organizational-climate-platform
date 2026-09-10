@@ -33,15 +33,25 @@ export function matchesOnly(name, only) {
   return String(name ?? '').trim().toLowerCase().startsWith(prefix)
 }
 
+/**
+ * The link the live page prints for respondents: `/microclimates/<id>/respond`
+ * (`MicroclimateLivePage.tsx`), with or without its origin. Deliberately NOT
+ * `/microclimate-invitations/<token>`: that route records an `opened` step as it resolves, and
+ * no rehearsal step visits it — step 14 must land on the route that only reads on mount.
+ */
+export const RESPOND_LINK = /(?:https?:\/\/[^\s]+?)?\/microclimates\/[^\s/]+\/respond\b/
+
 /** The methods a read-only rehearsal lets the browser send. */
 export const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
 /**
  * Whether the browser may send this request. Reads always; anything else only in the one
  * step that opted into writing (10b). "Read-only" is enforced here rather than promised in a
- * header, because the pages are not: `MicroclimateInvitationPage` POSTs an `opened` step the
- * moment it mounts, and the wizard offers to DELETE a leftover draft. A blocked request is
- * recorded against the step, so the morning can see what the screen tried to do.
+ * header, because the pages are not: the wizard offers to DELETE a leftover draft, and
+ * `MicroclimateInvitationPage` POSTs an `opened` step once its token resolves (a route no
+ * rehearsal step visits — step 14 opens `/microclimates/<id>/respond`, which only reads on
+ * mount). A blocked request is recorded against the step, so the morning can see what the
+ * screen tried to do.
  */
 export function allowRequest(method, { allowWrites = false } = {}) {
   return allowWrites === true || READ_METHODS.has(String(method ?? '').toUpperCase())
