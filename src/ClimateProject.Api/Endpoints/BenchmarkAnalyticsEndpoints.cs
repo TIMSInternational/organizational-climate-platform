@@ -529,7 +529,7 @@ public static partial class BenchmarkEndpoints
         }
 
         var rows = await query
-            .Select(b => new { b.Category, b.Type, b.CompanyId, b.IsActive, b.QualityScore })
+            .Select(b => new { b.Category, b.Type, b.CompanyId, b.IsActive, b.ValidationStatus, b.QualityScore })
             .ToListAsync(cancellationToken);
 
         var summaries = rows
@@ -541,10 +541,28 @@ public static partial class BenchmarkEndpoints
                 GlobalCount: g.Count(r => r.CompanyId is null),
                 ActiveCount: g.Count(r => r.IsActive),
                 Types: g.Select(r => r.Type).Distinct(StringComparer.Ordinal).OrderBy(t => t, StringComparer.Ordinal).ToList(),
-                AverageQualityScore: Math.Round(g.Average(r => r.QualityScore), 1)))
+                AverageQualityScore: AverageReportedScore(
+                    g.Select(r => BenchmarkQuality.ReportedScore(r.ValidationStatus, r.QualityScore)))))
             .ToList();
 
         return Results.Ok(summaries);
+    }
+
+    /// <summary>
+    /// The mean quality score of the rows the rule has scored, or null when it has scored
+    /// none of them.
+    /// </summary>
+    /// <remarks>
+    /// Over <see cref="BenchmarkQuality.ReportedScore"/>, not the stored column: a `pending`
+    /// row's stored 0 is a column default, and averaging it in charted a category of three
+    /// verified benchmarks at 90 beside two fresh ones at 54 -- and a category nobody had
+    /// validated at a confident 0, which is a "chart of a constant" one level up from the
+    /// one #90 removed. Rounded to one decimal like the score itself.
+    /// </remarks>
+    private static double? AverageReportedScore(IEnumerable<double?> reported)
+    {
+        var scored = reported.Where(s => s.HasValue).Select(s => s!.Value).ToList();
+        return scored.Count == 0 ? null : Math.Round(scored.Average(), 1);
     }
 
     // -----------------------------------------------------------------------------------
@@ -579,7 +597,9 @@ public static partial class BenchmarkEndpoints
         var assessment = BenchmarkQuality.Assess(metrics, benchmark.Industry, benchmark.CompanySize, benchmark.Region);
 
         var previousStatus = benchmark.ValidationStatus;
-        var previousScore = benchmark.QualityScore;
+        // Null on the first run: a `pending` row's stored 0 is the column default, and
+        // reporting it as the previous score says the rule once failed the benchmark.
+        var previousScore = BenchmarkQuality.ReportedScore(previousStatus, benchmark.QualityScore);
 
         benchmark.ValidationStatus = assessment.Status;
         benchmark.QualityScore = assessment.Score;

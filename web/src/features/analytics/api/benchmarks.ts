@@ -49,7 +49,16 @@ export interface BenchmarkListItem {
   /** `null` means a global benchmark, readable by every tenant. */
   companyId: string | null
   isActive: boolean
-  qualityScore: number
+  /**
+   * The quality rule's verdict, 0–100 — or `null` when the rule has never run on this
+   * benchmark, which is every row whose `validationStatus` is `pending`.
+   *
+   * `null` is not 0. The rule scores a benchmark that measures nothing at exactly 0, and
+   * that zero is a verdict; the list used to carry the column's old default and printed
+   * "0,00" under every reference an administrator had created and not yet validated.
+   * `QualityScoreReading` is the one place the two are told apart on screen.
+   */
+  qualityScore: number | null
   priorPeriodStatus: PriorPeriodStatus
 }
 
@@ -103,7 +112,8 @@ export interface Benchmark {
   companyId: string | null
   isActive: boolean
   validationStatus: string
-  qualityScore: number
+  /** `null` while `validationStatus` is `pending`, and only then — see `BenchmarkListItem`. */
+  qualityScore: number | null
   /**
    * The prior period's id **as this caller may see it** — `null` when the linked row belongs
    * to a tenant they cannot read, on the same terms as `priorPeriod`.

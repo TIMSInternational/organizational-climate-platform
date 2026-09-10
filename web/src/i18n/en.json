@@ -2174,6 +2174,7 @@
     "companySize": "Company size",
     "region": "Region",
     "qualityScore": "Quality score",
+    "qualityScoreNotAssessed": "Not scored yet",
     "validationStatus": "Validation",
     "validationStatusPending": "Not assessed yet",
     "validationStatusVerified": "Verified",

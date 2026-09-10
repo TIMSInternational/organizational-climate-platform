@@ -25,12 +25,16 @@ public sealed record BenchmarkQualityAssessment(
 /// state change: a caller that only sees the new value cannot tell a re-run that confirmed
 /// the score from one that moved it.
 /// </remarks>
+/// <param name="PreviousQualityScore">
+/// Null on the first run of the rule: there was no previous score, and 0 would have said the
+/// rule had once failed the benchmark. See <see cref="BenchmarkQuality.ReportedScore"/>.
+/// </param>
 public sealed record BenchmarkValidationResult(
     Guid BenchmarkId,
     string Status,
     double QualityScore,
     string PreviousStatus,
-    double PreviousQualityScore,
+    double? PreviousQualityScore,
     IReadOnlyList<BenchmarkQualityComponent> Components);
 
 /// <summary>A benchmark as it appears on one side of a comparison.</summary>
@@ -156,7 +160,11 @@ public sealed record BenchmarkCategorySummary(
     int GlobalCount,
     int ActiveCount,
     IReadOnlyList<string> Types,
-    double AverageQualityScore);
+    // The mean over the benchmarks the rule has scored, and null when it has scored none of
+    // them. A row nobody has validated is not a 0 in this mean: three verified rows at 90
+    // beside two fresh ones used to chart at 54, and a category nobody had validated at a
+    // confident 0.
+    double? AverageQualityScore);
 
 /// <summary>The filters an industry aggregate was actually computed under.</summary>
 /// <remarks>

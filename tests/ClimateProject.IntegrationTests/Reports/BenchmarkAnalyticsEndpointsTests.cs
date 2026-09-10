@@ -629,7 +629,8 @@ public class BenchmarkAnalyticsEndpointsTests : IAsyncLifetime
         var before = (await (await client.GetAsync($"/admin/benchmarks/{subject.Id}"))
             .Content.ReadFromJsonAsync<BenchmarkDetail>())!;
         Assert.Equal(BenchmarkValidationStatuses.Pending, before.ValidationStatus);
-        Assert.Equal(0d, before.QualityScore);
+        // No score, not 0: the rule has not run. The stored column default stays behind the API.
+        Assert.Null(before.QualityScore);
 
         var response = await client.PostAsync($"/admin/benchmarks/{subject.Id}/validate", null);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -638,7 +639,8 @@ public class BenchmarkAnalyticsEndpointsTests : IAsyncLifetime
         Assert.Equal(76.7d, result.QualityScore, 10);
         Assert.Equal(BenchmarkValidationStatuses.Verified, result.Status);
         Assert.Equal(BenchmarkValidationStatuses.Pending, result.PreviousStatus);
-        Assert.Equal(0d, result.PreviousQualityScore);
+        // The first run has no previous score to report; 0 would say the rule once failed it.
+        Assert.Null(result.PreviousQualityScore);
 
         Assert.Equal(1d, result.Components.Sum(c => c.Weight), 6);
         Assert.Equal(result.QualityScore, Math.Round(result.Components.Sum(c => c.WeightedScore) * 100d, 1), 10);
@@ -652,7 +654,8 @@ public class BenchmarkAnalyticsEndpointsTests : IAsyncLifetime
 
         var after = (await (await client.GetAsync($"/admin/benchmarks/{subject.Id}"))
             .Content.ReadFromJsonAsync<BenchmarkDetail>())!;
-        Assert.Equal(76.7d, after.QualityScore, 10);
+        Assert.NotNull(after.QualityScore);
+        Assert.Equal(76.7d, after.QualityScore.Value, 10);
         Assert.Equal(BenchmarkValidationStatuses.Verified, after.ValidationStatus);
     }
 
@@ -736,7 +739,72 @@ public class BenchmarkAnalyticsEndpointsTests : IAsyncLifetime
         var detail = (await (await adminA.GetAsync($"/admin/benchmarks/{global.Id}"))
             .Content.ReadFromJsonAsync<BenchmarkDetail>())!;
         Assert.Equal(BenchmarkValidationStatuses.Pending, detail.ValidationStatus);
-        Assert.Equal(0d, detail.QualityScore);
+        Assert.Null(detail.QualityScore);
+    }
+
+    /// <summary>
+    /// A benchmark nobody has validated carries no score on the wire; one the rule scored 0
+    /// carries 0.
+    ///
+    /// <para>
+    /// The column cannot tell them apart -- <c>quality_score</c> is <c>NOT NULL DEFAULT 0</c>
+    /// -- and until this the list printed "Puntaje de calidad 0,00" under every reference an
+    /// administrator had created and not yet validated: a failing grade on a row whose own
+    /// panel said "not assessed yet". The rule really does hand out 0 (a benchmark that
+    /// measures nothing, <see cref="Validate_fails_a_benchmark_that_measures_nothing"/>), so
+    /// the two have to be told apart by status, in <see cref="BenchmarkQuality.ReportedScore"/>.
+    /// </para>
+    /// <para>
+    /// The SAME row is read before and after the rule runs, through both readers of the score
+    /// -- the list row and the detail -- so this is null-then-0 on one benchmark, not two
+    /// fixtures that happen to differ. A second run then reports that 0 as the previous score
+    /// where the first run reported none.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_benchmark_nobody_has_validated_has_no_score_and_a_computed_zero_stays_zero()
+    {
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var subject = await CreateAsync(
+            client, "Never validated", _companyAId, category: $"unscored-{Guid.NewGuid():N}");
+
+        Assert.Equal(BenchmarkValidationStatuses.Pending, subject.ValidationStatus);
+        Assert.Null(subject.QualityScore);
+
+        var listed = (await (await client.GetAsync("/admin/benchmarks"))
+            .Content.ReadFromJsonAsync<List<BenchmarkListItem>>())!
+            .Single(b => b.Id == subject.Id);
+        Assert.Null(listed.QualityScore);
+
+        // An explicit null on the wire, not an omitted key: a client reading a missing
+        // `qualityScore` as 0 would put the "0,00" straight back.
+        using (var raw = JsonDocument.Parse(
+            await (await client.GetAsync($"/admin/benchmarks/{subject.Id}")).Content.ReadAsStringAsync()))
+        {
+            Assert.Equal(JsonValueKind.Null, raw.RootElement.GetProperty("qualityScore").ValueKind);
+        }
+
+        var first = (await (await client.PostAsync($"/admin/benchmarks/{subject.Id}/validate", null))
+            .Content.ReadFromJsonAsync<BenchmarkValidationResult>())!;
+        Assert.Equal(0d, first.QualityScore);
+        Assert.Equal(BenchmarkValidationStatuses.Failed, first.Status);
+        Assert.Equal(BenchmarkValidationStatuses.Pending, first.PreviousStatus);
+        Assert.Null(first.PreviousQualityScore);
+
+        // Scored 0 now, and 0 is what both readers say -- not null, not a dash.
+        var scoredDetail = (await (await client.GetAsync($"/admin/benchmarks/{subject.Id}"))
+            .Content.ReadFromJsonAsync<BenchmarkDetail>())!;
+        Assert.Equal(BenchmarkValidationStatuses.Failed, scoredDetail.ValidationStatus);
+        Assert.Equal(0d, scoredDetail.QualityScore);
+        var scoredRow = (await (await client.GetAsync("/admin/benchmarks"))
+            .Content.ReadFromJsonAsync<List<BenchmarkListItem>>())!
+            .Single(b => b.Id == subject.Id);
+        Assert.Equal(0d, scoredRow.QualityScore);
+
+        var second = (await (await client.PostAsync($"/admin/benchmarks/{subject.Id}/validate", null))
+            .Content.ReadFromJsonAsync<BenchmarkValidationResult>())!;
+        Assert.Equal(BenchmarkValidationStatuses.Failed, second.PreviousStatus);
+        Assert.Equal(0d, second.PreviousQualityScore);
     }
 
     // ===================================================================================
@@ -879,7 +947,8 @@ public class BenchmarkAnalyticsEndpointsTests : IAsyncLifetime
         Assert.All(listed, b => Assert.Equal(PriorPeriodStatuses.Unlinked, b.PriorPeriodStatus));
 
         var full = listed.Single(b => b.Name == "Sector engagement 2026");
-        Assert.Equal(100d, full.QualityScore, 10);
+        Assert.NotNull(full.QualityScore);
+        Assert.Equal(100d, full.QualityScore.Value, 10);
 
         var detail = (await (await client.GetAsync($"/admin/benchmarks/{full.Id}"))
             .Content.ReadFromJsonAsync<BenchmarkDetail>())!;
@@ -1671,6 +1740,56 @@ public class BenchmarkAnalyticsEndpointsTests : IAsyncLifetime
         Assert.Equal(2, summary.ActiveCount);
         Assert.Equal(2, summary.GlobalCount);
         // 80, which is neither of the two scores and not the number of rows.
-        Assert.Equal(80d, summary.AverageQualityScore, 10);
+        Assert.NotNull(summary.AverageQualityScore);
+        Assert.Equal(80d, summary.AverageQualityScore.Value, 10);
+    }
+    /// <summary>
+    /// A category's average is the mean over the benchmarks the rule has scored. A row nobody
+    /// has validated is not a 0 in it, and a category in which nothing has been scored has no
+    /// average at all.
+    ///
+    /// <para>
+    /// Two rows created through <c>POST /admin/benchmarks</c> -- <c>pending</c>, unscored --
+    /// then one imported row, which scores on the way in at 100 (the fully described row of
+    /// <see cref="Categories_reports_the_active_count_and_the_average_quality_score"/>). With
+    /// the column default in the mean the first read charted a confident 0 and the second
+    /// 33.3; the honest readings are null and 100.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Categories_leaves_benchmarks_nobody_has_validated_out_of_the_average()
+    {
+        var client = await ClientAsync(Roles.SuperAdmin, _companyADomain);
+        var category = $"cat-unscored-{Guid.NewGuid():N}";
+        await CreateAsync(client, "Fresh one", null, category: category);
+        await CreateAsync(client, "Fresh two", null, category: category);
+
+        var unscored = (await (await client.GetAsync("/admin/benchmarks/categories"))
+            .Content.ReadFromJsonAsync<List<BenchmarkCategorySummary>>())!
+            .Single(s => s.Category == category);
+        Assert.Equal(2, unscored.BenchmarkCount);
+        Assert.Null(unscored.AverageQualityScore);
+
+        var imported = await client.PostAsJsonAsync("/admin/benchmarks/import", new ImportBenchmarksRequest(
+            [
+                new ImportBenchmarkItem(
+                    "Fully described", "d", BenchmarkTypes.Industry, category, "vendor file",
+                    "manufacturing", "201-500", "Costa Rica", null,
+                    [
+                        new ImportBenchmarkMetricItem("engagement_score", 70, "percent", 50, 900),
+                        new ImportBenchmarkMetricItem("absence_rate", 3.4, "percent", 50, 900),
+                        new ImportBenchmarkMetricItem("turnover_rate", 11.2, "percent", 50, 900),
+                    ]),
+            ],
+            ValidateOnly: null));
+        Assert.Equal(HttpStatusCode.Created, imported.StatusCode);
+
+        var scored = (await (await client.GetAsync("/admin/benchmarks/categories"))
+            .Content.ReadFromJsonAsync<List<BenchmarkCategorySummary>>())!
+            .Single(s => s.Category == category);
+        Assert.Equal(3, scored.BenchmarkCount);
+        // 100 over the one scored row -- not 33.3 over three.
+        Assert.NotNull(scored.AverageQualityScore);
+        Assert.Equal(100d, scored.AverageQualityScore.Value, 10);
     }
 }
