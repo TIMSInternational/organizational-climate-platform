@@ -1,0 +1,1083 @@
+{
+  "_comment": "Grupo Meridiano S.A., the demo tenant, as the local API answered on 10 Sep 2026 (read-only GETs after POST /auth/login as the company administrator): GET /surveys, GET /surveys/climate-trends (ungrouped and ?groupBy=department), GET /dashboard/company-admin, GET /profile, GET /action-plans (+ one detail), GET /microclimates (+ one detail), the tracking service's GET /api/planes-accion, and the two tracking pickers GET /tracking/picker/nodos and /personas. Every field is one the wire carries and none is invented; the figures are the tenant's own. Shoot with --role company_admin --company 16c97c29-07f8-4522-86fc-e6cc56298829 --lang es --name 'Ana Rojas'.",
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+  "GET /profile": {
+    "id": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "companyName": "Grupo Meridiano S.A.",
+    "email": "ana.rojas@meridiano.test",
+    "name": "Ana Rojas",
+    "role": "company_admin",
+    "departmentId": null,
+    "departmentName": null,
+    "managerId": null,
+    "isActive": true,
+    "hasPassword": true,
+    "lastLoginAt": "2026-09-10T17:15:46.58381+00:00",
+    "createdAt": "2026-09-10T01:58:51.849247+00:00",
+    "demographics": {}
+  },
+  "GET /surveys": {
+    "surveys": [
+      {
+        "id": "801a81a4-3551-4f08-96f4-d465e05b1605",
+        "title": "Encuesta de Clima Q4 (abierta) (Copia)",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "archived",
+        "language": "both",
+        "startDate": "2026-09-03T02:03:39.148+00:00",
+        "endDate": "2026-10-10T02:03:39.148+00:00",
+        "responseCount": 1,
+        "targetAudienceCount": 24,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:42:10.457905+00:00"
+      },
+      {
+        "id": "38b2002f-66da-468d-b136-ec112ba3204b",
+        "title": "Encuesta de Clima Q3",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "closed",
+        "language": "both",
+        "startDate": "2026-07-16T02:05:22.92+00:00",
+        "endDate": "2026-08-06T02:05:22.922+00:00",
+        "responseCount": 24,
+        "targetAudienceCount": null,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:05:22.928985+00:00"
+      },
+      {
+        "id": "4c9c8c8c-03e1-4033-8224-8c80b242c558",
+        "title": "Encuesta de Clima Q4 (abierta)",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "active",
+        "language": "both",
+        "startDate": "2026-09-03T02:03:39.148+00:00",
+        "endDate": "2026-10-10T02:03:39.148+00:00",
+        "responseCount": 3,
+        "targetAudienceCount": 24,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:03:39.158774+00:00"
+      },
+      {
+        "id": "7321a9bb-9e83-465a-a31d-73bdc186d626",
+        "title": "Encuesta de Clima Q2",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "closed",
+        "language": "both",
+        "startDate": "2026-04-22T02:03:12.138+00:00",
+        "endDate": "2026-05-13T02:03:12.138+00:00",
+        "responseCount": 24,
+        "targetAudienceCount": null,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:03:12.144854+00:00"
+      },
+      {
+        "id": "f82beb53-29a0-45b6-b4e3-3d0b8b7173c3",
+        "title": "Encuesta de Clima Q1",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "closed",
+        "language": "both",
+        "startDate": "2026-01-22T03:02:44.908+00:00",
+        "endDate": "2026-02-12T03:02:44.911+00:00",
+        "responseCount": 24,
+        "targetAudienceCount": null,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:02:44.947694+00:00"
+      }
+    ]
+  },
+  "GET /surveys/climate-trends": {
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "groupBy": null,
+    "surveys": [
+      {
+        "surveyId": "f82beb53-29a0-45b6-b4e3-3d0b8b7173c3",
+        "title": "Encuesta de Clima Q1",
+        "status": "closed",
+        "endDate": "2026-02-12T03:02:44.911+00:00",
+        "completedCount": 24,
+        "isSuppressed": false
+      },
+      {
+        "surveyId": "7321a9bb-9e83-465a-a31d-73bdc186d626",
+        "title": "Encuesta de Clima Q2",
+        "status": "closed",
+        "endDate": "2026-05-13T02:03:12.138+00:00",
+        "completedCount": 24,
+        "isSuppressed": false
+      },
+      {
+        "surveyId": "38b2002f-66da-468d-b136-ec112ba3204b",
+        "title": "Encuesta de Clima Q3",
+        "status": "closed",
+        "endDate": "2026-08-06T02:05:22.922+00:00",
+        "completedCount": 24,
+        "isSuppressed": false
+      },
+      {
+        "surveyId": "801a81a4-3551-4f08-96f4-d465e05b1605",
+        "title": "Encuesta de Clima Q4 (abierta) (Copia)",
+        "status": "archived",
+        "endDate": "2026-10-10T02:03:39.148+00:00",
+        "completedCount": 1,
+        "isSuppressed": true
+      }
+    ],
+    "dimensions": [
+      {
+        "key": "belonging",
+        "surveyCount": 3
+      },
+      {
+        "key": "growth",
+        "surveyCount": 3
+      },
+      {
+        "key": "psychological_safety",
+        "surveyCount": 3
+      },
+      {
+        "key": "recognition",
+        "surveyCount": 3
+      },
+      {
+        "key": "trust",
+        "surveyCount": 3
+      },
+      {
+        "key": "workload",
+        "surveyCount": 3
+      }
+    ],
+    "groups": [
+      {
+        "key": "__company__",
+        "label": null,
+        "points": [
+          {
+            "surveyId": "f82beb53-29a0-45b6-b4e3-3d0b8b7173c3",
+            "respondentCount": 24,
+            "isSuppressed": false,
+            "scores": [
+              3.33,
+              3.17,
+              3.17,
+              2.79,
+              2.96,
+              2.75
+            ]
+          },
+          {
+            "surveyId": "7321a9bb-9e83-465a-a31d-73bdc186d626",
+            "respondentCount": 24,
+            "isSuppressed": false,
+            "scores": [
+              3.67,
+              3.54,
+              3.5,
+              3.08,
+              3.33,
+              3.04
+            ]
+          },
+          {
+            "surveyId": "38b2002f-66da-468d-b136-ec112ba3204b",
+            "respondentCount": 24,
+            "isSuppressed": false,
+            "scores": [
+              4,
+              3.79,
+              3.75,
+              3.38,
+              3.67,
+              3.33
+            ]
+          },
+          {
+            "surveyId": "801a81a4-3551-4f08-96f4-d465e05b1605",
+            "respondentCount": 0,
+            "isSuppressed": true,
+            "scores": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          }
+        ]
+      }
+    ],
+    "suppressedGroupCount": 0,
+    "minimumGroupSize": 5,
+    "generatedAt": "2026-09-10T17:14:25.578153+00:00"
+  },
+  "GET /surveys/climate-trends?groupBy=department": {
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "groupBy": "department",
+    "surveys": [
+      {
+        "surveyId": "f82beb53-29a0-45b6-b4e3-3d0b8b7173c3",
+        "title": "Encuesta de Clima Q1",
+        "status": "closed",
+        "endDate": "2026-02-12T03:02:44.911+00:00",
+        "completedCount": 24,
+        "isSuppressed": false
+      },
+      {
+        "surveyId": "7321a9bb-9e83-465a-a31d-73bdc186d626",
+        "title": "Encuesta de Clima Q2",
+        "status": "closed",
+        "endDate": "2026-05-13T02:03:12.138+00:00",
+        "completedCount": 24,
+        "isSuppressed": false
+      },
+      {
+        "surveyId": "38b2002f-66da-468d-b136-ec112ba3204b",
+        "title": "Encuesta de Clima Q3",
+        "status": "closed",
+        "endDate": "2026-08-06T02:05:22.922+00:00",
+        "completedCount": 24,
+        "isSuppressed": false
+      },
+      {
+        "surveyId": "801a81a4-3551-4f08-96f4-d465e05b1605",
+        "title": "Encuesta de Clima Q4 (abierta) (Copia)",
+        "status": "archived",
+        "endDate": "2026-10-10T02:03:39.148+00:00",
+        "completedCount": 1,
+        "isSuppressed": true
+      }
+    ],
+    "dimensions": [
+      {
+        "key": "belonging",
+        "surveyCount": 3
+      },
+      {
+        "key": "growth",
+        "surveyCount": 3
+      },
+      {
+        "key": "psychological_safety",
+        "surveyCount": 3
+      },
+      {
+        "key": "recognition",
+        "surveyCount": 3
+      },
+      {
+        "key": "trust",
+        "surveyCount": 3
+      },
+      {
+        "key": "workload",
+        "surveyCount": 3
+      }
+    ],
+    "groups": [
+      {
+        "key": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+        "label": "Finanzas",
+        "points": [
+          {
+            "surveyId": "f82beb53-29a0-45b6-b4e3-3d0b8b7173c3",
+            "respondentCount": 0,
+            "isSuppressed": true,
+            "scores": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          },
+          {
+            "surveyId": "7321a9bb-9e83-465a-a31d-73bdc186d626",
+            "respondentCount": 0,
+            "isSuppressed": true,
+            "scores": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          },
+          {
+            "surveyId": "38b2002f-66da-468d-b136-ec112ba3204b",
+            "respondentCount": 0,
+            "isSuppressed": true,
+            "scores": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          },
+          {
+            "surveyId": "801a81a4-3551-4f08-96f4-d465e05b1605",
+            "respondentCount": 0,
+            "isSuppressed": true,
+            "scores": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          }
+        ]
+      },
+      {
+        "key": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "label": "Ingeniería",
+        "points": [
+          {
+            "surveyId": "f82beb53-29a0-45b6-b4e3-3d0b8b7173c3",
+            "respondentCount": 6,
+            "isSuppressed": false,
+            "scores": [
+              3.67,
+              3.33,
+              3.5,
+              3,
+              3.33,
+              3
+            ]
+          },
+          {
+            "surveyId": "7321a9bb-9e83-465a-a31d-73bdc186d626",
+            "respondentCount": 6,
+            "isSuppressed": false,
+            "scores": [
+              3.83,
+              3.83,
+              3.83,
+              3.17,
+              3.67,
+              3.5
+            ]
+          },
+          {
+            "surveyId": "38b2002f-66da-468d-b136-ec112ba3204b",
+            "respondentCount": 6,
+            "isSuppressed": false,
+            "scores": [
+              4.33,
+              4.17,
+              4,
+              3.5,
+              4,
+              3.67
+            ]
+          },
+          {
+            "surveyId": "801a81a4-3551-4f08-96f4-d465e05b1605",
+            "respondentCount": 0,
+            "isSuppressed": true,
+            "scores": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          }
+        ]
+      },
+      {
+        "key": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "label": "Operaciones",
+        "points": [
+          {
+            "surveyId": "f82beb53-29a0-45b6-b4e3-3d0b8b7173c3",
+            "respondentCount": 5,
+            "isSuppressed": false,
+            "scores": [
+              2.6,
+              2.4,
+              2,
+              2.2,
+              2.2,
+              1.8
+            ]
+          },
+          {
+            "surveyId": "7321a9bb-9e83-465a-a31d-73bdc186d626",
+            "respondentCount": 5,
+            "isSuppressed": false,
+            "scores": [
+              3,
+              2.8,
+              2.4,
+              2.6,
+              2.6,
+              2.2
+            ]
+          },
+          {
+            "surveyId": "38b2002f-66da-468d-b136-ec112ba3204b",
+            "respondentCount": 5,
+            "isSuppressed": false,
+            "scores": [
+              3.2,
+              3,
+              2.6,
+              2.8,
+              3,
+              2.4
+            ]
+          },
+          {
+            "surveyId": "801a81a4-3551-4f08-96f4-d465e05b1605",
+            "respondentCount": 0,
+            "isSuppressed": true,
+            "scores": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          }
+        ]
+      },
+      {
+        "key": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "label": "Personas",
+        "points": [
+          {
+            "surveyId": "f82beb53-29a0-45b6-b4e3-3d0b8b7173c3",
+            "respondentCount": 5,
+            "isSuppressed": false,
+            "scores": [
+              3.8,
+              3.6,
+              3.8,
+              3,
+              3.4,
+              3.4
+            ]
+          },
+          {
+            "surveyId": "7321a9bb-9e83-465a-a31d-73bdc186d626",
+            "respondentCount": 5,
+            "isSuppressed": false,
+            "scores": [
+              4.2,
+              4,
+              4.2,
+              3.4,
+              3.8,
+              3.6
+            ]
+          },
+          {
+            "surveyId": "38b2002f-66da-468d-b136-ec112ba3204b",
+            "respondentCount": 5,
+            "isSuppressed": false,
+            "scores": [
+              4.4,
+              4.2,
+              4.4,
+              3.6,
+              4,
+              4
+            ]
+          },
+          {
+            "surveyId": "801a81a4-3551-4f08-96f4-d465e05b1605",
+            "respondentCount": 0,
+            "isSuppressed": true,
+            "scores": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          }
+        ]
+      },
+      {
+        "key": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+        "label": "Ventas",
+        "points": [
+          {
+            "surveyId": "f82beb53-29a0-45b6-b4e3-3d0b8b7173c3",
+            "respondentCount": 5,
+            "isSuppressed": false,
+            "scores": [
+              3.4,
+              3.2,
+              3.4,
+              3,
+              3.2,
+              2.8
+            ]
+          },
+          {
+            "surveyId": "7321a9bb-9e83-465a-a31d-73bdc186d626",
+            "respondentCount": 5,
+            "isSuppressed": false,
+            "scores": [
+              3.8,
+              3.6,
+              3.6,
+              3.2,
+              3.4,
+              3
+            ]
+          },
+          {
+            "surveyId": "38b2002f-66da-468d-b136-ec112ba3204b",
+            "respondentCount": 5,
+            "isSuppressed": false,
+            "scores": [
+              4,
+              3.8,
+              4,
+              3.6,
+              3.8,
+              3.4
+            ]
+          },
+          {
+            "surveyId": "801a81a4-3551-4f08-96f4-d465e05b1605",
+            "respondentCount": 0,
+            "isSuppressed": true,
+            "scores": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          }
+        ]
+      }
+    ],
+    "suppressedGroupCount": 1,
+    "minimumGroupSize": 5,
+    "generatedAt": "2026-09-10T17:14:25.608839+00:00"
+  },
+  "GET /dashboard/company-admin": {
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "companyName": "Grupo Meridiano S.A.",
+    "userCount": 42,
+    "activeUserCount": 42,
+    "departmentCount": 5,
+    "surveyCount": 5,
+    "activeSurveyCount": 1,
+    "draftSurveyCount": 0,
+    "responseCount": 76,
+    "completedResponseCount": 76,
+    "openActionPlanCount": 4,
+    "overdueActionPlanCount": 0,
+    "ongoingSurveys": [
+      {
+        "id": "4c9c8c8c-03e1-4033-8224-8c80b242c558",
+        "title": "Encuesta de Clima Q4 (abierta)",
+        "status": "active",
+        "startDate": "2026-09-03T02:03:39.148+00:00",
+        "endDate": "2026-10-10T02:03:39.148+00:00",
+        "responseCount": 3,
+        "targetAudienceCount": 24
+      }
+    ],
+    "departments": [
+      {
+        "id": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+        "name": "Finanzas",
+        "memberCount": 6,
+        "completedResponseCount": 9
+      },
+      {
+        "id": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "name": "Ingeniería",
+        "memberCount": 14,
+        "completedResponseCount": 22
+      },
+      {
+        "id": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "name": "Operaciones",
+        "memberCount": 7,
+        "completedResponseCount": 15
+      },
+      {
+        "id": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "name": "Personas",
+        "memberCount": 7,
+        "completedResponseCount": 15
+      },
+      {
+        "id": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+        "name": "Ventas",
+        "memberCount": 7,
+        "completedResponseCount": 15
+      }
+    ]
+  },
+  "GET /action-plans": {
+    "actionPlans": [
+      {
+        "id": "1164cd20-3605-4c46-9297-6fc9ab6bb868",
+        "title": "Programa de reconocimiento entre pares",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "dueDate": "2026-09-30T02:05:50.251+00:00",
+        "status": "not_started",
+        "priority": "high",
+        "createdAt": "2026-09-10T02:05:50.263923+00:00"
+      },
+      {
+        "id": "433a542b-de20-4b71-9ff2-e8ab3cb3d625",
+        "title": "Buzón anónimo de sugerencias",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": null,
+        "dueDate": "2026-10-10T00:00:00+00:00",
+        "status": "cancelled",
+        "priority": "medium",
+        "createdAt": "2026-09-10T02:12:06.466863+00:00"
+      },
+      {
+        "id": "f5227d88-fd88-428f-a971-a109ee18ff32",
+        "title": "Almuerzos mensuales por departamento",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": null,
+        "dueDate": "2026-10-10T00:00:00+00:00",
+        "status": "cancelled",
+        "priority": "medium",
+        "createdAt": "2026-09-10T02:13:38.941573+00:00"
+      },
+      {
+        "id": "dec1b555-22e9-4519-8c43-c74c9615ea05",
+        "title": "Piloto de horario flexible en Ventas",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": null,
+        "dueDate": "2026-10-10T00:00:00+00:00",
+        "status": "cancelled",
+        "priority": "medium",
+        "createdAt": "2026-09-10T02:14:40.726189+00:00"
+      },
+      {
+        "id": "4f973f47-4ab2-4a5b-9606-af5db05670b8",
+        "title": "Reducir la carga de trabajo en Operaciones",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "dueDate": "2026-10-15T02:05:50.278+00:00",
+        "status": "not_started",
+        "priority": "high",
+        "createdAt": "2026-09-10T02:05:50.280646+00:00"
+      },
+      {
+        "id": "1276d432-b001-46e6-920d-08fa96618d52",
+        "title": "Reuniones abiertas con la dirección",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": null,
+        "dueDate": "2026-10-25T02:05:50.292+00:00",
+        "status": "not_started",
+        "priority": "medium",
+        "createdAt": "2026-09-10T02:05:50.294635+00:00"
+      },
+      {
+        "id": "b3797ec7-780c-4ca2-b5e6-ceb015855560",
+        "title": "Plan de desarrollo de carrera en Ingeniería",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "dueDate": "2026-11-09T03:05:50.285+00:00",
+        "status": "not_started",
+        "priority": "medium",
+        "createdAt": "2026-09-10T02:05:50.287727+00:00"
+      }
+    ]
+  },
+  "GET /action-plans/*": {
+    "id": "4f973f47-4ab2-4a5b-9606-af5db05670b8",
+    "title": "Reducir la carga de trabajo en Operaciones",
+    "description": "Atiende el hallazgo del T3 en Operaciones.",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "departmentId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+    "createdBy": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+    "dueDate": "2026-10-15T02:05:50.278+00:00",
+    "status": "not_started",
+    "priority": "high",
+    "tags": [
+      "clima",
+      "demo"
+    ],
+    "templateId": null,
+    "kpis": [],
+    "objectives": [],
+    "fallbackFields": []
+  },
+  "GET /microclimates": {
+    "microclimates": [
+      {
+        "id": "5e4cf7fd-d792-4cf5-9750-11f7748bd37e",
+        "title": "Pulso semanal — ¿cómo fue la semana?",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "status": "active",
+        "language": "en",
+        "responseCount": 0,
+        "targetParticipantCount": 20,
+        "createdAt": "2026-09-10T02:06:08.994263+00:00"
+      }
+    ]
+  },
+  "GET /microclimates/*": {
+    "id": "5e4cf7fd-d792-4cf5-9750-11f7748bd37e",
+    "title": "Pulso semanal — ¿cómo fue la semana?",
+    "description": "Cinco minutos, dos preguntas, anónimo.",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "createdBy": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+    "status": "active",
+    "responseCount": 0,
+    "targetParticipantCount": 20,
+    "startTime": "2026-09-10T02:06:08.991+00:00",
+    "endTime": "2026-09-12T02:06:08.992+00:00",
+    "anonymousResponses": true,
+    "showLiveResults": true,
+    "questions": [
+      {
+        "id": "7ab07c7b-9cb1-42ca-a8ca-0d6fa59ac52e",
+        "text": "¿Cómo se sintió esta semana?",
+        "type": "likert",
+        "options": null,
+        "required": true,
+        "order": 0,
+        "emojiOptions": null
+      },
+      {
+        "id": "fc09b434-c0a5-4027-9672-2c38a2c4db62",
+        "text": "En una palabra, ¿qué ayudaría más?",
+        "type": "open_ended",
+        "options": null,
+        "required": false,
+        "order": 1,
+        "emojiOptions": null
+      }
+    ],
+    "language": "en",
+    "resolvedLocale": "es",
+    "fallbackFields": []
+  },
+  "GET /api/planes-accion": [
+    {
+      "id": "01a08b9e-6367-75aa-942c-1ec0efd04176",
+      "planCode": "PA-2026-00001",
+      "nodoExternalId": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+      "liderExternalId": "",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Reponer la reunión de handover entre turnos",
+      "metodologiaComo": "Sesión de 20 minutos al cierre de cada turno, con acta breve.",
+      "responsableEjecucionExternalId": "77fbfc92-76bb-452e-8be3-8ae588464994",
+      "fechaCreacion": "2026-09-10",
+      "fechaCompromiso": "2026-08-20",
+      "porcentajeAvance": 0.0,
+      "estadoSemaforo": "Rojo",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-09-10",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "77fbfc92-76bb-452e-8be3-8ae588464994"
+      ]
+    },
+    {
+      "id": "01a08b9e-63d1-7f20-8a5d-62a31ac71d53",
+      "planCode": "PA-2026-00002",
+      "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+      "liderExternalId": "",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Publicar el rol de fines de semana con dos semanas de antelación",
+      "metodologiaComo": "Calendario compartido, actualizado los lunes por la jefatura del nodo.",
+      "responsableEjecucionExternalId": "1553edb1-e100-4bb1-a397-90882b3a3e9e",
+      "fechaCreacion": "2026-09-10",
+      "fechaCompromiso": "2026-09-15",
+      "porcentajeAvance": 0.0,
+      "estadoSemaforo": "Verde",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-09-10",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "1553edb1-e100-4bb1-a397-90882b3a3e9e"
+      ]
+    },
+    {
+      "id": "01a08b9e-63e0-7880-9789-494dd9369976",
+      "planCode": "PA-2026-00003",
+      "nodoExternalId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+      "liderExternalId": "",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Programa de reconocimiento entre pares",
+      "metodologiaComo": "Nominaciones mensuales, resultado comunicado en la reunión general.",
+      "responsableEjecucionExternalId": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+      "fechaCreacion": "2026-09-10",
+      "fechaCompromiso": "2026-11-09",
+      "porcentajeAvance": 0.0,
+      "estadoSemaforo": "Verde",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-09-10",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "7b34dd6e-3472-4180-9873-ec5cf7d2af65"
+      ]
+    }
+  ],
+  "GET /tracking/picker/nodos": {
+    "nodos": [
+      {
+        "id": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+        "name": "Finanzas"
+      },
+      {
+        "id": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "name": "Ingeniería"
+      },
+      {
+        "id": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "name": "Operaciones"
+      },
+      {
+        "id": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "name": "Personas"
+      },
+      {
+        "id": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+        "name": "Ventas"
+      }
+    ]
+  },
+  "GET /tracking/picker/personas": {
+    "personas": [
+      {
+        "id": "77fbfc92-76bb-452e-8be3-8ae588464994",
+        "name": "Adriana Marín",
+        "email": "adriana.marin@meridiano.test"
+      },
+      {
+        "id": "1553edb1-e100-4bb1-a397-90882b3a3e9e",
+        "name": "Alejandro Retana",
+        "email": "alejandro.retana@meridiano.test"
+      },
+      {
+        "id": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+        "name": "Ana Rojas",
+        "email": "ana.rojas@meridiano.test"
+      },
+      {
+        "id": "4189a6e9-0354-42fc-a653-31906cb33dfc",
+        "name": "Andrés Segura",
+        "email": "andres.segura@meridiano.test"
+      },
+      {
+        "id": "1ccb3318-9751-4b89-9fe0-0ddcf7885be3",
+        "name": "Camila Montero",
+        "email": "camila.montero@meridiano.test"
+      },
+      {
+        "id": "cb2b9759-0e4b-494a-9073-ed859744ba0d",
+        "name": "Carla Jiménez",
+        "email": "carla.jimenez@meridiano.test"
+      },
+      {
+        "id": "091b20f1-e4f0-4fa5-aa2e-5111faf2e3b4",
+        "name": "Carlos Mata",
+        "email": "carlos.mata@meridiano.test"
+      },
+      {
+        "id": "90db77e2-ba9d-488a-90a0-3b8e37b501a1",
+        "name": "Carolina Herrera",
+        "email": "carolina.herrera@meridiano.test"
+      },
+      {
+        "id": "dae0a508-07d8-4c4d-8395-f3a158e78a7e",
+        "name": "Daniel Salas",
+        "email": "daniel.salas@meridiano.test"
+      },
+      {
+        "id": "395b00b6-48e9-466b-80bf-6042ad9e0c5f",
+        "name": "Daniela Bolaños",
+        "email": "daniela.bolanos@meridiano.test"
+      },
+      {
+        "id": "581f933a-dd90-44a6-a85d-125f568e14a9",
+        "name": "Diego Solano",
+        "email": "diego.solano@meridiano.test"
+      },
+      {
+        "id": "6c396734-5d67-4d4f-9344-6ef53433958f",
+        "name": "Elena Quesada",
+        "email": "elena.quesada@meridiano.test"
+      },
+      {
+        "id": "6d94d70f-1588-413c-a713-f714e137d4f3",
+        "name": "Esteban Méndez",
+        "email": "esteban.mendez@meridiano.test"
+      },
+      {
+        "id": "fcede401-926d-48cc-a287-bf7db851a78b",
+        "name": "Felipe Sandoval",
+        "email": "felipe.sandoval@meridiano.test"
+      },
+      {
+        "id": "9a32b026-9e7d-4e78-b561-8598254d57f4",
+        "name": "Fernanda Fallas",
+        "email": "fernanda.fallas@meridiano.test"
+      },
+      {
+        "id": "b0a84adb-7722-41a5-82d5-721723f76e67",
+        "name": "Gabriel Aguilar",
+        "email": "gabriel.aguilar@meridiano.test"
+      },
+      {
+        "id": "f7560211-2be5-447c-a225-8fdac4013461",
+        "name": "Ignacio Espinoza",
+        "email": "ignacio.espinoza@meridiano.test"
+      },
+      {
+        "id": "9ae250a8-6127-41ef-b562-2c96ca97f170",
+        "name": "Isabel Guzmán",
+        "email": "isabel.guzman@meridiano.test"
+      },
+      {
+        "id": "0dc1c3a2-f8d2-434f-92a6-202385e768bc",
+        "name": "Javier Araya",
+        "email": "javier.araya@meridiano.test"
+      },
+      {
+        "id": "7c1d3f71-7e4c-4ba9-91ee-198068173fbb",
+        "name": "Jorge Zúñiga",
+        "email": "jorge.zuniga@meridiano.test"
+      },
+      {
+        "id": "dd6320ca-38b9-4d1f-9e3d-434b867b2aa3",
+        "name": "José Arias",
+        "email": "jose.arias@meridiano.test"
+      },
+      {
+        "id": "967f586f-af23-46e5-a01e-7dea1ac64ab1",
+        "name": "Laura Barrantes",
+        "email": "laura.barrantes@meridiano.test"
+      },
+      {
+        "id": "b139ad6b-7e6b-4c1f-97e0-3dd2ce2c1d3d",
+        "name": "Lucía Brenes",
+        "email": "lucia.brenes@meridiano.test"
+      },
+      {
+        "id": "64fa2a68-3cef-4644-a7b0-ee3a7315c671",
+        "name": "Luis Mora",
+        "email": "luis.mora@meridiano.test"
+      },
+      {
+        "id": "78bdb7e0-155b-4635-a874-dbd4fef42f65",
+        "name": "Marco Castro",
+        "email": "marco.castro@meridiano.test"
+      },
+      {
+        "id": "c9eace72-d15a-4e0f-8693-175236aea56d",
+        "name": "Mariana Leiva",
+        "email": "mariana.leiva@meridiano.test"
+      },
+      {
+        "id": "b4efd72c-893b-4a2e-b202-eb68d8a46a5f",
+        "name": "María Chaves",
+        "email": "maria.chaves@meridiano.test"
+      },
+      {
+        "id": "9a3c64fe-b1ae-4ec8-8a51-4475909364e7",
+        "name": "Mauricio Céspedes",
+        "email": "mauricio.cespedes@meridiano.test"
+      },
+      {
+        "id": "ee3f169b-2608-41b5-ac34-4a7e1590e1b1",
+        "name": "Melissa Coto",
+        "email": "melissa.coto@meridiano.test"
+      },
+      {
+        "id": "270be315-7829-41ee-a825-381d9ee9529b",
+        "name": "Natalia Campos",
+        "email": "natalia.campos@meridiano.test"
+      },
+      {
+        "id": "c3c198f0-be0a-4ded-84f4-26a79bf244ac",
+        "name": "Pablo Solís",
+        "email": "pablo.solis@meridiano.test"
+      },
+      {
+        "id": "b7346b13-8ece-4ab5-84ca-fb8e1e3c2564",
+        "name": "Patricia Pacheco",
+        "email": "patricia.pacheco@meridiano.test"
+      },
+      {
+        "id": "037052e4-9120-4930-9308-ce83853806d4",
+        "name": "Paula Madrigal",
+        "email": "paula.madrigal@meridiano.test"
+      },
+      {
+        "id": "6a543cf4-d958-4dc5-bb1e-62bab06f6e71",
+        "name": "Ricardo Ramírez",
+        "email": "ricardo.ramirez@meridiano.test"
+      },
+      {
+        "id": "21913ed8-cbcd-4c31-9571-6c2369cb08ab",
+        "name": "Roberto Ulate",
+        "email": "roberto.ulate@meridiano.test"
+      },
+      {
+        "id": "496e6366-51fb-4b5d-9f39-e170649b3925",
+        "name": "Rodrigo Alvarado",
+        "email": "rodrigo.alvarado@meridiano.test"
+      },
+      {
+        "id": "dffb4537-85a4-4b37-afaf-4d832b76dcc4",
+        "name": "Sebastián Villalobos",
+        "email": "sebastian.villalobos@meridiano.test"
+      },
+      {
+        "id": "4f19257b-3d96-4d5a-8ab4-42aeefdb6101",
+        "name": "Silvia Umaña",
+        "email": "silvia.umana@meridiano.test"
+      },
+      {
+        "id": "8006070f-a571-46bf-8e08-18ddfe95909e",
+        "name": "Sofía Vargas",
+        "email": "sofia.vargas@meridiano.test"
+      },
+      {
+        "id": "c3c58a00-d916-431c-9a27-594e69dff76b",
+        "name": "Valeria Porras",
+        "email": "valeria.porras@meridiano.test"
+      },
+      {
+        "id": "dedaca2a-20fc-4db6-9ac9-0e7f1589d3aa",
+        "name": "Verónica Cordero",
+        "email": "veronica.cordero@meridiano.test"
+      },
+      {
+        "id": "e9b3fec5-fdcb-490a-8936-8c7e9fe46eb3",
+        "name": "Óscar Vindas",
+        "email": "oscar.vindas@meridiano.test"
+      }
+    ]
+  }
+}

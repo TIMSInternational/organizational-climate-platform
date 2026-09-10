@@ -305,7 +305,9 @@ async function main() {
           await routeRequest.abort()
           return
         }
-        const match = matchFixture(fixtures, method, url.pathname)
+        // The query rides along so a key that names one can tell two calls to one
+        // path apart (`matchFixture`); the unmatched listing keeps the bare path.
+        const match = matchFixture(fixtures, method, `${url.pathname}${url.search}`)
         if (!match) {
           unmatched.add(`${method} ${url.pathname}`)
           await routeRequest.fulfill({

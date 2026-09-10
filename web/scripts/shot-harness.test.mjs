@@ -178,6 +178,50 @@ describe('shot harness: fixture matching', () => {
   it('returns null rather than undefined when nothing matches', () => {
     expect(matchFixture(fixtures, 'GET', '/nope')).toBeNull()
   })
+
+  /**
+   * Two calls to one path with different queries are different payloads: every climate
+   * map reads `/surveys/climate-trends` ungrouped and then `?groupBy=department`. A key
+   * may name the query that tells them apart; a key without one keeps answering any
+   * query, so no existing fixture changes meaning.
+   */
+  describe('a key may name a query', () => {
+    const queried = compileFixtures({
+      'GET /surveys/climate-trends': { groupBy: null },
+      'GET /surveys/climate-trends?groupBy=department': { groupBy: 'department' },
+    })
+
+    it('answers the request carrying the named parameter with the narrower fixture', () => {
+      expect(
+        matchFixture(queried, 'GET', '/surveys/climate-trends?groupBy=department&lang=es'),
+      ).toMatchObject({ body: { groupBy: 'department' } })
+    })
+
+    it('answers a request without it, or with another value, with the bare fixture', () => {
+      expect(matchFixture(queried, 'GET', '/surveys/climate-trends?lang=es')).toMatchObject({
+        body: { groupBy: null },
+      })
+      expect(matchFixture(queried, 'GET', '/surveys/climate-trends')).toMatchObject({
+        body: { groupBy: null },
+      })
+      expect(matchFixture(queried, 'GET', '/surveys/climate-trends?groupBy=gender')).toMatchObject({
+        body: { groupBy: null },
+      })
+    })
+
+    it('never lets a queried key answer a request that lacks its parameter, even alone', () => {
+      const only = compileFixtures({
+        'GET /surveys/climate-trends?groupBy=department': { groupBy: 'department' },
+      })
+      expect(matchFixture(only, 'GET', '/surveys/climate-trends?lang=es')).toBeNull()
+    })
+
+    it('still ignores the query for a key that names none', () => {
+      expect(matchFixture(fixtures, 'GET', '/admin/companies?lang=es')).toMatchObject({
+        body: { companies: [] },
+      })
+    })
+  })
 })
 
 /**
