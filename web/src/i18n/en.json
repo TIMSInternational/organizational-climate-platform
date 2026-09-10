@@ -1856,7 +1856,8 @@
         "noMatch": "No company matches the search.",
         "createHeading": "New company",
         "create": "Create company",
-        "loadFailed": "The companies could not be read"
+        "loadFailed": "The companies could not be read",
+        "superOnly": "The list of companies belongs to the super administrator: no other account can read it."
       },
       "companyDetail": {
         "title": "Company detail",
@@ -1883,11 +1884,12 @@
           "language": "Content language",
           "languageHelper": "New surveys, their invitations and their reports are written in this language. Each person can change it when answering.",
           "frequency": "Survey frequency",
-          "quarterly": "Four waves a year.",
-          "monthly": "One wave a month.",
-          "weekly": "One wave a week.",
-          "daily": "One wave a day.",
-          "wavesSeen": "The closed ones: {list}.",
+          "quarterly": "Four waves a year",
+          "monthly": "One wave a month",
+          "weekly": "One wave a week",
+          "daily": "One wave a day",
+          "cadenceOnly": "{cadence}.",
+          "wavesSeen": "{cadence}: {list}.",
           "waveMonth": "{code} in {month}",
           "anonymity": "Default anonymity",
           "anonymous": "Anonymous",
@@ -2008,7 +2010,14 @@
           "choose": "Choose file",
           "format": ".csv · one row per person"
         },
-        "loadFailed": "The list of people could not be read"
+        "loadFailed": "The list of people could not be read",
+        "roles": {
+          "super_admin": "Super administrator",
+          "company_admin": "Company administrator",
+          "leader": "Leader",
+          "supervisor": "Supervisor",
+          "employee": "Employee"
+        }
       },
       "demographics": {
         "description": "The cuts results can be broken down by. Each one shrinks the sample, so each one is checked against the floor of {floor} before it is offered.",
@@ -2067,6 +2076,7 @@
           "countMeta": "{count} fields",
           "emptyTitle": "No demographic fields yet",
           "emptyText": "Today results only divide by department ({count} active). Every new field divides the same sample again.",
+          "emptyTextNoCount": "Today results only divide by department. Every new field divides the same sample again.",
           "active": "Active",
           "inactive": "Inactive",
           "usable": "Usable",
@@ -2113,6 +2123,9 @@
           "emptyGlobalOne": "The platform's only benchmark is global: {name}, with a quality score of {score}. This view reads only the company's own benchmarks, so it is not shown here.",
           "emptyGlobalMany": "The platform has {count} global benchmarks; this view reads only the company's own.",
           "emptyNone": "The platform has no benchmarks yet.",
+          "emptyGlobalOneUnscored": "The platform's only benchmark is global: {name}, not scored yet. This view reads only the company's own benchmarks, so it is not shown here.",
+          "emptyOwnOnly": "This view reads only the company's own benchmarks.",
+          "unscored": "not scored",
           "quality": "quality {score}",
           "active": "Active",
           "inactive": "Inactive"

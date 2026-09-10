@@ -1856,7 +1856,8 @@
         "noMatch": "Ninguna empresa coincide con la búsqueda.",
         "createHeading": "Nueva empresa",
         "create": "Crear empresa",
-        "loadFailed": "No se pudieron leer las empresas"
+        "loadFailed": "No se pudieron leer las empresas",
+        "superOnly": "La lista de empresas es solo del super administrador: ninguna otra cuenta la puede leer."
       },
       "companyDetail": {
         "title": "Detalle de empresa",
@@ -1883,11 +1884,12 @@
           "language": "Idioma del contenido",
           "languageHelper": "Las encuestas nuevas, sus invitaciones y sus informes se redactan en este idioma. Cada persona puede cambiarlo al responder.",
           "frequency": "Frecuencia de encuestas",
-          "quarterly": "Cuatro olas al año.",
-          "monthly": "Una ola al mes.",
-          "weekly": "Una ola por semana.",
-          "daily": "Una ola al día.",
-          "wavesSeen": "Las cerradas: {list}.",
+          "quarterly": "Cuatro olas al año",
+          "monthly": "Una ola al mes",
+          "weekly": "Una ola por semana",
+          "daily": "Una ola al día",
+          "cadenceOnly": "{cadence}.",
+          "wavesSeen": "{cadence}: {list}.",
           "waveMonth": "{code} en {month}",
           "anonymity": "Anonimato por defecto",
           "anonymous": "Anónima",
@@ -2008,7 +2010,14 @@
           "choose": "Elegir archivo",
           "format": ".csv · una fila por persona"
         },
-        "loadFailed": "No se pudo leer la lista de personas"
+        "loadFailed": "No se pudo leer la lista de personas",
+        "roles": {
+          "super_admin": "Super administrador",
+          "company_admin": "Administrador de empresa",
+          "leader": "Líder",
+          "supervisor": "Supervisor",
+          "employee": "Empleado"
+        }
       },
       "demographics": {
         "description": "Los cortes por los que se pueden desglosar los resultados. Cada uno reduce la muestra, así que cada uno se contrasta con el umbral de {floor} antes de ofrecerse.",
@@ -2067,6 +2076,7 @@
           "countMeta": "{count} campos",
           "emptyTitle": "Aún no hay campos demográficos",
           "emptyText": "Hoy los resultados solo se dividen por departamento ({count} activos). Cada campo nuevo vuelve a dividir la misma muestra.",
+          "emptyTextNoCount": "Hoy los resultados solo se dividen por departamento. Cada campo nuevo vuelve a dividir la misma muestra.",
           "active": "Activo",
           "inactive": "Inactivo",
           "usable": "Utilizable",
@@ -2113,6 +2123,9 @@
           "emptyGlobalOne": "La única referencia de la plataforma es global: {name}, con un puntaje de calidad de {score}. Esta vista lee solo las referencias propias de la empresa, así que no se muestra aquí.",
           "emptyGlobalMany": "La plataforma tiene {count} referencias globales; esta vista lee solo las propias de la empresa.",
           "emptyNone": "La plataforma no tiene referencias todavía.",
+          "emptyGlobalOneUnscored": "La única referencia de la plataforma es global: {name}, todavía sin puntaje de calidad. Esta vista lee solo las referencias propias de la empresa, así que no se muestra aquí.",
+          "emptyOwnOnly": "Esta vista lee solo las referencias propias de la empresa.",
+          "unscored": "sin puntaje",
           "quality": "calidad {score}",
           "active": "Activa",
           "inactive": "Inactiva"

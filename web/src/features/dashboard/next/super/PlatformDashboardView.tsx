@@ -122,7 +122,8 @@ function PlatformBody({ model, onOpen }: { model: PlatformModel; onOpen: (compan
   const mix = model.mix
 
   return (
-    <div className="flex flex-col gap-section">
+    // `pt-2`: `PageTopBar` keeps 16px under its rule; the canvas has 24 before the tiles.
+    <div className="flex flex-col gap-section pt-2">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiTile
           surface="card"

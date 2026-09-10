@@ -22,7 +22,10 @@ export function BreadcrumbList({ className, ...props }: ComponentProps<'ol'>) {
     <ol
       data-slot="breadcrumb-list"
       className={cn(
-        'flex flex-wrap items-center gap-inline break-words text-sm text-fg-tertiary',
+        // `m-0 list-none p-0`: the element layer indents every `ol` for the classless
+        // pages, which pushed the trail ~20px in from the page title it sits over. The
+        // per-role canvas draws it flush with the title on every page that has one.
+        'm-0 flex list-none flex-wrap items-center gap-inline break-words p-0 text-sm text-fg-tertiary',
         className,
       )}
       {...props}

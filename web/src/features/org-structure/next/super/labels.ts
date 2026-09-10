@@ -63,6 +63,24 @@ export function languageText(t: TranslateFn, language: string | null | undefined
   return key ? t(key) : value
 }
 
+const ROLE_KEYS = new Map<string, string>([
+  ['super_admin', 'superadmin.next.users.roles.super_admin'],
+  ['company_admin', 'superadmin.next.users.roles.company_admin'],
+  ['leader', 'superadmin.next.users.roles.leader'],
+  ['supervisor', 'superadmin.next.users.roles.supervisor'],
+  ['employee', 'superadmin.next.users.roles.employee'],
+])
+
+/**
+ * A role as the roster prints it, in sentence case ("Administrador de empresa"). The
+ * canvas genders each chip by the person; nothing on the wire says a person's gender, so
+ * the chip uses the unmarked form rather than guessing one from a first name.
+ */
+export function roleText(t: TranslateFn, role: string): string {
+  const key = ROLE_KEYS.get(role)
+  return key ? t(key) : role
+}
+
 /** A one/many pair of catalogue keys; both carry `{count}`. */
 export interface CountKeys {
   one: string
