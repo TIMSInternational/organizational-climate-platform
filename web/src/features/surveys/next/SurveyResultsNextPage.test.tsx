@@ -240,7 +240,8 @@ describe('SurveyResultsNextPage', () => {
     expect(findings[0].textContent).toContain('2.4')
     expect(within(findings[0]).getByText(copy.planCovers)).toBeTruthy()
 
-    // The sample chip is on the page: the deltas are not a measurement yet.
+    // The sample chip is on the page: the opened group's 1–5 distribution is not a
+    // measurement (the deltas are; without the trends payload this mock has none).
     expect(screen.getAllByText(en.dashboard.next.sampleChip).length).toBeGreaterThan(0)
   })
 

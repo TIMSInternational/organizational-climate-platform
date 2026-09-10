@@ -21,7 +21,7 @@ export interface ResultsCellPanelProps {
   code: string
   /** The anonymity floor, per company. */
   threshold: number
-  /** The group's own 1–5 distribution is a sample until phase 2 — the chip says so. */
+  /** The group's own 1–5 distribution is a sample — no endpoint carries it — and the chip says so. */
   sample: ResultsSampleWave
   /** The previous wave's code, for "Comparar con Q2" — `null` when there is none to compare with. */
   previousCode: string | null
@@ -42,7 +42,7 @@ export interface ResultsCellPanelProps {
  *
  * Every number is `detail`'s, and `detail` is `cellDetail`'s: this component makes
  * no arithmetic and no request. The one sample here is the group's own answer
- * distribution (`sampleModel.ts` says which endpoint will carry it); the company's
+ * distribution (`sampleModel.ts` says why no endpoint carries it); the company's
  * is real, off the question's own `distribution`.
  */
 export default function ResultsCellPanel({
