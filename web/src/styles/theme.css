@@ -258,6 +258,7 @@
   --tracking-normal: var(--admin-tracking-normal);
   --tracking-label: var(--admin-tracking-label);
   --tracking-eyebrow: var(--admin-tracking-eyebrow);
+  --tracking-tile: var(--admin-tracking-tile);
 
   /* -- Elevation --------------------------------------------------------- */
   --shadow-sm: var(--admin-shadow-sm);

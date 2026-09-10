@@ -307,7 +307,7 @@ when the thing you are spacing has a name:
 | `--admin-size-control-lg` | 32px | `h-control-lg`, … | Button, input, select |
 | `--admin-size-icon` | 16px | `size-icon` | Inline icon |
 | `--admin-size-icon-box` | 28px | `size-icon-box` | Icon tile |
-| `--admin-size-sidebar` | 220px | `w-sidebar` | Sidebar |
+| `--admin-size-sidebar` | 236px | `w-sidebar` | Sidebar — the canvas rail (10 Sep): a 220px column inside 8px gutters |
 | `--admin-size-sidebar-collapsed` | 52px | `w-sidebar-collapsed` | Collapsed sidebar |
 | `--admin-size-content-max` | 1280px | `max-w-content`, `w-content` | Content column cap. **Not** applied by `AdminLayout` any more — the shell panel fills; its remaining callers are `PublicSurveyRespondPage` and the dev chart gallery |
 | `--admin-size-measure` | 70ch | `max-w-measure` | The prose measure. Only prose is capped; tables and charts fill the width. Not `max-w-prose`, which Tailwind emits as a static 65ch |

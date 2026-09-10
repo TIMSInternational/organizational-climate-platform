@@ -67,3 +67,25 @@ describe('Breadcrumb', () => {
     expect(screen.getByText('Más páginas')).toBeTruthy()
   })
 })
+
+describe('the breadcrumb trail sits flush', () => {
+  it('drops the list margin, indent and bullets index.css gives every ol and li, at 13px', () => {
+    const { container } = render(
+      <Breadcrumb aria-label="Ruta">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink href="/surveys">Encuestas</BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>Resultados</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>,
+    )
+    // The artboards (10 Sep) draw the trail at the title's own x, one 13px line tall.
+    const list = container.querySelector('ol')!
+    expect(list.className.split(/\s+/)).toEqual(expect.arrayContaining(['m-0', 'p-0', 'list-none', 'text-base']))
+    for (const item of container.querySelectorAll('li')) expect(item.className.split(/\s+/)).toContain('mb-0')
+  })
+})

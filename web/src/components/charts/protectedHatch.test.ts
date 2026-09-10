@@ -106,7 +106,9 @@ describe('the protected hatch', () => {
   const token = hatchToken()
 
   it('is painted in a token the component actually names', () => {
-    expect(token).toBe('--admin-border-hover')
+    // Its own token since the canvas (10 Sep): the artboards' stripe is fainter than
+    // `--admin-border-hover`, which every hovered border still uses.
+    expect(token).toBe('--admin-hatch-stripe')
     // The surface it is painted on. `bg-surface-icon-box` maps to
     // `--admin-bg-icon-box` through theme.css.
     expect(protectedCellSource).toContain('bg-surface-icon-box')
