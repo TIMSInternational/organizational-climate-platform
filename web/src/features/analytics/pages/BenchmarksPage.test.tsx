@@ -767,6 +767,51 @@ describe('BenchmarksPage single-selection readings', () => {
     expect(panel.textContent).toContain('0.92')
   })
 
+  /**
+   * `qualityScore` is `null` until the rule has run. The list used to hand the API's old
+   * column default, 0, straight to `formatMetric`, so every reference an administrator
+   * had created and not yet validated read "0.00" — a failing grade — under a heading
+   * that promised a score. A benchmark the rule scored 0 is a different thing and keeps
+   * its number.
+   */
+  it('shows a labelled dash, never 0.00, for a benchmark nobody has scored, and 0.00 for a scored zero', async () => {
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [
+        /\/admin\/benchmarks\/n(\?|$)/,
+        () => withMetrics('n', 'Never scored', { qualityScore: null, validationStatus: 'pending' }),
+      ],
+      [
+        /\/admin\/benchmarks(\?|$)/,
+        () => [
+          { ...listRow('n', 'Never scored', OWN), qualityScore: null },
+          { ...listRow('z', 'Measures nothing', OWN), qualityScore: 0 },
+        ],
+      ],
+    ])
+
+    renderPage()
+
+    const table = await screen.findByRole('table')
+    const rows = within(table).getAllByRole('row')
+    const neverScored = rows.find((row) => row.textContent?.includes('Never scored'))!
+    const measuresNothing = rows.find((row) => row.textContent?.includes('Measures nothing'))!
+
+    // The scored zero is a number. The unscored row is a dash for the eye, hidden from
+    // assistive technology, beside a sentence only a screen reader gets.
+    expect(measuresNothing.textContent).toContain('0.00')
+    expect(neverScored.textContent).not.toContain('0.00')
+    expect(neverScored.querySelector('[aria-hidden="true"]')?.textContent).toBe('—')
+    expect(within(neverScored).getByText('Not scored yet').className).toContain('sr-only')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Never scored/ }))
+    const panel = (await screen.findByRole('heading', { name: 'Never scored', level: 2 }))
+      .closest('section')!
+    // The panel agrees with the row above it: no number, the same sentence.
+    expect(panel.textContent).not.toContain('0.00')
+    expect(within(panel).getByText('Not scored yet').className).toContain('sr-only')
+  })
+
   it('sets the trend readings in mono with tabular figures', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
