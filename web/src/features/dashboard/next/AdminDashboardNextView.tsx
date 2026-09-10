@@ -285,13 +285,17 @@ export default function AdminDashboardNextView({ model }: { model: AdminDashboar
                   {t('dashboard.next.byGroupHeading', { wave: model.latestClosedWave.code })}
                 </span>
               </SectionHeading>
-              <Link
-                to={`/surveys/${model.latestClosedWave.id}/results`}
-                className="inline-flex items-center gap-1 text-xs text-fg-secondary hover:text-fg-primary"
-              >
-                {t('dashboard.next.openResults')}
-                <ArrowRight aria-hidden="true" className="size-3" />
-              </Link>
+              {/* `GET /surveys/{id}/results` is `CanAdminister` (`SurveyResultsEndpoints.cs:199`):
+                  an admin with a company, for any survey of the scoped tenant. */}
+              {capabilities.seesWholeCompany && (
+                <Link
+                  to={`/surveys/${model.latestClosedWave.id}/results`}
+                  className="inline-flex items-center gap-1 text-xs text-fg-secondary hover:text-fg-primary"
+                >
+                  {t('dashboard.next.openResults')}
+                  <ArrowRight aria-hidden="true" className="size-3" />
+                </Link>
+              )}
             </div>
             <div className="overflow-x-auto">
               <ClimateMap
@@ -375,13 +379,17 @@ export default function AdminDashboardNextView({ model }: { model: AdminDashboar
                     })}
                   </div>
                 </div>
-                <Link
-                  to={`/microclimates/${model.liveMicroclimate.id}/live`}
-                  className="inline-flex shrink-0 items-center gap-1 text-xs text-fg-secondary hover:text-fg-primary"
-                >
-                  {t('dashboard.next.viewSession')}
-                  <ArrowRight aria-hidden="true" className="size-3" />
-                </Link>
+                {/* The live page loads `GET /microclimates/{id}/live-results`, which is
+                    `CanAccessCompany` (`MicroclimateEndpoints.cs:1420`): the same admin-with-a-company. */}
+                {capabilities.seesWholeCompany && (
+                  <Link
+                    to={`/microclimates/${model.liveMicroclimate.id}/live`}
+                    className="inline-flex shrink-0 items-center gap-1 text-xs text-fg-secondary hover:text-fg-primary"
+                  >
+                    {t('dashboard.next.viewSession')}
+                    <ArrowRight aria-hidden="true" className="size-3" />
+                  </Link>
+                )}
               </div>
             )}
           </section>

@@ -46,6 +46,14 @@ function renderView(model = sampleModel, viewer: Record<string, unknown> = { rol
   )
 }
 
+/** Every `href` on the screen that matches `pattern` — the role tests assert this is empty. */
+function linksMatching(pattern: RegExp): string[] {
+  return screen
+    .queryAllByRole('link')
+    .map((link) => link.getAttribute('href') ?? '')
+    .filter((href) => pattern.test(href))
+}
+
 describe('DashboardNextPage', () => {
   beforeEach(() => {
     window.localStorage.clear()
@@ -73,6 +81,9 @@ describe('DashboardNextPage', () => {
     )
     expect(screen.getByRole('link', { name: copy.openResults }).getAttribute('href')).toBe(
       '/surveys/s-q3/results',
+    )
+    expect(screen.getByRole('link', { name: copy.viewSession }).getAttribute('href')).toBe(
+      '/microclimates/mc-1/live',
     )
   })
 
@@ -137,6 +148,12 @@ describe('DashboardNextPage', () => {
     for (const item of Array.from(items)) {
       expect(within(item as HTMLElement).queryByRole('link')).toBeNull()
     }
+    // Nor the two section links: `/surveys/{id}/results` is `CanAdminister` and the live
+    // microclimate loader is `CanAccessCompany` — both 403 for an employee.
+    expect(screen.queryByRole('link', { name: copy.openResults })).toBeNull()
+    expect(screen.queryByRole('link', { name: copy.viewSession })).toBeNull()
+    expect(linksMatching(/^\/surveys\/[^/]+\/results$/)).toEqual([])
+    expect(linksMatching(/^\/microclimates\/[^/]+\/live$/)).toEqual([])
   })
 
   it('offers a leader their own node’s progress action and their export, and nothing else', () => {
@@ -149,6 +166,9 @@ describe('DashboardNextPage', () => {
     expect(within(items[0]).queryByRole('link')).toBeNull()
     expect(within(items[1]).getByRole('link').getAttribute('href')).toBe('/tracking/planes/tp-1')
     expect(within(items[2]).queryByRole('link')).toBeNull()
+    // A leader is not an admin: no results link and no live-session link either.
+    expect(linksMatching(/^\/surveys\/[^/]+\/results$/)).toEqual([])
+    expect(linksMatching(/^\/microclimates\/[^/]+\/live$/)).toEqual([])
     cleanup()
     // The leader of another node may read the overdue plan but not record on it.
     renderView(sampleModel, { role: 'leader', nodoId: 'nodo-operaciones' })
