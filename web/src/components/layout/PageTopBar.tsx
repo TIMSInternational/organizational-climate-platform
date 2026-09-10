@@ -144,6 +144,12 @@ export interface PageTopBarProps {
   }
   /** Buttons, links, filters — whatever the page acts with. */
   actions?: ReactNode
+  /**
+   * A line of chips and facts under the description — the redesign's status row
+   * ("Borrador · Encuesta de Clima Q1 2027 · 6 preguntas"). Optional and additive: a
+   * page that passes nothing renders exactly as before.
+   */
+  meta?: ReactNode
 }
 
 export function PageTopBar({
@@ -154,6 +160,7 @@ export function PageTopBar({
   breadcrumbLabel,
   badge,
   actions,
+  meta,
 }: PageTopBarProps) {
   const { t } = useTranslation()
   const derivedEyebrow = useSectionEyebrow()
@@ -252,6 +259,14 @@ export function PageTopBar({
               than on the page around it. */}
           {description && (
             <p className="mb-0 max-w-measure break-words text-fg-secondary">{description}</p>
+          )}
+          {meta && (
+            <div
+              data-slot="page-meta"
+              className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-fg-secondary"
+            >
+              {meta}
+            </div>
           )}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-inline">{actions}</div>}
