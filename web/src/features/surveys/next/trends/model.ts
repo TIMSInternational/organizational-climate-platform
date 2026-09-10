@@ -1,5 +1,5 @@
 /**
- * The typed model behind the redesigned Clima en el tiempo (`/surveys/climate-trends/next`).
+ * The typed model behind the redesigned Clima en el tiempo (`/surveys/climate-trends`).
  *
  * Every number the page prints is derived from this shape in `derive.ts` — the wave
  * average, the deltas, "above / on / below target" — never typed as a string. The page

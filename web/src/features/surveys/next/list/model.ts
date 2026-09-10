@@ -1,7 +1,7 @@
 import type { SurveyListItem } from '../../api/surveys'
 
 /**
- * The typed model behind the redesigned Todas las Encuestas (`/surveys/next`).
+ * The typed model behind the redesigned Todas las Encuestas (`/surveys`).
  *
  * The rows are `GET /surveys` verbatim (`SurveyListItem`, `api/surveys.ts`) — the
  * payload already carries everything the design prints. What the design adds is

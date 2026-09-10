@@ -41,10 +41,8 @@ import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
 import ReportsListPage from '../features/reports/pages/ReportsListPage'
 import SharedReportPage from '../features/reports/pages/SharedReportPage'
 import SurveyResultsPage from '../features/surveys/pages/SurveyResultsPage'
-import ClimateTrendsPage from '../features/surveys/pages/ClimateTrendsPage'
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
 import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPage'
-import SurveysListPage from '../features/surveys/pages/SurveysListPage'
 import SurveyCreatePage from '../features/surveys/pages/SurveyCreatePage'
 import SurveyDetailPage from '../features/surveys/pages/SurveyDetailPage'
 import SurveyQuestionsEditPage from '../features/surveys/pages/SurveyQuestionsEditPage'
@@ -360,9 +358,10 @@ export const router = createBrowserRouter([
               // `/surveys/:id/results`.
               { path: '/microclimates/:id/live', element: <MicroclimateLivePage /> },
               { path: '/microclimates/:id/results', element: <MicroclimateResultsPage /> },
-              { path: '/surveys', element: <SurveysListPage /> },
-              // The redesigned list, beside the current one until the swap (a separate decision).
-              { path: '/surveys/next', element: <SurveysListNextPage /> },
+              // The redesigned Todas las Encuestas replaced `SurveysListPage` on this route
+              // (ruled 10 Sep). The old page stays in the tree, unrouted, as the wiring
+              // reference — its module comment says what it still pins.
+              { path: '/surveys', element: <SurveysListNextPage /> },
               // Before `/surveys/:id` for the same static-beats-dynamic reason the
               // two entries below record: `new` is a literal segment and could never
               // be read as a survey id, so the order is readability only.
@@ -384,8 +383,9 @@ export const router = createBrowserRouter([
               // parsed as a survey id. Unlike `/surveys/:id/results` this one IS in the
               // sidebar: it is a company-level reading rather than a per-survey
               // destination, and there is no survey to reach it from.
-              { path: '/surveys/climate-trends', element: <ClimateTrendsPage /> },
-              { path: '/surveys/climate-trends/next', element: <ClimateTrendsNextPage /> },
+              // The redesigned Clima en el tiempo replaced `ClimateTrendsPage` here (same
+              // ruling as `/surveys`); the old page stays unrouted as the wiring reference.
+              { path: '/surveys/climate-trends', element: <ClimateTrendsNextPage /> },
               { path: '/surveys/:id', element: <SurveyDetailPage /> },
               // `/surveys/:id/respond` used to be declared here. It is now a sibling
               // of this whole `AdminLayout` branch, one level up — see the comment

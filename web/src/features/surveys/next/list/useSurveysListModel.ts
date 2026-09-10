@@ -24,7 +24,7 @@ export interface SurveysListModelState {
 }
 
 /**
- * The model behind `/surveys/next` — THE wiring seam of that screen, and the same
+ * The model behind `/surveys` — THE wiring seam of that screen, and the same
  * request the current list makes: `GET /surveys` through `listSurveys`, type and
  * search on the query string, status narrowed on the client so the chips can count
  * every status at once (`SurveysListPage.tsx` carries the argument). No company id is

@@ -9,6 +9,15 @@ import ClimateTrendsPage from './ClimateTrendsPage'
 import { getClimateTrends, type ClimateTrendsResponse } from '../api/climateTrends'
 import { tokenFor } from '../../../test/jwtFixture'
 
+/**
+ * The grid `/surveys/climate-trends` drew until the redesign replaced it with
+ * `../next/trends/ClimateTrendsNextPage` — the module comment on the page says why it
+ * is still in the tree. Rendered directly, because nothing routes to it any more; the
+ * route's own guarantees (the withheld wave, the SuperAdmin's chosen company, the empty
+ * state, the failed-load recovery) are asserted against the new screen in
+ * `ClimateTrendsNextPage.test.tsx`.
+ */
+
 /** An unsigned token: nothing here verifies one, and `company-context` only reads claims. */
 
 const OWN = 'company-1'

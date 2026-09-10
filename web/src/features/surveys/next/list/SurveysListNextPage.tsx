@@ -31,7 +31,8 @@ const SECTION_KEY: Record<SurveySection, string> = {
 }
 
 /**
- * `/surveys/next` — the redesigned Todas las Encuestas.
+ * `/surveys` — the redesigned Todas las Encuestas, which replaced `SurveysListPage` on
+ * this route (the old page stays in the tree, unrouted, as the wiring reference).
  *
  * Same request and same scoping as `SurveysListPage` (`useSurveysListModel`); what
  * changes is the reading: the open survey first, then what is coming, then what

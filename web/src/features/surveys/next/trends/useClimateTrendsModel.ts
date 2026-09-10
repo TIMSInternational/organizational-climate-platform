@@ -28,7 +28,7 @@ export interface ClimateTrendsModelState {
 }
 
 /**
- * The model behind `/surveys/climate-trends/next` — THE wiring seam of that screen.
+ * The model behind `/surveys/climate-trends` — THE wiring seam of that screen.
  *
  * Two requests, both through the existing client: the ungrouped series (the whole
  * company) and the department breakdown. The server returns one grouping per call

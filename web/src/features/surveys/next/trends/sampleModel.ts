@@ -1,7 +1,7 @@
 /**
  * SAMPLE DATA. This is not a measurement of anything.
  *
- * Everything else on `/surveys/climate-trends/next` is read from
+ * Everything else on `/surveys/climate-trends` is read from
  * `GET /surveys/climate-trends`. This one figure is not, because no endpoint provides
  * it today: `grep -rni 'climateTarget\|targetScore' web/src` finds nothing outside the
  * dashboard's own sample, and the company settings payload

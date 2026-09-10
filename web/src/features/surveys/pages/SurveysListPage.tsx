@@ -1,3 +1,17 @@
+/**
+ * NOT ROUTED. `/surveys` renders the redesigned Todas las Encuestas
+ * (`../next/list/SurveysListNextPage`), which replaced this page — ruled 10 Sep, the
+ * same swap `DashboardPage` made for the Panel de Control. Nothing in `router.tsx`
+ * reaches this file.
+ *
+ * It stays in the tree on purpose, as the wiring reference: `useSurveysListModel`
+ * already makes this page's request (`GET /surveys` through `listSurveys`, type and
+ * search on the wire, status narrowed on the client, no company id — the argument
+ * below), and what this file still pins is the table the redesign chose not to keep:
+ * the `SurveyList` component with three actions per row, its overflow and clamping
+ * rules. Delete it when that table has no other reader. Until then its behaviour is
+ * pinned by `SurveysListPage.test.tsx`, which renders it directly.
+ */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useCompanyName } from '../../../company-context/useCompanyName'
 import { listSurveys, type SurveyListItem } from '../api/surveys'

@@ -1,9 +1,11 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { render, screen, cleanup, within } from '@testing-library/react'
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { TranslationProvider } from '../../../../i18n'
 import { setToken, clearToken } from '../../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../../company-context'
+import { clearCompanyNameCache } from '../../../../company-context/useCompanyName'
 import { tokenFor } from '../../../../test/jwtFixture'
 import { listSurveys, type SurveyListItem } from '../../api/surveys'
 import SurveysListNextPage from './SurveysListNextPage'
@@ -46,7 +48,7 @@ function renderAs(claims: Record<string, unknown>) {
   setToken(tokenFor({ sub: 'u1', nodoId: '', ...claims }))
   return render(
     <TranslationProvider>
-      <MemoryRouter initialEntries={['/surveys/next']}>
+      <MemoryRouter initialEntries={['/surveys']}>
         <CompanyContextProvider>
           <SurveysListNextPage />
         </CompanyContextProvider>
@@ -69,7 +71,76 @@ describe('SurveysListNextPage', () => {
   afterEach(() => {
     cleanup()
     clearToken()
+    clearCompanyNameCache()
+    vi.unstubAllGlobals()
     window.localStorage.removeItem(COMPANY_CONTEXT_STORAGE_KEY)
+  })
+
+  /**
+   * The guarantees `/surveys` kept when the redesign took the route over from
+   * `SurveysListPage` (its test still pins the old table, rendered directly). Each one
+   * was a defect once: a `companyId` on the wire rescopes a SuperAdmin, a missing `lang`
+   * showed a Spanish reader the English half of every title, a status on the wire
+   * emptied the chips' counts, a fetch per keystroke, and an eyebrow that named the nav
+   * section instead of the company.
+   */
+  it('sends no companyId and asks for the titles in the reader’s language', async () => {
+    renderAs({ role: 'super_admin' })
+    await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
+    const [, filters, lang] = vi.mocked(listSurveys).mock.calls[0]
+    expect(filters).not.toHaveProperty('companyId')
+    expect(lang).toBe('en')
+  })
+
+  it('narrows to a status on the client, without a second request', async () => {
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
+    const chips = screen.getByRole('group', { name: en.surveys.filterByStatus })
+    const closed = within(chips).getByRole('button', {
+      name: copy.chipCount.replace('{label}', en.surveys.statusClosed).replace('{count}', '3'),
+    })
+    await userEvent.click(closed)
+    expect(closed.getAttribute('aria-pressed')).toBe('true')
+    expect(rowIds()).toEqual(['q3', 'other', 'q1'])
+    expect(vi.mocked(listSurveys)).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not refetch on every keystroke; the search button applies the query', async () => {
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
+    await userEvent.type(screen.getByRole('searchbox', { name: copy.searchPlaceholder }), 'clima')
+    expect(vi.mocked(listSurveys)).toHaveBeenCalledTimes(1)
+    await userEvent.click(screen.getByRole('button', { name: en.common.search }))
+    await waitFor(() => expect(vi.mocked(listSurveys)).toHaveBeenCalledTimes(2))
+    expect(vi.mocked(listSurveys).mock.calls[1][1]).toEqual({ status: '', type: '', q: 'clima' })
+  })
+
+  it('shows the server’s message on a failed load, with a retry that refetches', async () => {
+    vi.mocked(listSurveys).mockRejectedValueOnce(new Error('Boom'))
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    expect(await screen.findByText('Boom')).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: en.common.retry }))
+    expect(await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })).toBeTruthy()
+    expect(vi.mocked(listSurveys)).toHaveBeenCalledTimes(2)
+  })
+
+  it('names the company on the eyebrow, from the caller’s own profile', async () => {
+    // `/profile` is the one source every role that can open this screen may read; a
+    // leader could not read `/admin/companies/{id}`.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((input: RequestInfo | URL) =>
+        Promise.resolve(
+          new Response(JSON.stringify(String(input).includes('/profile') ? { companyName: 'Acme Corporation' } : {}), {
+            status: 200,
+          }),
+        ),
+      ),
+    )
+    renderAs({ role: 'leader', companyId: 'c1' })
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe('Acme Corporation')
+    })
   })
 
   it('stacks the open survey first, closed newest first, archived last and demoted, and names a missing invitation list', async () => {

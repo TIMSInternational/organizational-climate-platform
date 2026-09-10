@@ -22,11 +22,12 @@ const STANDING_TONE: Record<Standing, 'good' | 'neutral' | 'critical'> = {
 }
 
 /**
- * `/surveys/climate-trends/next` — the redesigned Clima en el tiempo, for the company
- * administrator: header → four tiles → the segmented control → six charts, one per
+ * `/surveys/climate-trends` — the redesigned Clima en el tiempo, which replaced
+ * `ClimateTrendsPage` on this route (the old page stays unrouted as the wiring
+ * reference), for the company administrator: header → four tiles → the segmented control → six charts, one per
  * dimension → the same numbers as the accessible grid.
  *
- * Same gate as `DashboardNextPage`: `company_admin`, or `super_admin` once a company
+ * Same gate as `DashboardPage`'s company branch: `company_admin`, or `super_admin` once a company
  * is chosen; a SuperAdmin with none chosen is asked to choose one, as the current
  * page does, because the endpoint answers 400 with no company to name. Every other
  * role goes to `/dashboard`, which dispatches them to the view their role has.
