@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ArrowRight, Library, Search, SquareLibrary } from 'lucide-react'
 import { Link } from 'react-router'
 import { PageTopBar } from '../../../components/layout'
-import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, SkeletonText, Switch } from '../../../components/ui'
+import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, SkeletonText, Switch, Table } from '../../../components/ui'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { useCompanyScope } from '../../../company-context'
 import { useCompanyName } from '../../../company-context/useCompanyName'
@@ -134,7 +134,7 @@ export default function QuestionBankNextPage() {
       ) : (
         <div className={TABLE_CARD_CLASS}>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
+            <Table className="w-full border-collapse text-sm">
               <thead className="border-b border-line-light">
                 <tr>
                   <th scope="col" className={TH_CLASS}>{t('questionBank.next.colQuestion')}</th>
@@ -196,7 +196,7 @@ export default function QuestionBankNextPage() {
                   ))
                 )}
               </tbody>
-            </table>
+            </Table>
           </div>
         </div>
       )}

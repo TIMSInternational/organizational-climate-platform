@@ -29,7 +29,7 @@ import { authoredLocales, blankQuestion, isEditable, moveQuestion, removeQuestio
 
 type Load = { status: 'loading' } | { status: 'failed'; message: string } | { status: 'ready'; authoring: SurveyQuestionAuthoring; detail: SurveyDetail }
 
-export function useSurveyQuestionsModel(id: string | undefined) {
+function useSurveyQuestionsModel(id: string | undefined) {
   const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [state, setState] = useState<Load>({ status: 'loading' })
@@ -228,7 +228,7 @@ export default function SurveyQuestionsEditorPage() {
         </Panel>
       )}
 
-      <div className="grid items-start gap-panel-gap lg:grid-cols-[minmax(0,1fr)_minmax(0,29rem)]">
+      <div className="grid items-start gap-panel-gap xl:grid-cols-[minmax(0,1fr)_minmax(0,29rem)]">
         <Panel aria-labelledby="questions-heading">
           <PanelHeading
             id="questions-heading"
@@ -261,9 +261,9 @@ export default function SurveyQuestionsEditorPage() {
                 >
                   <div className={cn('flex items-center gap-3 px-3 py-2.5', open && 'rounded-t-lg bg-surface-icon-box')}>
                     {editable ? (
-                      <GripVertical aria-hidden="true" className="size-4 shrink-0 cursor-grab text-fg-tertiary" />
+                      <GripVertical aria-hidden="true" className="size-4 shrink-0 cursor-grab text-fg-secondary" />
                     ) : (
-                      <Lock aria-hidden="true" className="size-3.5 shrink-0 text-fg-tertiary" />
+                      <Lock aria-hidden="true" className="size-3.5 shrink-0 text-fg-secondary" />
                     )}
                     <span className="w-4 shrink-0 font-mono text-xs text-fg-secondary tabular-nums">{index + 1}</span>
                     <div className="min-w-0 flex-1">
@@ -362,7 +362,7 @@ export default function SurveyQuestionsEditorPage() {
                               {copy('moveDown')}
                             </Button>
                           )}
-                          <Button type="button" variant="outline" className="text-accent-red" onClick={() => { setQuestions((c) => removeQuestion(c, index)); setOpenIndex(null) }}>
+                          <Button type="button" variant="outline" className="text-chip-critical-ink" onClick={() => { setQuestions((c) => removeQuestion(c, index)); setOpenIndex(null) }}>
                             {copy('remove')}
                           </Button>
                         </span>
@@ -536,7 +536,7 @@ function EditorField({ label, hint, required, children }: { label: string; hint?
     <label className="flex flex-col gap-1">
       <span className="text-sm font-semibold text-fg-primary">
         {label}
-        {required && <span className="text-accent-red"> *</span>}
+        {required && <span className="text-chip-critical-ink"> *</span>}
       </span>
       {children}
       {hint && <span className="text-xs text-fg-secondary">{hint}</span>}

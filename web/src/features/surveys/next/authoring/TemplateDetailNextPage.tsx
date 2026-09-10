@@ -29,7 +29,7 @@ import { groupByDimension, uniformScale } from './model'
 
 type Load = { status: 'loading' } | { status: 'failed'; message: string } | { status: 'ready'; byLocale: Partial<Record<Locale, SurveyTemplateDetail>>; primary: SurveyTemplateDetail }
 
-export function useTemplateDetailModel(id: string | undefined) {
+function useTemplateDetailModel(id: string | undefined) {
   const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [state, setState] = useState<Load>({ status: 'loading' })

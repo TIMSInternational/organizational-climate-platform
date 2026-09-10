@@ -1,6 +1,6 @@
 import { ShieldCheck, Sparkles } from 'lucide-react'
 import { PageTopBar } from '../../../components/layout'
-import { Alert, AlertDescription, Button, Chip, ErrorState, LoadingRegion, SkeletonText, EmptyState } from '../../../components/ui'
+import { Alert, AlertDescription, Button, Chip, ErrorState, LoadingRegion, SkeletonText, EmptyState, Table } from '../../../components/ui'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { useCompanyScope } from '../../../company-context'
 import { useCompanyName } from '../../../company-context/useCompanyName'
@@ -8,7 +8,7 @@ import { useTranslation } from '../../../i18n'
 import { insightPriorityLabel, insightTypeLabel } from '../insightVocabulary'
 import { EmptyRow, Note, PanelHeading, TABLE_CARD_CLASS, TH_CLASS } from '../../shared-next/parts'
 import { useAIInsightsModel } from './useAnalyticsModels'
-import type { ChipTone } from '../../../components/ui'
+import { priorityTone } from './model'
 
 /**
  * Información de IA, redesigned (canvas board "AIInsights").
@@ -25,12 +25,6 @@ import type { ChipTone } from '../../../components/ui'
  * The previous screen, `pages/AIInsightsPage.tsx`, stays in the tree as the wiring
  * reference for the detail panel; the router no longer mounts it.
  */
-
-export function priorityTone(priority: string): ChipTone {
-  if (priority === 'critical') return 'critical'
-  if (priority === 'high') return 'warning'
-  return 'neutral'
-}
 
 export default function AIInsightsNextPage() {
   const { t } = useTranslation()
@@ -90,7 +84,7 @@ export default function AIInsightsNextPage() {
         />
       ) : (
         <div className={TABLE_CARD_CLASS}>
-          <table className="w-full border-collapse text-sm">
+          <Table className="w-full border-collapse text-sm">
             <thead className="border-b border-line-light">
               <tr>
                 <th scope="col" className={`${TH_CLASS} w-28`}>{t('insights.next.colPriority')}</th>
@@ -144,7 +138,7 @@ export default function AIInsightsNextPage() {
                 ))
               )}
             </tbody>
-          </table>
+          </Table>
         </div>
       )}
 

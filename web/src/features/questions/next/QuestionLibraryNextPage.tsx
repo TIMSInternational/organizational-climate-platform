@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { Check, ChevronDown, Lock, Plus, Search, X } from 'lucide-react'
 import { PageTopBar } from '../../../components/layout'
-import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, SkeletonText, Textarea } from '../../../components/ui'
+import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, SkeletonText, Textarea, Table } from '../../../components/ui'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { useCompanyScope } from '../../../company-context'
 import { useCompanyName } from '../../../company-context/useCompanyName'
@@ -308,7 +308,7 @@ export default function QuestionLibraryNextPage() {
                   </select>
                 </div>
                 <div className={TABLE_CARD_CLASS}>
-                  <table className="w-full border-collapse text-sm">
+                  <Table className="w-full border-collapse text-sm">
                     <thead className="border-b border-line-light">
                       <tr>
                         <th scope="col" className={TH_CLASS}>{t('questionLibrary.next.colQuestion')}</th>
@@ -330,7 +330,7 @@ export default function QuestionLibraryNextPage() {
                         </ChildSection>
                       ))}
                     </tbody>
-                  </table>
+                  </Table>
                   <p className="m-0 border-t border-line-light px-3 py-2.5 text-xs text-fg-secondary">
                     {t('questionLibrary.next.globalsNote')}
                   </p>
@@ -585,7 +585,7 @@ function Field({ label, hint, required, children }: { label: string; hint?: stri
     <label className="flex flex-col gap-1">
       <span className="text-sm font-semibold text-fg-primary">
         {label}
-        {required && <span className="text-accent-red"> *</span>}
+        {required && <span className="text-chip-critical-ink"> *</span>}
       </span>
       {children}
       {hint && <span className="text-xs text-fg-secondary">{hint}</span>}

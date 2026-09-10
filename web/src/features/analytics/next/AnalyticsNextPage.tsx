@@ -1,14 +1,13 @@
 import { ArrowRight, Gauge, Sparkles } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { PageTopBar } from '../../../components/layout'
-import { Button, Chip, ErrorState, LoadingRegion, SkeletonText } from '../../../components/ui'
+import { Button, Chip, ErrorState, LoadingRegion, SkeletonText, Table } from '../../../components/ui'
 import { useCompanyName } from '../../../company-context/useCompanyName'
 import { useTranslation } from '../../../i18n'
 import { insightPriorityLabel } from '../insightVocabulary'
 import { EmptyRow, IconBox, PanelHeading, TABLE_CARD_CLASS, TH_CLASS } from '../../shared-next/parts'
-import { openInsightCount, type BenchmarkRow } from './model'
+import { openInsightCount, priorityTone, type BenchmarkRow } from './model'
 import { useAnalyticsModel } from './useAnalyticsModels'
-import { priorityTone } from './AIInsightsNextPage'
 
 /**
  * Analítica, redesigned (canvas board "AnalyticsDashboard"): one job — which references
@@ -81,7 +80,7 @@ export default function AnalyticsNextPage() {
             />
             <div className={TABLE_CARD_CLASS}>
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
+                <Table className="w-full border-collapse text-sm">
                   <thead className="border-b border-line-light">
                     <tr>
                       <th scope="col" className={TH_CLASS}>{t('analytics.next.colReference')}</th>
@@ -95,7 +94,7 @@ export default function AnalyticsNextPage() {
                       <BenchmarkTableRow key={row.id} row={row} />
                     ))}
                   </tbody>
-                </table>
+                </Table>
               </div>
               {!state.data.benchmarks.some((row) => !row.isGlobal) && (
                 <EmptyRow

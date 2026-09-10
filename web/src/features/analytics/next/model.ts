@@ -2,6 +2,7 @@ import type { AIInsightListItem } from '../api/insights'
 import type { BenchmarkListItem, Benchmark } from '../api/benchmarks'
 import type { SurveyListItem } from '../../surveys/api/surveys'
 import { INSIGHT_PRIORITIES } from '../insightVocabulary'
+import type { ChipTone } from '../../../components/ui'
 
 /**
  * The redesigned Información de IA and Analítica screens, as data.
@@ -90,4 +91,11 @@ export function latestClosedSurvey(
   return closed.reduce((latest, survey) =>
     new Date(survey.endDate).getTime() > new Date(latest.endDate).getTime() ? survey : latest,
   )
+}
+
+/** The chip tone a priority wears: critical red, high amber, the rest neutral. */
+export function priorityTone(priority: string): ChipTone {
+  if (priority === 'critical') return 'critical'
+  if (priority === 'high') return 'warning'
+  return 'neutral'
 }
