@@ -272,7 +272,12 @@ public static class DashboardQueries
         Guid companyId,
         int limit)
         => departments
-            .Where(d => d.CompanyId == companyId)
+            // Active departments only. A deactivated department is one the administrator
+            // retired; listing it made the dashboard count it among the departments "still
+            // without people", which is the opposite of what happened to it. Its responses
+            // stay in the organisation-level rate, as every response row keeps its
+            // department id -- the row is retired, the history is not.
+            .Where(d => d.CompanyId == companyId && d.IsActive)
             .OrderBy(d => d.Name)
             .ThenBy(d => d.Id)
             .Take(limit)

@@ -97,7 +97,8 @@ describe('SurveysListPage', () => {
     renderPage()
 
     await screen.findByText('Q3 climate survey')
-    expect(new URL(lastUrl(fetchMock)).searchParams.get('lang')).toBe('en')
+    // Relative on CI (no VITE_API_BASE_URL), absolute on a laptop with `.env.local`; parse both.
+    expect(new URL(lastUrl(fetchMock), 'http://test.local').searchParams.get('lang')).toBe('en')
   })
 
   it('keeps status off the wire, because the chips count statuses the response would not contain', async () => {

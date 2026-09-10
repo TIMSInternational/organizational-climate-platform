@@ -676,12 +676,23 @@ public static class MicroclimateEndpoints
         if (isAuthenticated)
         {
             var currentUser = principal.GetCurrentUser();
-            if (!CanAccessCompany(currentUser, microclimate.CompanyId))
+            if (CanAccessCompany(currentUser, microclimate.CompanyId))
+            {
+                return Results.Ok(await ToDetailAsync(microclimate, db, lang, cancellationToken));
+            }
+
+            if (!CanRespondForCompany(currentUser, microclimate.CompanyId))
             {
                 return Results.Forbid();
             }
 
-            return Results.Ok(await ToDetailAsync(microclimate, db, lang, cancellationToken));
+            // A signed-in member of the company who may NOT read its detail -- an employee who
+            // opened the session's respond link while still logged in -- falls through to exactly
+            // what a stranger is served, under the same anonymous-and-active rule. Before this the
+            // employee was refused with a 403 while the stranger holding the same link could
+            // answer, which put "No se pudo cargar esta sesión" in front of the one person the
+            // link was made for. A signed-in caller from ANOTHER company is still refused above:
+            // the cross-tenant boundary this route has always had does not move for a respond link.
         }
 
         // Unauthenticated visitors may only view microclimates that are both configured for

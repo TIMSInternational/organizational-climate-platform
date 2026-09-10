@@ -73,6 +73,19 @@ describe('ReportsListPage', () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toContain('/admin/reports?companyId=c1')
   })
 
+  it('asks for the titles in the reader\'s language, as the survey lists do', async () => {
+    // The reports list was the one admin screen that still omitted `lang`, so a Spanish
+    // reader saw the English half of every bilingual title here and again in the share
+    // dialog that repeats it. The provider's default locale is what must reach the wire.
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([reportRow()]))
+    renderPage()
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    const url = new URL(String(vi.mocked(fetch).mock.calls[0][0]), 'http://test.local')
+    expect(url.searchParams.get('companyId')).toBe('c1')
+    expect(url.searchParams.get('lang')).toBe('en')
+  })
+
   it('shows a loading state before the first response arrives, announced once', async () => {
     let resolve: (value: Response) => void = () => {}
     vi.mocked(fetch).mockReturnValueOnce(

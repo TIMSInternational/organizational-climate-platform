@@ -129,6 +129,36 @@ public class DashboardEndpointsTests : IAsyncLifetime
 
     public Task DisposeAsync() => Task.CompletedTask;
 
+    /// <summary>
+    /// A deactivated department is one the administrator retired. It used to come back as a
+    /// dashboard row with no members and no reading, so the screen counted it among the
+    /// departments "still without people" -- the opposite of what happened to it. Its
+    /// responses stay in the organisation-level rate; the row does not.
+    /// </summary>
+    [Fact]
+    public async Task A_deactivated_department_is_neither_a_dashboard_row_nor_counted()
+    {
+        Guid retiredId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
+            var now = DateTimeOffset.UtcNow;
+            var retired = new Department { Id = Guid.NewGuid(), CompanyId = _companyAId, Name = "Retired", IsActive = false, CreatedAt = now, UpdatedAt = now };
+            db.Departments.Add(retired);
+            await db.SaveChangesAsync();
+            retiredId = retired.Id;
+        }
+
+        var client = await ClientAsync(Roles.CompanyAdmin, _companyADomain, _companyAId);
+        var json = (await (await client.GetAsync("/dashboard/company-admin"))
+            .Content.ReadFromJsonAsync<CompanyAdminDashboard>())!;
+
+        Assert.DoesNotContain(json.Departments, d => d.Id == retiredId);
+        Assert.Contains(json.Departments, d => d.Id == _engineeringId);
+        Assert.Contains(json.Departments, d => d.Id == _salesId);
+        Assert.Equal(2, json.DepartmentCount);
+    }
+
     // ------------------------------------------------------------------
     // Seeding
     // ------------------------------------------------------------------

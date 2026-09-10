@@ -58,7 +58,7 @@ import {
  * admin acts on; what replaced it names the file that just landed.
  */
 export default function ReportsListPage() {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const { companyId } = useParams<{ companyId: string }>()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [reports, setReports] = useState<ReportListItem[]>([])
@@ -84,13 +84,16 @@ export default function ReportsListPage() {
     setLoading(true)
     setError(null)
     try {
-      setReports(await listReports(baseUrl, companyId))
+      // `lang` rides along so the titles come back in the reader's language; without it a
+      // Spanish reader saw the English half of every bilingual title here and in the share
+      // dialog that repeats it.
+      setReports(await listReports(baseUrl, companyId, locale))
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {
       setLoading(false)
     }
-  }, [baseUrl, companyId, t])
+  }, [baseUrl, companyId, locale, t])
 
   useEffect(() => {
     reload()

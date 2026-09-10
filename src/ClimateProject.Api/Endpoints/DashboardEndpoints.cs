@@ -398,7 +398,8 @@ public static class DashboardEndpoints
         var users = await DashboardQueries
             .UserCounts(db.Users.Where(u => u.CompanyId == scopedCompanyId))
             .FirstOrDefaultAsync(cancellationToken) ?? DashboardUserCounts.Empty;
-        var departmentCount = await db.Departments.CountAsync(d => d.CompanyId == scopedCompanyId, cancellationToken);
+        // Active only, the same population the department rows below are drawn from.
+        var departmentCount = await db.Departments.CountAsync(d => d.CompanyId == scopedCompanyId && d.IsActive, cancellationToken);
         var surveys = await DashboardQueries.SurveyCounts(scopedSurveys)
             .FirstOrDefaultAsync(cancellationToken) ?? DashboardSurveyCounts.Empty;
         var responses = await DashboardQueries

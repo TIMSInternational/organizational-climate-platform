@@ -77,8 +77,16 @@ export interface CreateReportInput {
   templateId?: string
 }
 
-export async function listReports(baseUrl: string, companyId: string): Promise<ReportListItem[]> {
-  const response = await authFetch(`${baseUrl}/admin/reports?companyId=${encodeURIComponent(companyId)}`)
+/**
+ * `locale` rides along as `lang` so the bilingual titles come back in the reader's language.
+ * Without it the list printed the English half of every title on a Spanish screen, and the
+ * share dialog repeated it, while the API had the Spanish half all along: the screen never
+ * asked.
+ */
+export async function listReports(baseUrl: string, companyId: string, locale?: string): Promise<ReportListItem[]> {
+  const query = new URLSearchParams({ companyId })
+  if (locale) query.set('lang', locale)
+  const response = await authFetch(`${baseUrl}/admin/reports?${query.toString()}`)
   return response.json() as Promise<ReportListItem[]>
 }
 
@@ -90,8 +98,9 @@ export async function createReport(baseUrl: string, input: CreateReportInput): P
   return response.json() as Promise<Report>
 }
 
-export async function getReport(baseUrl: string, id: string): Promise<Report> {
-  const response = await authFetch(`${baseUrl}/admin/reports/${id}`)
+export async function getReport(baseUrl: string, id: string, locale?: string): Promise<Report> {
+  const suffix = locale ? `?lang=${encodeURIComponent(locale)}` : ''
+  const response = await authFetch(`${baseUrl}/admin/reports/${id}${suffix}`)
   return response.json() as Promise<Report>
 }
 

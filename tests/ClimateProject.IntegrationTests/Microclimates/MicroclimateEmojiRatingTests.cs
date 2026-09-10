@@ -824,4 +824,35 @@ public class MicroclimateEmojiRatingTests : IAsyncLifetime
             Assert.Equal(MicroclimateStatuses.Draft, still.Status);
         }
     }
+
+    // ------------------------------------------------------------------
+    // The respond link is for the company's own people, and they are usually signed in.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_signed_in_employee_opening_the_respond_link_is_served_the_public_payload_not_a_403()
+    {
+        var client = await AdminClientAsync();
+        var created = await (await PostMicroclimateAsync(client, "Live pulse",
+                [new CreateQuestionInput("How was your week?", "emoji_rating", null, true, 1, FourFaces())]))
+            .Content.ReadFromJsonAsync<MicroclimateDetail>();
+        await client.PutAsJsonAsync($"/microclimates/{created!.Id}", new UpdateMicroclimateRequest(null, null, "active", null));
+
+        // Signup mints an employee of the same company -- exactly who the live session's link
+        // is handed to, and who is still logged in when they open it. Before this test the
+        // employee got a 403 where a stranger holding the same link got the questions.
+        var employee = _factory.CreateClient();
+        var signup = await employee.PostAsJsonAsync("/auth/signup",
+            new SignupRequest("Employee", $"{Guid.NewGuid():N}@{_domain}", "A-good-passw0rd"));
+        var token = (await signup.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
+        employee.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var response = await employee.GetAsync($"/microclimates/{created.Id}");
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("questions", body);
+        // The reduced payload, not the administrator's detail: the employee learns no more
+        // than the stranger would.
+        Assert.DoesNotContain("companyId", body);
+    }
 }

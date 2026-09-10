@@ -251,7 +251,7 @@ describe('BenchmarksPage headline counts', () => {
     // The survey the read-out names is fetched in the reader's language, like the list page.
     const surveyRequests = vi.mocked(fetch).mock.calls.map((call) => String(call[0])).filter((url) => url.includes('/surveys?'))
     expect(surveyRequests.length).toBeGreaterThan(0)
-    expect(surveyRequests.every((url) => new URL(url).searchParams.get('lang') === 'en')).toBe(true)
+    expect(surveyRequests.every((url) => new URL(url, 'http://test.local').searchParams.get('lang') === 'en')).toBe(true)
   })
 })
 
