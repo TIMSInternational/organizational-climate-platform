@@ -1180,6 +1180,41 @@ public class SurveyDistributionEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_deactivated_invitee_is_not_reminded_by_the_manual_route_either()
+    {
+        var client = await AdminAAsync();
+        var survey = await CreateActiveSurveyAsync(client);
+        var leaver = await SeedEmployeeAsync(_companyAId);
+        var result = await InviteAsync(client, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [leaver]));
+        await AgeInvitationAsync(result.InvitationIds[0], days: 5);
+
+        // Invited while active, deactivated since. The scheduled sweep
+        // (InvitationReminderJob.LoadRecipientsAsync) already skips this person; this route
+        // reminded them, advanced their invitation's counters and reported the reminder as
+        // queued -- one invitation, two answers, depending on who asked.
+        await _harness.WithDbAsync(async db =>
+        {
+            var user = await db.Users.FirstAsync(u => u.Id == leaver);
+            user.IsActive = false;
+            await db.SaveChangesAsync();
+        });
+
+        var response = await client.PostAsync($"/surveys/{survey.Id}/invitations/reminders", null);
+        response.EnsureSuccessStatusCode();
+        var reminderResult = (await response.Content.ReadFromJsonAsync<SurveyReminderResult>())!;
+
+        // Not eligible either: a reminder that cannot be sent is not a reminder that is owed.
+        Assert.Equal(0, reminderResult.Eligible);
+        Assert.Equal(0, reminderResult.Queued);
+        Assert.False(await _harness.WithDbAsync(db => db.Notifications
+            .AnyAsync(n => n.UserId == leaver && n.Type == NotificationTypes.SurveyReminder)));
+
+        var invitation = await InvitationRowAsync(result.InvitationIds[0]);
+        Assert.Equal(0, invitation.ReminderCount);
+        Assert.Null(invitation.LastReminderSent);
+    }
+
+    [Fact]
     public async Task Nobody_is_reminded_within_the_cadence_of_the_invitation_itself()
     {
         var client = await AdminAAsync();
