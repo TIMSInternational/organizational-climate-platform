@@ -102,7 +102,15 @@ export default function AudienceSelector({
           <legend className="text-sm text-fg-secondary">
             {t('surveys.distribution.audienceDepartments')}
           </legend>
-          {departments.map((department) => (
+          {/* A retired department is not offered, for the reason the inactive user below
+              is not: a deactivated department is one the administrator retired, and the
+              catalogue (`GET /admin/departments`) still lists it only so the departments
+              page can show it behind "show inactive". The tracking picker and the survey
+              builder's audience step apply the same rule. Its people are still reachable
+              by name, or company-wide. */}
+          {departments
+            .filter((department) => department.isActive)
+            .map((department) => (
             <label key={department.id} className="mb-0 flex items-center gap-inline">
               <Checkbox
                 checked={selectedDepartmentIds.includes(department.id)}
