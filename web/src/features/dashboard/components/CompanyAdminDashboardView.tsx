@@ -1,3 +1,17 @@
+/**
+ * NOT ROUTED. `/dashboard` renders the redesigned Panel de Control
+ * (`../next/AdminDashboardNextView`) for a company administrator, and for a SuperAdmin
+ * with a tenant selected, since the redesign replaced this view — see `DashboardPage`.
+ * Nothing in `router.tsx` reaches this file.
+ *
+ * It stays in the tree on purpose, as the wiring reference: its `useDashboardData` call
+ * of `getCompanyAdminDashboard` (`GET /dashboard/company-admin`, with the SuperAdmin's
+ * `companyId` and none for a CompanyAdmin), the readings `companyClimate.ts` derives from
+ * that payload, and the floor-of-5 handling below are what `useAdminDashboardModel` has
+ * to reproduce on the day it stops returning the sample. Delete this file when that hook
+ * fetches. Until then its behaviour is pinned by `CompanyAdminDashboardView.test.tsx`,
+ * which renders it directly.
+ */
 import { useCallback } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { AlertTriangle, CheckCircle2, ClipboardList, FileText, Gauge, Lock, Plus, Radio } from 'lucide-react'
@@ -35,10 +49,9 @@ interface CompanyAdminDashboardViewProps {
 }
 
 /**
- * One company's overview — **the reference implementation of the redesign.**
- *
- * Reached by a CompanyAdmin always, and by a SuperAdmin who has picked a tenant in the
- * header switcher — see `DashboardPage`.
+ * One company's overview — the view `/dashboard` drew for a CompanyAdmin, and for a
+ * SuperAdmin who had picked a tenant in the header switcher, until the redesign replaced
+ * it (module comment above).
  *
  * ## The composition, and why it is in this order
  *

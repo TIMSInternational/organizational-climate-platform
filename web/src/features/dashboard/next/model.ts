@@ -1,5 +1,6 @@
 /**
- * The typed model behind the redesigned Panel de Control (`/dashboard/next`).
+ * The typed model behind the redesigned Panel de Control — the company administrator's
+ * `/dashboard`.
  *
  * Every number the page prints is derived from this shape in `derive.ts` — the
  * average, the deltas, the percentages, "below target" — never typed as a string.

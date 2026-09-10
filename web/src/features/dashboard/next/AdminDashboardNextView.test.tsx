@@ -1,37 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, within } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router'
-import DashboardNextPage from './DashboardNextPage'
+import { MemoryRouter } from 'react-router'
 import AdminDashboardNextView from './AdminDashboardNextView'
 import { sampleModel } from './sampleModel'
 import { TranslationProvider } from '../../../i18n'
-import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
-import { setToken } from '../../../auth/token'
-import { tokenFor } from '../../../test/jwtFixture'
+import { CompanyContextProvider } from '../../../company-context'
 import en from '../../../i18n/en.json'
 
 const copy = en.dashboard.next
 
-function renderAt(role: string, companyId = 'c1') {
-  setToken(tokenFor({ role, companyId }))
-  return render(
-    <TranslationProvider>
-      <MemoryRouter initialEntries={['/dashboard/next']}>
-        <CompanyContextProvider>
-          <Routes>
-            <Route path="/dashboard/next" element={<DashboardNextPage />} />
-            <Route path="/dashboard" element={<div data-testid="home" />} />
-          </Routes>
-        </CompanyContextProvider>
-      </MemoryRouter>
-    </TranslationProvider>,
-  )
-}
-
+/**
+ * The view alone, handed the sample directly. Which roles reach it — a company_admin,
+ * and a super_admin once a tenant is selected — is `DashboardPage`'s dispatch and is
+ * proven in `DashboardPage.test.tsx`.
+ */
 function renderView(model = sampleModel) {
   return render(
     <TranslationProvider>
-      <MemoryRouter initialEntries={['/dashboard/next']}>
+      <MemoryRouter initialEntries={['/dashboard']}>
         <CompanyContextProvider>
           <AdminDashboardNextView model={model} />
         </CompanyContextProvider>
@@ -40,7 +26,7 @@ function renderView(model = sampleModel) {
   )
 }
 
-describe('DashboardNextPage', () => {
+describe('AdminDashboardNextView', () => {
   beforeEach(() => {
     window.localStorage.clear()
     window.localStorage.setItem('preferredLocale', 'en')
@@ -50,8 +36,8 @@ describe('DashboardNextPage', () => {
     window.localStorage.clear()
   })
 
-  it('renders the six sections for a company administrator', () => {
-    renderAt('company_admin')
+  it('renders the six sections, and its three actions land somewhere that exists', () => {
+    renderView()
     expect(screen.getByRole('heading', { level: 1, name: copy.title })).toBeTruthy()
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
     expect(headings).toEqual([
@@ -68,22 +54,6 @@ describe('DashboardNextPage', () => {
     expect(screen.getByRole('link', { name: copy.openResults }).getAttribute('href')).toBe(
       '/surveys/s-q3/results',
     )
-  })
-
-  it('sends every other role back to /dashboard', () => {
-    for (const role of ['employee', 'leader', 'supervisor']) {
-      renderAt(role)
-      expect(screen.getByTestId('home')).toBeTruthy()
-      expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
-      cleanup()
-    }
-    // A SuperAdmin without a tenant chosen has no company to show.
-    renderAt('super_admin', '')
-    expect(screen.getByTestId('home')).toBeTruthy()
-    cleanup()
-    window.localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'c9')
-    renderAt('super_admin', '')
-    expect(screen.getByRole('heading', { level: 1, name: copy.title })).toBeTruthy()
   })
 
   it('prints no digit anywhere on a protected map row', () => {

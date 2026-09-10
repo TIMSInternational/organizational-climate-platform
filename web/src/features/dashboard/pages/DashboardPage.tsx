@@ -1,7 +1,8 @@
-import CompanyAdminDashboardView from '../components/CompanyAdminDashboardView'
 import DepartmentAdminDashboardView from '../components/DepartmentAdminDashboardView'
 import EmployeeDashboardView from '../components/EmployeeDashboardView'
 import SuperAdminDashboardView from '../components/SuperAdminDashboardView'
+import AdminDashboardNextView from '../next/AdminDashboardNextView'
+import { useAdminDashboardModel } from '../next/useAdminDashboardModel'
 import { useCompanyScope } from '../../../company-context'
 
 /**
@@ -38,13 +39,22 @@ import { useCompanyScope } from '../../../company-context'
  * 403 or a blank screen. Defaulting the other way — to an admin view — would be a page
  * that 403s, which is precisely what `resolveInitialRoute` was changed to stop doing.
  *
+ * ## The company view is the redesign
+ *
+ * A CompanyAdmin — and a SuperAdmin with a tenant selected — gets the redesigned Panel
+ * de Control from `../next`, which replaced `CompanyAdminDashboardView` on this route.
+ * Until `useAdminDashboardModel` is wired it draws the sample in `sampleModel.ts` and
+ * says so with a chip; the old view stays in the tree, unrouted, as the reference for
+ * that wiring (its module comment says what to copy from it and when to delete it).
+ *
  * ## The SuperAdmin's two dashboards
  *
  * A SuperAdmin with no company selected gets the platform overview: their subject really is
  * "all tenants", and `useCompanyScope` reports `needs-selection` rather than guessing one
  * (#124). Once they pick a tenant in the header switcher, the company dashboard for *that*
- * tenant is the more useful answer, and `GET /dashboard/company-admin` accepts an explicit
- * `companyId` from this role for exactly that. A CompanyAdmin's selection is ignored by
+ * tenant is the more useful answer, and the selection is handed to `useAdminDashboardModel`
+ * for exactly that — `GET /dashboard/company-admin`, which it will read, accepts an
+ * explicit `companyId` from this role. A CompanyAdmin's selection is ignored by
  * `useCompanyScope` and their claim is used instead, so this branch cannot be used to widen
  * anything.
  */
@@ -53,15 +63,15 @@ export default function DashboardPage() {
 
   if (scope.isSuperAdmin) {
     return scope.status === 'ready' && scope.companyId ? (
-      <CompanyAdminDashboardView companyId={scope.companyId} />
+      <CompanyDashboard companyId={scope.companyId} />
     ) : (
       <SuperAdminDashboardView />
     )
   }
 
   if (scope.role === 'company_admin') {
-    // No `companyId` prop: the server takes it from the claim. See the prop's doc comment.
-    return <CompanyAdminDashboardView />
+    // No `companyId`: the server takes it from the claim. See the hook's parameter doc.
+    return <CompanyDashboard />
   }
 
   if (scope.role === 'leader' || scope.role === 'supervisor') {
@@ -69,4 +79,15 @@ export default function DashboardPage() {
   }
 
   return <EmployeeDashboardView />
+}
+
+/**
+ * The company administrator's view: the redesigned Panel de Control, fed by the model
+ * hook. A component of its own rather than a hook call in `DashboardPage`, so that
+ * `useAdminDashboardModel` runs only on the two branches that draw it — once it fetches,
+ * an employee's landing page must not be asking for a tenant's figures.
+ */
+function CompanyDashboard({ companyId }: { companyId?: string }) {
+  const model = useAdminDashboardModel(companyId)
+  return <AdminDashboardNextView model={model} />
 }

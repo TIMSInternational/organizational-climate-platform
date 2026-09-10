@@ -40,7 +40,7 @@ import CycleTimeline, { type CycleStep } from './CycleTimeline'
  * header → where the organisation stands (four tiles) → what moved (six small
  * multiples) beside the map by group → what needs attention beside the cycle.
  *
- * It takes the model as a prop and makes no request: `DashboardNextPage` hands it
+ * It takes the model as a prop and makes no request: `DashboardPage` hands it
  * `useAdminDashboardModel()`, which is the only place wiring will happen. The
  * same rules as `CompanyAdminDashboardView` hold — every reading is
  * `font-mono tabular-nums`, prose stays sans; a withheld row is drawn hatched,
