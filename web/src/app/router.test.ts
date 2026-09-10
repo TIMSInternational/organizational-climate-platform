@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, globSync } from 'node:fs'
 import { join } from 'node:path'
 import { router } from './router'
+import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPage'
+import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
 
 /**
  * A construction guard for the router.
@@ -254,6 +256,34 @@ describe('router', () => {
     // #142. Flat rather than nested under a company: the page takes its company
     // from company-context, so one route serves super_admin and company_admin.
     expect(paths).toContain('/departments')
+  })
+
+  /**
+   * The redesign replaced two pages on their real routes (ruled 10 Sep): the list the
+   * sidebar links as `/surveys`, and Clima en el tiempo at `/surveys/climate-trends`.
+   * The old pages stay in the tree as the wiring reference and nothing may route to
+   * them; the `/next` siblings the first cut mounted are gone with the ruling. Asserted
+   * on the element, not the path: a path alone would pass with the old page behind it.
+   */
+  it('mounts the redesigned list and Clima en el tiempo on the real routes, and no /next sibling', () => {
+    const byPath = new Map<string, unknown>()
+    function walk(routes: typeof router.routes): void {
+      for (const route of routes) {
+        if (route.path) byPath.set(route.path, route.element)
+        if (route.children) walk(route.children as typeof router.routes)
+      }
+    }
+    walk(router.routes)
+    const componentAt = (path: string) => (byPath.get(path) as { type?: unknown } | undefined)?.type
+    expect(componentAt('/surveys')).toBe(SurveysListNextPage)
+    expect(componentAt('/surveys/climate-trends')).toBe(ClimateTrendsNextPage)
+    expect(byPath.has('/surveys/next')).toBe(false)
+    expect(byPath.has('/surveys/climate-trends/next')).toBe(false)
+
+    // Unrouted means unreferenced: the router imports neither old page for any route.
+    const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
+    expect(source).not.toMatch(/pages\/SurveysListPage'/)
+    expect(source).not.toMatch(/pages\/ClimateTrendsPage'/)
   })
 
   /**

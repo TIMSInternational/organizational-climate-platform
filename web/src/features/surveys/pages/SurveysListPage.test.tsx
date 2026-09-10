@@ -8,6 +8,15 @@ import { setToken, clearToken } from '../../../auth/token'
 import SurveysListPage from './SurveysListPage'
 import type { SurveyListItem } from '../api/surveys'
 
+/**
+ * The list `/surveys` drew until the redesign replaced it with
+ * `../next/list/SurveysListNextPage` — the module comment on the page says why it is
+ * still in the tree. Rendered directly, because nothing routes to it any more; the
+ * route's own guarantees (scoping, `lang`, status off the wire, the eyebrow, the
+ * failed-load recovery) are asserted against the new screen in
+ * `SurveysListNextPage.test.tsx`.
+ */
+
 function row(overrides: Partial<SurveyListItem> = {}): SurveyListItem {
   return {
     id: 's1',

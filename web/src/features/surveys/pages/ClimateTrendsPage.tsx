@@ -1,3 +1,17 @@
+/**
+ * NOT ROUTED. `/surveys/climate-trends` renders the redesigned Clima en el tiempo
+ * (`../next/trends/ClimateTrendsNextPage`), which replaced this page — ruled 10 Sep,
+ * the same swap `DashboardPage` made for the Panel de Control. Nothing in
+ * `router.tsx` reaches this file.
+ *
+ * It stays in the tree on purpose, as the wiring reference: `useClimateTrendsModel`
+ * already makes this page's request through `getClimateTrends` with the resolved
+ * company (the #124 rule below), and the redesign keeps this page's grid beneath its
+ * charts. What this file still pins is the one-grouping-at-a-time reading and the
+ * refetch-on-regroup it argues for below, which the redesign replaced with two
+ * requests up front. Delete it when that argument has no other reader. Until then its
+ * behaviour is pinned by `ClimateTrendsPage.test.tsx`, which renders it directly.
+ */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PageTopBar } from '../../../components/layout'
 import { ClimateMap } from '../../../components/charts'

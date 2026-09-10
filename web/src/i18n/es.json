@@ -2054,6 +2054,59 @@
       "nothingToDrawBody": "Ninguna dimensión tiene puntaje en todas las encuestas mostradas, así que no hay columna que pueda leerse entre ellas.",
       "omittedDimensions": "No se muestran, porque no tuvieron puntaje en todas las encuestas aquí: {dimensions}.",
       "suppressedGroups": "{count} grupo(s) se reservan en todas las encuestas mostradas, porque respondieron menos de {threshold} personas."
+    },
+    "next": {
+      "trends": {
+        "title": "Clima en el tiempo",
+        "description": "Cómo se movió cada dimensión entre encuestas cerradas, frente a la meta de {target}.",
+        "standingHeading": "Dónde está la organización",
+        "climateLabel": "Clima · {wave}",
+        "climateOf": "de 5",
+        "climateVs": "frente a {wave}",
+        "closedLabel": "Encuestas cerradas",
+        "aboveLabel": "Sobre la meta",
+        "belowLabel": "Bajo la meta",
+        "ofDimensions": "de {total} dimensiones",
+        "none": "ninguna",
+        "breakDownBy": "Desglosar por",
+        "wholeCompany": "Toda la empresa",
+        "legendTarget": "meta {target}",
+        "legendBelow": "último valor bajo la meta",
+        "standing": {
+          "above": "sobre la meta",
+          "on": "en la meta",
+          "below": "bajo la meta"
+        },
+        "sinceWave": "desde {wave}",
+        "chartLabel": "{dimension}: {values}, meta {target}",
+        "withheld": "protegido",
+        "tableHeading": "Los mismos números, en tabla",
+        "tableScale": "{group} · escala de 1 a 5",
+        "floorNote": "Un grupo con menos de {floor} respuestas en una encuesta se muestra protegido en esa encuesta, sin número.",
+        "targetSampleNote": "La meta de {target} es un dato de muestra: ninguna configuración guarda todavía una meta de clima."
+      },
+      "list": {
+        "description": "Cuál encuesta está abierta hoy, cuánto le falta para cerrar y dónde leer las que ya cerraron.",
+        "searchPlaceholder": "Buscar por título o etiqueta",
+        "allTypes": "Todos los tipos",
+        "chipCount": "{label} · {count}",
+        "countSummary": "{count} encuestas · ordenadas por estado y fecha",
+        "openHeading": "Abierta ahora",
+        "openNote": "La encuesta abierta se analiza al cerrar; nadie ve llegar las respuestas una por una.",
+        "upcomingHeading": "Borradores y programadas",
+        "closedHeading": "Cerradas",
+        "archivedHeading": "Archivadas",
+        "archivedNote": "Una encuesta archivada no cuenta en Clima en el tiempo ni en los puntos de referencia.",
+        "colSurvey": "Encuesta",
+        "colClose": "Cierre",
+        "noInviteList": "sin lista de invitados",
+        "noSubmissions": "sin envíos",
+        "completed": "{count} completadas",
+        "opened": "abrió el {date}",
+        "closedOn": "cerró el {date}",
+        "inDays": "en {count} días",
+        "opens": "abre el {date}"
+      }
     }
   },
   "users": {
