@@ -43,6 +43,7 @@ import {
 } from '../components/SurveyDraftNotices'
 import {
   CONTENT_LANGUAGES,
+  defaultContentLanguage,
   SURVEY_WIZARD_STEPS,
   buildCreateInput,
   buildInstantiateInput,
@@ -178,6 +179,14 @@ export default function SurveyCreatePage() {
   const keyPrefix = useId()
   const [searchParams] = useSearchParams()
 
+  // The reader's UI locale, not English and not the company setting: a Spanish
+  // admin on a Spanish tenant was offered "Content language: English" on every new
+  // survey, because this seed was the literal `'en'`. `defaultContentLanguage`
+  // records why the company setting is not consulted. The same value is the fallback
+  // for a restored draft whose snapshot names no usable language, so the two ways
+  // into this wizard cannot disagree about what "no choice yet" means.
+  const fallbackLanguage = defaultContentLanguage(locale)
+
   /**
    * `?template={id}` — how the catalogue hands a template to this wizard.
    *
@@ -193,7 +202,7 @@ export default function SurveyCreatePage() {
    * one than a silently blank picker.
    */
   const [values, setValues] = useState<SurveyWizardValues>(() => {
-    const initial = emptyWizardValues('en')
+    const initial = emptyWizardValues(fallbackLanguage)
     const requested = searchParams.get('template')
     return requested === null || requested === '' ? initial : { ...initial, templateId: requested }
   })
@@ -329,6 +338,7 @@ export default function SurveyCreatePage() {
   const draft = useSurveyDraft({
     baseUrl,
     locale,
+    fallbackLanguage,
     enabled: Boolean(companyId),
     keyPrefix,
     values,

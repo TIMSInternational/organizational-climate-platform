@@ -282,10 +282,39 @@ export function questionFromLibrary(
 }
 
 /**
- * `language` is seeded from the company rather than defaulted to English, for the
- * reason the microclimate module records: the server's own default is
- * `company.Settings.Language`, and guessing differently in the form would silently
- * disagree with a request that omitted the field.
+ * The content language a fresh wizard starts with: the reader's own UI locale.
+ *
+ * Not the company's `Settings.Language`, and the reasons are measured rather than
+ * preferred. There is no `GET` for it -- `CompanyEndpoints` maps only
+ * `PUT /{id}/settings`, and `CompanyDetailPage` reads the record by sending `{}` to
+ * that `PUT`, "a read dressed as a write". The domain default is `"en"`
+ * (`Company.cs`, `Language = "en"`), so a company nobody has configured is
+ * indistinguishable on the wire from one configured for English -- and
+ * `CompanySettingsForm` offers no language control, so today nobody *can* configure it
+ * from the product. Seeding from that field would preselect English on every
+ * Spanish tenant whose admin never touched a setting they cannot see, which is the
+ * defect this helper exists to remove. The microclimate wizard made the same call
+ * (`MicroclimateCreatePage`): the seed is what the admin is most likely to want, not
+ * a claim about the company.
+ *
+ * Whether the company setting should sit *ahead* of the reader's locale once it is
+ * readable and "unset" is observable is a product ruling, recorded as open in the
+ * pull request that introduced this function.
+ *
+ * `locale` is typed `string` rather than `Locale` on purpose: a third UI locale must
+ * land here as English, never as a content language the server would reject.
+ */
+export function defaultContentLanguage(locale: string): ContentLanguage {
+  return locale === 'es' ? 'es' : 'en'
+}
+
+/**
+ * `language` is whatever the page passes in -- `defaultContentLanguage` for a fresh
+ * wizard, or the fallback for a draft whose stored snapshot names no usable language.
+ * The server's own default when a request omits the field is
+ * `company.Settings.Language`, but this wizard always sends the field, so the seed
+ * here is the value that reaches the server; see `defaultContentLanguage` for why it
+ * is the reader's locale rather than that setting.
  */
 export function emptyWizardValues(language: ContentLanguage): SurveyWizardValues {
   return {
