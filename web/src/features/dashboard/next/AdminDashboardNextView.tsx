@@ -13,11 +13,11 @@ import {
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { ANONYMITY_FLOOR, ClimateMap, KpiTile } from '../../../components/charts'
-import { Button, Chip } from '../../../components/ui'
+import { Button, Chip, LoadingRegion, SkeletonText } from '../../../components/ui'
 import { calendarDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { KpiRow, SectionHeading } from '../components/dashboardGrammar'
-import type { AdminDashboardModel, AttentionItem, Wave } from './model'
+import type { AdminDashboardModel, AttentionItem, RegionKey, RegionStatuses, Wave } from './model'
 import {
   closedWaveCount,
   daysBetween,
@@ -41,13 +41,21 @@ import CycleTimeline, { type CycleStep } from './CycleTimeline'
  * multiples) beside the map by group → what needs attention beside the cycle.
  *
  * It takes the model as a prop and makes no request: `DashboardPage` hands it
- * `useAdminDashboardModel()`, which is the only place wiring will happen. The
+ * `useAdminDashboardModel()`, which composes it from the existing clients region by
+ * region (`compose.ts`). `regions` says which of them fell back to the sample; each
+ * section names its own in a sentence, beside the chip in the top bar. The
  * same rules as `CompanyAdminDashboardView` hold — every reading is
  * `font-mono tabular-nums`, prose stays sans; a withheld row is drawn hatched,
  * never dropped, and never prints a number (`ClimateMap` with `threshold` at the
  * floor); and no colour carries a change alone.
  */
-export default function AdminDashboardNextView({ model }: { model: AdminDashboardModel }) {
+export default function AdminDashboardNextView({
+  model,
+  regions,
+}: {
+  model: AdminDashboardModel
+  regions?: RegionStatuses
+}) {
   const { t, locale } = useTranslation()
   const { target } = model
   const latest = latestAverage(model)
@@ -97,6 +105,7 @@ export default function AdminDashboardNextView({ model }: { model: AdminDashboar
           <SectionHeading>
             <span id="next-where">{t('dashboard.next.whereHeading')}</span>
           </SectionHeading>
+          <RegionNotice regions={regions} region="company" t={t} />
           <KpiRow>
             <KpiTile
               label={t('dashboard.next.climateLabel', { wave: model.latestClosedWave.code })}
@@ -214,6 +223,7 @@ export default function AdminDashboardNextView({ model }: { model: AdminDashboar
                 })}
               </p>
             </div>
+            <RegionNotice regions={regions} region="trends" t={t} />
             <div className="grid grid-cols-1 gap-panel-gap sm:grid-cols-2 lg:grid-cols-3">
               {model.dimensions.map((dimension) => {
                 const value = dimension.values[dimension.values.length - 1]
@@ -281,6 +291,7 @@ export default function AdminDashboardNextView({ model }: { model: AdminDashboar
                 <ArrowRight aria-hidden="true" className="size-3" />
               </Link>
             </div>
+            <RegionNotice regions={regions} region="map" t={t} />
             <div className="overflow-x-auto">
               <ClimateMap
                 // Short column heads, full name on hover and for AT: measured at 1440, six
@@ -312,6 +323,8 @@ export default function AdminDashboardNextView({ model }: { model: AdminDashboar
             <SectionHeading>
               <span id="next-attention">{t('dashboard.next.attentionHeading')}</span>
             </SectionHeading>
+            <RegionNotice regions={regions} region="actionPlans" t={t} />
+            <RegionNotice regions={regions} region="tracking" t={t} />
             <ul
               data-slot="attention-list"
               className="m-0 list-none divide-y divide-line-light rounded-lg border border-line-default bg-surface-card p-0"
@@ -327,6 +340,7 @@ export default function AdminDashboardNextView({ model }: { model: AdminDashboar
               <SectionHeading>
                 <span id="next-cycle">{t('dashboard.next.cycleHeading')}</span>
               </SectionHeading>
+              <RegionNotice regions={regions} region="surveys" t={t} />
               <div className="rounded-lg border border-line-default bg-surface-card p-card">
                 <CycleTimeline
                   steps={model.waves.map((wave) => toCycleStep(wave, t, locale))}
@@ -338,6 +352,7 @@ export default function AdminDashboardNextView({ model }: { model: AdminDashboar
                 </p>
               </div>
             </div>
+            <RegionNotice regions={regions} region="microclimates" t={t} />
             {model.liveMicroclimate && (
               <div
                 data-slot="live-microclimate"
@@ -476,12 +491,16 @@ function AttentionRow({
             }}
           />
         }
-        detail={t('dashboard.next.lowestCellPlanSub', {
-          plan: item.plan.name,
-          progress: progressOf(item.plan.progress),
-        })}
-        action={t('dashboard.next.openPlan')}
-        href={`/action-plans/${item.plan.id}`}
+        detail={
+          item.plan
+            ? t('dashboard.next.lowestCellPlanSub', {
+                plan: item.plan.name,
+                progress: progressOf(item.plan.progress),
+              })
+            : t('dashboard.next.lowestCellNoPlanSub')
+        }
+        action={item.plan ? t('dashboard.next.openPlan') : t('dashboard.next.createPlan')}
+        href={item.plan ? `/action-plans/${item.plan.id}` : '/action-plans'}
       />
     )
   }
@@ -529,17 +548,19 @@ function AttentionRow({
         />
       }
       detail={t(
-        item.remindersSent === 0
-          ? 'dashboard.next.lowParticipationSubNoReminder'
-          : 'dashboard.next.lowParticipationSubReminders',
+        item.remindersSent === null
+          ? 'dashboard.next.lowParticipationSubUnknown'
+          : item.remindersSent === 0
+            ? 'dashboard.next.lowParticipationSubNoReminder'
+            : 'dashboard.next.lowParticipationSubReminders',
         {
           wave: model.latestClosedWave.code,
           percent: previousRate === null ? '—' : percentReading(previousRate, locale),
-          count: item.remindersSent,
+          count: item.remindersSent ?? 0,
         },
       )}
       action={t('dashboard.next.sendReminder')}
-      href={`/surveys/${survey.id}`}
+      href={`/surveys/${survey.id}/distribution`}
     />
   )
 }
@@ -580,5 +601,85 @@ function AttentionItemRow({
         <Link to={href}>{action}</Link>
       </Button>
     </li>
+  )
+}
+
+const REGION_NAME_KEYS: Record<RegionKey, string> = {
+  company: 'dashboard.next.regionCompany',
+  surveys: 'dashboard.next.regionSurveys',
+  trends: 'dashboard.next.regionTrends',
+  map: 'dashboard.next.regionMap',
+  actionPlans: 'dashboard.next.regionActionPlans',
+  tracking: 'dashboard.next.regionTracking',
+  microclimates: 'dashboard.next.regionMicroclimates',
+}
+
+/**
+ * The honest sentence a section carries when its region is the sample: which region,
+ * and the server's own reason when it gave one. Drawn nowhere otherwise — a live
+ * region says nothing, and neither does a deployment with no tracking service.
+ */
+function RegionNotice({
+  regions,
+  region,
+  t,
+}: {
+  regions: RegionStatuses | undefined
+  region: RegionKey
+  t: TranslateFn
+}) {
+  const state = regions?.[region]
+  if (!state || state.status !== 'fallback') return null
+  const name = t(REGION_NAME_KEYS[region])
+  return (
+    <p
+      data-slot="region-fallback"
+      data-region={region}
+      role="status"
+      className="m-0 mb-inline rounded-md bg-accent-amber-soft px-3 py-2 text-xs text-accent-amber-ink"
+    >
+      {state.reason === 'empty'
+        ? t('dashboard.next.fallbackEmpty', { region: name })
+        : t('dashboard.next.fallbackRegion', {
+            region: name,
+            error: state.error ?? t('dashboard.next.fallbackNoReason'),
+          })}
+    </p>
+  )
+}
+
+const SECTION_REGIONS: readonly { id: string; headingKey: string; region: RegionKey }[] = [
+  { id: 'next-where', headingKey: 'dashboard.next.whereHeading', region: 'company' },
+  { id: 'next-moved', headingKey: 'dashboard.next.movedHeading', region: 'trends' },
+  { id: 'next-attention', headingKey: 'dashboard.next.attentionHeading', region: 'actionPlans' },
+  { id: 'next-cycle', headingKey: 'dashboard.next.cycleHeading', region: 'surveys' },
+]
+
+/**
+ * The page while its regions load: the same top bar and section headings, each section
+ * a skeleton announced by name, so the wait reads as the page arriving and not as an
+ * empty one. Rendered by `DashboardPage` until `useAdminDashboardModel` has a model.
+ */
+export function AdminDashboardNextSkeleton() {
+  const { t } = useTranslation()
+  return (
+    <div>
+      <PageTopBar title={t('dashboard.next.title')} description={t('dashboard.next.description')} />
+      <div className="flex flex-col gap-section">
+        {SECTION_REGIONS.map((section) => (
+          <section key={section.id} aria-labelledby={section.id}>
+            <SectionHeading>
+              <span id={section.id}>{t(section.headingKey)}</span>
+            </SectionHeading>
+            <LoadingRegion
+              loading
+              label={t('dashboard.next.loadingRegion', { region: t(REGION_NAME_KEYS[section.region]) })}
+            >
+              <SkeletonText lines={3} />
+            </LoadingRegion>
+          </section>
+        ))}
+      </div>
+    </div>
   )
 }

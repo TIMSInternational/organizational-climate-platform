@@ -3,6 +3,7 @@ import { render, screen, cleanup, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import AdminDashboardNextView from './AdminDashboardNextView'
 import { sampleModel } from './sampleModel'
+import type { AdminDashboardModel, RegionStatuses } from './model'
 import { TranslationProvider } from '../../../i18n'
 import { CompanyContextProvider } from '../../../company-context'
 import en from '../../../i18n/en.json'
@@ -14,12 +15,12 @@ const copy = en.dashboard.next
  * and a super_admin once a tenant is selected — is `DashboardPage`'s dispatch and is
  * proven in `DashboardPage.test.tsx`.
  */
-function renderView(model = sampleModel) {
+function renderView(model: AdminDashboardModel = sampleModel, regions?: RegionStatuses) {
   return render(
     <TranslationProvider>
       <MemoryRouter initialEntries={['/dashboard']}>
         <CompanyContextProvider>
-          <AdminDashboardNextView model={model} />
+          <AdminDashboardNextView model={model} regions={regions} />
         </CompanyContextProvider>
       </MemoryRouter>
     </TranslationProvider>,
@@ -82,7 +83,7 @@ describe('AdminDashboardNextView', () => {
     const items = document.querySelectorAll('[data-slot="attention-item"]')
     expect(items).toHaveLength(3)
     const hrefs = Array.from(items).map((item) => within(item as HTMLElement).getByRole('link').getAttribute('href'))
-    expect(hrefs).toEqual(['/action-plans/ap-1', '/tracking/planes/tp-1', '/surveys/s-q4'])
+    expect(hrefs).toEqual(['/action-plans/ap-1', '/tracking/planes/tp-1', '/surveys/s-q4/distribution'])
     // The lowest cell is derived from the map, not typed: Operaciones × Carga de trabajo at 2.4.
     expect(items[0].textContent).toContain('Operaciones')
     expect(items[0].textContent).toContain('2.4')
@@ -104,6 +105,53 @@ describe('AdminDashboardNextView', () => {
     cleanup()
     renderView({ ...sampleModel, isSample: false })
     expect(screen.queryByText(copy.sampleChip)).toBeNull()
+  })
+
+  it('signs the change on every trend card from the series, never from a literal', () => {
+    renderView()
+    // Pertenencia went 3.7 → 4.0, so the card says +0.3; Carga 3.0 → 3.3, also up.
+    const card = document.querySelector('[data-slot="trend-card"][data-dimension="pertenencia"]')
+    expect(card?.textContent).toContain('+0.3')
+    expect(card?.textContent).not.toContain('-0.3')
+  })
+
+  it('names, in its own section, each region that fell back to the sample — and only those', () => {
+    const live: RegionStatuses = {
+      company: { status: 'live' },
+      surveys: { status: 'live' },
+      trends: { status: 'live' },
+      map: { status: 'fallback', reason: 'failed', error: 'Service unavailable' },
+      actionPlans: { status: 'live' },
+      tracking: { status: 'off' },
+      microclimates: { status: 'fallback', reason: 'empty' },
+    }
+    renderView(sampleModel, live)
+    const notices = document.querySelectorAll('[data-slot="region-fallback"]')
+    expect(Array.from(notices).map((node) => node.getAttribute('data-region'))).toEqual(['map', 'microclimates'])
+    expect(notices[0].textContent).toBe(
+      copy.fallbackRegion.replace('{region}', copy.regionMap).replace('{error}', 'Service unavailable'),
+    )
+    expect(notices[1].textContent).toBe(copy.fallbackEmpty.replace('{region}', copy.regionMicroclimates))
+    // The map notice sits inside the map's own section.
+    expect(notices[0].closest('section')?.getAttribute('aria-labelledby')).toBe('next-by-group')
+  })
+
+  it('offers to create a plan when none covers the lowest cell, and says only what it knows about reminders', () => {
+    const attention = sampleModel.attention.map((item) =>
+      item.kind === 'lowest-cell'
+        ? { ...item, plan: null }
+        : item.kind === 'low-participation'
+          ? { ...item, remindersSent: null }
+          : item,
+    )
+    renderView({ ...sampleModel, attention })
+    const items = document.querySelectorAll('[data-slot="attention-item"]')
+    expect(items[0].textContent).toContain(copy.lowestCellNoPlanSub)
+    expect(within(items[0] as HTMLElement).getByRole('link', { name: copy.createPlan }).getAttribute('href')).toBe(
+      '/action-plans',
+    )
+    expect(items[2].textContent).not.toContain('no reminder sent yet')
+    expect(items[2].textContent).toContain('Q3 closed at 100%')
   })
 
   it('derives the headline average and its delta from the dimension series', () => {

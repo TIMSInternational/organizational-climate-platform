@@ -1,7 +1,8 @@
 import DepartmentAdminDashboardView from '../components/DepartmentAdminDashboardView'
 import EmployeeDashboardView from '../components/EmployeeDashboardView'
 import SuperAdminDashboardView from '../components/SuperAdminDashboardView'
-import AdminDashboardNextView from '../next/AdminDashboardNextView'
+import DashboardState from '../components/DashboardState'
+import AdminDashboardNextView, { AdminDashboardNextSkeleton } from '../next/AdminDashboardNextView'
 import { useAdminDashboardModel } from '../next/useAdminDashboardModel'
 import { useCompanyScope } from '../../../company-context'
 
@@ -43,9 +44,9 @@ import { useCompanyScope } from '../../../company-context'
  *
  * A CompanyAdmin — and a SuperAdmin with a tenant selected — gets the redesigned Panel
  * de Control from `../next`, which replaced `CompanyAdminDashboardView` on this route.
- * Until `useAdminDashboardModel` is wired it draws the sample in `sampleModel.ts` and
- * says so with a chip; the old view stays in the tree, unrouted, as the reference for
- * that wiring (its module comment says what to copy from it and when to delete it).
+ * `useAdminDashboardModel` composes it from the existing clients; a region whose fetch
+ * fails falls back to `sampleModel.ts`, and the page says so with a chip and a sentence.
+ * The old view stays in the tree, unrouted, as the reference for that composition.
  *
  * ## The SuperAdmin's two dashboards
  *
@@ -88,6 +89,17 @@ export default function DashboardPage() {
  * an employee's landing page must not be asking for a tenant's figures.
  */
 function CompanyDashboard({ companyId }: { companyId?: string }) {
-  const model = useAdminDashboardModel(companyId)
-  return <AdminDashboardNextView model={model} />
+  const { model, regions, loading, failed, error, reload } = useAdminDashboardModel(companyId)
+  if (model === null) {
+    // The loader settles every region on its own, so `failed` is a defect in it rather
+    // than a network outage; it still gets the shared error band and a retry.
+    return failed ? (
+      <DashboardState loading={loading} failed={failed} error={error} onRetry={reload}>
+        {null}
+      </DashboardState>
+    ) : (
+      <AdminDashboardNextSkeleton />
+    )
+  }
+  return <AdminDashboardNextView model={model} regions={regions ?? undefined} />
 }

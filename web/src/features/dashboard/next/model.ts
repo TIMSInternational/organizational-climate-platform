@@ -67,15 +67,27 @@ export interface OpenSurvey {
 }
 
 export type AttentionItem =
-  /** The lowest disclosed cell of the map; the cell itself is derived from `map`. */
-  | { kind: 'lowest-cell'; plan: PlanRef }
+  /**
+   * The lowest disclosed cell of the map; the cell itself is derived from `map`. `plan`
+   * is the action plan that already covers it, or `null` when none does — the page then
+   * offers to create one rather than naming a plan that does not exist.
+   */
+  | { kind: 'lowest-cell'; plan: PlanRef | null }
   /** A tracking plan past its due date, in a nodo. */
   | { kind: 'overdue-plan'; nodo: string; plan: PlanRef }
-  /** The open survey with few responses in; `surveyId` names `openSurvey`. */
-  | { kind: 'low-participation'; surveyId: string; remindersSent: number }
+  /**
+   * The open survey with few responses in; `surveyId` names `openSurvey`. `remindersSent`
+   * is `null` when nothing on the wire counts reminders — the page then says nothing
+   * about them, rather than "none sent", which would be a claim.
+   */
+  | { kind: 'low-participation'; surveyId: string; remindersSent: number | null }
 
 export interface AdminDashboardModel {
-  /** True while the model is the sample; the page shows a chip saying so. */
+  /**
+   * True while any region of the model is the sample — the whole of it before wiring,
+   * and since wiring only a region whose fetch failed (`RegionState`). The page shows a
+   * chip saying so, and names the region.
+   */
   isSample: boolean
   /** ISO date the model was read at; day counts are computed against it. */
   asOf: string
@@ -94,3 +106,28 @@ export interface AdminDashboardModel {
   attention: readonly AttentionItem[]
   liveMicroclimate: { id: string; name: string; responses: number; closesAt: string } | null
 }
+
+/**
+ * The regions the model is composed from — each read by one existing client, each
+ * failing on its own. `compose.ts` says which fields belong to which.
+ */
+export type RegionKey =
+  | 'company'
+  | 'surveys'
+  | 'trends'
+  | 'map'
+  | 'actionPlans'
+  | 'tracking'
+  | 'microclimates'
+
+export type RegionState =
+  /** Read from the API. */
+  | { status: 'live' }
+  /** The fetch failed; the sample stands in for this region and the page says so. */
+  | { status: 'fallback'; reason: 'failed'; error: string | null }
+  /** The fetch succeeded but the tenant has nothing to show; the sample stands in. */
+  | { status: 'fallback'; reason: 'empty' }
+  /** Not part of this deployment: no tracking service is configured. */
+  | { status: 'off' }
+
+export type RegionStatuses = Readonly<Record<RegionKey, RegionState>>

@@ -230,34 +230,41 @@ describe('DashboardPage', () => {
    * useful answer than the platform one.
    *
    * The tenant dashboard is the redesigned Panel de Control (`../next`), which replaced
-   * `CompanyAdminDashboardView` on this route. Until `useAdminDashboardModel` is wired it
-   * draws the sample and says so with a chip, and the chip is asserted on purpose: the day
-   * it goes is the day these two cases have to start answering the endpoints, and they
-   * should fail then rather than pass on a request nobody served. No role endpoint is
-   * asked at all — which is also the proof that the old view is not still mounted
-   * underneath, since it would have asked `/dashboard/company-admin`.
+   * `CompanyAdminDashboardView` on this route. `useAdminDashboardModel` composes it from
+   * the existing clients region by region; this stub answers every one of them 503, so
+   * every region falls back to the sample and the page says so — the chip, and a sentence
+   * carrying the server's own message. What THIS file proves is the dispatch: the scope
+   * the page hands the hook reaches `GET /dashboard/company-admin`. The composition and
+   * the fallback rules are `loadModel.test.ts`'s and `compose.test.ts`'s.
    */
-  it('shows a super_admin the redesigned company dashboard once they have picked a company', async () => {
+  it('shows a super_admin the redesigned company dashboard for the company they picked', async () => {
     setToken(tokenFor('super_admin', ''))
     window.localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'c9')
+    serves({ message: 'Service unavailable' }, { status: 503 })
 
     renderDashboard()
 
-    expect(await screen.findByRole('heading', { level: 1, name: nextCopy.title })).toBeTruthy()
+    expect(await screen.findByText(nextCopy.sampleChip)).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: nextCopy.title })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 2, name: nextCopy.whereHeading })).toBeTruthy()
-    expect(screen.getByText(nextCopy.sampleChip)).toBeTruthy()
-    expect(dashboardRequests()).toEqual([])
+    expect(screen.getAllByText(/Service unavailable/).length).toBeGreaterThan(0)
+    expect(dashboardRequests().filter((url) => url.includes('/dashboard/company-admin'))).toEqual([
+      expect.stringContaining('/dashboard/company-admin?companyId=c9'),
+    ])
   })
 
-  it('shows a company_admin the redesigned company dashboard, marked as a sample', async () => {
+  it('shows a company_admin the redesigned company dashboard, and sends no company id', async () => {
     setToken(tokenFor('company_admin', 'c1'))
+    serves({ message: 'Service unavailable' }, { status: 503 })
 
     renderDashboard()
 
-    expect(await screen.findByRole('heading', { level: 1, name: nextCopy.title })).toBeTruthy()
+    expect(await screen.findByText(nextCopy.sampleChip)).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: nextCopy.title })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 2, name: nextCopy.whereHeading })).toBeTruthy()
-    expect(screen.getByText(nextCopy.sampleChip)).toBeTruthy()
-    expect(dashboardRequests()).toEqual([])
+    const company = dashboardRequests().filter((url) => url.includes('/dashboard/company-admin'))
+    expect(company).toHaveLength(1)
+    expect(company[0]).not.toContain('companyId')
   })
 
   /**
