@@ -285,10 +285,12 @@ export function questionFromLibrary(
  * The content language a fresh wizard starts with: the reader's own UI locale.
  *
  * Not the company's `Settings.Language`, and the reasons are measured rather than
- * preferred. Nothing returns it: of the five routes `CompanyEndpoints` maps, the only
- * one that touches settings is `PUT /{id}/settings`, and `GET /{id}` is SuperAdmin-only
- * with a `CompanyDetail` that carries no settings -- which is why `CompanyDetailPage`
- * reads the record by sending `{}` to that `PUT`, "a read dressed as a write". The
+ * preferred. No `GET` returns it: of the five routes `CompanyEndpoints` maps, the only
+ * one that returns the settings is `PUT /{id}/settings` -- a write, which any admin
+ * may call for their own company -- and `GET /{id}` is SuperAdmin-only with a
+ * `CompanyDetail` that carries no settings. So the only read is the empty-body `PUT`:
+ * `CompanyDetailPage` sends `{}` to it, "a read dressed as a write", and a wizard
+ * doing the same would perform a write on every open. The
  * default is `"en"` at both layers (`Company.cs`, `Language = "en"`; the
  * `settings_language` column is required with a default of `'en'`), so a company
  * nobody has configured is indistinguishable, in the database and on the wire, from
