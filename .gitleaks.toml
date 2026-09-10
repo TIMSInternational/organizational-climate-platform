@@ -36,6 +36,11 @@ paths = [
 ]
 
 regexes = [
+  # Shot fixtures shaped from the demo tenant carry question and survey ids as JSON
+  # "key" fields; gitleaks' generic-api-key rule reads a UUID after `key` as a secret.
+  # A bare UUID is an identifier, never a credential here (our secrets are JWTs and
+  # AKIA… keys). Anchored to the whole matched value, nothing wider.
+  '''^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$''',
   # docker-compose / appsettings.Development.json local Postgres. Not reachable from
   # outside a developer's machine and identical in every checkout.
   '''Password=postgres''',
