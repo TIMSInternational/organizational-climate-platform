@@ -284,7 +284,7 @@ export default function QuestionLibraryNextPage() {
                   </h2>
                   <Chip
                     tone="neutral"
-                    icon={selected.category.companyId === null ? <Lock /> : undefined}
+                    icon={selected.category.companyId === null ? <Lock className="size-3" /> : undefined}
                     label={selected.category.companyId === null ? t('questionLibrary.next.global') : company}
                   />
                 </div>
@@ -552,7 +552,7 @@ function ItemRow({ item, primary, secondary, owner, action, onOpen }: { item: Qu
         <div className="mt-0.5 text-2xs text-fg-tertiary">{meta}</div>
       </td>
       <td className="px-3 py-2.5 align-top">
-        <Chip tone="neutral" icon={item.companyId === null ? <Lock /> : undefined} label={owner} />
+        <Chip tone="neutral" icon={item.companyId === null ? <Lock className="size-3" /> : undefined} label={owner} />
       </td>
       <td className="px-3 py-2.5 text-right align-top">
         <Button type="button" size="sm" variant="ghost" onClick={onOpen}>

@@ -59,16 +59,14 @@ export default function SurveyQuestionsEditorPage() {
   const caps = useViewerCapabilities()
   const navigate = useNavigate()
   const { state, reload } = useSurveyQuestionsModel(id)
-  const [questions, setQuestions] = useState<AuthoringQuestion[]>([])
+  // null until the author changes something: the list on screen is the payload's until then,
+  // so the first render already counts the real questions.
+  const [edited, setEdited] = useState<AuthoringQuestion[] | null>(null)
   const [openIndex, setOpenIndex] = useState<number | null>(0)
   const [previewLocale, setPreviewLocale] = useState<Locale>(locale)
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (state.status === 'ready') setQuestions(state.authoring.questions)
-  }, [state])
 
   if (state.status === 'loading') {
     return (
@@ -92,10 +90,14 @@ export default function SurveyQuestionsEditorPage() {
   }
 
   const { authoring, detail } = state
+  const questions = edited ?? authoring.questions
+  const setQuestions = (change: (current: AuthoringQuestion[]) => AuthoringQuestion[]) =>
+    setEdited((previous) => change(previous ?? authoring.questions))
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const editable = isEditable(authoring.status, detail.responseCount) && caps.canAuthorSurveys
   const locked = !isEditable(authoring.status, detail.responseCount)
-  const locales = authoring.locales
+  // The reader's language first, as the board orders ES · EN for a Spanish reader.
+  const locales = [...authoring.locales].sort((x, y) => (x === locale ? -1 : y === locale ? 1 : 0))
   const summary = summarise(questions, locales)
   const title = detail.title ?? t('surveys.untitled')
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.authoring.${key}`, vars)
@@ -284,7 +286,7 @@ export default function SurveyQuestionsEditorPage() {
                     </div>
                     {editable ? (
                       <label className="inline-flex shrink-0 items-center gap-2 text-sm text-fg-secondary">
-                        <Switch checked={question.required} onCheckedChange={(value) => update(index, { required: value === true })} />
+                        <Switch className="data-[state=checked]:bg-chip-good-ink" checked={question.required} onCheckedChange={(value) => update(index, { required: value === true })} />
                         {copy('required')}
                       </label>
                     ) : (
@@ -342,11 +344,11 @@ export default function SurveyQuestionsEditorPage() {
                         ))}
                       <div className="flex flex-wrap items-center gap-4 border-t border-line-light pt-3">
                         <label className="inline-flex items-center gap-2 text-sm text-fg-secondary">
-                          <Switch checked={question.required} onCheckedChange={(value) => update(index, { required: value === true })} />
+                          <Switch className="data-[state=checked]:bg-chip-good-ink" checked={question.required} onCheckedChange={(value) => update(index, { required: value === true })} />
                           {copy('answerRequired')}
                         </label>
                         <label className="inline-flex items-center gap-2 text-sm text-fg-secondary">
-                          <Switch checked={question.commentRequired} onCheckedChange={(value) => update(index, { commentRequired: value === true })} />
+                          <Switch className="data-[state=checked]:bg-chip-good-ink" checked={question.commentRequired} onCheckedChange={(value) => update(index, { commentRequired: value === true })} />
                           {copy('commentRequired')}
                         </label>
                         <span className="ml-auto flex gap-2">
@@ -425,7 +427,7 @@ export default function SurveyQuestionsEditorPage() {
                 {copy('preview')}
               </h2>
               <div className="flex items-center gap-2">
-                {locked && <Chip tone="neutral" icon={<Lock />} label={copy('readOnly')} />}
+                {locked && <Chip tone="neutral" icon={<Lock className="size-3" />} label={copy('readOnly')} />}
                 {locales.length > 1 && (
                   <Segmented
                     label={copy('previewLanguage')}

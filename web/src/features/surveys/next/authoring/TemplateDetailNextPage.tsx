@@ -88,7 +88,8 @@ export default function TemplateDetailNextPage() {
   }
 
   const { primary, byLocale } = state
-  const locales = (Object.keys(byLocale) as Locale[]).sort()
+  // The reader's language first, as the board orders Español · Inglés for a Spanish reader.
+  const locales = (Object.keys(byLocale) as Locale[]).sort((x, y) => (x === locale ? -1 : y === locale ? 1 : 0))
   const firstLocale = byLocale[first] ? first : primary.resolvedLocale as Locale
   const secondLocale = locales.find((l) => l !== firstLocale) ?? null
   const textOf = (loc: Locale | null, questionId: string) => (loc ? byLocale[loc]?.questions.find((q) => q.id === questionId)?.text ?? null : null)
@@ -218,7 +219,7 @@ export default function TemplateDetailNextPage() {
               <dd className="m-0 flex flex-col items-start gap-1">
                 <span className="flex flex-wrap gap-1.5">
                   {locales.map((l) => (
-                    <Chip key={l} tone="good" icon={<Check />} label={copy(`language.${l}`)} />
+                    <Chip key={l} tone="good" icon={<Check className="size-3" />} label={copy(`language.${l}`)} />
                   ))}
                 </span>
                 <span className="text-xs text-fg-secondary">{copy(locales.length === 2 ? 'allInBoth' : 'allInOne', { count: n })}</span>
