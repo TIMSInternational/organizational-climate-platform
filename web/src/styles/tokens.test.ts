@@ -6,6 +6,7 @@ import themeCss from './theme.css?raw'
 import indexCss from '../index.css?raw'
 import adminThemeSource from '../theme/adminTheme.ts?raw'
 import respondShellSource from '../components/layout/RespondShell.tsx?raw'
+import sidebarBrandSource from '../components/layout/SidebarBrand.tsx?raw'
 
 /**
  * The token layer is a port, not a design. These tests pin the two things a
@@ -306,5 +307,26 @@ describe('hairlines in the dark palette', () => {
     // vanished in dark.
     expect(darkToken('--admin-border-light')).not.toBe(darkToken('--admin-bg-card'))
     expect(darkToken('--admin-border-light')).not.toBe(darkToken('--admin-bg-panel'))
+  })
+})
+
+describe('the canvas shell', () => {
+  it('draws the rail at the canvas width: 220px of rows inside 8px gutters', () => {
+    // Every artboard: `<aside style="width: 220px; padding: 12px 8px">`, content-box.
+    expect(token('--admin-size-sidebar')).toBe('236px')
+  })
+
+  it('paints the at-target step in the canvas lavender, not a neutral grey', () => {
+    // Dashboard.png (Ingeniería 3,7) and ClimateTrends.png (Confianza Q3 3,7) sample
+    // rgb(207,205,217). The map, the trends table, the "en la meta" chip and the legend
+    // swatch all read this one token.
+    expect(token('--admin-chart-div-mid').toLowerCase()).toBe('#cfcdd9')
+  })
+
+  it('sets the wordmark in the canvas two tones, the tail in the muted lavender', () => {
+    expect(token('--admin-brand-lead').toLowerCase()).toBe('#e1ddee')
+    expect(token('--admin-brand-tail').toLowerCase()).toBe('#a69bc9')
+    expect(sidebarBrandSource).toContain("color: 'var(--admin-brand-lead)'")
+    expect(sidebarBrandSource).toContain("color: 'var(--admin-brand-tail)'")
   })
 })

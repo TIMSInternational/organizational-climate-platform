@@ -163,11 +163,11 @@ export function PageTopBar({
     // `.ptb`: 16px of pad, then the hairline, then 16px before the KPI row.
     // `pb-4` is the canvas's 16px under the header (every artboard: `padding-bottom:
     // 16px`), and the text column's `gap-1.5` its 6px between eyebrow, title and
-    // description; `mb-panel` is the 16px
-    // `--admin-size-panel-padding`.
+    // description; `mb-section` is the canvas's 24px under the rule (SurveysList.dc.html and
+    // ClimateTrends.dc.html set the header inside `flex-direction: column; gap: 24px`).
     <div
       data-slot="page-top-bar"
-      className="mb-panel flex flex-col gap-inline border-b border-line-light pb-4"
+      className="mb-section flex flex-col gap-inline border-b border-line-light pb-4"
     >
       {breadcrumbs && breadcrumbs.length > 0 && (
         <Breadcrumb aria-label={breadcrumbLabel ?? t('shell.breadcrumb')}>

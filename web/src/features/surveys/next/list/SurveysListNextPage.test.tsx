@@ -151,6 +151,9 @@ describe('SurveysListNextPage', () => {
     expect(select.className).toContain('appearance-none')
     const chevron = select.closest('label')?.querySelector('svg[data-slot="type-chevron"]')
     expect(chevron?.getAttribute('aria-hidden')).toBe('true')
+    // The label ink, the one that clears AA here (respondContrast.test.ts bans the tertiary).
+    const ink = (chevron?.getAttribute('class') ?? '').split(/\s+/).filter((name) => name.startsWith('text-fg-'))
+    expect(ink).toEqual(['text-fg-label'])
   })
 
   it('lays each table on the canvas grid from xl: its fixed columns carry the 12px gap, and every cell after the first starts at its column edge', async () => {

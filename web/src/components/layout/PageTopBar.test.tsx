@@ -166,11 +166,13 @@ describe('PageTopBar', () => {
       expect(classes).toContain('pb-4')
     })
 
-    it('leaves 16px between the rule and whatever the page puts next', () => {
+    it('leaves 24px between the rule and whatever the page puts next, as every artboard does', () => {
       const { container } = renderTopBar({ title: 'Companies' })
-      // `mb-panel` is --admin-size-panel-padding, 16px. It was `mb-section`
-      // (24px) with a `<Separator />` inside before UI-0.
-      expect(topBar(container).className.split(/\s+/)).toContain('mb-panel')
+      // `mb-section` is --admin-size-section-gap, 24px: the artboards lay the header and the
+      // first section in a `gap: 24px` column (SurveysList.dc.html, ClimateTrends.dc.html).
+      const classes = topBar(container).className.split(/\s+/)
+      expect(classes).toContain('mb-section')
+      expect(classes).not.toContain('mb-panel')
     })
 
     it('draws the rule itself rather than delegating to a Separator element', () => {

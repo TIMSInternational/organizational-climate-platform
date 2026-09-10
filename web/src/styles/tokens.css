@@ -147,6 +147,11 @@
 
   --admin-size-sidebar: 236px; /* the canvas's rail: 220px of rows inside 8px gutters (`<aside style="width: 220px; padding: 12px 8px">`, content-box, in every artboard) */
   --admin-size-sidebar-collapsed: 52px;
+  /* The wordmark on the rail, as every artboard draws it: `CLIMA` in #e1ddee, `TE` in the
+     muted lavender #a69bc9 (`<span style="color: #a69bc9;">TE</span>`). The rail is the same
+     dark ground in both themes, so one pair serves both. */
+  --admin-brand-lead: #e1ddee;
+  --admin-brand-tail: #a69bc9;
   --admin-size-content-max: 1280px;
   /* The block a page-level empty state reserves for itself, so its message centres
      in the screen rather than clinging to the heading with the rest of the card
@@ -601,7 +606,7 @@
      be a gray and not a hue (palette.test.ts, "r == g == b"). */
   --admin-chart-div-neg-2: #c62828;
   --admin-chart-div-neg-1: #f5bcbc;
-  --admin-chart-div-mid: #cfcfcf;
+  --admin-chart-div-mid: #cfcdd9; /* the canvas's "en la meta" lavender: every artboard paints the at-target step rgb(207,205,217) (Dashboard.png, Ingeniería 3,7; ClimateTrends.png, Confianza Q3 3,7) */
   --admin-chart-div-pos-1: #b6dff5;
   --admin-chart-div-pos-2: #5fb3e6;
 
