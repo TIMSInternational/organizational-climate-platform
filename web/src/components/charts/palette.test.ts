@@ -117,12 +117,22 @@ describe('categorical series palette', () => {
 describe('sequential and diverging scales', () => {
   it('has a neutral gray diverging midpoint, not a hue', () => {
     // A hue at the midpoint reads as a third category rather than as "neither".
-    // Gray means r == g == b.
+    // Neutral means no channel strays more than 16/255 from the others: the canvas's
+    // grey, #cfcdd9, spreads 12 — the blue bias every light neutral in this palette
+    // carries — while a tint that could read as a category spreads far more.
+    const spread = (hex: string) => {
+      const [, r, g, b] = /^#(\w{2})(\w{2})(\w{2})$/.exec(hex) ?? []
+      const channels = [r, g, b].map((channel) => parseInt(channel, 16))
+      return Math.max(...channels) - Math.min(...channels)
+    }
+    // Not vacuous: a pale amber and a pale green fail it, a true gray passes.
+    expect(spread('#e0d080')).toBeGreaterThan(16)
+    expect(spread('#b6e3b6')).toBeGreaterThan(16)
+    expect(spread('#a1a1a1')).toBe(0)
     for (const read of [light, dark]) {
       const mid = read('--admin-chart-div-mid')
-      const [, r, g, b] = /^#(\w{2})(\w{2})(\w{2})$/.exec(mid) ?? []
-      expect(r).toBe(g)
-      expect(g).toBe(b)
+      expect(mid).toMatch(/^#[0-9a-fA-F]{6}$/)
+      expect(spread(mid)).toBeLessThanOrEqual(16)
     }
   })
 

@@ -12,13 +12,15 @@ import { authFetch } from '../../../api/authFetch'
  * bounded by the instrument and the org chart and is the reason the *raw* format on the server
  * side is the streaming one.
  *
- * ## Why the PDF and not the CSV
+ * ## The PDF, and the server's CSV beside the page's own
  *
- * The server serves both, and the page deliberately keeps its own CSV
- * (`surveyResultsCsv.ts`): that one writes translated headings for the payload the reader is
+ * The server serves both (`SurveyExportEndpoints.cs:56-62`), and the page keeps its own CSVs
+ * (`surveyResultsCsv.ts`): those write translated headings for the payload the reader is
  * looking at, while the server's writes machine-readable reason codes in a single long-format
  * document. They are different artefacts for different readers, and neither re-derives a
  * suppression decision. There was no PDF at all before #122 — that is the gap this closes.
+ * The server's CSV is offered too, behind the results header's overflow menu, for the reader
+ * who wants the machine-readable one.
  */
 function exportUrl(baseUrl: string, surveyId: string, format: string, lang?: string): string {
   // `lang` last and optional, per the house rule a prior bug taught: an optional `baseUrl`
@@ -46,4 +48,23 @@ export async function getSurveyResultsPdf(
 /** The download name, matching what the server puts in `Content-Disposition`. */
 export function surveyResultsPdfFileName(surveyId: string): string {
   return `survey-${surveyId}-results.pdf`
+}
+
+/**
+ * The server's long-format CSV (`GET /surveys/{id}/export/csv`) — one row per reading, with
+ * reason codes where the page prints words. Same authorized `fetch` + `Blob` route as the
+ * PDF, for the same reason: an `<a href>` would send cookies, not the bearer header.
+ */
+export async function getSurveyResultsCsv(
+  baseUrl: string,
+  surveyId: string,
+  lang?: string,
+): Promise<Blob> {
+  const response = await authFetch(exportUrl(baseUrl, surveyId, 'csv', lang))
+  return response.blob()
+}
+
+/** The download name, matching `SurveyExport.CsvFileName` on the server. */
+export function surveyResultsCsvFileName(surveyId: string): string {
+  return `survey-${surveyId}-results.csv`
 }

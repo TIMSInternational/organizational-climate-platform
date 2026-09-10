@@ -371,8 +371,8 @@ describe('MicroclimateLivePage', () => {
     // happy-dom has no layout, so this cannot check that the row is unbroken --
     // that was measured in Chromium. What it CAN pin is the thing that made the
     // row break: a viewport query standing in for a width the viewport does not
-    // determine. `AdminLayout` renders a fixed 220px rail from `md` upward
-    // (`hidden md:flex`, `--admin-size-sidebar: 220px`), so widening the window
+    // determine. `AdminLayout` renders a fixed 236px rail from `md` upward
+    // (`hidden md:flex`, `--admin-size-sidebar: 236px`), so widening the window
     // from 700px to 768px makes this section NARROWER, and any `sm:`/`md:`/`lg:`
     // gate on it is wrong in that direction by construction.
     renderPage()

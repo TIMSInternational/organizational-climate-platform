@@ -294,3 +294,10 @@ describe('class detection', () => {
     expect(indexCss).toMatch(/@source not '\.\/\*\*\/\*\.test\.\{ts,tsx\}'/)
   })
 })
+
+describe('the shell rail', () => {
+  it('is the canvas rail: a 220px column inside 8px gutters, 236px in all', () => {
+    // Every artboard of 10 Sep draws it so; at 220px "Cerrar sesión" was cut.
+    expect(token('--admin-size-sidebar')).toBe('236px')
+  })
+})

@@ -68,9 +68,27 @@ export interface DistributionStripProps {
    * Already-translated captions for the two ends, printed under the strip —
    * e.g. "1 · Strongly disagree". The caller owns the composition because the
    * anchor words are survey content, not catalogue copy.
+   *
+   * Both optional, together: the SurveyResults artboard stacks two strips of the
+   * same question (the group's, the company's) over ONE shared axis, so a caller
+   * drawing that pair leaves both off and prints the axis once itself. One end
+   * without the other is the unlabelled-axis defect this row exists to prevent,
+   * so the pair is all-or-nothing.
    */
-  minEnd: string
-  maxEnd: string
+  minEnd?: string
+  maxEnd?: string
+  /**
+   * What the number inside a segment is: its `count` (default), or its share of
+   * the strip as a whole percent — the SurveyResults drill-in reads "20 · 40 ·
+   * 25 · 10 · 5", which is the form a reader compares two strips in.
+   */
+  labels?: 'count' | 'share'
+  /**
+   * `compact` is the artboard's 18px strip with no gaps between segments and a
+   * 3px radius — the drill-in's form, where the strip sits under a heading and
+   * the reading. `default` keeps the 24px strip the question list draws.
+   */
+  size?: 'default' | 'compact'
   /** BCP-47 locale for the counts printed inside the segments. */
   locale?: string
   className?: string
@@ -91,6 +109,8 @@ export default function DistributionStrip({
   max,
   minEnd,
   maxEnd,
+  labels = 'count',
+  size = 'default',
   locale,
   className,
 }: DistributionStripProps) {
@@ -102,10 +122,16 @@ export default function DistributionStrip({
   if (total === 0 || !(max > min)) return null
 
   const midpoint = (min + max) / 2
+  const compact = size === 'compact'
 
   return (
     <div className={cn('flex flex-col gap-1', className)}>
-      <div className="flex h-6 w-full gap-0.5 overflow-hidden rounded-md">
+      <div
+        className={cn(
+          'flex w-full overflow-hidden',
+          compact ? 'h-4.5 rounded-sm' : 'h-6 gap-0.5 rounded-md',
+        )}
+      >
         {segments.map((segment) => {
           if (segment.count === 0) return null
           const { fill, ink } = divergingPair((segment.position - midpoint) / (max - min))
@@ -122,19 +148,28 @@ export default function DistributionStrip({
               // charts/ token discipline forbids arbitrary Tailwind values — and
               // rightly: this is a visibility floor, not a design token.
               style={{ flexGrow: segment.count, minWidth: 3, backgroundColor: fill, color: ink }}
-              className="flex items-center justify-center overflow-hidden font-mono text-2xs font-semibold tabular-nums"
+              className={cn(
+                'flex items-center justify-center overflow-hidden font-mono text-2xs tabular-nums',
+                !compact && 'font-semibold',
+              )}
             >
-              {share >= LABEL_MIN_SHARE && formatMetric(segment.count, { kind: 'number' }, locale)}
+              {share >= LABEL_MIN_SHARE &&
+                (labels === 'share'
+                  ? formatMetric(Math.round(share * 100), { kind: 'number' }, locale)
+                  : formatMetric(segment.count, { kind: 'number' }, locale))}
             </span>
           )
         })}
       </div>
-      {/* The axis in words. Both ends always render — an unlabelled axis is the
-          defect the walk measured (bare 1-5 with no words anywhere). */}
-      <div className="flex justify-between gap-2 text-xs text-fg-secondary">
-        <span>{minEnd}</span>
-        <span>{maxEnd}</span>
-      </div>
+      {/* The axis in words. Both ends render whenever the caller gave them — an
+          unlabelled axis is the defect the walk measured (bare 1-5 with no words
+          anywhere); a caller stacking two strips over one axis prints it once. */}
+      {minEnd !== undefined && maxEnd !== undefined && (
+        <div className="flex justify-between gap-2 text-xs text-fg-secondary">
+          <span>{minEnd}</span>
+          <span>{maxEnd}</span>
+        </div>
+      )}
     </div>
   )
 }

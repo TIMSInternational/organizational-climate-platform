@@ -107,8 +107,9 @@ export const DIVERGING_COLORS = [
  * value inside the fill — the climate map does.
  *
  * These are `var()` references rather than literals precisely because the
- * assignment inverts between the themes: the light ramp needs
- * light/dark/dark/dark/light ink and the dark ramp needs dark/light/light/light/dark.
+ * assignment inverts between the themes on four of the five steps: the light
+ * ramp needs light/dark/dark/dark/dark ink (its far-above tint is a mid blue
+ * only a dark ink clears) and the dark ramp needs dark/light/light/light/dark.
  * A literal array would be correct in one theme and unreadable in the other, and
  * that is not something review catches by eye. `tokens.css` declares both, and
  * `styles/divInkContrast.test.ts` re-measures every pair.
