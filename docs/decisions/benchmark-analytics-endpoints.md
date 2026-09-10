@@ -200,6 +200,43 @@ same terms `prior_period_status` got one in #89. Until #90 nothing wrote anythin
 adds two. The constraint is built from `BenchmarkValidationStatuses.All` rather than a literal
 list, so the constraint and the constants cannot drift apart.
 
+### An unscored benchmark has no score
+
+`quality_score` has been `NOT NULL DEFAULT 0` since the table was created, so a benchmark an
+administrator had created and not yet validated held the same stored value as one the rule had
+scored 0 and failed — and the benchmarks page printed "Puntaje de calidad 0,00" over both, a
+failing grade on a row whose own detail panel said "not assessed yet" (the demo script of
+10 September names the seeded reference this happened to). The two are not the same fact: the
+rule scores a benchmark that measures nothing at exactly 0 (the short circuit above), so 0 is a
+verdict it really hands out, and only a score nobody computed is an absence.
+
+The row already knows which it is. `pending` is written by exactly one path — `POST
+/admin/benchmarks` — and the only other writers of `validation_status`, `validate` and
+`import`, store what the rule returned, which is never `pending`. So `pending` means "the rule
+has not run" and nothing else, and a row cannot return to it. That makes the null derivable at
+read time, with **no schema change**: `BenchmarkQuality.ReportedScore(status, stored)` is null
+for a `pending` row and the stored number otherwise, and every payload that carries a score
+derives it there, so the list, the detail, `validate` and `categories` cannot disagree about
+which zeros are real. The column keeps its default; only the API stops repeating it.
+
+Three consequences for readers of the payloads:
+
+- **A computed zero is still `0`.** Only a `pending` row's score is null. The web renders null as
+  a dash with a spoken "not scored yet" label (`QualityScoreReading`) and 0 as `0,00`.
+- **`categories[].averageQualityScore` is the mean over scored rows**, and null for a category
+  in which nothing has been scored. Before this, three verified rows at 90 beside two fresh ones
+  charted at 54, and a category nobody had validated charted a confident 0.
+- **`validate` reports `previousQualityScore: null`** on its first run: there was no previous
+  score, and 0 would have said the rule had once failed the benchmark.
+
+**Open — owner Federico.** Whether the column itself should become nullable, with a check
+constraint tying `quality_score IS NULL` to `validation_status = 'pending'` on the terms of the
+other two constraints. It would make the stored row say what the API now says, at the cost of a
+migration (`ALTER COLUMN ... DROP NOT NULL`, an `UPDATE` of every `pending` row, and the reverse
+on the way down). The derivation above does not need it, and a migration the morning after a
+production deploy, for a display distinction the status already carries, is a ruling rather than
+overnight work.
+
 ---
 
 ## What these routes tell an unauthorized caller

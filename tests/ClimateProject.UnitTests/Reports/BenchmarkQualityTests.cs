@@ -243,4 +243,47 @@ public class BenchmarkQualityTests
             Assert.Contains(assessment.Status, BenchmarkValidationStatuses.All);
         }
     }
+    /// <summary>
+    /// The reading half of the rule: a <c>pending</c> row has no score, and every other
+    /// status reports the stored number unchanged -- zero included.
+    /// </summary>
+    /// <remarks>
+    /// <c>quality_score</c> is <c>NOT NULL DEFAULT 0</c>, so the column alone cannot tell
+    /// "never assessed" from "assessed and scored 0" -- and <see cref="BenchmarkQuality.Assess"/>
+    /// scores an empty benchmark at exactly 0 (the short circuit), so 0 IS a verdict the rule
+    /// hands out. The distinction has to come from the status. These pin both halves; the
+    /// integration suite pins that the list, the detail, <c>validate</c> and
+    /// <c>categories</c> all go through it.
+    /// </remarks>
+    [Fact]
+    public void A_pending_benchmark_reports_no_score_at_all()
+    {
+        Assert.Null(BenchmarkQuality.ReportedScore(BenchmarkValidationStatuses.Pending, 0d));
+        // Whatever the column happens to hold: the status is the fact, not the number.
+        Assert.Null(BenchmarkQuality.ReportedScore(BenchmarkValidationStatuses.Pending, 76.7d));
+    }
+
+    /// <summary>
+    /// A benchmark the rule scored 0 -- one that measures nothing -- reports 0, not absence.
+    /// The one case the column default and a real verdict coincide, taken from
+    /// <see cref="BenchmarkQuality.Assess"/> itself rather than written as a literal.
+    /// </summary>
+    [Fact]
+    public void A_computed_zero_is_reported_as_zero_not_as_absence()
+    {
+        var failed = BenchmarkQuality.Assess([], "manufacturing", "201-500", "Costa Rica");
+
+        Assert.Equal(0d, failed.Score);
+        Assert.Equal(BenchmarkValidationStatuses.Failed, failed.Status);
+        Assert.Equal(0d, BenchmarkQuality.ReportedScore(failed.Status, failed.Score));
+    }
+
+    [Theory]
+    [InlineData(BenchmarkValidationStatuses.Verified, 76.7d)]
+    [InlineData(BenchmarkValidationStatuses.NeedsReview, 51.7d)]
+    [InlineData(BenchmarkValidationStatuses.Failed, 36.7d)]
+    public void Every_assessed_status_reports_the_stored_score_unchanged(string status, double stored)
+    {
+        Assert.Equal(stored, BenchmarkQuality.ReportedScore(status, stored));
+    }
 }

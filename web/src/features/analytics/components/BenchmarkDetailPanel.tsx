@@ -1,8 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import type { AddBenchmarkMetricInput, Benchmark, UpdateBenchmarkInput } from '../api/benchmarks'
 import { isGlobalBenchmark } from '../benchmarkScope'
-import { QUALITY_SCORE_FORMAT } from '../benchmarkReadings'
 import BenchmarkForm, { type BenchmarkFormValues } from './BenchmarkForm'
+import QualityScoreReading from './QualityScoreReading'
 import { useTranslation } from '../../../i18n'
 import { Badge, Button, Table } from '../../../components/ui'
 import { formatMetric } from '../../../components/charts'
@@ -50,10 +50,12 @@ export interface BenchmarkDetailPanelProps {
  * sans-face metrics table one click later is the same measurement in two different
  * voices. The metric *name* and the unit stay sans — they are words, not readings.
  *
- * `QUALITY_SCORE_FORMAT` fixes the score at two decimals rather than letting
- * `formatMetric`'s default cap it at one. The default printed a stored 0.92 as
- * "0.9", losing a digit off a number this panel exists to report, and left 0.9 and
- * 0.92 unable to line up in the list column beside it.
+ * The quality score goes through `QualityScoreReading`, which fixes it at two decimals
+ * rather than letting `formatMetric`'s default cap it at one — the default printed a
+ * stored 0.92 as "0.9", losing a digit off a number this panel exists to report, and
+ * left 0.9 and 0.92 unable to line up in the list column beside it — and which renders
+ * a score nobody has computed as a labelled dash, so this cell and the "not assessed
+ * yet" status two cells to its left cannot contradict each other.
  *
  * ## When the caller may not write, the panel says why
  *
@@ -110,7 +112,7 @@ export default function BenchmarkDetailPanel({ benchmark, canWrite, onUpdate, on
   }
 
   /** Label over value. The label is a caption; the value is the record. */
-  function attribute(label: string, value: string, reading = false) {
+  function attribute(label: string, value: ReactNode, reading = false) {
     return (
       <div>
         <dt className="text-2xs font-semibold uppercase tracking-label text-fg-tertiary">
@@ -163,7 +165,7 @@ export default function BenchmarkDetailPanel({ benchmark, canWrite, onUpdate, on
         {attribute(t('benchmarks.region'), benchmark.region ?? t('benchmarks.notRecorded'))}
         {attribute(
           t('benchmarks.qualityScore'),
-          formatMetric(benchmark.qualityScore, QUALITY_SCORE_FORMAT, locale),
+          <QualityScoreReading value={benchmark.qualityScore} />,
           true,
         )}
       </dl>
