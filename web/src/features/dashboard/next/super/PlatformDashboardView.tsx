@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { AlertCircle, ArrowRight, Building2, Check, Clock, FileText, Mail, Plus } from 'lucide-react'
+import { AlertCircle, ArrowRight, Check, Clock, Copy, FileText, Mail, Plus } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { KpiTile } from '../../../../components/charts'
@@ -501,7 +501,7 @@ function AttentionRow({ item, onOpen }: { item: PlatformAttention; onOpen: (comp
       return (
         <>
           <IconBox>
-            <Building2 />
+            <Copy />
           </IconBox>
           <AttentionText
             lead={item.companyName}

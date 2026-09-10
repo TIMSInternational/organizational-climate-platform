@@ -1942,7 +1942,8 @@
           "readSurveys": "Surveys",
           "readPlans": "Action plans",
           "readPlansNoneOverdue": "{open} open · none overdue",
-          "readPlansOverdue": "{open} open · {overdue} overdue"
+          "readPlansOverdue": "{open} open · {overdue} overdue",
+          "selectCountry": "Choose a country"
         },
         "brand": {
           "heading": "Brand",
@@ -2146,7 +2147,8 @@
           "quality": "quality {score}",
           "active": "Active",
           "inactive": "Inactive",
-          "emptyGlobalOneCompared": "The platform's only benchmark is global: {name}, with a quality score of {score}. It is not compared with this company ({profile}), so it is not shown here."
+          "emptyGlobalOneCompared": "The platform's only benchmark is global: {name}, with a quality score of {score}. It is not compared with this company ({profile}), so it is not shown here.",
+          "cohort": "{sector}, {from} to {to} {unit}"
         },
         "insights": {
           "meta": "about the closed surveys",

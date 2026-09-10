@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { BookOpen, CircleAlert, Copy, Library } from 'lucide-react'
 import { readFileSync, globSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import {
@@ -647,5 +648,18 @@ describe('withUnreadBadge', () => {
         ['/notifications', '2'],
       ])
     }
+  })
+})
+
+describe('the super administrator’s rail glyphs', () => {
+  it('draws Empresas, Estado del sistema, Banco and Biblioteca with the canvas’s glyphs (SuperDashboard.dc.html:51,63-65)', () => {
+    const rows = buildNavSections('super_admin', 'company-1').flatMap((section) =>
+      section.items.flatMap((item) => [item, ...(item.sub ?? [])]),
+    )
+    const icon = (key: string) => rows.find((row) => row.labelKey === key)?.icon
+    expect(icon('navigation.companies')).toBe(Copy)
+    expect(icon('navigation.systemHealth')).toBe(CircleAlert)
+    expect(icon('navigation.questionBank')).toBe(BookOpen)
+    expect(icon('navigation.questionLibrary')).toBe(Library)
   })
 })

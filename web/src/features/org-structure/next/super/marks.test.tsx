@@ -1,7 +1,7 @@
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Switch } from '../../../../components/ui'
-import { CanvasChip, CanvasSelect, MiniBar } from './parts'
+import { CanvasChip, CanvasSelect, MiniBar, Note } from './parts'
 
 /**
  * Two marks the fidelity refuter found missing on screen while every behaviour test was
@@ -49,5 +49,25 @@ describe('the canvas’s select and chip', () => {
     const [good, neutral] = [...container.querySelectorAll('[data-slot="chip"]')] as HTMLElement[]
     expect(good.className.split(/\s+/)).toContain('border-chip-good-ink/20')
     expect(neutral.className.split(/\s+/)).toContain('border-line-default')
+  })
+})
+
+describe('the canvas’s type on chips and notes', () => {
+  it('sets a chip at the canvas’s .chip weight (500), not semibold', () => {
+    const { container } = render(<CanvasChip tone="neutral" label="Básico" />)
+    const chip = container.querySelector('[data-slot="chip"]') as HTMLElement
+    expect(chip.className.split(/\s+/)).toContain('font-medium')
+    expect(chip.className.split(/\s+/)).not.toContain('font-semibold')
+  })
+
+  it('sets a note’s body at the canvas’s 12px (text-sm), not 11px', () => {
+    const { container } = render(
+      <Note icon={null} lead="Idioma">
+        texto
+      </Note>,
+    )
+    const note = container.querySelector('[data-slot="canvas-note"]') as HTMLElement
+    expect(note.className.split(/\s+/)).toContain('text-sm')
+    expect(note.className.split(/\s+/)).not.toContain('text-xs')
   })
 })

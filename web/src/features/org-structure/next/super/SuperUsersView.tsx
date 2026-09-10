@@ -550,7 +550,7 @@ function EditPerson({
           <Input id={ids.name} value={name} onChange={(event) => setName(event.target.value)} className="w-full" />
         </Field>
         <Field fieldLabel={t('superadmin.next.users.email')} htmlFor={ids.email} helper={t('superadmin.next.users.emailHelper')}>
-          <div className="flex h-control-lg items-center gap-2 rounded-md border border-line-default bg-surface-icon-box px-2.5">
+          <div data-slot="email-field" className="flex h-control-lg items-center gap-2 rounded-md border border-line-default bg-surface-input px-2.5">
             <Mail aria-hidden="true" className="size-3.5 shrink-0 text-fg-tertiary" />
             <input
               id={ids.email}

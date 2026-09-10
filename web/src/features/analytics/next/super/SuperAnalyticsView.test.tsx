@@ -124,10 +124,14 @@ describe('SuperAnalyticsView', () => {
     // The payload's own qualityScore (0), printed at two decimals, and the tenant's own
     // sector and size from its record ('Services', 'medium') — never the board's numbers.
     const sentence = copy.refs.emptyGlobalOneCompared
-      .replace('{name}', 'Manufacturing · 500–1000 staff')
+      .replace('{name}', 'manufacturing, 500 to 1000 staff')
       .replace('{score}', '0.00')
       .replace('{profile}', `services, ${en.superadmin.next.sizes.medium.toLowerCase()}`)
-    expect(await screen.findByText(sentence)).toBeTruthy()
+    const holders = await screen.findAllByText((_, element) => element?.textContent === sentence && element.querySelector('[data-slot="score"]') !== null)
+    expect(holders.length).toBeGreaterThan(0)
+    const score = document.querySelector('[data-slot="score"]') as HTMLElement
+    expect(score.textContent).toBe('0.00')
+    expect(score.className.split(/\s+/)).toContain('font-mono')
     expect(screen.getByText(copy.tiles.globalOnlyOne)).toBeTruthy()
   })
 

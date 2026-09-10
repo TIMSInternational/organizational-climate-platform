@@ -62,3 +62,20 @@ export function companyProfile(
     .map((part) => part.toLocaleLowerCase(locale))
     .join(', ')
 }
+
+/** "Sector · from–to unit", the shape the server gives a cohort benchmark's localised name. */
+const COHORT_NAME = /^(.+?)\s*·\s*(\d[\d.,]*)\s*[–-]\s*(\d[\d.,]*)\s+(.+)$/u
+
+/**
+ * A cohort benchmark's name as the canvas writes it inside a sentence: "Manufactura ·
+ * 500–1000 personas" reads "manufactura, de 500 a 1000 personas". The name the server
+ * localises is the only source: the detail's `industry` and `companySize` are null on the
+ * platform's global row (measured `GET /admin/benchmarks/{id}`, 10 Sep, in both languages).
+ * A name of any other shape is returned as it is, never guessed at.
+ */
+export function cohortPhrase(name: string, t: TranslateFn, locale: string): string {
+  const match = COHORT_NAME.exec(name.trim())
+  if (!match) return name
+  const [, sector, from, to, unit] = match
+  return t('superadmin.next.analytics.refs.cohort', { sector: sector.toLocaleLowerCase(locale), from, to, unit })
+}

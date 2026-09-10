@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { SurveyListItem } from '../../../surveys/api/surveys'
 import type { BenchmarkListItem } from '../../api/benchmarks'
-import { globalBenchmarks, isUnscored, lastClosedSurvey } from './derive'
+import { cohortPhrase, globalBenchmarks, isUnscored, lastClosedSurvey } from './derive'
+import { createTranslator } from '../../../../i18n/translate'
+import es from '../../../../i18n/es.json'
+import en from '../../../../i18n/en.json'
 
 function survey(status: string, title: string, endDate: string, responseCount = 24): SurveyListItem {
   return {
@@ -60,5 +63,16 @@ describe('benchmarks', () => {
   it('reads a zero quality score as unscored, as the triage ruled', () => {
     expect(isUnscored(benchmark('g', null, 0))).toBe(true)
     expect(isUnscored(benchmark('own', 'm', 72.5))).toBe(false)
+  })
+})
+
+describe('cohortPhrase', () => {
+  it('writes a cohort benchmark’s name as the canvas does inside a sentence, in either language', () => {
+    expect(cohortPhrase('Manufactura · 500–1000 personas', createTranslator(es), 'es')).toBe('manufactura, de 500 a 1000 personas')
+    expect(cohortPhrase('Manufacturing · 500–1000 staff', createTranslator(en), 'en')).toBe('manufacturing, 500 to 1000 staff')
+  })
+
+  it('returns a name of any other shape as it is, never guessing at it', () => {
+    expect(cohortPhrase('Índice regional 2025', createTranslator(es), 'es')).toBe('Índice regional 2025')
   })
 })

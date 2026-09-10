@@ -143,6 +143,17 @@ describe('CompaniesListNextPage', () => {
     expect(screen.getAllByText(copy.languageInDetail)).toHaveLength(2)
   })
 
+  it('marks its three notes with the board’s glyphs: an open book, a circle alert, a plus', async () => {
+    serve()
+    renderPage()
+    await screen.findAllByRole('row')
+    const notes = [...document.querySelectorAll('[data-slot="canvas-note"]')]
+    expect(notes).toHaveLength(3)
+    expect(notes[0].querySelector('.lucide-book-open')).not.toBeNull()
+    expect(notes[1].querySelector('.lucide-circle-alert')).not.toBeNull()
+    expect(notes[2].querySelector('.lucide-plus')).not.toBeNull()
+  })
+
   it('searches the name, the domain and the sector as the operator types', async () => {
     // Each term lives in exactly ONE field of ONE company, so a filter that stopped reading a
     // field fails here rather than being rescued by another match.

@@ -8,10 +8,28 @@ import { useCompanyContext } from '../../../../company-context'
 import { calendarDay } from '../../../../lib/calendarDay'
 import CompanyContextBar from '../../../org-structure/next/super/CompanyContextBar'
 import { CanvasChip, EmptyNote, Panel } from '../../../org-structure/next/super/parts'
-import { companyProfile, globalBenchmarks, isUnscored, lastClosedSurvey } from './derive'
+import { cohortPhrase, companyProfile, globalBenchmarks, isUnscored, lastClosedSurvey } from './derive'
 import { useSuperAnalyticsModel } from './useSuperAnalyticsModel'
 
 const SCORE = { minimumFractionDigits: 2, maximumFractionDigits: 2 } as const
+
+/** Stands in for the score inside a translated sentence, so the number can take the mono face. */
+const SCORE_SLOT = '\u0001'
+
+/** The sentence with its score set in the canvas's mono face (`<span class="mono">0,00</span>`). */
+function withMonoScore(sentence: string, value: string) {
+  const [before, ...rest] = sentence.split(SCORE_SLOT)
+  if (rest.length === 0) return sentence
+  return (
+    <>
+      {before}
+      <span data-slot="score" className="font-mono tabular-nums">
+        {value}
+      </span>
+      {rest.join(value)}
+    </>
+  )
+}
 
 /**
  * `/admin/companies/:companyId/analytics` for a super administrator — the canvas's
@@ -159,14 +177,20 @@ export default function SuperAnalyticsView() {
                           ? t('superadmin.next.analytics.refs.emptyNone')
                           : globals.length === 1
                             ? profile
-                              ? t('superadmin.next.analytics.refs.emptyGlobalOneCompared', {
-                                  name: globals[0].name,
-                                  score: score(globals[0].qualityScore),
-                                  profile,
-                                })
+                              ? withMonoScore(
+                                  t('superadmin.next.analytics.refs.emptyGlobalOneCompared', {
+                                    name: cohortPhrase(globals[0].name, t, locale),
+                                    score: SCORE_SLOT,
+                                    profile,
+                                  }),
+                                  score(globals[0].qualityScore),
+                                )
                               : isUnscored(globals[0])
-                              ? t('superadmin.next.analytics.refs.emptyGlobalOneUnscored', { name: globals[0].name })
-                              : t('superadmin.next.analytics.refs.emptyGlobalOne', { name: globals[0].name, score: score(globals[0].qualityScore) })
+                              ? t('superadmin.next.analytics.refs.emptyGlobalOneUnscored', { name: cohortPhrase(globals[0].name, t, locale) })
+                              : withMonoScore(
+                                  t('superadmin.next.analytics.refs.emptyGlobalOne', { name: cohortPhrase(globals[0].name, t, locale), score: SCORE_SLOT }),
+                                  score(globals[0].qualityScore),
+                                )
                             : t('superadmin.next.analytics.refs.emptyGlobalMany', { count: globals.length })}
                     </EmptyNote>
                   ) : (

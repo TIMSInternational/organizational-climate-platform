@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { Info, Languages, Plus, Search } from 'lucide-react'
+import { BookOpen, CircleAlert, Plus, Search } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { Button, EmptyState, Input, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../../components/ui'
@@ -221,10 +221,10 @@ export default function CompaniesListNextPage() {
       )}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        <Note icon={<Languages />} lead={t('superadmin.next.companies.languageLead')}>
+        <Note icon={<BookOpen />} lead={t('superadmin.next.companies.languageLead')}>
           {t('superadmin.next.companies.languageNote')}
         </Note>
-        <Note icon={<Info />} lead={t('superadmin.next.companies.unsetLead')}>
+        <Note icon={<CircleAlert />} lead={t('superadmin.next.companies.unsetLead')}>
           {t('superadmin.next.companies.unsetNote')}
           {unconfigured && (
             <>

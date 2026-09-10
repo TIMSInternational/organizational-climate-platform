@@ -1,5 +1,7 @@
 import {
-  Activity,
+  BookOpen,
+  CircleAlert,
+  Copy,
   Shield,
   Building2,
   Settings,
@@ -17,7 +19,6 @@ import {
   LayoutDashboard,
   LayoutTemplate,
   Library,
-  BookMarked,
   ListChecks,
   Network,
   SquareKanban,
@@ -206,8 +207,10 @@ const QUESTION_BANK_ITEM: NavItem = {
   labelKey: 'navigation.questionBank',
   href: '/admin/question-bank',
   // Not ListChecks: TRACKING_MIS_TAREAS_ITEM already carries it, and two sidebar rows
-  // with one glyph is how a reader learns to stop trusting the glyphs.
-  icon: Library,
+  // with one glyph is how a reader learns to stop trusting the glyphs. BookOpen is the
+  // open book the canvas draws for this row (10 Sep, on the super administrator's and the
+  // company administrator's rails alike).
+  icon: BookOpen,
 }
 
 // The question LIBRARY's authoring screen (#423). Sits beside the bank and is not the
@@ -219,10 +222,10 @@ const QUESTION_BANK_ITEM: NavItem = {
 const QUESTION_LIBRARY_ITEM: NavItem = {
   labelKey: 'navigation.questionLibrary',
   href: '/admin/question-library',
-  // Deliberately NOT Library, which QUESTION_BANK_ITEM above already carries. These two
-  // rows sit next to each other, so sharing a glyph would make the pair unreadable at
-  // exactly the place a reader most needs to tell them apart.
-  icon: BookMarked,
+  // Library, the leaning books the canvas draws for this row (10 Sep). The bank above it
+  // carries BookOpen: these two rows sit next to each other, so sharing a glyph would make
+  // the pair unreadable at exactly the place a reader most needs to tell them apart.
+  icon: Library,
 }
 
 // Departments (#142). Admin-only: `/admin/departments` allows a super_admin
@@ -368,7 +371,8 @@ export function buildNavSections(
             icon: Shield,
             flat: true,
             sub: [
-              { labelKey: 'navigation.companies', href: '/admin/companies', icon: Building2 },
+              // Copy: the stacked squares the canvas draws for Empresas, not a building.
+              { labelKey: 'navigation.companies', href: '/admin/companies', icon: Copy },
               { labelKey: 'navigation.systemSettings', href: '/admin/system-settings', icon: Settings },
             ],
           },
@@ -434,7 +438,7 @@ export function buildNavSections(
           {
             labelKey: 'navigation.systemHealth',
             href: '/admin/system',
-            icon: Activity,
+            icon: CircleAlert,
           },
           QUESTION_BANK_ITEM,
           QUESTION_LIBRARY_ITEM,

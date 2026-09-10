@@ -170,18 +170,26 @@ describe('SuperCompanyDetailView', () => {
     serve()
     renderPage()
     const country = await screen.findByLabelText(copy.company.country)
-    await userEvent.clear(country)
-    await userEvent.type(country, 'Panamá')
+    await userEvent.selectOptions(country, 'Panama')
     await userEvent.selectOptions(screen.getByLabelText(new RegExp(`^${copy.surveys.language}`)), 'en')
     await userEvent.click(screen.getByRole('button', { name: copy.save }))
 
     await waitFor(() => expect(writes()).toHaveLength(2))
     const [profile, settings] = writes()
     expect(profile.url).toMatch(new RegExp(`/admin/companies/${C}$`))
-    expect(JSON.parse(profile.body ?? '')).toEqual({ country: 'Panamá' })
+    expect(JSON.parse(profile.body ?? '')).toEqual({ country: 'Panama' })
     expect(settings.url).toContain(`/admin/companies/${C}/settings`)
     expect(JSON.parse(settings.body ?? '')).toEqual({ language: 'en' })
     await waitFor(() => expect(calls.filter((call) => call.method === 'GET' && call.url.endsWith(`/admin/companies/${C}`))).toHaveLength(2))
+  })
+
+  it('offers País as the canvas’s select over the countries, with the tenant’s own value selected', async () => {
+    serve()
+    renderPage()
+    const country = (await screen.findByLabelText(copy.company.country)) as HTMLSelectElement
+    expect(country.tagName).toBe('SELECT')
+    expect(country.value).toBe('Costa Rica')
+    expect([...country.options].map((option) => option.value)).toContain('Colombia')
   })
 
   it('puts the form back on Discard, and offers no save for a retention it would refuse', async () => {
@@ -204,8 +212,7 @@ describe('SuperCompanyDetailView', () => {
     renderPage()
     expect((await screen.findAllByText(en.companySettings.settingsUnavailable)).length).toBe(2)
     const country = screen.getByLabelText(copy.company.country)
-    await userEvent.clear(country)
-    await userEvent.type(country, 'Panamá')
+    await userEvent.selectOptions(country, 'Panama')
     await userEvent.click(screen.getByRole('button', { name: copy.save }))
     await waitFor(() => expect(writes()).toHaveLength(1))
     expect(writes()[0].url).not.toContain('/settings')

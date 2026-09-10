@@ -12,6 +12,7 @@ import { updateCompany } from '../../api/companies'
 import { updateCompanySettings } from '../../api/companySettings'
 import { CompanyValidation } from '../../components/companyValidation'
 import { surveyFrequencyLabelKey } from '../../labels'
+import { countryOptions } from './countries'
 import { plainTitle, statusMix, waveOf } from '../../../dashboard/next/super/derive'
 import {
   HEX_COLOUR,
@@ -622,7 +623,14 @@ function CompanyCard({
           </CanvasSelect>
         </Field>
         <Field fieldLabel={t('superadmin.next.companyDetail.company.country')} htmlFor={ids.country}>
-          <Input id={ids.country} value={profile.country} onChange={(event) => set({ country: event.target.value })} className="w-full" />
+          <CanvasSelect id={ids.country} className="w-full" value={profile.country} onChange={(event) => set({ country: event.target.value })}>
+            {profile.country === '' && <option value="">{t('superadmin.next.companyDetail.company.selectCountry')}</option>}
+            {countryOptions(locale, profile.country).map((country) => (
+              <option key={country} value={country}>
+                {country}
+              </option>
+            ))}
+          </CanvasSelect>
         </Field>
         <Field fieldLabel={t('superadmin.next.companyDetail.company.plan')} htmlFor={ids.plan}>
           <CanvasSelect id={ids.plan} className="w-full" value={profile.subscriptionTier} onChange={(event) => set({ subscriptionTier: event.target.value })}>

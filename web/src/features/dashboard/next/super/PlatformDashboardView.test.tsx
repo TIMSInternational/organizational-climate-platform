@@ -210,3 +210,24 @@ describe('PlatformDashboardView sentences', () => {
     expect(document.body.textContent).not.toContain(`Acme Corporation${tail}`)
   })
 })
+
+describe('the unconfigured tenant’s attention item', () => {
+  it('carries the canvas’s stacked-squares company glyph, not a building', async () => {
+    serve()
+    renderView()
+    const leads = await screen.findAllByText('Verify Co')
+    const icons = leads
+      .map((lead) => {
+        let node: Element | null = lead
+        for (let depth = 0; node && depth < 4; depth += 1) {
+          node = node.parentElement
+          const svg = node?.querySelector('svg')
+          if (svg) return svg
+        }
+        return null
+      })
+      .filter((svg): svg is SVGSVGElement => svg !== null)
+    expect(icons.some((svg) => svg.classList.contains('lucide-copy'))).toBe(true)
+    expect(icons.some((svg) => [...svg.classList].some((name) => name.startsWith('lucide-building')))).toBe(false)
+  })
+})

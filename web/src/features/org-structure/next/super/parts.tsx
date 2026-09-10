@@ -181,7 +181,7 @@ export function LinkCard({
 /** The recessed note: an icon, a bold lead, and the sentence it starts. */
 export function Note({ icon, lead, children }: { icon: ReactNode; lead?: ReactNode; children: ReactNode }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-lg bg-surface-icon-box px-3.5 py-3 text-xs leading-normal text-fg-secondary">
+    <div data-slot="canvas-note" className="flex items-start gap-2.5 rounded-lg bg-surface-icon-box px-3.5 py-3 text-sm leading-normal text-fg-secondary">
       <span aria-hidden="true" className="mt-0.5 inline-flex shrink-0 [&_svg]:size-3.5">
         {icon}
       </span>
@@ -269,5 +269,5 @@ const CHIP_BORDER: Record<ChipTone, string> = {
  * untouched.
  */
 export function CanvasChip({ tone = 'neutral', className, ...props }: ComponentProps<typeof Chip> & { tone?: ChipTone }) {
-  return <Chip tone={tone} data-canvas-chip={tone} className={cn(CHIP_BORDER[tone], className)} {...props} />
+  return <Chip tone={tone} data-canvas-chip={tone} className={cn(CHIP_BORDER[tone], 'font-medium', className)} {...props} />
 }

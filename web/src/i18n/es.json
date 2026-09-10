@@ -1942,7 +1942,8 @@
           "readSurveys": "Encuestas",
           "readPlans": "Planes de acción",
           "readPlansNoneOverdue": "{open} abiertos · ninguno atrasado",
-          "readPlansOverdue": "{open} abiertos · {overdue} atrasados"
+          "readPlansOverdue": "{open} abiertos · {overdue} atrasados",
+          "selectCountry": "Elegir país"
         },
         "brand": {
           "heading": "Marca",
@@ -2146,7 +2147,8 @@
           "quality": "calidad {score}",
           "active": "Activa",
           "inactive": "Inactiva",
-          "emptyGlobalOneCompared": "La única referencia de la plataforma es global: {name}, con un puntaje de calidad de {score}. No se compara con esta empresa ({profile}), así que no se muestra aquí."
+          "emptyGlobalOneCompared": "La única referencia de la plataforma es global: {name}, con un puntaje de calidad de {score}. No se compara con esta empresa ({profile}), así que no se muestra aquí.",
+          "cohort": "{sector}, de {from} a {to} {unit}"
         },
         "insights": {
           "meta": "sobre las encuestas cerradas",
@@ -2621,7 +2623,7 @@
     "leader": "Líder",
     "departmentAdmin": "Administrador de Departamento",
     "companyAdmin": "Administrador de Empresa",
-    "superAdmin": "Super Administrador",
+    "superAdmin": "Super administrador",
     "active": "Activo",
     "inactive": "Inactivo",
     "viewDetails": "Ver Detalles",

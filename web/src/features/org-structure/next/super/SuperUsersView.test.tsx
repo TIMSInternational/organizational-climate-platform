@@ -171,6 +171,17 @@ describe('SuperUsersView', () => {
     expect(screen.queryByText(copy.invitations.noneMeta)).toBeNull()
   })
 
+  it('draws the read-only email as an input like the name beside it, with its mail glyph and the reason it cannot change', async () => {
+    serve()
+    renderPage(`/admin/companies/${C}/users?editar=luis`)
+    await screen.findByDisplayValue('Luis Mora')
+    const field = document.querySelector('[data-slot="email-field"]') as HTMLElement
+    expect(field.className.split(/\s+/)).toContain('bg-surface-input')
+    expect(field.className.split(/\s+/)).not.toContain('bg-surface-icon-box')
+    expect(field.querySelector('.lucide-mail')).not.toBeNull()
+    expect(screen.getByText(en.superadmin.next.users.emailHelper)).toBeTruthy()
+  })
+
   it('opens the edit panel on the person the link names (?editar=), and on nobody for an id outside the tenant', async () => {
     serve()
     const first = renderPage(`/admin/companies/${C}/users?editar=luis`)
