@@ -12,6 +12,7 @@ import { CompanyContextProvider } from '../../../company-context'
 import { setToken } from '../../../auth/token'
 import { tokenFor } from '../../../test/jwtFixture'
 import en from '../../../i18n/en.json'
+import { calendarDay } from '../../../lib/calendarDay'
 
 const copy = en.dashboard.next
 
@@ -99,7 +100,8 @@ describe('AdminDashboardNextView', () => {
 
   it('marks exactly the two dimensions below the target as below target', () => {
     renderView()
-    const chips = screen.getAllByText(copy.belowTarget)
+    // Counted on the cards: the map's key says the same words, "bajo la meta", by design.
+    const chips = screen.getAllByText(copy.belowTarget).filter((chip) => chip.closest('[data-slot="trend-card"]'))
     expect(chips).toHaveLength(2)
     const dimensions = chips
       .map((chip) => chip.closest('[data-slot="trend-card"]')?.getAttribute('data-dimension'))
@@ -285,8 +287,9 @@ describe('AdminDashboardNextView', () => {
     expect(steps).toHaveLength(5)
     expect(steps[4].textContent).toContain('Q1 2027')
     expect(steps[4].textContent).toContain(copy.wavePlanned)
-    // The open wave names itself as the canvas does, "Q4 · open", and its close date.
-    expect(steps[3].textContent).toContain(copy.waveOpenShort.replace('{code}', 'Q4'))
+    // The open wave names itself as the canvas does, "Q4 open", over what its date means.
+    expect(steps[3].textContent).toContain(copy.waveOpen.replace('{code}', 'Q4'))
+    expect(steps[3].textContent).toContain(copy.waveCloses.replace('{date}', calendarDay(Date.parse('2026-10-10'), 'en')))
   })
 
   it('writes the overdue plan’s due date in words and its progress as the percentage it is', () => {
@@ -301,5 +304,87 @@ describe('AdminDashboardNextView', () => {
     expect(rules).toHaveLength(6)
     // Fitted one by one, each target rule would sit at its own height.
     expect(new Set(rules.map((rule) => rule.getAttribute('y1'))).size).toBe(1)
+  })
+
+  it('paints every map cell the step the Dashboard artboard paints it, rings none, and keys the steps by word', () => {
+    renderView()
+    const rows = [...document.querySelectorAll('table tbody tr')].filter(
+      (row) => row.querySelector('th[scope="row"]')?.textContent !== 'Finanzas',
+    )
+    const steps = rows.map((row) =>
+      [...row.querySelectorAll('td div')].map((cell) =>
+        (cell as HTMLElement).style.backgroundColor.replace(/^var\(--admin-chart-div-(.*)\)$/, '$1'),
+      ),
+    )
+    // build_admin.py tint() over the artboard's own cells: Ingeniería, Operaciones, Personas, Ventas.
+    expect(steps).toEqual([
+      ['pos-1', 'mid', 'pos-1', 'mid', 'pos-2', 'pos-2'],
+      ['neg-2', 'neg-2', 'neg-1', 'neg-1', 'neg-1', 'neg-1'],
+      ['pos-2', 'pos-1', 'pos-1', 'mid', 'pos-2', 'pos-2'],
+      ['pos-1', 'neg-1', 'pos-1', 'mid', 'pos-1', 'pos-1'],
+    ])
+    expect([...document.querySelectorAll('table td div')].some((cell) => (cell as HTMLElement).style.outline !== '')).toBe(false)
+    const legend = document.querySelector('[data-slot="climate-map-legend"]') as HTMLElement
+    expect(
+      [...legend.querySelectorAll('[data-legend]')].map((group) => [group.textContent, group.querySelectorAll('span').length]),
+    ).toEqual([
+      [en.charts.next.legendBelow, 2],
+      [en.charts.next.legendOn, 1],
+      [en.charts.next.legendAbove, 2],
+    ])
+    expect(legend.textContent).toContain(en.charts.next.legendProtected.replace('{threshold}', '5'))
+  })
+
+  it('heads the map with whole dimension names in the model’s column order, the whole name on hover', () => {
+    renderView()
+    const heads = [...document.querySelectorAll('table thead th')]
+    expect(heads.map((head) => head.textContent)).toEqual([
+      'Seguridad psicológica',
+      'Carga de trabajo',
+      'Confianza',
+      'Reconocimiento',
+      'Desarrollo',
+      'Pertenencia',
+    ])
+    expect(heads.map((head) => head.getAttribute('title'))).toEqual(heads.map((head) => head.textContent))
+  })
+
+  it('prints each card’s move as the difference of the readings it prints: 3,33 → 3,67 is +0,4', () => {
+    const dimensions = sampleModel.dimensions.map((dimension) =>
+      dimension.key === 'confianza' ? { ...dimension, values: [2.96, 3.33, 3.67] } : dimension,
+    )
+    renderView({ ...sampleModel, dimensions })
+    const card = document.querySelector('[data-slot="trend-card"][data-dimension="confianza"]') as HTMLElement
+    expect(card.querySelector('[data-slot="trend-move"]')?.textContent).toBe('+0.4')
+  })
+
+  it('words the climate tile, the moves legend and the rail as the artboard does', () => {
+    renderView()
+    expect(document.querySelector('[data-slot="climate-move"]')?.textContent).toContain(copy.riseOrdinal['2'])
+    expect(document.body.textContent).toContain(
+      copy.movedLegend.replace('{target}', '3.7').replace('{count}', copy.countWord['3']),
+    )
+    const steps = [...document.querySelectorAll('[data-slot="cycle-step"]')]
+    // The verb is on screen, not only for a screen reader.
+    expect(steps[0].textContent).toContain(copy.waveClosed.replace('{date}', calendarDay(Date.parse('2026-02-12'), 'en')))
+    expect(steps[0].querySelector('.sr-only')).toBeNull()
+  })
+
+  it('names the open survey as a sentence does and the live pulse by its head', () => {
+    const openSurvey = sampleModel.openSurvey ? { ...sampleModel.openSurvey, name: 'Encuesta de Clima Q4 (abierta)' } : null
+    renderView({ ...sampleModel, openSurvey })
+    const items = document.querySelectorAll('[data-slot="attention-item"]')
+    expect(items[2].textContent).toContain('Encuesta de Clima Q4 has')
+    expect(items[2].textContent).not.toContain('(abierta)')
+    const live = document.querySelector('[data-slot="live-microclimate"]') as HTMLElement
+    expect(live.textContent).toContain(copy.liveNamed.replace('{name}', 'Pulso semanal'))
+    expect(live.textContent).not.toContain('¿cómo fue la semana?')
+  })
+
+  it('sets the four tiles at the artboard’s hero size', () => {
+    renderView()
+    const values = [...document.querySelectorAll('[data-slot="kpi-value"]')]
+    expect(values).toHaveLength(4)
+    expect(values.every((value) => value.className.includes('text-[28px]'))).toBe(true)
   })
 })

@@ -10,7 +10,7 @@
  * Nothing here is a sample. The target is the product's `CLIMATE_TARGET`
  * (`features/dashboard/next/compose.ts`), the same constant the Panel de Control reads,
  * so the two screens can never disagree about "meta 3,7"; no company setting holds a
- * target yet, and the table's footnote says so.
+ * target yet.
  *
  * Naming follows `features/dashboard/next/model.ts`: payload content is `name`, never
  * `title`/`label`, so `noHardcodedStrings.test.ts` does not read it as UI copy.
@@ -71,6 +71,11 @@ export interface ClimateTrendsNextModel {
    * than the server's own `respondentCount: 0`, and the page never prints one.
    */
   respondents: readonly (number | null)[]
+  /**
+   * Per wave, the WHOLE COMPANY's withheld flag, whichever group is drawn: the footnote
+   * says "Toda la empresa nunca queda bajo el umbral" only while none of these is set.
+   */
+  companyWithheld: readonly boolean[]
   /**
    * The dimensions of the selected group, ordered by the whole company's latest reading,
    * highest first — the canvas's order, and one that stays put when a segment is chosen.

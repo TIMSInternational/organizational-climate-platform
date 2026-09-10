@@ -695,7 +695,13 @@
      can see it. */
   --admin-border-default: #2f235a;
   --admin-border-hover: #32245e;
-  --admin-border-light: #1f173b;
+  /* Measured, not by eye: at #1f173b this hairline WAS the card (`--admin-bg-card`
+     #1f173b), so every `border-line-light` / `divide-line-light` / `bg-line-light` drawn
+     on a card -- the Panel de Control's sparkline cards and attention rules, the survey
+     list's row rules and participation track -- vanished in dark. #2a2150 sits 1.151:1
+     off the card, the light palette's own relation (#eeedf6 on #ffffff is 1.162:1), and
+     stays lighter than `--admin-border-default`. */
+  --admin-border-light: #2a2150;
   --admin-border-panel: #2f235a;
 
   /* The same #83 re-valuation, in the other direction: dark ink lightens where

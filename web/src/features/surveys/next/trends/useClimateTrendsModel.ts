@@ -143,6 +143,10 @@ export function useClimateTrendsModel(enabled: boolean): ClimateTrendsModelState
     // absent one is treated as withheld rather than as a reading of nothing.
     const withheld = points.map((point) => point === undefined || point.isSuppressed)
     const respondents = points.map((point) => (point === undefined || point.isSuppressed ? null : point.respondentCount))
+    const companyWithheld = waves.map((wave) => {
+      const point = wholeGroup?.points.find((candidate) => candidate.surveyId === wave.id)
+      return point === undefined || point.isSuppressed
+    })
 
     return {
       companyName,
@@ -151,6 +155,7 @@ export function useClimateTrendsModel(enabled: boolean): ClimateTrendsModelState
       waves,
       withheld,
       respondents,
+      companyWithheld,
       dimensions,
       groups,
       selectedGroup: activeKey,

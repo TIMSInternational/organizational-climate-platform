@@ -1,4 +1,4 @@
-import { axisTicks, standing } from './derive'
+import { standing, trendAxis, type TrendAxis } from './derive'
 
 /**
  * One dimension across the closed waves, against the target — the canvas's chart
@@ -8,7 +8,7 @@ import { axisTicks, standing } from './derive'
  *
  * ## One axis for the page
  *
- * `ticks` is the axis the page computed for ALL six charts (`sharedAxisTicks`), so two
+ * `axis` is the one the page computed for ALL six charts (`sharedTrendAxis`), so two
  * slopes side by side are on the same scale. Left out, the chart derives its own from
  * its values, which is what a chart drawn alone wants.
  *
@@ -32,7 +32,7 @@ export interface DimensionTrendChartProps {
   withheld?: readonly boolean[]
   target: number
   /** The y axis, shared by every chart on the page; derived from `values` when omitted. */
-  ticks?: readonly number[]
+  axis?: TrendAxis
   /** One per value, drawn under the points. */
   labels: readonly string[]
   /** Already-translated accessible description of the whole figure. */
@@ -74,7 +74,7 @@ export default function DimensionTrendChart({
   values,
   withheld,
   target,
-  ticks: sharedTicks,
+  axis: sharedAxis,
   labels,
   label,
   withheldText,
@@ -83,9 +83,7 @@ export default function DimensionTrendChart({
   width = 330,
   height = 150,
 }: DimensionTrendChartProps) {
-  const ticks = sharedTicks && sharedTicks.length > 1 ? sharedTicks : axisTicks(values, target)
-  const low = ticks[0] ?? target - 0.5
-  const high = ticks[ticks.length - 1] ?? target + 0.5
+  const { low, high, ticks } = sharedAxis ?? trendAxis(values, target)
   const plotBottom = height - LABEL_BAND
   const firstX = AXIS_LEFT + INSET
   const lastX = width - AXIS_RIGHT - INSET

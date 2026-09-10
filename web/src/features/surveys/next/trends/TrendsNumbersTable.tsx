@@ -1,19 +1,18 @@
 import { useTranslation } from '../../../../i18n'
-import { DIVERGING_COLORS, ProtectedCell, divergingPair } from '../../../../components/charts'
+import { DIVERGING_COLORS, DIVERGING_INKS, ProtectedCell } from '../../../../components/charts'
 import { Table } from '../../../../components/ui'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
-import { MAP_DEAD_BAND_AT, MAP_EXTREME_AT, printedReading } from '../../../dashboard/next/compose'
-import { reading, signedReading } from '../../../dashboard/next/derive'
+import { printedMove, reading, signedReading, targetStep } from '../../../dashboard/next/derive'
 import type { TrendDimension, TrendWave } from './model'
 
 /**
  * "Los mismos números, en tabla" — the six charts' readings as the accessible table
  * the canvas draws under them: one row per closed wave (its name, when it closed and
  * how many of the drawn group answered it), one column per dimension, every reading tinted against the
- * target the way the Panel de Control's map tints it (`MAP_DEAD_BAND_AT`,
- * `MAP_EXTREME_AT`), and a last row with each dimension's move from the first wave to
- * the last.
+ * target by the Panel de Control's one rule (`targetStep`: the printed reading against
+ * the canvas's bands), and a last row with each dimension's move from the first wave to
+ * the last, the difference of the two readings as printed (`printedMove`).
  *
  * ## Three kinds of cell, never confused
  *
@@ -42,7 +41,7 @@ export interface TrendsNumbersTableProps {
   caption: string
 }
 
-const HEAD = 'px-1 pb-1 align-bottom text-2xs font-bold uppercase leading-tight tracking-label text-fg-secondary'
+const HEAD = 'px-1 pb-1 align-bottom text-[9px] font-bold uppercase leading-tight tracking-label text-fg-label'
 
 export default function TrendsNumbersTable({
   waves,
@@ -54,17 +53,25 @@ export default function TrendsNumbersTable({
   caption,
 }: TrendsNumbersTableProps) {
   const { t, locale } = useTranslation()
-  const deadBand = MAP_DEAD_BAND_AT / (2 * MAP_EXTREME_AT)
   const first = waves[0]
   const lastIndex = waves.length - 1
   const last = waves[lastIndex]
 
   return (
-    <Table data-slot="trends-table" className="border-separate border-spacing-1 text-sm">
+    // `table-fixed` + the colgroup: a 180px survey column and six EQUAL dimension columns,
+    // as the artboard's grid draws them — auto layout gave "Seguridad psicológica" twice
+    // the width of "Confianza".
+    <Table data-slot="trends-table" className="table-fixed border-separate border-spacing-1 text-sm">
       <caption className="sr-only">{caption}</caption>
+      <colgroup>
+        <col className="w-45" />
+        {dimensions.map((dimension) => (
+          <col key={dimension.key} data-slot="trends-col" />
+        ))}
+      </colgroup>
       <thead>
         <tr>
-          <th scope="col" className={cn(HEAD, 'w-44 pl-0 text-left')}>
+          <th scope="col" className={cn(HEAD, 'pl-0 text-left')}>
             {t('surveys.next.trends.tableColSurvey')}
           </th>
           {dimensions.map((dimension) => (
@@ -120,14 +127,18 @@ export default function TrendsNumbersTable({
                   </td>
                 )
               }
-              const { fill, ink } = divergingPair((printedReading(value) - target) / (2 * MAP_EXTREME_AT), deadBand)
+              // The Panel de Control's one rule — the printed reading against the canvas's
+              // bands — so a 3,5 is the grey "en la meta" here as on the map.
+              const step = targetStep(value, target)
+              const fill = DIVERGING_COLORS[step]
+              const ink = DIVERGING_INKS[step]
               return (
                 <td key={dimension.key} className="p-0">
                   <span
                     data-slot="trends-cell"
                     // Which of the five steps, for a reader of the DOM: the fill itself is a
                     // `var()` reference a test cannot resolve.
-                    data-tint={(DIVERGING_COLORS as readonly string[]).indexOf(fill)}
+                    data-tint={step}
                     className="flex h-10 items-center justify-center rounded font-mono text-sm tabular-nums"
                     style={{ backgroundColor: fill, color: ink }}
                   >
@@ -148,7 +159,7 @@ export default function TrendsNumbersTable({
             {dimensions.map((dimension) => {
               const from = withheld[0] ? null : (dimension.values[0] ?? null)
               const to = withheld[lastIndex] ? null : (dimension.values[lastIndex] ?? null)
-              const move = from === null || to === null ? null : to - from
+              const move = from === null || to === null ? null : printedMove(to, from)
               return (
                 <td key={dimension.key} className="border-t border-line-light pt-1.5 text-center">
                   {move === null ? (

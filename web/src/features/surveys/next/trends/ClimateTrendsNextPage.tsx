@@ -1,11 +1,14 @@
 import { Navigate } from 'react-router'
+import { Download } from 'lucide-react'
+import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
+import { downloadTextFile } from '../../../../lib/downloadTextFile'
 import { useTranslation } from '../../../../i18n'
 import { useCompanyScope } from '../../../../company-context'
 import { PageTopBar } from '../../../../components/layout'
 import { KpiTile } from '../../../../components/charts'
 import { Button, Chip, EmptyState, LoadingRegion, NetworkError } from '../../../../components/ui'
 import { KpiRow } from '../../../dashboard/components/dashboardGrammar'
-import { reading, signedReading } from '../../../dashboard/next/derive'
+import { printedMove, reading, signedReading } from '../../../dashboard/next/derive'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import { WHOLE_COMPANY_KEY } from '../../api/climateTrends'
@@ -14,13 +17,15 @@ import TrendsNumbersTable from './TrendsNumbersTable'
 import {
   deltaSince,
   latestIndex,
-  sharedAxisTicks,
+  sharedTrendAxis,
   standing,
   standings,
   waveMean,
   type DimensionStanding,
   type Standing,
+  type TrendAxis,
 } from './derive'
+import { buildTrendsCsv } from './trendsCsv'
 import type { ClimateTrendsNextModel, TrendDimension, TrendWave } from './model'
 import { useClimateTrendsModel } from './useClimateTrendsModel'
 
@@ -45,9 +50,11 @@ const TARGET_RULE = '#b9b6cc'
  * page does, because the endpoint answers 400 with no company to name. Every other
  * role goes to `/dashboard`, which dispatches them to the view their role has.
  *
- * No export action, where the artboard draws one: `/surveys/climate-trends` has no
- * export endpoint (`SurveyClimateTrendsEndpoints.cs` maps one GET), and a button that
- * exists and then does nothing is the failure `viewerCapabilities.ts` describes.
+ * "Exportar" is the numbers table as a CSV, built in the browser from the same model the
+ * table draws (`trendsCsv.ts`): `/surveys/climate-trends` has no export endpoint
+ * (`SurveyClimateTrendsEndpoints.cs` maps one GET), and the page already holds every
+ * number the file carries and nothing the page withholds. It is offered to the viewers
+ * the product lets export (`viewerCapabilities.canExport`).
  */
 export default function ClimateTrendsNextPage() {
   const { t } = useTranslation()
@@ -119,6 +126,7 @@ function ClimateTrendsNextView({
   onSelectGroup: (key: string) => void
 }) {
   const { t, locale } = useTranslation()
+  const capabilities = useViewerCapabilities()
   const { target, waves, dimensions } = model
   const targetText = reading(target, locale)
   const last = waves.length - 1
@@ -129,13 +137,14 @@ function ClimateTrendsNextView({
   const moves = [last - 1, ...(last >= 2 ? [0] : [])].flatMap((index) => {
     const wave = waves[index]
     const mean = index >= 0 ? waveMean(dimensions, index) : null
-    return wave && mean !== null && latestMean !== null ? [{ wave, delta: latestMean - mean }] : []
+    // The difference of the two averages as the tile prints them, at two decimals.
+    return wave && mean !== null && latestMean !== null ? [{ wave, delta: printedMove(latestMean, mean, 2) }] : []
   })
   const judged = standings(dimensions, target)
   const above = judged.filter((entry) => entry.standing === 'above')
   const below = judged.filter((entry) => entry.standing === 'below').sort((a, b) => a.value - b.value)
   const rising = risingPhrase(below, t)
-  const ticks = sharedAxisTicks(dimensions, target)
+  const axis = sharedTrendAxis(dimensions, target)
   const groupName =
     model.selectedGroup === WHOLE_COMPANY_KEY
       ? t('surveys.next.trends.wholeCompany').toLocaleLowerCase(locale)
@@ -146,6 +155,29 @@ function ClimateTrendsNextView({
     const month = new Date(wave.closedAt).toLocaleDateString(locale, { timeZone: 'UTC', month: 'short' })
     return wave.code.length <= 8 ? `${wave.code} · ${month}` : month
   })
+  const exportTable = () => {
+    downloadTextFile(
+      `${t('surveys.next.trends.exportFileName')}.csv`,
+      'text/csv;charset=utf-8',
+      buildTrendsCsv({
+        groupName:
+          model.selectedGroup === WHOLE_COMPANY_KEY
+            ? t('surveys.next.trends.wholeCompany')
+            : (model.groups.find((group) => group.key === model.selectedGroup)?.name ?? model.selectedGroup),
+        waves,
+        withheld: model.withheld,
+        respondents: model.respondents,
+        dimensions,
+        labels: {
+          group: t('surveys.next.trends.csvColGroup'),
+          survey: t('surveys.next.trends.tableColSurvey'),
+          closed: t('surveys.next.trends.csvColClosed'),
+          responses: t('surveys.next.trends.csvColResponses'),
+          withheld: t('surveys.next.trends.withheld'),
+        },
+      }),
+    )
+  }
 
   return (
     <div>
@@ -153,6 +185,14 @@ function ClimateTrendsNextView({
         eyebrow={model.companyName}
         title={t('surveys.next.trends.title')}
         description={t('surveys.next.trends.description', { target: targetText })}
+        actions={
+          capabilities.canExport && waves.length > 0 ? (
+            <Button type="button" variant="outline" onClick={exportTable}>
+              <Download aria-hidden="true" />
+              {t('surveys.next.trends.export')}
+            </Button>
+          ) : undefined
+        }
       />
 
       <div className="flex flex-col gap-section">
@@ -166,6 +206,7 @@ function ClimateTrendsNextView({
             <section aria-label={t('surveys.next.trends.standingHeading')}>
               <KpiRow>
                 <KpiTile
+                  size="large"
                   label={t('surveys.next.trends.climateLabel', { wave: latestWave?.code ?? '' })}
                   value={latestMean}
                   format={{ kind: 'number', decimals: 2 }}
@@ -186,6 +227,7 @@ function ClimateTrendsNextView({
                   }
                 />
                 <KpiTile
+                  size="large"
                   label={t('surveys.next.trends.closedLabel')}
                   value={waves.length}
                   unit={waves.map((wave) => wave.code).join(' · ')}
@@ -202,6 +244,7 @@ function ClimateTrendsNextView({
                   }
                 />
                 <KpiTile
+                  size="large"
                   label={t('surveys.next.trends.aboveLabel')}
                   value={above.length}
                   unit={t('surveys.next.trends.ofDimensions', { total: judged.length })}
@@ -215,6 +258,7 @@ function ClimateTrendsNextView({
                   }
                 />
                 <KpiTile
+                  size="large"
                   label={t('surveys.next.trends.belowLabel')}
                   value={below.length}
                   unit={t('surveys.next.trends.ofDimensions', { total: judged.length })}
@@ -284,7 +328,7 @@ function ClimateTrendsNextView({
                     key={dimension.key}
                     dimension={dimension}
                     model={model}
-                    ticks={ticks}
+                    axis={axis}
                     tickLabels={tickLabels}
                   />
                 ))}
@@ -310,15 +354,15 @@ function ClimateTrendsNextView({
                 floor={model.floor}
                 caption={t('surveys.next.trends.tableHeading')}
               />
-              <div className="flex flex-col gap-1 text-xs text-fg-label">
-                {model.suppressedGroupCount > 0 && (
-                  <p className="m-0">
-                    {t('surveys.climateTrends.suppressedGroups', { count: model.suppressedGroupCount, threshold: model.floor })}
-                  </p>
-                )}
-                <p className="m-0">{t('surveys.next.trends.floorNote', { floor: model.floor })}</p>
-                <p className="m-0">{t('surveys.next.trends.targetNote', { target: targetText })}</p>
-              </div>
+              {/* The artboard's one line: the floor's rule, and — only while it is true of
+                  every wave on the page — that the whole company is never under it. A
+                  department withheld in every wave says so in its own segment, where every
+                  cell is hatched; the target is the Panel de Control's, and the subtitle
+                  already names it. */}
+              <p data-slot="trends-footnote" className="m-0 text-xs text-fg-label">
+                {t('surveys.next.trends.floorNote', { floor: model.floor })}
+                {!model.companyWithheld.some(Boolean) && <> {t('surveys.next.trends.companyNeverWithheld')}</>}
+              </p>
             </section>
           </>
         )}
@@ -330,12 +374,12 @@ function ClimateTrendsNextView({
 function TrendCard({
   dimension,
   model,
-  ticks,
+  axis,
   tickLabels,
 }: {
   dimension: TrendDimension
   model: ClimateTrendsNextModel
-  ticks: readonly number[]
+  axis: TrendAxis
   tickLabels: readonly string[]
 }) {
   const { t, locale } = useTranslation()
@@ -361,7 +405,7 @@ function TrendCard({
         {stand && <Chip tone={STANDING_TONE[stand]} label={t(`surveys.next.trends.standing.${stand}`)} />}
       </div>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="font-mono text-2xl tabular-nums text-fg-primary">
+        <span className="font-mono text-[22px] tabular-nums text-fg-primary">
           {value === null ? t('surveys.next.trends.withheld') : reading(value, locale)}
         </span>
         {sincePrevious !== null && previousWave && <Move value={sincePrevious} />}
@@ -383,7 +427,7 @@ function TrendCard({
         values={dimension.values}
         withheld={model.withheld}
         target={target}
-        ticks={ticks}
+        axis={axis}
         labels={tickLabels}
         format={(reading_) => reading(reading_, locale)}
         withheldText={t('surveys.next.trends.withheld')}

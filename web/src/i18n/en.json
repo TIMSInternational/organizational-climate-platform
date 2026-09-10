@@ -365,7 +365,13 @@
     "gallerySampleActionOneTitle": "Schedule the session",
     "gallerySampleActionOneBody": "Book 90 minutes with the Support leads.",
     "gallerySampleActionTwoTitle": "Rebalance the on-call rota",
-    "gallerySampleActionTwoBody": "Spread the weekend rotation across a wider group."
+    "gallerySampleActionTwoBody": "Spread the weekend rotation across a wider group.",
+    "next": {
+      "legendBelow": "below target",
+      "legendOn": "on target",
+      "legendAbove": "above target",
+      "legendProtected": "protected, fewer than {threshold} responses"
+    }
   },
   "common": {
     "loading": "Loading...",
@@ -817,7 +823,27 @@
       "createPlan": "Create a plan",
       "lowParticipationSubUnknown": "{wave} closed at {percent}",
       "liveTitle": "{name} · live",
-      "waveOpenShort": "{code} · open"
+      "waveOpenShort": "{code} · open",
+      "riseOrdinal": {
+        "2": "second rise in a row",
+        "3": "third rise in a row",
+        "4": "fourth rise in a row",
+        "5": "fifth rise in a row",
+        "6": "sixth rise in a row"
+      },
+      "countWord": {
+        "2": "two",
+        "3": "three",
+        "4": "four",
+        "5": "five",
+        "6": "six",
+        "7": "seven",
+        "8": "eight",
+        "9": "nine",
+        "10": "ten"
+      },
+      "movedLegendOne": "target {target} · one closed survey, whole company",
+      "liveNamed": "{name} live"
     }
   },
   "departments": {
@@ -2055,7 +2081,7 @@
       "nothingToDrawTitle": "Nothing to compare yet",
       "nothingToDrawBody": "No dimension has a score in every survey shown, so there is no column that could be read across them.",
       "omittedDimensions": "Not shown, because they were not scored in every survey here: {dimensions}.",
-      "suppressedGroups": "{count} group(s) are withheld in every survey shown, because fewer than {threshold} people answered."
+      "suppressedGroups": "Groups withheld in every survey shown, because fewer than {threshold} people answered: {count}."
     },
     "next": {
       "trends": {
@@ -2098,7 +2124,13 @@
         "noMove": "no comparison between the first and the last survey",
         "targetNote": "The {target} target is fixed for now: no company setting holds a climate target yet.",
         "chartsLabel": "Each dimension over time",
-        "tableRowClosed": "closed {date}"
+        "tableRowClosed": "closed {date}",
+        "companyNeverWithheld": "The whole company is never under the floor.",
+        "export": "Export",
+        "exportFileName": "climate-over-time",
+        "csvColGroup": "Group",
+        "csvColClosed": "Closed",
+        "csvColResponses": "Responses"
       },
       "list": {
         "description": "Which survey is open today, how long until it closes, and where to read the ones that already closed.",

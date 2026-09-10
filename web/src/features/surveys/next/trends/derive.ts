@@ -1,4 +1,5 @@
 import { WHOLE_COMPANY_KEY, type ClimateTrendsResponse } from '../../api/climateTrends'
+import { printedMove, targetStanding, type TargetStanding } from '../../../dashboard/next/derive'
 import type { TrendDimension } from './model'
 
 /**
@@ -7,19 +8,20 @@ import type { TrendDimension } from './model'
  * this file answers "what is the number", the view answers "how does it read".
  */
 
-export type Standing = 'above' | 'on' | 'below'
+export type Standing = TargetStanding
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10
 }
 
-/** Where a reading sits against the target, at the one-decimal precision the page prints. */
+/**
+ * Where a reading sits against the target: the Panel de Control's one rule
+ * (`targetStanding`), at the decimal the page prints and with the canvas's bands — so a
+ * chip, a red endpoint and a table tint on this page never disagree with each other or
+ * with the dashboard.
+ */
 export function standing(value: number, target: number): Standing {
-  const shown = round1(value)
-  const goal = round1(target)
-  if (shown > goal) return 'above'
-  if (shown < goal) return 'below'
-  return 'on'
+  return targetStanding(value, target)
 }
 
 /**
@@ -86,7 +88,9 @@ export function deltaSince(values: readonly (number | null)[], fromIndex: number
   const from = values[fromIndex]
   const latest = values[to]
   if (from === null || from === undefined || latest === null || latest === undefined) return null
-  return latest - from
+  // The difference of the two readings AS PRINTED (`printedMove`): Carga de trabajo's
+  // 2,75 → 3,33 prints "2,8" and "3,3", so its move is "+0,5", never the raw "+0,6".
+  return printedMove(latest, from)
 }
 
 /** Mean of the disclosed dimension readings of one wave, or `null` when there are none. */
@@ -136,25 +140,40 @@ export function orderByLatest<T extends TrendDimension>(dimensions: readonly T[]
     .map(({ dimension }) => dimension)
 }
 
-/** The 0.5-step ticks that enclose every reading and the target — one chart's y axis. */
-export function axisTicks(values: readonly (number | null)[], target: number): number[] {
+/**
+ * One chart's y axis. The DOMAIN runs from the half-point under every reading and the
+ * target (less a margin) to the half-point over them; the TICKS drawn and labelled are
+ * the half-points from the lowest printed reading up. That is the canvas's `linechart`
+ * (domain 2,5–4,5, gridlines and labels at 3,0 · 3,5 · 4,0 · 4,5 over readings down to
+ * 2,8): the domain's floor is room for the lowest point to sit in, not a reading, so it
+ * carries no gridline and no label.
+ */
+export interface TrendAxis {
+  low: number
+  high: number
+  ticks: number[]
+}
+
+export function trendAxis(values: readonly (number | null)[], target: number): TrendAxis {
   const present = values.filter((value): value is number => typeof value === 'number')
-  const low = Math.floor((Math.min(...present, target) - 0.2) * 2) / 2
+  const lowest = Math.min(...present, target)
+  const low = Math.floor((lowest - 0.2) * 2) / 2
   const high = Math.ceil((Math.max(...present, target) + 0.2) * 2) / 2
+  const first = Math.ceil(round1(lowest) * 2) / 2
   const ticks: number[] = []
-  for (let tick = low; tick <= high + 1e-9; tick += 0.5) ticks.push(round1(tick))
-  return ticks
+  for (let tick = first; tick <= high + 1e-9; tick += 0.5) ticks.push(round1(tick))
+  return { low, high, ticks }
 }
 
 /**
  * ONE y axis for all six charts: the ticks that enclose every reading of every
  * dimension, and the target. Small multiples on six different scales invite the eye to
  * compare slopes that are not comparable — a 0,3 rise on a 1-point axis looks like a
- * 0,6 rise on a half-point one — so the canvas draws all six on 3,0–4,5 and this does
+ * 0,6 rise on a half-point one — so the canvas draws all six on one axis and this does
  * the same from the data.
  */
-export function sharedAxisTicks(dimensions: readonly TrendDimension[], target: number): number[] {
-  return axisTicks(
+export function sharedTrendAxis(dimensions: readonly TrendDimension[], target: number): TrendAxis {
+  return trendAxis(
     dimensions.flatMap((dimension) => dimension.values),
     target,
   )

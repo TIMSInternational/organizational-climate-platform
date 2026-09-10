@@ -9,6 +9,7 @@ import { tokenFor } from '../../../../test/jwtFixture'
 import { getClimateTrends, type ClimateTrendsResponse } from '../../api/climateTrends'
 import { listSurveys, type SurveyListItem } from '../../api/surveys'
 import ClimateTrendsNextPage from './ClimateTrendsNextPage'
+import { downloadTextFile } from '../../../../lib/downloadTextFile'
 import en from '../../../../i18n/en.json'
 
 const copy = en.surveys.next.trends
@@ -21,6 +22,7 @@ vi.mock('../../api/surveys', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/surveys')>()),
   listSurveys: vi.fn(),
 }))
+vi.mock('../../../../lib/downloadTextFile', () => ({ downloadTextFile: vi.fn() }))
 
 const JAN = '2026-02-12T00:00:00+00:00'
 const MAY = '2026-05-13T00:00:00+00:00'
@@ -143,6 +145,7 @@ describe('ClimateTrendsNextPage', () => {
     )
     vi.mocked(listSurveys).mockReset()
     vi.mocked(listSurveys).mockResolvedValue([OPEN])
+    vi.mocked(downloadTextFile).mockReset()
   })
   afterEach(() => {
     cleanup()
@@ -169,9 +172,11 @@ describe('ClimateTrendsNextPage', () => {
     const table = screen.getByRole('table')
     expect(screen.getByRole('heading', { name: copy.tableHeading })).toBeTruthy()
     expect(within(table).getAllByRole('row')).toHaveLength(1 + 3 + 1)
-    // The target is CLIMATE_TARGET, as on the Panel de Control: no sample chip, one footnote.
+    // The target is CLIMATE_TARGET, as on the Panel de Control: no sample chip.
     expect(screen.queryByText(en.dashboard.next.sampleChip)).toBeNull()
-    expect(screen.getByText(copy.targetNote.replace('{target}', '3.7'))).toBeTruthy()
+    // The artboard's one footnote: the floor's rule, and that the whole company is never under it.
+    const footnote = document.querySelector('[data-slot="trends-footnote"]') as HTMLElement
+    expect(footnote.textContent).toBe(`${copy.floorNote.replace('{floor}', '5')} ${copy.companyNeverWithheld}`)
   })
 
   /**
@@ -225,10 +230,12 @@ describe('ClimateTrendsNextPage', () => {
     const axes = [...document.querySelectorAll('[data-slot="trend-card"]')].map((card) =>
       [...card.querySelectorAll('[data-slot="trend-tick"]')].map((tick) => tick.textContent),
     )
-    // Belonging alone would be 3.0–4.5 and workload alone 2.5–4.0.
+    // Belonging alone would label 3.5–4.5 and workload alone 3.0–4.0. Shared, both label the
+    // canvas's 3.0–4.5: the domain reaches down to 2.5 for workload's 2.8, but the floor is
+    // room for a point, not a reading, and carries no label.
     expect(axes).toEqual([
-      ['2.5', '3.0', '3.5', '4.0', '4.5'],
-      ['2.5', '3.0', '3.5', '4.0', '4.5'],
+      ['3.0', '3.5', '4.0', '4.5'],
+      ['3.0', '3.5', '4.0', '4.5'],
     ])
   })
 
@@ -346,5 +353,43 @@ describe('ClimateTrendsNextPage', () => {
     renderAt('super_admin', undefined)
     expect(await screen.findByText(en.companyContext.chooseACompany)).toBeTruthy()
     expect(vi.mocked(getClimateTrends)).not.toHaveBeenCalled()
+  })
+
+  it('says the whole company is never under the floor only while that is true of every wave shown', async () => {
+    vi.mocked(getClimateTrends).mockImplementation(async (_base, query) => {
+      if (query?.groupBy === 'department') return byDepartment()
+      const payload = whole()
+      return {
+        ...payload,
+        groups: payload.groups.map((group) => ({
+          ...group,
+          points: group.points.map((point, index) =>
+            index === 0 ? { ...point, respondentCount: 0, isSuppressed: true, scores: [null, null] } : point,
+          ),
+        })),
+      }
+    })
+    renderAt('company_admin')
+    await waitFor(() => expect(document.querySelector('[data-slot="trends-footnote"]')).not.toBeNull())
+    const footnote = document.querySelector('[data-slot="trends-footnote"]') as HTMLElement
+    expect(footnote.textContent).toBe(copy.floorNote.replace('{floor}', '5'))
+    // And no "group(s)": the count sentence the artboard does not have is gone from the page.
+    expect(document.body.textContent).not.toContain('(s)')
+  })
+
+  it('exports the table as shown: the drawn group, readings as printed, and a withheld wave as the word, never a number', async () => {
+    renderAt('company_admin')
+    await waitFor(() => expect(document.querySelectorAll('[data-slot="trend-card"]')).toHaveLength(2))
+    await userEvent.click(screen.getByRole('button', { name: copy.export }))
+    expect(vi.mocked(downloadTextFile)).toHaveBeenCalledTimes(1)
+    const [fileName, mime, contents] = vi.mocked(downloadTextFile).mock.calls[0]
+    expect(fileName).toBe(`${copy.exportFileName}.csv`)
+    expect(mime).toContain('text/csv')
+    expect(contents.split('\r\n')[1]).toBe(`${copy.wholeCompany},Q1,2026-02-12,24,3.3,2.8`)
+    // Finanzas is withheld in Q2: the file says so in every cell of that row, count included.
+    await userEvent.click(screen.getByRole('button', { name: 'Finanzas' }))
+    await userEvent.click(screen.getByRole('button', { name: copy.export }))
+    const finanzas = vi.mocked(downloadTextFile).mock.calls[1][2].split('\r\n')
+    expect(finanzas[2]).toBe(`Finanzas,Q2,2026-05-13,${copy.withheld},${copy.withheld},${copy.withheld}`)
   })
 })

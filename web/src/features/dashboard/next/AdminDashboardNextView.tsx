@@ -9,7 +9,6 @@ import { useViewerCapabilities, type ViewerCapabilities } from '../../../auth/vi
 import { calendarDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { KpiRow, SectionHeading } from '../components/dashboardGrammar'
-import { MAP_DEAD_BAND_AT, MAP_EXTREME_AT, printedReading } from './compose'
 import type { AdminDashboardModel, AttentionItem, DimensionSeries, RegionKey, RegionStatuses, Wave } from './model'
 import {
   closedWaveCount,
@@ -17,14 +16,18 @@ import {
   isBelowTarget,
   latestAverage,
   lowestCell,
+  nameHead,
   nextWaveCode,
   percent,
   percentReading,
   previousAverage,
+  printedMove,
   protectedRows,
   reading,
   risesInARow,
+  sentenceName,
   signedReading,
+  targetStep,
 } from './derive'
 import TrendSparkline from './TrendSparkline'
 import CycleTimeline, { type CycleStep } from './CycleTimeline'
@@ -70,7 +73,8 @@ export default function AdminDashboardNextView({
   const { target } = model
   const latest = latestAverage(model)
   const previous = previousAverage(model)
-  const move = latest !== null && previous !== null ? latest - previous : null
+  // The move between the two averages AS the tile prints them, at two decimals.
+  const move = latest !== null && previous !== null ? printedMove(latest, previous, 2) : null
   const rises = risesInARow(model)
   const withheld = protectedRows(model, ANONYMITY_FLOOR)
   const completion = percent(model.participation.completed, model.participation.responses)
@@ -131,6 +135,7 @@ export default function AdminDashboardNextView({
           <RegionNotice regions={regions} region="company" t={t} />
           <KpiRow>
             <KpiTile
+              size="hero"
               label={t('dashboard.next.climateLabel', { wave: model.latestClosedWave.code })}
               value={latest}
               format={{ kind: 'number', decimals: 2 }}
@@ -142,12 +147,13 @@ export default function AdminDashboardNextView({
                   <span data-slot="climate-move" className={move >= 0 ? 'text-accent-green-ink' : 'text-accent-red-ink'}>
                     <span className="font-mono tabular-nums">{signedReading(move, locale, 2)}</span>{' '}
                     {t('dashboard.next.climateVs', { wave: model.previousWave.code })}
-                    {rises >= 2 && <> · {t('dashboard.next.risesInARow', { count: rises })}</>}
+                    {rises >= 2 && <> · {risesPhrase(rises, t)}</>}
                   </span>
                 ) : undefined
               }
             />
             <KpiTile
+              size="hero"
               label={t('dashboard.next.participationLabel', { wave: model.latestClosedWave.code })}
               value={model.participation.responses}
               unit={t('dashboard.next.participationSub', {
@@ -167,6 +173,7 @@ export default function AdminDashboardNextView({
               }
             />
             <KpiTile
+              size="hero"
               label={t('dashboard.next.openSurveyLabel', { wave: open?.code ?? '—' })}
               value={open ? open.responses : null}
               unit={
@@ -200,6 +207,7 @@ export default function AdminDashboardNextView({
               }
             />
             <KpiTile
+              size="hero"
               label={t('dashboard.next.plansLabel')}
               value={model.plans.open}
               unit={t('dashboard.next.plansOpen')}
@@ -235,10 +243,7 @@ export default function AdminDashboardNextView({
                 <svg aria-hidden="true" width="18" height="2" viewBox="0 0 18 2" className="shrink-0">
                   <line x1="0" x2="18" y1="1" y2="1" stroke={TARGET_RULE} strokeDasharray="3 2" />
                 </svg>
-                {t('dashboard.next.movedLegend', {
-                  target: reading(target, locale),
-                  count: closedWaveCount(model),
-                })}
+                {movedLegend(closedWaveCount(model), reading(target, locale), t, locale)}
               </span>
             </div>
             <RegionNotice regions={regions} region="trends" t={t} />
@@ -280,24 +285,23 @@ export default function AdminDashboardNextView({
             <RegionNotice regions={regions} region="map" t={t} />
             <div className="overflow-x-auto">
               <ClimateMap
-                // Short column heads, full name on hover and for AT: measured at 1440, six
-                // full names made the grid wider than its panel and clipped two columns.
-                dimensions={model.map.dimensionKeys.map((key) => ({
-                  key,
-                  label: shortLabel(dimensionName(key)),
-                  fullLabel: dimensionName(key),
-                }))}
+                // The artboard's grid: whole names set small and cut by their column (the
+                // full name on hover and for AT), 34px cells, the grouped legend, and no
+                // ring — the deep red is the mark. Columns in the survey's question order
+                // (`compose.ts` `questionOrderOf`), which is the artboard's order.
+                variant="canvas"
+                dimensions={model.map.dimensionKeys.map((key) => ({ key, label: dimensionName(key) }))}
                 rows={model.map.rows.map((row) => ({
                   id: row.departmentId,
                   label: row.name,
                   responses: row.responses,
-                  // The reading each cell PRINTS, so its tint and its "above / below"
-                  // agree with the number on it (`MAP_DEAD_BAND_AT`).
-                  scores: row.scores.map(printedReading),
+                  scores: row.scores,
                 }))}
                 target={target}
-                deadBandAt={MAP_DEAD_BAND_AT}
-                extremeAt={MAP_EXTREME_AT}
+                // The one rule every cell and chip on the page judges by — the printed
+                // reading against the canvas's bands — so a cell's tint and its "en / bajo /
+                // sobre la meta" agree with the number on it.
+                tintStep={(score) => targetStep(score, target)}
                 decimals={1}
                 // The floor, and never lower: a row under it is hatched and prints nothing.
                 threshold={ANONYMITY_FLOOR}
@@ -349,8 +353,10 @@ export default function AdminDashboardNextView({
                 className="flex items-center justify-between gap-3 rounded-lg border border-line-default bg-surface-card px-4 py-3.5 shadow-xs"
               >
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="truncate text-base font-semibold text-fg-primary">
-                    {t('dashboard.next.liveTitle', { name: model.liveMicroclimate.name })}
+                  {/* The name's head, as the artboard's "Pulso semanal en vivo"; the whole
+                      name, subtitle included, is the tooltip. */}
+                  <span className="truncate text-base font-semibold text-fg-primary" title={model.liveMicroclimate.name}>
+                    {t('dashboard.next.liveNamed', { name: nameHead(model.liveMicroclimate.name) })}
                   </span>
                   <span className="text-sm text-fg-label">
                     <span className="font-mono tabular-nums">{model.liveMicroclimate.responses}</span>{' '}
@@ -400,6 +406,9 @@ function SparkCard({
   const before = dimension.values[dimension.values.length - 2]
   if (value === undefined) return null
   const below = isBelowTarget(value, target)
+  // The move between the two readings AS PRINTED: Confianza's 3,33 → 3,67 prints "3,3" and
+  // "3,7", so its move is "+0,4" — the raw difference printed "+0,3" beside them.
+  const move = before === undefined ? null : printedMove(value, before)
   return (
     <div
       data-slot="trend-card"
@@ -409,15 +418,13 @@ function SparkCard({
     >
       <div className="truncate text-sm text-fg-secondary">{dimension.name}</div>
       <div className="flex flex-wrap items-baseline gap-2">
-        <span className="font-mono text-2xl leading-none tabular-nums text-fg-primary">{reading(value, locale)}</span>
-        {before !== undefined && (
+        <span className="font-mono text-[22px] leading-none tabular-nums text-fg-primary">{reading(value, locale)}</span>
+        {move !== null && (
           <span
-            className={cn(
-              'font-mono text-sm tabular-nums',
-              value >= before ? 'text-accent-green-ink' : 'text-accent-red-ink',
-            )}
+            data-slot="trend-move"
+            className={cn('font-mono text-sm tabular-nums', move >= 0 ? 'text-accent-green-ink' : 'text-accent-red-ink')}
           >
-            {signedReading(value - before, locale)}
+            {signedReading(move, locale)}
           </span>
         )}
         {below && <Chip tone="critical" label={t('dashboard.next.belowTarget')} className="h-4.5 px-1.5 text-2xs" />}
@@ -437,29 +444,42 @@ function SparkCard({
   )
 }
 
-/** The first letters of a column head; the full name rides on `fullLabel`. */
-function shortLabel(name: string): string {
-  return name.length > 6 ? `${name.slice(0, 5)}…` : name
+/**
+ * "segunda alza seguida" — the rises in a row as the artboard words them (its "tercer
+ * alza seguida"), by the count the data gives: Q1 → Q2 → Q3 is the second. Past the
+ * sixth the catalogue has no ordinal and the count is printed.
+ */
+function risesPhrase(rises: number, t: TranslateFn): string {
+  return rises <= 6 ? t(`dashboard.next.riseOrdinal.${rises}`) : t('dashboard.next.risesInARow', { count: rises })
+}
+
+/** "meta 3,7 · tres encuestas cerradas, toda la empresa" — the count in words up to ten, as the artboard writes it. */
+function movedLegend(count: number, target: string, t: TranslateFn, locale: string): string {
+  if (count === 1) return t('dashboard.next.movedLegendOne', { target })
+  const words = count >= 2 && count <= 10 ? t(`dashboard.next.countWord.${count}`) : count.toLocaleString(locale)
+  return t('dashboard.next.movedLegend', { target, count: words })
 }
 
 /**
- * The rail: one step per wave, its code and its date, the full sentence for AT — and,
+ * The rail: one step per wave, its code and what its date means ("cerró 12 feb",
+ * "cierra 10 oct") on screen, as the artboard draws them — and,
  * when nothing is planned after the open wave, the next slot of a quarterly cycle as a
  * hollow "por planificar" step (`nextWaveCode`), which names a slot and claims no survey.
  */
 function cycleSteps(waves: readonly Wave[], t: TranslateFn, locale: string): CycleStep[] {
   const steps = waves.map((wave): CycleStep => {
+    // The verb is on screen, not only for AT: a bare date under a code does not say
+    // which way it points, and the artboard reads "cerró 12 feb" and "cierra 10 oct".
     if (wave.status === 'closed' && wave.closedAt) {
       const date = calendarDay(Date.parse(wave.closedAt), locale)
-      return { id: wave.id, code: wave.code, detail: date, srDetail: t('dashboard.next.waveClosed', { date }), status: 'closed' }
+      return { id: wave.id, code: wave.code, detail: t('dashboard.next.waveClosed', { date }), status: 'closed' }
     }
     if (wave.status === 'open' && wave.closesAt) {
       const date = calendarDay(Date.parse(wave.closesAt), locale)
       return {
         id: wave.id,
-        code: t('dashboard.next.waveOpenShort', { code: wave.code }),
-        detail: date,
-        srDetail: t('dashboard.next.waveCloses', { date }),
+        code: t('dashboard.next.waveOpen', { code: wave.code }),
+        detail: t('dashboard.next.waveCloses', { date }),
         status: 'open',
       }
     }
@@ -627,7 +647,14 @@ function AttentionRow({
           t={t}
           messageKey="dashboard.next.lowParticipationHeadline"
           params={{
-            survey: { strong: survey.name },
+            // The title as it reads inside the sentence: "Encuesta de Clima Q4", its
+            // "(abierta)" dropped because the sentence already says it is open.
+            survey: {
+              strong: sentenceName(
+                survey.name,
+                model.waves.filter((wave) => wave.id !== survey.id).map((wave) => wave.name),
+              ),
+            },
             responses: { mono: survey.responses.toLocaleString(locale) },
             audience: { mono: survey.audience.toLocaleString(locale) },
             days: { mono: daysBetween(model.asOf, survey.closesAt).toLocaleString(locale) },

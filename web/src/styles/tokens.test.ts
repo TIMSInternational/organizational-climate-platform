@@ -294,3 +294,13 @@ describe('class detection', () => {
     expect(indexCss).toMatch(/@source not '\.\/\*\*\/\*\.test\.\{ts,tsx\}'/)
   })
 })
+
+describe('hairlines in the dark palette', () => {
+  it('never draws a hairline in the colour of the surface it rules', () => {
+    // At #1f173b `--admin-border-light` WAS `--admin-bg-card`, so every light rule on a card
+    // — the dashboard's sparkline cards, the survey list's rows and participation track —
+    // vanished in dark.
+    expect(darkToken('--admin-border-light')).not.toBe(darkToken('--admin-bg-card'))
+    expect(darkToken('--admin-border-light')).not.toBe(darkToken('--admin-bg-panel'))
+  })
+})

@@ -67,3 +67,16 @@ export function calendarDay(value: number | Date, locale: string, now: number | 
     ...(sameYear ? {} : { year: 'numeric' }),
   })
 }
+
+/**
+ * Today as an ISO calendar day — "2026-09-10" — in the reader's own calendar: the `asOf`
+ * every "en N días" and "a N días del cierre" counts from, on every screen. A day, not an
+ * instant. Counted from `new Date().toISOString()`, a survey closing on 10 Oct read "en 29
+ * días" on the survey list at three in the afternoon while the Panel de Control, which
+ * counts from the day, said "a 30 días del cierre" in the same minute.
+ */
+export function todayCalendarDay(now: Date = new Date()): string {
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}

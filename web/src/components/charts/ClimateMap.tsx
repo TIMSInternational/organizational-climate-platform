@@ -2,7 +2,7 @@ import { useTranslation } from '../../i18n'
 import { cn } from '../../lib/cn'
 import { Table } from '../ui'
 import { formatMetric } from './formatMetric'
-import { DIVERGING_COLORS, divergingPair } from './palette'
+import { DIVERGING_COLORS, DIVERGING_INKS, divergingPair } from './palette'
 import ProtectedCell from './ProtectedCell'
 import { PROTECTED_HATCH, isSuppressed } from './suppression'
 
@@ -131,6 +131,15 @@ const DENSITY = {
   large: { box: 'h-11', reading: 'text-sm', header: 'text-xs', label: 'text-sm' },
 } as const
 
+/**
+ * The Dashboard artboard's cells (10 Sep): 34px tall and printed at 12px, the column
+ * heads at 9px, the group names at 13px in the primary ink.
+ */
+const CANVAS_DENSITY = { box: 'h-8.5', reading: 'text-sm', header: 'text-[9px]', label: 'text-base' } as const
+
+/** A step of the diverging scale: 0 far below … 2 on target … 4 far above. */
+export type ClimateMapStep = 0 | 1 | 2 | 3 | 4
+
 export interface ClimateMapProps {
   dimensions: readonly ClimateMapDimension[]
   rows: readonly ClimateMapRow[]
@@ -180,6 +189,22 @@ export interface ClimateMapProps {
   onSelectRow?: (rowId: string) => void
   /** What is open now, so the grid can mark it. */
   selection?: ClimateMapSelection | null
+  /**
+   * How the map is drawn. `canvas` is the Dashboard artboard's grid (10 Sep): a 120px
+   * label column and six equal columns 4px apart, 34px cells printed at 12px, the whole
+   * dimension name set small and cut by its column with an ellipsis (the full name is the
+   * tooltip and the accessible name), no ring around the far-below cells — the deep red
+   * is the mark — and the grouped legend "■■ bajo la meta · ■ en la meta · ■■ sobre la
+   * meta" with the protected key after it.
+   */
+  variant?: 'default' | 'canvas'
+  /**
+   * The step each disclosed reading takes, when the caller owns the rule — the Panel de
+   * Control judges the PRINTED reading against the canvas's bands (`targetStep`). Its
+   * words for AT follow the same step. Left out, the step comes from `deadBandAt` and
+   * `extremeAt`, as before.
+   */
+  tintStep?: (score: number) => ClimateMapStep
 }
 
 export default function ClimateMap({
@@ -195,9 +220,12 @@ export default function ClimateMap({
   onSelectCell,
   onSelectRow,
   selection = null,
+  variant = 'default',
+  tintStep,
 }: ClimateMapProps) {
   const { t, locale } = useTranslation()
-  const density = DENSITY[size]
+  const canvas = variant === 'canvas'
+  const density = canvas ? CANVAS_DENSITY : DENSITY[size]
 
   const deadBand = deadBandAt / (2 * extremeAt)
   const reading = (value: number) => formatMetric(value, { kind: 'number', decimals }, locale)
@@ -210,19 +238,33 @@ export default function ClimateMap({
 
       {/* `Table` supplies `w-full` and the container that scrolls a wide grid
           inside itself rather than pushing the page sideways. */}
-      <Table className="text-sm">
+      {/* `canvas`: the artboard's grid — a 120px label column, equal reading columns and
+          4px between every cell — drawn by `table-fixed` + `border-spacing-1`, so it stays
+          the real table the module note describes rather than becoming a CSS grid. */}
+      <Table className={canvas ? 'table-fixed border-separate border-spacing-1 text-sm' : 'text-sm'}>
         <caption className="sr-only">{t('charts.tableCaption')}</caption>
+        {canvas && (
+          <colgroup>
+            <col className="w-30" />
+            {dimensions.map((dimension) => (
+              <col key={dimension.key} />
+            ))}
+          </colgroup>
+        )}
         <thead>
           <tr>
             {/* Heads the row-label column, which has no column name of its own.
                 `w-px` with the labels set `whitespace-nowrap` below is the
                 shrink-to-content column: the table's surplus width then goes to
                 the reading columns, which is where the design puts it. */}
-            <td className="w-px" />
+            <td className={canvas ? undefined : 'w-px'} />
             {dimensions.map((dimension) => (
               <th
                 key={dimension.key}
                 scope="col"
+                // `canvas` prints the whole name and lets its column cut it; the tooltip
+                // carries the rest, as the artboard's "SEGU…" does.
+                title={canvas ? (dimension.fullLabel ?? dimension.label) : undefined}
                 // `text-fg-secondary`, not `text-fg-tertiary`. These are `text-2xs`
                 // dimension names, so WCAG AA wants 4.5:1, and `--admin-font-tertiary`
                 // (#818181, the same value in both palettes) gives 3.90:1 on
@@ -232,7 +274,9 @@ export default function ClimateMap({
                 // `KpiTile` already took for its label; `resultsContrast.test.ts`
                 // measures the pair and bans the utility by name in this file.
                 className={cn(
-                  'px-1 pb-1.5 text-left font-semibold uppercase tracking-label text-fg-secondary',
+                  canvas
+                    ? 'truncate px-0 pb-1 text-center align-bottom font-bold uppercase leading-tight tracking-label text-fg-label'
+                    : 'px-1 pb-1.5 text-left font-semibold uppercase tracking-label text-fg-secondary',
                   density.header,
                 )}
               >
@@ -266,7 +310,9 @@ export default function ClimateMap({
                 <th
                   scope="row"
                   className={cn(
-                    'w-px whitespace-nowrap pr-2 text-left font-medium text-fg-secondary',
+                    canvas
+                      ? 'truncate pr-2 text-left font-normal text-fg-primary'
+                      : 'w-px whitespace-nowrap pr-2 text-left font-medium text-fg-secondary',
                     density.label,
                   )}
                 >
@@ -305,7 +351,7 @@ export default function ClimateMap({
                   // colour can be computed against a target that does not exist.
                   if (target === null || suppressed) {
                     return (
-                      <td key={dimension.key} className="p-px">
+                      <td key={dimension.key} className={canvas ? 'p-0' : 'p-px'}>
                         <ProtectedCell
                           // 0, not `row.responses`: the row-level decision above
                           // is the one that governs, and the withheld count has no
@@ -330,11 +376,32 @@ export default function ClimateMap({
                   }
 
                   const score = row.scores[index]
-                  const { fill, ink } = divergingPair((score - target) / (2 * extremeAt), deadBand)
+                  // The caller's rule when it owns one (`tintStep`), else the band that
+                  // `deadBandAt` / `extremeAt` describe. Either way the fill and its ink
+                  // come from ONE step, so they can never land on different ones.
+                  const step = tintStep ? tintStep(score) : null
+                  const { fill, ink } =
+                    step === null
+                      ? divergingPair((score - target) / (2 * extremeAt), deadBand)
+                      : { fill: DIVERGING_COLORS[step], ink: DIVERGING_INKS[step] }
+                  const standing =
+                    step !== null
+                      ? step < 2
+                        ? 'below'
+                        : step > 2
+                          ? 'above'
+                          : 'on'
+                      : score - target > deadBandAt
+                        ? 'above'
+                        : score - target < -deadBandAt
+                          ? 'below'
+                          : 'on'
                   // The ring marks the cells worth acting on. It is a second
                   // channel on top of the fill, not a substitute for it, and the
-                  // accessible label says "below target" in words either way.
-                  const severelyBelow = score - target <= -extremeAt
+                  // accessible label says "below target" in words either way. The
+                  // canvas draws none: its far-below step is the deep red, and that is
+                  // the mark.
+                  const severelyBelow = !canvas && (step === null ? score - target <= -extremeAt : step === 0)
 
                   const cellOpen =
                     selection?.rowId === row.id && selection.dimensionKey === dimension.key
@@ -390,9 +457,9 @@ export default function ClimateMap({
                       {reading(score)}
                       <span className="sr-only">
                         {` — ${t(
-                          score - target > deadBandAt
+                          standing === 'above'
                             ? 'charts.aboveTarget'
-                            : score - target < -deadBandAt
+                            : standing === 'below'
                               ? 'charts.belowTarget'
                               : 'charts.onTarget',
                           { target: reading(target) },
@@ -402,7 +469,7 @@ export default function ClimateMap({
                   )
 
                   return (
-                    <td key={dimension.key} className="p-px">
+                    <td key={dimension.key} className={canvas ? 'p-0' : 'p-px'}>
                       {onSelectCell ? (
                         // The button WRAPS the painted cell rather than being it.
                         // `severelyBelow` sets `outline` inline, and an inline
@@ -437,6 +504,9 @@ export default function ClimateMap({
         </tbody>
       </Table>
 
+      {canvas ? (
+        <CanvasLegend threshold={threshold} hasTarget={target !== null} inert={Boolean(onSelectCell || onSelectRow)} />
+      ) : (
       <div className="flex flex-wrap items-center gap-3 text-xs text-fg-secondary">
         {/* The scale is dropped when there is no target: not one cell on the grid
             carries a colour from it, and a key to colours that appear nowhere is
@@ -473,6 +543,44 @@ export default function ClimateMap({
             : t('charts.protectedLegend', { threshold })}
         </span>
       </div>
+      )}
     </figure>
+  )
+}
+
+/**
+ * The Dashboard artboard's key (10 Sep): the five steps grouped by the word they mean —
+ * "■■ bajo la meta · ■ en la meta · ■■ sobre la meta" — then the hatch and the floor,
+ * where the default legend draws a five-swatch ramp between two words.
+ */
+function CanvasLegend({ threshold, hasTarget, inert }: { threshold: number; hasTarget: boolean; inert: boolean }) {
+  const { t } = useTranslation()
+  const groups: readonly { key: string; steps: readonly ClimateMapStep[]; label: string }[] = [
+    { key: 'below', steps: [0, 1], label: t('charts.next.legendBelow') },
+    { key: 'on', steps: [2], label: t('charts.next.legendOn') },
+    { key: 'above', steps: [3, 4], label: t('charts.next.legendAbove') },
+  ]
+  return (
+    <div data-slot="climate-map-legend" className="flex flex-wrap items-center gap-3.5 text-xs text-fg-label">
+      {/* The same rule as the default key: no target, no colour on the grid, no key to it. */}
+      {hasTarget &&
+        groups.map((group) => (
+          <span key={group.key} data-legend={group.key} className="inline-flex items-center gap-1">
+            {group.steps.map((step) => (
+              <span
+                key={step}
+                aria-hidden="true"
+                className="inline-block size-2.5 rounded-xs"
+                style={{ backgroundColor: DIVERGING_COLORS[step] }}
+              />
+            ))}
+            {group.label}
+          </span>
+        ))}
+      <span className="inline-flex items-center gap-1">
+        <span aria-hidden="true" className={`inline-block size-2.5 rounded-xs bg-surface-icon-box ${PROTECTED_HATCH}`} />
+        {inert ? t('charts.protectedLegendInert', { threshold }) : t('charts.next.legendProtected', { threshold })}
+      </span>
+    </div>
   )
 }

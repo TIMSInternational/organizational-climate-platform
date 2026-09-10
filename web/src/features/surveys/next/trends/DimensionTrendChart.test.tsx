@@ -61,9 +61,22 @@ describe('DimensionTrendChart', () => {
 
   it('draws on the axis it is handed, so a page of charts shares one scale', () => {
     const own = render(<DimensionTrendChart {...props} values={[3.3, 3.7, 4.0]} />)
-    expect(ticksOf(own.container)).toEqual(['3.0', '3.5', '4.0', '4.5'])
+    expect(ticksOf(own.container)).toEqual(['3.5', '4.0', '4.5'])
     cleanup()
-    const shared = render(<DimensionTrendChart {...props} values={[3.3, 3.7, 4.0]} ticks={[2.5, 3.0, 3.5, 4.0, 4.5]} />)
-    expect(ticksOf(shared.container)).toEqual(['2.5', '3.0', '3.5', '4.0', '4.5'])
+    const shared = render(
+      <DimensionTrendChart {...props} values={[3.3, 3.7, 4.0]} axis={{ low: 2.5, high: 4.5, ticks: [3.0, 3.5, 4.0, 4.5] }} />,
+    )
+    expect(ticksOf(shared.container)).toEqual(['3.0', '3.5', '4.0', '4.5'])
+  })
+
+  it('draws the canvas geometry: no 2,5 label, the 3,0 label at y 100,5 and a 2,8 point under it at y 107,8', () => {
+    const { container } = render(
+      <DimensionTrendChart {...props} values={[2.8, 3.0, 3.3]} axis={{ low: 2.5, high: 4.5, ticks: [3.0, 3.5, 4.0, 4.5] }} />,
+    )
+    expect(ticksOf(container)).not.toContain('2.5')
+    const three = [...container.querySelectorAll('[data-slot="trend-tick"]')].find((tick) => tick.textContent === '3.0')
+    // The artboard's own numbers: `<text y="100.5">3,0</text>`, `<circle cy="107.8">` for 2,8.
+    expect(Number(three?.getAttribute('y'))).toBeCloseTo(100.5)
+    expect(Number(container.querySelector('circle[data-slot="trend-point"]')?.getAttribute('cy'))).toBeCloseTo(107.8)
   })
 })

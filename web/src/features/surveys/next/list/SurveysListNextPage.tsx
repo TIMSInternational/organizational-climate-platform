@@ -21,7 +21,7 @@ import {
 } from '../../../../components/ui'
 import { useViewerCapabilities, type ViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { formatMetric } from '../../../../components/charts/formatMetric'
-import { calendarDay } from '../../../../lib/calendarDay'
+import { calendarDay, todayCalendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import { daysBetween, percentReading, signedReading } from '../../../dashboard/next/derive'
 import { statusLabel, typeLabel } from '../../surveyVocabulary'
@@ -347,7 +347,10 @@ function SurveyTableRow({
   const counts = surveyResponseReading(row.responseCount, row.targetAudienceCount)
   const action = primaryActionFor(row, capabilities)
   const running = row.status === 'active'
-  const daysLeft = running ? daysBetween(new Date().toISOString(), row.endDate) : null
+  // Counted from TODAY AS A DAY (`todayCalendarDay`), as the Panel de Control counts:
+  // from the instant, a close on 10 Oct read "en 29 días" here at three in the afternoon
+  // while the dashboard said "a 30 días del cierre" for the same survey in the same minute.
+  const daysLeft = running ? daysBetween(todayCalendarDay(), row.endDate) : null
   const datePhrase =
     section === 'open'
       ? t('surveys.next.list.opened', { date: calendarDay(Date.parse(row.startDate), locale) })

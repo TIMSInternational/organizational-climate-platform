@@ -365,7 +365,13 @@
     "gallerySampleActionOneTitle": "Agendar la sesión",
     "gallerySampleActionOneBody": "Reservar 90 minutos con los líderes de Soporte.",
     "gallerySampleActionTwoTitle": "Reequilibrar el rol de guardias",
-    "gallerySampleActionTwoBody": "Distribuir la rotación de fin de semana en un grupo más amplio."
+    "gallerySampleActionTwoBody": "Distribuir la rotación de fin de semana en un grupo más amplio.",
+    "next": {
+      "legendBelow": "bajo la meta",
+      "legendOn": "en la meta",
+      "legendAbove": "sobre la meta",
+      "legendProtected": "protegido, menos de {threshold} respuestas"
+    }
   },
   "common": {
     "loading": "Cargando...",
@@ -817,7 +823,27 @@
       "createPlan": "Crear un plan",
       "lowParticipationSubUnknown": "{wave} cerró al {percent}",
       "liveTitle": "{name} · en vivo",
-      "waveOpenShort": "{code} · abierta"
+      "waveOpenShort": "{code} · abierta",
+      "riseOrdinal": {
+        "2": "segunda alza seguida",
+        "3": "tercera alza seguida",
+        "4": "cuarta alza seguida",
+        "5": "quinta alza seguida",
+        "6": "sexta alza seguida"
+      },
+      "countWord": {
+        "2": "dos",
+        "3": "tres",
+        "4": "cuatro",
+        "5": "cinco",
+        "6": "seis",
+        "7": "siete",
+        "8": "ocho",
+        "9": "nueve",
+        "10": "diez"
+      },
+      "movedLegendOne": "meta {target} · una encuesta cerrada, toda la empresa",
+      "liveNamed": "{name} en vivo"
     }
   },
   "departments": {
@@ -2055,7 +2081,7 @@
       "nothingToDrawTitle": "Aún no hay nada que comparar",
       "nothingToDrawBody": "Ninguna dimensión tiene puntaje en todas las encuestas mostradas, así que no hay columna que pueda leerse entre ellas.",
       "omittedDimensions": "No se muestran, porque no tuvieron puntaje en todas las encuestas aquí: {dimensions}.",
-      "suppressedGroups": "{count} grupo(s) se reservan en todas las encuestas mostradas, porque respondieron menos de {threshold} personas."
+      "suppressedGroups": "Grupos protegidos en todas las encuestas mostradas, porque respondieron menos de {threshold} personas: {count}."
     },
     "next": {
       "trends": {
@@ -2098,7 +2124,13 @@
         "noMove": "sin comparación entre la primera y la última encuesta",
         "targetNote": "La meta de {target} es fija por ahora: ninguna configuración de la empresa guarda todavía una meta de clima.",
         "chartsLabel": "Cada dimensión en el tiempo",
-        "tableRowClosed": "cerró el {date}"
+        "tableRowClosed": "cerró el {date}",
+        "companyNeverWithheld": "Toda la empresa nunca queda bajo el umbral.",
+        "export": "Exportar",
+        "exportFileName": "clima-en-el-tiempo",
+        "csvColGroup": "Grupo",
+        "csvColClosed": "Cerró",
+        "csvColResponses": "Respuestas"
       },
       "list": {
         "description": "Cuál encuesta está abierta hoy, cuánto le falta para cerrar y dónde leer las que ya cerraron.",

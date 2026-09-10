@@ -85,7 +85,24 @@ export interface KpiTileProps {
   unit?: React.ReactNode
   /** BCP-47 locale. Defaults to the document's language. */
   locale?: string
+  /**
+   * How large the reading is set. The artboards (10 Sep) draw two beside the default:
+   * `hero`, the Panel de Control's 28px reading under a label spaced .06em, and `large`,
+   * Clima en el tiempo's (and SurveyResults') 26px reading under a label spaced .12em —
+   * both at the regular weight and a line height of 1. `default` is the 24px tile the
+   * list pages keep.
+   */
+  size?: KpiTileSize
   className?: string
+}
+
+export type KpiTileSize = 'default' | 'hero' | 'large'
+
+/** The reading's size and weight and the label's tracking, per `size`. */
+const SIZES: Record<KpiTileSize, { value: string; label: string }> = {
+  default: { value: 'text-3xl font-medium tracking-tight', label: 'tracking-label' },
+  hero: { value: 'text-[28px] leading-none font-normal tracking-normal', label: 'tracking-label' },
+  large: { value: 'text-[26px] leading-none font-normal tracking-normal', label: 'tracking-[0.12em]' },
 }
 
 export default function KpiTile({
@@ -98,6 +115,7 @@ export default function KpiTile({
   changeLabel,
   unit,
   locale,
+  size = 'default',
   className,
 }: KpiTileProps) {
   // A tile with no reading has no change either: there is no number to have moved.
@@ -139,13 +157,13 @@ export default function KpiTile({
           pinned it — `features/surveys/respondContrast.test.ts` and
           `features/surveys/resultsContrast.test.ts` each ban `text-fg-tertiary` from
           this file by name. */}
-      <div className="text-2xs font-bold uppercase tracking-eyebrow text-fg-secondary">
+      <div data-slot="kpi-label" className={cn('text-2xs font-bold uppercase text-fg-secondary', SIZES[size].label)}>
         {label}
       </div>
       {/* The unit shares the value's baseline, as the artboards draw it — never a
           second line, which is what `sub` is for. */}
       <div className="mt-1.5 flex flex-wrap items-baseline gap-2">
-        <span className="font-mono text-3xl font-medium tracking-tight tabular-nums">
+        <span data-slot="kpi-value" className={cn('font-mono tabular-nums', SIZES[size].value)}>
           {value === null ? EM_DASH : formatMetric(value, format, locale)}
         </span>
         {unit && <span className="text-sm text-fg-secondary">{unit}</span>}

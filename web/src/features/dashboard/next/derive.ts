@@ -48,16 +48,87 @@ export function risesInARow(model: AdminDashboardModel): number {
   return rises
 }
 
+/** A 1–5 reading at the one decimal every cell, card and chip prints. */
+export function printedReading(value: number): number {
+  return Math.round(value * 10) / 10
+}
+
 /**
- * The one comparison behind every "below target" mark on the page — judged at the one
- * decimal the page prints. The whole company's Confianza is 3,67 on the wire and prints
- * "3,7" beside "meta 3,7"; a strict `3.67 < 3.7` marked it "bajo la meta" there while
- * Clima en el tiempo, which judges the printed reading, called it "en la meta". A mark
- * that contradicts the number beside it is read as a bug, so both screens judge the
- * number the reader sees.
+ * The canvas's bands around the target, each the upper bound of its step in TENTHS of a
+ * point between the PRINTED reading and the target (`build_admin.py`'s `tint()`, drawn
+ * against "meta 3,7"): 2,6 and under is far below (step 0), 2,7–3,4 below (1), 3,5–3,7
+ * on target (2), 3,8–4,0 above (3), 4,1 and over far above (4). The map's legend names
+ * the grey middle band "en la meta", so a 3,5 is on target on every screen that judges one.
  */
+export const TARGET_BANDS_TENTHS = [-11, -3, 0, 3] as const
+
+/** An index into `DIVERGING_COLORS` / `DIVERGING_INKS`: 0 far below … 2 on target … 4 far above. */
+export type TargetStep = 0 | 1 | 2 | 3 | 4
+export type TargetStanding = 'below' | 'on' | 'above'
+
+/**
+ * The step a reading takes against the target — the ONE rule behind every tint (the
+ * Panel de Control's map, Clima en el tiempo's table) and every "bajo / en / sobre la
+ * meta" word, judged at the decimal the page prints. The whole company's Confianza is
+ * 3,67 on the wire and prints "3,7" beside "meta 3,7"; judged raw it was "bajo la meta"
+ * on one screen and "en la meta" on the other. A mark that contradicts the number
+ * beside it is read as a bug, so every mark judges the number the reader sees.
+ */
+export function targetStep(value: number, target: number): TargetStep {
+  const tenths = Math.round(printedReading(value) * 10) - Math.round(printedReading(target) * 10)
+  const [farBelow, below, on, above] = TARGET_BANDS_TENTHS
+  if (tenths <= farBelow) return 0
+  if (tenths <= below) return 1
+  if (tenths <= on) return 2
+  if (tenths <= above) return 3
+  return 4
+}
+
+/** The word a step reads as: the two red steps are below, the grey one on, the two blue above. */
+export function targetStanding(value: number, target: number): TargetStanding {
+  const step = targetStep(value, target)
+  return step < 2 ? 'below' : step > 2 ? 'above' : 'on'
+}
+
+/** The comparison behind every "bajo la meta" chip and red endpoint — `targetStanding`. */
 export function isBelowTarget(value: number, target: number): boolean {
-  return Math.round(value * 10) < Math.round(target * 10)
+  return targetStanding(value, target) === 'below'
+}
+
+/**
+ * The move between two readings AS PRINTED: the difference of the rounded readings, never
+ * the rounding of the difference. Confianza went 3,33 → 3,67, which the card prints as
+ * "3,3" and "3,7"; the raw difference 0,34 printed "+0,3" beside two numbers a reader can
+ * subtract to 0,4. `decimals` is the precision the two readings are printed at.
+ */
+export function printedMove(to: number, from: number, decimals = 1): number {
+  const scale = 10 ** decimals
+  return (Math.round(to * scale) - Math.round(from * scale)) / scale
+}
+
+/**
+ * A survey's title as it reads inside a sentence: one trailing parenthetical dropped —
+ * "Encuesta de Clima Q4 (abierta)" → "Encuesta de Clima Q4", as the Dashboard artboard
+ * writes it in "… lleva 1 de 24 respuestas a 30 días del cierre", where the sentence
+ * already says the survey is open. Kept whole when nothing would be left, or when what
+ * is left is another listed survey's own title — then the parenthetical is what tells
+ * the two apart.
+ */
+export function sentenceName(title: string, others: readonly string[] = []): string {
+  const match = /^(.*\S)\s*\([^()]*\)$/.exec(title.trim())
+  if (!match) return title
+  const head = match[1]
+  return others.some((other) => other.trim() === head) ? title : head
+}
+
+/**
+ * The head of a name that carries a subtitle after a spaced dash — "Pulso semanal —
+ * ¿cómo fue la semana?" → "Pulso semanal", as the artboard's live card names it. A
+ * hyphen inside a word is not a subtitle and is left alone.
+ */
+export function nameHead(name: string): string {
+  const head = name.split(/\s[—–]\s/)[0]?.trim()
+  return head ? head : name
 }
 
 /**

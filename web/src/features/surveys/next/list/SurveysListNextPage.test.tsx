@@ -305,4 +305,21 @@ describe('SurveysListNextPage', () => {
     expect(vi.mocked(listSurveys).mock.calls[0]?.[1]).toEqual({ status: '', type: '', q: '' })
     expect(await openMenu('q3')).toEqual([copy.viewSurvey])
   })
+
+  it('counts the days to close from today as a day, as the Panel de Control does: 30, not 29, in the afternoon', async () => {
+    // 15:00 UTC on 10 Sep: still 10 Sep from UTC-15 to UTC+8. Counted from the instant, a
+    // close at 02:03 UTC on 10 Oct is 29.46 days away and printed "29"; from the day, 30.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-10T15:00:00Z'))
+    try {
+      vi.mocked(listSurveys).mockResolvedValue([
+        row({ id: 'open', title: 'Q4', status: 'active', responseCount: 3, targetAudienceCount: 24, endDate: '2026-10-10T02:03:39.148+00:00' }),
+      ])
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await waitFor(() => expect(rowOf('open')).toBeTruthy())
+      expect(rowOf('open').querySelector('[data-slot="close-note"]')?.textContent).toBe(copy.inDays.replace('{count}', '30'))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

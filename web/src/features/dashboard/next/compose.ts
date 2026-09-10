@@ -1,7 +1,8 @@
 import type { ActionPlan, ActionPlanDetail } from '../../action-plans/api/actionPlans'
 import type { Microclimate, MicroclimateDetail } from '../../microclimates/api/microclimates'
 import { WHOLE_COMPANY_KEY, type ClimateTrendsResponse } from '../../surveys/api/climateTrends'
-import type { SurveyListItem } from '../../surveys/api/surveys'
+import type { SurveyInvitationList } from '../../surveys/api/surveyDistribution'
+import type { SurveyDetail, SurveyListItem } from '../../surveys/api/surveys'
 import type { PlanAccion } from '../../tracking/api/trackingApi'
 import type { CompanyAdminDashboard } from '../api/dashboard'
 import { daysBetween, lowestCell, type MapCell } from './derive'
@@ -41,6 +42,12 @@ import type {
  * | `actionPlans`   | `GET /action-plans`, `GET /action-plans/{id}`     | the plan covering the lowest cell                     |
  * | `tracking`      | tracking `GET /api/planes-accion` + the pickers   | `plans` when tracking is on, the overdue-plan item    |
  * | `microclimates` | `GET /microclimates`, `GET /microclimates/{id}`   | `liveMicroclimate`                                    |
+ * | (column order)  | `GET /surveys/{latest closed id}`                 | the map's column order: the order that survey asks its dimensions |
+ * | (reminders)     | `GET /surveys/{open id}/invitations`              | `remindersSent` on the participation item             |
+ *
+ * The last two are enrichments, not regions: neither carries a number the page could
+ * mistake, so a failed read changes no chip — the map keeps the server's column order,
+ * and the participation item says nothing about reminders.
  *
  * ## Why the map reads the trends endpoint and not `/surveys/{id}/results`
  *
@@ -54,30 +61,18 @@ import type {
  *
  * ## What no endpoint carries
  *
- * A climate target: `CLIMATE_TARGET` is the mockup's 3.7 until a setting exists. A
- * count of reminders sent: the participation item carries `remindersSent: null` and the
- * page says nothing about reminders rather than "none sent".
+ * A climate target: `CLIMATE_TARGET` is the mockup's 3.7 until a setting exists.
+ * Reminders are read from the open survey's invitations (`reminderCount`, summed); when
+ * that read fails the item carries `remindersSent: null` and the page says nothing about
+ * reminders rather than "none sent".
  */
 
 /** The climate target on the 1–5 scale. No endpoint carries one; this is the mockup's. */
 export const CLIMATE_TARGET = 3.7
 
-/**
- * How a 1–5 reading is tinted against `CLIMATE_TARGET` wherever the product draws a cell,
- * applied to the reading ROUNDED TO THE ONE DECIMAL THE CELL PRINTS: a cell that prints
- * "3,7" beside "meta 3,7" is on target, one that prints "3,8" is above it — the same
- * rule as the "sobre / en / bajo la meta" chips (`surveys/next/trends/derive.ts`
- * `standing`), so a tint never contradicts the word beside it. A full point away
- * saturates. The Panel de Control's map and Clima en el tiempo's table both read these,
- * so one score is one tint on both screens.
- */
-export const MAP_DEAD_BAND_AT = 0.05
-export const MAP_EXTREME_AT = 1
-
-/** A 1–5 reading at the one decimal every cell prints — what the tint is judged on. */
-export function printedReading(value: number): number {
-  return Math.round(value * 10) / 10
-}
+// How a reading is tinted and worded against the target — `targetStep` and
+// `targetStanding` in `derive.ts` — is judged at the printed decimal with the canvas's
+// bands; every cell and chip on the Panel de Control and Clima en el tiempo reads it.
 
 /** One region's payload, or the reason it has none. */
 export type Part<T> =
@@ -112,6 +107,18 @@ export interface ModelParts {
   actionPlans: Part<ActionPlansPart>
   tracking: Part<TrackingPart>
   microclimates: Part<MicroclimatesPart>
+  /**
+   * The categories of the latest closed survey's questions, in the order it asks them
+   * (`GET /surveys/{id}`, `questionOrderOf`) — the map's column order. Absent or failed,
+   * the map keeps the server's order.
+   */
+  questionOrder?: Part<readonly string[]>
+  /**
+   * Reminders sent for the open survey, summed from its invitations' `reminderCount`
+   * (`GET /surveys/{id}/invitations`, `remindersOf`). Absent or failed, the item says
+   * nothing about reminders — "ningún recordatorio" would be a claim nobody read.
+   */
+  reminders?: Part<number>
 }
 
 export interface ComposeOptions {
@@ -190,6 +197,50 @@ function toWave(survey: SurveyListItem): Wave {
 /** The rail: the last three closed waves, every open one, and the next planned one. */
 const CLOSED_WAVES_ON_RAIL = 3
 
+/** Closed surveys by close date, oldest first. An archived survey is never one. */
+function closedByClose(surveys: readonly SurveyListItem[]): SurveyListItem[] {
+  return surveys
+    .filter((survey) => survey.status === 'closed')
+    .sort((a, b) => a.endDate.localeCompare(b.endDate))
+}
+
+/** Open surveys, the one closing soonest first. */
+function openByClose(surveys: readonly SurveyListItem[]): SurveyListItem[] {
+  return surveys
+    .filter((survey) => survey.status === 'active')
+    .sort((a, b) => a.endDate.localeCompare(b.endDate))
+}
+
+/** The latest closed survey — the wave the tiles and the map read — or `null`. */
+export function latestClosedSurvey(surveys: readonly SurveyListItem[]): SurveyListItem | null {
+  const closed = closedByClose(surveys)
+  return closed[closed.length - 1] ?? null
+}
+
+/** The open survey the page reports on — the one closing soonest — or `null`. */
+export function currentOpenSurvey(surveys: readonly SurveyListItem[]): SurveyListItem | null {
+  return openByClose(surveys)[0] ?? null
+}
+
+/**
+ * The dimensions a survey asks, in question order, each once: the map's column order.
+ * The Dashboard artboard's columns — Seguridad psicológica, Carga de trabajo, Confianza,
+ * Reconocimiento, Desarrollo, Pertenencia — are exactly the order the tenant's Q3 asks
+ * them (read on `GET /surveys/{id}`, 10 Sep); the trends payload lists them by key.
+ */
+export function questionOrderOf(survey: Pick<SurveyDetail, 'questions'>): string[] {
+  const order: string[] = []
+  for (const question of [...survey.questions].sort((a, b) => a.order - b.order)) {
+    if (question.category && !order.includes(question.category)) order.push(question.category)
+  }
+  return order
+}
+
+/** Reminders sent for a survey: every invitation's `reminderCount` (attempts), summed. */
+export function remindersOf(list: Pick<SurveyInvitationList, 'invitations'>): number {
+  return list.invitations.reduce((sum, invitation) => sum + invitation.reminderCount, 0)
+}
+
 interface SurveysRegion {
   waves: Wave[]
   latestClosedWave: Wave
@@ -200,14 +251,10 @@ interface SurveysRegion {
 
 function composeSurveys(surveys: readonly SurveyListItem[]): SurveysRegion | null {
   const kept = surveys.filter((survey) => survey.status !== 'archived')
-  const closed = kept
-    .filter((survey) => survey.status === 'closed')
-    .sort((a, b) => a.endDate.localeCompare(b.endDate))
+  const closed = closedByClose(kept)
   const latest = closed[closed.length - 1]
   if (latest === undefined) return null
-  const open = kept
-    .filter((survey) => survey.status === 'active')
-    .sort((a, b) => a.endDate.localeCompare(b.endDate))
+  const open = openByClose(kept)
   const planned = kept
     .filter((survey) => survey.status !== 'closed' && survey.status !== 'active')
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
@@ -254,8 +301,15 @@ function composeDimensions(
   }))
 }
 
-/** One row per department for one survey — the latest closed wave — by the results screen's rules. */
-function composeMap(grouped: ClimateTrendsResponse, latestClosedId: string | null): AdminDashboardModel['map'] {
+/**
+ * One row per department for one survey — the latest closed wave — by the results
+ * screen's rules, its columns in `order` (the survey's question order) when it is known.
+ */
+function composeMap(
+  grouped: ClimateTrendsResponse,
+  latestClosedId: string | null,
+  order: readonly string[] | null,
+): AdminDashboardModel['map'] {
   let index = latestClosedId === null ? -1 : grouped.surveys.findIndex((survey) => survey.surveyId === latestClosedId)
   if (index < 0) index = grouped.surveys.map((survey) => survey.status).lastIndexOf('closed')
   if (index < 0) return { dimensionKeys: [], rows: [] }
@@ -270,14 +324,21 @@ function composeMap(grouped: ClimateTrendsResponse, latestClosedId: string | nul
       ({ dimensionIndex }) =>
         disclosed.length > 0 && disclosed.every(({ point }) => point.scores[dimensionIndex] !== null),
     )
+  // The survey's question order; a dimension it does not name keeps the server's place,
+  // after the named ones.
+  const rank = (key: string) => {
+    const at = order?.indexOf(key) ?? -1
+    return at === -1 ? Number.MAX_SAFE_INTEGER : at
+  }
+  const columns = [...kept].sort((a, b) => rank(a.key) - rank(b.key) || a.dimensionIndex - b.dimensionIndex)
   const rows: MapRow[] = points.map(({ group, point }) => ({
     departmentId: group.key,
     name: group.label ?? group.key,
     // The server's own count, untouched: 0 for a withheld row, which is what hatches it.
     responses: point.respondentCount,
-    scores: point.isSuppressed ? [] : kept.map(({ dimensionIndex }) => point.scores[dimensionIndex] as number),
+    scores: point.isSuppressed ? [] : columns.map(({ dimensionIndex }) => point.scores[dimensionIndex] as number),
   }))
-  return { dimensionKeys: kept.map(({ key }) => key), rows }
+  return { dimensionKeys: columns.map(({ key }) => key), rows }
 }
 
 function toRegionState(part: Part<unknown>): RegionState {
@@ -324,7 +385,8 @@ export function composeModel(parts: ModelParts, options: ComposeOptions): Compos
 
   // map
   const grouped = parts.map.status === 'live' ? parts.map.value : null
-  const map = grouped ? composeMap(grouped, surveys ? surveys.latestClosedWave.id : null) : sample.map
+  const questionOrder = parts.questionOrder?.status === 'live' ? parts.questionOrder.value : null
+  const map = grouped ? composeMap(grouped, surveys ? surveys.latestClosedWave.id : null, questionOrder) : sample.map
   if (grouped && map.rows.length === 0) statuses.map = toRegionState(EMPTY)
   const mapOrSample = statuses.map.status === 'live' ? map : sample.map
 
@@ -392,7 +454,11 @@ export function composeModel(parts: ModelParts, options: ComposeOptions): Compos
   if (surveys) {
     const open = surveys.openSurvey
     if (open && (open.audience <= 0 || open.responses / open.audience < 0.5)) {
-      attention.push({ kind: 'low-participation', surveyId: open.id, remindersSent: null })
+      attention.push({
+        kind: 'low-participation',
+        surveyId: open.id,
+        remindersSent: parts.reminders?.status === 'live' ? parts.reminders.value : null,
+      })
     }
   } else {
     const sampleItem = sample.attention.find((item) => item.kind === 'low-participation')

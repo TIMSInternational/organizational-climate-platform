@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import type { ClimateTrendsResponse } from '../../api/climateTrends'
 import {
-  axisTicks,
   deltaSince,
   latestValue,
   orderByLatest,
-  sharedAxisTicks,
+  sharedTrendAxis,
   standing,
   standings,
+  trendAxis,
   waveMean,
   withoutArchived,
 } from './derive'
@@ -27,6 +27,9 @@ describe('trends derive', () => {
     // 3,67 prints "3,7" beside "meta 3,7": on target, not below it.
     expect(standing(3.67, 3.7)).toBe('on')
     expect(standing(3.4, 3.7)).toBe('below')
+    // The canvas's grey band: 3,46 prints "3,5" and is on target; 3,44 prints "3,4" and is below.
+    expect(standing(3.46, 3.7)).toBe('on')
+    expect(standing(3.44, 3.7)).toBe('below')
     expect(standings(dims, 3.7).map((s) => s.standing)).toEqual(['above', 'on', 'below'])
   })
 
@@ -55,6 +58,8 @@ describe('trends derive', () => {
     expect(deltaSince([3.0, 3.2, null], 0)).toBeCloseTo(0.2)
     expect(deltaSince([3.0, 3.2, null], 1)).toBeNull()
     expect(deltaSince([null, null], 0)).toBeNull()
+    // The move between the readings AS PRINTED: 2,75 → 3,33 prints "2,8" and "3,3", so +0,5.
+    expect(deltaSince([2.75, 3.04, 3.33], 0)).toBe(0.5)
   })
 
   it('averages a wave over the dimensions that disclosed it, leaving withheld ones out of the denominator', () => {
@@ -68,14 +73,19 @@ describe('trends derive', () => {
     expect(waveMean(mixed, 0)).toBeCloseTo(3.5)
   })
 
-  it('draws 0.5-step ticks that enclose every reading and the target', () => {
-    expect(axisTicks([3.3, 3.7, 4.0], 3.7)).toEqual([3.0, 3.5, 4.0, 4.5])
-    expect(axisTicks([2.8, null, 3.4], 3.7)).toEqual([2.5, 3.0, 3.5, 4.0])
+  it('spans a domain around every reading and the target, and labels the half-points from the lowest reading up', () => {
+    // The canvas's linechart: domain 2,5–4,5, labels 3,0 · 3,5 · 4,0 · 4,5 over readings down to 2,8.
+    expect(trendAxis([2.8, null, 3.4, 4.0], 3.7)).toEqual({ low: 2.5, high: 4.5, ticks: [3.0, 3.5, 4.0, 4.5] })
+    expect(trendAxis([3.3, 3.7, 4.0], 3.7)).toEqual({ low: 3.0, high: 4.5, ticks: [3.5, 4.0, 4.5] })
+    // A lowest reading of 2,75 prints "2,8": the first label is still 3,0.
+    expect(trendAxis([2.75, 3.33], 3.7).ticks[0]).toBe(3.0)
+    // A reading on a half-point is labelled at its own level.
+    expect(trendAxis([3.0, 3.6], 3.7).ticks[0]).toBe(3.0)
   })
 
-  it('puts every chart on ONE axis: the ticks that enclose every dimension', () => {
-    // A alone would be 3,0–4,5 and C alone 2,5–4,0; side by side they must share a scale.
-    expect(sharedAxisTicks(dims, 3.7)).toEqual([2.5, 3.0, 3.5, 4.0, 4.5])
+  it('puts every chart on ONE axis: the domain and the labels of every dimension together', () => {
+    // A alone would start its labels at 3,5 and C at 3,0; side by side they must share one scale.
+    expect(sharedTrendAxis(dims, 3.7)).toEqual({ low: 2.5, high: 4.5, ticks: [3.0, 3.5, 4.0, 4.5] })
   })
 
   it('orders the dimensions by the latest reading, highest first, ties and gaps stable', () => {

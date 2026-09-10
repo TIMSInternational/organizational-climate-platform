@@ -8,8 +8,12 @@ import type { CompanyAdminDashboard } from '../api/dashboard'
 import {
   composeModel,
   coveringPlan,
+  currentOpenSurvey,
   isOverdue,
+  latestClosedSurvey,
   planProgress,
+  questionOrderOf,
+  remindersOf,
   waveCode,
   type ComposeOptions,
   type ModelParts,
@@ -441,5 +445,55 @@ describe('the derivations', () => {
     }
     expect(lowestCell(withProtected, 5)).toMatchObject({ dimensionKey: 'workload', score: 2.4 })
     expect(lowestCell(withProtected, 5)?.row.name).toBe('Operaciones')
+  })
+
+  it('draws the map in the question order of the latest closed survey, and keeps the server’s without it', () => {
+    const parts = live()
+    parts.questionOrder = { status: 'live', value: ['trust', 'workload'] }
+    const { model } = composeModel(parts, options())
+    expect(model.map.dimensionKeys).toEqual(['trust', 'workload'])
+    // Each row's scores move with their columns: Operaciones is trust 3.0, workload 2.4.
+    expect(model.map.rows.find((row) => row.name === 'Operaciones')?.scores).toEqual([3.0, 2.4])
+    expect(model.isSample).toBe(false)
+    parts.questionOrder = { status: 'fallback', reason: 'failed', error: null }
+    const failed = composeModel(parts, options())
+    expect(failed.model.map.dimensionKeys).toEqual(['workload', 'trust'])
+    // An order that could not be read is not a sample: nothing on the page is invented.
+    expect(failed.model.isSample).toBe(false)
+  })
+
+  it('reads a survey’s question order as the dimensions it asks, in order, each once', () => {
+    const questions = [
+      { order: 3, category: 'belonging' },
+      { order: 0, category: 'psychological_safety' },
+      { order: 1, category: 'workload' },
+      { order: 2, category: 'workload' },
+      { order: 4, category: null },
+    ]
+    expect(questionOrderOf({ questions: questions as never })).toEqual(['psychological_safety', 'workload', 'belonging'])
+  })
+
+  it('counts the reminders sent from the open survey’s invitations, and claims nothing it could not read', () => {
+    expect(remindersOf({ invitations: [{ reminderCount: 2 }, { reminderCount: 0 }, { reminderCount: 1 }] as never })).toBe(3)
+    const parts = live()
+    parts.reminders = { status: 'live', value: 0 }
+    expect(composeModel(parts, options()).model.attention.at(-1)).toEqual({
+      kind: 'low-participation',
+      surveyId: 'sv-q4',
+      remindersSent: 0,
+    })
+    parts.reminders = { status: 'fallback', reason: 'failed', error: null }
+    expect(composeModel(parts, options()).model.attention.at(-1)).toEqual({
+      kind: 'low-participation',
+      surveyId: 'sv-q4',
+      remindersSent: null,
+    })
+  })
+
+  it('finds the latest closed and the open survey the way the page does, archived copies aside', () => {
+    expect(latestClosedSurvey(surveys())?.id).toBe('sv-q3')
+    expect(currentOpenSurvey(surveys())?.id).toBe('sv-q4')
+    expect(latestClosedSurvey([])).toBeNull()
+    expect(currentOpenSurvey([])).toBeNull()
   })
 })
