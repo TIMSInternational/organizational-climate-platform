@@ -87,12 +87,18 @@ export default function DemographicFieldsPage() {
     setLoading(true)
     setError(null)
     const [list, dashboard] = await Promise.allSettled([
-      // `lang` rides along so each field's label and its option labels come back in
-      // the reader's language rather than the company's; the list is what the table
-      // and the edit form show.
-      listDemographicFields(baseUrl, companyId, locale),
-      // No `lang` here: the only thing read off this response is `activeUserCount`,
-      // and a headcount has no language.
+      // No `lang` on the list, on purpose. The edit form below prefills `label` from
+      // this response and saves it back as a bare string, which the server files under
+      // the company's own language (`DemographicFieldEndpoints.UpdateAsync` ->
+      // `LocalizedInput.TryResolve(companyLanguage)`). Asking for the reader's language
+      // here would show an English-UI admin the English half of a bilingual field on a
+      // Spanish company, and the save would then overwrite the Spanish column with
+      // English text. Until the form carries both halves, the list and the form have
+      // to address the same column: the company's. The client accepts `lang`; this
+      // page must not pass it.
+      listDemographicFields(baseUrl, companyId),
+      // No `lang` here either: the only thing read off this response is
+      // `activeUserCount`, and a headcount has no language.
       getCompanyAdminDashboard(baseUrl, { companyId }),
     ])
 
@@ -112,9 +118,9 @@ export default function DemographicFieldsPage() {
 
   useEffect(() => {
     reload()
-    // `locale` too: the labels come back resolved for the reader, so a language
-    // switch has to ask again.
-  }, [companyId, locale])
+    // Not `locale`: the list is fetched for the company's language (see `reload`), so
+    // a language switch changes nothing on the wire and must not refetch.
+  }, [companyId])
 
   // Each entry becomes an option whose stable value is derived server-side from the
   // label. A single-language admin never sees the value; it exists so the same choice

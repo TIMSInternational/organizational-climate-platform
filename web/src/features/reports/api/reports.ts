@@ -177,9 +177,15 @@ export async function clearReportSchedule(baseUrl: string, id: string): Promise<
  *
  * The backend rejects the call with 400 unless `status === 'completed'`; `authFetch` turns a
  * non-2xx into a throw, so a page never sees a half-successful download.
+ *
+ * `lang` is the reader's locale. `DownloadAsync` heads the document -- its title and
+ * description -- for `lang`, falling back to the language the report was named in, exactly
+ * as the survey export does. Without it the server assumed English, so a Spanish reader's
+ * copy of a bilingual report opened under an English heading.
  */
-export async function downloadReport(baseUrl: string, id: string): Promise<Blob> {
-  const response = await authFetch(`${baseUrl}/admin/reports/${id}/download`, { method: 'POST' })
+export async function downloadReport(baseUrl: string, id: string, lang?: string): Promise<Blob> {
+  const query = lang ? `?lang=${encodeURIComponent(lang)}` : ''
+  const response = await authFetch(`${baseUrl}/admin/reports/${id}/download${query}`, { method: 'POST' })
   return response.blob()
 }
 

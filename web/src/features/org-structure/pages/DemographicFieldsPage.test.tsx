@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import DemographicFieldsPage from './DemographicFieldsPage'
-import { TranslationProvider } from '../../../i18n'
+import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import type { DemographicField } from '../api/demographicFields'
 import { tokenFor } from '../../../test/jwtFixture'
@@ -86,6 +86,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   clearToken()
+  localStorage.removeItem(LOCALE_STORAGE_KEY)
   vi.unstubAllGlobals()
 })
 
@@ -254,10 +255,15 @@ describe('the curated page eyebrow', () => {
 })
 
 describe('DemographicFieldsPage locale on the wire', () => {
-  it('asks for the labels in the reader\'s language', async () => {
-    // A field's label and its option labels are paired columns resolved server-side for
-    // `lang`; the page never asked, so the table and the edit form showed the company's
-    // language rather than the reader's.
+  it('asks for the labels in the company\'s language, not the reader\'s, because the edit form writes that column back', async () => {
+    // The list is what the edit form prefills from, and the form saves `label` as a bare
+    // string that the server files under the company's own language
+    // (`DemographicFieldEndpoints.UpdateAsync` -> `LocalizedInput.TryResolve(companyLanguage)`).
+    // Were this request to carry the reader's locale, an English-UI admin of a Spanish
+    // company whose field holds both halves would be shown the English text, and the save
+    // would overwrite the Spanish column with it. So: no `lang`, even for a reader who has
+    // chosen one.
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
     serve(() => [field()], 40)
     renderPage()
 
@@ -267,6 +273,6 @@ describe('DemographicFieldsPage locale on the wire', () => {
       'http://test.local',
     )
     expect(url.searchParams.get('companyId')).toBe(COMPANY)
-    expect(url.searchParams.get('lang')).toBe('en')
+    expect(url.searchParams.get('lang')).toBeNull()
   })
 })

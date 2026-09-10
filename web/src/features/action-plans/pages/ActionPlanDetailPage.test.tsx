@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router'
-import { TranslationProvider } from '../../../i18n'
+import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import ActionPlanDetailPage from './ActionPlanDetailPage'
 import type { ActionPlanDetail } from '../api/actionPlans'
@@ -100,6 +100,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   clearToken()
+  localStorage.removeItem(LOCALE_STORAGE_KEY)
   vi.unstubAllGlobals()
 })
 
@@ -292,18 +293,20 @@ describe('ActionPlanDetailPage locale on the wire', () => {
   it('asks for the updated plan in the reader\'s language, because it renders the response', async () => {
     // A status change replaces the plan on screen with the PUT's response. The GET carried
     // `lang`; the PUT did not, so the title flipped to the server's fallback language the
-    // moment a Spanish reader changed a status.
+    // moment a Spanish reader changed a status. Rendered for a Spanish reader, so that a
+    // hardcoded 'en' in the page cannot pass: the option is "Completado" (`common.completed`).
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
     routeFetch()
     renderPage()
 
     await screen.findByRole('heading', { name: 'Raise engagement' })
     await userEvent.click(screen.getAllByRole('combobox')[0])
-    await userEvent.click(await screen.findByRole('option', { name: 'Completed' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Completado' }))
 
     const isPut = ([, init]: [RequestInfo | URL, RequestInit?]) => init?.method === 'PUT'
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(isPut)).toBe(true))
     const url = new URL(String(vi.mocked(fetch).mock.calls.find(isPut)![0]), 'http://test.local')
     expect(url.pathname.endsWith('/action-plans/p1')).toBe(true)
-    expect(url.searchParams.get('lang')).toBe('en')
+    expect(url.searchParams.get('lang')).toBe('es')
   })
 })

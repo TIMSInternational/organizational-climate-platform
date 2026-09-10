@@ -3,7 +3,7 @@ import { render, screen, cleanup, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import SystemSettingsPage from './SystemSettingsPage'
-import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../i18n'
+import { TranslationProvider, LanguageSwitcher, LOCALE_STORAGE_KEY } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import type { SystemSettingsData } from '../api/systemSettings'
 
@@ -27,9 +27,11 @@ function settings(overrides: Partial<SystemSettingsData> = {}): SystemSettingsDa
   }
 }
 
-function renderPage() {
+/** `switcher` mounts the real language control beside the page, in the same provider. */
+function renderPage({ switcher = false } = {}) {
   return render(
     <TranslationProvider>
+      {switcher && <LanguageSwitcher compact />}
       <MemoryRouter initialEntries={['/admin/system-settings']}>
         <SystemSettingsPage />
       </MemoryRouter>
@@ -89,5 +91,23 @@ describe('SystemSettingsPage', () => {
     const url = new URL(String(vi.mocked(fetch).mock.calls[0][0]), 'http://test.local')
     expect(url.pathname.endsWith('/admin/system-settings')).toBe(true)
     expect(url.searchParams.get('lang')).toBe('es')
+  })
+
+  it('asks for the notice again when the reader switches locale', async () => {
+    // The load effect keys on `locale`: the notice on screen is in the language it was
+    // asked in, so a switch has to ask again rather than keep the old text.
+    // A fresh Response per call: a body can only be read once, and this test reads two.
+    vi.mocked(fetch).mockImplementation(() => Promise.resolve(new Response(JSON.stringify(settings()), { status: 200 })))
+    renderPage({ switcher: true })
+
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1))
+    expect(new URL(String(vi.mocked(fetch).mock.calls[0][0]), 'http://test.local').searchParams.get('lang')).toBe('en')
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Switch Language' }), 'es')
+
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2))
+    const second = new URL(String(vi.mocked(fetch).mock.calls[1][0]), 'http://test.local')
+    expect(second.pathname.endsWith('/admin/system-settings')).toBe(true)
+    expect(second.searchParams.get('lang')).toBe('es')
   })
 })

@@ -122,7 +122,9 @@ export default function ReportsListPage() {
       // in a silent no-op, because a download button that does nothing reads as a broken
       // build -- the same call SurveyResultsPage makes for the survey PDF.
       const fileName = reportFileName(report.id, report.format)
-      downloadBlobFile(fileName, await downloadReport(baseUrl, report.id))
+      // The reader's locale rides along: the server heads the document for it, so the
+      // file opens in the language the list was read in.
+      downloadBlobFile(fileName, await downloadReport(baseUrl, report.id, locale))
       setDownloadNotice(t('reports.downloaded', { title: report.title, fileName }))
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.generic'))
