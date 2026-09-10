@@ -16,7 +16,7 @@ title = "organizational-climate-platform"
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "Placeholders and documented attacker indicators — never real credentials."
 
 paths = [
@@ -36,11 +36,6 @@ paths = [
 ]
 
 regexes = [
-  # Shot fixtures shaped from the demo tenant carry question and survey ids as JSON
-  # "key" fields; gitleaks' generic-api-key rule reads a UUID after `key` as a secret.
-  # A bare UUID is an identifier, never a credential here (our secrets are JWTs and
-  # AKIA… keys). Anchored to the whole matched value, nothing wider.
-  '''^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$''',
   # docker-compose / appsettings.Development.json local Postgres. Not reachable from
   # outside a developer's machine and identical in every checkout.
   '''Password=postgres''',
@@ -49,4 +44,20 @@ regexes = [
   # README's local-dev instruction for `dotnet user-secrets set TrackingJwtSecret`.
   # A literal instruction to the reader, not a value in use anywhere.
   '''any-local-dev-value-at-least-32-bytes-long''',
+]
+
+# Shot fixtures shaped from the demo tenant carry question and survey ids as JSON "key"
+# fields; gitleaks' generic-api-key rule reads a UUID after `key` as a secret. A bare UUID
+# is an identifier, never a credential here (our secrets are JWTs and AKIA… keys) — but
+# the exemption is scoped to the one directory that needs it. `condition = "AND"` means
+# BOTH must hold: the file is a shot fixture AND the whole matched value is a UUID. A
+# UUID-shaped value anywhere else in the repository is still reported.
+[[allowlists]]
+description = "Shot fixtures: record ids shaped from the demo tenant's real payloads."
+condition = "AND"
+paths = [
+  '''^web/scripts/shot-fixtures/[^/]+\.json$''',
+]
+regexes = [
+  '''^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$''',
 ]

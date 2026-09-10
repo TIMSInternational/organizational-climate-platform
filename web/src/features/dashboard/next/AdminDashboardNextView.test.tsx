@@ -306,6 +306,27 @@ describe('AdminDashboardNextView', () => {
     expect(new Set(rules.map((rule) => rule.getAttribute('y1'))).size).toBe(1)
   })
 
+  it('fits the shared scale to every reading, so no card draws a point outside its plot', () => {
+    // The first dimension reads 3.3–4.0; the last is far below it. A scale taken from any
+    // one dimension would push the other's points off the 60px sparkline.
+    const dimensions = sampleModel.dimensions.map((dimension, index) =>
+      index === sampleModel.dimensions.length - 1 ? { ...dimension, values: [1.6, 1.8, 2.0] } : dimension,
+    )
+    renderView({ ...sampleModel, dimensions })
+    const cards = [...document.querySelectorAll('[data-slot="trend-card"]')]
+    expect(cards).toHaveLength(6)
+    for (const card of cards) {
+      const svg = card.querySelector('svg[data-slot="trend-sparkline"]') as SVGElement
+      const height = Number(svg.getAttribute('viewBox')?.split(' ')[3])
+      const ys = [...card.querySelectorAll('circle')].map((circle) => Number(circle.getAttribute('cy')))
+      expect(ys.length).toBeGreaterThan(0)
+      for (const cy of ys) {
+        expect(cy).toBeGreaterThanOrEqual(0)
+        expect(cy).toBeLessThanOrEqual(height)
+      }
+    }
+  })
+
   it('paints every map cell the step the Dashboard artboard paints it, rings none, and keys the steps by word', () => {
     renderView()
     const rows = [...document.querySelectorAll('table tbody tr')].filter(

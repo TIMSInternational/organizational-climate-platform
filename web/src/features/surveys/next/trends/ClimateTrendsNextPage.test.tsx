@@ -216,6 +216,19 @@ describe('ClimateTrendsNextPage', () => {
     expect(tile(copy.belowLabel).textContent).toContain(copy.risingOne)
   })
 
+  it('names only an ACTIVE survey in the open-survey sentence, whatever else the list holds', async () => {
+    // A draft closing sooner than the open Q4. The request asks for `status=active`, but
+    // the sentence must not depend on the server honouring the filter: a draft is not a
+    // wave anyone is answering.
+    const draft: SurveyListItem = { ...OPEN, id: 's9', title: 'Q9', status: 'draft', endDate: '2026-09-20T00:00:00Z' }
+    vi.mocked(listSurveys).mockResolvedValue([draft, OPEN])
+    renderAt('company_admin')
+    await waitFor(() => expect(document.querySelector('[data-slot="open-wave"]')).not.toBeNull())
+    const sentence = (document.querySelector('[data-slot="open-wave"]') as HTMLElement).textContent ?? ''
+    expect(sentence).toContain('Q4')
+    expect(sentence).not.toContain('Q9')
+  })
+
   it('loses only the open-survey sentence when the survey list cannot be read', async () => {
     vi.mocked(listSurveys).mockRejectedValue(new Error('Request failed: 500'))
     renderAt('company_admin')

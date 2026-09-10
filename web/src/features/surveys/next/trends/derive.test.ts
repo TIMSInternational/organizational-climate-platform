@@ -130,6 +130,17 @@ describe('withoutArchived', () => {
             { surveyId: 's3', respondentCount: 6, isSuppressed: false, scores: [4.3] },
           ],
         },
+        {
+          // Withheld in one closed wave and disclosed in the other: never protected in
+          // EVERY wave that is left, so it must not be counted.
+          key: 'd-ops',
+          label: 'Operaciones',
+          points: [
+            { surveyId: 's1', respondentCount: 0, isSuppressed: true, scores: [null] },
+            { surveyId: 'copy', respondentCount: 0, isSuppressed: true, scores: [null] },
+            { surveyId: 's3', respondentCount: 6, isSuppressed: false, scores: [2.9] },
+          ],
+        },
       ],
       suppressedGroupCount: 0,
       minimumGroupSize: 5,
@@ -150,6 +161,15 @@ describe('withoutArchived', () => {
     // The server counted 0: Finanzas was disclosed in the archived copy. Without it,
     // Finanzas is withheld in every closed wave, and the page must say so.
     expect(withoutArchived(payload()).suppressedGroupCount).toBe(1)
+  })
+
+  it('does not count a group withheld in only some of the waves that are left', () => {
+    // Operaciones is withheld in Q1 and disclosed in Q3. Counting it would tell the reader
+    // a group is protected throughout when Q3 printed its number.
+    const cut = withoutArchived(payload())
+    const withheldEverywhere = cut.groups.filter((group) => group.points.every((point) => point.isSuppressed))
+    expect(withheldEverywhere.map((group) => group.key)).toEqual(['d-fin'])
+    expect(cut.suppressedGroupCount).toBe(1)
   })
 
   it('leaves a window with nothing archived exactly as it was', () => {

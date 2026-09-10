@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { router } from './router'
 import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPage'
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
+import DashboardPage from '../features/dashboard/pages/DashboardPage'
 
 /**
  * A construction guard for the router.
@@ -277,6 +278,14 @@ describe('router', () => {
     const componentAt = (path: string) => (byPath.get(path) as { type?: unknown } | undefined)?.type
     expect(componentAt('/surveys')).toBe(SurveysListNextPage)
     expect(componentAt('/surveys/climate-trends')).toBe(ClimateTrendsNextPage)
+    // `/dashboard` is role-dispatched, so the route mounts the dispatcher and the
+    // dispatcher mounts the redesigned Panel de Control for a company administrator
+    // (`DashboardPage.test.tsx` renders that branch). The old company view stays in the
+    // tree as the wiring reference and must not be reachable from here.
+    expect(componentAt('/dashboard')).toBe(DashboardPage)
+    const dispatcher = readFileSync(join(process.cwd(), 'src', 'features', 'dashboard', 'pages', 'DashboardPage.tsx'), 'utf8')
+    expect(dispatcher).toMatch(/from '\.\.\/next\/AdminDashboardNextView'/)
+    expect(dispatcher).not.toMatch(/from '\.\.\/components\/CompanyAdminDashboardView'/)
     expect(byPath.has('/surveys/next')).toBe(false)
     expect(byPath.has('/surveys/climate-trends/next')).toBe(false)
 
