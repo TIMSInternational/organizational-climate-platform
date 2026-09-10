@@ -3,7 +3,7 @@ import type { SurveyBreakdown, SurveyQuestionResult, SurveyResultsSummary } from
 import type { ClimateMapModel } from '../surveyResultsMap'
 
 /**
- * The typed model behind the redesigned survey results (`/surveys/:id/results/next`).
+ * The typed model behind the redesigned survey results (`/surveys/:id/results`).
  *
  * Same conventions as `features/dashboard/next/model.ts`: the page reads this through
  * `useSurveyResultsModel()`, which is the ONE place the API is called; every number the
@@ -80,6 +80,11 @@ export interface SurveyResultsNextModel {
   questions: readonly SurveyQuestionResult[]
   /** The department breakdown the map is drawn from; `null` when the payload has none. */
   breakdown: SurveyBreakdown | null
+  /**
+   * Every breakdown the server returned, for the breakdown export: the file carries
+   * every dimension, not only the one the map is drawn from.
+   */
+  breakdowns: readonly SurveyBreakdown[]
   /** The map as `buildClimateMap` produced it, with withheld rows kept and hatched. */
   climate: ClimateMapModel | null
   /**

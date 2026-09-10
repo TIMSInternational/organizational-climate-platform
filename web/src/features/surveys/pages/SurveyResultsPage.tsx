@@ -1,3 +1,17 @@
+/**
+ * NOT ROUTED. `/surveys/:id/results` renders the redesigned results
+ * (`../next/SurveyResultsNextPage`), which replaced this page — see `router.tsx`.
+ * Nothing in `router.tsx` reaches this file.
+ *
+ * It stays in the tree on purpose, as the wiring reference: its one
+ * `getSurveyAnalytics` request, the `buildClimateMap` / `climateFindings` /
+ * `climateDetail` readings it derives from that payload, the content-language notice,
+ * the open-text themes and the per-question filters are what `useSurveyResultsModel`
+ * has to reproduce on the day the endpoints in `next/sampleModel.ts` exist and the
+ * wave-over-wave and per-group distribution regions stop being a sample. Delete this
+ * file when that hook covers them. Until then its behaviour is pinned by
+ * `SurveyResultsPage.test.tsx`, which renders it directly.
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { useTranslation } from '../../../i18n'

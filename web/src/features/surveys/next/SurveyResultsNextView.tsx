@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, Check, ChevronDown, Download, MoreHorizontal, ShieldCheck, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, Download, ShieldCheck, X } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import {
@@ -215,23 +215,13 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                       downloadTextFile(
                         resultsFileName(csvPayload, 'breakdown'),
                         'text/csv',
-                        buildBreakdownCsv(model.breakdown ? [model.breakdown] : [], csvLabels),
+                        // Every dimension the server returned, not only the map's: the
+                        // reader cannot see from the header that a file was narrowed.
+                        buildBreakdownCsv(model.breakdowns, csvLabels),
                       )
                     }
                   >
                     {t('surveyResults.exportBreakdown')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" aria-label={t('surveyResults.next.moreActions')}>
-                    <MoreHorizontal aria-hidden="true" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild>
-                    <Link to={`/surveys/${model.surveyId}/results`}>{t('surveyResults.next.openClassic')}</Link>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

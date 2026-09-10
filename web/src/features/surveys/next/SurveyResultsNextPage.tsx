@@ -7,7 +7,9 @@ import SurveyResultsNextView from './SurveyResultsNextView'
 import { useSurveyResultsModel } from './useSurveyResultsModel'
 
 /**
- * `/surveys/:id/results/next` — the redesigned survey results, beside the current page.
+ * `/surveys/:id/results` — the redesigned survey results. It replaced
+ * `pages/SurveyResultsPage.tsx` on this route (ruled 10 Sep); that file stays as the
+ * wiring reference, unrouted.
  *
  * ## Who may open it
  *

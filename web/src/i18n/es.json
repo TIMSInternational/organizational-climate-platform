@@ -2554,8 +2554,6 @@
       "description": "Qué encontró esta encuesta, qué cambió desde la ola anterior y por dónde empezar a mirar.",
       "exportPdf": "Exportar informe (PDF)",
       "exportCsv": "CSV",
-      "moreActions": "Más acciones",
-      "openClassic": "Abrir la vista actual de resultados",
       "tilesHeading": "Resumen",
       "climateLabel": "Clima",
       "climateSub": "de 5 · media de la encuesta",

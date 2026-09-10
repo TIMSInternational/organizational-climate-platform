@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
@@ -8,10 +10,14 @@ import { CompanyContextProvider } from '../../../company-context'
 import { setToken } from '../../../auth/token'
 import { tokenFor } from '../../../test/jwtFixture'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
+import { downloadTextFile } from '../../../lib/downloadTextFile'
 import type { SurveyAnalyticsResponse, SurveyQuestionResult, SurveySegmentResult } from '../api/surveyResults'
 import en from '../../../i18n/en.json'
 
 vi.mock('../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
+// The only part of a CSV export that touches the DOM, stubbed so the assertions can read
+// the bytes the page decided to write.
+vi.mock('../../../lib/downloadTextFile', () => ({ downloadTextFile: vi.fn() }))
 
 const copy = en.surveyResults.next
 
@@ -120,10 +126,10 @@ function renderAt(claims: Record<string, unknown>) {
   setToken(tokenFor({ sub: 'u1', companyId: 'c1', nodoId: '', ...claims }))
   return render(
     <TranslationProvider>
-      <MemoryRouter initialEntries={['/surveys/s1/results/next']}>
+      <MemoryRouter initialEntries={['/surveys/s1/results']}>
         <CompanyContextProvider>
           <Routes>
-            <Route path="/surveys/:id/results/next" element={<SurveyResultsNextPage />} />
+            <Route path="/surveys/:id/results" element={<SurveyResultsNextPage />} />
             <Route path="/dashboard" element={<div data-testid="home" />} />
           </Routes>
         </CompanyContextProvider>
@@ -150,6 +156,7 @@ describe('SurveyResultsNextPage', () => {
     cleanup()
     vi.unstubAllGlobals()
     vi.mocked(downloadBlobFile).mockClear()
+    vi.mocked(downloadTextFile).mockClear()
     window.localStorage.clear()
   })
 
@@ -210,6 +217,79 @@ describe('SurveyResultsNextPage', () => {
     await userEvent.click(screen.getByRole('button', { name: copy.exportPdf }))
     await waitFor(() => expect(vi.mocked(downloadBlobFile)).toHaveBeenCalledTimes(1))
     expect(vi.mocked(downloadBlobFile).mock.calls[0][0]).toBe('survey-s1-results.pdf')
+    // The request carries the reader's locale, so the document's chrome comes back in
+    // the language they are reading — the same guarantee the page it replaced carried.
+    const requested = vi.mocked(fetch).mock.calls.map((call) => String(call[0]))
+    expect(requested.some((url) => /\/surveys\/s1\/export\/pdf\?lang=en$/.test(url))).toBe(true)
+  })
+
+  it('reports a failed PDF download instead of doing nothing', async () => {
+    // A download button that silently no-ops reads as a broken build, and an admin who
+    // cannot tell "refused" from "nothing happened" will retry rather than escalate.
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/analytics')) return Promise.resolve(jsonResponse(payload()))
+      if (url.includes('/action-plans')) return Promise.resolve(jsonResponse(plans))
+      if (url.includes('/export/pdf'))
+        return Promise.resolve(new Response(JSON.stringify({ message: 'Forbidden' }), { status: 403 }))
+      return Promise.resolve(new Response('{}', { status: 404 }))
+    })
+    renderAt({ role: 'company_admin' })
+    await screen.findByRole('heading', { level: 1 })
+    await userEvent.click(screen.getByRole('button', { name: copy.exportPdf }))
+    expect(await screen.findByText('Forbidden')).toBeTruthy()
+    expect(vi.mocked(downloadBlobFile)).not.toHaveBeenCalled()
+  })
+
+  it('writes every question to the questions CSV, whatever the page shows', async () => {
+    renderAt({ role: 'company_admin' })
+    await screen.findByRole('heading', { level: 1 })
+    await userEvent.click(screen.getByRole('button', { name: copy.exportCsv }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: en.surveyResults.exportQuestions }))
+    const [fileName, , contents] = vi.mocked(downloadTextFile).mock.calls.at(-1)!
+    expect(fileName).toBe('survey-s1-questions.csv')
+    expect(contents).toContain('Question q1')
+    expect(contents).toContain('Question q2')
+  })
+
+  it('writes every dimension to the breakdown CSV, not only the one the map is drawn from', async () => {
+    // The map draws the department breakdown; the file must still carry the others,
+    // because nothing beside the button says the download was narrowed.
+    const tenure = {
+      dimension: 'tenure',
+      segments: [segment('t-new', 'Under a year', 12, [3.5, 3.9])],
+      suppressedSegmentCount: 0,
+      suppressedRespondentCount: 0,
+      unsegmentedRespondentCount: 12,
+    }
+    const twoBreakdowns: SurveyAnalyticsResponse = { ...payload(), breakdowns: [...payload().breakdowns, tenure] }
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/analytics')) return Promise.resolve(jsonResponse(twoBreakdowns))
+      if (url.includes('/action-plans')) return Promise.resolve(jsonResponse(plans))
+      return Promise.resolve(new Response('{}', { status: 404 }))
+    })
+    renderAt({ role: 'company_admin' })
+    await screen.findByRole('heading', { level: 1 })
+    await userEvent.click(screen.getByRole('button', { name: copy.exportCsv }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: en.surveyResults.exportBreakdown }))
+    const [fileName, , contents] = vi.mocked(downloadTextFile).mock.calls.at(-1)!
+    expect(fileName).toBe('survey-s1-breakdown.csv')
+    expect(contents).toContain('department')
+    expect(contents).toContain('tenure')
+    // A withheld group is withheld in the file too: its name, never a count or a mean.
+    const finanzas = contents.split('\n').filter((line) => line.includes('Finanzas'))
+    expect(finanzas.length).toBeGreaterThan(0)
+    for (const line of finanzas) expect(line).not.toMatch(/\d/)
+  })
+
+  it('offers a retry rather than a blank page when the request fails', async () => {
+    vi.mocked(fetch).mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ message: 'Forbidden' }), { status: 403 })),
+    )
+    renderAt({ role: 'company_admin' })
+    expect(await screen.findByText(en.surveyResults.loadFailed)).toBeTruthy()
+    expect(screen.getByRole('button', { name: en.common.retry })).toBeTruthy()
   })
 
   it('offers no export and draws no map when the whole survey is under the floor', async () => {
@@ -236,6 +316,16 @@ describe('SurveyResultsNextPage', () => {
     expect(screen.queryByRole('heading', { level: 2, name: copy.mapHeading })).toBeNull()
     expect(screen.queryByTestId('group-row-d-eng')).toBeNull()
     expect(vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes('/export/pdf'))).toBe(false)
+  })
+
+  it('is what the real route renders: /surveys/:id/results mounts this page and no /next sibling remains', () => {
+    // `router.tsx` builds its routes inline for `createBrowserRouter`, so the swap is
+    // pinned at the source: the route the sidebar links to names this component, and
+    // the `/next` sibling the redesign first mounted beside the old page is gone.
+    const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
+    expect(source).toMatch(/path: '\/surveys\/:id\/results',\s*element: <SurveyResultsNextPage \/>/)
+    expect(source).not.toContain("'/surveys/:id/results/next'")
+    expect(source).not.toMatch(/element: <SurveyResultsPage \/>/)
   })
 
   it.each(['leader', 'supervisor', 'employee'])('sends a %s to /dashboard without fetching', async (role) => {

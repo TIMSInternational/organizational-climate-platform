@@ -15,7 +15,7 @@ export interface SurveyResultsModelState {
 }
 
 /**
- * The model behind `/surveys/:id/results/next` — the ONE place this screen fetches.
+ * The model behind `/surveys/:id/results` — the ONE place this screen fetches.
  *
  * Two real requests, through the clients the current page and the action-plan pages
  * already use: `GET /surveys/{id}/analytics` (both halves of one aggregation in one
@@ -88,6 +88,7 @@ export function useSurveyResultsModel(surveyId: string | undefined): SurveyResul
       minimumGroupSize: payload.minimumGroupSize,
       questions: payload.questions,
       breakdown,
+      breakdowns: payload.breakdowns,
       climate,
       plans,
       sample: sampleWave,

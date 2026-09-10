@@ -2554,8 +2554,6 @@
       "description": "What this survey found, what moved since the last wave and where to start looking.",
       "exportPdf": "Export report (PDF)",
       "exportCsv": "CSV",
-      "moreActions": "More actions",
-      "openClassic": "Open the current results view",
       "tilesHeading": "Summary",
       "climateLabel": "Climate",
       "climateSub": "of 5 · survey average",
