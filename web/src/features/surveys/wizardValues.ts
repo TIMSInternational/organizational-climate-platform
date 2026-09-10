@@ -285,17 +285,19 @@ export function questionFromLibrary(
  * The content language a fresh wizard starts with: the reader's own UI locale.
  *
  * Not the company's `Settings.Language`, and the reasons are measured rather than
- * preferred. There is no `GET` for it -- `CompanyEndpoints` maps only
- * `PUT /{id}/settings`, and `CompanyDetailPage` reads the record by sending `{}` to
- * that `PUT`, "a read dressed as a write". The domain default is `"en"`
- * (`Company.cs`, `Language = "en"`), so a company nobody has configured is
- * indistinguishable on the wire from one configured for English -- and
- * `CompanySettingsForm` offers no language control, so today nobody *can* configure it
- * from the product. Seeding from that field would preselect English on every
- * Spanish tenant whose admin never touched a setting they cannot see, which is the
- * defect this helper exists to remove. The microclimate wizard made the same call
- * (`MicroclimateCreatePage`): the seed is what the admin is most likely to want, not
- * a claim about the company.
+ * preferred. Nothing returns it: of the five routes `CompanyEndpoints` maps, the only
+ * one that touches settings is `PUT /{id}/settings`, and `GET /{id}` is SuperAdmin-only
+ * with a `CompanyDetail` that carries no settings -- which is why `CompanyDetailPage`
+ * reads the record by sending `{}` to that `PUT`, "a read dressed as a write". The
+ * default is `"en"` at both layers (`Company.cs`, `Language = "en"`; the
+ * `settings_language` column is required with a default of `'en'`), so a company
+ * nobody has configured is indistinguishable, in the database and on the wire, from
+ * one configured for English -- and `CompanySettingsForm` offers no language control,
+ * so today nobody *can* configure it from the product. Seeding from that field would
+ * preselect English on every Spanish tenant whose admin never touched a setting they
+ * cannot see, which is the defect this helper exists to remove. The microclimate
+ * wizard made the same call (`MicroclimateCreatePage`): the seed is what the admin is
+ * most likely to want, not a claim about the company.
  *
  * Whether the company setting should sit *ahead* of the reader's locale once it is
  * readable and "unset" is observable is a product ruling, recorded as open in the
