@@ -815,7 +815,9 @@
       "regionMicroclimates": "los microclimas",
       "lowestCellNoPlanSub": "Ningún plan la atiende todavía",
       "createPlan": "Crear un plan",
-      "lowParticipationSubUnknown": "{wave} cerró al {percent}"
+      "lowParticipationSubUnknown": "{wave} cerró al {percent}",
+      "liveTitle": "{name} · en vivo",
+      "waveOpenShort": "{code} · abierta"
     }
   },
   "departments": {

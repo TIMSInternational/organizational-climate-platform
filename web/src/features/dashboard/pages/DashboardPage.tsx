@@ -101,5 +101,5 @@ function CompanyDashboard({ companyId }: { companyId?: string }) {
       <AdminDashboardNextSkeleton />
     )
   }
-  return <AdminDashboardNextView model={model} regions={regions ?? undefined} />
+  return <AdminDashboardNextView model={model} regions={regions ?? undefined} companyId={companyId} />
 }

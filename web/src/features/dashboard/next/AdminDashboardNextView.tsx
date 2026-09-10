@@ -1,15 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import {
-  AlertCircle,
-  ArrowRight,
-  Clock,
-  Download,
-  FileText,
-  Plus,
-  Radio,
-  Send,
-} from 'lucide-react'
+import { AlertCircle, ArrowRight, Clock, FileText, Plus, Send, Waves } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { ANONYMITY_FLOOR, ClimateMap, KpiTile } from '../../../components/charts'
@@ -18,13 +9,15 @@ import { useViewerCapabilities, type ViewerCapabilities } from '../../../auth/vi
 import { calendarDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { KpiRow, SectionHeading } from '../components/dashboardGrammar'
-import type { AdminDashboardModel, AttentionItem, RegionKey, RegionStatuses, Wave } from './model'
+import { MAP_DEAD_BAND_AT, MAP_EXTREME_AT, printedReading } from './compose'
+import type { AdminDashboardModel, AttentionItem, DimensionSeries, RegionKey, RegionStatuses, Wave } from './model'
 import {
   closedWaveCount,
   daysBetween,
   isBelowTarget,
   latestAverage,
   lowestCell,
+  nextWaveCode,
   percent,
   percentReading,
   previousAverage,
@@ -35,9 +28,13 @@ import {
 } from './derive'
 import TrendSparkline from './TrendSparkline'
 import CycleTimeline, { type CycleStep } from './CycleTimeline'
+import DashboardExportMenu from './DashboardExportMenu'
+
+/** The target rule's hex, as the sparklines draw it, for the legend's swatch. */
+const TARGET_RULE = '#b9b6cc'
 
 /**
- * The body of the redesigned Panel de Control, exactly as the approved mockup:
+ * The body of the redesigned Panel de Control, drawn as the Dashboard artboard (10 Sep):
  * header → where the organisation stands (four tiles) → what moved (six small
  * multiples) beside the map by group → what needs attention beside the cycle.
  *
@@ -48,22 +45,32 @@ import CycleTimeline, { type CycleStep } from './CycleTimeline'
  * same rules as `CompanyAdminDashboardView` hold — every reading is
  * `font-mono tabular-nums`, prose stays sans; a withheld row is drawn hatched,
  * never dropped, and never prints a number (`ClimateMap` with `threshold` at the
- * floor); and no colour carries a change alone.
+ * floor); and no colour carries a change alone — every move carries its sign.
+ *
+ * `companyId` is the SuperAdmin's chosen tenant, for the export; a CompanyAdmin's
+ * scope is the claim's and it stays `undefined`.
  */
 export default function AdminDashboardNextView({
   model,
   regions,
+  companyId,
 }: {
   model: AdminDashboardModel
   regions?: RegionStatuses
+  companyId?: string
 }) {
   const { t, locale } = useTranslation()
   // Every action below shows only when the server would answer it with something other
   // than 403 — see `auth/viewerCapabilities.ts` for the rule each one mirrors.
   const capabilities = useViewerCapabilities()
+  // `/dashboard/company-admin/export` is the whole company's file: an admin with a
+  // company. `canExport` alone also admits a leader, whose export is the department's
+  // (`DashboardEndpoints.cs:124`) and whose dashboard is not this one.
+  const showExport = capabilities.canExport && capabilities.seesWholeCompany
   const { target } = model
   const latest = latestAverage(model)
   const previous = previousAverage(model)
+  const move = latest !== null && previous !== null ? latest - previous : null
   const rises = risesInARow(model)
   const withheld = protectedRows(model, ANONYMITY_FLOOR)
   const completion = percent(model.participation.completed, model.participation.responses)
@@ -72,6 +79,15 @@ export default function AdminDashboardNextView({
   const waveCodes = model.waves.filter((wave) => wave.status === 'closed').map((wave) => wave.code)
   const dimensionName = (key: string) =>
     model.dimensions.find((dimension) => dimension.key === key)?.name ?? key
+  // Highest latest reading first, as the canvas orders them: what is under the target
+  // gathers at the end of the grid. Ties keep the server's column order.
+  const ordered = [...model.dimensions].sort(
+    (a, b) => (b.values[b.values.length - 1] ?? -Infinity) - (a.values[a.values.length - 1] ?? -Infinity),
+  )
+  // One range for all six sparklines, so their slopes are on one scale.
+  const every = model.dimensions.flatMap((dimension) => dimension.values)
+  const domain: readonly [number, number] = [Math.min(...every, target) - 0.25, Math.max(...every, target) + 0.25]
+  const steps = cycleSteps(model.waves, t, locale)
 
   return (
     <div>
@@ -83,24 +99,19 @@ export default function AdminDashboardNextView({
         // numbers as measurements while `isSample` holds.
         badge={model.isSample ? { text: t('dashboard.next.sampleChip'), variant: 'warning' } : undefined}
         actions={
-          capabilities.canExport || capabilities.canLaunchMicroclimate || capabilities.canAuthorSurveys ? (
+          showExport || capabilities.canLaunchMicroclimate || capabilities.canAuthorSurveys ? (
             <>
-              {capabilities.canExport && (
-                <Button size="sm" variant="default" type="button">
-                  <Download aria-hidden="true" />
-                  {t('dashboard.next.export')}
-                </Button>
-              )}
+              {showExport && <DashboardExportMenu subject={model.companyName} companyId={companyId} />}
               {capabilities.canLaunchMicroclimate && (
-                <Button asChild size="sm" variant="default">
+                <Button asChild variant="outline">
                   <Link to="/microclimates/new">
-                    <Radio aria-hidden="true" />
+                    <Waves aria-hidden="true" />
                     {t('dashboard.next.launchMicroclimate')}
                   </Link>
                 </Button>
               )}
               {capabilities.canAuthorSurveys && (
-                <Button asChild size="sm" variant="primary">
+                <Button asChild variant="primary">
                   <Link to="/surveys/new">
                     <Plus aria-hidden="true" />
                     {t('dashboard.next.newSurvey')}
@@ -123,187 +134,146 @@ export default function AdminDashboardNextView({
               label={t('dashboard.next.climateLabel', { wave: model.latestClosedWave.code })}
               value={latest}
               format={{ kind: 'number', decimals: 2 }}
-              previousValue={previous ?? undefined}
+              unit={t('dashboard.next.climateSub', { target: reading(target, locale) })}
               locale={locale}
-              changeLabel={
-                model.previousWave
-                  ? t('dashboard.next.climateVs', { wave: model.previousWave.code })
-                  : undefined
-              }
               sub={
-                <span>
-                  · {t('dashboard.next.climateSub', { target: reading(target, locale) })}
-                  {rises >= 2 && <> · {t('dashboard.next.risesInARow', { count: rises })}</>}
-                </span>
+                move !== null && model.previousWave ? (
+                  // The sign is in the reading, so the colour is a second channel.
+                  <span data-slot="climate-move" className={move >= 0 ? 'text-accent-green-ink' : 'text-accent-red-ink'}>
+                    <span className="font-mono tabular-nums">{signedReading(move, locale, 2)}</span>{' '}
+                    {t('dashboard.next.climateVs', { wave: model.previousWave.code })}
+                    {rises >= 2 && <> · {t('dashboard.next.risesInARow', { count: rises })}</>}
+                  </span>
+                ) : undefined
               }
             />
             <KpiTile
               label={t('dashboard.next.participationLabel', { wave: model.latestClosedWave.code })}
               value={model.participation.responses}
+              unit={t('dashboard.next.participationSub', {
+                percent: completion === null ? '—' : percentReading(completion, locale),
+              })}
               locale={locale}
               sub={
-                <span className="flex flex-col">
-                  <span>
-                    {t('dashboard.next.participationSub', {
-                      percent: completion === null ? '—' : percentReading(completion, locale),
-                    })}
+                withheld.length > 0 ? (
+                  <span className="flex flex-col">
+                    {withheld.map((row) => (
+                      <span key={row.departmentId}>
+                        {t('dashboard.next.participationProtected', { group: row.name, floor: ANONYMITY_FLOOR })}
+                      </span>
+                    ))}
                   </span>
-                  {withheld.map((row) => (
-                    <span key={row.departmentId} className="text-fg-label">
-                      {t('dashboard.next.participationProtected', {
-                        group: row.name,
-                        floor: ANONYMITY_FLOOR,
-                      })}
-                    </span>
-                  ))}
-                </span>
+                ) : undefined
               }
             />
             <KpiTile
               label={t('dashboard.next.openSurveyLabel', { wave: open?.code ?? '—' })}
               value={open ? open.responses : null}
+              unit={
+                open
+                  ? t('dashboard.next.openSurveySub', {
+                      audience: open.audience,
+                      date: calendarDay(Date.parse(open.closesAt), locale),
+                    })
+                  : undefined
+              }
               locale={locale}
               sub={
-                open && (
-                  <span className="flex w-full flex-col gap-1.5">
-                    <span>
-                      {t('dashboard.next.openSurveySub', {
-                        audience: open.audience,
-                        date: calendarDay(Date.parse(open.closesAt), locale),
-                      })}
-                    </span>
+                open ? (
+                  <span
+                    role="progressbar"
+                    aria-label={t('dashboard.next.openSurveyProgress', {
+                      responses: open.responses,
+                      audience: open.audience,
+                    })}
+                    aria-valuemin={0}
+                    aria-valuemax={open.audience}
+                    aria-valuenow={open.responses}
+                    className="mt-0.5 block h-1.5 w-full overflow-hidden rounded-full bg-surface-icon-box"
+                  >
                     <span
-                      role="progressbar"
-                      aria-label={t('dashboard.next.openSurveyProgress', {
-                        responses: open.responses,
-                        audience: open.audience,
-                      })}
-                      aria-valuemin={0}
-                      aria-valuemax={open.audience}
-                      aria-valuenow={open.responses}
-                      className="block h-1 w-full overflow-hidden rounded-full bg-line-light"
-                    >
-                      <span
-                        className="block h-full rounded-full bg-accent-purple"
-                        style={{ width: `${Math.max(openProgress ?? 0, 2)}%` }}
-                      />
-                    </span>
+                      className="block h-full rounded-full bg-accent-blue"
+                      style={{ width: `${Math.max(openProgress ?? 0, 2)}%` }}
+                    />
                   </span>
-                )
+                ) : undefined
               }
             />
             <KpiTile
               label={t('dashboard.next.plansLabel')}
               value={model.plans.open}
+              unit={t('dashboard.next.plansOpen')}
               locale={locale}
               sub={
-                <span className="flex flex-col">
-                  <span>{t('dashboard.next.plansOpen')}</span>
-                  {model.plans.overdue > 0 && (
-                    <span className="flex items-center gap-1 text-accent-red">
-                      <AlertCircle aria-hidden="true" className="size-3" />
-                      <span className="font-mono tabular-nums">{model.plans.overdue}</span>
-                      <span>
-                        {t(
-                          model.plans.overdue === 1
-                            ? 'dashboard.next.plansOverdueOne'
-                            : 'dashboard.next.plansOverdueMany',
-                          { nodo: model.plans.overdueNodo ?? '—' },
-                        )}
-                      </span>
+                model.plans.overdue > 0 ? (
+                  <span className="flex items-center gap-1.5 text-accent-red-ink">
+                    <AlertCircle aria-hidden="true" className="size-3.5 shrink-0" />
+                    <span>
+                      <span className="font-mono tabular-nums">{model.plans.overdue}</span>{' '}
+                      {t(
+                        model.plans.overdue === 1 ? 'dashboard.next.plansOverdueOne' : 'dashboard.next.plansOverdueMany',
+                        { nodo: model.plans.overdueNodo ?? '—' },
+                      )}
                     </span>
-                  )}
-                </span>
+                  </span>
+                ) : undefined
               }
             />
           </KpiRow>
         </section>
 
-        <div className="grid grid-cols-1 gap-panel-gap xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
           <section
             aria-labelledby="next-moved"
-            className="rounded-lg border border-line-default bg-surface-card p-card xl:col-span-3"
+            className="flex min-w-0 flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-xs xl:col-span-7"
           >
-            <div className="mb-inline flex flex-wrap items-baseline justify-between gap-inline">
-              <SectionHeading>
-                <span id="next-moved">{t('dashboard.next.movedHeading')}</span>
-              </SectionHeading>
-              <p className="m-0 text-2xs text-fg-label">
+            <div className="flex flex-wrap items-baseline justify-between gap-3">
+              <h2 id="next-moved" className="m-0 text-2xl">
+                {t('dashboard.next.movedHeading')}
+              </h2>
+              <span className="inline-flex items-center gap-2 text-sm text-fg-label">
+                <svg aria-hidden="true" width="18" height="2" viewBox="0 0 18 2" className="shrink-0">
+                  <line x1="0" x2="18" y1="1" y2="1" stroke={TARGET_RULE} strokeDasharray="3 2" />
+                </svg>
                 {t('dashboard.next.movedLegend', {
                   target: reading(target, locale),
                   count: closedWaveCount(model),
                 })}
-              </p>
+              </span>
             </div>
             <RegionNotice regions={regions} region="trends" t={t} />
-            <div className="grid grid-cols-1 gap-panel-gap sm:grid-cols-2 lg:grid-cols-3">
-              {model.dimensions.map((dimension) => {
-                const value = dimension.values[dimension.values.length - 1]
-                const before = dimension.values[dimension.values.length - 2]
-                if (value === undefined) return null
-                const below = isBelowTarget(value, target)
-                return (
-                  <div
-                    key={dimension.key}
-                    data-slot="trend-card"
-                    data-dimension={dimension.key}
-                    data-below-target={below ? 'true' : 'false'}
-                    className="rounded-lg border border-line-light bg-surface-icon-box p-3"
-                  >
-                    <div className="text-xs text-fg-secondary">{dimension.name}</div>
-                    <div className="flex flex-wrap items-baseline gap-inline">
-                      <span className="font-mono text-2xl font-semibold tracking-tight tabular-nums">
-                        {reading(value, locale)}
-                      </span>
-                      {before !== undefined && (
-                        <span
-                          className={cn(
-                            'font-mono text-xs tabular-nums',
-                            value >= before ? 'text-accent-green' : 'text-accent-red',
-                          )}
-                        >
-                          {signedReading(value - before, locale)}
-                        </span>
-                      )}
-                      {below && <Chip tone="critical" label={t('dashboard.next.belowTarget')} />}
-                    </div>
-                    <div className="mt-2">
-                      <TrendSparkline
-                        values={dimension.values}
-                        target={target}
-                        labels={waveCodes}
-                        label={t('dashboard.next.sparklineLabel', {
-                          dimension: dimension.name,
-                          values: dimension.values.map((v) => reading(v, locale)).join(' → '),
-                          target: reading(target, locale),
-                        })}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              {ordered.map((dimension) => (
+                <SparkCard
+                  key={dimension.key}
+                  dimension={dimension}
+                  target={target}
+                  labels={waveCodes}
+                  domain={domain}
+                  t={t}
+                  locale={locale}
+                />
+              ))}
             </div>
           </section>
 
           <section
             aria-labelledby="next-by-group"
-            className="rounded-lg border border-line-default bg-surface-card p-card xl:col-span-2"
+            className="flex min-w-0 flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-xs xl:col-span-5"
           >
-            <div className="mb-inline flex flex-wrap items-baseline justify-between gap-inline">
-              <SectionHeading>
-                <span id="next-by-group">
-                  {t('dashboard.next.byGroupHeading', { wave: model.latestClosedWave.code })}
-                </span>
-              </SectionHeading>
+            <div className="flex flex-wrap items-baseline justify-between gap-3">
+              <h2 id="next-by-group" className="m-0 text-2xl">
+                {t('dashboard.next.byGroupHeading', { wave: model.latestClosedWave.code })}
+              </h2>
               {/* `GET /surveys/{id}/results` is `CanAdminister` (`SurveyResultsEndpoints.cs:199`):
                   an admin with a company, for any survey of the scoped tenant. */}
               {capabilities.seesWholeCompany && (
                 <Link
                   to={`/surveys/${model.latestClosedWave.id}/results`}
-                  className="inline-flex items-center gap-1 text-xs text-fg-secondary hover:text-fg-primary"
+                  className="inline-flex items-center gap-1 text-sm text-fg-secondary hover:text-fg-primary"
                 >
                   {t('dashboard.next.openResults')}
-                  <ArrowRight aria-hidden="true" className="size-3" />
+                  <ArrowRight aria-hidden="true" className="size-3.5" />
                 </Link>
               )}
             </div>
@@ -321,11 +291,13 @@ export default function AdminDashboardNextView({
                   id: row.departmentId,
                   label: row.name,
                   responses: row.responses,
-                  scores: row.scores,
+                  // The reading each cell PRINTS, so its tint and its "above / below"
+                  // agree with the number on it (`MAP_DEAD_BAND_AT`).
+                  scores: row.scores.map(printedReading),
                 }))}
                 target={target}
-                deadBandAt={0.1}
-                extremeAt={1}
+                deadBandAt={MAP_DEAD_BAND_AT}
+                extremeAt={MAP_EXTREME_AT}
                 decimals={1}
                 // The floor, and never lower: a row under it is hatched and prints nothing.
                 threshold={ANONYMITY_FLOOR}
@@ -334,16 +306,16 @@ export default function AdminDashboardNextView({
           </section>
         </div>
 
-        <div className="grid grid-cols-1 gap-panel-gap xl:grid-cols-5">
-          <section aria-labelledby="next-attention" className="xl:col-span-3">
-            <SectionHeading>
-              <span id="next-attention">{t('dashboard.next.attentionHeading')}</span>
-            </SectionHeading>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+          <section aria-labelledby="next-attention" className="flex min-w-0 flex-col gap-2.5 xl:col-span-7">
+            <h2 id="next-attention" className="m-0 text-2xl">
+              {t('dashboard.next.attentionHeading')}
+            </h2>
             <RegionNotice regions={regions} region="actionPlans" t={t} />
             <RegionNotice regions={regions} region="tracking" t={t} />
             <ul
               data-slot="attention-list"
-              className="m-0 list-none divide-y divide-line-light rounded-lg border border-line-default bg-surface-card p-0"
+              className="m-0 list-none divide-y divide-line-light rounded-lg border border-line-default bg-surface-card p-0 shadow-xs"
             >
               {model.attention.map((item, index) => (
                 <AttentionRow
@@ -358,51 +330,45 @@ export default function AdminDashboardNextView({
             </ul>
           </section>
 
-          <section aria-labelledby="next-cycle" className="flex flex-col gap-panel-gap xl:col-span-2">
-            <div>
-              <SectionHeading>
-                <span id="next-cycle">{t('dashboard.next.cycleHeading')}</span>
-              </SectionHeading>
-              <RegionNotice regions={regions} region="surveys" t={t} />
-              <div className="rounded-lg border border-line-default bg-surface-card p-card">
-                <CycleTimeline
-                  steps={model.waves.map((wave) => toCycleStep(wave, t, locale))}
-                  label={t('dashboard.next.cycleLabel')}
-                />
-                <p className="mt-panel-gap mb-0 flex items-start gap-inline rounded-md bg-surface-icon-box p-3 text-xs text-fg-secondary">
-                  <FileText aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                  <span>{t('dashboard.next.cycleNote')}</span>
-                </p>
-              </div>
+          <section aria-labelledby="next-cycle" className="flex min-w-0 flex-col gap-2.5 xl:col-span-5">
+            <h2 id="next-cycle" className="m-0 text-2xl">
+              {t('dashboard.next.cycleHeading')}
+            </h2>
+            <RegionNotice regions={regions} region="surveys" t={t} />
+            <div className="flex flex-col gap-3.5 rounded-lg border border-line-default bg-surface-card px-5 pt-4.5 pb-4 shadow-xs">
+              <CycleTimeline steps={steps} label={t('dashboard.next.cycleLabel')} />
+              <p className="m-0 flex items-center gap-2.5 rounded-md bg-surface-outer px-3 py-2.5 text-sm text-fg-secondary">
+                <FileText aria-hidden="true" className="size-3.5 shrink-0" />
+                <span>{t('dashboard.next.cycleNote')}</span>
+              </p>
             </div>
             <RegionNotice regions={regions} region="microclimates" t={t} />
             {model.liveMicroclimate && (
               <div
                 data-slot="live-microclimate"
-                className="flex items-center justify-between gap-panel-gap rounded-lg border border-line-default bg-surface-card p-card"
+                className="flex items-center justify-between gap-3 rounded-lg border border-line-default bg-surface-card px-4 py-3.5 shadow-xs"
               >
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-fg-primary">
-                    {t('dashboard.next.liveHeading')}
-                  </div>
-                  <div className="truncate text-xs text-fg-secondary">{model.liveMicroclimate.name}</div>
-                  <div className="text-xs text-fg-secondary">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate text-base font-semibold text-fg-primary">
+                    {t('dashboard.next.liveTitle', { name: model.liveMicroclimate.name })}
+                  </span>
+                  <span className="text-sm text-fg-label">
                     <span className="font-mono tabular-nums">{model.liveMicroclimate.responses}</span>{' '}
                     {t('dashboard.next.liveSub', {
                       date: calendarDay(Date.parse(model.liveMicroclimate.closesAt), locale),
                       floor: ANONYMITY_FLOOR,
                     })}
-                  </div>
+                  </span>
                 </div>
                 {/* The live page loads `GET /microclimates/{id}/live-results`, which is
                     `CanAccessCompany` (`MicroclimateEndpoints.cs:1420`): the same admin-with-a-company. */}
                 {capabilities.seesWholeCompany && (
                   <Link
                     to={`/microclimates/${model.liveMicroclimate.id}/live`}
-                    className="inline-flex shrink-0 items-center gap-1 text-xs text-fg-secondary hover:text-fg-primary"
+                    className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-sm text-fg-secondary hover:text-fg-primary"
                   >
                     {t('dashboard.next.viewSession')}
-                    <ArrowRight aria-hidden="true" className="size-3" />
+                    <ArrowRight aria-hidden="true" className="size-3.5" />
                   </Link>
                 )}
               </div>
@@ -414,25 +380,102 @@ export default function AdminDashboardNextView({
   )
 }
 
+/** One dimension's card in "Qué se movió": its name, its latest reading and move, its sparkline. */
+function SparkCard({
+  dimension,
+  target,
+  labels,
+  domain,
+  t,
+  locale,
+}: {
+  dimension: DimensionSeries
+  target: number
+  labels: readonly string[]
+  domain: readonly [number, number]
+  t: TranslateFn
+  locale: string
+}) {
+  const value = dimension.values[dimension.values.length - 1]
+  const before = dimension.values[dimension.values.length - 2]
+  if (value === undefined) return null
+  const below = isBelowTarget(value, target)
+  return (
+    <div
+      data-slot="trend-card"
+      data-dimension={dimension.key}
+      data-below-target={below ? 'true' : 'false'}
+      className="flex min-w-0 flex-col gap-1.5 rounded-md border border-line-light px-3.5 pt-3 pb-2.5"
+    >
+      <div className="truncate text-sm text-fg-secondary">{dimension.name}</div>
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span className="font-mono text-2xl leading-none tabular-nums text-fg-primary">{reading(value, locale)}</span>
+        {before !== undefined && (
+          <span
+            className={cn(
+              'font-mono text-sm tabular-nums',
+              value >= before ? 'text-accent-green-ink' : 'text-accent-red-ink',
+            )}
+          >
+            {signedReading(value - before, locale)}
+          </span>
+        )}
+        {below && <Chip tone="critical" label={t('dashboard.next.belowTarget')} className="h-4.5 px-1.5 text-2xs" />}
+      </div>
+      <TrendSparkline
+        values={dimension.values}
+        target={target}
+        labels={labels}
+        domain={domain}
+        label={t('dashboard.next.sparklineLabel', {
+          dimension: dimension.name,
+          values: dimension.values.map((v) => reading(v, locale)).join(' → '),
+          target: reading(target, locale),
+        })}
+      />
+    </div>
+  )
+}
+
 /** The first letters of a column head; the full name rides on `fullLabel`. */
 function shortLabel(name: string): string {
   return name.length > 6 ? `${name.slice(0, 5)}…` : name
 }
 
-/** One wave on the rail: its code and a status line, with the date in the reader's locale. */
-function toCycleStep(wave: Wave, t: TranslateFn, locale: string): CycleStep {
-  const detail =
-    wave.status === 'closed' && wave.closedAt
-      ? t('dashboard.next.waveClosed', { date: calendarDay(Date.parse(wave.closedAt), locale) })
-      : wave.status === 'open' && wave.closesAt
-        ? t('dashboard.next.waveCloses', { date: calendarDay(Date.parse(wave.closesAt), locale) })
-        : t('dashboard.next.wavePlanned')
-  return {
-    id: wave.id,
-    code: wave.status === 'open' ? t('dashboard.next.waveOpen', { code: wave.code }) : wave.code,
-    detail,
-    status: wave.status,
+/**
+ * The rail: one step per wave, its code and its date, the full sentence for AT — and,
+ * when nothing is planned after the open wave, the next slot of a quarterly cycle as a
+ * hollow "por planificar" step (`nextWaveCode`), which names a slot and claims no survey.
+ */
+function cycleSteps(waves: readonly Wave[], t: TranslateFn, locale: string): CycleStep[] {
+  const steps = waves.map((wave): CycleStep => {
+    if (wave.status === 'closed' && wave.closedAt) {
+      const date = calendarDay(Date.parse(wave.closedAt), locale)
+      return { id: wave.id, code: wave.code, detail: date, srDetail: t('dashboard.next.waveClosed', { date }), status: 'closed' }
+    }
+    if (wave.status === 'open' && wave.closesAt) {
+      const date = calendarDay(Date.parse(wave.closesAt), locale)
+      return {
+        id: wave.id,
+        code: t('dashboard.next.waveOpenShort', { code: wave.code }),
+        detail: date,
+        srDetail: t('dashboard.next.waveCloses', { date }),
+        status: 'open',
+      }
+    }
+    return { id: wave.id, code: wave.code, detail: t('dashboard.next.wavePlanned'), status: wave.status }
+  })
+  const last = waves[waves.length - 1]
+  if (last && !waves.some((wave) => wave.status === 'planned')) {
+    const code = nextWaveCode(last.code, last.closesAt ?? last.closedAt)
+    if (code) steps.push({ id: 'next-wave', code, detail: t('dashboard.next.wavePlanned'), status: 'planned' })
   }
+  return steps
+}
+
+/** "20 de agosto": a due date in the reader's own words, as the canvas writes it. */
+function longDay(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, { timeZone: 'UTC', day: 'numeric', month: 'long' })
 }
 
 /**
@@ -556,9 +599,10 @@ function AttentionRow({
           />
         }
         detail={t('dashboard.next.overduePlanSub', {
-          date: item.plan.dueAt ? calendarDay(Date.parse(item.plan.dueAt), locale) : '—',
+          date: item.plan.dueAt ? longDay(item.plan.dueAt, locale) : '—',
           owner: item.plan.owner ?? '—',
-          progress: progressOf(item.plan.progress),
+          // The tracking plan's own `porcentajeAvance`, printed as the percentage it is.
+          progress: percentReading(item.plan.progress, locale),
         })}
         // `avance` is the node leader's or an admin's (`PlanAccessHandler`); a plan the
         // model knows no node for is offered to admins only, never widened.
@@ -627,11 +671,11 @@ function AttentionItemRow({
   action?: { label: string; href: string }
 }) {
   return (
-    <li data-slot="attention-item" className="flex items-center gap-panel-gap p-3">
+    <li data-slot="attention-item" className="flex items-center gap-3 px-4 py-3.5">
       <span
         aria-hidden="true"
         className={cn(
-          'flex size-8 shrink-0 items-center justify-center rounded-md',
+          'flex size-7 shrink-0 items-center justify-center rounded-md',
           tone === 'critical'
             ? 'bg-accent-red-soft text-accent-red'
             : 'bg-accent-amber-soft text-accent-amber-ink',
@@ -639,12 +683,12 @@ function AttentionItemRow({
       >
         {icon}
       </span>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm text-fg-primary">{headline}</div>
-        <div className="text-xs text-fg-secondary">{detail}</div>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="text-base text-fg-primary">{headline}</div>
+        <div className="text-sm text-fg-label">{detail}</div>
       </div>
       {action && (
-        <Button asChild size="sm" variant="default" className="shrink-0">
+        <Button asChild variant="outline" className="shrink-0">
           <Link to={action.href}>{action.label}</Link>
         </Button>
       )}

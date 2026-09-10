@@ -60,6 +60,20 @@ export function isBelowTarget(value: number, target: number): boolean {
   return Math.round(value * 10) < Math.round(target * 10)
 }
 
+/**
+ * The slot after `code` in a quarterly cycle — "Q1 2027" after a Q4 that closes in 2026,
+ * "Q3" after "Q2" — or `null` when `code` is not a quarter. It labels the rail's hollow
+ * "por planificar" step: a slot of the cycle, never a claim that a survey exists.
+ */
+export function nextWaveCode(code: string, isoDate: string | undefined): string | null {
+  const match = /^Q([1-4])(?:\s+(\d{4}))?$/.exec(code.trim())
+  if (!match) return null
+  const quarter = Number(match[1])
+  if (quarter < 4) return match[2] ? `Q${quarter + 1} ${match[2]}` : `Q${quarter + 1}`
+  const year = match[2] ? Number(match[2]) : isoDate ? new Date(isoDate).getUTCFullYear() : Number.NaN
+  return Number.isNaN(year) ? null : `Q1 ${year + 1}`
+}
+
 /** `part` of `whole` as a 0–100 percentage, or `null` when there is nothing to divide by. */
 export function percent(part: number, whole: number): number | null {
   return whole > 0 ? (part / whole) * 100 : null

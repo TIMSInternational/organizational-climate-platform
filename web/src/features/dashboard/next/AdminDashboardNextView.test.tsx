@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, within } from '@testing-library/react'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { render, screen, cleanup, within, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import AdminDashboardNextView from './AdminDashboardNextView'
+import { getCompanyDashboardExport } from '../api/dashboardExport'
+import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import { sampleModel } from './sampleModel'
 import type { AdminDashboardModel, RegionStatuses } from './model'
 import { TranslationProvider } from '../../../i18n'
@@ -11,6 +14,12 @@ import { tokenFor } from '../../../test/jwtFixture'
 import en from '../../../i18n/en.json'
 
 const copy = en.dashboard.next
+
+vi.mock('../api/dashboardExport', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api/dashboardExport')>()),
+  getCompanyDashboardExport: vi.fn(),
+}))
+vi.mock('../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
 
 /**
  * The view reads the viewer's capabilities off the stored token, so every render names a
@@ -46,6 +55,8 @@ describe('AdminDashboardNextView', () => {
   beforeEach(() => {
     window.localStorage.clear()
     window.localStorage.setItem('preferredLocale', 'en')
+    vi.mocked(getCompanyDashboardExport).mockReset()
+    vi.mocked(downloadBlobFile).mockReset()
   })
   afterEach(() => {
     cleanup()
@@ -128,11 +139,14 @@ describe('AdminDashboardNextView', () => {
     expect(linksMatching(/^\/microclimates\/[^/]+\/live$/)).toEqual([])
   })
 
-  it('offers a leader their own node’s progress action and their export, and nothing else', () => {
+  it('offers a leader their own node’s progress action, and not the company’s export', () => {
     renderView(sampleModel, { role: 'leader', nodoId: 'nodo-finanzas' })
     expect(screen.queryByRole('link', { name: copy.newSurvey })).toBeNull()
     expect(screen.queryByRole('link', { name: copy.launchMicroclimate })).toBeNull()
-    expect(screen.getByRole('button', { name: copy.export })).toBeTruthy()
+    // The button now fetches `/dashboard/company-admin/export`, which is the whole
+    // company's file: an admin with a company. A leader's export is the department's
+    // (`DashboardEndpoints.cs:124`), on the dashboard a leader actually lands on.
+    expect(screen.queryByRole('button', { name: copy.export })).toBeNull()
     const items = Array.from(document.querySelectorAll('[data-slot="attention-item"]')) as HTMLElement[]
     expect(items).toHaveLength(3)
     expect(within(items[0]).queryByRole('link')).toBeNull()
@@ -220,5 +234,65 @@ describe('AdminDashboardNextView', () => {
     expect(tiles[1].textContent).toContain('100%')
     expect(tiles[1].textContent).toContain('Finanzas')
     expect(tiles[3].textContent).toContain('Finanzas')
+  })
+  it('wires Exportar to the file the server renders: one button, two formats, fetched with the bearer', async () => {
+    vi.mocked(getCompanyDashboardExport).mockResolvedValue(new Blob(['csv']))
+    renderView()
+    await userEvent.click(screen.getByRole('button', { name: copy.export }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: en.dashboard.exportCsv }))
+    await waitFor(() => expect(vi.mocked(downloadBlobFile)).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(getCompanyDashboardExport).mock.calls[0]?.slice(1)).toEqual(['csv', { companyId: undefined, lang: 'en' }])
+  })
+
+  it('says so when the export fails, and does not swallow it', async () => {
+    vi.mocked(getCompanyDashboardExport).mockRejectedValue(new Error('Request failed: 500'))
+    renderView()
+    await userEvent.click(screen.getByRole('button', { name: copy.export }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: en.dashboard.exportPdf }))
+    expect((await screen.findByRole('alert')).textContent).toBe(en.dashboard.exportFailed)
+    expect(vi.mocked(downloadBlobFile)).not.toHaveBeenCalled()
+  })
+
+  it('judges "below target" at the decimal the card prints: a 3.67 reads 3.7 and is on target', () => {
+    const dimensions = sampleModel.dimensions.map((dimension) =>
+      dimension.key === 'confianza' ? { ...dimension, values: [2.96, 3.33, 3.67] } : dimension,
+    )
+    renderView({ ...sampleModel, dimensions })
+    const card = document.querySelector('[data-slot="trend-card"][data-dimension="confianza"]') as HTMLElement
+    expect(card.textContent).toContain('3.7')
+    expect(card.getAttribute('data-below-target')).toBe('false')
+    expect(within(card).queryByText(copy.belowTarget)).toBeNull()
+  })
+
+  it('draws the trend cards highest latest reading first, whatever order the model holds them in', () => {
+    renderView({ ...sampleModel, dimensions: [...sampleModel.dimensions].reverse() })
+    const order = [...document.querySelectorAll('[data-slot="trend-card"]')].map((card) => card.getAttribute('data-dimension'))
+    // 4.0, then the two 3.8s in the order they came, then 3.7, 3.4, 3.3.
+    expect(order).toEqual(['pertenencia', 'seguridad', 'desarrollo', 'confianza', 'reconocimiento', 'carga'])
+  })
+
+  it('shows the climate move signed and without an arrow, in the good-news ink when it rose', () => {
+    renderView()
+    const move = document.querySelector('[data-slot="climate-move"]') as HTMLElement
+    expect(move.textContent).toContain('+0.32')
+    expect(move.textContent).not.toMatch(/[▲▼]/)
+    expect(move.className).toContain('text-accent-green-ink')
+  })
+
+  it('projects the next quarter as a hollow "to plan" step when nothing is planned after the open wave', () => {
+    renderView({ ...sampleModel, waves: sampleModel.waves.filter((wave) => wave.status !== 'planned') })
+    const steps = [...document.querySelectorAll('[data-slot="cycle-step"]')]
+    expect(steps).toHaveLength(5)
+    expect(steps[4].textContent).toContain('Q1 2027')
+    expect(steps[4].textContent).toContain(copy.wavePlanned)
+    // The open wave names itself as the canvas does, "Q4 · open", and its close date.
+    expect(steps[3].textContent).toContain(copy.waveOpenShort.replace('{code}', 'Q4'))
+  })
+
+  it('writes the overdue plan’s due date in words and its progress as the percentage it is', () => {
+    renderView()
+    const items = document.querySelectorAll('[data-slot="attention-item"]')
+    expect(items[1].textContent).toContain('August 20')
+    expect(items[1].textContent).toContain('0%')
   })
 })
