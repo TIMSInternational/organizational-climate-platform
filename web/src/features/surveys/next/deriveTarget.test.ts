@@ -121,7 +121,10 @@ describe('against the climate target, on the tenant’s real payload', () => {
   })
 
   it('averages the cells as printed, in whole tenths, so float noise cannot decide a half', () => {
-    // 237 tenths over six cells is 39,5: 4,0. Summing the floats gives 3,9499… and 3,9.
+    // 57 tenths over two cells is 28,5: 2,9. The float sum 2.9 + 2.8 is 5.6999…, and its
+    // mean 2.8499… would print 2,8 — a half decided by float noise, not by the cells.
+    expect(printedMean([2.9, 2.8], 1)).toBe(2.9)
+    // Ingeniería's six cells: 237 tenths, 39,5 a cell — 4,0.
     expect(printedMean([4.0, 3.7, 4.0, 3.5, 4.2, 4.3], 1)).toBe(4)
     // Each reading is rounded to its cell first: 3,75 prints 3,8 and 3,33 prints 3,3.
     expect(printedMean([3.75, 3.33, 3.67, 3.38, 3.79, 4.0], 2)).toBe(3.67)

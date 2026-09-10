@@ -79,8 +79,9 @@ function mean(values: readonly number[]): number | null {
 /**
  * The mean of readings AS PRINTED: each rounded to the one decimal of its cell, then
  * averaged and rounded to `decimals`. Worked in whole tenths so float noise cannot
- * decide a half: Ingeniería's cells 4,0 · 3,7 · 4,0 · 3,5 · 4,2 · 4,3 are 237 tenths,
- * 39,5 a cell, which prints 4,0 — where summing the floats gives 3,9499… and 3,9.
+ * decide a half: 2,9 and 2,8 are 57 tenths, 28,5 a cell, which prints 2,9 — where the
+ * float sum is 5,6999…, its mean 2,8499… and the figure 2,8. Ingeniería's cells 4,0 ·
+ * 3,7 · 4,0 · 3,5 · 4,2 · 4,3 are 237 tenths, 39,5 a cell: 4,0.
  */
 export function printedMean(values: readonly number[], decimals: number): number | null {
   if (values.length === 0) return null
