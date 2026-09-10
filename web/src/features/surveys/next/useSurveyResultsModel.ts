@@ -38,8 +38,9 @@ export interface SurveyResultsModelState {
  * and the note under the map says why). The model is published once, with every
  * reading in it, so the page never flashes a "could not load" that is merely early.
  *
- * `sample` is `sampleModel.ts` — the opened group's 1–5 distribution, which no endpoint
- * returns; the view keeps the "sample data" chip on that one region.
+ * Nothing it returns is a sample. The opened group's 1–5 spread is not fetched because no
+ * endpoint has it: `SurveySegmentQuestionResult` carries a group's mean per question and
+ * no distribution, so the opened cell prints that mean and says the spread is withheld.
  */
 export function useSurveyResultsModel(surveyId: string | undefined): SurveyResultsModelState {
   const { t, locale } = useTranslation()

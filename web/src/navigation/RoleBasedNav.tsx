@@ -244,19 +244,25 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
               onClick={() => toggleExpand(item.labelKey)}
               aria-expanded={isExpanded}
               // See the `title` note on the leaf row below. A group row is the
-              // tightest of the lot: the chevron and its gap take another 24px,
-              // leaving the label 156px of the 236px rail — while carrying the
+              // tightest of the lot: the chevron is 12px, 2px from the label, and
+              // the row gives 6px of its right padding back, leaving the label
+              // 172px of the 236px rail — "Administración de Empresa" wants 169
+              // at 13px, which the 16px chevron's 156 cut to "Emp…" — while carrying the
               // longest label in the nav, `navigation.systemAdministration`
               // ("Administración del Sistema", 26 characters).
               title={label}
-              style={rowStyle}
+              style={{
+                ...rowStyle,
+                padding: collapsed ? rowStyle.padding : 'var(--admin-space-4) 2px var(--admin-space-4) var(--admin-space-8)',
+              }}
             >
               {rowContent}
               <ChevronRight
                 aria-hidden="true"
                 style={{
-                  width: 'var(--admin-size-icon)',
-                  height: 'var(--admin-size-icon)',
+                  width: 12,
+                  height: 12,
+                  marginLeft: -6,
                   flexShrink: 0,
                   color: 'var(--admin-font-tertiary)',
                   transform: isExpanded ? 'rotate(90deg)' : 'none',

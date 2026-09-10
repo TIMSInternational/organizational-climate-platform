@@ -2709,7 +2709,11 @@
       "climateNotComparable": "no dimensions in common with {wave}",
       "deltaNoteNoBreakdown": "{wave} was loaded without a breakdown by group.",
       "deltaNoteFirstWave": "First wave: there is no earlier survey to compare with, so this view shows no changes.",
-      "deltaNotePreviousFailed": "The previous wave could not be loaded, so this view shows no changes."
+      "deltaNotePreviousFailed": "The previous wave could not be loaded, so this view shows no changes.",
+      "planCoversGroup": "A plan covers {group}",
+      "planSameGroup": "The same {group} plan",
+      "gridScrollHint": "The table scrolls sideways to every dimension; the group, its mean and the change stay in place.",
+      "questionsIntroTarget": "Every question of the whole survey against the target of {target}, in the map's colours and words."
     }
   },
   "employee": {

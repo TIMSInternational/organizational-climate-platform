@@ -32,8 +32,8 @@ export interface ResultsCellPanelProps {
 
 /**
  * The opened cell — "Celda abierta" — in the artboard's three columns: the question
- * behind the cell as two distributions (the group's, the whole company's) over one
- * axis; the same dimension in the other groups, protected ones hatched; and what is
+ * behind the cell, as the group's mean and the whole company's distribution over the
+ * scale; the same dimension in the other groups, protected ones hatched; and what is
  * being done about it, with the plan that covers the group, the way to the previous
  * wave, and the open-text privacy note.
  *
@@ -136,13 +136,6 @@ export default function ResultsCellPanel({
                 </p>
               </div>
 
-              {/* One axis for the two strips, in the author's own anchor words. */}
-              <div aria-hidden="true" className="flex justify-between gap-2 font-mono text-2xs text-fg-label">
-                {axisOf(question, t).map((tick) => (
-                  <span key={tick}>{tick}</span>
-                ))}
-              </div>
-
               <div className="flex flex-col gap-1.5" data-testid="company-distribution">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-sm font-semibold text-fg-primary">
@@ -158,6 +151,17 @@ export default function ResultsCellPanel({
                   max={question.scaleMax}
                   segments={segmentsOf(question.surveyDistribution, t)}
                 />
+                {/* The axis directly under the one strip it serves, the company's, in the
+                    author's own anchor words. */}
+                <div
+                  aria-hidden="true"
+                  data-testid="scale-axis"
+                  className="flex justify-between gap-2 font-mono text-2xs text-fg-label"
+                >
+                  {axisOf(question, t).map((tick) => (
+                    <span key={tick}>{tick}</span>
+                  ))}
+                </div>
                 <p className="m-0 text-xs text-fg-label">
                   {t('surveyResults.next.companyDistributionSubWave', {
                     wave: code,

@@ -1,6 +1,6 @@
 import type { ActionPlan } from '../../action-plans/api/actionPlans'
 import type { ClimateMapSelection, WordFrequency } from '../../../components/charts'
-import type { SurveyDistributionBucket, SurveyQuestionResult, SurveySegmentResult } from '../api/surveyResults'
+import type { SurveyDistributionBucket, SurveyQuestionResult } from '../api/surveyResults'
 import { CLIMATE_TARGET } from '../../dashboard/next/compose'
 import {
   climateDetail,
@@ -33,11 +33,15 @@ import type { ResultsGroupRow, ResultsPlanRef, SurveyResultsNextModel } from './
  * `null` mean, never 0.
  *
  * The one thing this file computes that the map does not is a **mean across
- * dimensions** (per group, and for the whole company). It is taken over the
- * *unrounded* per-question means on the wire rather than over the rounded cells, for
- * the reason `compose.ts` gives for the dashboard's CLIMA figure: that tile is the mean
- * of the raw trends scores, and this page has to print the same number for the same
- * survey — a reader moving between the two screens must not see 3,65 become 3,67.
+ * dimensions** (per group, and for the whole company) — "Media del grupo" and the CLIMA
+ * tile. It is the mean of the **printed cells** (`printedMean`): the reader has the six
+ * one-decimal readings in front of them, and a mean beside them that their own
+ * arithmetic cannot reach is a number the page cannot defend. For Q3 of the demo tenant
+ * the six company cells 3,8 · 3,3 · 3,7 · 3,4 · 3,8 · 4,0 average 3,67, where the
+ * unrounded per-question means average 3,6533 (3,65) — the figure the Panel de Control
+ * prints off the trends scores. The two screens therefore differ in the second decimal
+ * for the same survey; that is stated for the integrator rather than hidden by printing
+ * a mean that contradicts its own row.
  *
  * ## What every change is measured against
  *
@@ -52,11 +56,6 @@ export { CLIMATE_TARGET }
 /** One decimal, the precision `surveyResultsMap.ts` rounds every cell to. */
 function round1(value: number): number {
   return Math.round(value * 10) / 10
-}
-
-/** Two decimals, the precision the CLIMA tile and the whole-company mean print at. */
-function round2(value: number): number {
-  return Math.round(value * 100) / 100
 }
 
 /**
@@ -75,6 +74,19 @@ export function printedChange(now: number, before: number, decimals: number): nu
 function mean(values: readonly number[]): number | null {
   if (values.length === 0) return null
   return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+/**
+ * The mean of readings AS PRINTED: each rounded to the one decimal of its cell, then
+ * averaged and rounded to `decimals`. Worked in whole tenths so float noise cannot
+ * decide a half: Ingeniería's cells 4,0 · 3,7 · 4,0 · 3,5 · 4,2 · 4,3 are 237 tenths,
+ * 39,5 a cell, which prints 4,0 — where summing the floats gives 3,9499… and 3,9.
+ */
+export function printedMean(values: readonly number[], decimals: number): number | null {
+  if (values.length === 0) return null
+  const tenths = values.reduce((sum, value) => sum + Math.round(value * 10), 0)
+  const scale = 10 ** decimals
+  return Math.round((tenths * scale) / 10 / values.length) / scale
 }
 
 /**
@@ -129,16 +141,6 @@ export function isBelowTarget(score: number, target: number = CLIMATE_TARGET): b
   return round1(score) < target
 }
 
-/** The unrounded mean of a group's per-question means inside one dimension. */
-function rawSegmentScore(segment: SurveySegmentResult, dimension: ClimateDimension): number | null {
-  const wanted = new Set(dimension.questionIds)
-  return mean(
-    segment.questions
-      .filter((entry) => wanted.has(entry.questionId) && entry.average !== null)
-      .map((entry) => entry.average as number),
-  )
-}
-
 /** The unrounded mean of the whole survey's per-question means inside one dimension. */
 function rawSurveyScore(questions: readonly SurveyQuestionResult[], dimension: ClimateDimension): number | null {
   const wanted = new Set(dimension.questionIds)
@@ -154,13 +156,12 @@ function rawSurveyScore(questions: readonly SurveyQuestionResult[], dimension: C
  *
  * A protected row arrives from `buildClimateMap` with no scores and must read the same
  * way in every panel, so it carries `null` scores and a `null` mean here — never 0,
- * which would be a claim. A disclosed row's `scores` are the map's rounded cells;
- * its `mean` is over the raw per-question means (see the module note).
+ * which would be a claim. A disclosed row's `scores` are the map's rounded cells, and
+ * its `mean` is the mean of those cells as printed (`printedMean`, see the module note).
  */
 export function groupRows(model: SurveyResultsNextModel): ResultsGroupRow[] {
   const climate = model.climate
   if (!climate) return []
-  const segments = new Map((model.breakdown?.segments ?? []).map((segment) => [segment.key, segment]))
   const keys = climate.dimensions.map((dimension) => dimension.key)
   const before = model.previous.status === 'loaded' ? model.previous.wave.groupScores : {}
   return climate.rows.map((row) => {
@@ -169,14 +170,15 @@ export function groupRows(model: SurveyResultsNextModel): ResultsGroupRow[] {
     let rowMean: number | null = null
     let vsPrevious: number | null = null
     if (!isProtected) {
-      const segment = segments.get(row.id)
-      const raw = segment ? climate.dimensions.map((dimension) => rawSegmentScore(segment, dimension)) : scores
-      const all = mean(raw.filter((score): score is number => score !== null))
-      rowMean = all === null ? null : round1(all)
+      // The mean of the cells this row prints, at the one decimal it is printed at.
+      rowMean = printedMean(
+        scores.filter((score): score is number => score !== null),
+        1,
+      )
       // Only a group the previous wave DISCLOSED has an entry there. A withheld one has
       // none, so its change stays `null` — "sin Q2" on the grid, never a 0.
       const previous = before[row.id] as Readonly<Record<string, number>> | undefined
-      vsPrevious = previous === undefined ? null : likeForLike(keys, raw, previous, 1)
+      vsPrevious = previous === undefined ? null : likeForLike(keys, scores, previous, 1)
     }
     return { id: row.id, name: row.label, responses: row.responses, isProtected, scores, mean: rowMean, vsPrevious }
   })
@@ -189,24 +191,25 @@ export function companyScores(model: SurveyResultsNextModel): (number | null)[] 
 }
 
 /**
- * The whole survey's climate: the mean of its dimension scores, unrounded until the
- * end and printed to two decimals — the CLIMA tile, and the company row's own mean.
+ * The whole survey's climate: the mean of the company row's printed cells
+ * (`printedMean`), at the two decimals the CLIMA tile and the company row's own mean
+ * print — 3,67 for the demo tenant's 3,8 · 3,3 · 3,7 · 3,4 · 3,8 · 4,0.
  */
 export function companyMean(model: SurveyResultsNextModel): number | null {
   if (!model.climate) return null
-  const raw = mean(
-    model.climate.dimensions
-      .map((dimension) => rawSurveyScore(model.questions, dimension))
-      .filter((score): score is number => score !== null),
+  return printedMean(
+    companyScores(model).filter((score): score is number => score !== null),
+    2,
   )
-  return raw === null ? null : round2(raw)
 }
 
 /**
  * The change between two readings of the same construct: the mean of `now` minus the
  * mean of `before`, over exactly the dimension keys BOTH carry — so a dimension one
- * wave asked and the other did not cannot move the average — taken at the `decimals` it
- * is printed at (`printedChange`). `null` when they share none.
+ * wave asked and the other did not cannot move the average. Each side is the mean of
+ * its readings as printed (`printedMean`) at the `decimals` the change is printed at,
+ * so the change is the difference of two figures a reader can check (`printedChange`).
+ * `null` when they share none.
  */
 function likeForLike(
   keys: readonly string[],
@@ -223,23 +226,23 @@ function likeForLike(
     current.push(reading)
     earlier.push(previous)
   })
-  const nowMean = mean(current)
-  const beforeMean = mean(earlier)
+  const nowMean = printedMean(current, decimals)
+  const beforeMean = printedMean(earlier, decimals)
   return nowMean === null || beforeMean === null ? null : printedChange(nowMean, beforeMean, decimals)
 }
 
 /**
  * How far the whole company's climate moved since the previous wave, at the precision it
- * is printed: two decimals on the CLIMA tile ("+0,29 frente a Q2"), one on the company
- * row's "Frente a Q2" (`printedChange`). `null` without a
- * previous wave, or when the two share no dimension.
+ * is printed: two decimals on the CLIMA tile ("+0,32 frente a Q2" — 3,67 against the
+ * 3,35 Q2's own printed cells average), one on the company row's "Frente a Q2"
+ * (`likeForLike`). `null` without a previous wave, or when the two share no dimension.
  */
 export function companyDelta(model: SurveyResultsNextModel, decimals: number): number | null {
   const climate = model.climate
   if (!climate || model.previous.status !== 'loaded') return null
   return likeForLike(
     climate.dimensions.map((dimension) => dimension.key),
-    climate.dimensions.map((dimension) => rawSurveyScore(model.questions, dimension)),
+    companyScores(model),
     model.previous.wave.dimensionScores,
     decimals,
   )
@@ -314,6 +317,12 @@ export interface ResultsFinding {
   outsideOf: string | null
   /** `undefined` when plans could not be loaded; `null` when none covers the group. */
   plan: ResultsPlanRef | null | undefined
+  /**
+   * Whether an earlier finding already names this same plan. A plan belongs to a GROUP
+   * (`planFor`), so it is named once, on the first of its group's cells, and the later
+   * ones point to it instead of claiming it again for another dimension.
+   */
+  planRepeat: boolean
 }
 
 interface Candidate {
@@ -387,6 +396,7 @@ export function whereToLookFirst(model: SurveyResultsNextModel, limit = 3): Resu
   }
 
   const redOutside = candidates.filter((cell) => cell.rowId !== first.rowId && isRed(cell.band))
+  const named = new Set<string>()
   return picked.map((cell, index) => {
     let reason: FindingReason = 'shortfall'
     let outsideOf: string | null = null
@@ -399,13 +409,16 @@ export function whereToLookFirst(model: SurveyResultsNextModel, limit = 3): Resu
       reason = 'lowest-outside'
       outsideOf = first.rowName
     }
-    return {
-      ...cell,
-      reason,
-      outsideOf,
-      plan: model.plans === null ? undefined : planFor(model.plans, cell.rowId),
-    }
+    const plan = model.plans === null ? undefined : planFor(model.plans, cell.rowId)
+    const planRepeat = plan ? named.has(plan.id) : false
+    if (plan) named.add(plan.id)
+    return { ...cell, reason, outsideOf, plan, planRepeat }
   })
+}
+
+/** A whole-survey question against the target: the grid's five bands, off its one-decimal mean. */
+export function questionBand(average: number): TargetBand {
+  return targetBand(round1(average))
 }
 
 export interface ResultsDistributionPoint {

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useTranslation } from '../../../i18n'
 import { DistributionStrip, formatMetric, type MetricFormat } from '../../../components/charts'
 import { cn } from '../../../lib/cn'
@@ -15,6 +16,12 @@ interface QuestionDistributionRowProps {
   strip: DistributionStripModel
   /** The per-question baseline the standing chip reads. `null` renders no chip. */
   standings: QuestionStandings | null
+  /**
+   * A chip drawn where the standing chip would be, for a caller that measures the
+   * question against something else — the redesigned results page reads the climate
+   * target, as its grid does. Pass `standings={null}` with it.
+   */
+  chip?: ReactNode
   /** Already-translated short identifier, e.g. "Q3". */
   shortLabel: string
   /** Already-translated dimension display text — the category, or the uncategorised word. */
@@ -55,6 +62,7 @@ export default function QuestionDistributionRow({
   shortLabel,
   dimensionName,
   uncategorised,
+  chip,
 }: QuestionDistributionRowProps) {
   const { t, locale } = useTranslation()
 
@@ -103,7 +111,8 @@ export default function QuestionDistributionRow({
               </span>
             </span>
           )}
-          {standings && standing !== undefined && (
+          {chip}
+          {!chip && standings && standing !== undefined && (
             <StandingChip
               score={standing}
               target={standings.overall}

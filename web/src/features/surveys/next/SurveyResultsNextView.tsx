@@ -446,12 +446,21 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                           <span className="text-xs text-fg-label">{t('surveyResults.next.plansUnavailable')}</span>
                         ) : finding.plan === null ? (
                           <span className="text-xs text-fg-label">{t('surveyResults.next.planNone')}</span>
+                        ) : finding.planRepeat ? (
+                          // The same group plan an earlier card already names: pointed to,
+                          // never claimed again for this dimension (`ActionPlan` has none).
+                          <span className="text-xs text-fg-label" data-testid="finding-plan">
+                            {t('surveyResults.next.planSameGroup', { group: finding.rowName })}
+                          </span>
                         ) : (
-                          // Plans carry a department, not a dimension: the plan covers
-                          // the GROUP, and the sentence says no more than that.
-                          <span className="inline-flex items-center gap-1 text-xs text-accent-green-ink">
+                          // Plans carry a department, not a dimension: the plan covers the
+                          // GROUP, and the sentence names the group, never the cell.
+                          <span
+                            className="inline-flex items-center gap-1 text-xs text-accent-green-ink"
+                            data-testid="finding-plan"
+                          >
                             <Check aria-hidden="true" className="size-3" />
-                            {t('surveyResults.next.planCovers')}
+                            {t('surveyResults.next.planCoversGroup', { group: finding.rowName })}
                             {finding.plan.status === 'not_started' && ` · ${t('surveyResults.next.planNoProgress')}`}
                           </span>
                         )}

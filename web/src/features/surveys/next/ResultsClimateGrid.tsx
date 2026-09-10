@@ -30,15 +30,27 @@ const CELL = 'border-0 p-0'
 /** The artboard's `.label`: 10px, bold, uppercase, 0.06em, the tertiary ink. */
 // `[overflow-wrap:normal]`: `index.css` lets a cell break an unbreakable run anywhere,
 // which on a narrow column split "RECONOCIMIENTO" mid-word (measured at 1024). A label
-// wraps between words here, and the grid's minimum width keeps every word on a line.
+// wraps between words here; `hyphens-auto` breaks a word wider than its column at a
+// syllable (`TranslationProvider` sets the page's `lang`), and `px-1` keeps two heads
+// apart — at 1024 "RECONOCIMIENTO" ran straight into "DESARROLLO".
 const HEAD = cn(
   CELL,
-  'text-center align-bottom text-2xs font-bold uppercase leading-tight tracking-label text-fg-label [overflow-wrap:normal]',
+  'px-1 text-center align-bottom text-2xs font-bold uppercase leading-tight tracking-label text-fg-label hyphens-auto [overflow-wrap:normal]',
 )
 /** The row labels stay put while a narrow viewport scrolls the grid under them. */
 const STICKY = 'sticky left-0 z-10 bg-surface-card'
 /** `index.css` tints every body row on hover; a grid of coloured cells must not flash. */
 const ROW = 'hover:bg-transparent'
+/**
+ * The two reading columns, pinned to the right edge: below the grid's minimum width the
+ * dimensions scroll under them, so "Media del grupo" and "Frente a Q2" stay in view —
+ * at 1024 they sat past the card's edge with nothing saying so. Opaque, with a 4px
+ * card-coloured shadow over the gap a scrolled cell would otherwise show through.
+ */
+const PINNED = 'sticky z-10 bg-surface-card'
+const PIN_COVER = '-4px 0 0 var(--admin-bg-card)'
+/** The trailing column's width plus the 4px gap: where the mean column pins when both are drawn. */
+const TRAILING = 96 + 4
 
 /** Which of the three target sentences a band announces, for the screen reader. */
 function bandKey(band: TargetBand): string {
@@ -104,8 +116,10 @@ export interface ResultsClimateGridProps {
  * with 4px gaps, as a fixed-layout table: a `<colgroup>` pins the label and the two
  * trailing columns, the dimension columns share the rest, and `border-spacing` is the
  * gap. Group cells are 40px tall (`h-10`), the artboard's map row height. Below the
- * grid's minimum width `Table`'s own container scrolls it, never the page, and the
- * row labels stay pinned so a scrolled cell still says whose it is.
+ * grid's minimum width `Table`'s own container scrolls it, never the page: the row
+ * labels stay pinned on the left so a scrolled cell still says whose it is, the mean
+ * and the change stay pinned on the right (`PINNED`), and a line under the legend
+ * says the grid scrolls.
  */
 export default function ResultsClimateGrid({
   dimensions,
@@ -129,6 +143,8 @@ export default function ResultsClimateGrid({
   }
   const compare = previous.status === 'loaded' ? previous.wave : null
   const columns = dimensions.length + (compare ? 3 : 2)
+  const meanPin = { right: compare ? TRAILING : 0, boxShadow: PIN_COVER }
+  const deltaPin = { right: 0, boxShadow: PIN_COVER }
 
   return (
     <div className="flex flex-col gap-3">
@@ -159,11 +175,11 @@ export default function ResultsClimateGrid({
                 {dimension.name}
               </th>
             ))}
-            <th scope="col" className={HEAD}>
+            <th scope="col" className={cn(HEAD, PINNED)} style={meanPin}>
               {t('surveyResults.next.groupMean')}
             </th>
             {compare && (
-              <th scope="col" className={HEAD}>
+              <th scope="col" className={cn(HEAD, PINNED)} style={deltaPin}>
                 {t('surveyResults.next.vsWave', { wave: compare.code })}
               </th>
             )}
@@ -193,16 +209,18 @@ export default function ResultsClimateGrid({
                 </td>
               )
             })}
-            <td className={cn(CELL, 'text-center font-mono text-sm tabular-nums text-fg-primary')}>
+            <td className={cn(CELL, PINNED, 'text-center font-mono text-sm tabular-nums text-fg-primary')} style={meanPin}>
               {company.mean === null ? '—' : score2(company.mean)}
             </td>
             {compare && (
               <td
                 className={cn(
                   CELL,
+                  PINNED,
                   'text-center font-mono text-xs font-semibold tabular-nums',
                   companyDelta === null ? 'text-fg-label' : deltaInkOf(companyDelta, 1),
                 )}
+                style={deltaPin}
               >
                 {company.mean === null || companyDelta === null ? '—' : signed(companyDelta)}
               </td>
@@ -286,7 +304,7 @@ export default function ResultsClimateGrid({
                     </td>
                   )
                 })}
-                <td className={cn(CELL, 'text-center')}>
+                <td className={cn(CELL, PINNED, 'text-center')} style={meanPin}>
                   {row.isProtected ? (
                     <ProtectedCell
                       responses={0}
@@ -305,7 +323,7 @@ export default function ResultsClimateGrid({
                   )}
                 </td>
                 {compare && (
-                  <td className={cn(CELL, 'text-center text-xs text-fg-label')}>
+                  <td className={cn(CELL, PINNED, 'text-center text-xs text-fg-label')} style={deltaPin}>
                     {row.isProtected ? (
                       // Hatched too: a withheld group's change is as withheld as its
                       // level, and a dash would read as "no previous wave".
@@ -359,6 +377,12 @@ export default function ResultsClimateGrid({
           {t('surveyResults.next.legendOpen')}
         </span>
       </div>
+      {/* Under the grid's minimum width it scrolls inside its card: the pinned columns
+          keep the reading in view, and this line says the rest is a scroll away. From
+          `xl` the whole grid fits and the line is not drawn. */}
+      <p className="m-0 text-xs text-fg-label xl:hidden" data-testid="grid-scroll-hint">
+        {t('surveyResults.next.gridScrollHint')}
+      </p>
     </div>
   )
 }

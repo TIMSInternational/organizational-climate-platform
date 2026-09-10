@@ -11,6 +11,7 @@ import {
   cellDetail,
   companyDelta,
   companyMean,
+  printedMean,
   companyScores,
   dimensionDeltas,
   groupRows,
@@ -100,7 +101,8 @@ describe('against the climate target, on the tenant’s real payload', () => {
     const rows = groupRows(real())
     expect(rows.map((row) => [row.name, row.mean])).toEqual([
       ['Finanzas', null],
-      ['Ingeniería', 3.9],
+      // 4,0: its printed cells 4,0 · 3,7 · 4,0 · 3,5 · 4,2 · 4,3 average 3,95.
+      ['Ingeniería', 4],
       ['Operaciones', 2.8],
       ['Personas', 4.1],
       ['Ventas', 3.8],
@@ -108,14 +110,22 @@ describe('against the climate target, on the tenant’s real payload', () => {
     expect(rows[0].scores.every((score) => score === null)).toBe(true)
   })
 
-  it('reads the whole company per dimension and averages the unrounded means, as the dashboard does', () => {
+  it('reads the whole company per dimension, and its mean is the mean of the six printed cells', () => {
     const model = real()
     expect(companyScores(model)).toEqual([3.8, 3.3, 3.7, 3.4, 3.8, 4.0])
-    // 3,65 — the mean of the six unrounded means (21.92 / 6), which is the figure the
-    // Panel de Control prints for Q3 (`latestAverage` over the trends scores). The
-    // artboard's 3,67 is the mean of the six ROUNDED cells; printing it here would put
-    // two numbers for one survey on two screens.
-    expect(companyMean(model)).toBe(3.65)
+    // 3,67 — the six cells as printed, 22,0 / 6. The unrounded per-question means give
+    // 3,6533 (3,65), the figure the Panel de Control prints off the trends scores; a mean
+    // beside these six cells that their own average cannot reach is a number the page
+    // cannot defend.
+    expect(companyMean(model)).toBe(3.67)
+  })
+
+  it('averages the cells as printed, in whole tenths, so float noise cannot decide a half', () => {
+    // 237 tenths over six cells is 39,5: 4,0. Summing the floats gives 3,9499… and 3,9.
+    expect(printedMean([4.0, 3.7, 4.0, 3.5, 4.2, 4.3], 1)).toBe(4)
+    // Each reading is rounded to its cell first: 3,75 prints 3,8 and 3,33 prints 3,3.
+    expect(printedMean([3.75, 3.33, 3.67, 3.38, 3.79, 4.0], 2)).toBe(3.67)
+    expect(printedMean([], 2)).toBeNull()
   })
 
   it('names the dimensions under the target, worst first', () => {
@@ -229,10 +239,10 @@ describe('against the previous wave, on the tenant’s real payloads', () => {
       status: 'loaded',
       wave: { surveyId: Q2, code: 'Q2', hasGroupBreakdown: true, risesInARow: 2 },
     })
-    // Every change is the difference of the readings AS PRINTED (`printedChange`). The
-    // tile prints two decimals: 3,65 against Q2's 3,36 is +0,29. The company row prints
-    // one: 3,7 against 3,4 is +0,3.
-    expect(companyDelta(model, 2)).toBe(0.29)
+    // Every change is the difference of the readings AS PRINTED. The tile prints two
+    // decimals: 3,67 (the six printed cells) against Q2's 3,35 (its own six: 3,5 · 3,0 ·
+    // 3,3 · 3,1 · 3,5 · 3,7) is +0,32. The company row prints one: 3,7 against 3,4, +0,3.
+    expect(companyDelta(model, 2)).toBe(0.32)
     expect(companyDelta(model, 1)).toBe(0.3)
     // Seguridad psicológica, Carga de trabajo, Confianza, Reconocimiento, Desarrollo,
     // Pertenencia. Confianza is 3,67 against 3,33 — printed 3,7 and 3,3 — so +0,4, where
@@ -242,7 +252,8 @@ describe('against the previous wave, on the tenant’s real payloads', () => {
     // Q2's 3,43 (3,4), so +0,4 where the raw +0,33 would have printed +0,3.
     expect(Object.fromEntries(groupRows(model).map((row) => [row.name, row.vsPrevious]))).toEqual({
       Finanzas: null,
-      Ingeniería: 0.3,
+      // 4,0 against the 3,6 Q2's printed cells average (3,8 · 3,5 · 3,7 · 3,2 · 3,8 · 3,8).
+      Ingeniería: 0.4,
       Operaciones: 0.2,
       Personas: 0.2,
       Ventas: 0.4,
@@ -289,13 +300,10 @@ describe('against the previous wave, on the tenant’s real payloads', () => {
       segment.questions = segment.questions.filter((entry) => entry.questionId !== trust)
     }
     const model = against(fewer)
-    // Over the five dimensions both waves carry, and nothing else.
-    const now = (3.75 + 3.33 + 3.38 + 3.79 + 4.0) / 5
-    const before = (3.5 + 3.04 + 3.08 + 3.54 + 3.67) / 5
-    // At four decimals, so the like-for-like rule shows: 3,65 against 3,366 is 0,284;
-    // over all six of this wave's dimensions it would be 3,6533 − 3,366 = 0,2873.
-    expect(companyDelta(model, 4)).toBe(Math.round((Math.round(now * 1e4) - Math.round(before * 1e4))) / 1e4)
-    expect(companyDelta(model, 4)).toBe(0.284)
+    // Over the five dimensions both waves carry, and nothing else, as printed: 3,8 · 3,3 ·
+    // 3,4 · 3,8 · 4,0 average 3,66 against Q2's 3,5 · 3,0 · 3,1 · 3,5 · 3,7 at 3,36 —
+    // +0,30. Over all six of this wave's cells it would be 3,67 − 3,36 = +0,31.
+    expect(companyDelta(model, 2)).toBe(0.3)
     expect(dimensionDeltas(model)[2]).toBeNull()
   })
 

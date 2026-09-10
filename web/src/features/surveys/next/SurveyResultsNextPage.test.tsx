@@ -238,7 +238,8 @@ describe('SurveyResultsNextPage', () => {
     expect(findings.length).toBeGreaterThan(0)
     expect(findings[0].textContent).toContain('Operaciones')
     expect(findings[0].textContent).toContain('2.4')
-    expect(within(findings[0]).getByText(copy.planCovers)).toBeTruthy()
+    // The plan names its group, never the cell: `ActionPlan` carries no dimension.
+    expect(within(findings[0]).getByText(copy.planCoversGroup.replace('{group}', 'Operaciones'))).toBeTruthy()
 
     // No sample chip anywhere: every figure is measured, and the opened group's spread —
     // the one reading no endpoint returns — is not drawn at all.

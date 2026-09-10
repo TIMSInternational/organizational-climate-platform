@@ -92,6 +92,7 @@ const cell = (name: RegExp) => screen.getByRole('button', { name })
 const heading = (name: string) => screen.getByRole('heading', { level: 2, name })
 /** The last cell of a row: "Frente a Q2". */
 const vsQ2 = (testId: string) => screen.getByTestId(testId).querySelector('td:last-child')?.textContent
+const meanOf = (testId: string) => screen.getByTestId(testId).querySelector('td:nth-last-child(2)')?.textContent
 const requested = () => vi.mocked(fetch).mock.calls.map((call) => String(call[0]))
 
 describe('the survey results on the tenant’s real payload', () => {
@@ -131,12 +132,14 @@ describe('the survey results on the tenant’s real payload', () => {
     await open()
     const tiles = screen.getByRole('region', { name: 'Resumen' }).textContent ?? ''
     expect(tiles).toContain('Clima · Q3')
-    // The unrounded mean of the six dimension means — the Panel de Control's figure.
-    expect(tiles).toContain('3,65')
+    // The mean of the six printed cells 3,8 · 3,3 · 3,7 · 3,4 · 3,8 · 4,0.
+    expect(tiles).toContain('3,67')
+    expect(tiles).not.toContain('3,65')
     expect(tiles).toContain('de 5 · meta 3,7')
-    // 3,6533 against Q2's 3,3600; Q1 3,03 → Q2 3,36 → Q3 3,65 makes this the second rise.
+    // 3,67 against the 3,35 Q2's own printed cells average; Q1 3,03 → Q2 3,36 → Q3 3,65
+    // on the trends makes this the second rise.
     const delta = screen.getByTestId('climate-delta')
-    expect(delta.textContent).toBe('+0,29 frente a Q2 · segunda alza seguida')
+    expect(delta.textContent).toBe('+0,32 frente a Q2 · segunda alza seguida')
     expect(delta.className).toContain('text-accent-green-ink')
     expect(tiles).toContain('respuestas · 100 % completadas')
     expect(tiles).toContain('cerró el 6 de agosto · sin lista de invitados')
@@ -162,9 +165,14 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(items).toHaveLength(3)
     expect(items[0].textContent).toContain('Operaciones · Carga de trabajo')
     expect(items[0].textContent).toContain('La celda más baja del mapa · 1,3 bajo la meta')
-    expect(items[0].textContent).toContain('Un plan atiende este grupo · sin avances')
+    expect(items[0].textContent).toContain('Un plan atiende a Operaciones · sin avances')
     expect(items[1].textContent).toContain('Operaciones · Seguridad psicológica')
     expect(items[1].textContent).toContain('Segunda más baja · mismo grupo')
+    // The group's plan is named once: the second Operaciones cell points to it and claims
+    // nothing for Seguridad psicológica (`ActionPlan` carries no dimension).
+    expect(items[1].textContent).toContain('El mismo plan de Operaciones')
+    expect(items[1].textContent).not.toContain('Un plan atiende')
+    expect(within(items[1]).getByTestId('finding-plan').className).not.toContain('text-accent-green-ink')
     expect(items[2].textContent).toContain('Ventas · Carga de trabajo')
     expect(items[2].textContent).toContain('Única celda roja fuera de Operaciones')
     expect(items[2].textContent).toContain('Sin plan todavía')
@@ -189,16 +197,21 @@ describe('the survey results on the tenant’s real payload', () => {
     const order = [...grid.querySelectorAll('tbody tr[data-testid]')].map((row) => row.getAttribute('data-testid'))
     expect(order).toEqual(['company-row', `group-row-${FIN}`, `group-row-${ENG}`, `group-row-${OPS}`, `group-row-${PER}`, `group-row-${VEN}`])
     const company = screen.getByTestId('company-row').textContent ?? ''
-    for (const reading of ['3,8', '3,3', '3,7', '3,4', '4,0', '3,65']) expect(company).toContain(reading)
+    for (const reading of ['3,8', '3,3', '3,7', '3,4', '4,0', '3,67']) expect(company).toContain(reading)
+    // The mean beside the cells is THEIR mean: the six printed readings, averaged.
+    const companyCells = [...screen.getByTestId('company-row').querySelectorAll('td')].slice(0, 6)
+    const printed = companyCells.map((cell) => Number.parseFloat(cell.textContent!.slice(0, 3).replace(',', '.')))
+    expect(meanOf('company-row')).toBe((printed.reduce((sum, value) => sum + value, 0) / 6).toFixed(2).replace('.', ','))
     // Each change is the difference of the printed readings: Confianza is 3,7 now and
     // 3,3 in Q2, so +0,4 (the raw +0,34 would print +0,3 beside two figures 0,4 apart);
     // the other five dimensions and the mean's are +0,3.
     expect(company.match(/\+0,3/g)).toHaveLength(6)
     expect(company.match(/\+0,4/g)).toHaveLength(1)
     expect(vsQ2('company-row')).toBe('+0,3')
-    expect(screen.getByTestId(`group-row-${ENG}`).textContent).toContain('3,9')
+    // Ingeniería's printed cells 4,0 · 3,7 · 4,0 · 3,5 · 4,2 · 4,3 average 3,95: 4,0.
+    expect(meanOf(`group-row-${ENG}`)).toBe('4,0')
     // "Frente a Q2" per group, off Q2's own breakdown: every group Q2 disclosed.
-    expect(vsQ2(`group-row-${ENG}`)).toBe('+0,3')
+    expect(vsQ2(`group-row-${ENG}`)).toBe('+0,4')
     expect(vsQ2(`group-row-${OPS}`)).toBe('+0,2')
     expect(vsQ2(`group-row-${PER}`)).toBe('+0,2')
     // Ventas is 3,8 now against Q2's 3,4: +0,4, not the raw +0,33 rounded.
@@ -352,7 +365,7 @@ describe('the survey results on the tenant’s real payload', () => {
     )
     await open()
     expect(vsQ2(`group-row-${VEN}`)).toBe('sin Q2')
-    expect(vsQ2(`group-row-${ENG}`)).toBe('+0,3')
+    expect(vsQ2(`group-row-${ENG}`)).toBe('+0,4')
   })
 
   it('draws the finding link as the artboard does: 12px regular text, a 4px gap, a 12px arrow', async () => {
@@ -377,6 +390,54 @@ describe('the survey results on the tenant’s real payload', () => {
     renderAs({ role: 'super_admin', companyId: '' })
     expect(await screen.findByTestId('cell-panel')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Exportar informe (PDF)' })).toBeTruthy()
-    expect(screen.getByTestId('climate-delta').textContent).toBe('+0,29 frente a Q2 · segunda alza seguida')
+    expect(screen.getByTestId('climate-delta').textContent).toBe('+0,32 frente a Q2 · segunda alza seguida')
+  })
+
+  it('draws the 1–5 axis directly under the company strip it serves', async () => {
+    await open()
+    const company = screen.getByTestId('company-distribution')
+    const axis = within(company).getByTestId('scale-axis')
+    // The heading, the strip, the axis, then the strip's own sub-line: nothing between
+    // the strip and its axis, and no axis left under the group's withheld sentence.
+    const children = [...company.children]
+    expect(axis.parentElement).toBe(company)
+    expect(children.indexOf(axis)).toBe(2)
+    expect(children[3].textContent).toContain('respondió 1 o 2')
+    expect(axis.textContent).toContain('Muy en desacuerdo')
+  })
+
+  it('keeps "Media del grupo" and "Frente a Q2" in view when the grid scrolls, and says it scrolls', async () => {
+    await open()
+    const headers = within(screen.getByTestId('climate-grid')).getAllByRole('columnheader')
+    const [mean, change] = headers.slice(-2) as HTMLElement[]
+    expect(mean.className).toContain('sticky')
+    expect(change.className).toContain('sticky')
+    // The change at the right edge, the mean one 96px column and its 4px gap in from it.
+    expect(change.style.right).toBe('0px')
+    expect(mean.style.right).toBe('100px')
+    for (const testId of ['company-row', `group-row-${FIN}`, `group-row-${OPS}`]) {
+      const cells = [...screen.getByTestId(testId).children].slice(-2)
+      for (const cell of cells) expect(cell.className).toContain('sticky')
+    }
+    // Every dimension head keeps a gap to its neighbour and breaks a long word at a syllable.
+    for (const head of headers.slice(0, 6)) {
+      expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['px-1', 'hyphens-auto']))
+    }
+    const hint = screen.getByTestId('grid-scroll-hint')
+    expect(hint.className).toContain('xl:hidden')
+    expect(hint.textContent).toBe(
+      'La tabla se desliza de lado hasta cada dimensión; el grupo, su media y el cambio quedan fijos.',
+    )
+  })
+
+  it('measures every question against the target, in the grid’s words — never the mean of the question means', async () => {
+    await open()
+    const list = screen.getByTestId('question-list')
+    const chips = within(list).getAllByTestId('question-standing').map((chip) => chip.textContent)
+    // One scale question per dimension, read as the company row prints them: 3,8 · 3,3 ·
+    // 3,7 · 3,4 · 3,8 · 4,0 against the target of 3,7.
+    expect(chips).toEqual(['sobre la meta', 'bajo la meta', 'en la meta', 'bajo la meta', 'sobre la meta', 'sobre la meta'])
+    expect(list.textContent).not.toMatch(/Por encima|Por debajo|En la media/)
+    expect(screen.getByRole('heading', { level: 2, name: 'Resultados por pregunta' }).className).toContain('text-2xl')
   })
 })
