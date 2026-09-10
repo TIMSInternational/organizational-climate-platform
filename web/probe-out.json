@@ -1,0 +1,231 @@
+{
+ "target": 3.7,
+ "threshold": 5,
+ "dims": [
+  "psychological_safety",
+  "workload",
+  "trust",
+  "recognition",
+  "growth",
+  "belonging"
+ ],
+ "rows": [
+  {
+   "id": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+   "label": "Finanzas",
+   "responses": 0,
+   "scores": []
+  },
+  {
+   "id": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+   "label": "Ingeniería",
+   "responses": 6,
+   "scores": [
+    4,
+    3.7,
+    4,
+    3.5,
+    4.2,
+    4.3
+   ]
+  },
+  {
+   "id": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+   "label": "Operaciones",
+   "responses": 5,
+   "scores": [
+    2.6,
+    2.4,
+    3,
+    2.8,
+    3,
+    3.2
+   ]
+  },
+  {
+   "id": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+   "label": "Personas",
+   "responses": 5,
+   "scores": [
+    4.4,
+    4,
+    4,
+    3.6,
+    4.2,
+    4.4
+   ]
+  },
+  {
+   "id": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+   "label": "Ventas",
+   "responses": 5,
+   "scores": [
+    4,
+    3.4,
+    3.8,
+    3.6,
+    3.8,
+    4
+   ]
+  }
+ ],
+ "groupRows": [
+  {
+   "name": "Finanzas",
+   "isProtected": true,
+   "mean": null
+  },
+  {
+   "name": "Ingeniería",
+   "isProtected": false,
+   "mean": 4
+  },
+  {
+   "name": "Operaciones",
+   "isProtected": false,
+   "mean": 2.8
+  },
+  {
+   "name": "Personas",
+   "isProtected": false,
+   "mean": 4.1
+  },
+  {
+   "name": "Ventas",
+   "isProtected": false,
+   "mean": 3.8
+  }
+ ],
+ "findings": [
+  {
+   "rowId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+   "rowName": "Operaciones",
+   "dimensionKey": "workload",
+   "score": 2.4,
+   "shortfall": 1.3,
+   "plan": {
+    "id": "4f973f47-4ab2-4a5b-9606-af5db05670b8",
+    "name": "Reducir la carga de trabajo en Operaciones",
+    "dueAt": "2026-10-15T02:05:50.278+00:00",
+    "status": "not_started"
+   }
+  },
+  {
+   "rowId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+   "rowName": "Operaciones",
+   "dimensionKey": "psychological_safety",
+   "score": 2.6,
+   "shortfall": 1.1,
+   "plan": {
+    "id": "4f973f47-4ab2-4a5b-9606-af5db05670b8",
+    "name": "Reducir la carga de trabajo en Operaciones",
+    "dueAt": "2026-10-15T02:05:50.278+00:00",
+    "status": "not_started"
+   }
+  },
+  {
+   "rowId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+   "rowName": "Operaciones",
+   "dimensionKey": "recognition",
+   "score": 2.8,
+   "shortfall": 0.9,
+   "plan": {
+    "id": "4f973f47-4ab2-4a5b-9606-af5db05670b8",
+    "name": "Reducir la carga de trabajo en Operaciones",
+    "dueAt": "2026-10-15T02:05:50.278+00:00",
+    "status": "not_started"
+   }
+  }
+ ],
+ "climateDetail": {
+  "rowId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+  "rowLabel": "Operaciones",
+  "dimensionKey": "workload",
+  "dimensions": [
+   {
+    "key": "workload",
+    "score": 2.4,
+    "questions": [
+     {
+      "questionId": "c1efba3e-646c-4f35-b6ca-7b3b094755be",
+      "score": 2.4,
+      "answeredCount": 5,
+      "surveyScore": 3.33
+     }
+    ]
+   }
+  ]
+ },
+ "cellDetail": {
+  "rowId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+  "rowName": "Operaciones",
+  "dimensionKey": "workload",
+  "score": 2.4,
+  "questions": [
+   {
+    "questionId": "c1efba3e-646c-4f35-b6ca-7b3b094755be",
+    "text": "Mi carga de trabajo es sostenible a largo plazo.",
+    "groupScore": 2.4,
+    "groupAnswered": 5,
+    "surveyScore": 3.33,
+    "surveyAnswered": 24,
+    "surveyDistribution": [
+     {
+      "position": 1,
+      "percentage": 0
+     },
+     {
+      "position": 2,
+      "percentage": 16.67
+     },
+     {
+      "position": 3,
+      "percentage": 37.5
+     },
+     {
+      "position": 4,
+      "percentage": 41.67
+     },
+     {
+      "position": 5,
+      "percentage": 4.17
+     }
+    ],
+    "scaleLabelMin": "Muy en desacuerdo",
+    "scaleLabelMax": "Muy de acuerdo"
+   }
+  ],
+  "others": [
+   {
+    "id": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+    "name": "Finanzas",
+    "isProtected": true,
+    "score": null
+   },
+   {
+    "id": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+    "name": "Ingeniería",
+    "isProtected": false,
+    "score": 3.7
+   },
+   {
+    "id": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+    "name": "Personas",
+    "isProtected": false,
+    "score": 4
+   },
+   {
+    "id": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+    "name": "Ventas",
+    "isProtected": false,
+    "score": 3.4
+   }
+  ],
+  "plan": {
+   "id": "4f973f47-4ab2-4a5b-9606-af5db05670b8",
+   "name": "Reducir la carga de trabajo en Operaciones",
+   "dueAt": "2026-10-15T02:05:50.278+00:00",
+   "status": "not_started"
+  }
+ }
+}

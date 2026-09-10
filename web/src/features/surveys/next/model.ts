@@ -72,7 +72,15 @@ export interface SurveyResultsNextModel {
   surveyId: string
   /** The survey's own name, off the wire; `null` when it has none. */
   name: string | null
+  /** The wave the survey is discussed as — "Q3" out of "Encuesta de Clima Q3" (`waveCode`). */
+  code: string
   status: string
+  /**
+   * When the survey closed (or closes): `endDate` off `GET /surveys/{id}`, which the
+   * analytics envelope does not carry. `null` when that request failed — the header
+   * then falls back to the last response's day rather than inventing a closing one.
+   */
+  closesAt: string | null
   summary: SurveyResultsSummary
   /** The whole survey is under `minimumGroupSize`: no map, no findings, counters only. */
   isSuppressed: boolean
