@@ -75,6 +75,14 @@ export interface KpiTileProps {
   sub?: React.ReactNode
   /** Already-translated period name for the change indicator, e.g. "since Q1". */
   changeLabel?: string
+  /**
+   * The unit or denominator printed on the value's own baseline — "de 5 · meta 3,7",
+   * "respuestas · 100 % completadas". Already translated. The artboards (Dashboard
+   * and SurveyResults, 10 Sep) put the unit beside the number and keep `sub` for
+   * the one coloured sentence under it; a caller that has only a sentence leaves
+   * this off.
+   */
+  unit?: React.ReactNode
   /** BCP-47 locale. Defaults to the document's language. */
   locale?: string
   className?: string
@@ -88,6 +96,7 @@ export default function KpiTile({
   higherIsBetter = true,
   sub,
   changeLabel,
+  unit,
   locale,
   className,
 }: KpiTileProps) {
@@ -109,11 +118,12 @@ export default function KpiTile({
       // so a test asserting the strip needs a handle that is not the label text.
       data-slot="kpi-tile"
       className={cn(
-        // `surface-icon-box` is this project's existing recessed surface (the
-        // badge `secondary` variant sits on it too), which is the role the
-        // design's `--panel-2` plays. Reused rather than adding a near-duplicate
-        // token for a shade nobody could tell apart.
-        'rounded-lg border border-line-light bg-surface-icon-box p-3',
+        // The canvas's `.card`: the card surface with the default hairline, 14px
+        // by 16px of padding, 8px radius. It shipped first on the recessed
+        // `surface-icon-box`, which read as a tinted block beside the Dashboard
+        // and SurveyResults artboards' white cards (10 Sep); both screens draw
+        // this one primitive, so the surface is corrected here once.
+        'rounded-lg border border-line-default bg-surface-card px-4 py-3.5',
         className,
       )}
     >
@@ -129,14 +139,19 @@ export default function KpiTile({
           pinned it — `features/surveys/respondContrast.test.ts` and
           `features/surveys/resultsContrast.test.ts` each ban `text-fg-tertiary` from
           this file by name. */}
-      <div className="text-2xs font-semibold uppercase tracking-label text-fg-secondary">
+      <div className="text-2xs font-bold uppercase tracking-eyebrow text-fg-secondary">
         {label}
       </div>
-      <div className="mt-0.5 font-mono text-3xl font-semibold tracking-tight tabular-nums">
-        {value === null ? EM_DASH : formatMetric(value, format, locale)}
+      {/* The unit shares the value's baseline, as the artboards draw it — never a
+          second line, which is what `sub` is for. */}
+      <div className="mt-1.5 flex flex-wrap items-baseline gap-2">
+        <span className="font-mono text-3xl font-medium tracking-tight tabular-nums">
+          {value === null ? EM_DASH : formatMetric(value, format, locale)}
+        </span>
+        {unit && <span className="text-sm text-fg-secondary">{unit}</span>}
       </div>
-      {/* Same measurement as the label above; this line is 11px. */}
-      <div className="mt-px flex items-center gap-1 text-xs text-fg-secondary">
+      {/* Same measurement as the label above; this line is 12px, the canvas's sentence size. */}
+      <div className="mt-1.5 flex items-center gap-1 text-sm text-fg-secondary">
         {hasChange && (
           <span
             className={cn(

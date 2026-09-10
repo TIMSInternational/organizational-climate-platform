@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from '../../../i18n'
 import { useCompanyScope } from '../../../company-context'
 import { listActionPlans, type ActionPlan } from '../../action-plans/api/actionPlans'
+import { waveCode } from '../../dashboard/next/compose'
 import { getSurveyAnalytics, type SurveyAnalyticsResponse } from '../api/surveyResults'
+import { getSurvey } from '../api/surveys'
 import { buildClimateMap } from '../surveyResultsMap'
 import type { SurveyResultsNextModel } from './model'
 import { sampleWave } from './sampleModel'
@@ -17,15 +19,18 @@ export interface SurveyResultsModelState {
 /**
  * The model behind `/surveys/:id/results` — the ONE place this screen fetches.
  *
- * Two real requests, through the clients the current page and the action-plan pages
+ * Three real requests, through the clients the previous page and the action-plan pages
  * already use: `GET /surveys/{id}/analytics` (both halves of one aggregation in one
- * round trip — see `surveyResults.ts` on why not `/results` + `/statistics`) and
+ * round trip — see `surveyResults.ts` on why not `/results` + `/statistics`),
+ * `GET /surveys/{id}` for the closing date the analytics envelope does not carry, and
  * `GET /action-plans?companyId=` for the plan that covers a group. The map is built by
- * `buildClimateMap`, exactly as the current page builds it, so withheld rows arrive
+ * `buildClimateMap`, exactly as the previous page built it, so withheld rows arrive
  * hatched and never as a number.
  *
  * A failed plans request is not "no plans": it lands as `plans: null` and the view says
- * the plans could not be loaded. A failed analytics request is the page's error.
+ * the plans could not be loaded. A failed survey request lands as `closesAt: null` and
+ * the header names the last response's day instead. A failed analytics request is the
+ * page's error.
  *
  * `sample` is `sampleModel.ts` until the endpoints in its header exist; the view keeps
  * the "sample data" chip on every region it feeds.
@@ -38,6 +43,7 @@ export function useSurveyResultsModel(surveyId: string | undefined): SurveyResul
 
   const [payload, setPayload] = useState<SurveyAnalyticsResponse | null>(null)
   const [plans, setPlans] = useState<ActionPlan[] | null>(null)
+  const [closesAt, setClosesAt] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -49,7 +55,15 @@ export function useSurveyResultsModel(surveyId: string | undefined): SurveyResul
       // The UI locale is a request; the payload's `resolvedLocale` says what came back.
       const analytics = await getSurveyAnalytics(baseUrl, surveyId, locale)
       setPayload(analytics)
-      // Plans are the secondary reading: their failure must not take the map down.
+      // The closing date is a secondary reading: its failure must not take the map down.
+      let closed: string | null = null
+      try {
+        closed = (await getSurvey(baseUrl, surveyId, locale)).endDate ?? null
+      } catch {
+        closed = null
+      }
+      setClosesAt(closed)
+      // Plans are the other secondary reading, for the same reason.
       let loadedPlans: ActionPlan[] | null = null
       if (companyId) {
         try {
@@ -82,7 +96,11 @@ export function useSurveyResultsModel(surveyId: string | undefined): SurveyResul
     return {
       surveyId: payload.surveyId,
       name: payload.title,
+      // "Q3" out of "Encuesta de Clima Q3"; a survey named without a wave code is
+      // discussed by the first part of its id rather than by nothing.
+      code: waveCode(payload.title, payload.surveyId.slice(0, 8)),
       status: payload.status,
+      closesAt,
       language: payload.language,
       resolvedLocale: payload.resolvedLocale,
       fallbackFields: payload.fallbackFields,
@@ -96,7 +114,7 @@ export function useSurveyResultsModel(surveyId: string | undefined): SurveyResul
       plans,
       sample: sampleWave,
     }
-  }, [payload, plans])
+  }, [payload, plans, closesAt])
 
   return { model, loading, error, reload }
 }

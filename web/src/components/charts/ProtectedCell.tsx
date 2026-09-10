@@ -1,4 +1,4 @@
-import { Lock } from 'lucide-react'
+import { Shield } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { cn } from '../../lib/cn'
 import { ANONYMITY_FLOOR, PROTECTED_HATCH, isSuppressed } from './suppression'
@@ -133,8 +133,12 @@ export default function ProtectedCell({
       aria-label={label}
       title={label}
       className={cn(
-        'flex items-center justify-center rounded border border-dashed border-line-default',
-        // `text-fg-tertiary`, not `text-fg-light`: the padlock is the message, and
+        // No border: the approved artboards (Dashboard and SurveyResults, 10 Sep)
+        // draw a withheld cell as the hatch and the shield alone, flush with the
+        // tinted cells beside it; the dashed hairline that shipped first read as a
+        // third state between "withheld" and "empty".
+        'flex items-center justify-center rounded',
+        // `text-fg-tertiary`, not `text-fg-light`: the shield is the message, and
         // `--admin-font-light` is #999 on #f0f0f0 in light (2.0:1) and #555 on
         // #2a2a2a in dark (2.2:1) — a glyph a reader has to hunt for. #818181 is
         // the same value in both themes and clears 3:1 against both surfaces.
@@ -151,7 +155,10 @@ export default function ProtectedCell({
         suppressedClassName,
       )}
     >
-      <Lock aria-hidden="true" className="size-3" />
+      {/* The shield, not a padlock: the canvas draws a shield in every withheld
+          cell and in the privacy note beside the opened cell, so the one glyph
+          means "the floor is enforced here" wherever it appears. */}
+      <Shield aria-hidden="true" className="size-3" />
     </span>
   )
 

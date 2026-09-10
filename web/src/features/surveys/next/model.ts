@@ -13,11 +13,11 @@ import type { ClimateMapModel } from '../surveyResultsMap'
  *
  * ## What is a measurement and what is a sample
  *
- * Everything below `sample` comes off `GET /surveys/{id}/analytics` and `GET /action-plans`
- * — the map, the protected rows, the per-question means and the whole-survey 1–5
- * distributions. `sample` carries the two things no endpoint returns today (see
- * `sampleModel.ts` for which endpoints will), and the view marks every region it feeds
- * with the "sample data" chip.
+ * Everything below `sample` comes off `GET /surveys/{id}/analytics`, `GET /surveys/{id}`
+ * and `GET /action-plans` — the map, the protected rows, the per-question means, the
+ * whole-survey 1–5 distributions, the closing date. `sample` carries the two things no
+ * endpoint returns today (see `sampleModel.ts` for which endpoints will), and the view
+ * marks every region it feeds with the "sample data" chip.
  */
 
 /** One column of the map: a dimension the survey measured. */
@@ -28,9 +28,9 @@ export interface ResultsDimension {
 }
 
 /**
- * One group's row. `mean` is the mean of the group's disclosed dimension scores and
- * is `null` — never 0 — for a protected row, which carries no scores at all
- * (`buildClimateMap` strips them, the server emptied them first).
+ * One group's row. `mean` is the mean of the group's dimension scores and is `null`
+ * — never 0 — for a protected row, which carries no scores at all (`buildClimateMap`
+ * strips them, the server emptied them first).
  */
 export interface ResultsGroupRow {
   id: string
@@ -72,7 +72,15 @@ export interface SurveyResultsNextModel {
   surveyId: string
   /** The survey's own name, off the wire; `null` when it has none. */
   name: string | null
+  /** The wave the survey is discussed as — "Q3" out of "Encuesta de Clima Q3" (`waveCode`). */
+  code: string
   status: string
+  /**
+   * When the survey closed (or closes): `endDate` off `GET /surveys/{id}`, which the
+   * analytics envelope does not carry. `null` when that request failed — the header
+   * then falls back to the last response's day rather than inventing a closing one.
+   */
+  closesAt: string | null
   /** The survey's authored content language: `'es' | 'en' | 'both'`. */
   language: string
   /**
