@@ -3,7 +3,7 @@ import { render, screen, cleanup, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import SurveyDistributionPage from './SurveyDistributionPage'
-import { TranslationProvider } from '../../../i18n'
+import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
 import { tokenFor } from '../../../test/jwtFixture'
@@ -184,6 +184,7 @@ describe('SurveyDistributionPage', () => {
     cleanup()
     clearToken()
     localStorage.removeItem(COMPANY_CONTEXT_STORAGE_KEY)
+    localStorage.removeItem(LOCALE_STORAGE_KEY)
     vi.unstubAllGlobals()
   })
 
@@ -362,12 +363,14 @@ describe('SurveyDistributionPage', () => {
   it('keeps the reader\'s locale on the wire when a status chip refetches the invitations', async () => {
     // Every other request on this page carried `lang` since the 9 September rehearsal;
     // the chip refetch did not, so choosing a status swapped the guarantee sentence to
-    // English on a Spanish screen.
+    // English on a Spanish screen. Rendered for a Spanish reader, so that a hardcoded
+    // 'en' in the page cannot pass: the chip is "Enviada" (`surveys.distribution.status.sent`).
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
     const fetchMock = stubApi()
     renderPage()
-    await screen.findByRole('button', { name: 'Send reminders' })
+    await screen.findByRole('button', { name: 'Enviar recordatorios' })
 
-    await userEvent.click(screen.getByRole('button', { name: /^Sent\b/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Enviada\b/ }))
 
     await waitFor(() =>
       expect(fetchMock.mock.calls.some(([url]) => String(url).includes('status=sent'))).toBe(true),
@@ -377,6 +380,6 @@ describe('SurveyDistributionPage', () => {
       'http://test.local',
     )
     expect(refetch.searchParams.get('status')).toBe('sent')
-    expect(refetch.searchParams.get('lang')).toBe('en')
+    expect(refetch.searchParams.get('lang')).toBe('es')
   })
 })
