@@ -53,7 +53,7 @@ export default function SuperDemographicFieldsView() {
 
   return (
     <div className="flex flex-col gap-section">
-      <div className="-mb-2">
+      <div className="-mb-6">
         <PageTopBar
           eyebrow={companyName ?? t('navigation.systemAdministration')}
           title={t('navigation.demographicFields')}

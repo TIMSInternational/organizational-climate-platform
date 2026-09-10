@@ -73,7 +73,7 @@ export default function SuperAnalyticsView() {
         }}
       />
       <div className="flex flex-col gap-section">
-        <div className="-mb-2">
+        <div className="-mb-6">
           <PageTopBar
             eyebrow={t('navigation.systemAdministration')}
             title={t('navigation.analytics')}
