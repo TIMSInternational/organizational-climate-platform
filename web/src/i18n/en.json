@@ -2709,7 +2709,8 @@
       "createPlan": "Crear plan de acción",
       "registrarAvance": "Registrar avance",
       "marcarCumplido": "Marcar como cumplido",
-      "agregarInvolucrados": "Agregar involucrados"
+      "agregarInvolucrados": "Agregar involucrados",
+      "abrirAgregarInvolucrados": "Agregar personas al plan"
     },
     "consolidadoTitle": "Vista Consolidada",
     "tableroTitle": "Tablero de Seguimiento"

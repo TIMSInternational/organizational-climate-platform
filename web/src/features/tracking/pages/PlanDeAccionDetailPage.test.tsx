@@ -199,6 +199,8 @@ describe('the node leader view', () => {
     renderPage()
     await screen.findByText('Reforzar la comunicación interna')
 
+    // The picker sits behind a button: the detail reads as a detail until asked.
+    fireEvent.click(await screen.findByRole('button', { name: 'Agregar personas al plan' }))
     fireEvent.click(await screen.findByRole('checkbox', { name: /Carla/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Agregar involucrados' }))
 
@@ -215,8 +217,60 @@ describe('the node leader view', () => {
     renderPage()
     await screen.findByText('Reforzar la comunicación interna')
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Agregar personas al plan' }))
     const beto = (await screen.findByRole('checkbox', { name: /Beto/ })) as HTMLButtonElement
     expect(beto.disabled).toBe(true)
+  })
+
+  it('keeps the directory picker closed until asked, and closes it again on cancel', async () => {
+    // The whole directory as a checkbox list under the plan read as a form somebody had
+    // left open; the detail is a detail until the leader asks to add people.
+    renderPage()
+    await screen.findByText('Reforzar la comunicación interna')
+    expect(screen.queryByRole('checkbox')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar personas al plan' }))
+    await screen.findByRole('checkbox', { name: /Carla/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('checkbox')).toBeNull())
+  })
+})
+
+describe('names, not identifiers', () => {
+  beforeEach(() => {
+    setToken(tokenFor(LEADER))
+  })
+
+  it('prints the nodo and the responsable by name when the directory answers', async () => {
+    // The consolidado prints nodo names from the same picker; a detail that printed
+    // `bff21fd0-…` and `77fbfc92-…` where the board prints "Finanzas" and a person read
+    // as broken, and was the one tracking screen doing so.
+    renderPage()
+    await screen.findByText('Reforzar la comunicación interna')
+
+    await screen.findByText('Operaciones')
+    // The responsable, persona-2, is also an involucrado: the name appears as the
+    // responsable row AND as a badge, and the raw id appears nowhere.
+    await waitFor(() => expect(screen.getAllByText('Beto Solís').length).toBeGreaterThanOrEqual(2))
+    expect(screen.queryByText('nodo-a')).toBeNull()
+    expect(screen.queryByText('persona-2')).toBeNull()
+  })
+
+  it('falls back to the external ids when the directory refuses, so the plan still names its nodo', async () => {
+    // `TrackingPickerEndpoints` refuses every non-admin role; the page must not blank
+    // the rows over a label lookup.
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/tracking/picker/')) return Promise.resolve(new Response('', { status: 403 }))
+      return Promise.resolve(new Response(JSON.stringify(plan()), { status: 200 }))
+    })
+    renderPage()
+    await screen.findByText('Reforzar la comunicación interna')
+
+    expect(await screen.findByText('nodo-a')).toBeTruthy()
+    expect(screen.getAllByText('persona-2').length).toBeGreaterThanOrEqual(1)
+    expect(screen.queryByText('Operaciones')).toBeNull()
   })
 })
 
