@@ -450,17 +450,18 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                           // The same group plan an earlier card already names: pointed to,
                           // never claimed again for this dimension (`ActionPlan` has none).
                           <span className="text-xs text-fg-label" data-testid="finding-plan">
-                            {t('surveyResults.next.planSameGroup', { group: finding.rowName })}
+                            {t('surveyResults.next.planSameGroup')}
                           </span>
                         ) : (
                           // Plans carry a department, not a dimension: the plan covers the
-                          // GROUP, and the sentence names the group, never the cell.
+                          // GROUP — the card's title names it — and the sentence says the
+                          // group, never the cell ("la atiende" would claim the cell).
                           <span
                             className="inline-flex items-center gap-1 text-xs text-accent-green-ink"
                             data-testid="finding-plan"
                           >
                             <Check aria-hidden="true" className="size-3" />
-                            {t('surveyResults.next.planCoversGroup', { group: finding.rowName })}
+                            {t('surveyResults.next.planCoversGroup')}
                             {finding.plan.status === 'not_started' && ` · ${t('surveyResults.next.planNoProgress')}`}
                           </span>
                         )}

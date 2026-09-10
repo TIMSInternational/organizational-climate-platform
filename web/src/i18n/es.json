@@ -2710,8 +2710,8 @@
       "deltaNoteNoBreakdown": "{wave} se cargó sin desglose por grupo.",
       "deltaNoteFirstWave": "Primera ola: no hay una encuesta anterior con la cual comparar, así que esta vista no muestra cambios.",
       "deltaNotePreviousFailed": "No se pudo cargar la ola anterior, así que esta vista no muestra cambios.",
-      "planCoversGroup": "Un plan atiende a {group}",
-      "planSameGroup": "El mismo plan de {group}",
+      "planCoversGroup": "Un plan atiende al grupo",
+      "planSameGroup": "El mismo plan del grupo",
       "gridScrollHint": "La tabla se desliza de lado hasta cada dimensión; el grupo, su media y el cambio quedan fijos.",
       "questionsIntroTarget": "Cada pregunta de toda la encuesta frente a la meta {target}, con los colores y las palabras del mapa."
     }

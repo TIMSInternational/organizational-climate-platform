@@ -483,3 +483,17 @@ describe('RoleBasedNav row states', () => {
     }
   })
 })
+
+describe('RoleBasedNav group row width', () => {
+  it('keeps the whole label of a group row: a 12px chevron 2px from it, and 2px of right padding', () => {
+    renderNav(buildNavSections('company_admin', COMPANY), '/notifications')
+    const toggle = screen.getByRole('button', { name: 'Company Administration' })
+    // 8 + 16 + 8 + 2 + 12 + 2 around the label leave it 172px of the 220px row, and
+    // "Administración de Empresa" wants 169 at 13px: the 16px chevron's 156 cut it to
+    // "Administración de Emp…" (the canvas draws the label whole).
+    expect(toggle.getAttribute('style')).toContain('var(--admin-space-4) 2px var(--admin-space-4) var(--admin-space-8)')
+    const chevron = toggle.querySelector('svg:last-of-type') as SVGElement
+    expect(chevron.style.width).toBe('12px')
+    expect(chevron.style.marginLeft).toBe('-6px')
+  })
+})

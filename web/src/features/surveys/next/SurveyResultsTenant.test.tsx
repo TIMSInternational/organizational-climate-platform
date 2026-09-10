@@ -165,12 +165,12 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(items).toHaveLength(3)
     expect(items[0].textContent).toContain('Operaciones · Carga de trabajo')
     expect(items[0].textContent).toContain('La celda más baja del mapa · 1,3 bajo la meta')
-    expect(items[0].textContent).toContain('Un plan atiende a Operaciones · sin avances')
+    expect(items[0].textContent).toContain('Un plan atiende al grupo · sin avances')
     expect(items[1].textContent).toContain('Operaciones · Seguridad psicológica')
     expect(items[1].textContent).toContain('Segunda más baja · mismo grupo')
     // The group's plan is named once: the second Operaciones cell points to it and claims
     // nothing for Seguridad psicológica (`ActionPlan` carries no dimension).
-    expect(items[1].textContent).toContain('El mismo plan de Operaciones')
+    expect(items[1].textContent).toContain('El mismo plan del grupo')
     expect(items[1].textContent).not.toContain('Un plan atiende')
     expect(within(items[1]).getByTestId('finding-plan').className).not.toContain('text-accent-green-ink')
     expect(items[2].textContent).toContain('Ventas · Carga de trabajo')
