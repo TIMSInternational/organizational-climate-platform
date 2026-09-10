@@ -801,7 +801,21 @@
       "cycleNote": "La encuesta abierta se analiza al cerrar. Nadie ve llegar las respuestas una por una.",
       "liveHeading": "Microclima en vivo",
       "liveSub": "respuestas · abierto hasta el {date} · palabras protegidas hasta {floor}",
-      "viewSession": "Ver sesión"
+      "viewSession": "Ver sesión",
+      "loadingRegion": "Cargando {region}…",
+      "fallbackRegion": "Datos de muestra — no se pudo leer {region}: {error}.",
+      "fallbackEmpty": "Datos de muestra — {region}: todavía no hay nada que mostrar.",
+      "fallbackNoReason": "el servidor no indicó el motivo",
+      "regionCompany": "el resumen de la empresa",
+      "regionSurveys": "las encuestas",
+      "regionTrends": "las tendencias de clima",
+      "regionMap": "el mapa por grupo",
+      "regionActionPlans": "los planes de acción",
+      "regionTracking": "los planes de seguimiento",
+      "regionMicroclimates": "los microclimas",
+      "lowestCellNoPlanSub": "Ningún plan la atiende todavía",
+      "createPlan": "Crear un plan",
+      "lowParticipationSubUnknown": "{wave} cerró al {percent}"
     }
   },
   "departments": {

@@ -801,7 +801,21 @@
       "cycleNote": "The open survey is analysed when it closes. Nobody watches the responses arrive one by one.",
       "liveHeading": "Live microclimate",
       "liveSub": "responses · open until {date} · words protected under {floor}",
-      "viewSession": "View session"
+      "viewSession": "View session",
+      "loadingRegion": "Loading {region}…",
+      "fallbackRegion": "Sample data — {region} could not be read: {error}.",
+      "fallbackEmpty": "Sample data — {region}: nothing to show yet.",
+      "fallbackNoReason": "the server gave no reason",
+      "regionCompany": "the company overview",
+      "regionSurveys": "the surveys",
+      "regionTrends": "the climate trends",
+      "regionMap": "the map by group",
+      "regionActionPlans": "the action plans",
+      "regionTracking": "the tracking plans",
+      "regionMicroclimates": "the microclimates",
+      "lowestCellNoPlanSub": "No plan covers it yet",
+      "createPlan": "Create a plan",
+      "lowParticipationSubUnknown": "{wave} closed at {percent}"
     }
   },
   "departments": {
