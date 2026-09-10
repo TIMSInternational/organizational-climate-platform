@@ -229,17 +229,23 @@ describe('against the previous wave, on the tenant’s real payloads', () => {
       status: 'loaded',
       wave: { surveyId: Q2, code: 'Q2', hasGroupBreakdown: true, risesInARow: 2 },
     })
-    // 3,6533 against Q2's 3,3600: the tile's "+0,29 frente a Q2".
-    expect(companyDelta(model)).toBeCloseTo(0.2933, 4)
-    const hundredths = (value: number | null) => (value === null ? null : Math.round(value * 100) / 100)
-    // Seguridad psicológica, Carga de trabajo, Confianza, Reconocimiento, Desarrollo, Pertenencia.
-    expect(dimensionDeltas(model).map(hundredths)).toEqual([0.25, 0.29, 0.34, 0.3, 0.25, 0.33])
-    expect(Object.fromEntries(groupRows(model).map((row) => [row.name, hundredths(row.vsPrevious)]))).toEqual({
+    // Every change is the difference of the readings AS PRINTED (`printedChange`). The
+    // tile prints two decimals: 3,65 against Q2's 3,36 is +0,29. The company row prints
+    // one: 3,7 against 3,4 is +0,3.
+    expect(companyDelta(model, 2)).toBe(0.29)
+    expect(companyDelta(model, 1)).toBe(0.3)
+    // Seguridad psicológica, Carga de trabajo, Confianza, Reconocimiento, Desarrollo,
+    // Pertenencia. Confianza is 3,67 against 3,33 — printed 3,7 and 3,3 — so +0,4, where
+    // the raw +0,34 would have printed +0,3 beside two figures 0,4 apart.
+    expect(dimensionDeltas(model)).toEqual([0.3, 0.3, 0.4, 0.3, 0.3, 0.3])
+    // Per group, at the one decimal of "Media del grupo": Ventas is 3,77 (3,8) against
+    // Q2's 3,43 (3,4), so +0,4 where the raw +0,33 would have printed +0,3.
+    expect(Object.fromEntries(groupRows(model).map((row) => [row.name, row.vsPrevious]))).toEqual({
       Finanzas: null,
-      Ingeniería: 0.31,
-      Operaciones: 0.23,
-      Personas: 0.23,
-      Ventas: 0.33,
+      Ingeniería: 0.3,
+      Operaciones: 0.2,
+      Personas: 0.2,
+      Ventas: 0.4,
     })
   })
 
@@ -286,18 +292,21 @@ describe('against the previous wave, on the tenant’s real payloads', () => {
     // Over the five dimensions both waves carry, and nothing else.
     const now = (3.75 + 3.33 + 3.38 + 3.79 + 4.0) / 5
     const before = (3.5 + 3.04 + 3.08 + 3.54 + 3.67) / 5
-    expect(companyDelta(model)).toBeCloseTo(now - before, 6)
+    // At four decimals, so the like-for-like rule shows: 3,65 against 3,366 is 0,284;
+    // over all six of this wave's dimensions it would be 3,6533 − 3,366 = 0,2873.
+    expect(companyDelta(model, 4)).toBe(Math.round((Math.round(now * 1e4) - Math.round(before * 1e4))) / 1e4)
+    expect(companyDelta(model, 4)).toBe(0.284)
     expect(dimensionDeltas(model)[2]).toBeNull()
   })
 
   it('says why there is no comparison rather than printing one: a first wave, a failed request', () => {
     const first = composeResultsModel(fixture['GET /surveys/*/analytics'], [], null, { status: 'none' })
     expect(first.previous).toEqual({ status: 'none' })
-    expect(companyDelta(first)).toBeNull()
+    expect(companyDelta(first, 2)).toBeNull()
     expect(dimensionDeltas(first).every((delta) => delta === null)).toBe(true)
     expect(groupRows(first).every((row) => row.vsPrevious === null)).toBe(true)
     const failed = composeResultsModel(fixture['GET /surveys/*/analytics'], [], null, { status: 'failed' })
     expect(failed.previous).toEqual({ status: 'failed' })
-    expect(companyDelta(failed)).toBeNull()
+    expect(companyDelta(failed, 2)).toBeNull()
   })
 })

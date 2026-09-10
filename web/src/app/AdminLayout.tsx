@@ -176,7 +176,11 @@ function AdminShell() {
           </header>
 
           {/* The scroll container. */}
-          <main id="main" className="min-w-0 flex-1 overflow-y-auto p-gutter">
+          {/* Flush against the rail and under the bar from `md` — every artboard of the
+              10 Sep canvas draws the card at x=236 (the rail's edge) and y=52 (the bar's
+              foot), with the 12px gutter only on the right and the bottom. Below `md` the
+              rail is gone and the gutter keeps the card off the screen's edge. */}
+          <main id="main" className="min-w-0 flex-1 overflow-y-auto p-gutter md:pt-0 md:pl-0">
           {/* Legacy AppShell inset its content by 12px and put it on a panel:
               `background: var(--admin-bg-panel)`, `1px solid
               var(--admin-border-panel)`, `borderRadius: 8`.

@@ -2644,6 +2644,7 @@
       "cellAbove": "Media {score} · {excess} sobre la media",
       "groupDistribution": "Pregunta de {dimension} · {group}",
       "groupDistributionSub": "Respuestas del grupo, en % · {low} % respondió 1 o 2",
+      "groupDistributionWithheld": "Por grupo, la encuesta entrega solo la media de cada pregunta, no cómo se repartieron las respuestas.",
       "companyDistribution": "La misma pregunta · toda la empresa",
       "companyDistributionSub": "{responses} respuestas · {low} % respondió 1 o 2",
       "othersHeading": "{dimension} en los otros grupos",

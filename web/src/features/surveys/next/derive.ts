@@ -59,6 +59,19 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100
 }
 
+/**
+ * A change as the reader can check it: the two readings each rounded to the `decimals`
+ * the change is printed at, then subtracted, and the difference rounded again so float
+ * noise cannot survive into the figure. The raw difference would not do: Confianza is
+ * 3,67 now against Q2's 3,33 — printed 3,7 and 3,3 — and "+0,3" beside two figures
+ * 0,4 apart is a subtraction the reader cannot make.
+ */
+export function printedChange(now: number, before: number, decimals: number): number {
+  const scale = 10 ** decimals
+  const shown = (value: number) => Math.round(value * scale) / scale
+  return Math.round((shown(now) - shown(before)) * scale) / scale
+}
+
 function mean(values: readonly number[]): number | null {
   if (values.length === 0) return null
   return values.reduce((sum, value) => sum + value, 0) / values.length
@@ -163,7 +176,7 @@ export function groupRows(model: SurveyResultsNextModel): ResultsGroupRow[] {
       // Only a group the previous wave DISCLOSED has an entry there. A withheld one has
       // none, so its change stays `null` — "sin Q2" on the grid, never a 0.
       const previous = before[row.id] as Readonly<Record<string, number>> | undefined
-      vsPrevious = previous === undefined ? null : likeForLike(keys, raw, previous)
+      vsPrevious = previous === undefined ? null : likeForLike(keys, raw, previous, 1)
     }
     return { id: row.id, name: row.label, responses: row.responses, isProtected, scores, mean: rowMean, vsPrevious }
   })
@@ -192,12 +205,14 @@ export function companyMean(model: SurveyResultsNextModel): number | null {
 /**
  * The change between two readings of the same construct: the mean of `now` minus the
  * mean of `before`, over exactly the dimension keys BOTH carry — so a dimension one
- * wave asked and the other did not cannot move the average. `null` when they share none.
+ * wave asked and the other did not cannot move the average — taken at the `decimals` it
+ * is printed at (`printedChange`). `null` when they share none.
  */
 function likeForLike(
   keys: readonly string[],
   now: readonly (number | null)[],
   before: Readonly<Record<string, number>>,
+  decimals: number,
 ): number | null {
   const current: number[] = []
   const earlier: number[] = []
@@ -210,25 +225,30 @@ function likeForLike(
   })
   const nowMean = mean(current)
   const beforeMean = mean(earlier)
-  return nowMean === null || beforeMean === null ? null : nowMean - beforeMean
+  return nowMean === null || beforeMean === null ? null : printedChange(nowMean, beforeMean, decimals)
 }
 
 /**
- * How far the whole company's climate moved since the previous wave, unrounded — the
- * CLIMA tile's "+0,29 frente a Q2" and the company row's "Frente a Q2". `null` without a
+ * How far the whole company's climate moved since the previous wave, at the precision it
+ * is printed: two decimals on the CLIMA tile ("+0,29 frente a Q2"), one on the company
+ * row's "Frente a Q2" (`printedChange`). `null` without a
  * previous wave, or when the two share no dimension.
  */
-export function companyDelta(model: SurveyResultsNextModel): number | null {
+export function companyDelta(model: SurveyResultsNextModel, decimals: number): number | null {
   const climate = model.climate
   if (!climate || model.previous.status !== 'loaded') return null
   return likeForLike(
     climate.dimensions.map((dimension) => dimension.key),
     climate.dimensions.map((dimension) => rawSurveyScore(model.questions, dimension)),
     model.previous.wave.dimensionScores,
+    decimals,
   )
 }
 
-/** Each map column's change since the previous wave, unrounded; `null` where that wave has no reading. */
+/**
+ * Each map column's change since the previous wave, printed at one decimal under its
+ * one-decimal cell (`printedChange`); `null` where that wave has no reading.
+ */
 export function dimensionDeltas(model: SurveyResultsNextModel): (number | null)[] {
   const climate = model.climate
   if (!climate) return []
@@ -236,7 +256,7 @@ export function dimensionDeltas(model: SurveyResultsNextModel): (number | null)[
   return climate.dimensions.map((dimension) => {
     const now = rawSurveyScore(model.questions, dimension)
     const earlier = before === null ? undefined : (before[dimension.key] as number | undefined)
-    return now === null || earlier === undefined ? null : now - earlier
+    return now === null || earlier === undefined ? null : printedChange(now, earlier, 1)
   })
 }
 

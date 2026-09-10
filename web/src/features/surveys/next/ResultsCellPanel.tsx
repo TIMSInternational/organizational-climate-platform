@@ -3,11 +3,10 @@ import { Link } from 'react-router'
 import { Plus, Shield, Target, TrendingUp, X } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { DistributionStrip, ProtectedCell, formatMetric } from '../../../components/charts'
-import { Button, Chip } from '../../../components/ui'
+import { Button } from '../../../components/ui'
 import type { ViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay } from '../../../lib/calendarDay'
 import { lowShare, type ResultsCellDetail, type ResultsDistributionPoint } from './derive'
-import type { ResultsSampleWave } from './model'
 import { tintOf } from './tint'
 
 /** The artboard's `.label`: 10px, bold, uppercase, 0.06em, the tertiary ink. */
@@ -21,8 +20,6 @@ export interface ResultsCellPanelProps {
   code: string
   /** The anonymity floor, per company. */
   threshold: number
-  /** The group's own 1–5 distribution is a sample — no endpoint carries it — and the chip says so. */
-  sample: ResultsSampleWave
   /** The previous wave's code, for "Comparar con Q2" — `null` when there is none to compare with. */
   previousCode: string | null
   capabilities: ViewerCapabilities
@@ -41,16 +38,17 @@ export interface ResultsCellPanelProps {
  * wave, and the open-text privacy note.
  *
  * Every number is `detail`'s, and `detail` is `cellDetail`'s: this component makes
- * no arithmetic and no request. The one sample here is the group's own answer
- * distribution (`sampleModel.ts` says why no endpoint carries it); the company's
- * is real, off the question's own `distribution`.
+ * no arithmetic and no request, and nothing in it is a sample. The group's line carries
+ * its mean and no spread: `GET /surveys/{id}/analytics` gives a group one mean per
+ * question (`SurveySegmentQuestionResult`) and never how its answers were spread, so
+ * the panel says that rather than drawing a distribution no endpoint returned. The
+ * company's strip is real, off the question's own `distribution`.
  */
 export default function ResultsCellPanel({
   detail,
   dimensionName,
   code,
   threshold,
-  sample,
   previousCode,
   capabilities,
   id,
@@ -123,25 +121,18 @@ export default function ResultsCellPanel({
             <div key={question.questionId} className="flex flex-col gap-3.5">
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-fg-primary">
+                  <span className="text-sm font-semibold text-fg-primary">
                     {t('surveyResults.next.groupDistribution', { dimension, group: detail.rowName })}
-                    {/* The group's own distribution is the sample on this panel. */}
-                    {sample.isSample && <Chip tone="warning" label={t('dashboard.next.sampleChip')} />}
                   </span>
                   <span className="font-mono text-lg tabular-nums text-fg-primary">
                     {question.groupScore === null ? '—' : score(question.groupScore)}
                   </span>
                 </div>
-                <DistributionStrip
-                  size="compact"
-                  labels="share"
-                  locale={locale}
-                  min={question.scaleMin}
-                  max={question.scaleMax}
-                  segments={segmentsOf(sample.groupDistribution, t)}
-                />
-                <p className="m-0 text-xs text-fg-label">
-                  {t('surveyResults.next.groupDistributionSub', { low: lowShare(sample.groupDistribution) })}
+                {/* No strip for the group: the payload carries its mean per question and
+                    never how its answers were spread, and a drawn spread would be a
+                    number no endpoint returned. */}
+                <p className="m-0 text-xs text-fg-label" data-testid="group-distribution-withheld">
+                  {t('surveyResults.next.groupDistributionWithheld')}
                 </p>
               </div>
 

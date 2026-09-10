@@ -5,7 +5,6 @@ import { WHOLE_COMPANY_KEY, type ClimateTrendSurvey, type ClimateTrendsResponse 
 import type { SurveyAnalyticsResponse, SurveyBreakdown } from '../api/surveyResults'
 import { buildClimateMap, dimensionKeyOf } from '../surveyResultsMap'
 import type { ResultsPrevious, SurveyResultsNextModel } from './model'
-import { sampleWave } from './sampleModel'
 
 /**
  * What the hook fetched about the previous wave, before it is reduced: the trends window
@@ -196,6 +195,5 @@ export function composeResultsModel(
     climate,
     plans,
     previous: composePrevious(previous, payload.surveyId),
-    sample: sampleWave,
   }
 }

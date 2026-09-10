@@ -2644,6 +2644,7 @@
       "cellAbove": "Mean {score} · {excess} above the average",
       "groupDistribution": "{dimension} question · {group}",
       "groupDistributionSub": "Group answers, in % · {low} % answered 1 or 2",
+      "groupDistributionWithheld": "For a group, the survey returns each question's mean only, not how its answers were spread.",
       "companyDistribution": "The same question · whole company",
       "companyDistributionSub": "{responses} responses · {low} % answered 1 or 2",
       "othersHeading": "{dimension} in the other groups",

@@ -190,15 +190,19 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(order).toEqual(['company-row', `group-row-${FIN}`, `group-row-${ENG}`, `group-row-${OPS}`, `group-row-${PER}`, `group-row-${VEN}`])
     const company = screen.getByTestId('company-row').textContent ?? ''
     for (const reading of ['3,8', '3,3', '3,7', '3,4', '4,0', '3,65']) expect(company).toContain(reading)
-    // Six dimension changes and the mean's, all +0,3 once rounded to what is printed.
-    expect(company.match(/\+0,3/g)).toHaveLength(7)
+    // Each change is the difference of the printed readings: Confianza is 3,7 now and
+    // 3,3 in Q2, so +0,4 (the raw +0,34 would print +0,3 beside two figures 0,4 apart);
+    // the other five dimensions and the mean's are +0,3.
+    expect(company.match(/\+0,3/g)).toHaveLength(6)
+    expect(company.match(/\+0,4/g)).toHaveLength(1)
     expect(vsQ2('company-row')).toBe('+0,3')
     expect(screen.getByTestId(`group-row-${ENG}`).textContent).toContain('3,9')
     // "Frente a Q2" per group, off Q2's own breakdown: every group Q2 disclosed.
     expect(vsQ2(`group-row-${ENG}`)).toBe('+0,3')
     expect(vsQ2(`group-row-${OPS}`)).toBe('+0,2')
     expect(vsQ2(`group-row-${PER}`)).toBe('+0,2')
-    expect(vsQ2(`group-row-${VEN}`)).toBe('+0,3')
+    // Ventas is 3,8 now against Q2's 3,4: +0,4, not the raw +0,33 rounded.
+    expect(vsQ2(`group-row-${VEN}`)).toBe('+0,4')
     expect(screen.getByTestId('delta-note').textContent).toBe(
       '«Frente a Q2» por grupo aparece cuando la encuesta anterior tiene ese mismo grupo por encima del umbral.',
     )
@@ -283,12 +287,28 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(within(doing).getByRole('link', { name: 'Crear un plan' }).getAttribute('href')).toBe('/action-plans')
   })
 
-  it('wears the sample chip on the group’s distribution, and nowhere else', async () => {
-    await open()
-    expect(screen.getAllByText(SAMPLE)).toHaveLength(1)
-    expect(within(screen.getByTestId('cell-question')).getByText(SAMPLE)).toBeTruthy()
-    // The whole-company distribution is real: no chip on it.
-    expect(within(screen.getByTestId('company-distribution')).queryByText(SAMPLE)).toBeNull()
+  it('draws no spread for a group — no endpoint returns one — and says so, whichever cell is open', async () => {
+    const panel = await open()
+    // Nothing on the page is a sample: no chip anywhere.
+    expect(screen.queryAllByText(SAMPLE)).toHaveLength(0)
+    const withheld = 'Por grupo, la encuesta entrega solo la media de cada pregunta, no cómo se repartieron las respuestas.'
+    expect(within(panel).getByTestId('group-distribution-withheld').textContent).toBe(withheld)
+    // The only "respondió 1 o 2" is the company's own strip: 4 of 24 answered 2.
+    const first = within(panel).getByTestId('cell-question').textContent ?? ''
+    expect(first.match(/respondió 1 o 2/g)).toHaveLength(1)
+    expect(first).not.toContain('Respuestas del grupo')
+    // A second cell, far above the target: no spread follows it from the first.
+    await userEvent.click(cell(/^Personas, Seguridad psicológica: 4,4/))
+    const second = within(screen.getByTestId('cell-panel'))
+    expect(second.getByRole('heading', { level: 2, name: 'Personas · Seguridad psicológica' })).toBeTruthy()
+    const question = second.getByTestId('cell-question').textContent ?? ''
+    expect(question).toContain('Pregunta de Seguridad psicológica · Personas')
+    expect(question).toContain('4,4')
+    expect(question).toContain(withheld)
+    // 2 of 24 answered 2 across the company: 8 %, and no other share on the column.
+    expect(question.match(/respondió 1 o 2/g)).toHaveLength(1)
+    expect(question).toContain('Q3 · 24 respuestas · 8 % respondió 1 o 2')
+    expect(question).not.toContain('60 %')
   })
 
   it('says the previous wave could not be loaded, and prints no change anywhere, when that request fails', async () => {

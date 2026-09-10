@@ -60,16 +60,6 @@ export interface ResultsPlanRef {
 }
 
 /**
- * The one reading no endpoint provides today: the opened group's answer distribution.
- * `isSample` is always true while this shape is fed from `sampleModel.ts`.
- */
-export interface ResultsSampleWave {
-  isSample: boolean
-  /** The opened group's answers to the opened question, as % per scale point, 1..5. */
-  groupDistribution: readonly { position: number; percentage: number }[]
-}
-
-/**
  * The survey before this one, as the page compares against it. Every figure is measured,
  * from that survey's own `GET /surveys/{id}/analytics`, by the same rules this survey's
  * figures are read by (`compose.ts` `composePrevious`).
@@ -146,5 +136,4 @@ export interface SurveyResultsNextModel {
   plans: readonly ActionPlan[] | null
   /** The wave this survey is compared against, measured — or why there is none. */
   previous: ResultsPrevious
-  sample: ResultsSampleWave
 }

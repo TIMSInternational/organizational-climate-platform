@@ -240,9 +240,9 @@ describe('SurveyResultsNextPage', () => {
     expect(findings[0].textContent).toContain('2.4')
     expect(within(findings[0]).getByText(copy.planCovers)).toBeTruthy()
 
-    // The sample chip is on the page: the opened group's 1–5 distribution is not a
-    // measurement (the deltas are; without the trends payload this mock has none).
-    expect(screen.getAllByText(en.dashboard.next.sampleChip).length).toBeGreaterThan(0)
+    // No sample chip anywhere: every figure is measured, and the opened group's spread —
+    // the one reading no endpoint returns — is not drawn at all.
+    expect(screen.queryAllByText(en.dashboard.next.sampleChip)).toHaveLength(0)
   })
 
   it('never prints a number for a protected group, in any panel', async () => {

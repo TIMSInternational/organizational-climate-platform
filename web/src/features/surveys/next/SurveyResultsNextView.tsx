@@ -114,7 +114,6 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   const headingRef = useRef<HTMLHeadingElement>(null)
 
   const climate = model.climate
-  const sample = model.sample
   const score = useCallback((value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale), [locale])
   // Rounded to what is printed first, so the sign and the ink agree with the figure
   // (`|| 0` folds a rounded -0 into 0).
@@ -137,7 +136,11 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   const groups = useMemo(() => legibleGroups(model), [model])
   const findings = useMemo(() => whereToLookFirst(model), [model])
   const detail = useMemo(() => (selection ? cellDetail(model, selection) : null), [model, selection])
-  const climateDelta = useMemo(() => companyDelta(model), [model])
+  // The tile prints the change to two decimals and the grid's company row to one, so
+  // each is taken at its own precision: a printed change is the difference of the
+  // printed readings (`printedChange`).
+  const climateDelta = useMemo(() => companyDelta(model, 2), [model])
+  const companyRowDelta = useMemo(() => companyDelta(model, 1), [model])
   const deltas = useMemo(() => dimensionDeltas(model), [model])
   const openText = hasOpenText(model)
   const themes = useMemo(() => openTextWords(model), [model])
@@ -487,7 +490,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                 rows={rows}
                 company={company}
                 previous={previous}
-                companyDelta={climateDelta}
+                companyDelta={companyRowDelta}
                 dimensionDeltas={deltas}
                 threshold={climate.threshold}
                 selection={selection}
@@ -523,7 +526,6 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                   dimensionName={dimensionName}
                   code={model.code}
                   threshold={climate.threshold}
-                  sample={sample}
                   previousCode={previousWave?.code ?? null}
                   capabilities={capabilities}
                   onClose={() => setSelection(null)}

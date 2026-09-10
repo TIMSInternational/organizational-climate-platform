@@ -4,7 +4,6 @@ import type { SurveyQuestionResult } from '../api/surveyResults'
 import type { ClimateMapModel } from '../surveyResultsMap'
 import { distributionPoints, groupRows, lowShare, planFor } from './derive'
 import type { SurveyResultsNextModel } from './model'
-import { sampleWave } from './sampleModel'
 
 function plan(id: string, departmentId: string | null, dueDate: string): ActionPlan {
   return { id, title: `Plan ${id}`, companyId: 'c1', departmentId, dueDate, status: 'open', priority: 'high', createdAt: '' }
@@ -33,7 +32,6 @@ const model = {
   breakdown: null,
   plans: null,
   previous: { status: 'none' },
-  sample: sampleWave,
 } as unknown as SurveyResultsNextModel
 
 describe('derive', () => {
