@@ -43,6 +43,8 @@ import ReportsListPage from '../features/reports/pages/ReportsListPage'
 import SharedReportPage from '../features/reports/pages/SharedReportPage'
 import SurveyResultsPage from '../features/surveys/pages/SurveyResultsPage'
 import ClimateTrendsPage from '../features/surveys/pages/ClimateTrendsPage'
+import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
+import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPage'
 import SurveysListPage from '../features/surveys/pages/SurveysListPage'
 import SurveyCreatePage from '../features/surveys/pages/SurveyCreatePage'
 import SurveyDetailPage from '../features/surveys/pages/SurveyDetailPage'
@@ -364,6 +366,8 @@ export const router = createBrowserRouter([
               { path: '/microclimates/:id/live', element: <MicroclimateLivePage /> },
               { path: '/microclimates/:id/results', element: <MicroclimateResultsPage /> },
               { path: '/surveys', element: <SurveysListPage /> },
+              // The redesigned list, beside the current one until the swap (a separate decision).
+              { path: '/surveys/next', element: <SurveysListNextPage /> },
               // Before `/surveys/:id` for the same static-beats-dynamic reason the
               // two entries below record: `new` is a literal segment and could never
               // be read as a survey id, so the order is readability only.
@@ -386,6 +390,7 @@ export const router = createBrowserRouter([
               // sidebar: it is a company-level reading rather than a per-survey
               // destination, and there is no survey to reach it from.
               { path: '/surveys/climate-trends', element: <ClimateTrendsPage /> },
+              { path: '/surveys/climate-trends/next', element: <ClimateTrendsNextPage /> },
               { path: '/surveys/:id', element: <SurveyDetailPage /> },
               // `/surveys/:id/respond` used to be declared here. It is now a sibling
               // of this whole `AdminLayout` branch, one level up — see the comment

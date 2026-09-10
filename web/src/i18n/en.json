@@ -2040,6 +2040,59 @@
       "nothingToDrawBody": "No dimension has a score in every survey shown, so there is no column that could be read across them.",
       "omittedDimensions": "Not shown, because they were not scored in every survey here: {dimensions}.",
       "suppressedGroups": "{count} group(s) are withheld in every survey shown, because fewer than {threshold} people answered."
+    },
+    "next": {
+      "trends": {
+        "title": "Climate over time",
+        "description": "How each dimension moved between closed surveys, against the target of {target}.",
+        "standingHeading": "Where the organisation stands",
+        "climateLabel": "Climate · {wave}",
+        "climateOf": "of 5",
+        "climateVs": "vs {wave}",
+        "closedLabel": "Closed surveys",
+        "aboveLabel": "Above target",
+        "belowLabel": "Below target",
+        "ofDimensions": "of {total} dimensions",
+        "none": "none",
+        "breakDownBy": "Break down by",
+        "wholeCompany": "Whole company",
+        "legendTarget": "target {target}",
+        "legendBelow": "latest value below target",
+        "standing": {
+          "above": "above target",
+          "on": "on target",
+          "below": "below target"
+        },
+        "sinceWave": "since {wave}",
+        "chartLabel": "{dimension}: {values}, target {target}",
+        "withheld": "withheld",
+        "tableHeading": "The same numbers, as a table",
+        "tableScale": "{group} · scale of 1 to 5",
+        "floorNote": "A group with fewer than {floor} responses in a survey is shown protected in that survey, without a number.",
+        "targetSampleNote": "The target of {target} is sample data: no setting holds a climate target yet."
+      },
+      "list": {
+        "description": "Which survey is open today, how long until it closes, and where to read the ones that already closed.",
+        "searchPlaceholder": "Search by title or tag",
+        "allTypes": "All types",
+        "chipCount": "{label} · {count}",
+        "countSummary": "{count} surveys · ordered by status and date",
+        "openHeading": "Open now",
+        "openNote": "The open survey is analysed when it closes; nobody watches responses arrive one by one.",
+        "upcomingHeading": "Drafts and scheduled",
+        "closedHeading": "Closed",
+        "archivedHeading": "Archived",
+        "archivedNote": "An archived survey does not count in Climate over time or in the benchmarks.",
+        "colSurvey": "Survey",
+        "colClose": "Close",
+        "noInviteList": "no invitation list",
+        "noSubmissions": "no submissions",
+        "completed": "{count} completed",
+        "opened": "opened {date}",
+        "closedOn": "closed {date}",
+        "inDays": "in {count} days",
+        "opens": "opens {date}"
+      }
     }
   },
   "users": {
