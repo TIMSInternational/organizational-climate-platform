@@ -408,7 +408,8 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
               {findings.length === 0 ? (
                 <p className="m-0 text-sm text-fg-secondary">{t('surveyResults.next.whereNoneTarget', { target })}</p>
               ) : (
-                <ul className="m-0 grid list-none gap-3 p-0 md:grid-cols-3" data-testid="findings">
+                // Three across from `xl`; at 1024 three columns cut every name, so they stack.
+                <ul className="m-0 grid list-none gap-3 p-0 xl:grid-cols-3" data-testid="findings">
                   {findings.map((finding) => (
                     <li
                       key={`${finding.rowId}:${finding.dimensionKey}`}
@@ -430,9 +431,9 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                       </div>
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         {finding.plan === undefined ? (
-                          <span className="text-xs text-fg-light">{t('surveyResults.next.plansUnavailable')}</span>
+                          <span className="text-xs text-fg-label">{t('surveyResults.next.plansUnavailable')}</span>
                         ) : finding.plan === null ? (
-                          <span className="text-xs text-fg-light">{t('surveyResults.next.planNone')}</span>
+                          <span className="text-xs text-fg-label">{t('surveyResults.next.planNone')}</span>
                         ) : (
                           // Plans carry a department, not a dimension: the plan covers
                           // the GROUP, and the sentence says no more than that.
@@ -445,7 +446,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                         <Button
                           variant="link"
                           size="sm"
-                          className="h-auto p-0 text-sm"
+                          className="h-auto p-0 text-sm text-fg-secondary hover:text-fg-primary"
                           onClick={() => openCell(finding.rowId, finding.dimensionKey, true)}
                         >
                           {t('surveyResults.next.viewQuestion')}
@@ -479,7 +480,10 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                 panelId={PANEL_ID}
                 onSelectCell={(rowId, dimensionKey) => openCell(rowId, dimensionKey, false)}
               />
-              <p className="m-0 text-xs text-fg-light">
+              {/* The chip for the grid's one sample — the "Frente a Q2" deltas — on the
+                  note that explains them. */}
+              <p className="m-0 flex flex-wrap items-center gap-1.5 text-xs text-fg-label" data-testid="delta-note">
+                {sampleChip}
                 {t('surveyResults.next.deltaNote', { wave: sample.previousCode })}
               </p>
             </section>

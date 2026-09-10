@@ -6,7 +6,7 @@ import {
   type ClimateMapSelection,
 } from '../../../components/charts'
 import { PROTECTED_HATCH } from '../../../components/charts/suppression'
-import { Chip, Table } from '../../../components/ui'
+import { Table } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
 import { CLIMATE_TARGET, targetBand, type TargetBand } from './derive'
 import type { ResultsGroupRow, ResultsSampleWave } from './model'
@@ -28,7 +28,15 @@ const OPEN_RING = '0 0 0 2px var(--admin-bg-card), 0 0 0 4px var(--admin-font-pr
  */
 const CELL = 'border-0 p-0'
 /** The artboard's `.label`: 10px, bold, uppercase, 0.06em, the tertiary ink. */
-const HEAD = cn(CELL, 'text-center align-bottom text-2xs font-bold uppercase leading-tight tracking-label text-fg-label')
+// `[overflow-wrap:normal]`: `index.css` lets a cell break an unbreakable run anywhere,
+// which on a narrow column split "RECONOCIMIENTO" mid-word (measured at 1024). A label
+// wraps between words here, and the grid's minimum width keeps every word on a line.
+const HEAD = cn(
+  CELL,
+  'text-center align-bottom text-2xs font-bold uppercase leading-tight tracking-label text-fg-label [overflow-wrap:normal]',
+)
+/** The row labels stay put while a narrow viewport scrolls the grid under them. */
+const STICKY = 'sticky left-0 z-10 bg-surface-card'
 /** `index.css` tints every body row on hover; a grid of coloured cells must not flash. */
 const ROW = 'hover:bg-transparent'
 
@@ -87,9 +95,9 @@ export interface ResultsClimateGridProps {
  * The artboard's `grid-template-columns: 140px repeat(6, minmax(0, 1fr)) 96px 96px`
  * with 4px gaps, as a fixed-layout table: a `<colgroup>` pins the label and the two
  * trailing columns, the dimension columns share the rest, and `border-spacing` is the
- * gap. Group cells are 40px tall (`h-10`), the artboard's map row height; at 1024 the
- * dimension columns come to ~60px, which still holds a one-decimal reading, and
- * `Table`'s own container scrolls the grid below that rather than the page.
+ * gap. Group cells are 40px tall (`h-10`), the artboard's map row height. Below the
+ * grid's minimum width `Table`'s own container scrolls it, never the page, and the
+ * row labels stay pinned so a scrolled cell still says whose it is.
  */
 export default function ResultsClimateGrid({
   dimensions,
@@ -114,9 +122,11 @@ export default function ResultsClimateGrid({
         data-testid="climate-grid"
         // `border-separate` + `border-spacing-1`: the artboard's 4px gaps between
         // cells, over the primitive's `border-collapse`. `table-fixed` so the
-        // `<colgroup>` widths are honoured and the dimension columns share the rest;
-        // `min-w-2xl` is where the grid stops shrinking and starts to scroll.
-        className="min-w-2xl table-fixed border-separate border-spacing-1 text-base"
+        // `<colgroup>` widths are honoured and the dimension columns share the rest.
+        // 59rem is where it stops shrinking and scrolls instead: ~96px per dimension,
+        // the narrowest a one-word label ("RECONOCIMIENTO") fits — met from 1280 up,
+        // scrolled inside the card at 1024 (measured in the 1024 shot).
+        className="min-w-[59rem] table-fixed border-separate border-spacing-1 text-base"
       >
         <caption className="sr-only">{t('surveyResults.next.gridCaption', { target: score(CLIMATE_TARGET) })}</caption>
         <colgroup>
@@ -129,7 +139,7 @@ export default function ResultsClimateGrid({
         </colgroup>
         <thead>
           <tr className={ROW}>
-            <td className={CELL} />
+            <td className={cn(CELL, STICKY)} />
             {dimensions.map((dimension) => (
               <th key={dimension.key} scope="col" className={HEAD}>
                 {dimension.name}
@@ -138,13 +148,10 @@ export default function ResultsClimateGrid({
             <th scope="col" className={HEAD}>
               {t('surveyResults.next.groupMean')}
             </th>
+            {/* The deltas are the one sample on the grid; their chip sits on the note
+                under the legend that explains them — a 96px header cannot hold it. */}
             <th scope="col" className={HEAD}>
-              <span className="inline-flex flex-col items-center gap-1">
-                {t('surveyResults.next.vsWave', { wave: sample.previousCode })}
-                {/* The deltas are the one sample on the grid: the chip rides the
-                    column that is nothing but deltas. */}
-                {sample.isSample && <Chip tone="warning" label={t('dashboard.next.sampleChip')} />}
-              </span>
+              {t('surveyResults.next.vsWave', { wave: sample.previousCode })}
             </th>
           </tr>
         </thead>
@@ -153,7 +160,7 @@ export default function ResultsClimateGrid({
               wave delta under it, then the two-decimal mean and its delta. Not a
               button — there is no cell to open for the company as a whole. */}
           <tr data-testid="company-row" className={ROW}>
-            <th scope="row" className={cn(CELL, 'text-left text-sm font-semibold text-fg-primary')}>
+            <th scope="row" className={cn(CELL, STICKY, 'text-left text-sm font-semibold text-fg-primary')}>
               {t('surveyResults.next.wholeCompany')}
             </th>
             {dimensions.map((dimension, index) => {
@@ -191,7 +198,12 @@ export default function ResultsClimateGrid({
               <tr key={row.id} data-testid={`group-row-${row.id}`} className={ROW}>
                 <th
                   scope="row"
-                  className={cn(CELL, 'text-left text-base text-fg-primary', rowOpen ? 'font-semibold' : 'font-normal')}
+                  className={cn(
+                    CELL,
+                    STICKY,
+                    'text-left text-base text-fg-primary',
+                    rowOpen ? 'font-semibold' : 'font-normal',
+                  )}
                 >
                   {row.name}
                 </th>
@@ -219,7 +231,7 @@ export default function ResultsClimateGrid({
                   const value = row.scores[index]
                   if (value === null || value === undefined) {
                     return (
-                      <td key={dimension.key} className={cn(CELL, 'text-center text-fg-light')}>
+                      <td key={dimension.key} className={cn(CELL, 'text-center text-fg-label')}>
                         —
                       </td>
                     )
@@ -270,7 +282,7 @@ export default function ResultsClimateGrid({
                     </span>
                   )}
                 </td>
-                <td className={cn(CELL, 'text-center text-xs text-fg-light')}>
+                <td className={cn(CELL, 'text-center text-xs text-fg-label')}>
                   {row.isProtected ? (
                     // Hatched too: a withheld group's change is as withheld as its
                     // level, and a dash would read as "no previous wave".

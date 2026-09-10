@@ -112,8 +112,10 @@ export default function ResultsCellPanel({
         </Button>
       </div>
 
-      <div className="grid gap-7 lg:grid-cols-[1.3fr_0.7fr_1fr]">
-        <div className="flex min-w-0 flex-col gap-3.5" data-testid="cell-question">
+      {/* The artboard's three columns from `xl`; at 1024 the question takes the full
+          width and the other two sit side by side under it. */}
+      <div className="grid gap-7 md:grid-cols-2 xl:grid-cols-[1.3fr_0.7fr_1fr]">
+        <div className="flex min-w-0 flex-col gap-3.5 md:col-span-2 xl:col-span-1" data-testid="cell-question">
           {detail.questions.map((question) => (
             <div key={question.questionId} className="flex flex-col gap-3.5">
               <div className="flex flex-col gap-1.5">
@@ -135,13 +137,13 @@ export default function ResultsCellPanel({
                   max={question.scaleMax}
                   segments={segmentsOf(sample.groupDistribution, t)}
                 />
-                <p className="m-0 text-xs text-fg-light">
+                <p className="m-0 text-xs text-fg-label">
                   {t('surveyResults.next.groupDistributionSub', { low: lowShare(sample.groupDistribution) })}
                 </p>
               </div>
 
               {/* One axis for the two strips, in the author's own anchor words. */}
-              <div aria-hidden="true" className="flex justify-between gap-2 font-mono text-2xs text-fg-light">
+              <div aria-hidden="true" className="flex justify-between gap-2 font-mono text-2xs text-fg-label">
                 {axisOf(question, t).map((tick) => (
                   <span key={tick}>{tick}</span>
                 ))}
@@ -162,7 +164,7 @@ export default function ResultsCellPanel({
                   max={question.scaleMax}
                   segments={segmentsOf(question.surveyDistribution, t)}
                 />
-                <p className="m-0 text-xs text-fg-light">
+                <p className="m-0 text-xs text-fg-label">
                   {t('surveyResults.next.companyDistributionSubWave', {
                     wave: code,
                     responses: question.surveyAnswered,
@@ -207,7 +209,7 @@ export default function ResultsCellPanel({
             ))}
           </ul>
           {protectedOthers.length > 0 && (
-            <p className="m-0 text-xs text-fg-light">
+            <p className="m-0 text-xs text-fg-label">
               {t('surveyResults.next.othersProtected', {
                 groups: protectedOthers.map((other) => other.name).join(', '),
                 floor: threshold,

@@ -2,12 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from '../../../i18n'
 import { useCompanyScope } from '../../../company-context'
 import { listActionPlans, type ActionPlan } from '../../action-plans/api/actionPlans'
-import { waveCode } from '../../dashboard/next/compose'
 import { getSurveyAnalytics, type SurveyAnalyticsResponse } from '../api/surveyResults'
 import { getSurvey } from '../api/surveys'
-import { buildClimateMap } from '../surveyResultsMap'
+import { composeResultsModel } from './compose'
 import type { SurveyResultsNextModel } from './model'
-import { sampleWave } from './sampleModel'
 
 export interface SurveyResultsModelState {
   model: SurveyResultsNextModel | null
@@ -23,9 +21,9 @@ export interface SurveyResultsModelState {
  * already use: `GET /surveys/{id}/analytics` (both halves of one aggregation in one
  * round trip — see `surveyResults.ts` on why not `/results` + `/statistics`),
  * `GET /surveys/{id}` for the closing date the analytics envelope does not carry, and
- * `GET /action-plans?companyId=` for the plan that covers a group. The map is built by
- * `buildClimateMap`, exactly as the previous page built it, so withheld rows arrive
- * hatched and never as a number.
+ * `GET /action-plans?companyId=` for the plan that covers a group. `composeResultsModel`
+ * turns the three into the model, the same function the tests build from the tenant's
+ * real payloads.
  *
  * A failed plans request is not "no plans": it lands as `plans: null` and the view says
  * the plans could not be loaded. A failed survey request lands as `closesAt: null` and
@@ -84,37 +82,10 @@ export function useSurveyResultsModel(surveyId: string | undefined): SurveyResul
     reload()
   }, [reload])
 
-  const model = useMemo<SurveyResultsNextModel | null>(() => {
-    if (!payload) return null
-    const breakdown =
-      payload.breakdowns.find((candidate) => candidate.dimension === 'department') ??
-      payload.breakdowns[0] ??
-      null
-    const climate = breakdown
-      ? buildClimateMap(breakdown, payload.questions, payload.minimumGroupSize, (segment) => segment.label ?? segment.key)
-      : null
-    return {
-      surveyId: payload.surveyId,
-      name: payload.title,
-      // "Q3" out of "Encuesta de Clima Q3"; a survey named without a wave code is
-      // discussed by the first part of its id rather than by nothing.
-      code: waveCode(payload.title, payload.surveyId.slice(0, 8)),
-      status: payload.status,
-      closesAt,
-      language: payload.language,
-      resolvedLocale: payload.resolvedLocale,
-      fallbackFields: payload.fallbackFields,
-      summary: payload.summary,
-      isSuppressed: payload.isSuppressed,
-      minimumGroupSize: payload.minimumGroupSize,
-      questions: payload.questions,
-      breakdown,
-      breakdowns: payload.breakdowns,
-      climate,
-      plans,
-      sample: sampleWave,
-    }
-  }, [payload, plans, closesAt])
+  const model = useMemo<SurveyResultsNextModel | null>(
+    () => (payload ? composeResultsModel(payload, plans, closesAt) : null),
+    [payload, plans, closesAt],
+  )
 
   return { model, loading, error, reload }
 }

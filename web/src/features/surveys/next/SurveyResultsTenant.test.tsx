@@ -1,0 +1,263 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router'
+import SurveyResultsNextPage from './SurveyResultsNextPage'
+import { TranslationProvider } from '../../../i18n'
+import { CompanyContextProvider } from '../../../company-context'
+import { COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context/companyContext'
+import { setToken } from '../../../auth/token'
+import { tokenFor } from '../../../test/jwtFixture'
+import { downloadBlobFile } from '../../../lib/downloadBlobFile'
+
+vi.mock('../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
+
+/**
+ * `/surveys/:id/results` rendered from the demo tenant's REAL payloads — the three GETs
+ * the page makes, fetched read-only from the local API on 10 Sep as Grupo Meridiano's
+ * company administrator and stored unmodified as the shot fixture. The artboard was
+ * drawn from this survey; #468's drill-in was only ever tested on a hand-made payload.
+ * In Spanish, as the tenant reads it.
+ */
+const FIXTURE = join(process.cwd(), 'scripts', 'shot-fixtures', 'survey-results-meridiano.json')
+const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Record<string, unknown>
+
+const SURVEY = '38b2002f-66da-468d-b136-ec112ba3204b'
+const COMPANY = '16c97c29-07f8-4522-86fc-e6cc56298829'
+const FIN = 'bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9'
+const ENG = '5bfdb04e-8847-4baa-89c8-d4411654a129'
+const OPS = '0a9d7637-814c-4d4a-8407-45cfbca3f4e7'
+const PER = 'aac7e1b9-5af4-4e04-872b-c11df8f1d4bd'
+const VEN = '07f5a4d4-27d8-4df0-afdc-b50db1371062'
+const OPS_PLAN = '4f973f47-4ab2-4a5b-9606-af5db05670b8'
+const SAMPLE = 'Datos de muestra'
+
+function json(body: unknown): Response {
+  return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
+}
+
+/** The page's requests, answered with the tenant's payloads; the exports with a file. */
+function tenant(input: RequestInfo | URL): Promise<Response> {
+  const url = String(input)
+  if (url.includes('/export/')) return Promise.resolve(new Response(new Blob(['file']), { status: 200 }))
+  if (url.includes('/analytics')) return Promise.resolve(json(fixture['GET /surveys/*/analytics']))
+  if (url.includes('/action-plans')) return Promise.resolve(json(fixture['GET /action-plans']))
+  if (new RegExp(`/surveys/${SURVEY}(\\?|$)`).test(url)) return Promise.resolve(json(fixture['GET /surveys/*']))
+  return Promise.resolve(new Response('{}', { status: 404 }))
+}
+
+function renderAs(claims: Record<string, unknown>) {
+  setToken(tokenFor({ sub: 'u1', companyId: COMPANY, nodoId: '', ...claims }))
+  return render(
+    <TranslationProvider>
+      <MemoryRouter initialEntries={[`/surveys/${SURVEY}/results`]}>
+        <CompanyContextProvider>
+          <Routes>
+            <Route path="/surveys/:id/results" element={<SurveyResultsNextPage />} />
+            <Route path="/dashboard" element={<div data-testid="home" />} />
+          </Routes>
+        </CompanyContextProvider>
+      </MemoryRouter>
+    </TranslationProvider>,
+  )
+}
+
+/** The page, loaded, as Ana Rojas (company administrator) reads it. */
+async function open() {
+  renderAs({ role: 'company_admin' })
+  return screen.findByTestId('cell-panel')
+}
+
+const cell = (name: RegExp) => screen.getByRole('button', { name })
+const heading = (name: string) => screen.getByRole('heading', { level: 2, name })
+
+describe('the survey results on the tenant’s real payload', () => {
+  let scrolled: ReturnType<typeof vi.fn>
+  const original = HTMLElement.prototype.scrollIntoView
+
+  beforeEach(() => {
+    window.localStorage.clear()
+    window.localStorage.setItem('preferredLocale', 'es')
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(tenant))
+    scrolled = vi.fn()
+    // The suite's DOM has no layout; the page calls this to bring the opened cell up.
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { value: scrolled, configurable: true, writable: true })
+  })
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+    vi.mocked(downloadBlobFile).mockClear()
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { value: original, configurable: true, writable: true })
+    window.localStorage.clear()
+  })
+
+  it('names the day the survey closed, not the day of its last response, and the wave it compares with', async () => {
+    await open()
+    const eyebrow = document.querySelector('[data-slot="page-eyebrow"]')
+    expect(eyebrow?.textContent).toContain('Encuesta de Clima Q3 · cerró el 6 de agosto')
+    expect(eyebrow?.textContent).not.toContain('última respuesta')
+    expect(screen.getByRole('heading', { level: 1, name: 'Resultados de Encuesta de Clima Q3' })).toBeTruthy()
+    expect(screen.getByText('Qué encontró esta encuesta, qué cambió desde Q2 y por dónde empezar a mirar.')).toBeTruthy()
+  })
+
+  it('measures the tiles against the target of 3,7, not the survey’s own mean', async () => {
+    await open()
+    const tiles = screen.getByRole('region', { name: 'Resumen' }).textContent ?? ''
+    expect(tiles).toContain('Clima · Q3')
+    // The unrounded mean of the six dimension means — the Panel de Control's figure.
+    expect(tiles).toContain('3,65')
+    expect(tiles).toContain('de 5 · meta 3,7')
+    expect(tiles).toContain('+0,32 frente a Q2')
+    expect(tiles).toContain('respuestas · 100 % completadas')
+    expect(tiles).toContain('cerró el 6 de agosto · sin lista de invitados')
+    expect(tiles).toContain('de 5 legibles')
+    expect(tiles).toContain('Finanzas bajo el umbral de 5: protegido')
+    expect(tiles).toContain('Bajo la meta')
+    expect(screen.getByTestId('below-target').textContent).toBe('Carga de trabajo 3,3 · Reconocimiento 3,4')
+    expect(tiles).not.toContain('media')
+  })
+
+  it('lists the artboard’s three cells, each with its reason and whether a plan covers its group', async () => {
+    await open()
+    expect(screen.getByText('Las tres celdas más lejos de la meta · cada una abre su pregunta')).toBeTruthy()
+    const items = within(screen.getByTestId('findings')).getAllByRole('listitem')
+    expect(items).toHaveLength(3)
+    expect(items[0].textContent).toContain('Operaciones · Carga de trabajo')
+    expect(items[0].textContent).toContain('La celda más baja del mapa · 1,3 bajo la meta')
+    expect(items[0].textContent).toContain('Un plan atiende este grupo · sin avances')
+    expect(items[1].textContent).toContain('Operaciones · Seguridad psicológica')
+    expect(items[1].textContent).toContain('Segunda más baja · mismo grupo')
+    expect(items[2].textContent).toContain('Ventas · Carga de trabajo')
+    expect(items[2].textContent).toContain('Única celda roja fuera de Operaciones')
+    expect(items[2].textContent).toContain('Sin plan todavía')
+  })
+
+  it('draws ONE grid: the columns, the whole company first, then every group', async () => {
+    await open()
+    const map = screen.getByRole('region', { name: 'Clima por grupo y dimensión · Q3' })
+    expect(within(map).getByText('meta 3,7 · selecciona una celda para ver su pregunta')).toBeTruthy()
+    expect(within(map).getAllByRole('table')).toHaveLength(1)
+    const grid = screen.getByTestId('climate-grid')
+    expect(within(grid).getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      'Seguridad psicológica',
+      'Carga de trabajo',
+      'Confianza',
+      'Reconocimiento',
+      'Desarrollo',
+      'Pertenencia',
+      'Media del grupo',
+      'Frente a Q2',
+    ])
+    const order = [...grid.querySelectorAll('tbody tr[data-testid]')].map((row) => row.getAttribute('data-testid'))
+    expect(order).toEqual(['company-row', `group-row-${FIN}`, `group-row-${ENG}`, `group-row-${OPS}`, `group-row-${PER}`, `group-row-${VEN}`])
+    const company = screen.getByTestId('company-row').textContent ?? ''
+    for (const reading of ['3,8', '3,3', '3,7', '3,4', '4,0', '3,65', '+0,3']) expect(company).toContain(reading)
+    expect(screen.getByTestId(`group-row-${ENG}`).textContent).toContain('3,9')
+    expect(within(screen.getByTestId('grid-legend')).getByText('protegido, menos de 5 respuestas')).toBeTruthy()
+  })
+
+  it('never prints a number for the protected group: every cell hatched, mean and delta included, none a button', async () => {
+    await open()
+    const finanzas = screen.getByTestId(`group-row-${FIN}`)
+    expect(finanzas.textContent).not.toMatch(/\d/)
+    // Six dimensions, the mean and the delta: eight hatched readings.
+    expect(within(finanzas).getAllByRole('img')).toHaveLength(8)
+    expect(within(finanzas).queryAllByRole('button')).toHaveLength(0)
+    // The mean cell carries the word where the number would be.
+    expect(finanzas.textContent).toContain('Protegido')
+    // And in the opened cell's "other groups", Finanzas is hatched too.
+    const other = screen.getByTestId(`other-${FIN}`)
+    expect(other.textContent).not.toMatch(/\d/)
+    expect(within(other).getByRole('img')).toBeTruthy()
+  })
+
+  it('opens the lowest cell with its three columns: the question twice, the other groups, what is being done', async () => {
+    const panel = await open()
+    expect(within(panel).getByRole('heading', { level: 2, name: 'Operaciones · Carga de trabajo' })).toBeTruthy()
+    expect(panel.textContent).toContain('Media 2,4 · 1,3 bajo la meta · la celda más baja del mapa')
+    const question = within(panel).getByTestId('cell-question').textContent ?? ''
+    expect(question).toContain('Pregunta de Carga de trabajo · Operaciones')
+    expect(question).toContain('La misma pregunta · toda la empresa')
+    expect(question).toContain('3,3')
+    expect(question).toContain('Q3 · 24 respuestas · 17 % respondió 1 o 2')
+    expect(question).toContain('1 · Muy en desacuerdo')
+    expect(question).toContain('5 · Muy de acuerdo')
+    expect(within(panel).getByText('Carga de trabajo en los otros grupos')).toBeTruthy()
+    expect(screen.getByTestId(`other-${ENG}`).textContent).toContain('3,7')
+    expect(screen.getByTestId(`other-${VEN}`).textContent).toContain('3,4')
+    const doing = within(panel).getByTestId('cell-doing')
+    expect(doing.textContent).toContain('Un plan ya atiende este grupo: Reducir la carga de trabajo en Operaciones')
+    expect(doing.textContent).toContain('vence el 15 oct')
+    expect(within(doing).getByRole('link', { name: 'Abrir el plan' }).getAttribute('href')).toBe(`/action-plans/${OPS_PLAN}`)
+    expect(within(doing).getByRole('link', { name: 'Comparar con Q2' }).getAttribute('href')).toBe('/surveys/climate-trends')
+    expect(doing.textContent).toContain('El texto libre de Operaciones no se muestra')
+  })
+
+  it('keeps the cell open when "Ver la pregunta" names the cell already open, and brings it into view', async () => {
+    await open()
+    const [first] = screen.getAllByRole('button', { name: /Ver la pregunta/ })
+    await userEvent.click(first)
+    await userEvent.click(first)
+    const opened = heading('Operaciones · Carga de trabajo')
+    expect(opened).toBeTruthy()
+    expect(scrolled).toHaveBeenCalled()
+    // Opened from a finding, the reader lands on what it opened.
+    expect(document.activeElement).toBe(opened)
+  })
+
+  it('opens another cell from the grid, by pointer or by keyboard, and marks it open', async () => {
+    await open()
+    const confianza = cell(/^Ingeniería, Confianza: 4,0/)
+    await userEvent.click(confianza)
+    expect(heading('Ingeniería · Confianza')).toBeTruthy()
+    expect(confianza.getAttribute('aria-expanded')).toBe('true')
+    expect(confianza.getAttribute('aria-controls')).toBe('results-next-cell-panel')
+    expect(cell(/^Operaciones, Carga de trabajo: 2,4/).getAttribute('aria-expanded')).toBe('false')
+    expect(scrolled).toHaveBeenCalled()
+
+    const ventas = cell(/^Ventas, Reconocimiento: 3,6/)
+    ventas.focus()
+    await userEvent.keyboard('{Enter}')
+    expect(heading('Ventas · Reconocimiento')).toBeTruthy()
+    // The × is the one way to close it.
+    await userEvent.click(screen.getByRole('button', { name: 'Cerrar' }))
+    expect(screen.queryByTestId('cell-panel')).toBeNull()
+  })
+
+  it('offers "Crear un plan" on a group no plan covers, and sends it to a route that exists', async () => {
+    await open()
+    await userEvent.click(cell(/^Ventas, Carga de trabajo: 3,4/))
+    const doing = within(screen.getByTestId('cell-panel')).getByTestId('cell-doing')
+    expect(doing.textContent).toContain('Sin plan todavía para este grupo.')
+    expect(within(doing).getByRole('link', { name: 'Crear un plan' }).getAttribute('href')).toBe('/action-plans')
+  })
+
+  it('wears the sample chip on the wave deltas and the group’s distribution, and nowhere else', async () => {
+    await open()
+    expect(screen.getAllByText(SAMPLE)).toHaveLength(3)
+    expect(within(screen.getByTestId('climate-delta')).getByText(SAMPLE)).toBeTruthy()
+    expect(within(screen.getByTestId('delta-note')).getByText(SAMPLE)).toBeTruthy()
+    expect(within(screen.getByTestId('cell-question')).getByText(SAMPLE)).toBeTruthy()
+    // The whole-company distribution is real: no chip on it.
+    expect(within(screen.getByTestId('company-distribution')).queryByText(SAMPLE)).toBeNull()
+  })
+
+  it('keeps the server’s long-format CSV behind "···", through fetch + Blob', async () => {
+    await open()
+    await userEvent.click(screen.getByRole('button', { name: 'Más exportaciones' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'CSV del servidor (formato largo)' }))
+    await waitFor(() => expect(vi.mocked(downloadBlobFile)).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(downloadBlobFile).mock.calls[0][0]).toBe(`survey-${SURVEY}-results.csv`)
+    const urls = vi.mocked(fetch).mock.calls.map((call) => String(call[0]))
+    expect(urls.some((url) => url.endsWith(`/surveys/${SURVEY}/export/csv?lang=es`))).toBe(true)
+  })
+
+  it('draws the same page for a super administrator who chose the company', async () => {
+    window.localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, COMPANY)
+    renderAs({ role: 'super_admin', companyId: '' })
+    expect(await screen.findByTestId('cell-panel')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Exportar informe (PDF)' })).toBeTruthy()
+  })
+})
