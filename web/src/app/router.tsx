@@ -10,6 +10,7 @@ import RequireAuth from './RequireAuth'
 import AdminLayout from './AdminLayout'
 import RouteErrorBoundary from './RouteErrorBoundary'
 import DashboardPage from '../features/dashboard/pages/DashboardPage'
+import DashboardNextPage from '../features/dashboard/next/DashboardNextPage'
 import CompaniesListPage from '../features/org-structure/pages/CompaniesListPage'
 import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage'
 import UsersListPage from '../features/org-structure/pages/UsersListPage'
@@ -309,6 +310,10 @@ export const router = createBrowserRouter([
               // role, and each role's endpoint refuses the other three, so there is no
               // per-role route to gate and nothing a wrong guess here could leak.
               { path: '/dashboard', element: <DashboardPage /> },
+              // The redesigned Panel de Control, sample-fed until its hook is wired; the
+              // page itself sends every role but the company administrator back to
+              // `/dashboard`.
+              { path: '/dashboard/next', element: <DashboardNextPage /> },
               { path: '/admin/companies', element: <CompaniesListPage /> },
               { path: '/admin/companies/:id', element: <CompanyDetailPage /> },
               { path: '/admin/companies/:companyId/users', element: <UsersListPage /> },
