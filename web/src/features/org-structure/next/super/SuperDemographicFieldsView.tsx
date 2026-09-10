@@ -326,7 +326,9 @@ function FieldForm({
       {isList && (
         <Field
           fieldLabel={t('superadmin.next.demographics.form.values')}
-          htmlFor={ids.value}
+          // Only the input takes the label: on the button it would replace the button's own
+          // name ("Agregar valor") with the field's ("Valores").
+          htmlFor={adding ? ids.value : undefined}
           helper={
             count > 0
               ? t('superadmin.next.demographics.form.valuesCount', { count })
@@ -368,7 +370,6 @@ function FieldForm({
               />
             ) : (
               <Button
-                id={ids.value}
                 type="button"
                 variant="outline"
                 size="sm"

@@ -118,7 +118,7 @@ export default function CompaniesListNextPage() {
       <div className="flex flex-wrap items-center gap-3">
         <label className="relative m-0 w-full sm:w-80">
           <span className="sr-only">{t('superadmin.next.companies.searchPlaceholder')}</span>
-          <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-fg-light" />
+          <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-fg-tertiary" />
           <Input
             type="search"
             value={search}
@@ -246,41 +246,41 @@ function CompanyRow({ row, language }: { row: CompanyListRow; language: string |
         >
           {row.name}
         </Link>
-        {row.emailDomain && <span className="block truncate text-2xs text-fg-light">{row.emailDomain}</span>}
+        {row.emailDomain && <span className="block truncate text-2xs text-fg-tertiary">{row.emailDomain}</span>}
       </td>
       <td className="px-3 py-3">
-        <span className={cn('block truncate', row.industry ? 'text-fg-primary' : 'text-fg-light')}>
+        <span className={cn('block truncate', row.industry ? 'text-fg-primary' : 'text-fg-tertiary')}>
           {row.industry || t('superadmin.next.companies.noSector')}
         </span>
-        <span className="block truncate text-2xs text-fg-light">{size ?? t('superadmin.next.companies.noSize')}</span>
+        <span className="block truncate text-2xs text-fg-tertiary">{size ?? t('superadmin.next.companies.noSize')}</span>
       </td>
       <td className="px-3 py-3">
         {row.country ? (
           <span className="block truncate text-fg-primary">{row.country}</span>
         ) : (
-          <span aria-hidden="true" className="text-fg-light">
+          <span aria-hidden="true" className="text-fg-tertiary">
             —
           </span>
         )}
       </td>
       <td className="px-3 py-3">
         {language === undefined ? (
-          <span aria-hidden="true" className="text-fg-light">
+          <span aria-hidden="true" className="text-fg-tertiary">
             …
           </span>
         ) : language === null ? (
-          <span className="text-xs text-fg-light">{t('superadmin.next.unavailable')}</span>
+          <span className="text-xs text-fg-tertiary">{t('superadmin.next.unavailable')}</span>
         ) : languageName ? (
           <span className="text-fg-primary">{languageName}</span>
         ) : (
-          <span className="text-xs text-fg-light">{t('superadmin.next.companies.noLanguage')}</span>
+          <span className="text-xs text-fg-tertiary">{t('superadmin.next.companies.noLanguage')}</span>
         )}
       </td>
       <td className="px-3 py-3">
         {tier ? (
           <Chip tone="neutral" label={tier} />
         ) : (
-          <span className="text-xs text-fg-light">{t('superadmin.next.companies.noPlan')}</span>
+          <span className="text-xs text-fg-tertiary">{t('superadmin.next.companies.noPlan')}</span>
         )}
       </td>
       <td className="px-3 py-3 text-right font-mono text-sm tabular-nums text-fg-primary">
@@ -288,13 +288,13 @@ function CompanyRow({ row, language }: { row: CompanyListRow; language: string |
       </td>
       <td className="px-3 py-3">
         {row.activeSurveyCount === null ? (
-          <span aria-hidden="true" className="text-fg-light">
+          <span aria-hidden="true" className="text-fg-tertiary">
             —
           </span>
         ) : (
           <>
             <span className="block font-mono tabular-nums text-fg-primary">{row.activeSurveyCount}</span>
-            <span className="block truncate text-2xs text-fg-light">
+            <span className="block truncate text-2xs text-fg-tertiary">
               {row.openSurvey
                 ? t('superadmin.next.companies.openLine', {
                     code: row.openSurvey.code,

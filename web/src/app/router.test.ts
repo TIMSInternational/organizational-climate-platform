@@ -3,6 +3,7 @@ import { readFileSync, globSync } from 'node:fs'
 import { join } from 'node:path'
 import { router } from './router'
 import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPage'
+import CompaniesListNextPage from '../features/org-structure/next/super/CompaniesListNextPage'
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
 
 /**
@@ -284,6 +285,26 @@ describe('router', () => {
     const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
     expect(source).not.toMatch(/pages\/SurveysListPage'/)
     expect(source).not.toMatch(/pages\/ClimateTrendsPage'/)
+  })
+
+  /**
+   * The per-role canvas's Empresas replaced `CompaniesListPage` on `/admin/companies`, the
+   * route the super administrator's sidebar links as Empresas. Same ruling, same check: the
+   * element, not the path, and the old page imported for no route at all.
+   */
+  it('mounts the redesigned Empresas on /admin/companies and routes the old page nowhere', () => {
+    const byPath = new Map<string, unknown>()
+    function walk(routes: typeof router.routes): void {
+      for (const route of routes) {
+        if (route.path) byPath.set(route.path, route.element)
+        if (route.children) walk(route.children as typeof router.routes)
+      }
+    }
+    walk(router.routes)
+    expect((byPath.get('/admin/companies') as { type?: unknown } | undefined)?.type).toBe(CompaniesListNextPage)
+    expect(byPath.has('/admin/companies/next')).toBe(false)
+    const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
+    expect(source).not.toMatch(/pages\/CompaniesListPage'/)
   })
 
   /**

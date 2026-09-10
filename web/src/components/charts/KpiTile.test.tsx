@@ -131,3 +131,27 @@ describe('KpiTile', () => {
     })
   })
 })
+
+describe('KpiTile, the per-role canvas’s card', () => {
+  it('keeps the default markup for every existing caller: the recessed strip, the semibold reading', () => {
+    const { container } = render(<KpiTile label="Participation" value={84} />)
+    expect(container.querySelector('[data-slot="kpi-tile"]')?.className).toContain('bg-surface-icon-box')
+    expect(screen.getByText('84').className).toContain('font-semibold')
+  })
+
+  it('sets a unit beside the reading in the sans face, on the white card at regular weight', () => {
+    const { container } = render(<KpiTile label="Companies" value={3} unit="on the platform" surface="card" />)
+    expect(container.querySelector('[data-slot="kpi-tile"]')?.className).toContain('bg-surface-card')
+    const reading = screen.getByText('3')
+    expect(reading.className).toContain('font-mono')
+    expect(reading.className).toContain('font-normal')
+    expect(screen.getByText('on the platform').className).not.toContain('font-mono')
+  })
+
+  it('prints a reading that is a name, like a wave code, in the instrument face and never as a dash', () => {
+    const { container } = render(<KpiTile label="Last closed survey" value={null} valueText="Q3" surface="card" />)
+    expect(screen.getByText('Q3').className).toContain('font-mono')
+    expect(container.textContent).not.toContain('\u2014')
+  })
+})
+

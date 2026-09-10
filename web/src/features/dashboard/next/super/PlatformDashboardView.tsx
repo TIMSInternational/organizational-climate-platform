@@ -266,18 +266,18 @@ function CompanyRow({ row, onOpen }: { row: PlatformCompanyRow; onOpen: (company
           {row.name}
         </Link>
         {row.profileKnown && (
-          <span className="block truncate text-2xs text-fg-light">
+          <span className="block truncate text-2xs text-fg-tertiary">
             {place || t('superadmin.next.dashboard.companies.noSectorCountry')}
           </span>
         )}
       </td>
       <td className="px-3 py-3">
         {row.surveyCount === null ? (
-          <span aria-hidden="true" className="text-fg-light">
+          <span aria-hidden="true" className="text-fg-tertiary">
             —
           </span>
         ) : row.surveyCount === 0 ? (
-          <span className="text-xs text-fg-light">{t('superadmin.next.dashboard.companies.noSurveys')}</span>
+          <span className="text-xs text-fg-tertiary">{t('superadmin.next.dashboard.companies.noSurveys')}</span>
         ) : survey ? (
           <>
             <span className="block truncate font-medium text-fg-primary" title={survey.name ?? undefined}>
@@ -288,7 +288,7 @@ function CompanyRow({ row, onOpen }: { row: PlatformCompanyRow; onOpen: (company
             </span>
           </>
         ) : (
-          <span className="text-xs text-fg-light">{t('superadmin.next.dashboard.companies.noneOpen')}</span>
+          <span className="text-xs text-fg-tertiary">{t('superadmin.next.dashboard.companies.noneOpen')}</span>
         )}
       </td>
       <td className="px-3 py-3">
@@ -304,21 +304,21 @@ function CompanyRow({ row, onOpen }: { row: PlatformCompanyRow; onOpen: (company
               </span>
             </span>
           ) : (
-            <span className="text-xs text-fg-light">{t('superadmin.next.dashboard.companies.noInviteList')}</span>
+            <span className="text-xs text-fg-tertiary">{t('superadmin.next.dashboard.companies.noInviteList')}</span>
           )
         ) : row.surveyCount === null ? (
-          <span aria-hidden="true" className="text-fg-light">
+          <span aria-hidden="true" className="text-fg-tertiary">
             —
           </span>
         ) : (
-          <span className="text-xs text-fg-light">{t('superadmin.next.dashboard.companies.noSubmissions')}</span>
+          <span className="text-xs text-fg-tertiary">{t('superadmin.next.dashboard.companies.noSubmissions')}</span>
         )}
       </td>
       <td className="px-3 py-3 text-right font-mono text-sm tabular-nums text-fg-primary">{row.people}</td>
       <td
         className={cn(
           'px-3 py-3 text-right font-mono text-sm tabular-nums',
-          row.completedResponses === 0 ? 'text-fg-light' : 'text-fg-primary',
+          row.completedResponses === 0 ? 'text-fg-tertiary' : 'text-fg-primary',
         )}
       >
         {row.completedResponses}
@@ -521,7 +521,7 @@ function SystemRow({
     <li data-system-status={status} className="flex items-center justify-between gap-2.5 border-t border-line-light py-2">
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="text-base font-medium text-fg-primary">{name}</span>
-        <span className="text-2xs text-fg-light">{sub}</span>
+        <span className="text-2xs text-fg-tertiary">{sub}</span>
       </div>
       <Chip
         tone={tone}

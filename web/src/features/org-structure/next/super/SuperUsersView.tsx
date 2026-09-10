@@ -217,7 +217,7 @@ export default function SuperUsersView() {
         </label>
         <label htmlFor={searchId} className="relative m-0 w-full sm:w-60">
           <span className="sr-only">{t('superadmin.next.users.searchPlaceholder')}</span>
-          <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-fg-light" />
+          <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-fg-tertiary" />
           <Input
             id={searchId}
             type="search"
@@ -322,7 +322,7 @@ export default function SuperUsersView() {
               <Upload aria-hidden="true" />
               {t('superadmin.next.users.import.choose')}
             </Button>
-            <span className="text-xs text-fg-light">{t('superadmin.next.users.import.format')}</span>
+            <span className="text-xs text-fg-tertiary">{t('superadmin.next.users.import.format')}</span>
           </div>
         </Panel>
       </div>
@@ -374,7 +374,7 @@ function PersonRow({
           label={roleText(t, user.role)}
         />
       </td>
-      <td className={cn('truncate px-3 py-3', department ? 'text-fg-secondary' : 'text-fg-light')}>
+      <td className={cn('truncate px-3 py-3', department ? 'text-fg-secondary' : 'text-fg-tertiary')}>
         {department ?? t('superadmin.next.users.noDepartment')}
       </td>
       <td className="px-3 py-3">

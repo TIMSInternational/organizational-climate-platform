@@ -207,3 +207,28 @@ describe('readViewerClaims and useViewerCapabilities', () => {
     expect(result.current.canRecordProgress({ nodoExternalId: 'n1' })).toBe(false)
   })
 })
+
+/**
+ * The two capabilities the super administrator's tenant pages read. Each mirrors a guard
+ * that forbids every caller but a `super_admin` — `CompanyEndpoints.cs:29` and
+ * `UserEndpoints.cs:284` — whatever tenant is selected, because the tenant in those
+ * requests is the one in the path.
+ */
+describe('canManageCompanies and canAssignRoles', () => {
+  const cases: Array<{ name: string; claims: ViewerClaims; selected: string | null; expected: boolean }> = [
+    { name: 'super_admin with nothing selected', claims: claimsFor('super_admin'), selected: null, expected: true },
+    { name: 'super_admin with a company selected', claims: claimsFor('super_admin', { companyId: undefined }), selected: 'c9', expected: true },
+    { name: 'company_admin', claims: claimsFor('company_admin'), selected: null, expected: false },
+    { name: 'leader', claims: claimsFor('leader', { nodoExternalId: 'n1' }), selected: null, expected: false },
+    { name: 'supervisor', claims: claimsFor('supervisor'), selected: null, expected: false },
+    { name: 'employee', claims: claimsFor('employee'), selected: null, expected: false },
+    { name: 'no role claim', claims: claimsFor(undefined), selected: null, expected: false },
+  ]
+  for (const c of cases) {
+    it(c.name, () => {
+      const capabilities = capabilitiesFor(c.claims, scopeFor(c.claims, c.selected))
+      expect([capabilities.canManageCompanies, capabilities.canAssignRoles]).toEqual([c.expected, c.expected])
+    })
+  }
+})
+

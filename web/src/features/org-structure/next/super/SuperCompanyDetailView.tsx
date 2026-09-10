@@ -353,7 +353,7 @@ function SurveysCard({
               value={draft.dataRetentionDays}
               aria-invalid={retention === null}
               onChange={(event) => set({ dataRetentionDays: event.target.value })}
-              className="w-full border-0 bg-transparent px-0 font-mono tabular-nums shadow-none focus-visible:outline-none"
+              className="w-full border-0 bg-transparent px-0 font-mono tabular-nums shadow-none"
             />
           </InputAffix>
         </Field>
@@ -578,7 +578,7 @@ function CompanyCard({
               id={ids.domain}
               value={profile.emailDomain}
               onChange={(event) => set({ emailDomain: event.target.value })}
-              className="w-full border-0 bg-transparent px-0 font-mono shadow-none focus-visible:outline-none"
+              className="w-full border-0 bg-transparent px-0 font-mono shadow-none"
             />
           </InputAffix>
         </Field>
@@ -659,7 +659,7 @@ function BrandCard({
           <div className="flex h-22 w-28 shrink-0 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-line-default text-center text-2xs text-fg-tertiary">
             <Upload aria-hidden="true" className="size-4 text-fg-secondary" />
             {t('superadmin.next.companyDetail.brand.logo')}
-            <span className="text-fg-light">
+            <span className="text-fg-tertiary">
               {logo ? t('superadmin.next.companyDetail.brand.logoSet') : t('superadmin.next.companyDetail.brand.logoNone')}
             </span>
           </div>
