@@ -68,3 +68,12 @@ which needs the design to say so.
 
 Both are product rulings. Until they land, the routed screen keeps rows 1–3 and the
 breakdown CSV carries row 4.
+
+*Update, 10 Sep (results-fidelity, fix round 3).* The kept list no longer speaks a second
+language on the one colour scale. Its chips measured each question against the mean of
+the question means ("Por encima / En la media / Por debajo", `surveyQuestionStandings`)
+while the grid above measures cells against the target 3,7 ("sobre / en / bajo la
+meta"). The list now reads the target too (`questionBand` in
+`web/src/features/surveys/next/derive.ts`), in the grid's words and tints. Its heading is
+the page's serif h2, and its two filters are compact controls on the page's line. Keep,
+fold or restyle further is still open question B.
