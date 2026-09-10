@@ -139,7 +139,7 @@
   --admin-size-icon: 16px; /* legacy `h-4 w-4`; an SVG box, so px */
   --admin-size-icon-box: 1.75rem; /* 28px — Sidebar avatar/icon tile */
 
-  --admin-size-sidebar: 220px; /* ForMaps StudentSidebar EXPANDED_W */
+  --admin-size-sidebar: 236px; /* was ForMaps StudentSidebar EXPANDED_W, 220; every artboard of the 10 Sep per-role canvas draws a 236px rail (220px rows), and at 220 "Administración del Sistema", "Configuración" and "Cerrar sesión" ellipsised */
   --admin-size-sidebar-collapsed: 52px;
   --admin-size-content-max: 1280px;
   /* The block a page-level empty state reserves for itself, so its message centres

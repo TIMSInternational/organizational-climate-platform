@@ -199,7 +199,9 @@ function OnlyFromHere({ model }: { model: SuperCompanyDetailModel }) {
   const unread = t('superadmin.next.unavailable')
 
   return (
-    <section aria-labelledby="detail-only-here" className="flex flex-col gap-2">
+    // `-mt-4`: `PageTopBar` keeps 16px under its rule and the page column adds its 24px gap;
+    // the canvas has 24 in all between the rule and this strip.
+    <section aria-labelledby="detail-only-here" className="-mt-4 flex flex-col gap-2">
       <p id="detail-only-here" className="m-0 text-xs text-fg-tertiary">
         <span className="font-semibold">{t('superadmin.next.companyDetail.onlyHereLead')}</span>{' '}
         {t('superadmin.next.companyDetail.onlyHereNote')}

@@ -211,3 +211,12 @@ describe('SuperCompanyDetailView', () => {
     expect(writes()[0].url).not.toContain('/settings')
   })
 })
+
+describe('SuperCompanyDetailView Encuestas card', () => {
+  it('offers no AI insights switch: the canvas’s card has six fields, and the setting is left as the tenant has it', async () => {
+    serve()
+    renderPage()
+    await screen.findByText(copy.onlyHereLead)
+    expect(screen.queryByText(copy.surveys.aiInsights)).toBeNull()
+  })
+})

@@ -170,3 +170,16 @@ describe('SuperDemographicFieldsView', () => {
     expect((screen.getByLabelText(new RegExp(`^${copy.form.key}`)) as HTMLInputElement).disabled).toBe(true)
   })
 })
+
+describe('SuperDemographicFieldsView value chips', () => {
+  it('draws each value as the canvas’s plain chip, its remove control still reachable: sr-only until hover or focus', async () => {
+    serve()
+    renderPage()
+    const prefix = copy.form.removeValue.split('{value}')[0]
+    const removers = await screen.findAllByRole('button', { name: (name) => name.startsWith(prefix) })
+    expect(removers.length).toBeGreaterThan(0)
+    for (const remover of removers) {
+      expect(remover.className.split(/\s+/)).toEqual(expect.arrayContaining(['sr-only', 'group-hover:not-sr-only', 'group-focus-within:not-sr-only']))
+    }
+  })
+})

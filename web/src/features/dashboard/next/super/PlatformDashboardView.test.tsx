@@ -200,3 +200,13 @@ describe('PlatformDashboardView', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
   })
 })
+
+describe('PlatformDashboardView sentences', () => {
+  it('names the company by its short name mid-sentence: "con Acme como empresa activa", as the canvas writes it', async () => {
+    serve()
+    renderView()
+    const tail = copy.attention.behindPaceSub.split('{company}')[1]
+    await waitFor(() => expect(document.body.textContent).toContain(`Acme${tail}`))
+    expect(document.body.textContent).not.toContain(`Acme Corporation${tail}`)
+  })
+})

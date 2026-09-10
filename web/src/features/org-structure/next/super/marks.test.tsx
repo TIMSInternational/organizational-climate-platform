@@ -1,7 +1,7 @@
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Switch } from '../../../../components/ui'
-import { MiniBar } from './parts'
+import { CanvasChip, CanvasSelect, MiniBar } from './parts'
 
 /**
  * Two marks the fidelity refuter found missing on screen while every behaviour test was
@@ -23,5 +23,31 @@ describe('the marks the shots showed missing', () => {
     const knob = container.querySelector('[data-slot="switch-thumb"]') as HTMLElement
     expect(knob.className.split(/\s+/)).toContain('bg-fg-on-accent')
     expect(knob.className.split(/\s+/)).not.toContain('bg-surface-panel')
+  })
+})
+
+describe('the canvas’s select and chip', () => {
+  it('draws the select as the canvas does: still a native select, its OS chevron dropped for a lucide one', () => {
+    const { container } = render(
+      <CanvasSelect aria-label="plan" className="w-40" defaultValue="a">
+        <option value="a">A</option>
+      </CanvasSelect>,
+    )
+    const select = container.querySelector('select') as HTMLSelectElement
+    expect(select.className.split(/\s+/)).toContain('appearance-none')
+    expect(container.querySelector('[data-slot="canvas-select-chevron"]')).not.toBeNull()
+    expect((container.firstElementChild as HTMLElement).className.split(/\s+/)).toContain('w-40')
+  })
+
+  it('gives every chip the hairline the canvas’s .chip carries: the tone’s ink at 20%', () => {
+    const { container } = render(
+      <>
+        <CanvasChip tone="good" label="Correcto" />
+        <CanvasChip tone="neutral" label="Líder" />
+      </>,
+    )
+    const [good, neutral] = [...container.querySelectorAll('[data-slot="chip"]')] as HTMLElement[]
+    expect(good.className.split(/\s+/)).toContain('border-chip-good-ink/20')
+    expect(neutral.className.split(/\s+/)).toContain('border-line-default')
   })
 })

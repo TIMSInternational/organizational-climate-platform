@@ -228,7 +228,7 @@ export function MiniBar({
 /**
  * The canvas's select: a 32px field on the hairline with a lucide chevron, as every
  * artboard of the per-role canvas draws it (`.select` — `height: 32px; padding: 0 10px;
- * border: 1px solid #e0dbee; border-radius: 4px`, a 14px chevron in `#8a82a5`).
+ * border: 1px solid #e0dbee; border-radius: 4px`, a 14px chevron; `fg-tertiary`, since `inkContrast.test.ts` keeps the non-text ink `fg-light` to its two exempt sites).
  *
  * Still a native `<select>` underneath — `appearance-none` only drops the browser's own
  * chevron — so it keeps the platform's keyboard and screen-reader behaviour and every
@@ -247,7 +247,7 @@ export function CanvasSelect({ className, children, ...props }: ComponentProps<'
       <ChevronDown
         aria-hidden="true"
         data-slot="canvas-select-chevron"
-        className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-light"
+        className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-tertiary"
       />
     </span>
   )

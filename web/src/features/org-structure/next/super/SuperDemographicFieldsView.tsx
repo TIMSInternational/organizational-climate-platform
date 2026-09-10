@@ -356,9 +356,13 @@ function FieldForm({
         >
           <div className="flex flex-wrap items-center gap-1.5">
             {values.map((option) => (
+              // The canvas's value chip carries no remove mark (`.chip`, padding 0 8px). The
+              // remove control is still here, for pointer and keyboard alike: `sr-only` keeps it
+              // focusable and announced, and it shows on hover or while focus is inside the chip.
               <span
                 key={option.text}
-                className="inline-flex h-5.5 items-center gap-1 rounded-lg border border-line-default bg-surface-icon-box pl-2 pr-0.5 text-xs font-medium text-fg-secondary"
+                data-value-chip=""
+                className="group inline-flex h-5.5 items-center gap-1 rounded-lg border border-line-default bg-surface-icon-box px-2 text-xs font-medium text-fg-secondary focus-within:pr-0.5 hover:pr-0.5"
               >
                 {option.text}
                 <Button
@@ -367,7 +371,7 @@ function FieldForm({
                   size="icon"
                   aria-label={t('superadmin.next.demographics.form.removeValue', { value: option.text })}
                   onClick={() => setValues(values.filter((existing) => existing !== option))}
-                  className="size-4 rounded-sm text-fg-tertiary [&_svg:not([class*='size-'])]:size-3"
+                  className="sr-only size-4 rounded-sm text-fg-tertiary group-focus-within:not-sr-only group-hover:not-sr-only [&_svg:not([class*='size-'])]:size-3"
                 >
                   <X aria-hidden="true" />
                 </Button>

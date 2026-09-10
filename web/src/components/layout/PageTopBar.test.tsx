@@ -232,3 +232,28 @@ describe('PageTopBar', () => {
     })
   })
 })
+
+describe('PageTopBar canvas rhythm', () => {
+  it('spaces the header as the 10 Sep canvas does: 38px under the breadcrumb, 6px between eyebrow, title and description', () => {
+    renderTopBar({
+      title: 'Detalle de empresa',
+      eyebrow: 'Administración del Sistema',
+      description: 'Lo que cada encuesta nueva hereda.',
+      breadcrumbs: [{ label: 'Empresas', href: '/admin/companies' }, { label: 'Grupo Meridiano S.A.' }],
+      rhythm: 'canvas',
+    })
+    const bar = document.querySelector('[data-slot="page-top-bar"]') as HTMLElement
+    expect(bar.getAttribute('data-rhythm')).toBe('canvas')
+    // gap-inline (8px) + mb-7.5 (30px) = the artboards' margin-bottom 14px inside a gap of 24px.
+    expect((bar.querySelector('nav') as HTMLElement).className.split(/\s+/)).toContain('mb-7.5')
+    const column = (screen.getByRole('heading', { level: 1 }).closest('.basis-header-text') as HTMLElement).className.split(/\s+/)
+    expect(column).toEqual(expect.arrayContaining(['flex', 'flex-col', 'gap-1.5']))
+  })
+
+  it('keeps the default rhythm for every screen that does not ask for the canvas’s', () => {
+    renderTopBar({ title: 'Surveys', breadcrumbs: [{ label: 'Home', href: '/' }, { label: 'Surveys' }] })
+    const bar = document.querySelector('[data-slot="page-top-bar"]') as HTMLElement
+    expect(bar.getAttribute('data-rhythm')).toBe('default')
+    expect((bar.querySelector('nav') as HTMLElement).className.split(/\s+/)).not.toContain('mb-7.5')
+  })
+})
