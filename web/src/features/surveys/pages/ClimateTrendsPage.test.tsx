@@ -181,7 +181,8 @@ describe('ClimateTrendsPage', () => {
     vi.mocked(getClimateTrends).mockResolvedValue(payload({ suppressedGroupCount: 3 }))
     renderPage()
 
-    expect(await screen.findByText(/3 group\(s\) are withheld/)).toBeTruthy()
+    // The sentence no longer fakes a plural with "(s)": the count follows a colon.
+    expect(await screen.findByText(/Groups withheld in every survey shown.*: 3\./)).toBeTruthy()
   })
 
   /**

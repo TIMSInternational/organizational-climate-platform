@@ -385,6 +385,6 @@ describe('AdminDashboardNextView', () => {
     renderView()
     const values = [...document.querySelectorAll('[data-slot="kpi-value"]')]
     expect(values).toHaveLength(4)
-    expect(values.every((value) => value.className.includes('text-[28px]'))).toBe(true)
+    expect(values.every((value) => value.className.includes('text-kpi-hero'))).toBe(true)
   })
 })

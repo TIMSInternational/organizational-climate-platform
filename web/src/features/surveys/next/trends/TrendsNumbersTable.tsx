@@ -41,7 +41,9 @@ export interface TrendsNumbersTableProps {
   caption: string
 }
 
-const HEAD = 'px-1 pb-1 align-bottom text-[9px] font-bold uppercase leading-tight tracking-label text-fg-label'
+// `border-0` / `border-b-0`: `index.css` rules every bare th and td; the artboard's table
+// draws one rule, above the Q1 → Q3 row.
+const HEAD = 'border-0 px-1 pb-1 align-bottom text-3xs font-bold uppercase leading-tight tracking-label text-fg-label'
 
 export default function TrendsNumbersTable({
   waves,
@@ -84,7 +86,7 @@ export default function TrendsNumbersTable({
       <tbody>
         {waves.map((wave, waveIndex) => (
           <tr key={wave.id} data-wave={wave.id}>
-            <th scope="row" className="py-0 pr-2 pl-0 text-left align-middle font-normal">
+            <th scope="row" className="border-0 py-0 pr-2 pl-0 text-left align-middle font-normal">
               <span className="block text-base text-fg-primary">{wave.name?.trim() || wave.code}</span>
               <span className="block text-xs text-fg-label">
                 {/* The count is the drawn GROUP's, never the survey's: "24 resp." beside
@@ -102,7 +104,7 @@ export default function TrendsNumbersTable({
               const value = dimension.values[waveIndex] ?? null
               if (withheld[waveIndex]) {
                 return (
-                  <td key={dimension.key} className="p-0">
+                  <td key={dimension.key} className="border-0 p-0">
                     <ProtectedCell
                       // 0, not a count: the wave is withheld for this group and no
                       // figure of it travels further down than it must.
@@ -119,7 +121,7 @@ export default function TrendsNumbersTable({
               }
               if (value === null) {
                 return (
-                  <td key={dimension.key} className="p-0" data-slot="trends-not-asked">
+                  <td key={dimension.key} className="border-0 p-0" data-slot="trends-not-asked">
                     <span className="flex h-10 items-center justify-center rounded bg-surface-icon-box text-fg-label">
                       <span aria-hidden="true">—</span>
                       <span className="sr-only">{t('surveys.next.trends.notAsked')}</span>
@@ -133,7 +135,7 @@ export default function TrendsNumbersTable({
               const fill = DIVERGING_COLORS[step]
               const ink = DIVERGING_INKS[step]
               return (
-                <td key={dimension.key} className="p-0">
+                <td key={dimension.key} className="border-0 p-0">
                   <span
                     data-slot="trends-cell"
                     // Which of the five steps, for a reader of the DOM: the fill itself is a
@@ -153,7 +155,7 @@ export default function TrendsNumbersTable({
       {first && last && lastIndex > 0 && (
         <tfoot>
           <tr data-slot="trends-move-row">
-            <th scope="row" className="border-t border-line-light pt-1.5 pl-0 text-left text-sm font-semibold text-fg-primary">
+            <th scope="row" className="border-t border-b-0 border-line-light pt-1.5 pl-0 text-left text-sm font-semibold text-fg-primary">
               {`${first.code} → ${last.code}`}
             </th>
             {dimensions.map((dimension) => {
@@ -161,7 +163,7 @@ export default function TrendsNumbersTable({
               const to = withheld[lastIndex] ? null : (dimension.values[lastIndex] ?? null)
               const move = from === null || to === null ? null : printedMove(to, from)
               return (
-                <td key={dimension.key} className="border-t border-line-light pt-1.5 text-center">
+                <td key={dimension.key} className="border-t border-b-0 border-line-light pt-1.5 text-center">
                   {move === null ? (
                     <span className="text-fg-label">
                       <span aria-hidden="true">—</span>

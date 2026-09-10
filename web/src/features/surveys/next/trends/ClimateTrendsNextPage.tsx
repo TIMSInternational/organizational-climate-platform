@@ -405,7 +405,7 @@ function TrendCard({
         {stand && <Chip tone={STANDING_TONE[stand]} label={t(`surveys.next.trends.standing.${stand}`)} />}
       </div>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="font-mono text-[22px] tabular-nums text-fg-primary">
+        <span className="font-mono text-reading tabular-nums text-fg-primary">
           {value === null ? t('surveys.next.trends.withheld') : reading(value, locale)}
         </span>
         {sincePrevious !== null && previousWave && <Move value={sincePrevious} />}

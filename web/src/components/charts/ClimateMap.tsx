@@ -135,7 +135,7 @@ const DENSITY = {
  * The Dashboard artboard's cells (10 Sep): 34px tall and printed at 12px, the column
  * heads at 9px, the group names at 13px in the primary ink.
  */
-const CANVAS_DENSITY = { box: 'h-8.5', reading: 'text-sm', header: 'text-[9px]', label: 'text-base' } as const
+const CANVAS_DENSITY = { box: 'h-8.5', reading: 'text-sm', header: 'text-3xs', label: 'text-base' } as const
 
 /** A step of the diverging scale: 0 far below … 2 on target … 4 far above. */
 export type ClimateMapStep = 0 | 1 | 2 | 3 | 4
@@ -257,7 +257,8 @@ export default function ClimateMap({
                 `w-px` with the labels set `whitespace-nowrap` below is the
                 shrink-to-content column: the table's surplus width then goes to
                 the reading columns, which is where the design puts it. */}
-            <td className={canvas ? undefined : 'w-px'} />
+            {/* `border-0` in the canvas: `index.css` rules every bare th/td, and the artboard's grid has no rules. */}
+            <td className={canvas ? 'border-0' : 'w-px'} />
             {dimensions.map((dimension) => (
               <th
                 key={dimension.key}
@@ -275,7 +276,7 @@ export default function ClimateMap({
                 // measures the pair and bans the utility by name in this file.
                 className={cn(
                   canvas
-                    ? 'truncate px-0 pb-1 text-center align-bottom font-bold uppercase leading-tight tracking-label text-fg-label'
+                    ? 'truncate border-0 px-0 pb-1 text-center align-bottom font-bold uppercase leading-tight tracking-label text-fg-label'
                     : 'px-1 pb-1.5 text-left font-semibold uppercase tracking-label text-fg-secondary',
                   density.header,
                 )}
@@ -311,7 +312,7 @@ export default function ClimateMap({
                   scope="row"
                   className={cn(
                     canvas
-                      ? 'truncate pr-2 text-left font-normal text-fg-primary'
+                      ? 'truncate border-0 pr-2 text-left font-normal text-fg-primary'
                       : 'w-px whitespace-nowrap pr-2 text-left font-medium text-fg-secondary',
                     density.label,
                   )}
@@ -351,7 +352,7 @@ export default function ClimateMap({
                   // colour can be computed against a target that does not exist.
                   if (target === null || suppressed) {
                     return (
-                      <td key={dimension.key} className={canvas ? 'p-0' : 'p-px'}>
+                      <td key={dimension.key} className={canvas ? 'border-0 p-0' : 'p-px'}>
                         <ProtectedCell
                           // 0, not `row.responses`: the row-level decision above
                           // is the one that governs, and the withheld count has no
@@ -469,7 +470,7 @@ export default function ClimateMap({
                   )
 
                   return (
-                    <td key={dimension.key} className={canvas ? 'p-0' : 'p-px'}>
+                    <td key={dimension.key} className={canvas ? 'border-0 p-0' : 'p-px'}>
                       {onSelectCell ? (
                         // The button WRAPS the painted cell rather than being it.
                         // `severelyBelow` sets `outline` inline, and an inline

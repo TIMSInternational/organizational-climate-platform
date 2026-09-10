@@ -491,6 +491,8 @@ describe('ClimateMap, drawn as the canvas', () => {
     const heads = [...container.querySelectorAll('thead th')]
     expect(heads.map((head) => head.getAttribute('title'))).toEqual(['Psychological safety', 'Workload'])
     expect(heads.every((head) => head.className.includes('truncate'))).toBe(true)
+    // No rules: `index.css` draws one under every bare th and td, and the artboard's grid has none.
+    expect([...container.querySelectorAll('th, td')].every((cell) => cell.className.includes('border-0'))).toBe(true)
   })
 
   it('leaves the default map as it was: a far-below cell is still ringed there', () => {

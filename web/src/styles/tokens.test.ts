@@ -85,8 +85,12 @@ describe('type scale', () => {
     const sizes = [...tokensCss.matchAll(/^\s*--admin-text-[\w-]+:\s*([^;]+);/gm)].map((m) =>
       m[1].trim(),
     )
-    expect(sizes.length).toBe(8)
+    // The legacy eight, and the canvas's four named steps (10 Sep): 9, 22, 26 and 28px.
+    expect(sizes.length).toBe(12)
     for (const size of sizes) expect(size).toMatch(/rem$/)
+    expect([token('--admin-text-3xs'), token('--admin-text-reading'), token('--admin-text-kpi-lg'), token('--admin-text-kpi-hero')]).toEqual(
+      ['0.5625rem', '1.375rem', '1.625rem', '1.75rem'],
+    )
   })
 
   it('does not pin the root font size', () => {

@@ -244,6 +244,14 @@
   --text-2xl--line-height: var(--admin-leading-tight);
   --text-3xl: var(--admin-text-3xl);
   --text-3xl--line-height: var(--admin-leading-tight);
+  --text-3xs: var(--admin-text-3xs);
+  --text-3xs--line-height: var(--admin-leading-tight);
+  --text-reading: var(--admin-text-reading);
+  --text-reading--line-height: var(--admin-leading-tight);
+  --text-kpi-lg: var(--admin-text-kpi-lg);
+  --text-kpi-lg--line-height: 1;
+  --text-kpi-hero: var(--admin-text-kpi-hero);
+  --text-kpi-hero--line-height: 1;
 
   --leading-tight: var(--admin-leading-tight);
   --leading-snug: var(--admin-leading-snug);
@@ -258,6 +266,7 @@
   --tracking-normal: var(--admin-tracking-normal);
   --tracking-label: var(--admin-tracking-label);
   --tracking-eyebrow: var(--admin-tracking-eyebrow);
+  --tracking-kpi: var(--admin-tracking-kpi);
 
   /* -- Elevation --------------------------------------------------------- */
   --shadow-sm: var(--admin-shadow-sm);

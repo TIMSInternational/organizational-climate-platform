@@ -48,7 +48,10 @@ const twMerge = extendTailwindMerge({
     theme: {
       spacing: SPACING_STEPS,
       container: ['content'],
-      text: ['2xs'],
+      // Every named step in `theme.css`: an unregistered `text-3xs` is read as a COLOUR and
+      // silently drops the `text-fg-label` beside it.
+      text: ['2xs', '3xs', 'reading', 'kpi-lg', 'kpi-hero'],
+      tracking: ['label', 'eyebrow', 'kpi'],
     },
   },
 })

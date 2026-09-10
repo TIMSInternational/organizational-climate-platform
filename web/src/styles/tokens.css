@@ -71,6 +71,11 @@
   --admin-text-xl: 1rem; /* 16px — h3/h4 (globals h6) */
   --admin-text-2xl: 1.25rem; /* 20px — h2 (globals h4) */
   --admin-text-3xl: 1.5rem; /* 24px — h1; legacy admin page titles are text-2xl */
+  /* The canvas's four named steps (the 10 Sep artboards), so no primitive spells a size in px: */
+  --admin-text-3xs: 0.5625rem; /* 9px — column heads over a dense grid (the map, the trends table) */
+  --admin-text-reading: 1.375rem; /* 22px — a reading on a card (sparkline cards, trend charts) */
+  --admin-text-kpi-lg: 1.625rem; /* 26px — the KPI reading on Clima en el tiempo and SurveyResults */
+  --admin-text-kpi-hero: 1.75rem; /* 28px — the KPI reading on the Panel de Control */
 
   --admin-leading-tight: 1.2; /* headings — globals.css h1..h6 */
   --admin-leading-snug: 1.35; /* dense table/data rows */
@@ -83,6 +88,7 @@
 
   --admin-tracking-tight: -0.025em; /* headings — globals.css h1..h6 */
   --admin-tracking-normal: 0;
+  --admin-tracking-kpi: 0.12em; /* the KPI label on Clima en el tiempo and SurveyResults */
   --admin-tracking-label: 0.06em; /* uppercase section labels — legacy
                                      RoleBasedNav `tracking-[0.06em]` */
   --admin-tracking-eyebrow: 0.2em; /* the page eyebrow over an <h1> — ForMaps

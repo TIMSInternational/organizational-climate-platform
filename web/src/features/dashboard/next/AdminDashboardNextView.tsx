@@ -418,7 +418,7 @@ function SparkCard({
     >
       <div className="truncate text-sm text-fg-secondary">{dimension.name}</div>
       <div className="flex flex-wrap items-baseline gap-2">
-        <span className="font-mono text-[22px] leading-none tabular-nums text-fg-primary">{reading(value, locale)}</span>
+        <span className="font-mono text-reading leading-none tabular-nums text-fg-primary">{reading(value, locale)}</span>
         {move !== null && (
           <span
             data-slot="trend-move"

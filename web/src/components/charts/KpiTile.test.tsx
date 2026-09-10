@@ -135,12 +135,12 @@ describe('KpiTile', () => {
 describe('KpiTile sizes', () => {
   it('sets the artboards’ two tiles: hero 28px under a .06em label, large 26px under a .12em label', () => {
     render(<KpiTile label="Hero" value={24} size="hero" />)
-    expect(screen.getByText('24').className).toContain('text-[28px]')
+    expect(screen.getByText('24').className).toContain('text-kpi-hero')
     expect(screen.getByText('Hero').className).toContain('tracking-label')
     cleanup()
     render(<KpiTile label="Large" value={3} size="large" />)
-    expect(screen.getByText('3').className).toContain('text-[26px]')
-    expect(screen.getByText('Large').className).toContain('tracking-[0.12em]')
+    expect(screen.getByText('3').className).toContain('text-kpi-lg')
+    expect(screen.getByText('Large').className).toContain('tracking-kpi')
     cleanup()
     render(<KpiTile label="Default" value={7} />)
     expect(screen.getByText('7').className).toContain('text-3xl')
