@@ -28,7 +28,7 @@ import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { chromium } from 'playwright-core'
 import { STORAGE_KEYS, nextViewportHeight } from './shot-harness.mjs'
-import { NAMES, allowRequest, matchesOnly, exitCode } from './rehearse-harness.mjs'
+import { NAMES, BLOCKED_ERROR_CODE, allowRequest, isConsoleNoise, matchesOnly, exitCode } from './rehearse-harness.mjs'
 
 /**
  * The worst vertical overflow hidden inside any scroll container, in CSS px. Runs in the
@@ -89,13 +89,16 @@ let shot = 0
 async function contextFor(who, { allowWrites = false } = {}) {
   const auth = who ? await login(who) : { token: '', profile: {} }
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
-  // The read-only guard. A blocked request is a fact about the screen, not a failure of it.
+  // The read-only guard. A blocked request is a fact about the screen, not a failure of it:
+  // it is aborted with the code `isConsoleNoise` recognises, so the console error Chromium
+  // logs for it is not held against the step — a bare abort() reads `net::ERR_FAILED`, the
+  // text of a dead API, and the step would FAIL for what the guard did.
   const blocked = []
   await context.route('**/*', (route) => {
     const request = route.request()
     if (allowRequest(request.method(), { allowWrites })) return route.continue()
     blocked.push(`${request.method()} ${request.url().replace(API, '').replace(ORIGIN, '')}`)
-    return route.abort()
+    return route.abort(BLOCKED_ERROR_CODE)
   })
   await context.addInitScript(([keys, t, company, locale, theme]) => {
     try { if (t) localStorage.setItem(keys.token, t); localStorage.setItem(keys.locale, locale); localStorage.setItem(keys.theme, theme); if (company) localStorage.setItem(keys.company, company) } catch {}
@@ -127,25 +130,32 @@ const mainText = async (page) => (await page.locator('main').first().innerText()
 
 async function step(name, who, run, { allowWrites = false } = {}) {
   if (!matchesOnly(name, values.only)) { log(`skip  ${name}`); return }
-  const { context, token, profile, blocked } = await contextFor(who, { allowWrites })
-  const page = await context.newPage()
   const errors = []
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
-  page.on('console', (m) => { if (m.type() === 'error' && !/favicon|net::ERR_ABORTED|Download the React DevTools/.test(m.text())) errors.push(m.text()) })
   const failed = []
-  page.on('response', (r) => { if (r.status() >= 400 && !/favicon/.test(r.url())) failed.push(`${r.status()} ${r.request().method()} ${r.url().replace(API, '').replace(ORIGIN, '')}`) })
+  let blocked = []
   const tail = () => `${errors.length ? ' — console: ' + errors[0].slice(0, 160) : ''}${failed.length ? ' — http: ' + failed.join('; ').slice(0, 160) : ''}${blocked.length ? ' — blocked writes: ' + blocked.join('; ').slice(0, 160) : ''}`
+  // The sign-in is inside the try: an account the tenant does not have must fail THIS step
+  // and leave the rest of the rehearsal, and `results.json`, to run.
+  let context = null
+  let page = null
   try {
-    const note = await run({ page, token, profile, blocked })
+    const auth = await contextFor(who, { allowWrites })
+    context = auth.context
+    blocked = auth.blocked
+    page = await context.newPage()
+    page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
+    page.on('console', (m) => { if (m.type() === 'error' && !isConsoleNoise(m.text())) errors.push(m.text()) })
+    page.on('response', (r) => { if (r.status() >= 400 && !/favicon/.test(r.url())) failed.push(`${r.status()} ${r.request().method()} ${r.url().replace(API, '').replace(ORIGIN, '')}`) })
+    const note = await run({ page, token: auth.token, profile: auth.profile, blocked })
     const status = errors.length ? 'FAIL' : 'PASS'
     results.push({ name, who, status, note, errors, http: failed, blocked })
     log(`${status}  ${name} (${who ?? 'anonymous'}) ${note ? '— ' + note : ''}${tail()}`)
   } catch (error) {
-    const file = await snap(page, `${name}-FAILED`).catch(() => '')
+    const file = page ? await snap(page, `${name}-FAILED`).catch(() => '') : ''
     results.push({ name, who, status: 'FAIL', reason: error.message.split('\n')[0], errors, http: failed, blocked, screenshot: file })
-    log(`FAIL  ${name} (${who ?? 'anonymous'}) — ${error.message.split('\n')[0].slice(0, 200)}${tail()}  [${file}]`)
+    log(`FAIL  ${name} (${who ?? 'anonymous'}) — ${error.message.split('\n')[0].slice(0, 200)}${tail()}${file ? `  [${file}]` : ''}`)
   } finally {
-    await context.close()
+    if (context) await context.close()
   }
 }
 
@@ -326,7 +336,7 @@ await step('14 microclimate live page and respond link as a signed-in employee',
   const { context: employeeContext, blocked: employeeBlocked } = await contextFor(values.employee)
   const pub = await employeeContext.newPage()
   const pubErrors = []
-  pub.on('console', (msg) => { if (msg.type() === 'error' && !/favicon|net::ERR_ABORTED|DevTools/.test(msg.text())) pubErrors.push(msg.text()) })
+  pub.on('console', (msg) => { if (msg.type() === 'error' && !isConsoleNoise(msg.text())) pubErrors.push(msg.text()) })
   await pub.goto(url, { waitUntil: 'networkidle' })
   await pub.waitForTimeout(1200)
   // Counts the controls; clicks none of them.

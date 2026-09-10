@@ -24,7 +24,8 @@ tenant's accounts (`ana.rojas`, `diego.solano`, `luis.mora`, `sofia.vargas` at
 `--supervisor` change them, `--api` and `--server` the origins.
 
 Exit code: `0` when every step that ran passed, `1` on any failure, `2` when `--only`
-matched no step — a typo must not read as a green rehearsal.
+matched no step — a typo must not read as a green rehearsal. An account that cannot sign in
+fails its own step with the status (`login x@y: 401`) and the other steps still run.
 
 ## What it writes, and what it does not
 
@@ -32,7 +33,10 @@ matched no step — a typo must not read as a green rehearsal.
 scripts/rehearse.mjs` shows one request with a method — the login `POST`, which writes
 nothing — and every browser context aborts any request that is not a `GET`/`HEAD`/`OPTIONS`
 and records it against the step as `blocked writes: …` (`allowRequest` in
-`rehearse-harness.mjs`). That guard exists because the pages are not read-only on their
+`rehearse-harness.mjs`). The abort uses the code Chromium reports as
+`net::ERR_BLOCKED_BY_CLIENT`, and the step's console filter (`isConsoleNoise`) knows that one
+is the guard's own doing; a bare abort reads `net::ERR_FAILED`, the text of a dead API, and
+the step would fail for what the guard did. That guard exists because the pages are not read-only on their
 own: the invitation page POSTs an `opened` step the moment it mounts
 (`MicroclimateInvitationPage.tsx`), and the wizard offers to DELETE a leftover draft. So
 step 12 opens the share dialog and photographs it without pressing *Crear enlace*; step 09

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { NAMES, READ_METHODS, allowRequest, matchesOnly, exitCode } from './rehearse-harness.mjs'
+import { NAMES, READ_METHODS, BLOCKED_ERROR_CODE, allowRequest, isConsoleNoise, matchesOnly, exitCode } from './rehearse-harness.mjs'
 
 describe('a read-only rehearsal lets the browser read and nothing else', () => {
   it('passes GET, HEAD and OPTIONS whatever the case', () => {
@@ -16,6 +16,25 @@ describe('a read-only rehearsal lets the browser read and nothing else', () => {
     expect(allowRequest('DELETE', { allowWrites: true })).toBe(true)
     expect(allowRequest('POST', { allowWrites: 'yes' })).toBe(false)
     expect(allowRequest('POST', {})).toBe(false)
+  })
+})
+
+describe('a write the guard blocked is listed as blocked, not counted as a console error of the screen', () => {
+  it('aborts with the code Chromium reports as ERR_BLOCKED_BY_CLIENT, and ignores exactly that', () => {
+    expect(BLOCKED_ERROR_CODE).toBe('blockedbyclient')
+    expect(isConsoleNoise('Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector')).toBe(true)
+    // A plain abort() reads like a dead API, and a dead API must still fail the step.
+    expect(isConsoleNoise('Failed to load resource: net::ERR_FAILED')).toBe(false)
+    expect(isConsoleNoise('Failed to load resource: the server responded with a status of 500 ()')).toBe(false)
+    expect(isConsoleNoise("TypeError: Cannot read properties of undefined (reading 'id')")).toBe(false)
+  })
+
+  it("keeps ignoring the dev server's missing favicon, a cancelled navigation and the DevTools banner", () => {
+    expect(isConsoleNoise('Failed to load resource: the server responded with a status of 404 (favicon.ico)')).toBe(true)
+    expect(isConsoleNoise('Failed to load resource: net::ERR_ABORTED')).toBe(true)
+    expect(isConsoleNoise('Download the React DevTools for a better development experience')).toBe(true)
+    expect(isConsoleNoise(undefined)).toBe(false)
+    expect(isConsoleNoise('')).toBe(false)
   })
 })
 

@@ -48,6 +48,26 @@ export function allowRequest(method, { allowWrites = false } = {}) {
 }
 
 /**
+ * The error code the guard aborts a blocked write with. Chromium reports it in the page's
+ * console as `net::ERR_BLOCKED_BY_CLIENT`, which is how `isConsoleNoise` tells the guard's own
+ * refusal from a request the product failed. Measured against a blackhole origin: a plain
+ * `route.abort()` on a POST logs "Failed to load resource: net::ERR_FAILED", the same text a
+ * dead API produces, and a step would FAIL for what the rehearsal did to it;
+ * `route.abort('blockedbyclient')` logs "… net::ERR_BLOCKED_BY_CLIENT.Inspector".
+ */
+export const BLOCKED_ERROR_CODE = 'blockedbyclient'
+
+/**
+ * Console errors a step does not hold against the screen: the favicon the dev server has none
+ * of, a navigation that cancelled a request in flight, the React DevTools banner, and the
+ * guard's own abort of a write (already listed under `blocked writes`). Everything else —
+ * `net::ERR_FAILED`, a 500, an uncaught TypeError — is the product's and fails the step.
+ */
+export function isConsoleNoise(text) {
+  return /favicon|net::ERR_ABORTED|net::ERR_BLOCKED_BY_CLIENT|Download the React DevTools/.test(String(text ?? ''))
+}
+
+/**
  * The exit code for a finished run: 1 when any step failed, 2 when nothing ran at all (a
  * `--only` that matched no step must not read as green), 0 otherwise.
  */
