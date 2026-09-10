@@ -14,6 +14,9 @@ cd web && npm run shot -- /admin/companies /tmp/shots/companies-dark.png --theme
 Both themes, both languages, every role, and authenticated screens without logging in.
 See [docs/screenshots.md](docs/screenshots.md).
 
+To walk the demo runbook against the real local stack instead — one PNG per step, read-only —
+see [docs/rehearsal.md](docs/rehearsal.md).
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)

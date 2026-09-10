@@ -146,6 +146,10 @@ copy; answer the copy as Carlos at `/surveys/<copy id>/respond` — go straight 
 because the dashboard's **Empezar a responder** points at the original; then close the copy
 and archive it (a survey with a response cannot be deleted). The archived copy stays in the
 admin list; that is what the one already there is. Nothing else in the walkthrough writes.
+`web/scripts/rehearse.mjs` walks every step above read-only, one PNG per step into
+`web/.rehearsal/`, and answers a survey only when given `--answerer` and `--answer-survey`
+(`web/docs/rehearsal.md`); `web/scripts/flows.mjs` is the one that writes, and it now keeps
+to a single department and a single plan by fixed name and revokes the link it shares.
 
 ## If the API refuses to start
 
