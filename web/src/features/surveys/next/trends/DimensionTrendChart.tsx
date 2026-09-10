@@ -238,7 +238,7 @@ export default function DimensionTrendChart({
               y={y(value) - 10}
               textAnchor="middle"
               fontSize={11}
-              className="fill-fg-primary font-mono"
+              data-slot="trend-value" className="fill-fg-primary font-mono"
             >
               {format(value)}
             </text>

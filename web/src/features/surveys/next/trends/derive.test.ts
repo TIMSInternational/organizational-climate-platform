@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { axisTicks, deltaSince, latestValue, standing, standings, waveMean } from './derive'
+import type { ClimateTrendsResponse } from '../../api/climateTrends'
+import {
+  axisTicks,
+  deltaSince,
+  latestValue,
+  orderByLatest,
+  sharedAxisTicks,
+  standing,
+  standings,
+  waveMean,
+  withoutArchived,
+} from './derive'
 import type { TrendDimension } from './model'
 
 const dims: TrendDimension[] = [
@@ -13,8 +24,23 @@ describe('trends derive', () => {
     expect(standing(4.0, 3.7)).toBe('above')
     expect(standing(3.7, 3.7)).toBe('on')
     expect(standing(3.71, 3.7)).toBe('on')
+    // 3,67 prints "3,7" beside "meta 3,7": on target, not below it.
+    expect(standing(3.67, 3.7)).toBe('on')
     expect(standing(3.4, 3.7)).toBe('below')
     expect(standings(dims, 3.7).map((s) => s.standing)).toEqual(['above', 'on', 'below'])
+  })
+
+  it('carries each standing\'s last move, and none across a withheld wave', () => {
+    const judged = standings(
+      [
+        { key: 'a', name: 'A', values: [3.0, 3.3] },
+        { key: 'b', name: 'B', values: [3.0, null, 3.4] },
+      ],
+      3.7,
+    )
+    expect(judged[0].lastMove).toBeCloseTo(0.3)
+    // The wave before the latest reading is withheld: no move, never a reconstruction.
+    expect(judged[1].lastMove).toBeNull()
   })
 
   it('never differences from or to a withheld wave, and does difference across one', () => {
@@ -45,5 +71,83 @@ describe('trends derive', () => {
   it('draws 0.5-step ticks that enclose every reading and the target', () => {
     expect(axisTicks([3.3, 3.7, 4.0], 3.7)).toEqual([3.0, 3.5, 4.0, 4.5])
     expect(axisTicks([2.8, null, 3.4], 3.7)).toEqual([2.5, 3.0, 3.5, 4.0])
+  })
+
+  it('puts every chart on ONE axis: the ticks that enclose every dimension', () => {
+    // A alone would be 3,0–4,5 and C alone 2,5–4,0; side by side they must share a scale.
+    expect(sharedAxisTicks(dims, 3.7)).toEqual([2.5, 3.0, 3.5, 4.0, 4.5])
+  })
+
+  it('orders the dimensions by the latest reading, highest first, ties and gaps stable', () => {
+    const order = orderByLatest([
+      { key: 'workload', name: 'W', values: [2.8, 3.3] },
+      { key: 'belonging', name: 'B', values: [3.3, 4.0] },
+      { key: 'never', name: 'N', values: [null, null] },
+      { key: 'growth', name: 'G', values: [3.2, 3.8] },
+      { key: 'safety', name: 'S', values: [3.2, 3.8] },
+    ]).map((dimension) => dimension.key)
+    expect(order).toEqual(['belonging', 'growth', 'safety', 'workload', 'never'])
+  })
+})
+
+describe('withoutArchived', () => {
+  function payload(): ClimateTrendsResponse {
+    return {
+      companyId: 'c1',
+      groupBy: 'department',
+      surveys: [
+        { surveyId: 's1', title: 'Q1', status: 'closed', endDate: '2026-02-12T00:00:00Z', completedCount: 24, isSuppressed: false },
+        { surveyId: 'copy', title: 'Q4 (Copia)', status: 'archived', endDate: '2026-10-10T00:00:00Z', completedCount: 1, isSuppressed: true },
+        { surveyId: 's3', title: 'Q3', status: 'closed', endDate: '2026-08-06T00:00:00Z', completedCount: 24, isSuppressed: false },
+      ],
+      dimensions: [{ key: 'belonging', surveyCount: 3 }],
+      groups: [
+        {
+          key: 'd-fin',
+          label: 'Finanzas',
+          points: [
+            { surveyId: 's1', respondentCount: 0, isSuppressed: true, scores: [null] },
+            { surveyId: 'copy', respondentCount: 6, isSuppressed: false, scores: [3.9] },
+            { surveyId: 's3', respondentCount: 0, isSuppressed: true, scores: [null] },
+          ],
+        },
+        {
+          key: 'd-eng',
+          label: 'Ingeniería',
+          points: [
+            { surveyId: 's1', respondentCount: 6, isSuppressed: false, scores: [3.7] },
+            { surveyId: 'copy', respondentCount: 0, isSuppressed: true, scores: [null] },
+            { surveyId: 's3', respondentCount: 6, isSuppressed: false, scores: [4.3] },
+          ],
+        },
+      ],
+      suppressedGroupCount: 0,
+      minimumGroupSize: 5,
+      generatedAt: '2026-09-10T00:00:00Z',
+    }
+  }
+
+  it('takes an archived survey out of the window and its point out of every group, keeping the alignment', () => {
+    const cut = withoutArchived(payload())
+    expect(cut.surveys.map((survey) => survey.surveyId)).toEqual(['s1', 's3'])
+    for (const group of cut.groups) {
+      expect(group.points.map((point) => point.surveyId)).toEqual(['s1', 's3'])
+    }
+    expect(cut.groups[1].points.map((point) => point.scores[0])).toEqual([3.7, 4.3])
+  })
+
+  it('recounts the groups withheld in every wave that is left', () => {
+    // The server counted 0: Finanzas was disclosed in the archived copy. Without it,
+    // Finanzas is withheld in every closed wave, and the page must say so.
+    expect(withoutArchived(payload()).suppressedGroupCount).toBe(1)
+  })
+
+  it('leaves a window with nothing archived exactly as it was', () => {
+    const closedOnly = payload()
+    closedOnly.surveys = closedOnly.surveys.filter((survey) => survey.status !== 'archived')
+    closedOnly.groups = closedOnly.groups.map((group) => ({ ...group, points: group.points.filter((point) => point.surveyId !== 'copy') }))
+    const cut = withoutArchived(closedOnly)
+    expect(cut.surveys).toEqual(closedOnly.surveys)
+    expect(cut.groups).toEqual(closedOnly.groups)
   })
 })

@@ -2118,7 +2118,22 @@
         "opened": "abrió el {date}",
         "closedOn": "cerró el {date}",
         "inDays": "en {count} días",
-        "opens": "abre el {date}"
+        "opens": "abre el {date}",
+        "facetAll": "Todas",
+        "facetDraft": "Borradores",
+        "facetScheduled": "Programadas",
+        "facetActive": "Activas",
+        "facetClosed": "Cerradas",
+        "facetArchived": "Archivadas",
+        "completedUnit": "completadas",
+        "ofAudience": "de {target}",
+        "vsWave": "{delta} frente a {wave}",
+        "firstReading": "primera medición",
+        "closedNoteEach": "Cada una con {count} respuestas",
+        "closedNoteCompletion": "{percent} completadas",
+        "createdOn": "creada el {date}",
+        "moreActions": "Más acciones: {title}",
+        "viewSurvey": "Ver la encuesta"
       }
     }
   },

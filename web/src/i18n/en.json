@@ -2118,7 +2118,22 @@
         "opened": "opened {date}",
         "closedOn": "closed {date}",
         "inDays": "in {count} days",
-        "opens": "opens {date}"
+        "opens": "opens {date}",
+        "facetAll": "All",
+        "facetDraft": "Drafts",
+        "facetScheduled": "Scheduled",
+        "facetActive": "Active",
+        "facetClosed": "Closed",
+        "facetArchived": "Archived",
+        "completedUnit": "completed",
+        "ofAudience": "of {target}",
+        "vsWave": "{delta} vs {wave}",
+        "firstReading": "first reading",
+        "closedNoteEach": "Each with {count} responses",
+        "closedNoteCompletion": "{percent} completed",
+        "createdOn": "created {date}",
+        "moreActions": "More actions: {title}",
+        "viewSurvey": "Open the survey"
       }
     }
   },
