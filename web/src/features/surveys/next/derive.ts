@@ -1,7 +1,14 @@
 import type { ActionPlan } from '../../action-plans/api/actionPlans'
 import type { SurveyDistributionBucket, SurveyQuestionResult } from '../api/surveyResults'
-import type { ClimateMapSelection } from '../../../components/charts'
-import { climateDetail, climateFindings, surveyDimensionScore } from '../surveyResultsMap'
+import type { ClimateMapSelection, WordFrequency } from '../../../components/charts'
+import {
+  climateDetail,
+  climateFindings,
+  openTextThemes,
+  surveyDimensionScore,
+  withheldWordCount,
+} from '../surveyResultsMap'
+import { isOpenEnded } from '../surveyResultsView'
 import type { ResultsGroupRow, ResultsPlanRef, SurveyResultsNextModel } from './model'
 
 /**
@@ -205,4 +212,31 @@ export function cellDetail(model: SurveyResultsNextModel, selection: ClimateMapS
       })),
     plan: model.plans === null ? undefined : planFor(model.plans, detail.rowId),
   }
+}
+
+/**
+ * Whether the survey asked anything open-ended — the gate on the themes section.
+ *
+ * The gate is the question type, not the words being non-empty: a survey with no
+ * open-text question gets no section (drawing one that would always be empty is
+ * designing fiction), while a survey whose every word fell under the word floor
+ * keeps its section and says the words are withheld. Withheld is not absent.
+ */
+export function hasOpenText(model: SurveyResultsNextModel): boolean {
+  return model.questions.some(isOpenEnded)
+}
+
+/**
+ * Every open-text word the survey returned, merged across its open-ended questions
+ * and kept apart per language — `openTextThemes`, the current page's own function,
+ * so the cloud here and the one it replaced cannot disagree. Verbatim response text
+ * is never on the wire, so nothing here can leak one.
+ */
+export function openTextWords(model: SurveyResultsNextModel): WordFrequency[] {
+  return openTextThemes(model.questions)
+}
+
+/** Distinct words the server withheld for appearing in too few answers, over every question. */
+export function withheldWords(model: SurveyResultsNextModel): number {
+  return withheldWordCount(model.questions)
 }

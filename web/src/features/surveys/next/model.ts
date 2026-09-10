@@ -73,6 +73,16 @@ export interface SurveyResultsNextModel {
   /** The survey's own name, off the wire; `null` when it has none. */
   name: string | null
   status: string
+  /** The survey's authored content language: `'es' | 'en' | 'both'`. */
+  language: string
+  /**
+   * The locale the text on the wire is **actually in**. The UI locale is a request;
+   * a Spanish-only survey opened in English comes back `'es'`, and the view has to
+   * say so (#195) — `ResultsContentLanguageNotice` reads these three fields.
+   */
+  resolvedLocale: string
+  /** Field paths that reached for the other language, e.g. `questions[2].text`. */
+  fallbackFields: readonly string[]
   summary: SurveyResultsSummary
   /** The whole survey is under `minimumGroupSize`: no map, no findings, counters only. */
   isSuppressed: boolean

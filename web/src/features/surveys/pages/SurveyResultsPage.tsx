@@ -3,13 +3,18 @@
  * (`../next/SurveyResultsNextPage`), which replaced this page — see `router.tsx`.
  * Nothing in `router.tsx` reaches this file.
  *
- * It stays in the tree on purpose, as the wiring reference: its one
- * `getSurveyAnalytics` request, the `buildClimateMap` / `climateFindings` /
- * `climateDetail` readings it derives from that payload, the content-language notice,
- * the open-text themes and the per-question filters are what `useSurveyResultsModel`
- * has to reproduce on the day the endpoints in `next/sampleModel.ts` exist and the
- * wave-over-wave and per-group distribution regions stop being a sample. Delete this
- * file when that hook covers them. Until then its behaviour is pinned by
+ * It stays in the tree on purpose, as the wiring reference. What the routed page
+ * already reproduces from here: the one `getSurveyAnalytics` request, the
+ * `buildClimateMap` / `climateFindings` / `climateDetail` readings, the content-language
+ * notice, the open-text themes and the per-question list with its filters (all three
+ * restored on the real route — `docs/decisions/survey-results-route-swap.md`). What it
+ * does not, and what this file still documents: the breakdown table with its dimension
+ * selector and per-segment comparison (`SegmentBreakdownPanel` — the routed map is the
+ * department breakdown only; the other dimensions reach the reader through the
+ * breakdown CSV), the whole-survey dimension standings table, and the participation
+ * strip's invited/outstanding tiles. Delete this file when `useSurveyResultsModel`
+ * covers those too and the wave-over-wave and per-group distribution regions in
+ * `next/sampleModel.ts` stop being a sample. Until then its behaviour is pinned by
  * `SurveyResultsPage.test.tsx`, which renders it directly.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'

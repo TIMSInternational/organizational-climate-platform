@@ -118,8 +118,71 @@ const plans = {
   ],
 }
 
+/** An open-ended question: no distribution, no mean, word frequencies per language. */
+function openQuestion(
+  id: string,
+  text: string,
+  category: string | null,
+  words: SurveyQuestionResult['words'],
+  suppressedWordCount: number,
+): SurveyQuestionResult {
+  return {
+    questionId: id,
+    order: Number(id.slice(1)),
+    type: 'open_ended',
+    text,
+    category,
+    answeredCount: 11,
+    distribution: [],
+    average: null,
+    median: null,
+    scaleMin: null,
+    scaleMax: null,
+    scaleLabelMin: null,
+    scaleLabelMax: null,
+    words,
+    suppressedWordCount,
+  }
+}
+
+/**
+ * The payload plus two open-ended questions. "workload" is written 5 times in one
+ * and 4 in the other, so the merged themes cloud is the only place it reads 9; the
+ * Spanish word never merges with an English one; 4 + 3 words were withheld.
+ */
+function withOpenText(): SurveyAnalyticsResponse {
+  const base = payload()
+  return {
+    ...base,
+    questions: [
+      ...base.questions,
+      openQuestion(
+        'q3',
+        'What would you change?',
+        'culture',
+        [
+          { language: 'en', word: 'workload', count: 5, responseCount: 5 },
+          { language: 'es', word: 'horario', count: 3, responseCount: 3 },
+        ],
+        4,
+      ),
+      openQuestion('q4', 'Anything else?', null, [{ language: 'en', word: 'workload', count: 4, responseCount: 4 }], 3),
+    ],
+  }
+}
+
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
+}
+
+/** The two requests the page makes, answered with the given analytics payload. */
+function fetching(analytics: SurveyAnalyticsResponse) {
+  return (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes('/analytics')) return Promise.resolve(jsonResponse(analytics))
+    if (url.includes('/action-plans')) return Promise.resolve(jsonResponse(plans))
+    return Promise.resolve(new Response('{}', { status: 404 }))
+  }
 }
 
 function renderAt(claims: Record<string, unknown>) {
@@ -338,5 +401,85 @@ describe('SurveyResultsNextPage', () => {
     renderAt({ role: 'super_admin', companyId: '' })
     expect(await screen.findByTestId('home')).toBeTruthy()
     expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+  })
+
+  /**
+   * Three things the page this one replaced rendered and the artboard did not draw
+   * — the artboard's survey had one scale question per dimension, in the reader's
+   * language, with no open text. They are kept on the real route, and each case here
+   * is the guarantee the swap must not lose (`docs/decisions/survey-results-route-swap.md`).
+   */
+  describe('what the replaced page rendered beyond the artboard', () => {
+    it('says so when the content came back in a language the reader did not ask for', async () => {
+      // An English reader, a Spanish-only survey: every field fell back, and the
+      // reader is told before quoting a question they could not read.
+      vi.mocked(fetch).mockImplementation(
+        fetching({ ...payload(), language: 'es', resolvedLocale: 'es', fallbackFields: ['title'] }),
+      )
+      renderAt({ role: 'company_admin' })
+      expect(await screen.findByText(en.surveyResults.languageNoticeTitle)).toBeTruthy()
+      expect(screen.getByText(/Showing content in Spanish because it is not available in English/)).toBeTruthy()
+      expect(screen.getByText(/1 individual fields fell back/)).toBeTruthy()
+    })
+
+    it('stays silent when the content is in the language that was asked for', async () => {
+      renderAt({ role: 'company_admin' })
+      await screen.findByRole('heading', { level: 1 })
+      expect(screen.queryByText(en.surveyResults.languageNoticeTitle)).toBeNull()
+    })
+
+    it('gathers open text into one themes cloud, per language, and says what it withheld', async () => {
+      vi.mocked(fetch).mockImplementation(fetching(withOpenText()))
+      renderAt({ role: 'company_admin' })
+      const themes = await screen.findByRole('region', { name: en.surveyResults.themesTitle })
+      // Merged across the two questions: the only place "workload" reads 9.
+      expect(within(themes).getByLabelText('workload, 9 occurrences')).toBeTruthy()
+      // Spanish is counted apart — never folded into an English word.
+      expect(within(themes).getByLabelText('horario, 3 occurrences')).toBeTruthy()
+      expect(within(themes).getByText(/7 words are withheld/)).toBeTruthy()
+    })
+
+    it('keeps the themes section when every word fell under the word floor, and says so', async () => {
+      // Withheld is not absent: the survey HAS an open-text question, so the section
+      // stays and the withheld count is its content.
+      const base = withOpenText()
+      const allWithheld: SurveyAnalyticsResponse = {
+        ...base,
+        questions: [base.questions[0], base.questions[1], openQuestion('q3', 'What would you change?', 'culture', [], 9)],
+      }
+      vi.mocked(fetch).mockImplementation(fetching(allWithheld))
+      renderAt({ role: 'company_admin' })
+      const themes = await screen.findByRole('region', { name: en.surveyResults.themesTitle })
+      expect(within(themes).getByText(/9 words are withheld/)).toBeTruthy()
+    })
+
+    it('renders no themes section for a survey with no open-text question', async () => {
+      renderAt({ role: 'company_admin' })
+      await screen.findByRole('heading', { level: 1 })
+      expect(screen.queryByRole('region', { name: en.surveyResults.themesTitle })).toBeNull()
+    })
+
+    it('lists every question under the map, and narrows the list by type without a request', async () => {
+      vi.mocked(fetch).mockImplementation(fetching(withOpenText()))
+      renderAt({ role: 'company_admin' })
+      const list = await screen.findByTestId('question-list')
+      // Both scale questions and both open-ended ones: the open-ended pair has no
+      // other on-screen surface, since the map is drawn from scale questions only.
+      expect(within(list).getByText('Question q1')).toBeTruthy()
+      expect(within(list).getByText('Question q2')).toBeTruthy()
+      // `getAll`: an open-ended card names its question in the heading and again in
+      // the cloud's own caption.
+      expect(within(list).getAllByText(/What would you change\?/).length).toBeGreaterThan(0)
+      expect(within(list).getAllByText(/Anything else\?/).length).toBeGreaterThan(0)
+      const requests = vi.mocked(fetch).mock.calls.length
+
+      await userEvent.selectOptions(screen.getByLabelText(en.surveyResults.filterType), 'open_ended')
+
+      await waitFor(() => expect(within(screen.getByTestId('question-list')).queryByText('Question q1')).toBeNull())
+      expect(within(screen.getByTestId('question-list')).getAllByText(/What would you change\?/).length).toBeGreaterThan(0)
+      // Client side, over a payload the server already floored: no request, so no
+      // filter can narrow the data below the floor.
+      expect(vi.mocked(fetch).mock.calls.length).toBe(requests)
+    })
   })
 })

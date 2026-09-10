@@ -9,7 +9,8 @@ import { useSurveyResultsModel } from './useSurveyResultsModel'
 /**
  * `/surveys/:id/results` — the redesigned survey results. It replaced
  * `pages/SurveyResultsPage.tsx` on this route (ruled 10 Sep); that file stays as the
- * wiring reference, unrouted.
+ * wiring reference, unrouted, and its header says which of its parts this route
+ * carries and which it does not yet (`docs/decisions/survey-results-route-swap.md`).
  *
  * ## Who may open it
  *

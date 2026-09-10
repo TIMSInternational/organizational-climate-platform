@@ -7,6 +7,7 @@ import {
   ClimateMap,
   KpiTile,
   ProtectedCell,
+  WordCloud,
   formatMetric,
   type ClimateMapSelection,
   type MetricFormat,
@@ -34,16 +35,21 @@ import { dimensionLabel } from '../dimensionLabel'
 import { getSurveyResultsPdf, surveyResultsPdfFileName } from '../api/surveyExport'
 import { UNCATEGORISED_DIMENSION } from '../surveyResultsMap'
 import { buildBreakdownCsv, buildQuestionResultsCsv, resultsFileName, type CsvLabels } from '../surveyResultsCsv'
+import ResultsContentLanguageNotice from '../components/ResultsContentLanguageNotice'
 import ResultsSuppressionNotice from '../components/ResultsSuppressionNotice'
 import type { SurveyResultsNextModel } from './model'
+import SurveyResultsQuestions from './SurveyResultsQuestions'
 import {
   belowReference,
   cellDetail,
   companyScores,
   groupRows,
+  hasOpenText,
   legibleGroups,
   lowShare,
+  openTextWords,
   whereToLookFirst,
+  withheldWords,
   type ResultsDistributionPoint,
 } from './derive'
 
@@ -68,6 +74,23 @@ interface SurveyResultsNextViewProps {
  * (`canCreateActionPlan`); the exports are gated by suppression alone, for the reason
  * given at `actions` below, so nothing here is offered to a viewer the server would
  * refuse.
+ *
+ * ## Three things the artboard did not draw and the page it replaced did
+ *
+ * This view took over `/surveys/:id/results` from `pages/SurveyResultsPage.tsx`
+ * (ruled 10 Sep), and the artboard was drawn for one survey — Grupo Meridiano's, one
+ * scale question per dimension, authored in Spanish, no open text. Three things that
+ * page rendered for every *other* survey are kept here, because the swap must not
+ * lose them silently (`docs/decisions/survey-results-route-swap.md`):
+ *
+ * 1. **The content-language notice**, first: a Spanish administrator opening an
+ *    English-only survey is told the questions are in English before quoting them.
+ * 2. **The open-text themes**, after the opened cell: the word cloud is the one
+ *    surface the open-ended answers have — word frequencies per language, never a
+ *    quote — and the artboard's own drill-in says that is what is shown.
+ * 3. **Every question, one row each, with its filters**, last: a multiple-choice,
+ *    ranking or open-ended question never reaches the map, and a dimension with more
+ *    than one question shows them all only here (`SurveyResultsQuestions`).
  *
  * ## The four-layer privacy rule, kept
  *
@@ -114,6 +137,9 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   const groups = useMemo(() => legibleGroups(model), [model])
   const findings = useMemo(() => whereToLookFirst(model), [model])
   const detail = useMemo(() => (selection ? cellDetail(model, selection) : null), [model, selection])
+  const openText = hasOpenText(model)
+  const themes = useMemo(() => openTextWords(model), [model])
+  const withheld = withheldWords(model)
 
   const openCell = useCallback((rowId: string, dimensionKey: string) => {
     setSelection((current) =>
@@ -231,6 +257,15 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
       />
 
       <div className="flex flex-col gap-section">
+        {/* Before any number: the reader is about to quote these questions, and a
+            question they cannot read in their own language is one they may summarise
+            wrongly. Renders nothing when the content is in the language asked for. */}
+        <ResultsContentLanguageNotice
+          language={model.language}
+          resolvedLocale={model.resolvedLocale}
+          fallbackFields={model.fallbackFields}
+        />
+
         <section aria-labelledby="results-next-tiles" className="grid gap-panel-gap sm:grid-cols-2 xl:grid-cols-4">
           <h2 id="results-next-tiles" className="sr-only">
             {t('surveyResults.next.tilesHeading')}
@@ -609,6 +644,28 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                 </div>
               </section>
             )}
+
+            {/* Gated on the survey HAVING open-text questions, not on the themes being
+                non-empty: a survey whose every word fell under the word floor keeps the
+                section and says so — withheld rendered as absent is the familiar mistake. */}
+            {openText && (
+              <section aria-labelledby="results-next-themes" className={`${PANEL} flex flex-col gap-panel-gap`}>
+                <div className="flex flex-wrap items-baseline justify-between gap-inline">
+                  <H2 id="results-next-themes">{t('surveyResults.themesTitle')}</H2>
+                  <p className="max-w-prose text-sm text-fg-secondary">{t('surveyResults.themesIntro')}</p>
+                </div>
+                {themes.length > 0 && (
+                  <WordCloud data={themes} colorBy="category" title={t('surveyResults.themesChartTitle')} />
+                )}
+                {withheld > 0 && (
+                  <p className="max-w-prose text-sm text-fg-secondary">
+                    {t('surveyResults.wordsWithheld', { count: withheld })}
+                  </p>
+                )}
+              </section>
+            )}
+
+            <SurveyResultsQuestions questions={model.questions} dimensionName={dimensionName} />
           </>
         )}
       </div>
