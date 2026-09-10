@@ -258,9 +258,12 @@ export default function SuperUsersView() {
             <EmptyState title={t('superadmin.next.users.empty')} />
           ) : (
             <div className="overflow-hidden rounded-xl border border-line-default bg-surface-card pt-2 shadow-sm">
+              {/* The table's minimum sits on a div for the reason the Empresas list gives. */}
+              <div className="overflow-x-auto">
+              <div className="min-w-[56rem]">
               <Table
                 aria-label={t('superadmin.next.users.tableLabel', { company: companyName ?? '' })}
-                className="min-w-200 table-fixed"
+                className="table-fixed"
               >
                 <colgroup>
                   <col />
@@ -294,6 +297,8 @@ export default function SuperUsersView() {
                   ))}
                 </tbody>
               </Table>
+              </div>
+              </div>
               <RosterFooter
                 visible={visible}
                 shownCount={shown.length}

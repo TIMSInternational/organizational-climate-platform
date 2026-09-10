@@ -219,7 +219,10 @@ function CompaniesSection({ model, onOpen }: { model: PlatformModel; onOpen: (co
         <p className="m-0 text-xs text-fg-secondary">{t('superadmin.next.dashboard.companies.surveysUnavailable')}</p>
       )}
       <div className="overflow-hidden rounded-xl border border-line-default bg-surface-card pt-2 shadow-sm">
-        <Table aria-label={t('superadmin.next.dashboard.companies.tableLabel')} className="min-w-160 table-fixed">
+        {/* The table's minimum sits on a div: Chrome ignores `min-width` on a `<table>`. */}
+        <div className="overflow-x-auto">
+        <div className="min-w-[46rem]">
+        <Table aria-label={t('superadmin.next.dashboard.companies.tableLabel')} className="table-fixed">
           <colgroup>
             <col className="w-[27%]" />
             <col />
@@ -246,6 +249,8 @@ function CompaniesSection({ model, onOpen }: { model: PlatformModel; onOpen: (co
             ))}
           </tbody>
         </Table>
+        </div>
+        </div>
       </div>
     </section>
   )

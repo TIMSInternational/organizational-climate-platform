@@ -165,10 +165,15 @@ export default function CompaniesListNextPage() {
             <EmptyState title={t('superadmin.next.companies.noMatch')} />
           ) : (
             <div className="overflow-hidden rounded-xl border border-line-default bg-surface-card pt-2 shadow-sm">
-              <Table aria-label={t('superadmin.next.companies.tableLabel')} className="min-w-240 table-fixed">
+              {/* A table takes no reliable minimum width — Chrome ignores `min-width` on a
+                  `<table>` and treats a width with a percentage in `max()` as `auto` — so the minimum
+                  sits on a div inside our own scroller, and the table fills that div. At 1024 the columns squeezed and the card clipped the last ones. */}
+              <div className="overflow-x-auto">
+              <div className="min-w-[70rem]">
+              <Table aria-label={t('superadmin.next.companies.tableLabel')} className="table-fixed">
                 <colgroup>
                   <col />
-                  <col className="w-[17%]" />
+                  <col className="w-40" />
                   <col className="w-28" />
                   <col className="w-24" />
                   <col className="w-28" />
@@ -198,6 +203,8 @@ export default function CompaniesListNextPage() {
                   ))}
                 </tbody>
               </Table>
+              </div>
+              </div>
             </div>
           )}
         </LoadingRegion>
