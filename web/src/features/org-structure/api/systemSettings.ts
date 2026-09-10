@@ -36,8 +36,14 @@ export interface UpdateSystemSettingsInput {
   emailSettings?: SystemEmailSettings
 }
 
-export async function getSystemSettings(baseUrl: string): Promise<SystemSettingsData> {
-  const response = await authFetch(`${baseUrl}/admin/system-settings`)
+/**
+ * `maintenanceMessage` is a paired column (#210) resolved server-side for `lang`. Without
+ * it the server answered in its fallback language, and a Spanish operator read the English
+ * half of a bilingual notice on the one screen that can turn sign-in off.
+ */
+export async function getSystemSettings(baseUrl: string, lang?: string): Promise<SystemSettingsData> {
+  const query = lang ? `?lang=${encodeURIComponent(lang)}` : ''
+  const response = await authFetch(`${baseUrl}/admin/system-settings${query}`)
   return response.json() as Promise<SystemSettingsData>
 }
 

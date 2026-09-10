@@ -87,10 +87,12 @@ export default function DemographicFieldsPage() {
     setLoading(true)
     setError(null)
     const [list, dashboard] = await Promise.allSettled([
-      listDemographicFields(baseUrl, companyId),
-      // No `lang`: the only thing read off this response is `activeUserCount`, and
-      // a headcount has no language. Asking for one would make the effect's
-      // dependency list wrong the moment the reader switched locale.
+      // `lang` rides along so each field's label and its option labels come back in
+      // the reader's language rather than the company's; the list is what the table
+      // and the edit form show.
+      listDemographicFields(baseUrl, companyId, locale),
+      // No `lang` here: the only thing read off this response is `activeUserCount`,
+      // and a headcount has no language.
       getCompanyAdminDashboard(baseUrl, { companyId }),
     ])
 
@@ -110,7 +112,9 @@ export default function DemographicFieldsPage() {
 
   useEffect(() => {
     reload()
-  }, [companyId])
+    // `locale` too: the labels come back resolved for the reader, so a language
+    // switch has to ask again.
+  }, [companyId, locale])
 
   // Each entry becomes an option whose stable value is derived server-side from the
   // label. A single-language admin never sees the value; it exists so the same choice

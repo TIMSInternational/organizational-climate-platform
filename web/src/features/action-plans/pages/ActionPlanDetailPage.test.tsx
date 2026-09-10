@@ -287,3 +287,23 @@ describe('ActionPlanDetailPage', () => {
     expect(picker.textContent).toContain('blocked_on_vendor')
   })
 })
+
+describe('ActionPlanDetailPage locale on the wire', () => {
+  it('asks for the updated plan in the reader\'s language, because it renders the response', async () => {
+    // A status change replaces the plan on screen with the PUT's response. The GET carried
+    // `lang`; the PUT did not, so the title flipped to the server's fallback language the
+    // moment a Spanish reader changed a status.
+    routeFetch()
+    renderPage()
+
+    await screen.findByRole('heading', { name: 'Raise engagement' })
+    await userEvent.click(screen.getAllByRole('combobox')[0])
+    await userEvent.click(await screen.findByRole('option', { name: 'Completed' }))
+
+    const isPut = ([, init]: [RequestInfo | URL, RequestInit?]) => init?.method === 'PUT'
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(isPut)).toBe(true))
+    const url = new URL(String(vi.mocked(fetch).mock.calls.find(isPut)![0]), 'http://test.local')
+    expect(url.pathname.endsWith('/action-plans/p1')).toBe(true)
+    expect(url.searchParams.get('lang')).toBe('en')
+  })
+})

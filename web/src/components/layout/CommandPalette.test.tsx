@@ -118,4 +118,23 @@ describe('CommandPalette search (#135)', () => {
 
     await waitFor(() => expect(screen.getByText('Benchmarks')).toBeTruthy())
   })
+
+  /**
+   * `SearchEndpoints.ToItem` resolves each hit's title and subtitle for `lang`. The palette
+   * never sent it, so a Spanish reader searching a Spanish product was offered the English
+   * half of every bilingual survey, plan and report. The provider's default locale is what
+   * must reach the wire.
+   */
+  it('asks for the hits in the reader\'s language', async () => {
+    const seen = serve([hit()])
+    renderPalette()
+    await openPalette()
+
+    await userEvent.type(screen.getByRole('combobox'), 'climate')
+
+    await waitFor(() => expect(seen.some((url) => url.includes('/search'))).toBe(true))
+    const url = new URL(seen.find((entry) => entry.includes('/search'))!, 'http://test.local')
+    expect(url.searchParams.get('q')).toBe('climate')
+    expect(url.searchParams.get('lang')).toBe('en')
+  })
 })

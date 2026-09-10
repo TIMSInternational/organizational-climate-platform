@@ -1463,6 +1463,7 @@
     "type_detailed": "Detailed",
     "type_comparison": "Comparison",
     "type_executive": "Executive",
+    "type_climate_summary": "Climate summary",
     "format_pdf": "PDF",
     "format_excel": "Excel",
     "format_csv": "CSV",

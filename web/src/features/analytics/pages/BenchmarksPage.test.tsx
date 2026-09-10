@@ -464,7 +464,7 @@ describe('BenchmarksPage comparison and trend', () => {
   it('distinguishes a benchmark with no prior period from one nobody has linked yet', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [/\/prior-period\/candidates$/, () => []],
+      [/\/prior-period\/candidates(\?|$)/, () => []],
       [/\/admin\/benchmarks\/first(\?|$)/, () => detail('first', 'Our first measurement', OWN, { priorPeriodStatus: 'none' })],
       [/\/admin\/benchmarks\/backlog(\?|$)/, () => detail('backlog', 'Our 2026 baseline', OWN)],
       [
@@ -495,7 +495,7 @@ describe('BenchmarksPage comparison and trend', () => {
   it('says a prior period exists but is unreadable rather than calling it unlinked', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [/\/prior-period\/candidates$/, () => []],
+      [/\/prior-period\/candidates(\?|$)/, () => []],
       [
         /\/admin\/benchmarks\/o(\?|$)/,
         () => detail('o', 'Our 2026 baseline', OWN, { priorPeriodStatus: 'linked', priorPeriodBenchmarkId: 'hidden', priorPeriod: null }),
@@ -525,7 +525,7 @@ describe('BenchmarksPage comparison and trend', () => {
   it('shows the year-over-year figures the API computed', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [/\/prior-period\/candidates$/, () => []],
+      [/\/prior-period\/candidates(\?|$)/, () => []],
       [
         /\/admin\/benchmarks\/o(\?|$)/,
         () =>
@@ -586,7 +586,7 @@ describe('BenchmarksPage comparison and trend', () => {
   it('refuses to difference the trend across a change of unit', async () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     routeFetch([
-      [/\/prior-period\/candidates$/, () => []],
+      [/\/prior-period\/candidates(\?|$)/, () => []],
       [
         /\/admin\/benchmarks\/q2(\?|$)/,
         () =>
@@ -633,7 +633,7 @@ describe('BenchmarksPage comparison and trend', () => {
           new Response(JSON.stringify(detail('o', 'Our 2026 baseline', OWN, { priorPeriodStatus: 'linked', priorPeriodBenchmarkId: 'p' })), { status: 200 }),
         )
       }
-      if (/\/prior-period\/candidates$/.test(url)) {
+      if (/\/prior-period\/candidates(\?|$)/.test(url)) {
         return Promise.resolve(
           new Response(
             JSON.stringify([
@@ -802,5 +802,31 @@ describe('BenchmarksPage single-selection readings', () => {
     expect(mono).toContain('+4')
     // The metric name is a word and must not be dragged into the mono face.
     expect(mono).not.toContain('engagement')
+  })
+})
+
+describe('BenchmarksPage locale on the wire', () => {
+  it('asks for the prior-period shortlist in the reader\'s language, as it asks for the catalogue', async () => {
+    // The list and the details carried `lang` since the 9 September rehearsal; the
+    // shortlist a company admin links a prior period from did not, so its names came back
+    // in the server's fallback language.
+    setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
+    routeFetch([
+      [/\/prior-period\/candidates(\?|$)/, () => []],
+      [/\/admin\/benchmarks\/o(\?|$)/, () => detail('o', 'Our 2026 baseline', OWN)],
+      [/\/admin\/benchmarks(\?|$)/, () => [listRow('o', 'Our 2026 baseline', OWN)]],
+    ])
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Our 2026 baseline/ }))
+
+    await waitFor(() =>
+      expect(vi.mocked(fetch).mock.calls.some(([input]) => /\/prior-period\/candidates/.test(String(input)))).toBe(true),
+    )
+    const url = new URL(
+      vi.mocked(fetch).mock.calls.map(([input]) => String(input)).find((entry) => /\/prior-period\/candidates/.test(entry))!,
+      'http://test.local',
+    )
+    expect(url.searchParams.get('lang')).toBe('en')
   })
 })

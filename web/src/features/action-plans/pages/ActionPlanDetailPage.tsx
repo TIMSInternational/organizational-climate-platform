@@ -115,7 +115,9 @@ export default function ActionPlanDetailPage() {
     setRecordedAt(null)
     setSaving(true)
     try {
-      setPlan(await updateActionPlan(baseUrl, id, patch))
+      // The response replaces the plan on screen, so it is asked for in the reader's
+      // language like the GET was; without `lang` a status change flipped the title.
+      setPlan(await updateActionPlan(baseUrl, id, patch, locale))
     } catch (err) {
       setActionError(err instanceof Error ? err.message : t('errors.generic'))
     } finally {

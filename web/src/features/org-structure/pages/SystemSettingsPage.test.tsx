@@ -77,4 +77,17 @@ describe('SystemSettingsPage', () => {
     await waitFor(() => expect(screen.queryByText('System settings could not be loaded.')).toBeNull())
     expect((await screen.findAllByRole('switch')).length).toBeGreaterThanOrEqual(2)
   })
+
+  it('asks for the maintenance notice in the reader\'s language', async () => {
+    // `maintenanceMessage` is a paired column resolved server-side for `lang`. The page
+    // never asked, so a Spanish operator read the English half of a bilingual notice.
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(settings()), { status: 200 }))
+    renderPage()
+
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled())
+    const url = new URL(String(vi.mocked(fetch).mock.calls[0][0]), 'http://test.local')
+    expect(url.pathname.endsWith('/admin/system-settings')).toBe(true)
+    expect(url.searchParams.get('lang')).toBe('es')
+  })
 })

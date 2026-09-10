@@ -27,8 +27,18 @@ export interface CreateMicroclimateTemplateInput {
   companyId?: string
 }
 
-export async function listMicroclimateTemplates(baseUrl: string, companyId: string): Promise<MicroclimateTemplate[]> {
-  const response = await authFetch(`${baseUrl}/microclimate-templates?companyId=${companyId}`)
+/**
+ * `lang` rides along so `name` and `description` come back in the reader's language.
+ * Without it the server resolved for its own fallback, and the wizard's template picker
+ * offered the English half of every bilingual name on a Spanish screen.
+ */
+export async function listMicroclimateTemplates(
+  baseUrl: string,
+  companyId: string,
+  lang?: string,
+): Promise<MicroclimateTemplate[]> {
+  const query = lang ? `&lang=${encodeURIComponent(lang)}` : ''
+  const response = await authFetch(`${baseUrl}/microclimate-templates?companyId=${companyId}${query}`)
   const body = (await response.json()) as { templates: MicroclimateTemplate[] }
   return body.templates
 }

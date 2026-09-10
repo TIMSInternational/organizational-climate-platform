@@ -54,10 +54,13 @@ export interface SearchResponse {
 export async function search(
   baseUrl: string,
   query: string,
-  options: { limit?: number; signal?: AbortSignal } = {},
+  options: { limit?: number; signal?: AbortSignal; lang?: string } = {},
 ): Promise<SearchResponse> {
   const params = new URLSearchParams({ q: query })
   if (options.limit !== undefined) params.set('limit', String(options.limit))
+  // `title` and `subtitle` are resolved server-side for `lang` (`SearchEndpoints.ToItem`);
+  // without it a Spanish reader's palette listed the English half of every bilingual hit.
+  if (options.lang) params.set('lang', options.lang)
   const response = await authFetch(`${baseUrl}/search?${params.toString()}`, { signal: options.signal })
   return (await response.json()) as SearchResponse
 }

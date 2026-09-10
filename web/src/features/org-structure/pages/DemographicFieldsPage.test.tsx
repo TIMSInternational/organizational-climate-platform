@@ -252,3 +252,21 @@ describe('the curated page eyebrow', () => {
     expect(eyebrow?.textContent).toBe('Company Administration')
   })
 })
+
+describe('DemographicFieldsPage locale on the wire', () => {
+  it('asks for the labels in the reader\'s language', async () => {
+    // A field's label and its option labels are paired columns resolved server-side for
+    // `lang`; the page never asked, so the table and the edit form showed the company's
+    // language rather than the reader's.
+    serve(() => [field()], 40)
+    renderPage()
+
+    await screen.findByText('Location')
+    const url = new URL(
+      vi.mocked(fetch).mock.calls.map(([input]) => String(input)).find((entry) => /\/admin\/demographic-fields/.test(entry))!,
+      'http://test.local',
+    )
+    expect(url.searchParams.get('companyId')).toBe(COMPANY)
+    expect(url.searchParams.get('lang')).toBe('en')
+  })
+})
