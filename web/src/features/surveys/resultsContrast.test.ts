@@ -34,6 +34,7 @@ import { join } from 'node:path'
 const TOKENS = join(process.cwd(), 'src', 'styles', 'tokens.css')
 const KPI_TILE = join(process.cwd(), 'src', 'components', 'charts', 'KpiTile.tsx')
 const RESULTS_PAGE = join(process.cwd(), 'src', 'features', 'surveys', 'pages', 'SurveyResultsPage.tsx')
+const RESULTS_NEXT_VIEW = join(process.cwd(), 'src', 'features', 'surveys', 'next', 'SurveyResultsNextView.tsx')
 const CLIMATE_MAP = join(process.cwd(), 'src', 'components', 'charts', 'ClimateMap.tsx')
 const DARK_SELECTOR = ":root[data-admin-theme='dark']"
 
@@ -193,6 +194,7 @@ describe('the survey results screen reads in both themes', () => {
   it.each([
     ['components/charts/KpiTile.tsx', KPI_TILE],
     ['features/surveys/pages/SurveyResultsPage.tsx', RESULTS_PAGE],
+    ['features/surveys/next/SurveyResultsNextView.tsx', RESULTS_NEXT_VIEW],
     ['components/charts/ClimateMap.tsx', CLIMATE_MAP],
   ])('%s never writes text-fg-tertiary', (_name, path) => {
     const source = readFileSync(path, 'utf8')

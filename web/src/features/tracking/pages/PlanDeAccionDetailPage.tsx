@@ -26,7 +26,7 @@ import {
   type PlanAccion,
   type RegistrarAvanceInput,
 } from '../api/trackingApi'
-import { listPersonaOptions, type PersonaPickerItem } from '../api/trackingPickers'
+import { getNodoNames, listPersonaOptions, type PersonaPickerItem } from '../api/trackingPickers'
 import InvolucradosPicker from '../components/InvolucradosPicker'
 import RegistrarAvanceForm from '../components/RegistrarAvanceForm'
 import SemaforoChip from '../components/SemaforoChip'
@@ -87,6 +87,7 @@ export default function PlanDeAccionDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [personas, setPersonas] = useState<PersonaPickerItem[]>([])
+  const [nodoNames, setNodoNames] = useState<ReadonlyMap<string, string>>(new Map())
 
   const [avanceError, setAvanceError] = useState<string | null>(null)
   const [savingAvance, setSavingAvance] = useState(false)
@@ -96,6 +97,9 @@ export default function PlanDeAccionDetailPage() {
   const [savingCumplido, setSavingCumplido] = useState(false)
 
   const [nuevosInvolucrados, setNuevosInvolucrados] = useState<string[]>([])
+  // The picker lists the whole directory. Closed until asked for, so the detail reads as
+  // a detail and not as a form somebody left open.
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [involucradosError, setInvolucradosError] = useState<string | null>(null)
   const [savingInvolucrados, setSavingInvolucrados] = useState(false)
 
@@ -129,6 +133,25 @@ export default function PlanDeAccionDetailPage() {
       })
       .catch(() => {
         if (!cancelled) setPersonas([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [companyId])
+
+  // The same directory the consolidado uses for its rows, for the same reason: a plan
+  // names a nodo and a responsable, and a screen that prints their ids where every other
+  // tracking screen prints their names reads as broken. Silent on failure, like the
+  // personas above: the id is still shown, just not a name.
+  useEffect(() => {
+    if (!companyId) return
+    let cancelled = false
+    void getNodoNames(companyId)
+      .then((names) => {
+        if (!cancelled) setNodoNames(names)
+      })
+      .catch(() => {
+        if (!cancelled) setNodoNames(new Map())
       })
     return () => {
       cancelled = true
@@ -176,6 +199,7 @@ export default function PlanDeAccionDetailPage() {
       }
       if (latest) setPlan(latest)
       setNuevosInvolucrados([])
+      setPickerOpen(false)
     } catch (err) {
       setInvolucradosError(err instanceof Error ? err.message : t('errors.generic'))
       // A partial success is still a success for the ones that landed, so the plan
@@ -212,6 +236,8 @@ export default function PlanDeAccionDetailPage() {
   }
 
   const percent = toPercent(plan.porcentajeAvance)
+  const nodoName = nodoNames.get(plan.nodoExternalId)
+  const responsable = personas.find((item) => item.id === plan.responsableEjecucionExternalId)
 
   return (
     <div className="flex flex-col gap-6">
@@ -240,12 +266,23 @@ export default function PlanDeAccionDetailPage() {
 
           <dl className="m-0 grid grid-cols-1 gap-2 text-sm sm:grid-cols-[auto_1fr]">
             <dt className="text-fg-tertiary">{t('tracking.fields.nodo')}</dt>
-            <dd className="m-0 font-mono text-fg-primary">{plan.nodoExternalId}</dd>
+            {/* A name when the directory answered, the external id otherwise -- the id
+                in monospace and muted, so a viewer the picker refuses (a leader, an
+                involucrado) still sees which nodo it is, and sees that it is an id. */}
+            {nodoName ? (
+              <dd className="m-0 text-fg-primary">{nodoName}</dd>
+            ) : (
+              <dd className="m-0 font-mono text-fg-secondary">{plan.nodoExternalId}</dd>
+            )}
 
             <dt className="text-fg-tertiary">{t('tracking.fields.responsable')}</dt>
-            <dd className="m-0 font-mono text-fg-primary">
-              {plan.responsableEjecucionExternalId}
-            </dd>
+            {responsable ? (
+              <dd className="m-0 text-fg-primary">{responsable.name}</dd>
+            ) : (
+              <dd className="m-0 font-mono text-fg-secondary">
+                {plan.responsableEjecucionExternalId}
+              </dd>
+            )}
 
             <dt className="text-fg-tertiary">{t('tracking.fields.metodologiaComo')}</dt>
             <dd className="m-0 text-fg-primary">{plan.metodologiaComo}</dd>
@@ -303,26 +340,47 @@ export default function PlanDeAccionDetailPage() {
                   <AlertDescription>{involucradosError}</AlertDescription>
                 </Alert>
               )}
-              <InvolucradosPicker
-                label={t('tracking.fields.agregarInvolucrados')}
-                description={t('tracking.fields.agregarInvolucradosHint')}
-                personas={personas}
-                value={nuevosInvolucrados}
-                onChange={setNuevosInvolucrados}
-                locked={plan.involucradosExternalIds}
-                disabled={savingInvolucrados}
-              />
-              <div>
-                <Button
-                  type="button"
-                  disabled={savingInvolucrados || nuevosInvolucrados.length === 0}
-                  onClick={() => void handleInvolucrados()}
-                >
-                  {savingInvolucrados
-                    ? t('common.saving')
-                    : t('tracking.actions.agregarInvolucrados')}
-                </Button>
-              </div>
+              {pickerOpen ? (
+                <>
+                  <InvolucradosPicker
+                    label={t('tracking.fields.agregarInvolucrados')}
+                    description={t('tracking.fields.agregarInvolucradosHint')}
+                    personas={personas}
+                    value={nuevosInvolucrados}
+                    onChange={setNuevosInvolucrados}
+                    locked={plan.involucradosExternalIds}
+                    disabled={savingInvolucrados}
+                  />
+                  <div className="flex flex-wrap gap-inline">
+                    <Button
+                      type="button"
+                      disabled={savingInvolucrados || nuevosInvolucrados.length === 0}
+                      onClick={() => void handleInvolucrados()}
+                    >
+                      {savingInvolucrados
+                        ? t('common.saving')
+                        : t('tracking.actions.agregarInvolucrados')}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={savingInvolucrados}
+                      onClick={() => {
+                        setNuevosInvolucrados([])
+                        setPickerOpen(false)
+                      }}
+                    >
+                      {t('common.cancel')}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <Button type="button" variant="outline" onClick={() => setPickerOpen(true)}>
+                    {t('tracking.actions.abrirAgregarInvolucrados')}
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </CardContent>

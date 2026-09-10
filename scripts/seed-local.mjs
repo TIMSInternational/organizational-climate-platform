@@ -43,14 +43,22 @@ const { values } = parseArgs({
     tracking: { type: 'string', default: 'http://localhost:5091' },
     email: { type: 'string', default: 'fede.admin@acme.test' },
     password: { type: 'string', default: 'Local1234!' },
+    /**
+     * The tag every row this script writes starts with, so a re-run updates rather than
+     * duplicates. Pass `--marker ''` for a tenant a client will see: the rows are then
+     * matched by their full text instead, and the screens print no bracketed tag.
+     */
+    marker: { type: 'string', default: '[seed-local]' },
   },
 })
 
 const API = values.api.replace(/\/$/, '')
 const TRACKING = values.tracking.replace(/\/$/, '')
 
-/** Marks a row as this script's, so a re-run updates rather than duplicates. */
-const MARKER = '[seed-local]'
+/** Marks a row as this script's, so a re-run updates rather than duplicates; may be ''. */
+const MARKER = values.marker
+/** `"[seed-local] text"`, or just `"text"` when the marker is empty — never `" text"`. */
+const tagged = (text) => [MARKER, text].filter(Boolean).join(' ')
 
 const log = (line) => process.stdout.write(`${line}\n`)
 
@@ -87,19 +95,19 @@ const PLANS = [
   {
     key: 'atrasado',
     fechaCompromiso: day(-21),
-    descripcionQue: `${MARKER} Reponer la reunión de handover entre turnos`,
+    descripcionQue: tagged('Reponer la reunión de handover entre turnos'),
     metodologiaComo: 'Sesión de 20 minutos al cierre de cada turno, con acta breve.',
   },
   {
     key: 'en-riesgo',
     fechaCompromiso: day(5),
-    descripcionQue: `${MARKER} Publicar el rol de fines de semana con dos semanas de antelación`,
+    descripcionQue: tagged('Publicar el rol de fines de semana con dos semanas de antelación'),
     metodologiaComo: 'Calendario compartido, actualizado los lunes por la jefatura del nodo.',
   },
   {
     key: 'al-dia',
     fechaCompromiso: day(60),
-    descripcionQue: `${MARKER} Programa de reconocimiento entre pares`,
+    descripcionQue: tagged('Programa de reconocimiento entre pares'),
     metodologiaComo: 'Nominaciones mensuales, resultado comunicado en la reunión general.',
   },
 ]

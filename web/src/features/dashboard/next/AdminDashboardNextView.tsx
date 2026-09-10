@@ -529,8 +529,7 @@ function AttentionRow({
             : t('dashboard.next.lowestCellNoPlanSub')
         }
         // Reading an action plan is `CanAccessCompany` (`ActionPlanEndpoints.cs:276-279`):
-        // the whole-company viewer, and nobody else. Creating one is `POST /action-plans`
-        // (`ActionPlanEndpoints.cs:103`), `canCreateActionPlan`.
+        // the whole-company viewer, and nobody else. Creating one is `canCreateActionPlan`.
         action={
           item.plan
             ? capabilities.seesWholeCompany

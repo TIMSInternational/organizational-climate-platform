@@ -13,16 +13,14 @@ import en from '../../../i18n/en.json'
 const copy = en.dashboard.next
 
 /**
- * The view alone, handed the sample directly. Which roles reach it — a company_admin,
- * and a super_admin once a tenant is selected — is `DashboardPage`'s dispatch and is
- * proven in `DashboardPage.test.tsx`. The view still reads the viewer's capabilities off
- * the stored token, so every render names a viewer: the default is the company
- * administrator the screen is drawn for; the role tests below hand it the others.
+ * The view reads the viewer's capabilities off the stored token, so every render names a
+ * viewer. The default is the company administrator the screen is drawn for; the role
+ * tests below hand it the others.
  */
 function renderView(
   model: AdminDashboardModel = sampleModel,
-  regions?: RegionStatuses,
   viewer: Record<string, unknown> = { role: 'company_admin' },
+  regions?: RegionStatuses,
 ) {
   setToken(tokenFor({ sub: 'u1', companyId: 'c1', nodoId: '', ...viewer }))
   return render(
@@ -112,7 +110,7 @@ describe('AdminDashboardNextView', () => {
   })
 
   it('offers an employee viewer none of the top-bar actions and none of the attention actions', () => {
-    renderView(sampleModel, undefined, { role: 'employee' })
+    renderView(sampleModel, { role: 'employee' })
     expect(screen.queryByRole('link', { name: copy.newSurvey })).toBeNull()
     expect(screen.queryByRole('link', { name: copy.launchMicroclimate })).toBeNull()
     expect(screen.queryByRole('button', { name: copy.export })).toBeNull()
@@ -131,7 +129,7 @@ describe('AdminDashboardNextView', () => {
   })
 
   it('offers a leader their own node’s progress action and their export, and nothing else', () => {
-    renderView(sampleModel, undefined, { role: 'leader', nodoId: 'nodo-finanzas' })
+    renderView(sampleModel, { role: 'leader', nodoId: 'nodo-finanzas' })
     expect(screen.queryByRole('link', { name: copy.newSurvey })).toBeNull()
     expect(screen.queryByRole('link', { name: copy.launchMicroclimate })).toBeNull()
     expect(screen.getByRole('button', { name: copy.export })).toBeTruthy()
@@ -145,7 +143,7 @@ describe('AdminDashboardNextView', () => {
     expect(linksMatching(/^\/microclimates\/[^/]+\/live$/)).toEqual([])
     cleanup()
     // The leader of another node may read the overdue plan but not record on it.
-    renderView(sampleModel, undefined, { role: 'leader', nodoId: 'nodo-operaciones' })
+    renderView(sampleModel, { role: 'leader', nodoId: 'nodo-operaciones' })
     const other = Array.from(document.querySelectorAll('[data-slot="attention-item"]')) as HTMLElement[]
     expect(within(other[1]).queryByRole('link')).toBeNull()
   })
@@ -184,7 +182,7 @@ describe('AdminDashboardNextView', () => {
       tracking: { status: 'off' },
       microclimates: { status: 'fallback', reason: 'empty' },
     }
-    renderView(sampleModel, live)
+    renderView(sampleModel, undefined, live)
     const notices = document.querySelectorAll('[data-slot="region-fallback"]')
     expect(Array.from(notices).map((node) => node.getAttribute('data-region'))).toEqual(['map', 'microclimates'])
     expect(notices[0].textContent).toBe(
