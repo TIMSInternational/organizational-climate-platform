@@ -12,12 +12,31 @@
  *
  * Signs in through `POST /auth/login` and hands the token to the page — the password
  * never touches a browser field. Runs on 5173 for the same CORS reason `e2e.mjs` does.
+ *
+ * What it leaves behind, by design of the API, is exactly one department and one plan —
+ * `FIXED_DEPARTMENT_NAME` / `FIXED_PLAN_TITLE` in `flows-harness.mjs`, created only when
+ * absent, reused otherwise, deactivated / cancelled at the end (neither can be deleted) — plus
+ * one ARCHIVED survey per run in which the employee flow answered (a survey with a response
+ * cannot be deleted). Every share link the run mints is revoked, and every test survey that
+ * can be deleted is. A teardown request that does not succeed is printed as RESIDUE LEFT and
+ * fails the run.
  */
 import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { chromium } from 'playwright-core'
 import { STORAGE_KEYS } from './shot-harness.mjs'
+import {
+  FIXED_DEPARTMENT_NAME,
+  FIXED_PLAN_TITLE,
+  MINT_PATH,
+  findFixedDepartment,
+  findFixedPlan,
+  shareFromMint,
+  teardownRequests,
+  teardownFallback,
+  summariseTeardown,
+} from './flows-harness.mjs'
 
 const { values } = parseArgs({
   options: {
@@ -51,12 +70,22 @@ async function api(path, token) {
   const r = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` } })
   return r.ok ? r.json() : null
 }
+/** A write the flow depends on; throws with the status so a refused reactivation fails the flow. */
+async function mutate(method, path, body, token) {
+  const r = await fetch(`${API}${path}`, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) })
+  if (!r.ok) throw new Error(`${method} ${path} -> ${r.status}`)
+  return r
+}
 
 const browser = await chromium.launch()
 const results = []
 let shot = 0
-/** Rows this run created, torn down at the end so a demo tenant never fills with test data. */
-const created = { surveys: [], plans: [], departments: [] }
+/**
+ * What this run must put back at the end — the survey it built, the plan and department it
+ * created OR reused (both go back to cancelled / inactive either way), and every share link
+ * the page minted. See `teardownRequests` for what happens to each.
+ */
+const created = { surveys: [], plans: [], departments: [], shares: [] }
 
 async function contextFor(who) {
   const { token, profile } = await login(who)
@@ -68,24 +97,29 @@ async function contextFor(who) {
 }
 
 async function flow(name, who, run) {
-  const { context, token, profile } = await contextFor(who)
-  const page = await context.newPage()
   const errors = []
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
-  page.on('console', (m) => { if (m.type() === 'error' && !/favicon|net::ERR_ABORTED|Download the React DevTools/.test(m.text())) errors.push(m.text()) })
   const start = Date.now()
+  // The sign-in is inside the try: a login that fails (an account the tenant does not have)
+  // must fail THIS flow, not throw past every later flow and past the teardown at the end.
+  let context = null
+  let page = null
   try {
-    const note = await run({ page, token, profile })
+    const auth = await contextFor(who)
+    context = auth.context
+    page = await context.newPage()
+    page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
+    page.on('console', (m) => { if (m.type() === 'error' && !/favicon|net::ERR_ABORTED|Download the React DevTools/.test(m.text())) errors.push(m.text()) })
+    const note = await run({ page, token: auth.token, profile: auth.profile })
     const status = errors.length ? 'FAIL' : 'PASS'
     results.push({ name, who, status, note, errors, ms: Date.now() - start })
     log(`${status}  ${name} (${who}) ${note ? '— ' + note : ''}${errors.length ? ' — console: ' + errors[0].slice(0, 140) : ''}`)
   } catch (error) {
-    const file = resolve(OUT, `${String(++shot).padStart(2, '0')}-${name.replace(/[^a-z0-9]+/gi, '-')}.png`)
-    await page.screenshot({ path: file, fullPage: true }).catch(() => {})
+    const file = page ? resolve(OUT, `${String(++shot).padStart(2, '0')}-${name.replace(/[^a-z0-9]+/gi, '-')}.png`) : ''
+    if (page) await page.screenshot({ path: file, fullPage: true }).catch(() => {})
     results.push({ name, who, status: 'FAIL', reason: error.message.split('\n')[0], errors, screenshot: file })
-    log(`FAIL  ${name} (${who}) — ${error.message.split('\n')[0].slice(0, 200)}  [${file}]`)
+    log(`FAIL  ${name} (${who}) — ${error.message.split('\n')[0].slice(0, 200)}${file ? `  [${file}]` : ''}`)
   } finally {
-    await context.close()
+    if (context) await context.close()
   }
 }
 
@@ -162,10 +196,21 @@ await flow('results: closed survey, drill into a finding, exports answer', value
   return `${closed.title} drill-in ok, csv+pdf 200`
 })
 
-await flow('action plan: create from the form', values.admin, async ({ page, token, profile }) => {
+await flow('action plan: the driver\'s own plan, created from the form when absent', values.admin, async ({ page, token, profile }) => {
+  const title = FIXED_PLAN_TITLE
+  // One plan by a fixed title, ever: a plan cannot be deleted, only cancelled, so a fresh one
+  // per run is one more cancelled row on the client's screen per run.
+  const before = await api(`/action-plans?companyId=${profile.companyId}&lang=es`, token)
+  const existing = findFixedPlan(before?.actionPlans, title)
+  if (existing) {
+    if (existing.reopen) await mutate('PUT', `/action-plans/${existing.id}`, { status: 'not_started' }, token)
+    created.plans.push(existing.id)
+    await go(page, '/action-plans')
+    await page.getByText(title, { exact: false }).first().waitFor({ timeout: 15000 })
+    return `${title} reused (${existing.reopen ? 'reopened' : 'already open'}) and listed`
+  }
   await go(page, '/action-plans')
   await click(page, /Nuevo Plan de Acción|New Action Plan/)
-  const title = `Plan de prueba ${Date.now() % 10000}`
   await page.getByLabel(/^Título|Title/i).first().fill(title)
   await page.getByLabel(/^Descripción|Description/i).first().fill('Creado por el recorrido automatizado; se puede borrar.')
   const due = page.getByLabel(/vencimiento|due/i).first(); if (await due.count()) await due.fill(new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10))
@@ -182,10 +227,17 @@ await flow('action plan: create from the form', values.admin, async ({ page, tok
   return title
 })
 
-await flow('report: share link created and opens anonymously', values.admin, async ({ page, profile }) => {
+await flow('report: share link created, opens anonymously, revoked at teardown', values.admin, async ({ page, profile }) => {
   await go(page, `/admin/companies/${profile.companyId}/reports`)
   await click(page, /Compartir|Share/)
+  // The mint response is the only place the share id ever appears (`reportShares.ts`), so it
+  // is caught on the wire, before the click that causes it, and revoked at teardown.
+  const minted = page.waitForResponse((r) => r.request().method() === 'POST' && MINT_PATH.test(r.url()), { timeout: 15000 })
   await click(page, /Crear enlace|Create link/)
+  const response = await minted
+  const share = shareFromMint(response.url(), await response.json().catch(() => null))
+  if (!share) throw new Error(`mint answered ${response.status()} without a share id`)
+  created.shares.push(share)
   await page.waitForTimeout(1500)
   const linkText = await page.getByRole('dialog').first().innerText()
   const m = linkText.match(/\/shared\/reports\/([A-Za-z0-9_-]+)/)
@@ -227,10 +279,21 @@ await flow('supervisor: dashboard and my surveys', values.supervisor, async ({ p
   return 'both rendered'
 })
 
-await flow('admin: department created and listed', values.admin, async ({ page, token, profile }) => {
+await flow('admin: the driver\'s own department, created from the form when absent, listed', values.admin, async ({ page, token, profile }) => {
+  const name = FIXED_DEPARTMENT_NAME
+  // One department by a fixed name, ever: a department cannot be deleted, only deactivated,
+  // and the create endpoint refuses a duplicate name at the same level anyway.
+  const before = await api(`/admin/departments?companyId=${profile.companyId}`, token)
+  const existing = findFixedDepartment(before?.departments, name)
+  if (existing) {
+    if (existing.reactivate) await mutate('PUT', `/admin/departments/${existing.id}`, { isActive: true }, token)
+    created.departments.push(existing.id)
+    await go(page, '/departments')
+    await page.getByText(name, { exact: false }).first().waitFor({ timeout: 15000 })
+    return `${name} reused (${existing.reactivate ? 'reactivated' : 'already active'}) and listed`
+  }
   await go(page, '/departments')
   await click(page, /Nuevo Departamento|New Department/)
-  const name = `Calidad ${Date.now() % 1000}`
   await page.getByLabel(/^Nombre|Name/i).first().fill(name)
   await click(page, /Crear|Guardar|Create|Save/)
   await page.waitForTimeout(1500)
@@ -243,16 +306,25 @@ await flow('admin: department created and listed', values.admin, async ({ page, 
 
 await browser.close()
 
-// Teardown through the same endpoints the UI uses: a draft survey is deletable, a plan is
-// cancelled, a department is deactivated (there is no delete for either, by design).
-{
+// Teardown through the same endpoints the UI uses — the plan is in `flows-harness.mjs`: every
+// share link revoked, the survey deleted (or closed and archived when it holds a response),
+// the plan cancelled, the department deactivated. Each status is recorded, and anything the
+// server refused is printed as residue and fails the run.
+const teardown = await (async () => {
   const { token } = await login(values.admin)
-  const del = (path, body) => fetch(`${API}${path}`, { method: body ? 'PUT' : 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: body ? JSON.stringify(body) : undefined })
-  for (const id of created.surveys) await del(`/surveys/${id}`)
-  for (const id of created.plans) await del(`/action-plans/${id}`, { status: 'cancelled' })
-  for (const id of created.departments) await del(`/admin/departments/${id}`, { isActive: false })
-  log(`teardown: ${created.surveys.length} draft survey(s) deleted, ${created.plans.length} plan(s) cancelled, ${created.departments.length} department(s) deactivated`)
-}
+  const send = async ({ method, path, body, headers }) => {
+    const r = await fetch(`${API}${path}`, { method, headers: { ...headers, Authorization: `Bearer ${token}` }, body: body ? JSON.stringify(body) : undefined })
+    return r.status
+  }
+  const outcomes = []
+  for (const request of teardownRequests(created)) {
+    let last = { ...request, status: await send(request) }
+    for (const fallback of teardownFallback(request, last.status)) last = { ...fallback, status: await send(fallback) }
+    outcomes.push(last)
+  }
+  return summariseTeardown(outcomes)
+})()
+log(teardown.line)
 const failed = results.filter((r) => r.status === 'FAIL')
-log(`\nflows: ${results.length - failed.length} passed, ${failed.length} failed`)
-process.exit(failed.length ? 1 : 0)
+log(`\nflows: ${results.length - failed.length} passed, ${failed.length} failed${teardown.failed.length ? `, ${teardown.failed.length} teardown request(s) refused` : ''}`)
+process.exit(failed.length || teardown.failed.length ? 1 : 0)
