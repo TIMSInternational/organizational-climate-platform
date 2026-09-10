@@ -157,3 +157,25 @@ export function draftProblems(profile: ProfileDraft, settings: SettingsDraft | n
   if (settings === null) return false
   return parseRetention(settings.dataRetentionDays) === null || !HEX_COLOUR.test(settings.primaryColor)
 }
+
+/**
+ * "Calidad 18, Calidad 79 …" → "Calidad 18", "79", …: when every name shares its first word,
+ * the word is printed once, as the canvas folds it. Anything else is returned as it came.
+ */
+export function foldCommonPrefix(names: readonly string[]): string[] {
+  if (names.length < 2) return [...names]
+  const first = names[0].split(/\s+/)[0]
+  const prefix = `${first} `
+  if (!first || !names.every((name) => name.startsWith(prefix) && name.length > prefix.length)) return [...names]
+  return [names[0], ...names.slice(1).map((name) => name.slice(prefix.length))]
+}
+
+/** A quarter as report titles write it: "Q3" or, in Spanish, "T3" (trimestre). */
+const REPORT_WAVE = /\b[QT][1-4]\b/i
+
+/** The one quarter every report is of ("Clima organizacional — T3 2026" → "T3"), or `null`. */
+export function reportWave(reports: readonly { title: string }[]): string | null {
+  const codes = new Set(reports.map((report) => report.title.match(REPORT_WAVE)?.[0].toUpperCase() ?? null))
+  const [code] = [...codes]
+  return reports.length > 0 && codes.size === 1 && code ? code : null
+}

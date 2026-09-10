@@ -20,7 +20,7 @@ import {
   percentOf,
   type SurveyStatusKey,
 } from '../../../org-structure/next/super/labels'
-import { ago, latestSuccess, toneOf, worstJob } from './derive'
+import { ago, latestSuccess, plainTitle, shortCompanyName, toneOf, withoutLegalForm, worstJob } from './derive'
 import type { MissingPart, PlatformAttention, PlatformCompanyRow, PlatformModel } from './model'
 import { usePlatformDashboardModel } from './usePlatformDashboardModel'
 import type { SystemAggregateStatus, SystemComponentStatus, SystemStatusResponse } from '../../../org-structure/api/systemStatus'
@@ -35,12 +35,32 @@ const MISSING_KEY: Readonly<Record<MissingPart, string>> = {
   surveys: 'superadmin.next.dashboard.attention.missingSurveys',
 }
 
+/** Two to ten as words ("las dos abiertas"), as the canvas writes them; larger counts stay digits. */
+const WORD_KEYS: Readonly<Record<number, string>> = {
+  2: 'superadmin.next.words.two',
+  3: 'superadmin.next.words.three',
+  4: 'superadmin.next.words.four',
+  5: 'superadmin.next.words.five',
+  6: 'superadmin.next.words.six',
+  7: 'superadmin.next.words.seven',
+  8: 'superadmin.next.words.eight',
+  9: 'superadmin.next.words.nine',
+  10: 'superadmin.next.words.ten',
+}
+
+function countWord(t: (key: string) => string, count: number): string {
+  const key = WORD_KEYS[count]
+  return key ? t(key) : String(count)
+}
+
 /** The status mix's bar, in the canvas's order and colours. */
 const SEGMENTS: ReadonlyArray<{ key: SurveyStatusKey; className: string }> = [
   { key: 'active', className: 'bg-accent-blue' },
   { key: 'closed', className: 'bg-line-hover' },
   { key: 'draft', className: 'bg-accent-amber' },
-  { key: 'archived', className: 'bg-line-light' },
+  // `line-default`, not `line-light`: in dark `--admin-border-light` IS the card's colour
+  // (#1f173b both), so a light swatch vanished on the dark card.
+  { key: 'archived', className: 'bg-line-default' },
 ]
 
 const STATUS_KEY: Readonly<Record<string, string>> = {
@@ -181,7 +201,7 @@ function PlatformBody({ model, onOpen }: { model: PlatformModel; onOpen: (compan
               {responders.length > 0
                 ? responders
                     .map((row) =>
-                      t('superadmin.next.dashboard.tiles.responsesIn', { count: row.completedResponses, company: row.name }),
+                      t('superadmin.next.dashboard.tiles.responsesIn', { count: row.completedResponses, company: shortCompanyName(row.name) }),
                     )
                     .join(' · ')
                 : t('superadmin.next.dashboard.tiles.responsesNone')}
@@ -284,14 +304,17 @@ function CompanyRow({ row, onOpen }: { row: PlatformCompanyRow; onOpen: (company
         ) : row.surveyCount === 0 ? (
           <span className="text-xs text-fg-tertiary">{t('superadmin.next.dashboard.companies.noSurveys')}</span>
         ) : survey ? (
-          <>
-            <span className="block truncate font-medium text-fg-primary" title={survey.name ?? undefined}>
-              {survey.name ?? survey.code}
+          <span className="block truncate whitespace-nowrap" title={survey.name ?? undefined}>
+            <span className="font-medium text-fg-primary">
+              {survey.wave
+                ? t('superadmin.next.dashboard.companies.wave', { code: survey.wave })
+                : (plainTitle(survey.name) ?? survey.code)}
             </span>
-            <span className="block truncate text-2xs text-fg-tertiary">
+            <span className="text-xs text-fg-tertiary">
+              {' · '}
               {t('superadmin.next.dashboard.companies.closes', { date: calendarDay(Date.parse(survey.endDate), locale) })}
             </span>
-          </>
+          </span>
         ) : (
           <span className="text-xs text-fg-tertiary">{t('superadmin.next.dashboard.companies.noneOpen')}</span>
         )}
@@ -399,7 +422,7 @@ function AttentionRow({ item, onOpen }: { item: PlatformAttention; onOpen: (comp
               <>
                 {': '}
                 {t('superadmin.next.dashboard.attention.behindPace', {
-                  survey: item.survey.name ?? item.survey.code,
+                  survey: plainTitle(item.survey.name) ?? item.survey.code,
                   responses: item.survey.responses,
                   audience: item.survey.audience ?? 0,
                   days: item.daysLeft,
@@ -665,15 +688,25 @@ function MixPanel({ model }: { model: PlatformModel }) {
               ))}
             </ul>
           </div>
-          {(model.openCompanies.length > 0 || model.draftCompanies.length > 0) && (
+          {model.note && (
             <p className="m-0 text-xs text-fg-tertiary">
               {[
-                model.openCompanies.length > 0
-                  ? t('superadmin.next.dashboard.mix.openFrom', { companies: list(model.openCompanies) })
-                  : null,
-                model.draftCompanies.length > 0
-                  ? t('superadmin.next.dashboard.mix.draftsFrom', { companies: list(model.draftCompanies) })
-                  : null,
+                model.note.open?.kind === 'same-wave'
+                  ? t('superadmin.next.dashboard.mix.openSameWave', {
+                      count: countWord(t, model.note.open.count),
+                      code: model.note.open.code,
+                    })
+                  : model.note.open
+                    ? t('superadmin.next.dashboard.mix.openFrom', { companies: list(model.note.open.companies.map(shortCompanyName)) })
+                    : null,
+                model.note.drafts?.kind === 'one-company'
+                  ? t('superadmin.next.dashboard.mix.draftsOne', {
+                      count: countWord(t, model.note.drafts.count),
+                      company: shortCompanyName(model.note.drafts.company),
+                    })
+                  : model.note.drafts
+                    ? t('superadmin.next.dashboard.mix.draftsFrom', { companies: list(model.note.drafts.companies.map(shortCompanyName)) })
+                    : null,
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -701,7 +734,7 @@ function PeoplePanel({ model }: { model: PlatformModel }) {
       <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
         {model.rows.map((row) => (
           <li key={row.id} className="grid grid-cols-[8rem_minmax(0,1fr)_2.5rem] items-center gap-2.5 text-xs">
-            <span className="truncate text-fg-primary">{row.name}</span>
+            <span className="truncate text-fg-primary">{withoutLegalForm(row.name)}</span>
             <MiniBar percent={percentOf(row.people, most)} className="w-full" />
             <span className="text-right font-mono tabular-nums text-fg-primary">{row.people}</span>
           </li>

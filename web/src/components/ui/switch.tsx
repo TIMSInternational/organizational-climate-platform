@@ -2,7 +2,11 @@ import * as SwitchPrimitive from '@radix-ui/react-switch'
 import type { ComponentProps } from 'react'
 import { cn } from '../../lib/cn'
 
-/** Ported from `climate-project/src/components/ui/switch.tsx`. */
+/**
+ * Ported from `climate-project/src/components/ui/switch.tsx`, sized to the canvas: an 18×32 track and a
+ * 14px knob in `fg-on-accent` (#ffffff in both themes). The knob used to be `bg-surface-panel`, and
+ * the 10 Sep shots showed a solid pill with no visible knob; the canvas draws a white one.
+ */
 export type SwitchProps = ComponentProps<typeof SwitchPrimitive.Root>
 
 export function Switch({ className, ...props }: SwitchProps) {
@@ -10,7 +14,7 @@ export function Switch({ className, ...props }: SwitchProps) {
     <SwitchPrimitive.Root
       data-slot="switch"
       className={cn(
-        'peer inline-flex h-4 w-7 shrink-0 items-center rounded-full border border-transparent',
+        'peer inline-flex h-[18px] w-[32px] shrink-0 items-center rounded-full border border-transparent',
         'transition-colors ease-out',
         'bg-line-default data-[state=checked]:bg-accent-blue',
         'disabled:cursor-not-allowed disabled:opacity-50',
@@ -21,9 +25,9 @@ export function Switch({ className, ...props }: SwitchProps) {
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
         className={cn(
-          'pointer-events-none block size-3 rounded-full bg-surface-panel shadow-sm ring-0',
+          'pointer-events-none block size-[14px] rounded-full bg-fg-on-accent shadow-sm ring-0',
           'transition-transform ease-out',
-          'translate-x-0.5 data-[state=checked]:translate-x-3.5',
+          'translate-x-[2px] data-[state=checked]:translate-x-[14px]',
         )}
       />
     </SwitchPrimitive.Root>

@@ -1083,10 +1083,10 @@
       "nextGeneration": null
     }
   ],
-  "GET /admin/benchmarks": [
+  "GET /admin/benchmarks?lang=es": [
     {
       "id": "d8c10838-d47a-413c-9b3b-0cfac7b413e7",
-      "name": "Manufacturing · 500–1000 staff",
+      "name": "Manufactura · 500–1000 personas",
       "type": "industry",
       "category": "climate",
       "companyId": null,
@@ -1095,6 +1095,6 @@
       "priorPeriodStatus": "unlinked"
     }
   ],
-  "GET /admin/benchmarks?companyId=16c97c29-07f8-4522-86fc-e6cc56298829": [],
+  "GET /admin/benchmarks?companyId=16c97c29-07f8-4522-86fc-e6cc56298829&lang=es": [],
   "GET /admin/ai-insights": []
 }

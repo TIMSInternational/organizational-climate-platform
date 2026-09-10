@@ -12,12 +12,19 @@ import { createCompany } from '../../api/companies'
 import CompanyForm, { type CompanyFormValues } from '../../components/CompanyForm'
 import { CompanyValidation } from '../../components/companyValidation'
 import { NO_PLAN, filterCompanyRows, isUnconfigured, type CompanyListRow } from './companiesList'
-import { dayWithYear, languageText, longDay, sizeText, tierText } from './labels'
+import { dayWithYear, longDay, sizeText, tierText } from './labels'
 import { Note, Panel } from './parts'
 import { useCompaniesListModel } from './useCompaniesListModel'
 
 const TH =
   'border-b border-line-default bg-transparent px-3 pb-2 pt-1 text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
+
+/**
+ * The row action stays in view while the columns scroll under it below `xl` (1280): at 1024
+ * the nine columns cannot fit the card, and a clipped "Abrir" behind a scroller with no edge
+ * is the defect the 1024 shot showed. From `xl` up every column fits and the cell is ordinary.
+ */
+const STICKY_ACTION = 'sticky right-0 z-[1] bg-surface-card border-l border-line-light xl:static xl:border-l-0'
 
 /**
  * `/admin/companies` — the canvas's *Empresas* (`CompaniesList` artboard), which replaced
@@ -192,14 +199,14 @@ export default function CompaniesListNextPage() {
                     <th className={cn(TH, 'text-right')}>{t('superadmin.next.companies.colPeople')}</th>
                     <th className={TH}>{t('superadmin.next.companies.colActiveSurveys')}</th>
                     <th className={TH}>{t('superadmin.next.companies.colAdded')}</th>
-                    <th className={TH}>
+                    <th className={cn(TH, STICKY_ACTION)}>
                       <span className="sr-only">{t('common.actions')}</span>
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {visible.map((row) => (
-                    <CompanyRow key={row.id} row={row} language={state.languages.get(row.id)} />
+                    <CompanyRow key={row.id} row={row} />
                   ))}
                 </tbody>
               </Table>
@@ -236,13 +243,12 @@ function UnconfiguredExample({ row }: { row: CompanyListRow }) {
   return <>{t('superadmin.next.companies.unsetExample', { company: row.name, date: longDay(row.createdAt, locale) })}</>
 }
 
-function CompanyRow({ row, language }: { row: CompanyListRow; language: string | null | undefined }) {
+function CompanyRow({ row }: { row: CompanyListRow }) {
   const { t, locale } = useTranslation()
   const { selectCompany } = useCompanyContext()
   const navigate = useNavigate()
   const size = sizeText(t, row.size)
   const tier = tierText(t, row.subscriptionTier)
-  const languageName = language ? languageText(t, language) : null
 
   return (
     <tr data-company-id={row.id}>
@@ -271,17 +277,9 @@ function CompanyRow({ row, language }: { row: CompanyListRow; language: string |
         )}
       </td>
       <td className="px-3 py-3">
-        {language === undefined ? (
-          <span aria-hidden="true" className="text-fg-tertiary">
-            …
-          </span>
-        ) : language === null ? (
-          <span className="text-xs text-fg-tertiary">{t('superadmin.next.unavailable')}</span>
-        ) : languageName ? (
-          <span className="text-fg-primary">{languageName}</span>
-        ) : (
-          <span className="text-xs text-fg-tertiary">{t('superadmin.next.companies.noLanguage')}</span>
-        )}
+        {/* Not read here: the only read of a tenant's settings is an audited PUT (see
+            `useCompaniesListModel`). The cell says where the language is, never guesses it. */}
+        <span className="text-xs text-fg-tertiary">{t('superadmin.next.companies.languageInDetail')}</span>
       </td>
       <td className="px-3 py-3">
         {tier ? (
@@ -319,7 +317,7 @@ function CompanyRow({ row, language }: { row: CompanyListRow; language: string |
       <td className="whitespace-nowrap px-3 py-3 font-mono text-xs tabular-nums text-fg-primary">
         {dayWithYear(row.createdAt, locale)}
       </td>
-      <td className="px-3 py-3 text-right">
+      <td className={cn('px-3 py-3 text-right', STICKY_ACTION)}>
         <Button
           type="button"
           variant="outline"

@@ -5,9 +5,11 @@ import type { User } from '../../api/users'
 import {
   departmentSummary,
   draftProblems,
+  foldCommonPrefix,
   parseRetention,
   peopleReading,
   profileChanges,
+  reportWave,
   retentionYears,
   settingsChanges,
   wavesByMonth,
@@ -189,5 +191,33 @@ describe('draftProblems', () => {
 
   it('judges only the profile when the settings were never read', () => {
     expect(draftProblems(profile, null)).toBe(false)
+  })
+})
+
+describe('foldCommonPrefix', () => {
+  it('prints a shared first word once, as the canvas folds the inactive departments', () => {
+    const names = ['Calidad 18', 'Calidad 79', 'Calidad 406', 'Calidad 547', 'Calidad 636', 'Calidad 797']
+    expect(new Intl.ListFormat('es', { type: 'conjunction' }).format(foldCommonPrefix(names))).toBe(
+      'Calidad 18, 79, 406, 547, 636 y 797',
+    )
+  })
+
+  it('leaves names that do not all share it as they came', () => {
+    expect(foldCommonPrefix(['Calidad 18', 'Finanzas'])).toEqual(['Calidad 18', 'Finanzas'])
+    expect(foldCommonPrefix(['Calidad', 'Calidad 79'])).toEqual(['Calidad', 'Calidad 79'])
+    expect(foldCommonPrefix(['Calidad 18'])).toEqual(['Calidad 18'])
+  })
+})
+
+describe('reportWave', () => {
+  it('reads the one quarter every report is of, in either language', () => {
+    expect(reportWave([{ title: 'Datos de clima — T3 2026' }, { title: 'Clima organizacional — T3 2026' }])).toBe('T3')
+    expect(reportWave([{ title: 'Climate — Q3' }, { title: 'Pulse Q3' }])).toBe('Q3')
+  })
+
+  it('says nothing when the reports span quarters, or carry none', () => {
+    expect(reportWave([{ title: 'Clima — T2' }, { title: 'Clima — T3' }])).toBeNull()
+    expect(reportWave([{ title: 'Informe anual' }])).toBeNull()
+    expect(reportWave([])).toBeNull()
   })
 })

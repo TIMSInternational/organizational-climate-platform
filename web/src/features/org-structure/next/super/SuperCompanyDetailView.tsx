@@ -12,10 +12,12 @@ import { updateCompany } from '../../api/companies'
 import { updateCompanySettings } from '../../api/companySettings'
 import { CompanyValidation } from '../../components/companyValidation'
 import { surveyFrequencyLabelKey } from '../../labels'
-import { statusMix } from '../../../dashboard/next/super/derive'
+import { plainTitle, statusMix, waveOf } from '../../../dashboard/next/super/derive'
 import {
   HEX_COLOUR,
   departmentSummary,
+  foldCommonPrefix,
+  reportWave,
   draftProblems,
   parseRetention,
   peopleReading,
@@ -98,15 +100,22 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [nothing, setNothing] = useState(false)
 
   const profileDiff = profileChanges(initialProfile, profile)
   const settingsDiff = initialSettings && draft ? settingsChanges(initialSettings, draft) : {}
   const dirty = Object.keys(profileDiff).length > 0 || Object.keys(settingsDiff).length > 0
-  const touched =
-    JSON.stringify(profile) !== JSON.stringify(initialProfile) || JSON.stringify(draft) !== JSON.stringify(initialSettings)
   const blocked = draftProblems(profile, draft)
 
   async function save() {
+    // Both actions are always offered, as the canvas draws them; a save with nothing
+    // changed sends nothing and says so, rather than a PUT that rewrites the same values.
+    if (!dirty) {
+      setSaved(false)
+      setNothing(true)
+      return
+    }
+    setNothing(false)
     setSaving(true)
     setSaveError(null)
     setSaved(false)
@@ -123,6 +132,7 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
   }
 
   function discard() {
+    setNothing(false)
     setProfile(initialProfile)
     setDraft(initialSettings)
     setSaveError(null)
@@ -137,17 +147,24 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
         breadcrumbs={[{ label: t('navigation.companies'), href: '/admin/companies' }, { label: company.name }]}
         actions={
           <>
-            <Button type="button" variant="outline" onClick={discard} disabled={!touched || saving}>
+            <Button type="button" variant="outline" onClick={discard} disabled={saving}>
               {t('superadmin.next.companyDetail.discard')}
             </Button>
-            <Button type="button" variant="primary" onClick={() => void save()} disabled={!dirty || blocked || saving}>
+            <Button type="button" variant="primary" onClick={() => void save()} disabled={blocked || saving}>
               <Check aria-hidden="true" />
               {saving ? t('superadmin.next.companyDetail.saving') : t('superadmin.next.companyDetail.save')}
             </Button>
           </>
         }
       />
-      <LiveRegion>{saved ? t('superadmin.next.companyDetail.saved') : ''}</LiveRegion>
+      <LiveRegion>
+        {saved
+          ? t('superadmin.next.companyDetail.saved')
+          : nothing && !dirty
+            ? t('superadmin.next.companyDetail.nothingToSave')
+            : ''}
+      </LiveRegion>
+      {nothing && !dirty && <p className="m-0 -mt-4 text-xs text-fg-tertiary">{t('superadmin.next.companyDetail.nothingToSave')}</p>}
       {saveError && (
         <Alert variant="destructive">
           <AlertDescription>
@@ -177,6 +194,8 @@ function OnlyFromHere({ model }: { model: SuperCompanyDetailModel }) {
   const id = model.company.id
   const people = model.users ? peopleReading(model.users) : null
   const latestReport = model.reports?.map((report) => report.createdAt).sort().at(-1)
+  // "2 informes de T3" when every report is of one quarter; one report keeps its date.
+  const wave = model.reports && model.reports.length > 1 ? reportWave(model.reports) : null
   const unread = t('superadmin.next.unavailable')
 
   return (
@@ -211,7 +230,12 @@ function OnlyFromHere({ model }: { model: SuperCompanyDetailModel }) {
           sub={
             model.reports === null
               ? unread
-              : latestReport
+              : wave
+                ? t('superadmin.next.companyDetail.links.reportsOfWave', {
+                    count: model.reports.length,
+                    code: wave,
+                  })
+                : latestReport
                 ? t('superadmin.next.companyDetail.links.reportsSome', {
                     count: model.reports.length,
                     date: calendarDay(Date.parse(latestReport), locale),
@@ -322,7 +346,16 @@ function SurveysCard({
         <Field
           fieldLabel={t('superadmin.next.companyDetail.surveys.anonymity')}
           htmlFor={ids.anonymity}
-          helper={t('superadmin.next.companyDetail.surveys.anonymityHelper')}
+          helper={
+            model.openSurvey
+              ? t('superadmin.next.companyDetail.surveys.anonymityHelperOpen', {
+                  code: waveOf(model.openSurvey.title) ?? plainTitle(model.openSurvey.title) ?? '',
+                  state: model.openSurvey.anonymous
+                    ? t('superadmin.next.companyDetail.surveys.stateAnonymous')
+                    : t('superadmin.next.companyDetail.surveys.stateNamed'),
+                })
+              : t('superadmin.next.companyDetail.surveys.anonymityHelper')
+          }
         >
           <select
             id={ids.anonymity}
@@ -353,7 +386,8 @@ function SurveysCard({
               value={draft.dataRetentionDays}
               aria-invalid={retention === null}
               onChange={(event) => set({ dataRetentionDays: event.target.value })}
-              className="w-full border-0 bg-transparent px-0 font-mono tabular-nums shadow-none"
+              style={{ width: `${Math.max(String(draft.dataRetentionDays).length, 1) + 1}ch` }}
+              className="w-auto min-w-0 flex-none border-0 bg-transparent px-0 font-mono tabular-nums shadow-none"
             />
           </InputAffix>
         </Field>
@@ -440,8 +474,6 @@ function DepartmentsCard({ model }: { model: SuperCompanyDetailModel }) {
   const { selectCompany } = useCompanyContext()
   const navigate = useNavigate()
   const summary = model.departments ? departmentSummary(model.departments) : null
-  const names = (list: readonly { name: string }[]) =>
-    new Intl.ListFormat(locale, { type: 'conjunction' }).format(list.map((department) => department.name))
 
   return (
     <section aria-labelledby="detail-departments" className="flex flex-wrap items-center gap-3.5 rounded-xl border border-line-default bg-surface-card px-4 py-3 shadow-sm sm:flex-nowrap">
@@ -471,7 +503,12 @@ function DepartmentsCard({ model }: { model: SuperCompanyDetailModel }) {
                   summary.inactiveHavePeople
                     ? 'superadmin.next.companyDetail.departments.inactiveWithPeople'
                     : 'superadmin.next.companyDetail.departments.inactiveEmpty',
-                  { count: summary.inactive.length, names: names(summary.inactive) },
+                  {
+                    count: summary.inactive.length,
+                    names: new Intl.ListFormat(locale, { type: 'conjunction' }).format(
+                      foldCommonPrefix(summary.inactive.map((department) => department.name)),
+                    ),
+                  },
                 )}
             </>
           )}
@@ -609,7 +646,7 @@ function CompanyCard({
           </select>
         </Field>
         <Field fieldLabel={t('superadmin.next.companyDetail.company.added')}>
-          <div className="flex h-control-lg items-center gap-2 rounded-md border border-line-default bg-surface-icon-box px-2.5">
+          <div className="flex h-control-lg items-center gap-2 rounded-md border border-line-default bg-surface-input px-2.5">
             <Calendar aria-hidden="true" className="size-3.5 text-fg-tertiary" />
             <span className="font-mono tabular-nums text-fg-primary">{dayWithYear(model.company.createdAt, locale)}</span>
           </div>

@@ -37,6 +37,8 @@ export interface OpenSurvey {
   name: string | null
   /** The short code a wave is discussed in ("Q4"), or a stand-in (`waveCode`). */
   code: string
+  /** The wave's short code ("Q4") when the title carries one; `null` when it does not. */
+  wave: string | null
   startDate: string
   endDate: string
   responses: number
@@ -114,8 +116,20 @@ export interface PlatformModel {
   /** Tenants with an open survey / with a draft, in row order. */
   openCompanies: readonly string[]
   draftCompanies: readonly string[]
+  /** What the survey mix's note says about the open ones and the drafts; `null` when the survey list failed. */
+  note: MixNote | null
   attention: readonly PlatformAttention[]
   system: SystemStatusResponse | null
   /** Which optional reads failed, so each region can say so rather than read as empty. */
   missing: { companies: boolean; surveys: boolean; system: boolean; settings: boolean }
+}
+
+/**
+ * The survey mix's closing sentence. "The two open ones are each company's Q4 wave" only
+ * when that is literally true — more than one open, one per company, one shared code;
+ * otherwise it names the companies. Drafts name their one owner, or every owner.
+ */
+export interface MixNote {
+  open: { kind: 'same-wave'; count: number; code: string } | { kind: 'companies'; companies: readonly string[] } | null
+  drafts: { kind: 'one-company'; count: number; company: string } | { kind: 'companies'; companies: readonly string[] } | null
 }

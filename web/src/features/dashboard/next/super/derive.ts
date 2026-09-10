@@ -10,7 +10,7 @@ import type {
 import type { SystemSettingsData } from '../../../org-structure/api/systemSettings'
 import { waveCode } from '../compose'
 import { daysBetween } from '../derive'
-import type { MissingPart, OpenSurvey, PlatformAttention, PlatformCompanyRow, PlatformModel, StatusMix } from './model'
+import type { MissingPart, MixNote, OpenSurvey, PlatformAttention, PlatformCompanyRow, PlatformModel, StatusMix } from './model'
 
 /**
  * Every number the platform overview prints, derived from the payloads — never typed.
@@ -27,6 +27,70 @@ export function statusMix(surveys: readonly Pick<SurveyListItem, 'status'>[]): S
   return mix
 }
 
+/** The wave code a title carries ("Encuesta de Clima Q4 (abierta)" → "Q4"), or `null`. */
+export function waveOf(title: string | null): string | null {
+  const code = waveCode(title, '')
+  return code && code !== (title?.trim() ?? '') ? code : null
+}
+
+/**
+ * A title without its parentheticals: "Encuesta de Clima Q4 (abierta)" → "Encuesta de Clima
+ * Q4". The seeded titles repeat the status the screen already prints; `null` for no title.
+ */
+export function plainTitle(title: string | null): string | null {
+  const plain = title?.replace(/\s*\([^)]*\)/g, '').trim()
+  return plain ? plain : null
+}
+
+const LEGAL_FORM =
+  /[\s,]+(s\.?\s?a\.?(\s?de\s?c\.?\s?v\.?)?|s\.?\s?a\.?\s?s\.?|s\.?\s?r\.?\s?l\.?|ltda\.?|inc\.?|corp\.?|corporation|co\.?|llc|ltd\.?|limited|gmbh|plc)$/i
+const GENERIC_LEAD = /^(grupo|group|compañía|compania|corporación|corporacion|empresa)\s+/i
+
+/** The name without its legal form: "Grupo Meridiano S.A." → "Grupo Meridiano". */
+export function withoutLegalForm(name: string): string {
+  const short = name.trim().replace(LEGAL_FORM, '').trim()
+  return short || name.trim()
+}
+
+/**
+ * The name a sentence can carry: no legal form and no generic lead word — "Grupo Meridiano
+ * S.A." → "Meridiano", "Acme Corporation" → "Acme". Never empty: a name that is nothing but
+ * those words stays as it was.
+ */
+export function shortCompanyName(name: string): string {
+  const base = withoutLegalForm(name)
+  return base.replace(GENERIC_LEAD, '').trim() || base
+}
+
+export function mixNote(rows: readonly PlatformCompanyRow[], surveys: readonly SurveyListItem[] | null): MixNote | null {
+  if (surveys === null) return null
+  const names = new Map(rows.map((row) => [row.id, row.name]))
+  const owners = (list: readonly SurveyListItem[]) =>
+    [...new Set(list.map((survey) => survey.companyId))].flatMap((id) => {
+      const name = names.get(id)
+      return name ? [name] : []
+    })
+  const open = surveys.filter((survey) => survey.status === 'active')
+  const drafts = surveys.filter((survey) => survey.status === 'draft')
+  const codes = new Set(open.map((survey) => waveOf(survey.title)))
+  const [code] = [...codes]
+  const oneEach = new Set(open.map((survey) => survey.companyId)).size === open.length
+  const openNote: MixNote['open'] =
+    open.length === 0
+      ? null
+      : open.length > 1 && codes.size === 1 && code && oneEach
+        ? { kind: 'same-wave', count: open.length, code }
+        : { kind: 'companies', companies: owners(open) }
+  const draftOwners = owners(drafts)
+  const draftNote: MixNote['drafts'] =
+    drafts.length === 0
+      ? null
+      : draftOwners.length === 1 && drafts.length > 1
+        ? { kind: 'one-company', count: drafts.length, company: draftOwners[0] }
+        : { kind: 'companies', companies: draftOwners }
+  return openNote || draftNote ? { open: openNote, drafts: draftNote } : null
+}
+
 /** The tenant's open wave — the one closing soonest when, unusually, two are open. */
 export function openSurveyOf(surveys: readonly SurveyListItem[]): OpenSurvey | null {
   const open = surveys
@@ -38,6 +102,7 @@ export function openSurveyOf(surveys: readonly SurveyListItem[]): OpenSurvey | n
     companyId: open.companyId,
     name: open.title,
     code: waveCode(open.title, open.id.slice(0, 8)),
+    wave: waveOf(open.title),
     startDate: open.startDate,
     endDate: open.endDate,
     responses: open.responseCount,
@@ -219,6 +284,7 @@ export function composePlatform(
     mix: surveys === null ? null : statusMix(surveys),
     openCompanies: tenantsWith('active'),
     draftCompanies: tenantsWith('draft'),
+    note: mixNote(rows, surveys),
     attention: attentionItems(rows, surveys, parts.settings, asOf),
     system: parts.system,
     missing: {

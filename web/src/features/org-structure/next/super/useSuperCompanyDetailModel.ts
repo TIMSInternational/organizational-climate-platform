@@ -3,7 +3,7 @@ import { useTranslation } from '../../../../i18n'
 import { getCompanyAdminDashboard, type CompanyAdminDashboard } from '../../../dashboard/api/dashboard'
 import { listBenchmarks, type BenchmarkListItem } from '../../../analytics/api/benchmarks'
 import { listReports, type ReportListItem } from '../../../reports/api/reports'
-import { listSurveys, type SurveyListItem } from '../../../surveys/api/surveys'
+import { getSurvey, listSurveys, type SurveyListItem } from '../../../surveys/api/surveys'
 import { getCompany, type CompanyDetail } from '../../api/companies'
 import { updateCompanySettings, type CompanySettingsResponse } from '../../api/companySettings'
 import { listDemographicFields, type DemographicField } from '../../api/demographicFields'
@@ -22,6 +22,11 @@ export interface SuperCompanyDetailModel {
   ownBenchmarks: BenchmarkListItem[] | null
   surveys: SurveyListItem[] | null
   dashboard: CompanyAdminDashboard | null
+  /**
+   * The open wave and whether it was created anonymous — `GET /surveys/{id}`'s
+   * `settings.anonymous` (the list item carries no anonymity). Absent when nothing is open or that read failed.
+   */
+  openSurvey?: { title: string | null; anonymous: boolean } | null
 }
 
 export interface SuperCompanyDetailState {
@@ -82,8 +87,13 @@ export function useSuperCompanyDetailModel(companyId: string | undefined): Super
             optional(() => listSurveys(baseUrl, { companyId: id }, locale), isList),
             optional(() => getCompanyAdminDashboard(baseUrl, { companyId: id, lang: locale }), hasKey('openActionPlanCount')),
           ])
+        const open = surveys
+          ?.filter((survey) => survey.status === 'active')
+          .sort((a, b) => Date.parse(a.endDate) - Date.parse(b.endDate))[0]
+        const detail = open ? await optional(() => getSurvey(baseUrl, open.id, locale), hasKey('settings')) : null
         if (cancelled) return
-        setModel({ company, settings, departments, users, demographicFields, reports, ownBenchmarks, surveys, dashboard })
+        const openSurvey = open && detail ? { title: open.title, anonymous: detail.settings.anonymous } : null
+        setModel({ company, settings, departments, users, demographicFields, reports, ownBenchmarks, surveys, dashboard, openSurvey })
         setVersion((count) => count + 1)
         setStatus('ready')
       } catch (err) {

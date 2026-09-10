@@ -47,7 +47,7 @@ interface Call {
 
 let calls: Call[] = []
 
-function serve({ settings = 'ok' as 'ok' | 'forbidden' } = {}) {
+function serve({ settings = 'ok' as 'ok' | 'forbidden', openWave = false } = {}) {
   calls = []
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -74,7 +74,15 @@ function serve({ settings = 'ok' as 'ok' | 'forbidden' } = {}) {
       ])
     }
     if (url.includes('/admin/benchmarks')) return ok([])
-    if (url.includes('/surveys')) return ok({ surveys: [] })
+    // The open wave's anonymity lives only on its detail (`settings.anonymous`).
+    if (url.includes('/surveys/s-open')) return ok({ id: 's-open', settings: { anonymous: false } })
+    if (url.includes('/surveys')) {
+      return ok({
+        surveys: openWave
+          ? [{ id: 's-open', companyId: C, title: 'Encuesta de Clima Q4 (abierta)', status: 'active', type: 'periodic', language: 'es', startDate: '2026-09-03T02:03:39Z', endDate: '2026-10-10T02:03:39Z', responseCount: 3, targetAudienceCount: 24, questionCount: 6, createdAt: '2026-09-03T02:03:39Z' }]
+          : [],
+      })
+    }
     if (url.includes('/dashboard/company-admin')) {
       return ok({ companyId: C, companyName: DETAIL.name, userCount: 3, activeUserCount: 3, departmentCount: 1, surveyCount: 0, activeSurveyCount: 0, draftSurveyCount: 0, responseCount: 0, completedResponseCount: 0, openActionPlanCount: 4, overdueActionPlanCount: 0, ongoingSurveys: [], departments: [] })
     }
@@ -119,7 +127,28 @@ describe('SuperCompanyDetailView', () => {
     expect((screen.getByLabelText(new RegExp(`^${copy.company.name}`)) as HTMLInputElement).value).toBe('Grupo Meridiano S.A.')
     expect((screen.getByLabelText(new RegExp(`^${copy.surveys.language}`)) as HTMLSelectElement).value).toBe('es')
     expect((screen.getByLabelText(copy.surveys.retention) as HTMLInputElement).value).toBe('2555')
-    expect(screen.getByRole('button', { name: copy.save }).hasAttribute('disabled')).toBe(true)
+  })
+
+  it('offers both actions from the start, and a save with nothing changed sends nothing and says so', async () => {
+    serve()
+    renderPage()
+    await screen.findByRole('heading', { level: 1, name: copy.title })
+    const save = screen.getByRole('button', { name: copy.save })
+    expect(save.hasAttribute('disabled')).toBe(false)
+    expect(screen.getByRole('button', { name: copy.discard }).hasAttribute('disabled')).toBe(false)
+    await userEvent.click(save)
+    expect((await screen.findAllByText(copy.nothingToSave)).length).toBeGreaterThan(0)
+    expect(writes()).toEqual([])
+  })
+
+  it('names the open wave’s own anonymity under the default, read from its detail', async () => {
+    serve({ openWave: true })
+    renderPage()
+    expect(
+      await screen.findByText(
+        copy.surveys.anonymityHelperOpen.replace('{code}', 'Q4').replace('{state}', copy.surveys.stateNamed),
+      ),
+    ).toBeTruthy()
   })
 
   it('reaches the four pages this role opens only from here, each with its own reading', async () => {

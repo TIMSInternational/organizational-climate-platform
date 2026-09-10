@@ -1749,6 +1749,7 @@
           "noSurveys": "No surveys",
           "noneOpen": "None open",
           "closes": "closes {date}",
+          "wave": "Climate {code}",
           "participation": "{responses} of {audience}",
           "noInviteList": "no invitation list",
           "noSubmissions": "nothing sent",
@@ -1809,7 +1810,9 @@
           "heading": "Surveys on the platform",
           "total": "{count} in total",
           "openFrom": "The open ones belong to {companies}.",
+          "openSameWave": "The {count} open ones are each company's {code} wave.",
           "draftsFrom": "The drafts belong to {companies}.",
+          "draftsOne": "The {count} drafts are {company}'s.",
           "empty": "There are no surveys on the platform yet.",
           "unavailable": "The platform's surveys could not be read."
         },
@@ -1839,6 +1842,7 @@
         "noSector": "no sector",
         "noSize": "no size",
         "noLanguage": "not set",
+        "languageInDetail": "in the detail",
         "noPlan": "no plan",
         "noSurveys": "no surveys",
         "noneOpen": "none open",
@@ -1846,9 +1850,9 @@
         "open": "Open",
         "openNamed": "Open {name}",
         "languageLead": "Language",
-        "languageNote": "is each company's own setting, and every new survey inherits it, with its invitations and reports. It is changed in the company detail.",
-        "unsetLead": "“Not set”",
-        "unsetNote": "is a company created without being configured, not an error.",
+        "languageNote": "is each company's setting, inherited by every new survey with its invitations and reports. It is read and changed in the company's detail: this list does not request it.",
+        "unsetLead": "“No sector” and “no plan”",
+        "unsetNote": "mark a company created and never configured, not an error.",
         "unsetExample": "{company} was created on {date} and nobody completed it.",
         "newLead": "New company",
         "newNote": "asks for a name, email domain, sector, size and country. The first person joins through an administrator invitation.",
@@ -1866,6 +1870,7 @@
         "save": "Save changes",
         "saving": "Saving…",
         "saved": "Changes saved.",
+        "nothingToSave": "There are no changes to save.",
         "saveFailed": "The changes could not be saved",
         "loadFailed": "This company could not be read",
         "onlyHereLead": "Only from here",
@@ -1876,6 +1881,7 @@
           "demographicsSome": "{count} defined",
           "reportsNone": "None yet",
           "reportsSome": "{count} reports · the latest on {date}",
+          "reportsOfWave": "{count} reports from {code}",
           "analyticsSub": "{count} own benchmarks"
         },
         "surveys": {
@@ -1895,6 +1901,9 @@
           "anonymous": "Anonymous",
           "identified": "Identified",
           "anonymityHelper": "Applies to new surveys only; existing ones keep their own.",
+          "anonymityHelperOpen": "Applies to new surveys only. The open {code} was created as {state}.",
+          "stateAnonymous": "anonymous",
+          "stateNamed": "not anonymous",
           "retention": "Data retention",
           "retentionUnit": "days",
           "retentionHelper": "How long responses are kept: {days} days is {years} years.",
@@ -2141,6 +2150,17 @@
           "pending": "Not reviewed"
         },
         "loadFailed": "This part could not be read"
+      },
+      "words": {
+        "two": "two",
+        "three": "three",
+        "four": "four",
+        "five": "five",
+        "six": "six",
+        "seven": "seven",
+        "eight": "eight",
+        "nine": "nine",
+        "ten": "ten"
       }
     }
   },

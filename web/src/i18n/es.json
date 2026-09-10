@@ -1749,6 +1749,7 @@
           "noSurveys": "Sin encuestas",
           "noneOpen": "Ninguna abierta",
           "closes": "cierra {date}",
+          "wave": "Clima {code}",
           "participation": "{responses} de {audience}",
           "noInviteList": "sin lista de invitados",
           "noSubmissions": "sin envíos",
@@ -1759,7 +1760,7 @@
         "attention": {
           "heading": "Qué necesita atención",
           "empty": "Nada necesita atención hoy.",
-          "behindPace": "{survey} lleva {responses} de {audience} respuestas y cierra en {days} días",
+          "behindPace": "la {survey} lleva {responses} de {audience} respuestas y cierra en {days} días",
           "behindPaceSub": "Abrió el {date} · el recordatorio se envía desde la distribución de esa encuesta, con {company} como empresa activa",
           "openCompany": "Abrir empresa",
           "mailOffLead": "Correo desactivado",
@@ -1809,7 +1810,9 @@
           "heading": "Encuestas en la plataforma",
           "total": "{count} en total",
           "openFrom": "Las abiertas son de {companies}.",
+          "openSameWave": "Las {count} abiertas son la ola {code} de cada empresa.",
           "draftsFrom": "Los borradores son de {companies}.",
+          "draftsOne": "Los {count} borradores son de {company}.",
           "empty": "Todavía no hay encuestas en la plataforma.",
           "unavailable": "No se pudieron leer las encuestas de la plataforma."
         },
@@ -1839,6 +1842,7 @@
         "noSector": "sin sector",
         "noSize": "sin tamaño",
         "noLanguage": "sin definir",
+        "languageInDetail": "en el detalle",
         "noPlan": "sin plan",
         "noSurveys": "sin encuestas",
         "noneOpen": "ninguna abierta",
@@ -1846,9 +1850,9 @@
         "open": "Abrir",
         "openNamed": "Abrir {name}",
         "languageLead": "Idioma",
-        "languageNote": "es el de la configuración de cada empresa y lo hereda cada encuesta nueva, con sus invitaciones e informes. Se cambia en el detalle de la empresa.",
-        "unsetLead": "«Sin definir»",
-        "unsetNote": "es una empresa creada sin configurar, no un error.",
+        "languageNote": "es el de la configuración de cada empresa y lo hereda cada encuesta nueva, con sus invitaciones e informes. Se lee y se cambia en el detalle de la empresa: esta lista no lo pide.",
+        "unsetLead": "«Sin sector» y «sin plan»",
+        "unsetNote": "señalan una empresa creada sin configurar, no un error.",
         "unsetExample": "{company} se creó el {date} y nadie la completó.",
         "newLead": "Nueva empresa",
         "newNote": "pide nombre, dominio de correo, sector, tamaño y país. La primera persona entra por una invitación de administrador.",
@@ -1866,6 +1870,7 @@
         "save": "Guardar cambios",
         "saving": "Guardando…",
         "saved": "Cambios guardados.",
+        "nothingToSave": "No hay cambios que guardar.",
         "saveFailed": "No se pudieron guardar los cambios",
         "loadFailed": "No se pudo leer esta empresa",
         "onlyHereLead": "Solo desde aquí",
@@ -1876,6 +1881,7 @@
           "demographicsSome": "{count} definidos",
           "reportsNone": "Ninguno todavía",
           "reportsSome": "{count} informes · el último el {date}",
+          "reportsOfWave": "{count} informes de {code}",
           "analyticsSub": "{count} referencias propias"
         },
         "surveys": {
@@ -1895,6 +1901,9 @@
           "anonymous": "Anónima",
           "identified": "Identificada",
           "anonymityHelper": "Solo aplica a encuestas nuevas; las que ya existen conservan el suyo.",
+          "anonymityHelperOpen": "Solo aplica a encuestas nuevas. La {code} abierta se creó como {state}.",
+          "stateAnonymous": "anónima",
+          "stateNamed": "no anónima",
           "retention": "Conservación de datos",
           "retentionUnit": "días",
           "retentionHelper": "Cuánto tiempo se conservan las respuestas: {days} días son {years} años.",
@@ -2141,6 +2150,17 @@
           "pending": "Sin revisar"
         },
         "loadFailed": "No se pudo leer esta parte"
+      },
+      "words": {
+        "two": "dos",
+        "three": "tres",
+        "four": "cuatro",
+        "five": "cinco",
+        "six": "seis",
+        "seven": "siete",
+        "eight": "ocho",
+        "nine": "nueve",
+        "ten": "diez"
       }
     }
   },

@@ -215,7 +215,7 @@ export function MiniBar({
   className?: string
 }) {
   return (
-    <span aria-hidden="true" className={cn('inline-flex h-1.5 shrink-0 overflow-hidden rounded-full bg-line-light', className ?? 'w-13')}>
+    <span aria-hidden="true" className={cn('inline-flex h-1.5 shrink-0 overflow-hidden rounded-full bg-line-default', className ?? 'w-13')}>
       <span
         className={cn('block h-full rounded-full', muted ? 'bg-fg-light' : 'bg-accent-blue')}
         style={{ width: `${Math.max(0, Math.min(100, percent))}%` }}

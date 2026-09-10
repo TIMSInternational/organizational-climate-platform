@@ -127,7 +127,7 @@ afterEach(() => {
 })
 
 describe('CompaniesListNextPage', () => {
-  it('lists every tenant by activity, with sector, plan, headcount, open wave and language', async () => {
+  it('lists every tenant by activity, with sector, plan, headcount and open wave; the language is read in the detail', async () => {
     serve()
     renderPage()
     expect(screen.getByRole('heading', { level: 1, name: 'Companies' })).toBeTruthy()
@@ -140,7 +140,7 @@ describe('CompaniesListNextPage', () => {
     expect(rows[1].textContent).toContain('Q4')
     expect(rows[2].textContent).toContain(copy.noPlan)
     expect(rows[2].textContent).toContain(copy.noSurveys)
-    await waitFor(() => expect(screen.getAllByText('Spanish')).toHaveLength(2))
+    expect(screen.getAllByText(copy.languageInDetail)).toHaveLength(2)
   })
 
   it('searches the name, the domain and the sector as the operator types', async () => {
@@ -168,12 +168,17 @@ describe('CompaniesListNextPage', () => {
     expect(screen.getByText('Contoso')).toBeTruthy()
   })
 
-  it('says "not read" for a language whose settings read failed, and never guesses one', async () => {
-    serve({ settings: 'forbidden' })
+  it('sends no request that writes: the language is never read through the audited settings PUT', async () => {
+    // The stub still ANSWERS the settings PUT, so a list that went back to reading each
+    // tenant's language that way would render "Spanish" here as well as send the PUT.
+    serve()
     renderPage()
-    await waitFor(() => expect(screen.getAllByText(en.superadmin.next.unavailable)).toHaveLength(2))
+    await screen.findByText('Northwind Logistics')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    const methods = vi.mocked(fetch).mock.calls.map(([, init]) => (init?.method ?? 'GET').toUpperCase())
+    expect(methods.length).toBeGreaterThan(0)
+    expect(methods.filter((method) => method !== 'GET')).toEqual([])
     expect(screen.queryByText('Spanish')).toBeNull()
-    expect(screen.queryByText('English')).toBeNull()
   })
 
   it('makes a tenant the active company when it is opened, and goes to its detail', async () => {
