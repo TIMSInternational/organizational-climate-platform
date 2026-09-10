@@ -235,8 +235,19 @@ export async function getMicroclimatePublic(baseUrl: string, id: string, lang?: 
   return response.json() as Promise<PublicMicroclimateDetail>
 }
 
-export async function updateMicroclimate(baseUrl: string, id: string, input: UpdateMicroclimateInput): Promise<MicroclimateDetail> {
-  const response = await authFetch(`${baseUrl}/microclimates/${id}`, {
+/**
+ * `lang` decides the language of the detail that comes back. The detail page renders the
+ * response in place of the session it already holds, so without it a status change flipped
+ * a bilingual title to the server's fallback language mid-screen.
+ */
+export async function updateMicroclimate(
+  baseUrl: string,
+  id: string,
+  input: UpdateMicroclimateInput,
+  lang?: string,
+): Promise<MicroclimateDetail> {
+  const query = lang ? `?lang=${encodeURIComponent(lang)}` : ''
+  const response = await authFetch(`${baseUrl}/microclimates/${id}${query}`, {
     method: 'PUT',
     body: JSON.stringify(input),
   })

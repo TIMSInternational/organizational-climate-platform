@@ -73,7 +73,7 @@ export interface CommandPaletteProps {
 }
 
 export function CommandPalette({ sections }: CommandPaletteProps) {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -162,7 +162,8 @@ export function CommandPalette({ sections }: CommandPaletteProps) {
     }
     const controller = new AbortController()
     const timer = setTimeout(() => {
-      void search(baseUrl, needle, { limit: RESULT_LIMIT, signal: controller.signal })
+      // The reader's locale rides along so a bilingual hit is titled in their language.
+      void search(baseUrl, needle, { limit: RESULT_LIMIT, signal: controller.signal, lang: locale })
         .then((response) => setResults(response.groups.flatMap((group) => group.items)))
         .catch(() => setResults([]))
     }, 200)
@@ -170,7 +171,7 @@ export function CommandPalette({ sections }: CommandPaletteProps) {
       clearTimeout(timer)
       controller.abort()
     }
-  }, [open, query, baseUrl])
+  }, [open, query, baseUrl, locale])
 
   const resultItems = useMemo<PaletteItem[]>(() => {
     const group = t('shell.commandPaletteResults')

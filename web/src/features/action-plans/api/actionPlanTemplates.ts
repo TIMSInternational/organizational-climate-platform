@@ -28,8 +28,18 @@ export interface CreateActionPlanTemplateInput {
   tags?: string[]
 }
 
-export async function listActionPlanTemplates(baseUrl: string, companyId: string): Promise<ActionPlanTemplate[]> {
-  const response = await authFetch(`${baseUrl}/action-plan-templates?companyId=${companyId}`)
+/**
+ * `lang` rides along so `name` and `description` come back in the reader's language.
+ * Without it the server resolved for its own fallback, and the create form's template
+ * picker offered the English half of every bilingual name on a Spanish screen.
+ */
+export async function listActionPlanTemplates(
+  baseUrl: string,
+  companyId: string,
+  lang?: string,
+): Promise<ActionPlanTemplate[]> {
+  const query = lang ? `&lang=${encodeURIComponent(lang)}` : ''
+  const response = await authFetch(`${baseUrl}/action-plan-templates?companyId=${companyId}${query}`)
   const body = (await response.json()) as { templates: ActionPlanTemplate[] }
   return body.templates
 }

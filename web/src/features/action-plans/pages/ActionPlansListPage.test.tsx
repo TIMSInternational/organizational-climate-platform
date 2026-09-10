@@ -526,3 +526,20 @@ describe('the company-name eyebrow', () => {
     })
   })
 })
+
+describe('ActionPlansListPage locale on the wire', () => {
+  it('asks for the templates in the reader\'s language, as it asks for the plans', async () => {
+    // The plans list carried `lang` since the 9 September rehearsal; the template picker
+    // beside it did not, so a Spanish reader chose from English names. The provider's
+    // default locale is what must reach the wire.
+    setToken(tokenFor({ role: 'company_admin', companyId: 'their-co' }))
+    renderPage()
+
+    await waitFor(() =>
+      expect(dataRequestUrls().some((url) => url.includes('/action-plan-templates'))).toBe(true),
+    )
+    const url = new URL(dataRequestUrls().find((entry) => entry.includes('/action-plan-templates'))!, 'http://test.local')
+    expect(url.searchParams.get('companyId')).toBe('their-co')
+    expect(url.searchParams.get('lang')).toBe('en')
+  })
+})

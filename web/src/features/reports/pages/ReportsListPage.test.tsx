@@ -161,6 +161,18 @@ describe('ReportsListPage', () => {
     expect(screen.getByText('bespoke')).toBeTruthy()
   })
 
+  it('labels the type the product itself writes, so a seeded tenant\'s reports do not read as slugs', async () => {
+    // `climate_summary` is never offered by the form: it is what the seeds and the scheduled
+    // runner write, and it was the type of every report on the first list a client saw --
+    // printed as `climate_summary` under "Type".
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse([reportRow({ type: 'climate_summary' })]))
+    renderPage()
+
+    await screen.findByText('Q3 climate summary')
+    expect(screen.getByText('Climate summary')).toBeTruthy()
+    expect(screen.queryByText('climate_summary')).toBeNull()
+  })
+
   it('only offers Download for a completed report, because the backend 400s otherwise', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       jsonResponse([

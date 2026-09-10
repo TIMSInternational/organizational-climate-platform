@@ -25,4 +25,15 @@ describe('microclimateTemplates api client', () => {
     expect(fetch).toHaveBeenCalledWith(`${baseUrl}/microclimate-templates`, expect.objectContaining({ method: 'POST' }))
     expect(result).toEqual(created)
   })
+
+  it('asks for the names in the reader\'s language when given a locale', async () => {
+    // The wizard's template picker offered the English half of every bilingual name on
+    // a Spanish screen; the API resolved `lang` all along.
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ templates: [] }), { status: 200 }))
+    await listMicroclimateTemplates(baseUrl, 'c1', 'es')
+    const url = new URL(String(vi.mocked(fetch).mock.calls[0][0]), 'http://test.local')
+    expect(url.pathname).toBe('/microclimate-templates')
+    expect(url.searchParams.get('companyId')).toBe('c1')
+    expect(url.searchParams.get('lang')).toBe('es')
+  })
 })

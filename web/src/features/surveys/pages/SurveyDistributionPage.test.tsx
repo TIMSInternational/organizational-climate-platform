@@ -358,4 +358,25 @@ describe('SurveyDistributionPage', () => {
 
     expect(await screen.findByRole('alert')).toBeTruthy()
   })
+
+  it('keeps the reader\'s locale on the wire when a status chip refetches the invitations', async () => {
+    // Every other request on this page carried `lang` since the 9 September rehearsal;
+    // the chip refetch did not, so choosing a status swapped the guarantee sentence to
+    // English on a Spanish screen.
+    const fetchMock = stubApi()
+    renderPage()
+    await screen.findByRole('button', { name: 'Send reminders' })
+
+    await userEvent.click(screen.getByRole('button', { name: /^Sent\b/ }))
+
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('status=sent'))).toBe(true),
+    )
+    const refetch = new URL(
+      fetchMock.mock.calls.map(([url]) => String(url)).find((url) => url.includes('status=sent'))!,
+      'http://test.local',
+    )
+    expect(refetch.searchParams.get('status')).toBe('sent')
+    expect(refetch.searchParams.get('lang')).toBe('en')
+  })
 })

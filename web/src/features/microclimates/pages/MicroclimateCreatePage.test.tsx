@@ -323,3 +323,23 @@ describe('MicroclimateCreatePage', () => {
     )
   })
 })
+
+describe('MicroclimateCreatePage locale on the wire', () => {
+  it('asks for the templates in the reader\'s language', async () => {
+    // The wizard seeds its content language from the reader's locale, but the picker
+    // beside it fetched the templates without `lang`, so a Spanish reader chose from the
+    // English half of every bilingual name.
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    renderPage()
+
+    await waitFor(() =>
+      expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes('/microclimate-templates'))).toBe(true),
+    )
+    const url = new URL(
+      vi.mocked(fetch).mock.calls.map(([input]) => String(input)).find((entry) => entry.includes('/microclimate-templates'))!,
+      'http://test.local',
+    )
+    expect(url.searchParams.get('companyId')).toBe('company-1')
+    expect(url.searchParams.get('lang')).toBe('es')
+  })
+})

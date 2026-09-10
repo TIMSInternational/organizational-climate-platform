@@ -109,6 +109,12 @@ describe('actionPlans api client', () => {
     expect(result.status).toBe('in_progress')
   })
 
+  it('asks for the updated plan in the reader\'s language, because the page renders the response', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }))
+    await updateActionPlan(baseUrl, 'p1', { status: 'in_progress' }, 'es')
+    expect(fetch).toHaveBeenCalledWith(`${baseUrl}/action-plans/p1?lang=es`, expect.objectContaining({ method: 'PUT' }))
+  })
+
   it('records progress', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ id: 'pu1', updateDate: '2026-01-01', overallNotes: 'notes', updatedBy: 'u1' }), { status: 201 }))
     const result = await recordProgress(baseUrl, 'p1', { overallNotes: 'notes', kpiUpdates: [], objectiveUpdates: [] })

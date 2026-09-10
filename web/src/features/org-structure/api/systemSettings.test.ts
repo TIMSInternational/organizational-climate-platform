@@ -30,4 +30,13 @@ describe('systemSettings api client', () => {
     expect(fetch).toHaveBeenCalledWith(`${baseUrl}/admin/system-settings`, expect.objectContaining({ method: 'PUT' }))
     expect(result.loginEnabled).toBe(false)
   })
+
+  it('asks for the maintenance notice in the reader\'s language when given a locale', async () => {
+    // `maintenanceMessage` is a paired column resolved server-side for `lang`.
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(settings), { status: 200 }))
+    await getSystemSettings(baseUrl, 'es')
+    const url = new URL(String(vi.mocked(fetch).mock.calls[0][0]), 'http://test.local')
+    expect(url.pathname).toBe('/admin/system-settings')
+    expect(url.searchParams.get('lang')).toBe('es')
+  })
 })
