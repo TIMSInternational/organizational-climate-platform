@@ -6,7 +6,7 @@ import { PageTopBar } from '../../../components/layout'
 import { ANONYMITY_FLOOR, ClimateMap, KpiTile } from '../../../components/charts'
 import { Button, Chip, LoadingRegion, SkeletonText } from '../../../components/ui'
 import { useViewerCapabilities, type ViewerCapabilities } from '../../../auth/viewerCapabilities'
-import { calendarDay } from '../../../lib/calendarDay'
+import { calendarDay, instantDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { KpiRow, SectionHeading } from '../components/dashboardGrammar'
 import type { AdminDashboardModel, AttentionItem, DimensionSeries, RegionKey, RegionStatuses, Wave } from './model'
@@ -361,7 +361,9 @@ export default function AdminDashboardNextView({
                   <span className="text-sm text-fg-label">
                     <span className="font-mono tabular-nums">{model.liveMicroclimate.responses}</span>{' '}
                     {t('dashboard.next.liveSub', {
-                      date: calendarDay(Date.parse(model.liveMicroclimate.closesAt), locale),
+                      // An instant, not a calendar day: the minute the session stops
+                      // taking answers, read where the reader is (`instantDay`).
+                      date: instantDay(Date.parse(model.liveMicroclimate.closesAt), locale, { now: Date.parse(model.asOf) }),
                       floor: ANONYMITY_FLOOR,
                     })}
                   </span>

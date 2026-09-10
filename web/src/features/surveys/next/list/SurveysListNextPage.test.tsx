@@ -143,6 +143,16 @@ describe('SurveysListNextPage', () => {
     expect(lang).toBe('en')
   })
 
+  it('draws the type filter as the canvas does: a native select with no platform arrow and a thin chevron', async () => {
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
+    const select = screen.getByRole('combobox')
+    expect(select.tagName).toBe('SELECT')
+    expect(select.className).toContain('appearance-none')
+    const chevron = select.closest('label')?.querySelector('svg[data-slot="type-chevron"]')
+    expect(chevron?.getAttribute('aria-hidden')).toBe('true')
+  })
+
   it('narrows to a status on the client, without a second request, from pills that show only what exists', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })

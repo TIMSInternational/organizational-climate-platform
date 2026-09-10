@@ -153,7 +153,7 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
         {!collapsed && (
           <>
             <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-              <span style={{ display: 'block', fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ display: 'block', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {name ?? t('shell.account')}
               </span>
               {/* Truncated like the name above it. Without this the role wrapped to
@@ -166,7 +166,7 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
                   title={t(roleKey)}
                   style={{
                     display: 'block',
-                    fontSize: 10,
+                    fontSize: 11,
                     color: 'var(--admin-font-tertiary)',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -190,11 +190,11 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
         // onto its own line, straight through the user block above. Both labels now
         // shrink and ellipsise, with `title` making the full text recoverable — the
         // same treatment `RoleBasedNav` gives its rows, and for the same reason.
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '4px 4px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 0 0' }}>
           <Link
             to="/settings/notifications"
             title={t('shell.settings')}
-            style={{ ...ROW, width: 'auto', minWidth: 0, gap: 6, height: 28, padding: '0 8px', fontSize: 12, textDecoration: 'none' }}
+            style={{ ...ROW, width: 'auto', minWidth: 0, gap: 6, height: 28, padding: '0 4px', fontSize: 12, textDecoration: 'none' }}
           >
             <Settings aria-hidden="true" style={{ width: 14, height: 14, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -205,7 +205,7 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
             type="button"
             onClick={onSignOut}
             title={t('shell.signOut')}
-            style={{ ...ROW, width: 'auto', minWidth: 0, gap: 6, height: 28, padding: '0 8px', fontSize: 12, marginLeft: 'auto' }}
+            style={{ ...ROW, width: 'auto', minWidth: 0, gap: 6, height: 28, padding: '0 4px', fontSize: 12 }}
           >
             <LogOut aria-hidden="true" style={{ width: 14, height: 14, color: 'var(--admin-font-tertiary)', flexShrink: 0 }} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

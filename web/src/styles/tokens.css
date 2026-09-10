@@ -145,7 +145,7 @@
   --admin-size-icon: 16px; /* legacy `h-4 w-4`; an SVG box, so px */
   --admin-size-icon-box: 1.75rem; /* 28px — Sidebar avatar/icon tile */
 
-  --admin-size-sidebar: 220px; /* ForMaps StudentSidebar EXPANDED_W */
+  --admin-size-sidebar: 236px; /* the canvas's rail: 220px of rows inside 8px gutters (`<aside style="width: 220px; padding: 12px 8px">`, content-box, in every artboard) */
   --admin-size-sidebar-collapsed: 52px;
   --admin-size-content-max: 1280px;
   /* The block a page-level empty state reserves for itself, so its message centres

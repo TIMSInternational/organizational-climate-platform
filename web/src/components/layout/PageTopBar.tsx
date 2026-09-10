@@ -160,12 +160,14 @@ export function PageTopBar({
   const eyebrowText = eyebrow === undefined ? derivedEyebrow : eyebrow
 
   return (
-    // `.ptb`: 14px of pad, then the hairline, then 16px before the KPI row.
-    // `pb-3.5` is 3.5 x the 4px `--spacing` token; `mb-panel` is the 16px
+    // `.ptb`: 16px of pad, then the hairline, then 16px before the KPI row.
+    // `pb-4` is the canvas's 16px under the header (every artboard: `padding-bottom:
+    // 16px`), and the text column's `gap-1.5` its 6px between eyebrow, title and
+    // description; `mb-panel` is the 16px
     // `--admin-size-panel-padding`.
     <div
       data-slot="page-top-bar"
-      className="mb-panel flex flex-col gap-inline border-b border-line-light pb-3.5"
+      className="mb-panel flex flex-col gap-inline border-b border-line-light pb-4"
     >
       {breadcrumbs && breadcrumbs.length > 0 && (
         <Breadcrumb aria-label={breadcrumbLabel ?? t('shell.breadcrumb')}>
@@ -208,7 +210,7 @@ export function PageTopBar({
           the actions take the next line at full width.
           See the docstring above; happy-dom cannot see any of this. */}
       <div className="flex flex-wrap items-start justify-between gap-panel">
-        <div className="min-w-0 grow basis-header-text">
+        <div className="flex min-w-0 grow basis-header-text flex-col gap-1.5">
       {/* `feat/ui-4-admin` found this same defect independently and fixed it with
           `basis-64` instead: it measured the description on
           /admin/companies/:id/users at 390px coming out one word per line. Same

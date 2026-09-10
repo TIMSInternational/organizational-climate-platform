@@ -158,12 +158,12 @@ describe('PageTopBar', () => {
       return element!
     }
 
-    it('closes itself with a hairline rule, 14px under the content', () => {
+    it('closes itself with a hairline rule, 16px under the content, as every artboard does', () => {
       const { container } = renderTopBar({ title: 'Companies' })
       const classes = topBar(container).className.split(/\s+/)
       expect(classes).toContain('border-b')
       expect(classes).toContain('border-line-light')
-      expect(classes).toContain('pb-3.5')
+      expect(classes).toContain('pb-4')
     })
 
     it('leaves 16px between the rule and whatever the page puts next', () => {

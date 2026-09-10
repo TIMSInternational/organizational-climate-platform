@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router'
-import { ChevronRight } from 'lucide-react'
 import { useTranslation } from '../i18n'
 import { activeHref, type NavSection, type NavItem as NavItemType } from './navSections'
 
@@ -244,25 +243,17 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
               onClick={() => toggleExpand(item.labelKey)}
               aria-expanded={isExpanded}
               // See the `title` note on the leaf row below. A group row is the
-              // tightest of the lot: the chevron and its gap take another 24px,
-              // leaving the label 140px of the 220px rail — while carrying the
-              // longest label in the nav, `navigation.systemAdministration`
-              // ("Administración del Sistema", 26 characters).
+              // tightest of the lot: it carries the longest label in the nav,
+              // `navigation.systemAdministration` ("Administración del Sistema",
+              // 26 characters), in the 180px a 236px rail leaves a label.
               title={label}
               style={rowStyle}
             >
+              {/* No chevron: the canvas draws the group row as a plain row, and at 13px
+                  "Administración de Empresa" fills the 180px a 236px rail leaves the
+                  label — a chevron and its gap would cut it to "Administración de E…".
+                  `aria-expanded` above still announces the sub-tree and its state. */}
               {rowContent}
-              <ChevronRight
-                aria-hidden="true"
-                style={{
-                  width: 'var(--admin-size-icon)',
-                  height: 'var(--admin-size-icon)',
-                  flexShrink: 0,
-                  color: 'var(--admin-font-tertiary)',
-                  transform: isExpanded ? 'rotate(90deg)' : 'none',
-                  transition: 'transform var(--admin-duration-base) var(--admin-ease-out)',
-                }}
-              />
             </button>
           ) : (
             <Link

@@ -306,6 +306,22 @@ describe('AdminDashboardNextView', () => {
     expect(new Set(rules.map((rule) => rule.getAttribute('y1'))).size).toBe(1)
   })
 
+  it('dates the live microclimate by the reader’s clock, since its end is an instant', () => {
+    // 02:06 UTC on the 12th is 20:06 on the 11th in Costa Rica; the canvas says "11 Sept".
+    const ambient = process.env.TZ
+    process.env.TZ = 'America/Costa_Rica'
+    try {
+      const live = sampleModel.liveMicroclimate!
+      renderView({ ...sampleModel, liveMicroclimate: { ...live, closesAt: '2026-09-12T02:06:08.992+00:00' } })
+      const sentence = (date: string) => copy.liveSub.replace('{date}', date).replace('{floor}', '5')
+      expect(document.body.textContent).toContain(sentence('Sep 11'))
+      expect(document.body.textContent).not.toContain(sentence('Sep 12'))
+    } finally {
+      if (ambient === undefined) delete process.env.TZ
+      else process.env.TZ = ambient
+    }
+  })
+
   it('fits the shared scale to every reading, so no card draws a point outside its plot', () => {
     // The first dimension reads 3.3–4.0; the last is far below it. A scale taken from any
     // one dimension would push the other's points off the 60px sparkline.

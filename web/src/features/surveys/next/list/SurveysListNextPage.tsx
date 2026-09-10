@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import { MoreHorizontal, Plus, Search } from 'lucide-react'
+import { ChevronDown, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import {
@@ -134,10 +134,17 @@ export default function SurveysListNextPage() {
             className="pl-8"
           />
         </div>
-        <label className="mb-0 w-full sm:w-42.5">
+        {/* A native <select> (ui/select.tsx says to prefer one for a plain list), drawn
+            as the artboard draws it: no platform arrow, the canvas's thin 14px chevron. */}
+        <label className="relative mb-0 w-full sm:w-42.5">
           <span className="sr-only">{t('surveys.typeLabel')}</span>
+          <ChevronDown
+            aria-hidden="true"
+            data-slot="type-chevron"
+            className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-tertiary"
+          />
           <select
-            className="w-full"
+            className="w-full appearance-none pr-8"
             value={state.draft.type}
             onChange={(event) => state.apply({ ...state.draft, type: event.target.value })}
           >
