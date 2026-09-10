@@ -3,8 +3,11 @@
  * step, console errors and failed HTTP responses recorded per step. Read-only, and enforced:
  * the login `POST` is the only request this file sends with a method (it writes nothing), and
  * every browser context aborts any request that is not a GET/HEAD/OPTIONS and records it
- * against the step — the pages themselves are not read-only (the invitation page POSTs an
- * `opened` step on mount; the wizard offers to DELETE a leftover draft).
+ * against the step. The pages are not read-only in general — the wizard offers to DELETE a
+ * leftover draft, and `/microclimate-invitations/<token>` POSTs an `opened` step when its
+ * token resolves — but no step here visits the invitation route, and every page a step does
+ * open only reads on mount, so a `blocked writes:` entry in a note is a finding about the
+ * product, not the expected case.
  *
  *   node scripts/rehearse.mjs                     # every step, as Grupo Meridiano, into .rehearsal/
  *   node scripts/rehearse.mjs --only 04           # one step (a case-insensitive name prefix)
@@ -28,7 +31,7 @@ import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { chromium } from 'playwright-core'
 import { STORAGE_KEYS, nextViewportHeight } from './shot-harness.mjs'
-import { NAMES, BLOCKED_ERROR_CODE, allowRequest, isConsoleNoise, matchesOnly, exitCode } from './rehearse-harness.mjs'
+import { NAMES, RESPOND_LINK, BLOCKED_ERROR_CODE, allowRequest, isConsoleNoise, matchesOnly, exitCode } from './rehearse-harness.mjs'
 
 /**
  * The worst vertical overflow hidden inside any scroll container, in CSS px. Runs in the
@@ -328,11 +331,16 @@ await step('14 microclimate live page and respond link as a signed-in employee',
   await go(page, `/microclimates/${live.id}/live`); await page.waitForTimeout(1500)
   await snap(page, '14a-microclimate-live')
   const text = await page.locator('main').innerText()
-  const m = text.match(/https?:\/\/[^\s]+\/(microclimate-invitations|s|m)\/[A-Za-z0-9_-]+|\/microclimate[^\s]*respond[^\s]*/)
+  const m = text.match(RESPOND_LINK)
   if (!m) throw new Error(`no respond link on the live page: ${text.slice(0, 200).replace(/\n/g, ' | ')}`)
   const url = m[0].startsWith('http') ? m[0] : `${ORIGIN}${m[0]}`
-  // The employee's context carries the same read-only guard: the invitation page POSTs an
-  // `opened` step as it mounts, and that is exactly the request the guard is for.
+  // That link is `/microclimates/<id>/respond` (`MicroclimateLivePage.tsx`), which the router
+  // renders with `MicroclimateRespondPage` → `MicroclimatePulseForm`; its only mount-time
+  // request is `GET /microclimates/{id}` (`getMicroclimatePublic`), and nothing POSTs until
+  // the form is submitted, which this step never does. It is not the invitation page
+  // (`/microclimate-invitations/<token>`, the one that records `opened`); no step visits that.
+  // The employee context still carries the read-only guard, so the expected `blocked` list is
+  // empty, and a `blocked writes:` entry in the note would be news about the product.
   const { context: employeeContext, blocked: employeeBlocked } = await contextFor(values.employee)
   const pub = await employeeContext.newPage()
   const pubErrors = []

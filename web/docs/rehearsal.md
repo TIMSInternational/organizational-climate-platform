@@ -36,13 +36,19 @@ and records it against the step as `blocked writes: …` (`allowRequest` in
 `rehearse-harness.mjs`). The abort uses the code Chromium reports as
 `net::ERR_BLOCKED_BY_CLIENT`, and the step's console filter (`isConsoleNoise`) knows that one
 is the guard's own doing; a bare abort reads `net::ERR_FAILED`, the text of a dead API, and
-the step would fail for what the guard did. That guard exists because the pages are not read-only on their
-own: the invitation page POSTs an `opened` step the moment it mounts
-(`MicroclimateInvitationPage.tsx`), and the wizard offers to DELETE a leftover draft. So
-step 12 opens the share dialog and photographs it without pressing *Crear enlace*; step 09
-photographs the draft offer without discarding it; step 14 opens the live microclimate's
-respond link as the signed-in employee, *counts* the answer controls and clicks none — and
-the `opened` POST it would have sent is listed in the note, blocked.
+the step would fail for what the guard did. That guard exists because the pages are not
+read-only on their own: the wizard offers to DELETE a leftover draft, and the invitation
+page (`/microclimate-invitations/<token>`, `MicroclimateInvitationPage.tsx`) POSTs an
+`opened` step once its token resolves. So step 12 opens the share dialog and photographs it
+without pressing *Crear enlace*; step 09 photographs the draft offer without discarding it;
+step 14 opens the live microclimate's respond link as the signed-in employee, *counts* the
+answer controls and clicks none. That link is `/microclimates/<id>/respond`
+(`MicroclimateLivePage.tsx`, `router.tsx`), a page whose only request on mount is
+`GET /microclimates/{id}` — nothing POSTs until the form is submitted — so its `blocked`
+list is expected to be empty, and a `blocked writes:` entry in any step's note is a
+finding about the product. No step visits `/microclimate-invitations/<token>`; the guard's
+handling of a page that does write is pinned by `rehearse-harness.test.mjs`, not by a
+rehearsal step.
 
 The one write is step **10b, answering a survey**, and it runs only when BOTH
 `--answerer <local-part>` and `--answer-survey <survey id>` are given. Point it at a

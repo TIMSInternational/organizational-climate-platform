@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { NAMES, READ_METHODS, BLOCKED_ERROR_CODE, allowRequest, isConsoleNoise, matchesOnly, exitCode } from './rehearse-harness.mjs'
+import { NAMES, RESPOND_LINK, READ_METHODS, BLOCKED_ERROR_CODE, allowRequest, isConsoleNoise, matchesOnly, exitCode } from './rehearse-harness.mjs'
 
 describe('a read-only rehearsal lets the browser read and nothing else', () => {
   it('passes GET, HEAD and OPTIONS whatever the case', () => {
@@ -102,5 +102,19 @@ describe('the exit code is non-zero on any failure and when nothing ran', () => 
   it('is 2 when --only matched nothing, so a typo cannot read as a green rehearsal', () => {
     expect(exitCode([])).toBe(2)
     expect(exitCode(undefined)).toBe(2)
+  })
+})
+
+describe('step 14 lands on the route that only reads on mount', () => {
+  it("finds the live page's respond link, with or without its origin", () => {
+    const shown = 'Enlace para responder\nhttp://localhost:5173/microclimates/7f3a-1b2c/respond\nCopiar'
+    expect(shown.match(RESPOND_LINK)?.[0]).toBe('http://localhost:5173/microclimates/7f3a-1b2c/respond')
+    expect('/microclimates/7f3a-1b2c/respond'.match(RESPOND_LINK)?.[0]).toBe('/microclimates/7f3a-1b2c/respond')
+  })
+
+  it('never takes the rehearsal to the invitation route, the one that records opened', () => {
+    expect('http://localhost:5173/microclimate-invitations/tok_abc'.match(RESPOND_LINK)).toBeNull()
+    expect('http://localhost:5173/m/tok_abc'.match(RESPOND_LINK)).toBeNull()
+    expect('/microclimates/7f3a-1b2c/live'.match(RESPOND_LINK)).toBeNull()
   })
 })
