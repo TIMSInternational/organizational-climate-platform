@@ -1,45 +1,35 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, within } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router'
-import DashboardNextPage from './DashboardNextPage'
+import { MemoryRouter } from 'react-router'
 import AdminDashboardNextView from './AdminDashboardNextView'
 import { sampleModel } from './sampleModel'
+import type { AdminDashboardModel, RegionStatuses } from './model'
 import { TranslationProvider } from '../../../i18n'
-import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
+import { CompanyContextProvider } from '../../../company-context'
 import { setToken } from '../../../auth/token'
 import { tokenFor } from '../../../test/jwtFixture'
 import en from '../../../i18n/en.json'
 
 const copy = en.dashboard.next
 
-function renderAt(role: string, companyId = 'c1') {
-  setToken(tokenFor({ role, companyId }))
-  return render(
-    <TranslationProvider>
-      <MemoryRouter initialEntries={['/dashboard/next']}>
-        <CompanyContextProvider>
-          <Routes>
-            <Route path="/dashboard/next" element={<DashboardNextPage />} />
-            <Route path="/dashboard" element={<div data-testid="home" />} />
-          </Routes>
-        </CompanyContextProvider>
-      </MemoryRouter>
-    </TranslationProvider>,
-  )
-}
-
 /**
- * The view reads the viewer's capabilities off the stored token, so every render names a
- * viewer. The default is the company administrator the screen is drawn for; the role
- * tests below hand it the others.
+ * The view alone, handed the sample directly. Which roles reach it — a company_admin,
+ * and a super_admin once a tenant is selected — is `DashboardPage`'s dispatch and is
+ * proven in `DashboardPage.test.tsx`. The view still reads the viewer's capabilities off
+ * the stored token, so every render names a viewer: the default is the company
+ * administrator the screen is drawn for; the role tests below hand it the others.
  */
-function renderView(model = sampleModel, viewer: Record<string, unknown> = { role: 'company_admin' }) {
+function renderView(
+  model: AdminDashboardModel = sampleModel,
+  regions?: RegionStatuses,
+  viewer: Record<string, unknown> = { role: 'company_admin' },
+) {
   setToken(tokenFor({ sub: 'u1', companyId: 'c1', nodoId: '', ...viewer }))
   return render(
     <TranslationProvider>
-      <MemoryRouter initialEntries={['/dashboard/next']}>
+      <MemoryRouter initialEntries={['/dashboard']}>
         <CompanyContextProvider>
-          <AdminDashboardNextView model={model} />
+          <AdminDashboardNextView model={model} regions={regions} />
         </CompanyContextProvider>
       </MemoryRouter>
     </TranslationProvider>,
@@ -54,7 +44,7 @@ function linksMatching(pattern: RegExp): string[] {
     .filter((href) => pattern.test(href))
 }
 
-describe('DashboardNextPage', () => {
+describe('AdminDashboardNextView', () => {
   beforeEach(() => {
     window.localStorage.clear()
     window.localStorage.setItem('preferredLocale', 'en')
@@ -64,8 +54,8 @@ describe('DashboardNextPage', () => {
     window.localStorage.clear()
   })
 
-  it('renders the six sections for a company administrator', () => {
-    renderAt('company_admin')
+  it('renders the six sections, and its three actions land somewhere that exists', () => {
+    renderView()
     expect(screen.getByRole('heading', { level: 1, name: copy.title })).toBeTruthy()
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
     expect(headings).toEqual([
@@ -85,22 +75,6 @@ describe('DashboardNextPage', () => {
     expect(screen.getByRole('link', { name: copy.viewSession }).getAttribute('href')).toBe(
       '/microclimates/mc-1/live',
     )
-  })
-
-  it('sends every other role back to /dashboard', () => {
-    for (const role of ['employee', 'leader', 'supervisor']) {
-      renderAt(role)
-      expect(screen.getByTestId('home')).toBeTruthy()
-      expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
-      cleanup()
-    }
-    // A SuperAdmin without a tenant chosen has no company to show.
-    renderAt('super_admin', '')
-    expect(screen.getByTestId('home')).toBeTruthy()
-    cleanup()
-    window.localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'c9')
-    renderAt('super_admin', '')
-    expect(screen.getByRole('heading', { level: 1, name: copy.title })).toBeTruthy()
   })
 
   it('prints no digit anywhere on a protected map row', () => {
@@ -129,7 +103,7 @@ describe('DashboardNextPage', () => {
     const items = document.querySelectorAll('[data-slot="attention-item"]')
     expect(items).toHaveLength(3)
     const hrefs = Array.from(items).map((item) => within(item as HTMLElement).getByRole('link').getAttribute('href'))
-    expect(hrefs).toEqual(['/action-plans/ap-1', '/tracking/planes/tp-1', '/surveys/s-q4'])
+    expect(hrefs).toEqual(['/action-plans/ap-1', '/tracking/planes/tp-1', '/surveys/s-q4/distribution'])
     // The lowest cell is derived from the map, not typed: Operaciones × Carga de trabajo at 2.4.
     expect(items[0].textContent).toContain('Operaciones')
     expect(items[0].textContent).toContain('2.4')
@@ -138,7 +112,7 @@ describe('DashboardNextPage', () => {
   })
 
   it('offers an employee viewer none of the top-bar actions and none of the attention actions', () => {
-    renderView(sampleModel, { role: 'employee' })
+    renderView(sampleModel, undefined, { role: 'employee' })
     expect(screen.queryByRole('link', { name: copy.newSurvey })).toBeNull()
     expect(screen.queryByRole('link', { name: copy.launchMicroclimate })).toBeNull()
     expect(screen.queryByRole('button', { name: copy.export })).toBeNull()
@@ -157,7 +131,7 @@ describe('DashboardNextPage', () => {
   })
 
   it('offers a leader their own node’s progress action and their export, and nothing else', () => {
-    renderView(sampleModel, { role: 'leader', nodoId: 'nodo-finanzas' })
+    renderView(sampleModel, undefined, { role: 'leader', nodoId: 'nodo-finanzas' })
     expect(screen.queryByRole('link', { name: copy.newSurvey })).toBeNull()
     expect(screen.queryByRole('link', { name: copy.launchMicroclimate })).toBeNull()
     expect(screen.getByRole('button', { name: copy.export })).toBeTruthy()
@@ -171,7 +145,7 @@ describe('DashboardNextPage', () => {
     expect(linksMatching(/^\/microclimates\/[^/]+\/live$/)).toEqual([])
     cleanup()
     // The leader of another node may read the overdue plan but not record on it.
-    renderView(sampleModel, { role: 'leader', nodoId: 'nodo-operaciones' })
+    renderView(sampleModel, undefined, { role: 'leader', nodoId: 'nodo-operaciones' })
     const other = Array.from(document.querySelectorAll('[data-slot="attention-item"]')) as HTMLElement[]
     expect(within(other[1]).queryByRole('link')).toBeNull()
   })
@@ -190,6 +164,53 @@ describe('DashboardNextPage', () => {
     cleanup()
     renderView({ ...sampleModel, isSample: false })
     expect(screen.queryByText(copy.sampleChip)).toBeNull()
+  })
+
+  it('signs the change on every trend card from the series, never from a literal', () => {
+    renderView()
+    // Pertenencia went 3.7 → 4.0, so the card says +0.3; Carga 3.0 → 3.3, also up.
+    const card = document.querySelector('[data-slot="trend-card"][data-dimension="pertenencia"]')
+    expect(card?.textContent).toContain('+0.3')
+    expect(card?.textContent).not.toContain('-0.3')
+  })
+
+  it('names, in its own section, each region that fell back to the sample — and only those', () => {
+    const live: RegionStatuses = {
+      company: { status: 'live' },
+      surveys: { status: 'live' },
+      trends: { status: 'live' },
+      map: { status: 'fallback', reason: 'failed', error: 'Service unavailable' },
+      actionPlans: { status: 'live' },
+      tracking: { status: 'off' },
+      microclimates: { status: 'fallback', reason: 'empty' },
+    }
+    renderView(sampleModel, live)
+    const notices = document.querySelectorAll('[data-slot="region-fallback"]')
+    expect(Array.from(notices).map((node) => node.getAttribute('data-region'))).toEqual(['map', 'microclimates'])
+    expect(notices[0].textContent).toBe(
+      copy.fallbackRegion.replace('{region}', copy.regionMap).replace('{error}', 'Service unavailable'),
+    )
+    expect(notices[1].textContent).toBe(copy.fallbackEmpty.replace('{region}', copy.regionMicroclimates))
+    // The map notice sits inside the map's own section.
+    expect(notices[0].closest('section')?.getAttribute('aria-labelledby')).toBe('next-by-group')
+  })
+
+  it('offers to create a plan when none covers the lowest cell, and says only what it knows about reminders', () => {
+    const attention = sampleModel.attention.map((item) =>
+      item.kind === 'lowest-cell'
+        ? { ...item, plan: null }
+        : item.kind === 'low-participation'
+          ? { ...item, remindersSent: null }
+          : item,
+    )
+    renderView({ ...sampleModel, attention })
+    const items = document.querySelectorAll('[data-slot="attention-item"]')
+    expect(items[0].textContent).toContain(copy.lowestCellNoPlanSub)
+    expect(within(items[0] as HTMLElement).getByRole('link', { name: copy.createPlan }).getAttribute('href')).toBe(
+      '/action-plans',
+    )
+    expect(items[2].textContent).not.toContain('no reminder sent yet')
+    expect(items[2].textContent).toContain('Q3 closed at 100%')
   })
 
   it('derives the headline average and its delta from the dimension series', () => {
