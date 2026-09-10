@@ -143,7 +143,7 @@ export default function SurveysListNextPage() {
           <ChevronDown
             aria-hidden="true"
             data-slot="type-chevron"
-            className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-tertiary"
+            className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-label"
           />
           <select
             className="w-full appearance-none pr-8"
