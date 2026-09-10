@@ -142,7 +142,10 @@
   --admin-size-icon: 16px; /* legacy `h-4 w-4`; an SVG box, so px */
   --admin-size-icon-box: 1.75rem; /* 28px — Sidebar avatar/icon tile */
 
-  --admin-size-sidebar: 220px; /* ForMaps StudentSidebar EXPANDED_W */
+  --admin-size-sidebar: 236px; /* the canvas rail: every artboard of 10 Sep draws a
+                                  220px column inside 8px gutters, 236px in all.
+                                  ForMaps' EXPANDED_W was 220px gutters included,
+                                  which cut "Configuración" and "Cerrar sesión". */
   --admin-size-sidebar-collapsed: 52px;
   --admin-size-content-max: 1280px;
   /* The block a page-level empty state reserves for itself, so its message centres

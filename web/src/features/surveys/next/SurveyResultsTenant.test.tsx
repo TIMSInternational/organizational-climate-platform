@@ -12,6 +12,7 @@ import { setToken } from '../../../auth/token'
 import { tokenFor } from '../../../test/jwtFixture'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import type { ClimateTrendsResponse } from '../api/climateTrends'
+import type { SurveyAnalyticsResponse } from '../api/surveyResults'
 
 vi.mock('../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
 
@@ -320,6 +321,26 @@ describe('the survey results on the tenant’s real payload', () => {
     )
     expect(within(screen.getByTestId('climate-grid')).queryByText(/^Frente a/)).toBeNull()
     expect(requested().filter((url) => url.includes('/analytics')).every((url) => url.includes(SURVEY))).toBe(true)
+  })
+
+  it('says "sin Q2" for a group Q2 withheld — never a 0 — and still compares every other group', async () => {
+    const withheld = structuredClone(fixture[`GET /surveys/${Q2}/analytics`]) as SurveyAnalyticsResponse
+    const ventas = withheld.breakdowns[0].segments.find((segment) => segment.key === VEN)!
+    Object.assign(ventas, { isSuppressed: true, respondentCount: 0, questions: [] })
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) =>
+      String(input).includes(`/surveys/${Q2}/analytics`) ? Promise.resolve(json(withheld)) : tenant(input),
+    )
+    await open()
+    expect(vsQ2(`group-row-${VEN}`)).toBe('sin Q2')
+    expect(vsQ2(`group-row-${ENG}`)).toBe('+0,3')
+  })
+
+  it('draws the finding link as the artboard does: 12px regular text, a 4px gap, a 12px arrow', async () => {
+    await open()
+    const [link] = screen.getAllByRole('button', { name: /Ver la pregunta/ })
+    // The Button's own medium weight, 6px gap and 16px icon drew it 109px against 102px.
+    expect(link.className.split(/\s+/)).toEqual(expect.arrayContaining(['text-sm', 'font-normal', 'gap-1']))
+    expect(link.querySelector('svg')?.getAttribute('class')).toContain('size-3')
   })
 
   it('keeps the server’s long-format CSV behind "···", through fetch + Blob', async () => {

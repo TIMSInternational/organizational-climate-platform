@@ -21,8 +21,12 @@ export function BreadcrumbList({ className, ...props }: ComponentProps<'ol'>) {
   return (
     <ol
       data-slot="breadcrumb-list"
+      // `m-0 list-none p-0`: `index.css` gives every `ol` an 8px bottom margin and a
+      // 20px indent, which set the trail 20px in from the title under it and 10px
+      // taller than its line. The artboards (10 Sep) draw it flush with the title, at
+      // 13px — `text-base`, one line of 19.5px.
       className={cn(
-        'flex flex-wrap items-center gap-inline break-words text-sm text-fg-tertiary',
+        'm-0 flex list-none flex-wrap items-center gap-inline break-words p-0 text-base text-fg-tertiary',
         className,
       )}
       {...props}
@@ -34,7 +38,8 @@ export function BreadcrumbItem({ className, ...props }: ComponentProps<'li'>) {
   return (
     <li
       data-slot="breadcrumb-item"
-      className={cn('inline-flex items-center gap-inline', className)}
+      // `mb-0`: `index.css` gives every `li` a 4px bottom margin.
+      className={cn('mb-0 inline-flex items-center gap-inline', className)}
       {...props}
     />
   )
@@ -75,7 +80,7 @@ export function BreadcrumbSeparator({ children, className, ...props }: Component
       data-slot="breadcrumb-separator"
       role="presentation"
       aria-hidden="true"
-      className={cn('[&>svg]:size-3.5', className)}
+      className={cn('mb-0 [&>svg]:size-3.5', className)}
       {...props}
     >
       {children ?? <ChevronRightIcon />}

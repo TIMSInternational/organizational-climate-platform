@@ -188,7 +188,7 @@ function AdminShell() {
               growing with the viewport on a large monitor. Measured across eleven
               viewports, that cap did something worse than what it prevented: it
               bites from 1516px up — which is a 1728 MacBook Pro and a 1920 monitor,
-              not an exotic size — and because the column starts *after* the 220px
+              not an exotic size — and because the column starts *after* the
               rail, centring the capped card inside it pushed the card away from the
               rail. At 2560 there were 530px of empty surface between them and at
               3440 there were 970px, so the navigation read as belonging to nothing

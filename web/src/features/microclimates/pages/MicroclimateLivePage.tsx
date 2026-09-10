@@ -477,7 +477,8 @@ function SessionPlate({
           plate. What decides whether it wraps is the width of one column, so the
           quantity that matters is the width of this section — and that is not a
           function of the viewport. `AdminLayout` renders the rail `hidden md:flex`
-          at `--admin-size-sidebar` (220px, or 52px collapsed), so the plate is
+          at `--admin-size-sidebar` (220px when measured below, 236px since the
+          canvas; 52px collapsed), so the plate is
           *narrower* at a 768px viewport than at a 700px one. Measured in Chromium
           at 2x with the rail expanded: 616px of plate at a 700px viewport, 464px
           at 768px — a bigger window, a smaller plate, and the two dates wrap. A

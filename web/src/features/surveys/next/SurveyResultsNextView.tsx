@@ -452,13 +452,13 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                             {finding.plan.status === 'not_started' && ` · ${t('surveyResults.next.planNoProgress')}`}
                           </span>
                         )}
-                        {/* The artboard's link: 12px text, a 4px gap, a 12px arrow. The
-                            Button's own 6px gap and 16px icon drew it 109px against the
-                            artboard's 102px. */}
+                        {/* The artboard's link: 12px regular text, a 4px gap, a 12px arrow.
+                            The Button's medium weight, 6px gap and 16px icon drew it 109px
+                            against the artboard's 102px. */}
                         <Button
                           variant="link"
                           size="sm"
-                          className="h-auto gap-1 p-0 text-sm text-fg-secondary hover:text-fg-primary"
+                          className="h-auto gap-1 p-0 text-sm font-normal text-fg-secondary hover:text-fg-primary"
                           onClick={() => openCell(finding.rowId, finding.dimensionKey, true)}
                         >
                           {t('surveyResults.next.viewQuestion')}
