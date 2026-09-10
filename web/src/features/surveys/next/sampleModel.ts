@@ -3,38 +3,29 @@ import type { ResultsSampleWave } from './model'
 /**
  * SAMPLE DATA. This is not a measurement of anything.
  *
- * It stands in for the two readings the redesigned results page draws that no
- * endpoint returns today, and it is the reason the page wears a "sample data" chip
- * on those regions while `isSample` is true:
+ * It stands in for the ONE reading the redesigned results page draws that no endpoint
+ * returns today, and it is the reason the page wears a "sample data" chip on that
+ * region — and on no other — while `isSample` is true:
  *
- * | Region                                   | Endpoint that will provide it                       |
- * |------------------------------------------|-----------------------------------------------------|
- * | "vs Q2" deltas (average and per dimension)| `GET /surveys/climate-trends` (`climateTrends.ts`)  |
- * | rises in a row                           | `GET /surveys/climate-trends`                        |
- * | the opened group's 1–5 distribution      | none — `GET /surveys/{id}/statistics` carries a mean |
- * |                                          | per segment question, never a distribution           |
+ * | Region                              | Endpoint that will provide it                          |
+ * |-------------------------------------|--------------------------------------------------------|
+ * | the opened group's 1–5 distribution | none — `GET /surveys/{id}/analytics` carries one mean  |
+ * |                                     | per segment question (`SurveySegmentQuestionResult`),  |
+ * |                                     | never a distribution                                   |
  *
- * The figures are the approved artboard's Grupo Meridiano numbers, so the screen can
- * be compared against the design. The dimension keys are the product's own slugs —
- * the keys of `surveyRespond.dimensions` in both catalogues, which `dimensionLabel.ts`
- * reads (`growth`, not `development`, is the product's word). A survey whose questions
- * carry other categories simply gets no delta on those columns, which the view prints
- * as "no Q2" rather than as 0 — so a shot fixture must carry the slugs, or the delta
- * cells are never drawn.
+ * The wave-over-wave readings this file used to stand in for — the change since the
+ * previous wave per dimension, per group and for the whole company, and the rises in a
+ * row — are measured now: `GET /surveys/climate-trends` names the previous wave and
+ * carries the company's series, and that wave's own `GET /surveys/{id}/analytics`
+ * gives its dimension and group means (`compose.ts` `composePrevious`). They are the
+ * readings the Panel de Control prints for the same survey, from the same endpoint,
+ * so the two screens cannot disagree about how much the climate moved.
+ *
+ * The distribution is the approved artboard's (Operaciones · Carga de trabajo), so the
+ * screen can be compared against the design.
  */
 export const sampleWave: ResultsSampleWave = {
   isSample: true,
-  previousCode: 'Q2',
-  averageDelta: 0.32,
-  dimensionDeltas: {
-    psychological_safety: 0.3,
-    workload: 0.3,
-    trust: 0.4,
-    recognition: 0.3,
-    growth: 0.3,
-    belonging: 0.3,
-  },
-  risesInARow: 3,
   groupDistribution: [
     { position: 1, percentage: 20 },
     { position: 2, percentage: 40 },

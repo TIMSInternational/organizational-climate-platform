@@ -23,6 +23,8 @@ export interface ResultsCellPanelProps {
   threshold: number
   /** The group's own 1–5 distribution is a sample until phase 2 — the chip says so. */
   sample: ResultsSampleWave
+  /** The previous wave's code, for "Comparar con Q2" — `null` when there is none to compare with. */
+  previousCode: string | null
   capabilities: ViewerCapabilities
   /** The panel's id, for `aria-controls` on the cell that opened it. */
   id: string
@@ -49,6 +51,7 @@ export default function ResultsCellPanel({
   code,
   threshold,
   sample,
+  previousCode,
   capabilities,
   id,
   headingRef,
@@ -257,12 +260,14 @@ export default function ResultsCellPanel({
                 </Button>
               )
             )}
-            <Button variant="outline" asChild>
-              <Link to="/surveys/climate-trends">
-                <TrendingUp aria-hidden="true" />
-                {t('surveyResults.next.compareWave', { wave: sample.previousCode })}
-              </Link>
-            </Button>
+            {previousCode && (
+              <Button variant="outline" asChild>
+                <Link to="/surveys/climate-trends">
+                  <TrendingUp aria-hidden="true" />
+                  {t('surveyResults.next.compareWave', { wave: previousCode })}
+                </Link>
+              </Button>
+            )}
           </div>
           <p className="m-0 flex items-start gap-2.5 rounded-md bg-surface-icon-box px-3.5 py-3 text-sm text-fg-secondary">
             <Shield aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />

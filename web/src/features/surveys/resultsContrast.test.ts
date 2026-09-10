@@ -83,9 +83,10 @@ interface Pair {
 }
 
 const PAIRS: readonly Pair[] = [
-  // charts/KpiTile: the participation strip at the top of the results screen.
-  { what: 'the KPI tile label', ink: '--admin-font-secondary', surface: '--admin-bg-icon-box' },
-  { what: 'the KPI tile sub-line', ink: '--admin-font-secondary', surface: '--admin-bg-icon-box' },
+  // charts/KpiTile: the tile strip at the top of the results screen — a white card
+  // since the canvas (10 Sep), its eyebrow in the label ink.
+  { what: 'the KPI tile label', ink: '--admin-font-section-label', surface: '--admin-bg-card' },
+  { what: 'the KPI tile sub-line', ink: '--admin-font-secondary', surface: '--admin-bg-card' },
   // The findings cards, which sit on the same recessed surface.
   { what: 'a finding headline', ink: '--admin-font-primary', surface: '--admin-bg-icon-box' },
   { what: "a finding's reading", ink: '--admin-font-secondary', surface: '--admin-bg-icon-box' },

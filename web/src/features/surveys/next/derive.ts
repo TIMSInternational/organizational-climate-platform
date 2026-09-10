@@ -38,6 +38,13 @@ import type { ResultsGroupRow, ResultsPlanRef, SurveyResultsNextModel } from './
  * the reason `compose.ts` gives for the dashboard's CLIMA figure: that tile is the mean
  * of the raw trends scores, and this page has to print the same number for the same
  * survey — a reader moving between the two screens must not see 3,65 become 3,67.
+ *
+ * ## What every change is measured against
+ *
+ * The previous wave, measured (`compose.ts` `composePrevious`): the same means, read off
+ * that survey's own analytics by the same rules. A change is always like for like
+ * (`likeForLike`) — over the dimensions both waves carry — and a group the previous wave
+ * withheld has no change at all, never a 0.
  */
 
 export { CLIMATE_TARGET }
@@ -141,22 +148,24 @@ export function groupRows(model: SurveyResultsNextModel): ResultsGroupRow[] {
   const climate = model.climate
   if (!climate) return []
   const segments = new Map((model.breakdown?.segments ?? []).map((segment) => [segment.key, segment]))
+  const keys = climate.dimensions.map((dimension) => dimension.key)
+  const before = model.previous.status === 'loaded' ? model.previous.wave.groupScores : {}
   return climate.rows.map((row) => {
     const isProtected = climate.target === null || row.responses < climate.threshold
     const scores = climate.dimensions.map((_, index) => (isProtected ? null : (row.scores[index] ?? null)))
     let rowMean: number | null = null
+    let vsPrevious: number | null = null
     if (!isProtected) {
       const segment = segments.get(row.id)
-      const raw = segment
-        ? mean(
-            climate.dimensions
-              .map((dimension) => rawSegmentScore(segment, dimension))
-              .filter((score): score is number => score !== null),
-          )
-        : mean(scores.filter((score): score is number => score !== null))
-      rowMean = raw === null ? null : round1(raw)
+      const raw = segment ? climate.dimensions.map((dimension) => rawSegmentScore(segment, dimension)) : scores
+      const all = mean(raw.filter((score): score is number => score !== null))
+      rowMean = all === null ? null : round1(all)
+      // Only a group the previous wave DISCLOSED has an entry there. A withheld one has
+      // none, so its change stays `null` — "sin Q2" on the grid, never a 0.
+      const previous = before[row.id] as Readonly<Record<string, number>> | undefined
+      vsPrevious = previous === undefined ? null : likeForLike(keys, raw, previous)
     }
-    return { id: row.id, name: row.label, responses: row.responses, isProtected, scores, mean: rowMean }
+    return { id: row.id, name: row.label, responses: row.responses, isProtected, scores, mean: rowMean, vsPrevious }
   })
 }
 
@@ -178,6 +187,57 @@ export function companyMean(model: SurveyResultsNextModel): number | null {
       .filter((score): score is number => score !== null),
   )
   return raw === null ? null : round2(raw)
+}
+
+/**
+ * The change between two readings of the same construct: the mean of `now` minus the
+ * mean of `before`, over exactly the dimension keys BOTH carry — so a dimension one
+ * wave asked and the other did not cannot move the average. `null` when they share none.
+ */
+function likeForLike(
+  keys: readonly string[],
+  now: readonly (number | null)[],
+  before: Readonly<Record<string, number>>,
+): number | null {
+  const current: number[] = []
+  const earlier: number[] = []
+  keys.forEach((key, index) => {
+    const reading = now[index]
+    const previous = before[key] as number | undefined
+    if (reading === null || reading === undefined || previous === undefined) return
+    current.push(reading)
+    earlier.push(previous)
+  })
+  const nowMean = mean(current)
+  const beforeMean = mean(earlier)
+  return nowMean === null || beforeMean === null ? null : nowMean - beforeMean
+}
+
+/**
+ * How far the whole company's climate moved since the previous wave, unrounded — the
+ * CLIMA tile's "+0,29 frente a Q2" and the company row's "Frente a Q2". `null` without a
+ * previous wave, or when the two share no dimension.
+ */
+export function companyDelta(model: SurveyResultsNextModel): number | null {
+  const climate = model.climate
+  if (!climate || model.previous.status !== 'loaded') return null
+  return likeForLike(
+    climate.dimensions.map((dimension) => dimension.key),
+    climate.dimensions.map((dimension) => rawSurveyScore(model.questions, dimension)),
+    model.previous.wave.dimensionScores,
+  )
+}
+
+/** Each map column's change since the previous wave, unrounded; `null` where that wave has no reading. */
+export function dimensionDeltas(model: SurveyResultsNextModel): (number | null)[] {
+  const climate = model.climate
+  if (!climate) return []
+  const before = model.previous.status === 'loaded' ? model.previous.wave.dimensionScores : null
+  return climate.dimensions.map((dimension) => {
+    const now = rawSurveyScore(model.questions, dimension)
+    const earlier = before === null ? undefined : (before[dimension.key] as number | undefined)
+    return now === null || earlier === undefined ? null : now - earlier
+  })
 }
 
 /** Column keys whose whole-survey reading sits under the target, worst first. */

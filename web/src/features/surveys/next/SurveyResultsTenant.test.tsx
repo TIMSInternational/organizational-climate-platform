@@ -11,20 +11,23 @@ import { COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context/companyCon
 import { setToken } from '../../../auth/token'
 import { tokenFor } from '../../../test/jwtFixture'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
+import type { ClimateTrendsResponse } from '../api/climateTrends'
 
 vi.mock('../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
 
 /**
- * `/surveys/:id/results` rendered from the demo tenant's REAL payloads — the three GETs
- * the page makes, fetched read-only from the local API on 10 Sep as Grupo Meridiano's
- * company administrator and stored unmodified as the shot fixture. The artboard was
- * drawn from this survey; #468's drill-in was only ever tested on a hand-made payload.
- * In Spanish, as the tenant reads it.
+ * `/surveys/:id/results` rendered from the demo tenant's REAL payloads — every GET the
+ * page makes, fetched read-only from the local API on 10 Sep as Grupo Meridiano's
+ * company administrator and stored unmodified as the shot fixture: Q3's analytics, the
+ * survey, the action plans, the climate-trends window that names Q2 as the wave before,
+ * and Q2's own analytics. The artboard was drawn from this survey; #468's drill-in was
+ * only ever tested on a hand-made payload. In Spanish, as the tenant reads it.
  */
 const FIXTURE = join(process.cwd(), 'scripts', 'shot-fixtures', 'survey-results-meridiano.json')
 const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Record<string, unknown>
 
 const SURVEY = '38b2002f-66da-468d-b136-ec112ba3204b'
+const Q2 = '7321a9bb-9e83-465a-a31d-73bdc186d626'
 const COMPANY = '16c97c29-07f8-4522-86fc-e6cc56298829'
 const FIN = 'bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9'
 const ENG = '5bfdb04e-8847-4baa-89c8-d4411654a129'
@@ -33,6 +36,12 @@ const PER = 'aac7e1b9-5af4-4e04-872b-c11df8f1d4bd'
 const VEN = '07f5a4d4-27d8-4df0-afdc-b50db1371062'
 const OPS_PLAN = '4f973f47-4ab2-4a5b-9606-af5db05670b8'
 const SAMPLE = 'Datos de muestra'
+/**
+ * Today, pinned: `calendarDayLong` appends the year when it is not the current one, so
+ * "cerró el 6 de agosto" reads "…de 2026" from 1 Jan 2027 and an unpinned assertion
+ * turns red by itself (measured by the refuter: now = 15 Jan 2027 failed it).
+ */
+const TODAY = new Date('2026-09-10T15:00:00Z')
 
 function json(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
@@ -42,10 +51,18 @@ function json(body: unknown): Response {
 function tenant(input: RequestInfo | URL): Promise<Response> {
   const url = String(input)
   if (url.includes('/export/')) return Promise.resolve(new Response(new Blob(['file']), { status: 200 }))
-  if (url.includes('/analytics')) return Promise.resolve(json(fixture['GET /surveys/*/analytics']))
+  if (url.includes('/surveys/climate-trends')) return Promise.resolve(json(fixture['GET /surveys/climate-trends']))
+  if (url.includes(`/surveys/${Q2}/analytics`)) return Promise.resolve(json(fixture[`GET /surveys/${Q2}/analytics`]))
+  if (url.includes(`/surveys/${SURVEY}/analytics`)) return Promise.resolve(json(fixture['GET /surveys/*/analytics']))
   if (url.includes('/action-plans')) return Promise.resolve(json(fixture['GET /action-plans']))
   if (new RegExp(`/surveys/${SURVEY}(\\?|$)`).test(url)) return Promise.resolve(json(fixture['GET /surveys/*']))
   return Promise.resolve(new Response('{}', { status: 404 }))
+}
+
+/** The same, with the climate-trends request answered by `answer` instead. */
+function tenantWithTrends(answer: () => Response) {
+  return (input: RequestInfo | URL) =>
+    String(input).includes('/surveys/climate-trends') ? Promise.resolve(answer()) : tenant(input)
 }
 
 function renderAs(claims: Record<string, unknown>) {
@@ -72,12 +89,18 @@ async function open() {
 
 const cell = (name: RegExp) => screen.getByRole('button', { name })
 const heading = (name: string) => screen.getByRole('heading', { level: 2, name })
+/** The last cell of a row: "Frente a Q2". */
+const vsQ2 = (testId: string) => screen.getByTestId(testId).querySelector('td:last-child')?.textContent
+const requested = () => vi.mocked(fetch).mock.calls.map((call) => String(call[0]))
 
 describe('the survey results on the tenant’s real payload', () => {
   let scrolled: ReturnType<typeof vi.fn>
   const original = HTMLElement.prototype.scrollIntoView
 
   beforeEach(() => {
+    // Only `Date`: the timers user-event and waitFor run on stay real.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(TODAY)
     window.localStorage.clear()
     window.localStorage.setItem('preferredLocale', 'es')
     vi.stubGlobal('fetch', vi.fn().mockImplementation(tenant))
@@ -88,6 +111,7 @@ describe('the survey results on the tenant’s real payload', () => {
   afterEach(() => {
     cleanup()
     vi.unstubAllGlobals()
+    vi.useRealTimers()
     vi.mocked(downloadBlobFile).mockClear()
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { value: original, configurable: true, writable: true })
     window.localStorage.clear()
@@ -96,20 +120,23 @@ describe('the survey results on the tenant’s real payload', () => {
   it('names the day the survey closed, not the day of its last response, and the wave it compares with', async () => {
     await open()
     const eyebrow = document.querySelector('[data-slot="page-eyebrow"]')
-    expect(eyebrow?.textContent).toContain('Encuesta de Clima Q3 · cerró el 6 de agosto')
+    expect(eyebrow?.textContent).toBe('Encuesta de Clima Q3 · cerró el 6 de agosto')
     expect(eyebrow?.textContent).not.toContain('última respuesta')
     expect(screen.getByRole('heading', { level: 1, name: 'Resultados de Encuesta de Clima Q3' })).toBeTruthy()
     expect(screen.getByText('Qué encontró esta encuesta, qué cambió desde Q2 y por dónde empezar a mirar.')).toBeTruthy()
   })
 
-  it('measures the tiles against the target of 3,7, not the survey’s own mean', async () => {
+  it('measures the tiles against the target of 3,7, and the change against Q2’s own analytics', async () => {
     await open()
     const tiles = screen.getByRole('region', { name: 'Resumen' }).textContent ?? ''
     expect(tiles).toContain('Clima · Q3')
     // The unrounded mean of the six dimension means — the Panel de Control's figure.
     expect(tiles).toContain('3,65')
     expect(tiles).toContain('de 5 · meta 3,7')
-    expect(tiles).toContain('+0,32 frente a Q2')
+    // 3,6533 against Q2's 3,3600; Q1 3,03 → Q2 3,36 → Q3 3,65 makes this the second rise.
+    const delta = screen.getByTestId('climate-delta')
+    expect(delta.textContent).toBe('+0,29 frente a Q2 · segunda alza seguida')
+    expect(delta.className).toContain('text-accent-green-ink')
     expect(tiles).toContain('respuestas · 100 % completadas')
     expect(tiles).toContain('cerró el 6 de agosto · sin lista de invitados')
     expect(tiles).toContain('de 5 legibles')
@@ -117,6 +144,14 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(tiles).toContain('Bajo la meta')
     expect(screen.getByTestId('below-target').textContent).toBe('Carga de trabajo 3,3 · Reconocimiento 3,4')
     expect(tiles).not.toContain('media')
+    // Every figure on the tiles is measured: no sample chip among them.
+    expect(tiles).not.toContain(SAMPLE)
+  })
+
+  it('asks climate-trends which wave came before, and reads that wave’s own analytics', async () => {
+    await open()
+    expect(requested().some((url) => url.endsWith(`/surveys/climate-trends?companyId=${COMPANY}&lang=es`))).toBe(true)
+    expect(requested().some((url) => url.endsWith(`/surveys/${Q2}/analytics?lang=es`))).toBe(true)
   })
 
   it('lists the artboard’s three cells, each with its reason and whether a plan covers its group', async () => {
@@ -134,7 +169,7 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(items[2].textContent).toContain('Sin plan todavía')
   })
 
-  it('draws ONE grid: the columns, the whole company first, then every group', async () => {
+  it('draws ONE grid: the columns, the whole company first, then every group with its change since Q2', async () => {
     await open()
     const map = screen.getByRole('region', { name: 'Clima por grupo y dimensión · Q3' })
     expect(within(map).getByText('meta 3,7 · selecciona una celda para ver su pregunta')).toBeTruthy()
@@ -153,8 +188,19 @@ describe('the survey results on the tenant’s real payload', () => {
     const order = [...grid.querySelectorAll('tbody tr[data-testid]')].map((row) => row.getAttribute('data-testid'))
     expect(order).toEqual(['company-row', `group-row-${FIN}`, `group-row-${ENG}`, `group-row-${OPS}`, `group-row-${PER}`, `group-row-${VEN}`])
     const company = screen.getByTestId('company-row').textContent ?? ''
-    for (const reading of ['3,8', '3,3', '3,7', '3,4', '4,0', '3,65', '+0,3']) expect(company).toContain(reading)
+    for (const reading of ['3,8', '3,3', '3,7', '3,4', '4,0', '3,65']) expect(company).toContain(reading)
+    // Six dimension changes and the mean's, all +0,3 once rounded to what is printed.
+    expect(company.match(/\+0,3/g)).toHaveLength(7)
+    expect(vsQ2('company-row')).toBe('+0,3')
     expect(screen.getByTestId(`group-row-${ENG}`).textContent).toContain('3,9')
+    // "Frente a Q2" per group, off Q2's own breakdown: every group Q2 disclosed.
+    expect(vsQ2(`group-row-${ENG}`)).toBe('+0,3')
+    expect(vsQ2(`group-row-${OPS}`)).toBe('+0,2')
+    expect(vsQ2(`group-row-${PER}`)).toBe('+0,2')
+    expect(vsQ2(`group-row-${VEN}`)).toBe('+0,3')
+    expect(screen.getByTestId('delta-note').textContent).toBe(
+      '«Frente a Q2» por grupo aparece cuando la encuesta anterior tiene ese mismo grupo por encima del umbral.',
+    )
     expect(within(screen.getByTestId('grid-legend')).getByText('protegido, menos de 5 respuestas')).toBeTruthy()
   })
 
@@ -236,14 +282,44 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(within(doing).getByRole('link', { name: 'Crear un plan' }).getAttribute('href')).toBe('/action-plans')
   })
 
-  it('wears the sample chip on the wave deltas and the group’s distribution, and nowhere else', async () => {
+  it('wears the sample chip on the group’s distribution, and nowhere else', async () => {
     await open()
-    expect(screen.getAllByText(SAMPLE)).toHaveLength(3)
-    expect(within(screen.getByTestId('climate-delta')).getByText(SAMPLE)).toBeTruthy()
-    expect(within(screen.getByTestId('delta-note')).getByText(SAMPLE)).toBeTruthy()
+    expect(screen.getAllByText(SAMPLE)).toHaveLength(1)
     expect(within(screen.getByTestId('cell-question')).getByText(SAMPLE)).toBeTruthy()
     // The whole-company distribution is real: no chip on it.
     expect(within(screen.getByTestId('company-distribution')).queryByText(SAMPLE)).toBeNull()
+  })
+
+  it('says the previous wave could not be loaded, and prints no change anywhere, when that request fails', async () => {
+    vi.mocked(fetch).mockImplementation(tenantWithTrends(() => new Response('{}', { status: 500 })))
+    await open()
+    expect(screen.getByTestId('climate-delta').textContent).toBe('no se pudo cargar la ola anterior')
+    expect(screen.getByTestId('delta-note').textContent).toBe(
+      'No se pudo cargar la ola anterior, así que esta vista no muestra cambios.',
+    )
+    expect(within(screen.getByTestId('climate-grid')).queryByText('Frente a Q2')).toBeNull()
+    expect(screen.getByTestId('company-row').textContent).not.toContain('+')
+    expect(screen.getByText('Qué encontró esta encuesta, qué cambió desde la ola anterior y por dónde empezar a mirar.')).toBeTruthy()
+    // The map is untouched: the lowest cell still opens, with no way to a wave it lacks.
+    const doing = within(screen.getByTestId('cell-panel')).getByTestId('cell-doing')
+    expect(within(doing).queryByRole('link', { name: /Comparar con/ })).toBeNull()
+    expect(requested().some((url) => url.includes(`/surveys/${Q2}/`))).toBe(false)
+  })
+
+  it('says a first wave has nothing to compare with, and asks for no other survey', async () => {
+    // The tenant's trends window cut down to Q3 alone: nothing closed before it.
+    const onlyQ3 = structuredClone(fixture['GET /surveys/climate-trends']) as ClimateTrendsResponse
+    const at = onlyQ3.surveys.findIndex((survey) => survey.surveyId === SURVEY)
+    onlyQ3.surveys = [onlyQ3.surveys[at]]
+    onlyQ3.groups = onlyQ3.groups.map((group) => ({ ...group, points: [group.points[at]] }))
+    vi.mocked(fetch).mockImplementation(tenantWithTrends(() => json(onlyQ3)))
+    await open()
+    expect(screen.getByTestId('climate-delta').textContent).toBe('primera ola: no hay una anterior con la cual comparar')
+    expect(screen.getByTestId('delta-note').textContent).toBe(
+      'Primera ola: no hay una encuesta anterior con la cual comparar, así que esta vista no muestra cambios.',
+    )
+    expect(within(screen.getByTestId('climate-grid')).queryByText(/^Frente a/)).toBeNull()
+    expect(requested().filter((url) => url.includes('/analytics')).every((url) => url.includes(SURVEY))).toBe(true)
   })
 
   it('keeps the server’s long-format CSV behind "···", through fetch + Blob', async () => {
@@ -252,8 +328,7 @@ describe('the survey results on the tenant’s real payload', () => {
     await userEvent.click(await screen.findByRole('menuitem', { name: 'CSV del servidor (formato largo)' }))
     await waitFor(() => expect(vi.mocked(downloadBlobFile)).toHaveBeenCalledTimes(1))
     expect(vi.mocked(downloadBlobFile).mock.calls[0][0]).toBe(`survey-${SURVEY}-results.csv`)
-    const urls = vi.mocked(fetch).mock.calls.map((call) => String(call[0]))
-    expect(urls.some((url) => url.endsWith(`/surveys/${SURVEY}/export/csv?lang=es`))).toBe(true)
+    expect(requested().some((url) => url.endsWith(`/surveys/${SURVEY}/export/csv?lang=es`))).toBe(true)
   })
 
   it('draws the same page for a super administrator who chose the company', async () => {
@@ -261,5 +336,6 @@ describe('the survey results on the tenant’s real payload', () => {
     renderAs({ role: 'super_admin', companyId: '' })
     expect(await screen.findByTestId('cell-panel')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Exportar informe (PDF)' })).toBeTruthy()
+    expect(screen.getByTestId('climate-delta').textContent).toBe('+0,29 frente a Q2 · segunda alza seguida')
   })
 })

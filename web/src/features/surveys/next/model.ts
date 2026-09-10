@@ -13,11 +13,14 @@ import type { ClimateMapModel } from '../surveyResultsMap'
  *
  * ## What is a measurement and what is a sample
  *
- * Everything below `sample` comes off `GET /surveys/{id}/analytics`, `GET /surveys/{id}`
- * and `GET /action-plans` — the map, the protected rows, the per-question means, the
- * whole-survey 1–5 distributions, the closing date. `sample` carries the two things no
- * endpoint returns today (see `sampleModel.ts` for which endpoints will), and the view
- * marks every region it feeds with the "sample data" chip.
+ * Everything but `sample` is measured. `GET /surveys/{id}/analytics`, `GET /surveys/{id}`
+ * and `GET /action-plans` give the map, the protected rows, the per-question means, the
+ * whole-survey 1–5 distributions, the closing date and the plans; `GET
+ * /surveys/climate-trends` names the previous wave and the rises in a row, and that
+ * wave's own `GET /surveys/{id}/analytics` gives what `previous` compares against.
+ * `sample` carries the one reading no endpoint returns today — the opened group's 1–5
+ * distribution (`sampleModel.ts`) — and the view marks that region, and only that one,
+ * with the "sample data" chip.
  */
 
 /** One column of the map: a dimension the survey measured. */
@@ -39,6 +42,12 @@ export interface ResultsGroupRow {
   isProtected: boolean
   scores: readonly (number | null)[]
   mean: number | null
+  /**
+   * The change of `mean` since the previous wave, unrounded. `null` — never 0 — for a
+   * protected row, for a group the previous wave withheld or did not have, and when
+   * there is no previous wave: the grid then says "sin Q2", or draws no such column.
+   */
+  vsPrevious: number | null
 }
 
 /** The plan that covers a group, when `GET /action-plans` lists one for its department. */
@@ -51,22 +60,47 @@ export interface ResultsPlanRef {
 }
 
 /**
- * Wave-over-wave and per-group distribution data no endpoint provides today.
+ * The one reading no endpoint provides today: the opened group's answer distribution.
  * `isSample` is always true while this shape is fed from `sampleModel.ts`.
  */
 export interface ResultsSampleWave {
   isSample: boolean
-  /** The code of the wave the deltas are against: "Q2". */
-  previousCode: string
-  /** Change of the whole-company mean since the previous wave. */
-  averageDelta: number
-  /** Change per dimension key since the previous wave; a key not listed has no reading. */
-  dimensionDeltas: Readonly<Record<string, number>>
-  /** How many waves in a row the average has risen, counting this one. */
-  risesInARow: number
   /** The opened group's answers to the opened question, as % per scale point, 1..5. */
   groupDistribution: readonly { position: number; percentage: number }[]
 }
+
+/**
+ * The survey before this one, as the page compares against it. Every figure is measured,
+ * from that survey's own `GET /surveys/{id}/analytics`, by the same rules this survey's
+ * figures are read by (`compose.ts` `composePrevious`).
+ */
+export interface ResultsPreviousWave {
+  surveyId: string
+  /** "Q2" out of "Encuesta de Clima Q2" (`waveCode`). */
+  code: string
+  /** The previous wave's unrounded whole-survey mean, per dimension key. */
+  dimensionScores: Readonly<Record<string, number>>
+  /**
+   * Per group (department id) the previous wave DISCLOSED, its unrounded mean per
+   * dimension key. A group that wave withheld, or did not have, has no entry — never a
+   * zero — and the grid says "sin Q2" for it.
+   */
+  groupScores: Readonly<Record<string, Readonly<Record<string, number>>>>
+  /** Whether the previous wave came with a breakdown by group at all. */
+  hasGroupBreakdown: boolean
+  /** Consecutive wave-over-wave rises of the company's climate, ending at THIS survey. */
+  risesInARow: number
+}
+
+/**
+ * What the page knows about the previous wave: `loaded`; `none` — nothing closed before
+ * this survey, a first wave; or `failed` — a request failed, and the page says so and
+ * prints no comparison.
+ */
+export type ResultsPrevious =
+  | { status: 'loaded'; wave: ResultsPreviousWave }
+  | { status: 'none' }
+  | { status: 'failed' }
 
 export interface SurveyResultsNextModel {
   surveyId: string
@@ -110,5 +144,7 @@ export interface SurveyResultsNextModel {
    * says, rather than claiming "no plan" on the strength of an error.
    */
   plans: readonly ActionPlan[] | null
+  /** The wave this survey is compared against, measured — or why there is none. */
+  previous: ResultsPrevious
   sample: ResultsSampleWave
 }

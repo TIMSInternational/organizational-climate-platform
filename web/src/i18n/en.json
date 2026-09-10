@@ -2638,7 +2638,7 @@
       "groupMean": "Group mean",
       "vsWave": "vs {wave}",
       "noPrevious": "no {wave}",
-      "deltaNote": "\"vs {wave}\" per group appears when the previous survey has that same group above the floor; today the previous wave is a sample.",
+      "deltaNote": "\"vs {wave}\" per group appears when the previous survey has that same group above the floor.",
       "cellHeading": "Open cell",
       "cellBelow": "Mean {score} · {shortfall} under the average",
       "cellAbove": "Mean {score} · {excess} above the average",
@@ -2697,7 +2697,18 @@
       "companyDistributionSubWave": "{wave} · {responses} responses · {low} % answered 1 or 2",
       "doingPlanLead": "A plan already covers this group:",
       "doingPlanDue": "due {date}",
-      "compareWave": "Compare with {wave}"
+      "compareWave": "Compare with {wave}",
+      "riseSecond": "second rise in a row",
+      "riseThird": "third rise in a row",
+      "riseFourth": "fourth rise in a row",
+      "riseFifth": "fifth rise in a row",
+      "risesCount": "{count} rises in a row",
+      "climateFirstWave": "first wave: none before it to compare with",
+      "climatePreviousFailed": "the previous wave could not be loaded",
+      "climateNotComparable": "no dimensions in common with {wave}",
+      "deltaNoteNoBreakdown": "{wave} was loaded without a breakdown by group.",
+      "deltaNoteFirstWave": "First wave: there is no earlier survey to compare with, so this view shows no changes.",
+      "deltaNotePreviousFailed": "The previous wave could not be loaded, so this view shows no changes."
     }
   },
   "employee": {

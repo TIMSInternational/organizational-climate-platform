@@ -9,8 +9,8 @@ import { PROTECTED_HATCH } from '../../../components/charts/suppression'
 import { Table } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
 import { CLIMATE_TARGET, targetBand, type TargetBand } from './derive'
-import type { ResultsGroupRow, ResultsSampleWave } from './model'
-import { tintOf } from './tint'
+import type { ResultsGroupRow, ResultsPrevious } from './model'
+import { deltaInkOf, tintOf } from './tint'
 
 /**
  * The open cell's ring, from the OUTSIDE: a 2px gap in the card's own surface and a
@@ -53,8 +53,16 @@ export interface ResultsClimateGridProps {
   rows: readonly ResultsGroupRow[]
   /** The whole survey's rounded reading per column, and its two-decimal mean. */
   company: { scores: readonly (number | null)[]; mean: number | null }
-  /** The wave-over-wave deltas, sample until phase 2 — the chip says so. */
-  sample: ResultsSampleWave
+  /**
+   * The previous wave, measured (`compose.ts` `composePrevious`). Without one — a first
+   * wave, or a request that failed — the grid draws no "Frente a" column at all rather
+   * than a column of dashes, and the note under it says why.
+   */
+  previous: ResultsPrevious
+  /** The whole company's change since the previous wave, unrounded; `null` without one. */
+  companyDelta: number | null
+  /** Each column's change since the previous wave, unrounded, aligned to `dimensions`. */
+  dimensionDeltas: readonly (number | null)[]
   /** The anonymity floor, per company. */
   threshold: number
   selection: ClimateMapSelection | null
@@ -103,7 +111,9 @@ export default function ResultsClimateGrid({
   dimensions,
   rows,
   company,
-  sample,
+  previous,
+  companyDelta,
+  dimensionDeltas,
   threshold,
   selection,
   panelId,
@@ -112,9 +122,13 @@ export default function ResultsClimateGrid({
   const { t, locale } = useTranslation()
   const score = (value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale)
   const score2 = (value: number) => formatMetric(value, { kind: 'number', decimals: 2 }, locale)
-  const signed = (value: number) => `${value > 0 ? '+' : ''}${score(value)}`
-  const columns = dimensions.length + 3
-  const deltaInk = (value: number) => (value >= 0 ? 'text-accent-green-ink' : 'text-accent-red-ink')
+  // Rounded to what is printed first, so the sign and the ink agree with the figure.
+  const signed = (value: number) => {
+    const shown = Math.round(value * 10) / 10 || 0
+    return `${shown > 0 ? '+' : ''}${score(shown)}`
+  }
+  const compare = previous.status === 'loaded' ? previous.wave : null
+  const columns = dimensions.length + (compare ? 3 : 2)
 
   return (
     <div className="flex flex-col gap-3">
@@ -135,7 +149,7 @@ export default function ResultsClimateGrid({
             <col key={dimension.key} />
           ))}
           <col style={{ width: 96 }} />
-          <col style={{ width: 96 }} />
+          {compare && <col style={{ width: 96 }} />}
         </colgroup>
         <thead>
           <tr className={ROW}>
@@ -148,11 +162,11 @@ export default function ResultsClimateGrid({
             <th scope="col" className={HEAD}>
               {t('surveyResults.next.groupMean')}
             </th>
-            {/* The deltas are the one sample on the grid; their chip sits on the note
-                under the legend that explains them — a 96px header cannot hold it. */}
-            <th scope="col" className={HEAD}>
-              {t('surveyResults.next.vsWave', { wave: sample.previousCode })}
-            </th>
+            {compare && (
+              <th scope="col" className={HEAD}>
+                {t('surveyResults.next.vsWave', { wave: compare.code })}
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -165,15 +179,15 @@ export default function ResultsClimateGrid({
             </th>
             {dimensions.map((dimension, index) => {
               const value = company.scores[index] ?? null
-              const delta = sample.dimensionDeltas[dimension.key]
+              const delta = compare ? (dimensionDeltas[index] ?? null) : null
               return (
                 <td key={dimension.key} className={cn(CELL, 'text-center')}>
                   <span className="flex flex-col items-center gap-px">
                     <span className="font-mono text-sm tabular-nums text-fg-primary">
                       {value === null ? '—' : score(value)}
                     </span>
-                    {value !== null && delta !== undefined && (
-                      <span className={cn('font-mono text-2xs tabular-nums', deltaInk(delta))}>{signed(delta)}</span>
+                    {value !== null && delta !== null && (
+                      <span className={cn('font-mono text-2xs tabular-nums', deltaInkOf(delta, 1))}>{signed(delta)}</span>
                     )}
                   </span>
                 </td>
@@ -182,9 +196,17 @@ export default function ResultsClimateGrid({
             <td className={cn(CELL, 'text-center font-mono text-sm tabular-nums text-fg-primary')}>
               {company.mean === null ? '—' : score2(company.mean)}
             </td>
-            <td className={cn(CELL, 'text-center font-mono text-xs font-semibold tabular-nums', deltaInk(sample.averageDelta))}>
-              {company.mean === null ? '—' : signed(sample.averageDelta)}
-            </td>
+            {compare && (
+              <td
+                className={cn(
+                  CELL,
+                  'text-center font-mono text-xs font-semibold tabular-nums',
+                  companyDelta === null ? 'text-fg-label' : deltaInkOf(companyDelta, 1),
+                )}
+              >
+                {company.mean === null || companyDelta === null ? '—' : signed(companyDelta)}
+              </td>
+            )}
           </tr>
           {/* The hairline under the company row, as its own row so it spans the gaps. */}
           <tr aria-hidden="true" className={ROW}>
@@ -282,23 +304,31 @@ export default function ResultsClimateGrid({
                     </span>
                   )}
                 </td>
-                <td className={cn(CELL, 'text-center text-xs text-fg-label')}>
-                  {row.isProtected ? (
-                    // Hatched too: a withheld group's change is as withheld as its
-                    // level, and a dash would read as "no previous wave".
-                    <ProtectedCell
-                      responses={0}
-                      threshold={threshold}
-                      description={`${row.name}, ${t('surveyResults.next.vsWave', { wave: sample.previousCode })}`}
-                      showWord={false}
-                      suppressedClassName="mx-auto h-8.5 w-12"
-                    >
-                      {null}
-                    </ProtectedCell>
-                  ) : (
-                    t('surveyResults.next.noPrevious', { wave: sample.previousCode })
-                  )}
-                </td>
+                {compare && (
+                  <td className={cn(CELL, 'text-center text-xs text-fg-label')}>
+                    {row.isProtected ? (
+                      // Hatched too: a withheld group's change is as withheld as its
+                      // level, and a dash would read as "no previous wave".
+                      <ProtectedCell
+                        responses={0}
+                        threshold={threshold}
+                        description={`${row.name}, ${t('surveyResults.next.vsWave', { wave: compare.code })}`}
+                        showWord={false}
+                        suppressedClassName="mx-auto h-8.5 w-12"
+                      >
+                        {null}
+                      </ProtectedCell>
+                    ) : row.vsPrevious === null ? (
+                      // The previous wave withheld this group, or did not have it: there
+                      // is nothing to compare with, said in words and never as a 0.
+                      t('surveyResults.next.noPrevious', { wave: compare.code })
+                    ) : (
+                      <span className={cn('font-mono tabular-nums', deltaInkOf(row.vsPrevious, 1))}>
+                        {signed(row.vsPrevious)}
+                      </span>
+                    )}
+                  </td>
+                )}
               </tr>
             )
           })}

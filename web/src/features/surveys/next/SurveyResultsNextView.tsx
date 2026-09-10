@@ -5,7 +5,6 @@ import { PageTopBar } from '../../../components/layout'
 import { KpiTile, WordCloud, formatMetric, type ClimateMapSelection } from '../../../components/charts'
 import {
   Button,
-  Chip,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -27,7 +26,7 @@ import { UNCATEGORISED_DIMENSION } from '../surveyResultsMap'
 import { buildBreakdownCsv, buildQuestionResultsCsv, resultsFileName, type CsvLabels } from '../surveyResultsCsv'
 import ResultsContentLanguageNotice from '../components/ResultsContentLanguageNotice'
 import ResultsSuppressionNotice from '../components/ResultsSuppressionNotice'
-import type { SurveyResultsNextModel } from './model'
+import type { ResultsPrevious, SurveyResultsNextModel } from './model'
 import ResultsCellPanel from './ResultsCellPanel'
 import ResultsClimateGrid from './ResultsClimateGrid'
 import SurveyResultsQuestions from './SurveyResultsQuestions'
@@ -35,8 +34,10 @@ import {
   CLIMATE_TARGET,
   belowTarget,
   cellDetail,
+  companyDelta,
   companyMean,
   companyScores,
+  dimensionDeltas,
   groupRows,
   hasOpenText,
   legibleGroups,
@@ -45,7 +46,7 @@ import {
   withheldWords,
   type ResultsFinding,
 } from './derive'
-import { tintOf } from './tint'
+import { deltaInkOf, tintOf } from './tint'
 
 /** The id the open cell's `aria-controls` names. */
 const PANEL_ID = 'results-next-cell-panel'
@@ -115,9 +116,14 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   const climate = model.climate
   const sample = model.sample
   const score = useCallback((value: number) => formatMetric(value, { kind: 'number', decimals: 1 }, locale), [locale])
+  // Rounded to what is printed first, so the sign and the ink agree with the figure
+  // (`|| 0` folds a rounded -0 into 0).
   const signed = useCallback(
-    (value: number, decimals: number) =>
-      `${value > 0 ? '+' : ''}${formatMetric(value, { kind: 'number', decimals }, locale)}`,
+    (value: number, decimals: number) => {
+      const scale = 10 ** decimals
+      const shown = Math.round(value * scale) / scale || 0
+      return `${shown > 0 ? '+' : ''}${formatMetric(shown, { kind: 'number', decimals }, locale)}`
+    },
     [locale],
   )
   const dimensionName = useCallback(
@@ -131,6 +137,8 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   const groups = useMemo(() => legibleGroups(model), [model])
   const findings = useMemo(() => whereToLookFirst(model), [model])
   const detail = useMemo(() => (selection ? cellDetail(model, selection) : null), [model, selection])
+  const climateDelta = useMemo(() => companyDelta(model), [model])
+  const deltas = useMemo(() => dimensionDeltas(model), [model])
   const openText = hasOpenText(model)
   const themes = useMemo(() => openTextWords(model), [model])
   const withheld = withheldWords(model)
@@ -193,17 +201,24 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
     : lastResponse
       ? t('surveyResults.next.eyebrowClosed', { name, date: calendarDayLong(Date.parse(lastResponse), locale) })
       : t('surveyResults.next.eyebrowOpen', { name })
-  const sampleChip = sample.isSample ? <Chip tone="warning" label={t('dashboard.next.sampleChip')} /> : null
   const protectedGroups = rows.filter((row) => row.isProtected).map((row) => row.name)
   const completedPercent = Math.round(model.summary.completionRate)
-  const deltaInk = (value: number) => (value >= 0 ? 'text-accent-green-ink' : 'text-accent-red-ink')
+  // The previous wave, measured (`compose.ts` `composePrevious`) — the readings the
+  // Panel de Control prints for this survey, so the two screens cannot disagree.
+  const previous = model.previous
+  const previousWave = previous.status === 'loaded' ? previous.wave : null
+  const climateLine = climateSentence(previous, climateDelta, t, signed)
 
   return (
     <div>
       <PageTopBar
         title={t('surveyResults.next.title', { name })}
         eyebrow={eyebrow}
-        description={t('surveyResults.next.descriptionWave', { wave: sample.previousCode })}
+        description={
+          previousWave
+            ? t('surveyResults.next.descriptionWave', { wave: previousWave.code })
+            : t('surveyResults.next.description')
+        }
         breadcrumbs={[
           { label: t('surveys.title'), href: '/surveys' },
           { label: name, href: `/surveys/${model.surveyId}` },
@@ -317,16 +332,10 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
             unit={t('surveyResults.next.climateUnit', { target })}
             sub={
               company.mean !== null && (
-                <span className="flex flex-wrap items-center gap-1.5" data-testid="climate-delta">
-                  <span className={deltaInk(sample.averageDelta)}>
-                    {t('surveyResults.next.climateVsWave', {
-                      delta: signed(sample.averageDelta, 2),
-                      wave: sample.previousCode,
-                    })}
-                    {sample.risesInARow >= 2 &&
-                      ` · ${t('dashboard.next.risesInARow', { count: sample.risesInARow })}`}
-                  </span>
-                  {sampleChip}
+                // One line in one colour, as the artboard draws it: the change since the
+                // previous wave, measured — or, without one, why there is none.
+                <span className={climateLine.ink} data-testid="climate-delta">
+                  {climateLine.text}
                 </span>
               )
             }
@@ -443,14 +452,17 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                             {finding.plan.status === 'not_started' && ` · ${t('surveyResults.next.planNoProgress')}`}
                           </span>
                         )}
+                        {/* The artboard's link: 12px text, a 4px gap, a 12px arrow. The
+                            Button's own 6px gap and 16px icon drew it 109px against the
+                            artboard's 102px. */}
                         <Button
                           variant="link"
                           size="sm"
-                          className="h-auto p-0 text-sm text-fg-secondary hover:text-fg-primary"
+                          className="h-auto gap-1 p-0 text-sm text-fg-secondary hover:text-fg-primary"
                           onClick={() => openCell(finding.rowId, finding.dimensionKey, true)}
                         >
                           {t('surveyResults.next.viewQuestion')}
-                          <ArrowRight aria-hidden="true" />
+                          <ArrowRight aria-hidden="true" className="size-3 text-fg-label" />
                         </Button>
                       </div>
                     </li>
@@ -474,17 +486,31 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                 dimensions={climate.dimensions.map((entry) => ({ key: entry.key, name: dimensionName(entry.key) }))}
                 rows={rows}
                 company={company}
-                sample={sample}
+                previous={previous}
+                companyDelta={climateDelta}
+                dimensionDeltas={deltas}
                 threshold={climate.threshold}
                 selection={selection}
                 panelId={PANEL_ID}
                 onSelectCell={(rowId, dimensionKey) => openCell(rowId, dimensionKey, false)}
               />
-              {/* The chip for the grid's one sample — the "Frente a Q2" deltas — on the
-                  note that explains them. */}
-              <p className="m-0 flex flex-wrap items-center gap-1.5 text-xs text-fg-label" data-testid="delta-note">
-                {sampleChip}
-                {t('surveyResults.next.deltaNote', { wave: sample.previousCode })}
+              {/* What the "Frente a" column measures, or why the grid has none. No
+                  chip: every change on the grid is measured against the previous wave. */}
+              <p className="m-0 text-xs text-fg-label" data-testid="delta-note">
+                {previousWave
+                  ? [
+                      t('surveyResults.next.deltaNote', { wave: previousWave.code }),
+                      previousWave.hasGroupBreakdown
+                        ? null
+                        : t('surveyResults.next.deltaNoteNoBreakdown', { wave: previousWave.code }),
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
+                  : t(
+                      previous.status === 'failed'
+                        ? 'surveyResults.next.deltaNotePreviousFailed'
+                        : 'surveyResults.next.deltaNoteFirstWave',
+                    )}
               </p>
             </section>
 
@@ -498,6 +524,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                   code={model.code}
                   threshold={climate.threshold}
                   sample={sample}
+                  previousCode={previousWave?.code ?? null}
                   capabilities={capabilities}
                   onClose={() => setSelection(null)}
                 />
@@ -535,6 +562,40 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
 }
 
 type Translate = (key: string, params?: Record<string, string | number>) => string
+
+/** The artboard's words for a run of rises — "tercera alza seguida" — from two up. */
+const RISE_ORDINALS: Readonly<Record<number, string>> = {
+  2: 'surveyResults.next.riseSecond',
+  3: 'surveyResults.next.riseThird',
+  4: 'surveyResults.next.riseFourth',
+  5: 'surveyResults.next.riseFifth',
+}
+
+function risesPhrase(rises: number, t: Translate): string | null {
+  if (rises < 2) return null
+  const ordinal = RISE_ORDINALS[rises] as string | undefined
+  return ordinal === undefined ? t('surveyResults.next.risesCount', { count: rises }) : t(ordinal)
+}
+
+/**
+ * The CLIMA tile's coloured sentence: "+0,29 frente a Q2 · segunda alza seguida" — the
+ * change since the previous wave and the run of rises it extends — or, without a
+ * previous wave, why there is no change to print, in the neutral ink.
+ */
+function climateSentence(
+  previous: ResultsPrevious,
+  delta: number | null,
+  t: Translate,
+  signed: (value: number, decimals: number) => string,
+): { text: string; ink: string } {
+  if (previous.status === 'failed') return { text: t('surveyResults.next.climatePreviousFailed'), ink: 'text-fg-label' }
+  if (previous.status === 'none') return { text: t('surveyResults.next.climateFirstWave'), ink: 'text-fg-label' }
+  const wave = previous.wave.code
+  if (delta === null) return { text: t('surveyResults.next.climateNotComparable', { wave }), ink: 'text-fg-label' }
+  const change = t('surveyResults.next.climateVsWave', { delta: signed(delta, 2), wave })
+  const rises = risesPhrase(previous.wave.risesInARow, t)
+  return { text: rises === null ? change : `${change} · ${rises}`, ink: deltaInkOf(delta, 2) }
+}
 
 /** The one-line reason under a finding's name — derived in `whereToLookFirst`, worded here. */
 function reasonOf(finding: ResultsFinding, t: Translate, score: (value: number) => string): string {

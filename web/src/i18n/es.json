@@ -2638,7 +2638,7 @@
       "groupMean": "Media del grupo",
       "vsWave": "Frente a {wave}",
       "noPrevious": "sin {wave}",
-      "deltaNote": "«Frente a {wave}» por grupo aparece cuando la encuesta anterior tiene ese mismo grupo por encima del umbral; hoy la ola anterior es una muestra.",
+      "deltaNote": "«Frente a {wave}» por grupo aparece cuando la encuesta anterior tiene ese mismo grupo por encima del umbral.",
       "cellHeading": "Celda abierta",
       "cellBelow": "Media {score} · {shortfall} bajo la media",
       "cellAbove": "Media {score} · {excess} sobre la media",
@@ -2697,7 +2697,18 @@
       "companyDistributionSubWave": "{wave} · {responses} respuestas · {low} % respondió 1 o 2",
       "doingPlanLead": "Un plan ya atiende este grupo:",
       "doingPlanDue": "vence el {date}",
-      "compareWave": "Comparar con {wave}"
+      "compareWave": "Comparar con {wave}",
+      "riseSecond": "segunda alza seguida",
+      "riseThird": "tercera alza seguida",
+      "riseFourth": "cuarta alza seguida",
+      "riseFifth": "quinta alza seguida",
+      "risesCount": "{count} alzas seguidas",
+      "climateFirstWave": "primera ola: no hay una anterior con la cual comparar",
+      "climatePreviousFailed": "no se pudo cargar la ola anterior",
+      "climateNotComparable": "sin dimensiones en común con {wave}",
+      "deltaNoteNoBreakdown": "{wave} se cargó sin desglose por grupo.",
+      "deltaNoteFirstWave": "Primera ola: no hay una encuesta anterior con la cual comparar, así que esta vista no muestra cambios.",
+      "deltaNotePreviousFailed": "No se pudo cargar la ola anterior, así que esta vista no muestra cambios."
     }
   },
   "employee": {

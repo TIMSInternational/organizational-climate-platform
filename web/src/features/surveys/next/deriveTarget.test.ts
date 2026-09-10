@@ -2,14 +2,17 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ActionPlan } from '../../action-plans/api/actionPlans'
+import type { ClimateTrendsResponse } from '../api/climateTrends'
 import type { SurveyAnalyticsResponse } from '../api/surveyResults'
-import { composeResultsModel } from './compose'
+import { composeResultsModel, previousSurveyOf, risesInARow, type PreviousPayloads } from './compose'
 import {
   CLIMATE_TARGET,
   belowTarget,
   cellDetail,
+  companyDelta,
   companyMean,
   companyScores,
+  dimensionDeltas,
   groupRows,
   targetBand,
   whereToLookFirst,
@@ -27,6 +30,9 @@ const FIXTURE = join(process.cwd(), 'scripts', 'shot-fixtures', 'survey-results-
 const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as {
   'GET /surveys/*/analytics': SurveyAnalyticsResponse
   'GET /action-plans': { actionPlans: ActionPlan[] }
+  // The two the page makes for the previous wave, fetched the same way on 10 Sep.
+  'GET /surveys/climate-trends': ClimateTrendsResponse
+  'GET /surveys/7321a9bb-9e83-465a-a31d-73bdc186d626/analytics': SurveyAnalyticsResponse
 }
 
 const FIN = 'bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9'
@@ -35,8 +41,23 @@ const OPS = '0a9d7637-814c-4d4a-8407-45cfbca3f4e7'
 const VEN = '07f5a4d4-27d8-4df0-afdc-b50db1371062'
 const OPS_PLAN = '4f973f47-4ab2-4a5b-9606-af5db05670b8'
 
+const Q2 = '7321a9bb-9e83-465a-a31d-73bdc186d626'
+const Q3 = '38b2002f-66da-468d-b136-ec112ba3204b'
+const trends = () => fixture['GET /surveys/climate-trends']
+const q2 = () => structuredClone(fixture['GET /surveys/7321a9bb-9e83-465a-a31d-73bdc186d626/analytics'])
+const Q1 = trends().surveys.find((survey) => survey.title === 'Encuesta de Clima Q1')!.surveyId
+
+/** The previous wave as the hook hands it over: Q2, named by the trends window. */
+function loaded(analytics: SurveyAnalyticsResponse = q2()): PreviousPayloads {
+  const survey = trends().surveys.find((candidate) => candidate.surveyId === Q2)!
+  return { status: 'loaded', trends: trends(), survey, analytics }
+}
+
 const real = () =>
-  composeResultsModel(fixture['GET /surveys/*/analytics'], fixture['GET /action-plans'].actionPlans, null)
+  composeResultsModel(fixture['GET /surveys/*/analytics'], fixture['GET /action-plans'].actionPlans, null, loaded())
+/** The tenant's Q3 against a doctored previous wave. */
+const against = (analytics: SurveyAnalyticsResponse) =>
+  composeResultsModel(fixture['GET /surveys/*/analytics'], [], null, loaded(analytics))
 
 describe('against the climate target, on the tenant’s real payload', () => {
   it('is the Panel de Control’s target, 3.7', () => {
@@ -129,14 +150,14 @@ describe('against the climate target, on the tenant’s real payload', () => {
     for (const segment of payload.breakdowns[0].segments) {
       for (const entry of segment.questions) entry.average = Math.min(5, (entry.average ?? 0) + 1.3)
     }
-    const lifted = composeResultsModel(payload, [], null)
+    const lifted = composeResultsModel(payload, [], null, { status: 'none' })
     expect(lifted.climate!.target).toBeGreaterThan(4)
     // Half the cells sit under that mean; none sits under the target.
     expect(whereToLookFirst(lifted)).toEqual([])
   })
 
   it('says "plans could not be loaded" rather than "no plan" when the plans request failed', () => {
-    const model = composeResultsModel(fixture['GET /surveys/*/analytics'], null, null)
+    const model = composeResultsModel(fixture['GET /surveys/*/analytics'], null, null, { status: 'none' })
     expect(whereToLookFirst(model).every((f) => f.plan === undefined)).toBe(true)
   })
 
@@ -183,5 +204,100 @@ describe('against the climate target, on the tenant’s real payload', () => {
         else expect(detail?.questions.length, `${row.name} ${dimension.key}`).toBe(1)
       }
     }
+  })
+})
+
+describe('against the previous wave, on the tenant’s real payloads', () => {
+  it('names Q2 as the wave before Q3, as the Panel de Control does, and gives Q1 none', () => {
+    // Q4's archived copy sits after Q3 in the window and is neither closed nor disclosed.
+    expect(previousSurveyOf(trends(), Q3, null)?.surveyId).toBe(Q2)
+    expect(previousSurveyOf(trends(), Q1, null)).toBeNull()
+    // Outside the window (still open, say), the last comparable wave that closed before it.
+    expect(previousSurveyOf(trends(), 'not-in-the-window', '2026-06-01T00:00:00Z')?.surveyId).toBe(Q2)
+    expect(previousSurveyOf(trends(), 'not-in-the-window', null)).toBeNull()
+  })
+
+  it('counts the rises the way the dashboard does: Q1 3,03 → Q2 3,36 → Q3 3,65 is two', () => {
+    expect(risesInARow(trends(), Q3)).toBe(2)
+    expect(risesInARow(trends(), Q2)).toBe(1)
+    expect(risesInARow(trends(), Q1)).toBe(0)
+  })
+
+  it('measures the company, every dimension and every group against Q2’s own analytics', () => {
+    const model = real()
+    expect(model.previous).toMatchObject({
+      status: 'loaded',
+      wave: { surveyId: Q2, code: 'Q2', hasGroupBreakdown: true, risesInARow: 2 },
+    })
+    // 3,6533 against Q2's 3,3600: the tile's "+0,29 frente a Q2".
+    expect(companyDelta(model)).toBeCloseTo(0.2933, 4)
+    const hundredths = (value: number | null) => (value === null ? null : Math.round(value * 100) / 100)
+    // Seguridad psicológica, Carga de trabajo, Confianza, Reconocimiento, Desarrollo, Pertenencia.
+    expect(dimensionDeltas(model).map(hundredths)).toEqual([0.25, 0.29, 0.34, 0.3, 0.25, 0.33])
+    expect(Object.fromEntries(groupRows(model).map((row) => [row.name, hundredths(row.vsPrevious)]))).toEqual({
+      Finanzas: null,
+      Ingeniería: 0.31,
+      Operaciones: 0.23,
+      Personas: 0.23,
+      Ventas: 0.33,
+    })
+  })
+
+  it('gives a group the previous wave withheld no change at all — "sin Q2", never 0', () => {
+    const withheld = q2()
+    const ventas = withheld.breakdowns[0].segments.find((segment) => segment.key === VEN)!
+    Object.assign(ventas, { isSuppressed: true, respondentCount: 0, questions: [] })
+    const row = groupRows(against(withheld)).find((candidate) => candidate.id === VEN)!
+    expect(row.isProtected).toBe(false)
+    expect(row.vsPrevious).toBeNull()
+  })
+
+  it('treats a previous group under the floor as withheld, whatever the server flagged', () => {
+    const under = q2()
+    under.breakdowns[0].segments.find((segment) => segment.key === VEN)!.respondentCount = 4
+    const model = against(under)
+    expect(model.previous.status === 'loaded' && VEN in model.previous.wave.groupScores).toBe(false)
+    expect(groupRows(model).find((candidate) => candidate.id === VEN)!.vsPrevious).toBeNull()
+  })
+
+  it('never compares a group this wave protects, even when the previous wave disclosed it', () => {
+    const disclosed = q2()
+    const segments = disclosed.breakdowns[0].segments
+    const fin = segments.find((segment) => segment.key === FIN)!
+    const eng = segments.find((segment) => segment.key === ENG)!
+    Object.assign(fin, { isSuppressed: false, respondentCount: 6, questions: structuredClone(eng.questions) })
+    const model = against(disclosed)
+    expect(model.previous.status === 'loaded' && FIN in model.previous.wave.groupScores).toBe(true)
+    expect(groupRows(model).find((candidate) => candidate.id === FIN)).toMatchObject({
+      isProtected: true,
+      mean: null,
+      vsPrevious: null,
+    })
+  })
+
+  it('compares like for like: a dimension only one wave asked cannot move the change', () => {
+    const fewer = q2()
+    const trust = fewer.questions.find((question) => question.category === 'trust')!.questionId
+    fewer.questions = fewer.questions.filter((question) => question.questionId !== trust)
+    for (const segment of fewer.breakdowns[0].segments) {
+      segment.questions = segment.questions.filter((entry) => entry.questionId !== trust)
+    }
+    const model = against(fewer)
+    // Over the five dimensions both waves carry, and nothing else.
+    const now = (3.75 + 3.33 + 3.38 + 3.79 + 4.0) / 5
+    const before = (3.5 + 3.04 + 3.08 + 3.54 + 3.67) / 5
+    expect(companyDelta(model)).toBeCloseTo(now - before, 6)
+    expect(dimensionDeltas(model)[2]).toBeNull()
+  })
+
+  it('says why there is no comparison rather than printing one: a first wave, a failed request', () => {
+    const first = composeResultsModel(fixture['GET /surveys/*/analytics'], [], null, { status: 'none' })
+    expect(first.previous).toEqual({ status: 'none' })
+    expect(companyDelta(first)).toBeNull()
+    expect(dimensionDeltas(first).every((delta) => delta === null)).toBe(true)
+    expect(groupRows(first).every((row) => row.vsPrevious === null)).toBe(true)
+    const failed = composeResultsModel(fixture['GET /surveys/*/analytics'], [], null, { status: 'failed' })
+    expect(failed.previous).toEqual({ status: 'failed' })
+    expect(companyDelta(failed)).toBeNull()
   })
 })

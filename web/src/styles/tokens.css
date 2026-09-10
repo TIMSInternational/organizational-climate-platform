@@ -92,6 +92,9 @@
                                       the letter-spacing is what separates the two
                                       lines, since the size difference alone reads
                                       as a subtitle that lost its font. */
+  --admin-tracking-tile: 0.12em; /* a KPI tile's eyebrow — the Dashboard and
+                                    SurveyResults artboards (10 Sep) space it at
+                                    .12em, between the label and the page eyebrow */
 
   /* -- Space scale -------------------------------------------------------
      ⚠ THE NUMBER IN THE NAME IS THE PIXEL COUNT, NOT A STEP INDEX.
@@ -298,10 +301,14 @@
      body ink" -- `resultsContrast`, `themeDiscipline`, `respondContrast` --
      therefore still measures the same failure it was written for. */
   --admin-border-default: #e0dbee;
-  /* One step darker than the line, as #d0d0d0 was to #e0e0e0. `ProtectedCell`
-     paints its hatch in this, so it has to stay separable from the recessed
-     surface it is drawn on: 1.40:1, against protectedHatch's floor of 1.2. */
+  /* One step darker than the line, as #d0d0d0 was to #e0e0e0. */
   --admin-border-hover: #cdc6e3;
+  /* The protected hatch's stripe (`PROTECTED_HATCH`), over the recessed surface
+     `ProtectedCell` paints it on. Every artboard of 10 Sep draws the hatch as faint
+     #e6e3f1 stripes on #f8f7fb, 1.18:1; this is the nearest violet that clears
+     protectedHatch.test.ts's floor of 1.2 on `--admin-bg-icon-box`: 1.22:1. It was
+     `--admin-border-hover`, 1.47:1, which read as a dark texture beside them. */
+  --admin-hatch-stripe: #dedaee;
   --admin-border-light: #eeedf6;
   --admin-border-panel: #e0dbee;
 
@@ -590,12 +597,14 @@
      saturated red, 3,4 on a pale red, 3,7 on grey, 3,8 on a pale blue, 4,2 on a
      mid blue -- in place of the saturated Tailwind reds and sky blues that
      shipped first and read as full-bleed blocks beside the artboard. The
-     canvas's grey is the violet-tinted #cfcdd9; the value here is the neutral
-     grey of the same luminance, because the midpoint of a diverging ramp must
-     be a gray and not a hue (palette.test.ts, "r == g == b"). */
+     grey is the canvas's own violet-tinted #cfcdd9 (Dashboard, LeaderDashboard,
+     ClimateTrends and SurveyResults all draw it). It is still a neutral, not a
+     hue: its channels sit within 12/255 of each other, the blue bias every light
+     neutral here carries, and palette.test.ts holds the midpoint within 16/255,
+     which no hue that could read as a third category passes. */
   --admin-chart-div-neg-2: #c62828;
   --admin-chart-div-neg-1: #f5bcbc;
-  --admin-chart-div-mid: #cfcfcf;
+  --admin-chart-div-mid: #cfcdd9;
   --admin-chart-div-pos-1: #b6dff5;
   --admin-chart-div-pos-2: #5fb3e6;
 
@@ -695,6 +704,7 @@
      can see it. */
   --admin-border-default: #2f235a;
   --admin-border-hover: #32245e;
+  --admin-hatch-stripe: #32245e; /* 1.30:1 on #1b1433; the artboards draw no dark theme */
   --admin-border-light: #1f173b;
   --admin-border-panel: #2f235a;
 

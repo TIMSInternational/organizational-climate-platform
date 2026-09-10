@@ -158,33 +158,49 @@ describe('PageTopBar', () => {
       return element!
     }
 
-    it('closes itself with a hairline rule, 14px under the content', () => {
+    it('closes itself with a hairline rule, 16px under the content', () => {
       const { container } = renderTopBar({ title: 'Companies' })
       const classes = topBar(container).className.split(/\s+/)
       expect(classes).toContain('border-b')
       expect(classes).toContain('border-line-light')
-      expect(classes).toContain('pb-3.5')
+      // The artboards' `padding-bottom: 16px` (10 Sep). UI-0 had 14px.
+      expect(classes).toContain('pb-4')
     })
 
-    it('leaves 16px between the rule and whatever the page puts next', () => {
+    it('leaves 24px between the rule and whatever the page puts next', () => {
       const { container } = renderTopBar({ title: 'Companies' })
-      // `mb-panel` is --admin-size-panel-padding, 16px. It was `mb-section`
-      // (24px) with a `<Separator />` inside before UI-0.
-      expect(topBar(container).className.split(/\s+/)).toContain('mb-panel')
+      // `mb-section` is --admin-size-section-gap, 24px: the gap every artboard of
+      // 10 Sep leaves under the header's hairline. UI-0 had narrowed it to 16px.
+      expect(topBar(container).className.split(/\s+/)).toContain('mb-section')
+    })
+
+    it('keeps 38px between the breadcrumb and the header, and 6px between its lines', () => {
+      const { container } = renderTopBar({
+        title: 'Companies',
+        eyebrow: 'Administration',
+        description: 'Every company on the platform',
+        breadcrumbs: [{ label: 'Admin', href: '/admin' }, { label: 'Companies' }],
+      })
+      // The artboards: the breadcrumb's own 14px margin plus the page's 24px gap.
+      expect(topBar(container).className.split(/\s+/)).toContain('gap-9.5')
+      // Eyebrow, title and description: one column, 6px apart.
+      const column = container.querySelector('[data-slot="page-eyebrow"]')!.parentElement!
+      expect(column.className.split(/\s+/)).toEqual(expect.arrayContaining(['flex', 'flex-col', 'gap-1.5']))
     })
 
     it('draws the rule itself rather than delegating to a Separator element', () => {
-      // A separator is a sibling with margins of its own, so the 14px/16px split
+      // A separator is a sibling with margins of its own, so the 16px/24px split
       // above cannot be expressed with one. Its absence is the assertion.
       const { container } = renderTopBar({ title: 'Companies' })
       expect(container.querySelector('[data-slot="separator"]')).toBeNull()
     })
 
-    it('sets the title at the header size, not at the bare h1 size', () => {
-      // index.css gives a bare `h1` --admin-text-3xl (24px). The redesign's page
-      // header is a step down from that; without the class it inherits 24px.
+    it('sets the title at 24px, the size every artboard draws it at', () => {
+      // --admin-text-3xl. UI-0 set the header a step down, at 20px; the approved
+      // canvas (10 Sep) draws every page title at 24px, and the class says so rather
+      // than leaning on index.css's bare-`h1` size.
       const { container } = renderTopBar({ title: 'Companies' })
-      expect(container.querySelector('h1')!.className.split(/\s+/)).toContain('text-2xl')
+      expect(container.querySelector('h1')!.className.split(/\s+/)).toContain('text-3xl')
     })
 
     it('caps the description and nothing else', () => {

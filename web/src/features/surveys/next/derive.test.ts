@@ -32,6 +32,7 @@ const model = {
   questions: [] as SurveyQuestionResult[],
   breakdown: null,
   plans: null,
+  previous: { status: 'none' },
   sample: sampleWave,
 } as unknown as SurveyResultsNextModel
 
