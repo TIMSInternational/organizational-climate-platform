@@ -186,6 +186,6 @@ export function buildBreakdownCsv(
 }
 
 /** A stable, filesystem-safe file name. Not copy: it is an identifier a user never reads as prose. */
-export function resultsFileName(payload: SurveyAnalyticsResponse, suffix: string): string {
+export function resultsFileName(payload: Pick<SurveyAnalyticsResponse, 'surveyId'>, suffix: string): string {
   return `survey-${payload.surveyId}-${suffix}.csv`
 }

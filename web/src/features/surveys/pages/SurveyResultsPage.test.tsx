@@ -154,6 +154,9 @@ function renderPage() {
   )
 }
 
+// The component under test is NOT ROUTED (see its header): these cases pin the wiring
+// reference `useSurveyResultsModel` has to reproduce. The routed screen's cases are in
+// `../next/SurveyResultsNextPage.test.tsx`.
 describe('SurveyResultsPage', () => {
   beforeEach(() => {
     // Pin the locale so the assertions below are about the page and not about

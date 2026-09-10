@@ -40,7 +40,7 @@ import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
 import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
 import ReportsListPage from '../features/reports/pages/ReportsListPage'
 import SharedReportPage from '../features/reports/pages/SharedReportPage'
-import SurveyResultsPage from '../features/surveys/pages/SurveyResultsPage'
+import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
 import ClimateTrendsPage from '../features/surveys/pages/ClimateTrendsPage'
 import SurveysListPage from '../features/surveys/pages/SurveysListPage'
 import SurveyCreatePage from '../features/surveys/pages/SurveyCreatePage'
@@ -388,7 +388,10 @@ export const router = createBrowserRouter([
               // No nav entry, deliberately: this is a per-survey destination reached from
               // a survey, not a place in the sidebar. `/surveys` and `/surveys/:id` are
               // #109's; this route only needs to exist beneath one of them.
-              { path: '/surveys/:id/results', element: <SurveyResultsPage /> },
+              // The redesigned results replaced the current page here (ruled 10 Sep);
+              // `pages/SurveyResultsPage.tsx` stays in the tree unrouted, as the wiring
+              // reference — its header says until when.
+              { path: '/surveys/:id/results', element: <SurveyResultsNextPage /> },
               // #273. Same rule as `/surveys/:id/results` above: no nav entry, because it
               // is a per-survey destination reached from a survey. The way in is on
               // `SurveyDetailPage`, offered only when the survey can actually be edited —
