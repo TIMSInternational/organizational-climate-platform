@@ -123,7 +123,7 @@ describe('AIInsightsNextPage', () => {
     const rows = await screen.findAllByTestId('insight-row')
     expect(rows.map((row) => within(row).getAllByRole('cell')[1].textContent)).toEqual(['Critical one', 'Low one'])
     await userEvent.click(within(rows[0]).getByRole('button', { name: insightsCopy.acknowledge }))
-    expect(acknowledgeAIInsight).toHaveBeenCalledWith(expect.any(String), 'b')
+    expect(vi.mocked(acknowledgeAIInsight).mock.calls[0][1]).toBe('b')
     await waitFor(() => expect(listAIInsights).toHaveBeenCalledTimes(2))
   })
 

@@ -45,10 +45,10 @@ import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrends
 import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPage'
 import SurveyCreatePage from '../features/surveys/pages/SurveyCreatePage'
 import SurveyDetailPage from '../features/surveys/pages/SurveyDetailPage'
-import SurveyQuestionsEditPage from '../features/surveys/pages/SurveyQuestionsEditPage'
+import SurveyQuestionsEditorPage from '../features/surveys/next/authoring/SurveyQuestionsEditorPage'
 import MySurveysPage from '../features/surveys/pages/MySurveysPage'
 import SurveyTemplatesPage from '../features/surveys/pages/SurveyTemplatesPage'
-import SurveyTemplateDetailPage from '../features/surveys/pages/SurveyTemplateDetailPage'
+import TemplateDetailNextPage from '../features/surveys/next/authoring/TemplateDetailNextPage'
 import AnalyticsNextPage from '../features/analytics/next/AnalyticsNextPage'
 import QuestionBankNextPage from '../features/questions/next/QuestionBankNextPage'
 import QuestionLibraryNextPage from '../features/questions/next/QuestionLibraryNextPage'
@@ -378,7 +378,7 @@ export const router = createBrowserRouter([
               // Same static-beats-dynamic ranking as `/surveys/my`, so `templates`
               // is never parsed as a survey id.
               { path: '/surveys/templates', element: <SurveyTemplatesPage /> },
-              { path: '/surveys/templates/:id', element: <SurveyTemplateDetailPage /> },
+              { path: '/surveys/templates/:id', element: <TemplateDetailNextPage /> },
               // Same static-beats-dynamic ranking again, so `climate-trends` is never
               // parsed as a survey id. Unlike `/surveys/:id/results` this one IS in the
               // sidebar: it is a company-level reading rather than a per-survey
@@ -403,7 +403,7 @@ export const router = createBrowserRouter([
               // but the page defends itself anyway, since this URL is typeable and the
               // server's second refusal (any response row exists) cannot be predicted from
               // a read.
-              { path: '/surveys/:id/questions', element: <SurveyQuestionsEditPage /> },
+              { path: '/surveys/:id/questions', element: <SurveyQuestionsEditorPage /> },
               // Not under /admin, and gated by nothing beyond RequireAuth: every
               // authenticated role — plain employees included — owns a profile, and
               // every endpoint behind this page resolves the caller from their own
