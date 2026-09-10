@@ -43,7 +43,10 @@ export interface TrendsNumbersTableProps {
 
 // `border-0` / `border-b-0`: `index.css` rules every bare th and td; the artboard's table
 // draws one rule, above the Q1 → Q3 row.
-const HEAD = 'border-0 px-1 pb-1 align-bottom text-3xs font-bold uppercase leading-tight tracking-label text-fg-label'
+// `hyphens-auto`: at 1024 a column is narrower than "RECONOCIMIENTO", and `index.css`'s
+// `overflow-wrap: break-word` split it as "RECONOCIMIE / NTO"; the document carries the
+// reader's `lang` (`TranslationProvider`), so the word breaks where the language breaks it.
+const HEAD = 'border-0 px-1 pb-1 align-bottom text-3xs font-bold uppercase leading-tight tracking-label text-fg-label hyphens-auto'
 
 export default function TrendsNumbersTable({
   waves,

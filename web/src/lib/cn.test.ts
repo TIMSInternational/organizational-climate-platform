@@ -57,5 +57,7 @@ describe('cn', () => {
     expect(cn('text-3xs', 'text-fg-label')).toBe('text-3xs text-fg-label')
     expect(cn('text-2xs', 'text-3xs')).toBe('text-3xs')
     expect(cn('text-3xl', 'text-kpi-hero')).toBe('text-kpi-hero')
+    // The one that needs registering: not a t-shirt size, so unregistered it reads as a colour.
+    expect(cn('text-reading', 'text-fg-primary')).toBe('text-reading text-fg-primary')
   })
 })

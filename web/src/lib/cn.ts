@@ -48,9 +48,10 @@ const twMerge = extendTailwindMerge({
     theme: {
       spacing: SPACING_STEPS,
       container: ['content'],
-      // Every named step in `theme.css`: an unregistered `text-3xs` is read as a COLOUR and
-      // silently drops the `text-fg-label` beside it.
-      text: ['2xs', '3xs', 'reading', 'kpi-lg', 'kpi-hero'],
+      // The named steps that are not t-shirt sizes. tailwind-merge already reads `2xs`/`3xs`
+      // as font sizes; an unregistered `text-reading` or `text-kpi-hero` is read as a COLOUR
+      // and silently drops the colour class beside it (`cn.test.ts`).
+      text: ['2xs', 'reading', 'kpi-lg', 'kpi-hero'],
       tracking: ['label', 'eyebrow', 'kpi'],
     },
   },

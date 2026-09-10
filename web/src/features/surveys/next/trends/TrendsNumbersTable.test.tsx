@@ -72,6 +72,8 @@ describe('TrendsNumbersTable', () => {
     expect(cols[0].className).toBe('w-45')
     // No dimension column carries a width of its own: `table-fixed` shares the rest equally.
     expect(cols.slice(1).every((col) => col.className === '')).toBe(true)
+    // A head wider than its column hyphenates in the reader's language instead of splitting mid-letter.
+    expect([...table.querySelectorAll('thead th')].every((head) => head.className.includes('hyphens-auto'))).toBe(true)
   })
 
   it('prints the first → last move as the difference of the printed readings: "2.8" → "3.3" is +0.5', () => {
