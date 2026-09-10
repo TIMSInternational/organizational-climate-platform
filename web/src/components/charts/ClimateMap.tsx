@@ -462,7 +462,7 @@ export default function ClimateMap({
         <span className="inline-flex items-center gap-1.5">
           <span
             aria-hidden="true"
-            className={`inline-block h-2 w-5 rounded-xs border border-dashed border-line-default bg-surface-icon-box ${PROTECTED_HATCH}`}
+            className={`inline-block h-2 w-5 rounded-xs bg-surface-icon-box ${PROTECTED_HATCH}`}
           />
           {/* The interactive grid says the extra half of the rule: these cells
               are not merely uncoloured, they are the ones that do not open. A

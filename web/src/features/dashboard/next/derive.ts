@@ -48,9 +48,16 @@ export function risesInARow(model: AdminDashboardModel): number {
   return rises
 }
 
-/** The one comparison behind every "below target" mark on the page. */
+/**
+ * The one comparison behind every "below target" mark on the page — judged at the one
+ * decimal the page prints. The whole company's Confianza is 3,67 on the wire and prints
+ * "3,7" beside "meta 3,7"; a strict `3.67 < 3.7` marked it "bajo la meta" there while
+ * Clima en el tiempo, which judges the printed reading, called it "en la meta". A mark
+ * that contradicts the number beside it is read as a bug, so both screens judge the
+ * number the reader sees.
+ */
 export function isBelowTarget(value: number, target: number): boolean {
-  return value < target
+  return Math.round(value * 10) < Math.round(target * 10)
 }
 
 /** `part` of `whole` as a 0–100 percentage, or `null` when there is nothing to divide by. */

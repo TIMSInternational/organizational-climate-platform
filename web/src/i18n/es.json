@@ -2083,7 +2083,20 @@
         "tableHeading": "Los mismos números, en tabla",
         "tableScale": "{group} · escala de 1 a 5",
         "floorNote": "Un grupo con menos de {floor} respuestas en una encuesta se muestra protegido en esa encuesta, sin número.",
-        "targetSampleNote": "La meta de {target} es un dato de muestra: ninguna configuración guarda todavía una meta de clima."
+        "targetSampleNote": "La meta de {target} es un dato de muestra: ninguna configuración guarda todavía una meta de clima.",
+        "openEnters": "la {wave} abierta entra al cerrar el {date}",
+        "risingOne": "sube",
+        "risingBoth": "ambas suben",
+        "risingAll": "todas suben",
+        "risingSome": "{count} de {total} suben",
+        "risingNone": "ninguna sube",
+        "tableColSurvey": "Encuesta",
+        "tableRowSub": "cerró el {date} · {count} resp.",
+        "notAsked": "no se preguntó en esta encuesta",
+        "noMove": "sin comparación entre la primera y la última encuesta",
+        "targetNote": "La meta de {target} es fija por ahora: ninguna configuración de la empresa guarda todavía una meta de clima.",
+        "chartsLabel": "Cada dimensión en el tiempo",
+        "tableRowClosed": "cerró el {date}"
       },
       "list": {
         "description": "Cuál encuesta está abierta hoy, cuánto le falta para cerrar y dónde leer las que ya cerraron.",

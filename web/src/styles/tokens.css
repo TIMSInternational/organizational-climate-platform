@@ -583,31 +583,43 @@
   --admin-chart-seq-7-ink: #f0fdfa;
 
   /* Diverging: two hues plus a NEUTRAL GRAY midpoint, never a hue at the
-     middle. For sentiment and any above/below-benchmark comparison. */
-  --admin-chart-div-neg-2: #b91c1c;
-  --admin-chart-div-neg-1: #fca5a5;
-  --admin-chart-div-mid: #a1a1a1;
-  --admin-chart-div-pos-1: #7dd3fc;
-  --admin-chart-div-pos-2: #0369a1;
+     middle. For sentiment and any above/below-benchmark comparison.
+
+     These five are the approved canvas tints (SurveyResults and Dashboard
+     artboards, 10 Sep, which agree cell for cell): a soft ramp -- 2,4 on a
+     saturated red, 3,4 on a pale red, 3,7 on grey, 3,8 on a pale blue, 4,2 on a
+     mid blue -- in place of the saturated Tailwind reds and sky blues that
+     shipped first and read as full-bleed blocks beside the artboard. The
+     canvas's grey is the violet-tinted #cfcdd9; the value here is the neutral
+     grey of the same luminance, because the midpoint of a diverging ramp must
+     be a gray and not a hue (palette.test.ts, "r == g == b"). */
+  --admin-chart-div-neg-2: #c62828;
+  --admin-chart-div-neg-1: #f5bcbc;
+  --admin-chart-div-mid: #cfcfcf;
+  --admin-chart-div-pos-1: #b6dff5;
+  --admin-chart-div-pos-2: #5fb3e6;
 
   /* Ink paired to each diverging step, for the same reason #208 added one per
      sequential step: the climate map prints the score INSIDE the cell, so the
      fill needs a label colour that is legible on it.
 
      Unlike the sequential ramp, the assignment is not a monotone run of dark inks
-     with a light one at the end -- it INVERTS between the themes, because the
-     diverging ramps do. Light runs light/dark/dark/dark/light; dark runs
+     with a light one at the end -- it INVERTS between the themes on four of the
+     five steps, because the diverging ramps do. Light runs
+     light/dark/dark/dark/dark (the far-above tint is a MID blue that only a dark
+     ink can clear AA on -- white on #5fb3e6 is 2.3:1); dark runs
      dark/light/light/light/dark. Writing one shared array would therefore be
      wrong in one theme and no eye would catch it, so both are declared.
 
-     Measured against the ramp above, worst pairing 5.11:1 vs AA's 4.5:1 for
-     small text. styles/divInkContrast.test.ts re-derives every pair from this
-     file, so a nudge here fails the build rather than the eye. */
-  --admin-chart-div-neg-2-ink: #f0fdfa;
-  --admin-chart-div-neg-1-ink: #02100f;
-  --admin-chart-div-mid-ink: #02100f;
-  --admin-chart-div-pos-1-ink: #02100f;
-  --admin-chart-div-pos-2-ink: #f0fdfa;
+     Measured against the ramp above, worst pairing 6.3:1 (#0b2b3f on #5fb3e6)
+     vs AA's 4.5:1 for small text. styles/divInkContrast.test.ts re-derives
+     every pair from this file, so a nudge here fails the build rather than the
+     eye. */
+  --admin-chart-div-neg-2-ink: #ffffff;
+  --admin-chart-div-neg-1-ink: #5a0a0e;
+  --admin-chart-div-mid-ink: #110a29;
+  --admin-chart-div-pos-1-ink: #0b2b3f;
+  --admin-chart-div-pos-2-ink: #0b2b3f;
 
   /* Chart furniture. Recessive on purpose -- grid and axes must not compete
      with the marks. The gap colour is the surface, used as the 2px spacer

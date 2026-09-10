@@ -62,6 +62,23 @@ import type {
 /** The climate target on the 1–5 scale. No endpoint carries one; this is the mockup's. */
 export const CLIMATE_TARGET = 3.7
 
+/**
+ * How a 1–5 reading is tinted against `CLIMATE_TARGET` wherever the product draws a cell,
+ * applied to the reading ROUNDED TO THE ONE DECIMAL THE CELL PRINTS: a cell that prints
+ * "3,7" beside "meta 3,7" is on target, one that prints "3,8" is above it — the same
+ * rule as the "sobre / en / bajo la meta" chips (`surveys/next/trends/derive.ts`
+ * `standing`), so a tint never contradicts the word beside it. A full point away
+ * saturates. The Panel de Control's map and Clima en el tiempo's table both read these,
+ * so one score is one tint on both screens.
+ */
+export const MAP_DEAD_BAND_AT = 0.05
+export const MAP_EXTREME_AT = 1
+
+/** A 1–5 reading at the one decimal every cell prints — what the tint is judged on. */
+export function printedReading(value: number): number {
+  return Math.round(value * 10) / 10
+}
+
 /** One region's payload, or the reason it has none. */
 export type Part<T> =
   | { status: 'live'; value: T }

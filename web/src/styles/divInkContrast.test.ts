@@ -93,17 +93,23 @@ describe('the diverging ramp can carry a label on every step', () => {
     ).toBeGreaterThanOrEqual(AA_SMALL_TEXT)
   })
 
-  it('the ink assignment really does invert between the themes', () => {
+  it('the ink assignment really does invert between the themes, on every step but the far-above one', () => {
     // This is the property that makes a shared literal array wrong. If a future
     // retheme makes the two agree, the inversion note in tokens.css and
     // palette.ts becomes false prose and should be rewritten — not silently left.
+    //
+    // The 10 Sep canvas retint made ONE step agree: the light far-above tint is
+    // the artboards' mid blue (#5fb3e6), which white cannot clear AA on (2.3:1),
+    // so both themes ink that step dark. The prose in both files was rewritten to
+    // say "four of the five"; this assertion is the one that keeps it honest.
     const polarity = (theme: (typeof THEMES)[number]) =>
       STEPS.map((step) => (luminance(p[theme][`--admin-chart-div-${step}-ink`]) > 0.5 ? 'L' : 'D'))
     const light = polarity('light')
     const dark = polarity('dark')
-    expect(light.join(''), 'light ink polarity changed shape').toBe('LDDDL')
+    expect(light.join(''), 'light ink polarity changed shape').toBe('LDDDD')
     expect(dark.join(''), 'dark ink polarity changed shape').toBe('DLLLD')
     for (const [i, step] of STEPS.entries()) {
+      if (step === 'pos-2') continue
       expect(light[i], `${step} no longer inverts between themes`).not.toBe(dark[i])
     }
   })

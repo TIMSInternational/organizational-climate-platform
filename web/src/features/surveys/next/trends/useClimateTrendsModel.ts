@@ -9,10 +9,11 @@ import {
   type ClimateTrendGroup,
   type ClimateTrendsResponse,
 } from '../../api/climateTrends'
-import { buildClimateTrendMap, type ClimateTrendMapModel } from '../../climateTrendsMap'
+import { listSurveys, type SurveyListItem } from '../../api/surveys'
 import { dimensionLabel } from '../../dimensionLabel'
-import type { ClimateTrendsNextModel, TrendDimension, TrendGroup, TrendWave } from './model'
-import { SAMPLE_TARGET } from './sampleModel'
+import { CLIMATE_TARGET, waveCode } from '../../../dashboard/next/compose'
+import { orderByLatest, withoutArchived } from './derive'
+import type { ClimateTrendsNextModel, OpenWave, TrendDimension, TrendGroup, TrendWave } from './model'
 
 export type ClimateTrendsStatus = 'loading' | 'ready' | 'error'
 
@@ -20,28 +21,44 @@ export interface ClimateTrendsModelState {
   status: ClimateTrendsStatus
   /** Present exactly when `status === 'ready'`. */
   model: ClimateTrendsNextModel | null
-  /** The numbers grid for the selected group, as `ClimateMap` draws it; `null` when nothing can be drawn. */
-  table: ClimateTrendMapModel | null
   error: string | null
   retry: () => void
   selectGroup: (key: string) => void
 }
 
+interface Payloads {
+  whole: ClimateTrendsResponse
+  byDepartment: ClimateTrendsResponse
+  /** `GET /surveys?status=active` for the tenant, or `null` when it could not be read. */
+  open: readonly SurveyListItem[] | null
+}
+
+/** The open survey closing soonest, as the cycle reads it — or `null`. */
+function openWaveOf(rows: readonly SurveyListItem[] | null, companyId: string | undefined): OpenWave | null {
+  if (rows === null) return null
+  const open = rows
+    .filter((row) => row.status === 'active' && (companyId === undefined || row.companyId === companyId))
+    .sort((a, b) => a.endDate.localeCompare(b.endDate))[0]
+  return open ? { code: waveCode(open.title, open.id.slice(0, 8)), closesAt: open.endDate } : null
+}
+
 /**
  * The model behind `/surveys/climate-trends` — THE wiring seam of that screen.
  *
- * Two requests, both through the existing client: the ungrouped series (the whole
- * company) and the department breakdown. The server returns one grouping per call
- * (`groups` holds departments OR the `__company__` series, never both), and the
- * segmented control needs every group at once so a click redraws without a round
- * trip. Both carry the resolved `companyId`, for the reason `ClimateTrendsPage`
- * gives: an explicit id is refused when mismatched rather than silently rescoped.
+ * Three requests, all through existing clients: the ungrouped series (the whole
+ * company), the department breakdown, and the tenant's open survey. The server returns
+ * one grouping per call (`groups` holds departments OR the `__company__` series, never
+ * both), and the segmented control needs every group at once so a click redraws without
+ * a round trip. All three carry the resolved `companyId`, for the reason
+ * `ClimateTrendsPage` gives: an explicit id is refused when mismatched rather than
+ * silently rescoped. The open survey is context for one sentence ("la Q4 abierta entra
+ * al cerrar el 10 oct"), so its failure costs that sentence and nothing else.
  *
- * `enabled` is the caller's role gate (see the effect): the request is only made
- * for a viewer the server would answer.
+ * Every payload passes through `withoutArchived` before anything reads it: the trends
+ * window carries archived surveys, and an archived survey never counts here.
  *
- * The target is the one figure no endpoint provides (`sampleModel.ts`), so `isSample`
- * is `true` and the page says so wherever the target is read.
+ * `enabled` is the caller's role gate (see the effect): the request is only made for a
+ * viewer the server would answer.
  */
 export function useClimateTrendsModel(enabled: boolean): ClimateTrendsModelState {
   const { t, locale } = useTranslation()
@@ -49,7 +66,7 @@ export function useClimateTrendsModel(enabled: boolean): ClimateTrendsModelState
   const scope = useCompanyScope()
   const companyName = useCompanyName()
 
-  const [payloads, setPayloads] = useState<{ whole: ClimateTrendsResponse; byDepartment: ClimateTrendsResponse } | null>(null)
+  const [payloads, setPayloads] = useState<Payloads | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   const [selectedGroup, setSelectedGroup] = useState<string>(WHOLE_COMPANY_KEY)
@@ -65,9 +82,12 @@ export function useClimateTrendsModel(enabled: boolean): ClimateTrendsModelState
     Promise.all([
       getClimateTrends(baseUrl, common),
       getClimateTrends(baseUrl, { ...common, groupBy: DEPARTMENT_GROUP }),
+      listSurveys(baseUrl, { companyId: scope.companyId, status: 'active' }, locale).catch(() => null),
     ])
-      .then(([whole, byDepartment]) => {
-        if (!cancelled) setPayloads({ whole, byDepartment })
+      .then(([whole, byDepartment, open]) => {
+        if (!cancelled) {
+          setPayloads({ whole: withoutArchived(whole), byDepartment: withoutArchived(byDepartment), open })
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : '')
@@ -79,9 +99,9 @@ export function useClimateTrendsModel(enabled: boolean): ClimateTrendsModelState
 
   const retry = useCallback(() => setAttempt((previous) => previous + 1), [])
 
-  const derived = useMemo(() => {
+  const model = useMemo((): ClimateTrendsNextModel | null => {
     if (payloads === null) return null
-    const { whole, byDepartment } = payloads
+    const { whole, byDepartment, open } = payloads
     const wholeGroup = whole.groups.find((group) => group.key === WHOLE_COMPANY_KEY) ?? whole.groups[0] ?? null
     // The grouped response never carries the `__company__` series on the real API; a
     // fixture that answers both requests alike would, and two segments with one key is
@@ -91,48 +111,55 @@ export function useClimateTrendsModel(enabled: boolean): ClimateTrendsModelState
       { key: WHOLE_COMPANY_KEY, name: null },
       ...departments.map((group) => ({ key: group.key, name: group.label ?? group.key })),
     ]
-    const active: ClimateTrendGroup | null =
-      selectedGroup === WHOLE_COMPANY_KEY
-        ? wholeGroup
-        : (departments.find((group) => group.key === selectedGroup) ?? wholeGroup)
-    const activeKey = active === null || active.key !== selectedGroup ? WHOLE_COMPANY_KEY : selectedGroup
-    const source = activeKey === WHOLE_COMPANY_KEY ? whole : byDepartment
+    const chosen = departments.find((group) => group.key === selectedGroup) ?? null
+    const active: ClimateTrendGroup | null = chosen ?? wholeGroup
+    const activeKey = chosen ? chosen.key : WHOLE_COMPANY_KEY
 
+    const monthYear = (iso: string) =>
+      new Date(iso).toLocaleDateString(locale, { timeZone: 'UTC', month: 'short', year: 'numeric' })
     const waves: TrendWave[] = whole.surveys.map((survey) => ({
       id: survey.surveyId,
+      code: waveCode(survey.title, monthYear(survey.endDate)),
       name: survey.title,
       closedAt: survey.endDate,
       completedCount: survey.completedCount,
-      status: survey.status,
     }))
-    const pointFor = (surveyId: string) => active?.points.find((point) => point.surveyId === surveyId) ?? null
-    const dimensions: TrendDimension[] = whole.dimensions.map((dimension, dimensionIndex) => ({
-      key: dimension.key,
-      name: dimensionLabel(dimension.key, t),
-      values: waves.map((wave) => {
-        const point = pointFor(wave.id)
-        if (point === null || point.isSuppressed) return null
-        return point.scores[dimensionIndex] ?? null
-      }),
-    }))
+    const seriesOf = (group: ClimateTrendGroup | null): TrendDimension[] =>
+      whole.dimensions.map((dimension, dimensionIndex) => ({
+        key: dimension.key,
+        name: dimensionLabel(dimension.key, t),
+        values: waves.map((wave) => {
+          const point = group?.points.find((candidate) => candidate.surveyId === wave.id) ?? null
+          if (point === null || point.isSuppressed) return null
+          return point.scores[dimensionIndex] ?? null
+        }),
+      }))
+    // The order is the whole company's, whichever group is drawn.
+    const order = orderByLatest(seriesOf(wholeGroup)).map((dimension) => dimension.key)
+    const series = seriesOf(active)
+    const dimensions = order.flatMap((key) => series.filter((dimension) => dimension.key === key))
+    const points = waves.map((wave) => active?.points.find((candidate) => candidate.surveyId === wave.id))
+    // The server pads a group that did not exist in a wave with a suppressed point, so an
+    // absent one is treated as withheld rather than as a reading of nothing.
+    const withheld = points.map((point) => point === undefined || point.isSuppressed)
+    const respondents = points.map((point) => (point === undefined || point.isSuppressed ? null : point.respondentCount))
 
-    const model: ClimateTrendsNextModel = {
-      isSample: true,
+    return {
       companyName,
-      target: SAMPLE_TARGET,
+      target: CLIMATE_TARGET,
       floor: whole.minimumGroupSize,
       waves,
+      withheld,
+      respondents,
       dimensions,
       groups,
       selectedGroup: activeKey,
       suppressedGroupCount: byDepartment.suppressedGroupCount,
+      openWave: openWaveOf(open, scope.companyId),
     }
-    const formatDate = (iso: string) => new Date(iso).toLocaleDateString(locale, { year: 'numeric', month: 'short' })
-    const table = active === null ? null : buildClimateTrendMap(source, active, formatDate)
-    return { model, table }
-  }, [payloads, selectedGroup, companyName, locale, t])
+  }, [payloads, selectedGroup, companyName, locale, t, scope.companyId])
 
-  if (error !== null) return { status: 'error', model: null, table: null, error, retry, selectGroup: setSelectedGroup }
-  if (derived === null) return { status: 'loading', model: null, table: null, error: null, retry, selectGroup: setSelectedGroup }
-  return { status: 'ready', model: derived.model, table: derived.table, error: null, retry, selectGroup: setSelectedGroup }
+  if (error !== null) return { status: 'error', model: null, error, retry, selectGroup: setSelectedGroup }
+  if (model === null) return { status: 'loading', model: null, error: null, retry, selectGroup: setSelectedGroup }
+  return { status: 'ready', model, error: null, retry, selectGroup: setSelectedGroup }
 }
