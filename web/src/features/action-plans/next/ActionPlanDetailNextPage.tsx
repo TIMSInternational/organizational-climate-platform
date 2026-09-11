@@ -168,6 +168,7 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
   return (
     <div>
       <PageTopBar
+        compact
         title={plan.title}
         eyebrow={scopeName ? t('actionPlans.next.eyebrow', { scope: scopeName }) : t('actionPlans.next.eyebrowPlain')}
         breadcrumbs={[{ label: t('navigation.actionPlans'), href: '/action-plans' }, { label: plan.title }]}
@@ -189,7 +190,7 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" disabled={state.saving}>
                     {t('actionPlans.next.changeStatus')}
-                    <ChevronDown aria-hidden="true" className="text-fg-light" />
+                    <ChevronDown aria-hidden="true" className="text-fg-tertiary" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -258,7 +259,7 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
                     ) : department ? (
                       <Link to="/departments" className="inline-flex items-center gap-1.5 font-medium text-fg-primary">
                         {department}
-                        <ArrowRight aria-hidden="true" className="size-3 text-fg-light" />
+                        <ArrowRight aria-hidden="true" className="size-3 text-fg-tertiary" />
                       </Link>
                     ) : (
                       <span className="text-fg-tertiary">{t('actionPlans.next.sheet.unknown')}</span>
@@ -483,7 +484,7 @@ function FindingBlock({ finding, scopeName }: { finding: Settled<PlanFinding>; s
       className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-fg-secondary hover:text-fg-primary"
     >
       {t('actionPlans.next.finding.open', { code: value.code })}
-      <ArrowRight aria-hidden="true" className="size-3 text-fg-light" />
+      <ArrowRight aria-hidden="true" className="size-3 text-fg-tertiary" />
     </Link>
   )
   if (value.status === 'protected') {
@@ -534,7 +535,7 @@ function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
     <CanvasCard title={t('actionPlans.next.measures.title')}>
       {plan.kpis.length === 0 ? (
         <div className="flex items-center gap-3">
-          <IconBox className="text-fg-light">
+          <IconBox className="text-fg-tertiary">
             <ChartColumn />
           </IconBox>
           <div className="flex min-w-0 flex-col gap-0.5">
@@ -574,7 +575,7 @@ function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
       )}
       {plan.objectives.length === 0 ? (
         <div className="flex items-center gap-3">
-          <IconBox className="text-fg-light">
+          <IconBox className="text-fg-tertiary">
             <Target />
           </IconBox>
           <div className="flex min-w-0 flex-col gap-0.5">
@@ -608,7 +609,7 @@ function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
           ))}
         </ul>
       )}
-      {none && <span className="text-sm text-fg-light">{t('actionPlans.next.measures.footer')}</span>}
+      {none && <span className="text-sm text-fg-tertiary">{t('actionPlans.next.measures.footer')}</span>}
     </CanvasCard>
   )
 }
@@ -684,7 +685,7 @@ function LogCard({
         ))}
       </ol>
       <p className="m-0 flex items-center gap-3 rounded-lg border border-dashed border-line-default p-3 text-base text-fg-tertiary">
-        <Clock aria-hidden="true" className="size-4 shrink-0 text-fg-light" />
+        <Clock aria-hidden="true" className="size-4 shrink-0 text-fg-tertiary" />
         <span>
           {t('actionPlans.next.log.noteBefore')} <b className="font-semibold text-fg-primary">{t('actionPlans.next.log.noteAction')}</b>
           {t('actionPlans.next.log.noteAfter')}

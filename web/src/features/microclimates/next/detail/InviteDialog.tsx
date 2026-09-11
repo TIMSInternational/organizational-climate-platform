@@ -101,11 +101,11 @@ export function InviteDialog({
               <span id={groupId} className="sr-only">
                 {t('microclimates.next.detail.inviteWho')}
               </span>
-              <label className="flex items-center gap-2 text-base">
+              <label className="m-0 flex items-center gap-2 text-base font-normal text-fg-primary">
                 <RadioGroupItem value="all" />
                 {t('microclimates.next.detail.inviteAll')}
               </label>
-              <label className="flex items-center gap-2 text-base">
+              <label className="m-0 flex items-center gap-2 text-base font-normal text-fg-primary">
                 <RadioGroupItem value="departments" />
                 {t('microclimates.next.detail.inviteDepartments')}
               </label>
@@ -119,7 +119,7 @@ export function InviteDialog({
                 ) : (
                   departments.map((department) => (
                     <li key={department.id}>
-                      <label className="flex items-center gap-2 text-base">
+                      <label className="m-0 flex items-center gap-2 text-base font-normal text-fg-primary">
                         <Checkbox
                           checked={picked.has(department.id)}
                           onCheckedChange={(checked) =>

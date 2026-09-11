@@ -16,7 +16,8 @@ const TITLE_KEY: Record<JourneyKey, string> = {
  *
  * A done step is a green check, the current one a red numbered disc (the identity fill,
  * `bg-accent-blue-fill`, which is `#dd0c15` in both palettes and carries white at 5.47:1),
- * a pending one a hollow numbered disc. The rule after a done step is green. The state is
+ * a pending one a hollow numbered disc. Pending ink is `text-fg-tertiary`, not the board's
+ * `#8a82a5`: that is `text-fg-light`, a non-text ink under 4.5:1 (`inkContrast.test.ts`). The rule after a done step is green. The state is
  * never the colour alone: the current step is `aria-current="step"` and its note says so.
  */
 export function JourneyRail({
@@ -60,7 +61,7 @@ export function JourneyRail({
                       'inline-flex size-5.5 shrink-0 items-center justify-center rounded-full font-mono text-xs tabular-nums',
                       state === 'current'
                         ? 'bg-accent-blue-fill font-semibold text-fg-on-accent'
-                        : 'border border-line-default bg-surface-icon-box text-fg-light',
+                        : 'border border-line-default bg-surface-icon-box text-fg-tertiary',
                     )}
                   >
                     {index + 1}
@@ -70,7 +71,7 @@ export function JourneyRail({
                   <span
                     className={cn(
                       'text-sm font-semibold',
-                      state === 'current' ? 'text-fg-primary' : state === 'done' ? 'text-fg-secondary' : 'text-fg-light',
+                      state === 'current' ? 'text-fg-primary' : state === 'done' ? 'text-fg-secondary' : 'text-fg-tertiary',
                     )}
                   >
                     {t(TITLE_KEY[key])}
@@ -78,7 +79,7 @@ export function JourneyRail({
                   <span
                     className={cn(
                       'text-xs xl:whitespace-nowrap',
-                      state === 'current' ? 'text-accent-red-ink' : state === 'done' ? 'text-fg-tertiary' : 'text-fg-light',
+                      state === 'current' ? 'text-accent-red-ink' : 'text-fg-tertiary',
                     )}
                   >
                     {notes[key]}

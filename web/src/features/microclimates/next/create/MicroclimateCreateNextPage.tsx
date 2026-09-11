@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from 'react'
 import * as RadioGroupPrimitive from '@radix-ui/react-radio-group'
-import { CalendarDays, Clock, Ellipsis, FileText, GripVertical, Plus, Send, ShieldCheck, Users } from 'lucide-react'
+import { Clock, Ellipsis, FileText, GripVertical, Plus, Send, ShieldCheck, Users } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { CanvasCard, FactList, NoteBand } from '../../../../components/canvas'
@@ -99,6 +99,7 @@ function CreateScreen() {
   return (
     <div>
       <PageTopBar
+        compact
         title={t('microclimates.next.create.title')}
         eyebrow={t('microclimates.next.create.eyebrow')}
         description={t('microclimates.next.create.description')}
@@ -263,7 +264,7 @@ function CreateScreen() {
                   >
                     <Plus aria-hidden="true" />
                     {t('microclimates.next.create.addQuestion')}
-                    <span className="font-normal text-fg-light">{t('microclimates.next.create.addQuestionHint')}</span>
+                    <span className="font-normal text-fg-tertiary">{t('microclimates.next.create.addQuestionHint')}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="center">
@@ -285,7 +286,7 @@ function CreateScreen() {
                 onAdd={(picked) => state.setQuestions((all) => [...all, ...picked.map((item) => questionFromLibrary(item, state.nextKey()))])}
               />
 
-              <span className="text-sm text-fg-light">
+              <span className="text-sm text-fg-tertiary">
                 {state.templates.length === 0
                   ? t('microclimates.next.create.templateNone', { company: companyName ?? t('microclimates.next.create.theCompany') })
                   : t('microclimates.next.create.templateSome')}
@@ -423,7 +424,7 @@ function CreateScreen() {
 function FieldLabel({ htmlFor, required, children }: { htmlFor: string; required?: boolean; children: string }) {
   const { t } = useTranslation()
   return (
-    <label htmlFor={htmlFor} className="text-sm font-semibold text-fg-secondary">
+    <label htmlFor={htmlFor} className="m-0 text-sm font-semibold leading-normal text-fg-secondary">
       {children}
       {required && (
         <span className="text-accent-red-ink" aria-label={t('microclimates.next.create.required')}>
@@ -523,7 +524,7 @@ function QuestionRow({
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-line-default px-3 pt-2.5 pb-3">
       <div className="flex flex-wrap items-center gap-2.5">
-        <GripVertical aria-hidden="true" className="size-4 shrink-0 text-fg-light" />
+        <GripVertical aria-hidden="true" className="size-4 shrink-0 text-fg-tertiary" />
         <span className="inline-flex size-5.5 shrink-0 items-center justify-center rounded-full bg-surface-icon-box font-mono text-xs font-semibold tabular-nums text-fg-secondary">
           {order}
         </span>
@@ -537,7 +538,7 @@ function QuestionRow({
             onCheckedChange={(required) => update({ required })}
             className="data-[state=checked]:bg-accent-green"
           />
-          <label htmlFor={switchId}>
+          <label htmlFor={switchId} className="m-0 text-sm font-normal leading-normal text-fg-secondary">
             {question.required ? t('microclimates.next.create.required') : t('microclimates.next.create.optional')}
           </label>
         </span>
@@ -645,20 +646,20 @@ function DateTimeField({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-semibold text-fg-secondary">
+      <label htmlFor={id} className="m-0 text-sm font-semibold leading-normal text-fg-secondary">
         {label}
       </label>
-      <div className="relative">
-        <CalendarDays aria-hidden="true" className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-fg-light" />
-        <Input
-          id={id}
-          type="datetime-local"
-          className="pl-8 font-mono tabular-nums"
-          value={value}
-          disabled={disabled}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      </div>
+      {/* The native `datetime-local` brings its own calendar button; a second glyph beside it
+          read as two controls. Its text is the browser's own locale format, which is why the
+          board's "14/09/2026 · 08:00" reads "09/14/2026, 08:00 AM" in an en-US browser. */}
+      <Input
+        id={id}
+        type="datetime-local"
+        className="font-mono tabular-nums"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </div>
   )
 }
@@ -695,7 +696,7 @@ function RespondentPreview({ values }: { values: MicroclimateWizardValues }) {
           </div>
         )
       })}
-      <span className="inline-flex h-8 items-center self-start rounded-md border border-line-default px-3 text-base font-medium text-fg-light">
+      <span className="inline-flex h-8 items-center self-start rounded-md border border-line-default px-3 text-base font-medium text-fg-tertiary">
         {t('microclimates.next.create.previewSubmit')}
       </span>
     </div>
@@ -707,7 +708,7 @@ function PreviewAnswer({ question, language }: { question: WizardQuestionValues;
   const box = 'inline-flex h-8.5 min-w-0 flex-1 items-center justify-center rounded-md border border-line-default bg-surface-card px-1 text-base text-fg-secondary'
   if (question.type === 'open_ended') {
     return (
-      <span className="inline-flex h-8 items-center rounded-md border border-line-default bg-surface-card px-2.5 text-base text-fg-light">
+      <span className="inline-flex h-8 items-center rounded-md border border-line-default bg-surface-card px-2.5 text-base text-fg-tertiary">
         {t('microclimates.next.type.openEnded')}
       </span>
     )

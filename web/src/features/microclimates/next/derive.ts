@@ -157,7 +157,8 @@ const QUARTER_HOUR_MS = 15 * 60_000
 export const DEFAULT_WINDOW_MS = 48 * 3_600_000
 
 /**
- * The schedule a new session starts with: opening at the next quarter hour, and open for as
+ * The schedule a new session starts with: opening at the current quarter hour — never in the
+ * future, so a fresh form is launchable as it stands — and open for as
  * long as the previous session was (48 hours when there is none, or its window is unusable).
  *
  * Opening NOW rather than on a date the board picked, because that is what launching does:
@@ -167,7 +168,7 @@ export const DEFAULT_WINDOW_MS = 48 * 3_600_000
  * something the product does not do.
  */
 export function defaultWindow(now: Date, previous?: { startTime: string; endTime: string } | null): { start: Date; end: Date } {
-  const start = new Date(Math.ceil(now.getTime() / QUARTER_HOUR_MS) * QUARTER_HOUR_MS)
+  const start = new Date(Math.floor(now.getTime() / QUARTER_HOUR_MS) * QUARTER_HOUR_MS)
   const copied = previous ? Date.parse(previous.endTime) - Date.parse(previous.startTime) : Number.NaN
   const length = Number.isFinite(copied) && copied > 0 ? copied : DEFAULT_WINDOW_MS
   return { start, end: new Date(start.getTime() + length) }
@@ -189,6 +190,6 @@ export function windowMs(start: string, end: string): number | null {
 
 /** A window as hours when it is at least one, else as minutes — `48 horas`, `30 minutos`. */
 export function windowLength(ms: number): { unit: 'hours' | 'minutes'; value: number } {
-  const hours = Math.round(ms / 3_600_000)
-  return hours >= 1 ? { unit: 'hours', value: hours } : { unit: 'minutes', value: Math.max(1, Math.round(ms / 60_000)) }
+  if (ms >= 3_600_000) return { unit: 'hours', value: Math.round(ms / 3_600_000) }
+  return { unit: 'minutes', value: Math.max(1, Math.round(ms / 60_000)) }
 }

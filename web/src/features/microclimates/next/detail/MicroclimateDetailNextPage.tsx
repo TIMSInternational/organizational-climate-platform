@@ -150,6 +150,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
   return (
     <div>
       <PageTopBar
+        compact
         title={title}
         eyebrow={t('microclimates.next.detail.eyebrow')}
         description={t('microclimates.next.detail.description')}
@@ -219,7 +220,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
             <CanvasCard title={t('microclimates.next.detail.linkTitle')}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex h-8 min-w-0 flex-1 basis-64 items-center gap-2 rounded-md border border-line-default bg-surface-card px-2.5">
-                  <Link2 aria-hidden="true" className="size-3.5 shrink-0 text-fg-light" />
+                  <Link2 aria-hidden="true" className="size-3.5 shrink-0 text-fg-tertiary" />
                   <span className="truncate font-mono text-base text-fg-primary">{`${host}${path}`}</span>
                 </span>
                 <Button variant={isDraft ? 'outline' : 'primary'} onClick={() => void copyLink()}>
@@ -348,7 +349,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
                       {t('microclimates.next.detail.closeNow')}
                     </Button>
                   </span>
-                  <span className="text-xs text-fg-light">{t('microclimates.next.detail.closeNote')}</span>
+                  <span className="text-xs text-fg-tertiary">{t('microclimates.next.detail.closeNote')}</span>
                 </div>
               )}
             </CanvasCard>
@@ -387,7 +388,7 @@ function AfterRow({ to, icon, title, note }: { to: string; icon: React.ReactNode
           <span className="text-base font-semibold">{title}</span>
           <span className="text-sm text-fg-tertiary">{note}</span>
         </span>
-        <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-fg-light" />
+        <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-fg-tertiary" />
       </Link>
     </li>
   )
@@ -474,12 +475,12 @@ function Ladder({ list }: { list: MicroclimateInvitationList }) {
         <div className="flex flex-wrap items-center gap-1.5">
           {ladder.recorded.map((state, index) => (
             <span key={state} className="inline-flex items-center gap-1.5">
-              {index > 0 && <ChevronRight aria-hidden="true" className="size-3 text-fg-light" />}
+              {index > 0 && <ChevronRight aria-hidden="true" className="size-3 text-fg-tertiary" />}
               <Chip label={rungLabel(t, state)} />
             </span>
           ))}
           {ladder.suppressed.length > 0 && (
-            <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-fg-light">
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-fg-tertiary">
               <ChevronRight aria-hidden="true" className="size-3" />
               <EyeOff aria-hidden="true" className="size-3.25" />
               {ladder.suppressed.map((state, index) => (

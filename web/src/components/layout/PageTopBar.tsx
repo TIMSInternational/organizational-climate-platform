@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
+import { cn } from '../../lib/cn'
 import { useTranslation } from '../../i18n'
 import { getToken } from '../../auth/token'
 import { decodeJwtPayload } from '../../auth/jwt'
@@ -149,6 +150,13 @@ export interface PageTopBarProps {
    * of 10 Sep draw it inside the header's text column, 6px under the description.
    */
   meta?: ReactNode
+  /**
+   * The admin-gaps boards of 10 Sep (Detalle de plan; Crear, Detalle, Analítica and
+   * Resultados de microclima) nest the breadcrumb in the header block with a 14px margin
+   * (`margin-bottom: 14px` in each `.dc.html`) instead of the first canvas's 38px, so the
+   * crumb sits 32px above the eyebrow's centre, not 55px. `compact` draws that gap.
+   */
+  compact?: boolean
 }
 
 export function PageTopBar({
@@ -160,6 +168,7 @@ export function PageTopBar({
   badge,
   actions,
   meta,
+  compact = false,
 }: PageTopBarProps) {
   const { t } = useTranslation()
   const derivedEyebrow = useSectionEyebrow()
@@ -174,7 +183,7 @@ export function PageTopBar({
     // `--admin-size-section-gap`. UI-0 had it at 8px / 14px / 16px.
     <div
       data-slot="page-top-bar"
-      className="mb-section flex flex-col gap-9.5 border-b border-line-light pb-4"
+      className={cn('mb-section flex flex-col border-b border-line-light pb-4', compact ? 'gap-3.5' : 'gap-9.5')}
     >
       {breadcrumbs && breadcrumbs.length > 0 && (
         <Breadcrumb aria-label={breadcrumbLabel ?? t('shell.breadcrumb')}>

@@ -114,6 +114,7 @@ function ResultsView({
   return (
     <div>
       <PageTopBar
+        compact
         title={title}
         eyebrow={t('microclimates.next.results.eyebrow')}
         description={t('microclimates.next.results.description', { floor: FLOOR })}
@@ -377,7 +378,7 @@ function QuestionCard({
           <div className="flex flex-wrap justify-between gap-2 text-sm text-fg-tertiary">
             <span>
               {t('microclimates.next.results.average')}{' '}
-              <span className="text-fg-light">
+              <span className="text-fg-tertiary">
                 {protectedSession ? t('microclimates.next.results.averageProtected') : t('microclimates.next.results.averageNotKept')}
               </span>
             </span>

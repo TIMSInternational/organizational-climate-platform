@@ -2,7 +2,7 @@ import { Link } from 'react-router'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { CanvasCard, CanvasSectionHead, HatchField, HatchTag, NoteBand } from '../../../../components/canvas'
-import { Button, Chip, EmptyState, LoadingRegion, NetworkError, SkeletonText } from '../../../../components/ui'
+import { Button, Chip, EmptyState, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { cn } from '../../../../lib/cn'
 import { nameHead, percentReading } from '../../../dashboard/next/derive'
@@ -41,6 +41,7 @@ function AnalyticsScreen() {
 
   const header = (
     <PageTopBar
+      compact
       title={t('microclimates.next.analytics.title')}
       eyebrow={t('microclimates.next.analytics.eyebrow')}
       description={t('microclimates.next.analytics.description', { floor: FLOOR })}
@@ -171,7 +172,7 @@ function ParticipationBar({ row }: { row: SessionRow }) {
         })}
         className="m-0 flex flex-col gap-1.5 pt-1"
       >
-        <div className="relative h-4 text-2xs text-fg-light">
+        <div className="relative h-4 text-2xs text-fg-tertiary">
           <span className="absolute top-0 whitespace-nowrap pl-1.5" style={{ left: `${floorAt}%` }}>
             {t('microclimates.next.analytics.floorMark', { floor: FLOOR })}
           </span>
@@ -192,7 +193,7 @@ function ParticipationBar({ row }: { row: SessionRow }) {
             </>
           )}
         </div>
-        <div aria-hidden="true" className="relative mt-1 h-4 font-mono text-2xs tabular-nums text-fg-light">
+        <div aria-hidden="true" className="relative mt-1 h-4 font-mono text-2xs tabular-nums text-fg-tertiary">
           {countTicks(max).map((tick) => (
             <span key={tick} className="absolute -translate-x-1/2" style={{ left: `${(tick / max) * 100}%` }}>
               {tick}
@@ -239,8 +240,10 @@ const CELL = 'px-3 py-3 align-middle border-b border-line-light'
 function SessionsTable({ rows }: { rows: readonly SessionRow[] }) {
   const { t, locale } = useTranslation()
   return (
-    <div className="overflow-x-auto rounded-xl border border-line-default bg-surface-card pt-2 shadow-xs">
-      <table className="w-full min-w-[56rem] border-collapse">
+    // `Table`, not a bare `<table>`: the primitive is the scroll container, so at 1024 the
+    // eight columns scroll inside the card instead of pushing the page wide (#218).
+    <div className="rounded-xl border border-line-default bg-surface-card pt-2 shadow-xs">
+      <Table className="min-w-[56rem]">
         <caption className="sr-only">{t('microclimates.next.analytics.sessionsTitle')}</caption>
         <thead>
           <tr>
@@ -271,7 +274,7 @@ function SessionsTable({ rows }: { rows: readonly SessionRow[] }) {
                       {session.title ?? t('microclimates.untitled')}
                     </Link>
                     {row.detail.status === 'ready' && (
-                      <span className="text-xs text-fg-light">
+                      <span className="text-xs text-fg-tertiary">
                         {t('microclimates.next.analytics.rowMeta', {
                           count: row.detail.value.questions.length,
                           mode: row.detail.value.anonymousResponses
@@ -337,7 +340,7 @@ function SessionsTable({ rows }: { rows: readonly SessionRow[] }) {
             )
           })}
         </tbody>
-      </table>
+      </Table>
     </div>
   )
 }

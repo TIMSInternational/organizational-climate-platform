@@ -18,7 +18,7 @@ export function HatchTag({ label, className }: { label: string; className?: stri
       data-protected="true"
       className={cn(
         PROTECTED_HATCH,
-        'inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-md bg-surface-outer px-2 text-xs text-fg-light',
+        'inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-md bg-surface-outer px-2 text-xs text-fg-tertiary',
         className,
       )}
     >
