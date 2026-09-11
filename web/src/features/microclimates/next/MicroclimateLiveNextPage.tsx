@@ -401,9 +401,14 @@ function WordsBlock({ live, responses }: { live: LiveResults | null; responses: 
  * The link and the QR are drawn for an open, anonymous session only, as the old live
  * page drew the link: a named session is answered from each person's own invitation,
  * and a draft or closed one refuses answers. The QR is the real code of the real link,
- * drawn with `ShareLinkQr`'s helpers and its fixed pair (modules on white paper in both
- * themes, so a camera reads it the same in dark mode) — this screen is the one meant to
- * be projected, so it is shown, not hidden behind a reveal.
+ * drawn with `ShareLinkQr`'s helpers on its white paper (`fg-on-accent`, #ffffff in both
+ * palettes) — this screen is the one meant to be projected, so it is shown, not hidden
+ * behind a reveal.
+ *
+ * Its modules are the shell's ink, not the share panel's accent red: `--admin-bg-shell` is
+ * dark in both palettes (#1f114c light, #120b2b dark), so the code never inverts, and it
+ * holds 16.90:1 and 18.94:1 on the paper where the red holds 5.08:1. A projector washes contrast
+ * out, and the artboard draws this box in its neutral greys with no red in it.
  */
 function RespondCard({ detail }: { detail: MicroclimateDetail }) {
   const { t, locale } = useTranslation()
@@ -483,7 +488,7 @@ function QrPlate({ url, label }: { url: string; label: string }) {
         aria-label={label}
         viewBox={`0 0 ${size} ${size}`}
         shapeRendering="crispEdges"
-        className="size-full text-accent-blue-fill"
+        className="size-full text-surface-shell"
       >
         <rect width={size} height={size} className="fill-fg-on-accent" />
         <path d={qrPathData(modules)} fill="currentColor" />

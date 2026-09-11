@@ -9,6 +9,8 @@ import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { clearToken, setToken } from '../../../auth/token'
 import { CompanyContextProvider } from '../../../company-context'
 import { tokenFor } from '../../../test/jwtFixture'
+import tokensCss from '../../../styles/tokens.css?raw'
+import themeCss from '../../../styles/theme.css?raw'
 
 /**
  * The redesigned live session (`/microclimates/:id/live`), against the MicroclimateLive
@@ -277,6 +279,70 @@ describe('what people wrote', () => {
     await waitFor(() => expect(figure()).toBe('13'))
     expect(screen.queryByText(/sentiment/i)).toBeNull()
     expect(screen.queryByText(/0\.42/)).toBeNull()
+  })
+})
+
+/**
+ * The QR's two colours, read end to end: the classes the rendered code carries, the
+ * `--admin-*` variable `theme.css` resolves each to, and that variable's value in each
+ * palette of `tokens.css`, the dark one layered over the light as the browser cascades them.
+ */
+function qrPalettes(): { light: Record<string, string>; dark: Record<string, string> } {
+  const cut = tokensCss.indexOf(":root[data-admin-theme='dark']")
+  expect(cut, 'tokens.css no longer declares a dark palette').toBeGreaterThan(0)
+  const declarations = (block: string): Record<string, string> =>
+    Object.fromEntries([...block.matchAll(/(--admin-[\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]))
+  const light = declarations(tokensCss.slice(tokensCss.indexOf(':root {'), cut))
+  return { light, dark: { ...light, ...declarations(tokensCss.slice(cut)) } }
+}
+
+function adminVariableOf(utility: string): string {
+  const declared = new RegExp(`--color-${utility}:\\s*var\\((--admin-[\\w-]+)\\)`).exec(themeCss)
+  expect(declared, `theme.css declares no --color-${utility}`).not.toBeNull()
+  return declared![1]
+}
+
+function relativeLuminance(hex: string): number {
+  const match = /^#([0-9a-fA-F]{6})$/.exec(hex)
+  expect(match, `not a six-digit hex: ${hex}`).not.toBeNull()
+  const [r, g, b] = [0, 2, 4].map((i) => {
+    const scaled = Number.parseInt(match![1].slice(i, i + 2), 16) / 255
+    return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+function contrastRatio(a: string, b: string): number {
+  const [lighter, darker] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+describe('the QR', () => {
+  it('prints dark modules on white paper in both themes, at 7:1 or more, for a code meant to be projected', async () => {
+    renderPage()
+    const qr = await screen.findByRole('img', { name: 'QR code of the respond link' })
+    const ink = /(?:^|\s)text-([a-z0-9-]+)/.exec(qr.getAttribute('class') ?? '')
+    const paper = /(?:^|\s)fill-([a-z0-9-]+)/.exec(qr.querySelector('rect')?.getAttribute('class') ?? '')
+    expect(ink, 'the code carries no text-* ink class').not.toBeNull()
+    expect(paper, 'the paper carries no fill-* class').not.toBeNull()
+    const inkVariable = adminVariableOf(ink![1])
+    const paperVariable = adminVariableOf(paper![1])
+
+    const { light, dark } = qrPalettes()
+    for (const [theme, palette] of [['light', light], ['dark', dark]] as const) {
+      // Dark on light, as ISO/IEC 18004 assumes: an inverted code is at the scanner's mercy.
+      expect(relativeLuminance(palette[inkVariable]), theme).toBeLessThan(relativeLuminance(palette[paperVariable]))
+      expect(contrastRatio(palette[inkVariable], palette[paperVariable]), theme).toBeGreaterThanOrEqual(7)
+    }
+  })
+
+  it("measures a real failure too: the share panel's red and a theme-following ink both miss 7:1", () => {
+    // Guard the guard. The accent red clears AA on white and not 7:1; the primary ink
+    // flips with the theme and is near-white in dark. If either passed, the measurement
+    // above would be broken, not the tokens.
+    const { light, dark } = qrPalettes()
+    expect(contrastRatio(light['--admin-accent-blue-fill'], light['--admin-font-on-accent'])).toBeLessThan(7)
+    expect(contrastRatio(dark['--admin-font-primary'], dark['--admin-font-on-accent'])).toBeLessThan(7)
   })
 })
 
