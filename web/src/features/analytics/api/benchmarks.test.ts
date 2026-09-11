@@ -6,6 +6,7 @@ import {
   getBenchmark,
   updateBenchmark,
   addBenchmarkMetric,
+  listPriorPeriodCandidates,
 } from './benchmarks'
 
 const baseUrl = 'http://api.test'
@@ -68,6 +69,17 @@ describe('benchmarks api client', () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }))
     await getBenchmark(baseUrl, 'b1', 'es')
     expect(fetch).toHaveBeenCalledWith(`${baseUrl}/admin/benchmarks/b1?lang=es`, expect.anything())
+  })
+
+  it('asks for the prior-period shortlist in the reader\'s language', async () => {
+    // A candidate's `name` is a paired column resolved server-side for `lang`; the
+    // shortlist a company admin links from named every prior period in the fallback.
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+    await listPriorPeriodCandidates(baseUrl, 'b1', 'es')
+    expect(fetch).toHaveBeenCalledWith(`${baseUrl}/admin/benchmarks/b1/prior-period/candidates?lang=es`, expect.anything())
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+    await listPriorPeriodCandidates(baseUrl, 'b1')
+    expect(fetch).toHaveBeenLastCalledWith(`${baseUrl}/admin/benchmarks/b1/prior-period/candidates`, expect.anything())
   })
 
   it('keeps a null companyId distinguishable from a company-scoped one', async () => {
