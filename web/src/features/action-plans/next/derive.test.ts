@@ -10,8 +10,7 @@ import {
   isDueThisMonth,
   ownerReading,
   summarize,
-  TIMELINE_LABEL_CHARS,
-  timelineLabelLines,
+  timelineLabelSlots,
 } from './derive'
 import type { PlanRow } from './model'
 
@@ -144,21 +143,36 @@ describe('applyFilters', () => {
   })
 })
 
-describe('timelineLabelLines', () => {
-  it('breaks a title at a word onto two whole lines', () => {
-    expect(timelineLabelLines('Programa de reconocimiento entre pares')).toEqual(['Programa de reconocimiento', 'entre pares'])
-    expect(timelineLabelLines('Reducir la carga de trabajo en Operaciones')).toEqual(['Reducir la carga de', 'trabajo en Operaciones'])
+describe('timelineLabelSlots', () => {
+  // The demo tenant's four open plans (20, 35, 45 and 60 days out) on the artboard's own
+  // 1120px drawing: the axis runs 40 → 1080, so the dots sit at these x positions.
+  const XS = [40 + (20 / 60) * 1040, 40 + (35 / 60) * 1040, 40 + (45 / 60) * 1040, 1080]
+
+  it('gives each label one line of room, centred under its dot, and hangs the one at the end of the axis inward', () => {
+    expect(timelineLabelSlots(XS, 40, 1080, 1120)).toEqual([
+      { anchor: 'middle', room: 252 },
+      { anchor: 'middle', room: 165 },
+      { anchor: 'middle', room: 165 },
+      { anchor: 'end', room: 169 },
+    ])
   })
 
-  it('keeps a short title on one line', () => {
-    expect(timelineLabelLines('Buzón anónimo')).toEqual(['Buzón anónimo'])
+  it('never lets two labels meet: each ends at least 8px before the next begins, and the first clears today', () => {
+    const extent = (x: number, slot: { anchor: string; room: number }) =>
+      slot.anchor === 'start' ? [x, x + slot.room] : slot.anchor === 'end' ? [x - slot.room, x] : [x - slot.room / 2, x + slot.room / 2]
+    for (const width of [1120, 686, 500]) {
+      const xs = XS.map((x) => 40 + ((x - 40) / 1040) * (width - 80))
+      const slots = timelineLabelSlots(xs, 40, width - 40, width)
+      const spans = xs.map((x, index) => extent(x, slots[index]))
+      expect(spans[0][0]).toBeGreaterThanOrEqual(40 + 28 + 8)
+      for (let index = 1; index < spans.length; index += 1) {
+        expect(spans[index][0] - spans[index - 1][1], `width ${width}, label ${index}`).toBeGreaterThanOrEqual(8)
+      }
+      expect(spans[spans.length - 1][1]).toBeLessThanOrEqual(width)
+    }
   })
 
-  it('ends only a title longer than two lines with an ellipsis, on the second line', () => {
-    const lines = timelineLabelLines('Publicar el rol de fines de semana con dos semanas de antelación y avisar a cada turno')
-    expect(lines).toHaveLength(2)
-    expect(lines[0].endsWith('…')).toBe(false)
-    expect(lines[1].endsWith('…')).toBe(true)
-    expect(lines.every((line) => line.length <= TIMELINE_LABEL_CHARS)).toBe(true)
+  it('hangs a plan already past due, which sits on today, from the start of the axis', () => {
+    expect(timelineLabelSlots([40, 600], 40, 1080, 1120)[0].anchor).toBe('start')
   })
 })

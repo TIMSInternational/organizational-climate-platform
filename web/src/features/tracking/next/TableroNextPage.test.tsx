@@ -125,15 +125,72 @@ describe('TableroNextPage — the leader of the nodo', () => {
     expect(within(card).getByRole('link', { name: new RegExp(next.viewPlan) }).getAttribute('href')).toBe(`/tracking/planes/${PLAN_ID}`)
   })
 
-  it('wears the sample chip on the avances tile and nowhere else', async () => {
+  it('reads Avances registrados 0 off plans with no avance on record, and wears no sample chip anywhere', async () => {
     renderPage()
     await screen.findByRole('article')
-    const chips = document.querySelectorAll('[data-slot="sample-chip"]')
-    expect(chips).toHaveLength(1)
-    expect(chips[0].closest('[data-slot="nodo-tile"]')?.textContent).toContain(next.tileAvances)
-    // On a line of its own under the reading, never in the label row: there it wrapped under
-    // "Avances registrados" and pushed the reading a row below the other three tiles'.
-    expect(chips[0].closest('[data-slot="nodo-tile-note"]')).not.toBeNull()
+    expect(document.querySelectorAll('[data-slot="sample-chip"]')).toHaveLength(0)
+    const tile = [...document.querySelectorAll('[data-slot="nodo-tile"]')].find((node) => node.textContent?.includes(next.tileAvances)) as HTMLElement
+    expect(tile.querySelector('[data-slot="avances-reading"]')?.textContent).toBe('0')
+    expect(tile.textContent).toContain(next.firstBelow)
+  })
+
+  it('once a plan carries an avance, reads how many plans do and the latest day — never a count of avances it cannot see', async () => {
+    const withAvance = { ...TABLERO.planes[0], porcentajeAvance: 0.25, fechaUltimaActualizacion: '2026-09-12' }
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.startsWith(`${TRACKING}/api/tablero-seguimiento`)) return json({ ...TABLERO, planes: [withAvance] })
+      if (/\/profile(\?|$)/.test(url)) return json(PROFILE)
+      return json({}, 404)
+    })
+    renderPage()
+    await screen.findByRole('article')
+    expect(screen.queryByText(next.tileAvances)).toBeNull()
+    const tile = screen.getByText(next.tilePlanesConAvance).closest('[data-slot="nodo-tile"]') as HTMLElement
+    expect(tile.querySelector('[data-slot="avances-reading"]')?.textContent).toBe('1')
+    expect(tile.textContent).toContain(next.ofPlansLatest.replace('{total}', '1').replace('{date}', '12 sept'))
+  })
+
+  it('names the viewer as the jefatura del nodo when they are the plan responsable, as the artboard names Luis Mora', async () => {
+    const mine = { ...TABLERO.planes[0], responsableEjecucionExternalId: 'u-luis' }
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.startsWith(`${TRACKING}/api/tablero-seguimiento`)) return json({ ...TABLERO, planes: [mine] })
+      if (/\/profile(\?|$)/.test(url)) return json(PROFILE)
+      return json({}, 404)
+    })
+    renderPage()
+    const card = await screen.findByRole('article')
+    const box = within(card).getByText(next.boxResponsable).parentElement as HTMLElement
+    expect(box.textContent).toContain('Luis Mora')
+    expect(box.textContent).toContain(next.jefaturaDelNodo)
+  })
+
+  it('says a responsable who is somebody else is named where the directory is — the administration', async () => {
+    renderPage()
+    const card = await screen.findByRole('article')
+    const box = within(card).getByText(next.boxResponsable).parentElement as HTMLElement
+    expect(box.textContent).toContain(next.personaUnnamed)
+    expect(box.textContent).toContain(next.personaUnnamedSub)
+    expect(box.textContent).not.toContain(next.jefaturaDelNodo)
+  })
+
+  it('sets the unit right after the figure, "0 %", and a placeholder naming the day the avance is for', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 8, 10, 12, 0, 0))
+    try {
+      renderPage()
+      const card = await screen.findByRole('article')
+      const unit = card.querySelector('[data-slot="avance-unit"]') as HTMLElement
+      // The stored 0 and a space: the field's 10px padding, one digit, one `ch`.
+      expect(unit.style.left).toBe('calc(0.625rem + 2ch)')
+      const percent = within(card).getByLabelText(next.fieldAvance)
+      await userEvent.clear(percent)
+      await userEvent.type(percent, '25')
+      expect(unit.style.left).toBe('calc(0.625rem + 3ch)')
+      expect(within(card).getByLabelText(next.fieldQueSeHizo).getAttribute('placeholder')).toBe('Lo que se hizo el 10 de septiembre')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('prints the avance date as the board prints dates, not as the browser numeric control', async () => {

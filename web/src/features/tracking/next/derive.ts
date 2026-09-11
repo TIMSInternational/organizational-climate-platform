@@ -1,7 +1,7 @@
 import type { PlanAccion, SemaforoCounts } from '../api/trackingApi'
 import type { PersonaPickerItem } from '../api/trackingPickers'
 import { SEMAFORO_ORDER, semaforoCount, toPercent, type SemaforoEstado } from '../semaforo'
-import type { PersonaRef, PlanLine } from './model'
+import type { AvancesReading, PersonaRef, PlanLine } from './model'
 
 /**
  * The derived readings of the three redesigned tracking screens, as pure functions.
@@ -36,15 +36,32 @@ export function isOverdue(plan: Pick<PlanAccion, 'cumplido' | 'fechaCompromiso'>
  * Whether a progress update is on record, read off the two fields the payload has.
  *
  * `PlanDeAccion.RegistrarAvance` writes both `PorcentajeAvance` and
- * `FechaUltimaActualizacion` (the avance's own date); creation sets the percentage to 0
- * and the last update to the creation date. So a plan with either a percentage above zero
- * or a last update later than its creation has had an avance. The one case this cannot
- * see is an avance of 0 % dated on the creation day, which leaves both fields exactly as
- * creation left them — the bitácora (not on the wire, see `sampleModel.ts`) is the only
- * thing that could tell those apart.
+ * `FechaUltimaActualizacion` (the avance's own date); creation runs it once with 0 % and
+ * the creation date (`PlanesAccionEndpoints.CreateAsync`, the "Plan creado" entry). So a
+ * plan with either a percentage above zero or a last update later than its creation has had
+ * an avance. The one case this cannot see is an avance of 0 % dated on the creation day,
+ * which leaves both fields exactly as creation left them — the bitácora is the only thing
+ * that could tell those apart, and `PlanResponse` does not carry it (`PlanDeAccionDtos.cs`).
  */
 export function hasRecordedProgress(plan: Pick<PlanAccion, 'porcentajeAvance' | 'fechaUltimaActualizacion' | 'fechaCreacion'>): boolean {
   return plan.porcentajeAvance > 0 || plan.fechaUltimaActualizacion > plan.fechaCreacion
+}
+
+/**
+ * The avances on a set of plans, as far as the payload can count them: how many plans have
+ * one on record and the latest day one was recorded. Never a number of avances — the
+ * bitácora is not on the wire, so a count of entries would be a guess, and a plan with
+ * three avances would read the same as one with a single avance.
+ */
+export function avancesReading(
+  plans: readonly Pick<PlanAccion, 'porcentajeAvance' | 'fechaUltimaActualizacion' | 'fechaCreacion'>[],
+): AvancesReading {
+  const recorded = plans.filter(hasRecordedProgress)
+  const latest = recorded.reduce<string | null>(
+    (best, plan) => (best === null || plan.fechaUltimaActualizacion > best ? plan.fechaUltimaActualizacion : best),
+    null,
+  )
+  return { withProgress: recorded.length, total: plans.length, latest }
 }
 
 /** A `DateOnly` with its year — "15 sept 2026" — rendered in UTC so the day cannot move. */

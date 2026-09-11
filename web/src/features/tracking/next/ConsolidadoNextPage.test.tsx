@@ -152,11 +152,12 @@ describe('ConsolidadoNextPage — company_admin', () => {
   it('lists each plan under its own nodo with its responsable, and the total names the nodos without a plan', async () => {
     renderPage()
     const finanzas = (await screen.findByRole('link', { name: 'Finanzas' })).closest('tbody') as HTMLElement
-    expect(within(finanzas).getByText('Reponer la reunión de handover entre turnos')).toBeTruthy()
-    expect(within(finanzas).getByText('responsable Adriana Marín')).toBeTruthy()
+    // Drawn twice — the folded cell and the wide column — and one of them shows at any width.
+    expect(within(finanzas).getAllByText('Reponer la reunión de handover entre turnos')).toHaveLength(2)
+    expect(within(finanzas).getAllByText('responsable Adriana Marín')).toHaveLength(2)
     const ingenieria = screen.getByRole('link', { name: 'Ingeniería' }).closest('tbody') as HTMLElement
-    expect(within(ingenieria).getByText('responsable Alejandro Retana')).toBeTruthy()
-    expect(within(ingenieria).queryByText('Reponer la reunión de handover entre turnos')).toBeNull()
+    expect(within(ingenieria).getAllByText('responsable Alejandro Retana')).toHaveLength(2)
+    expect(within(ingenieria).queryAllByText('Reponer la reunión de handover entre turnos')).toHaveLength(0)
     expect(screen.getByText('3 nodos con plan · 2 nodos sin plan')).toBeTruthy()
   })
 
@@ -199,7 +200,7 @@ describe('ConsolidadoNextPage — company_admin', () => {
     expect(vi.mocked(downloadBlobFile)).not.toHaveBeenCalled()
   })
 
-  it('fits 1024 by folding Avance and Compromiso under the qué below 1360px, never with a minimum width', async () => {
+  it('fits 1024 with each plan on one row: its code, then one cell across the other five with the qué, the semáforo and the compromiso side by side', async () => {
     renderPage()
     await screen.findByRole('link', { name: 'Finanzas' })
     const table = screen.getByRole('table')
@@ -207,10 +208,28 @@ describe('ConsolidadoNextPage — company_admin', () => {
     const avance = [...table.querySelectorAll('th')].find((th) => th.textContent === es.tracking.columnAvance) as HTMLElement
     expect(avance.className).toContain('hidden')
     expect(avance.className).toContain('min-[1360px]:table-cell')
-    const folded = table.querySelector('[data-plan="PA-2026-00001"] [data-slot="plan-row-folded"]') as HTMLElement
+    const row = table.querySelector('[data-plan="PA-2026-00001"]') as HTMLElement
+    const folded = row.querySelector('[data-slot="plan-row-folded"]') as HTMLElement
+    expect(folded.tagName).toBe('TD')
+    expect(folded.getAttribute('colspan')).toBe('5')
     expect(folded.className).toContain('min-[1360px]:hidden')
+    expect(within(folded).getByText('Reponer la reunión de handover entre turnos')).toBeTruthy()
     expect(within(folded).getByText(es.tracking.semaforo.rojo)).toBeTruthy()
     expect(folded.textContent).toContain('20 ago')
+    // Side by side, not stacked under the qué.
+    const line = folded.firstElementChild as HTMLElement
+    expect(line.className).toMatch(/(^|\s)flex(\s|$)/)
+    expect(line.className).not.toContain('flex-col')
+    // Below 1360px no plan row keeps empty count cells beside a narrow qué.
+    const shownFolded = [...row.children].filter((cell) => !cell.className.includes('min-[1360px]:table-cell'))
+    expect(shownFolded.every((cell) => (cell.textContent ?? '') !== '')).toBe(true)
+  })
+
+  it('marks Ver planes with the Planes de Acción row glyph, as the artboard draws it', async () => {
+    renderPage()
+    const link = await screen.findByRole('link', { name: next.viewPlans })
+    const svg = link.querySelector('[data-slot="view-plans-icon"]') as SVGElement
+    expect([...svg.querySelectorAll('circle')].map((circle) => circle.getAttribute('r'))).toEqual(['6', '2.5'])
   })
 
   it('spans six columns in every row of the folded sheet and eight in the wide one', async () => {
@@ -220,7 +239,7 @@ describe('ConsolidadoNextPage — company_admin', () => {
     for (const row of screen.getByRole('table').querySelectorAll('tr')) {
       const cells = [...row.children]
       const folded = cells.filter((cell) => !cell.className.includes('min-[1360px]:table-cell')).reduce((sum, cell) => sum + span(cell), 0)
-      const wide = cells.reduce((sum, cell) => sum + span(cell), 0)
+      const wide = cells.filter((cell) => !cell.className.includes('min-[1360px]:hidden')).reduce((sum, cell) => sum + span(cell), 0)
       expect(folded, row.textContent ?? '').toBe(6)
       expect(wide, row.textContent ?? '').toBe(8)
     }

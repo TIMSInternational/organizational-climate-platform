@@ -5,7 +5,6 @@ import {
   Settings,
   Users,
   Tags,
-  Gauge,
   Inbox,
   ListChecks,
 } from 'lucide-react'
@@ -51,6 +50,12 @@ export interface NavItem {
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
   badge?: string
   sub?: NavItem[]
+  /**
+   * Further paths this row reads as active under, besides its own `href` — for a row that
+   * stands for an area another route also belongs to. `activeHref` weighs each by its own
+   * length, so a row whose `href` is the more specific match still wins.
+   */
+  activeUnder?: readonly string[]
   /**
    * Draw this group flat: its own row and its children as plain rows beside it, with no
    * chevron and nothing to expand — the super administrator's "Administración del Sistema",
@@ -281,7 +286,9 @@ const TRACKING_CONSOLIDADO_ITEM: NavItem = {
 const TRACKING_TABLERO_ITEM: NavItem = {
   labelKey: 'navigation.trackingDashboard',
   href: '/tracking/tablero',
-  icon: Gauge,
+  // The canvas draws the tablero with the consolidado's table mark (TrackingTablero, 10 Sep):
+  // the same sheet, one nodo of it.
+  icon: RailConsolidatedIcon,
 }
 
 // The plans listing (#126). `PlanesAccionEndpoints.ListAsync` scopes the query
@@ -293,6 +300,11 @@ const TRACKING_PLANES_ITEM: NavItem = {
   labelKey: 'navigation.trackingPlans',
   href: '/tracking/planes',
   icon: RailPlansIcon,
+  // Where tracking is on this is the rail's one "Planes de Acción", so it is also the row a
+  // reader is in on `/action-plans` — reached from the Panel de Control's "Crear plan" and
+  // from search — as the ActionPlansList artboard draws it. The row still LEADS to the
+  // tracking listing (the 2026-08-21 decision below); it only lights up for both.
+  activeUnder: ['/action-plans'],
 }
 
 // The involucrado's view (#126). `MisTareasAsync` reads no role claim at all — it
@@ -676,12 +688,14 @@ export function isUnder(pathname: string, href: string): boolean {
  * `navSections.test.ts` without rendering a rail.
  */
 export function activeHref(pathname: string, sections: NavSection[]): string | null {
-  const hrefs = sections.flatMap((section) =>
-    section.items.flatMap((item) => [item.href, ...(item.sub?.map((sub) => sub.href) ?? [])]),
-  )
-  return hrefs
-    .filter((href) => isUnder(pathname, href))
-    .reduce<string | null>((best, href) => (best === null || href.length > best.length ? href : best), null)
+  const rows = sections.flatMap((section) => section.items.flatMap((item) => [item, ...(item.sub ?? [])]))
+  let best: { href: string; weight: number } | null = null
+  for (const row of rows) {
+    for (const path of [row.href, ...(row.activeUnder ?? [])]) {
+      if (isUnder(pathname, path) && (best === null || path.length > best.weight)) best = { href: row.href, weight: path.length }
+    }
+  }
+  return best?.href ?? null
 }
 
 /**

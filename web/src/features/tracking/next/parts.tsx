@@ -1,7 +1,5 @@
 import type { ReactNode } from 'react'
-import { Chip } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
-import { useTranslation } from '../../../i18n'
 import { initials } from './derive'
 
 /**
@@ -81,42 +79,34 @@ export function PersonaAvatar({ name, size = 'md' }: { name: string | null; size
   )
 }
 
-/** The artboards' small amber "Datos de muestra" chip, on a sample-fed region only. */
-export function SampleChip({ className }: { className?: string }) {
-  const { t } = useTranslation()
-  return <Chip tone="warning" label={t('dashboard.next.sampleChip')} data-slot="sample-chip" className={cn('normal-case tracking-normal', className)} />
+/**
+ * The round mark at the start of a bitácora row, where the Main artboard draws the author's
+ * initials. `PlanResponse` names no author for any entry, so the row carries a glyph for WHAT
+ * happened instead of a person the payload does not name.
+ */
+export function RowGlyph({ icon }: { icon: ReactNode }) {
+  return (
+    <span
+      aria-hidden="true"
+      data-slot="bitacora-glyph"
+      className="inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-line-default bg-surface-icon-box text-fg-secondary [&>svg]:size-3.5"
+    >
+      {icon}
+    </span>
+  )
 }
 
-/**
- * A card of the tablero's "Dónde está el nodo" row: a label, a reading, a unit.
- *
- * `note` is a line of its own under the reading — where a sample-fed tile wears its chip, so
- * the label and the reading keep the rows the other three tiles set. In the label row the
- * chip wrapped under "Avances registrados" at 1440 and pushed that tile's reading a row down.
- */
-export function NodoTile({
-  label,
-  children,
-  aside,
-  note,
-}: {
-  label: string
-  children: ReactNode
-  aside?: ReactNode
-  note?: ReactNode
-}) {
+/** A card of the tablero's "Dónde está el nodo" row: a label, a reading, a unit. */
+export function NodoTile({ label, children, aside }: { label: string; children: ReactNode; aside?: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-line-default bg-surface-card px-4 py-3.5 shadow-sm" data-slot="nodo-tile">
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <span className="whitespace-nowrap text-2xs font-bold uppercase tracking-label text-fg-label">{label}</span>
+        <span data-slot="nodo-tile-label" className="whitespace-nowrap text-2xs font-bold uppercase tracking-label text-fg-label">
+          {label}
+        </span>
         {aside}
       </div>
       <div className="flex min-h-7 flex-wrap items-baseline gap-1.5">{children}</div>
-      {note && (
-        <div data-slot="nodo-tile-note" className="flex">
-          {note}
-        </div>
-      )}
     </div>
   )
 }

@@ -53,11 +53,11 @@ function json(body: unknown, status = 200) {
   return Promise.resolve(new Response(status === 404 ? '' : JSON.stringify(body), { status }))
 }
 
-function routeFetch(options: { planStatus?: number } = {}) {
+function routeFetch(options: { planStatus?: number; plan?: Record<string, unknown> } = {}) {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.startsWith(`${TRACKING}/api/planes-accion/`) && init?.method === 'POST') return json({ ...PLAN, porcentajeAvance: 0.25 })
-    if (url.startsWith(`${TRACKING}/api/planes-accion/`)) return options.planStatus ? json({}, options.planStatus) : json(PLAN)
+    if (url.startsWith(`${TRACKING}/api/planes-accion/`)) return options.planStatus ? json({}, options.planStatus) : json({ ...PLAN, ...options.plan })
     if (url.includes('/tracking/picker/nodos')) return json({ nodos: [{ id: FINANZAS, name: 'Finanzas' }] })
     if (url.includes('/tracking/picker/personas')) {
       return json({ personas: [{ id: ADRIANA, name: 'Adriana Marín', email: 'adriana.marin@meridiano.test' }] })
@@ -135,12 +135,38 @@ describe('PlanDetailNextPage — an administrator', () => {
     expect(within(ficha).getByRole('link', { name: /Finanzas/ }).getAttribute('href')).toBe(`/tracking/tablero?nodoId=${FINANZAS}`)
   })
 
-  it('wears the sample chip on the Bitácora and nowhere else', async () => {
+  it('prints the Bitácora from the plan itself: its creation as one entry, no author the payload does not name, no sample chip', async () => {
     renderPage()
-    await screen.findByRole('heading', { name: next.bitacoraHeading })
-    const chips = document.querySelectorAll('[data-slot="sample-chip"]')
-    expect(chips).toHaveLength(1)
-    expect(chips[0].closest('section')?.textContent).toContain(next.bitacoraHeading)
+    const card = (await screen.findByRole('heading', { name: next.bitacoraHeading })).closest('section') as HTMLElement
+    expect(document.querySelectorAll('[data-slot="sample-chip"]')).toHaveLength(0)
+    expect([...card.querySelectorAll('[data-entry]')].map((entry) => entry.getAttribute('data-entry'))).toEqual(['created'])
+    expect(within(card).getByText(next.created)).toBeTruthy()
+    expect(card.textContent).not.toContain(next.createdBy)
+    expect(card.textContent).not.toContain('Ana Rojas')
+    expect(within(card).getByText('Responsable: Adriana Marín · Compromiso: 20 ago')).toBeTruthy()
+    expect(within(card).getByText(next.entriesOne)).toBeTruthy()
+    // A writer is told how the first avance is recorded.
+    expect(card.textContent).toContain(next.noAvancesLead)
+  })
+
+  it('adds the latest avance as its own row once one is on record, and says the earlier ones are not listed', async () => {
+    routeFetch({ plan: { porcentajeAvance: 0.4, fechaUltimaActualizacion: '2026-09-12' } })
+    renderPage()
+    const card = (await screen.findByRole('heading', { name: next.bitacoraHeading })).closest('section') as HTMLElement
+    expect([...card.querySelectorAll('[data-entry]')].map((entry) => entry.getAttribute('data-entry'))).toEqual(['created', 'latest'])
+    const latest = card.querySelector('[data-entry="latest"]') as HTMLElement
+    expect(latest.textContent).toContain('12 sept')
+    expect(latest.textContent).toContain(next.latestAvanceRow.replace('{percent}', '40'))
+    expect(within(card).getByText(next.earlierNotListed)).toBeTruthy()
+    expect(within(card).getByText(next.bitacoraLastOn.replace('{date}', '12 sept'))).toBeTruthy()
+    expect(within(card).queryByText(next.entriesOne)).toBeNull()
+  })
+
+  it('writes a plan marked cumplido into its latest row as the service words it', async () => {
+    routeFetch({ plan: { porcentajeAvance: 1, cumplido: true, estadoSemaforo: 'Verde', fechaUltimaActualizacion: '2026-09-12' } })
+    renderPage()
+    const card = (await screen.findByRole('heading', { name: next.bitacoraHeading })).closest('section') as HTMLElement
+    expect((card.querySelector('[data-entry="latest"]') as HTMLElement).textContent).toContain(next.cumplidoRow)
   })
 
   it('shows the hallazgo as text and never as a link into survey responses', async () => {
@@ -202,6 +228,14 @@ describe('PlanDetailNextPage — who may write, as PlanAccessHandler rules it', 
     expect(calls().some((call) => call.url.includes('/tracking/picker/'))).toBe(false)
     const ficha = screen.getByRole('heading', { name: next.fichaHeading }).closest('section') as HTMLElement
     expect(within(ficha).getByText('Adriana Marín')).toBeTruthy()
+  })
+
+  it('tells a reader who cannot record progress only that there is none yet — never to press a button they do not have', async () => {
+    setToken(tokenFor({ sub: ADRIANA, name: 'Adriana Marín', role: 'employee', companyId: COMPANY, nodoId: FINANZAS, isActive: 'true' }))
+    renderPage()
+    const card = (await screen.findByRole('heading', { name: next.bitacoraHeading })).closest('section') as HTMLElement
+    expect(within(card).getByText(next.noAvancesYet)).toBeTruthy()
+    expect(card.textContent).not.toContain(next.noAvancesLead)
   })
 
   it('gives the leader of the plan nodo the write controls but not the directory picker', async () => {

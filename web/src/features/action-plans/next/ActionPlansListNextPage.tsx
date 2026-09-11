@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { ChevronDown, ChevronRight, CircleAlert, Clock, Ellipsis, Plus, Search } from 'lucide-react'
+import { ChevronDown, ChevronRight, Clock, Ellipsis, Plus, Search } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { KpiTile } from '../../../components/charts'
@@ -31,6 +31,7 @@ import { calendarDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { KpiRow } from '../../dashboard/components/dashboardGrammar'
 import { CanvasSelect } from '../../org-structure/next/super/parts'
+import SemaforoChip from '../../tracking/components/SemaforoChip'
 import { ACTION_PLAN_PRIORITIES, ACTION_PLAN_STATUSES, priorityLabel, statusLabel } from '../actionPlanVocabulary'
 import ActionPlanForm from '../components/ActionPlanForm'
 import DueTimeline from './DueTimeline'
@@ -50,9 +51,16 @@ import {
 import type { ActionPlansListModel, PlanGroup, PlanRow } from './model'
 import { useActionPlansListModel } from './useActionPlansListModel'
 
-/** The artboard's column header: 10px, bold, uppercase, the label ink, no tint. */
-const HEAD = 'h-auto bg-transparent px-3 pb-2 pt-0 text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
-const CELL = 'px-3 py-3 align-middle'
+/**
+ * The artboard's column header: 10px, bold, uppercase, the label ink, no tint.
+ *
+ * Cells pad on the LEFT only, 12px, and the last column on the right too: the artboard's
+ * grid is `minmax(0,1fr) 210px 150px 120px 80px 120px` with 12px gaps and 12px at each end,
+ * so a column is its content plus the gap before it — the widths below (222, 162, 132, 92,
+ * and 120 + 24 for the last) put every heading and value where the artboard puts it.
+ */
+const HEAD = 'h-auto bg-transparent pl-3 pr-0 last:pr-3 pb-2 pt-0 text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
+const CELL = 'pl-3 pr-0 last:pr-3 py-3 align-middle'
 /** Shown from 1360px, where the finding and the owner have columns of their own. */
 const WIDE_ONLY = 'hidden min-[1360px]:table-cell'
 /** Shown below 1360px, where the finding and the owner fold into the plan's cell. */
@@ -100,9 +108,9 @@ const PRIORITY_TONE: Record<string, 'critical' | 'warning' | 'neutral'> = {
  *
  * ## Sample data
  *
- * The originating finding's dimension and the owner have no endpoint (see
- * `sampleModel.ts`). Their two columns and the two tiles that count them wear the
- * "Datos de muestra" chip; nothing else on the screen does.
+ * The originating finding's dimension has no endpoint (see `sampleModel.ts`). Its column
+ * and the tile that counts it wear the "Datos de muestra" chip; nothing else on the screen
+ * does. The owner is not sample: the entity has no owner, so "Sin asignar" is the reading.
  */
 export default function ActionPlansListNextPage() {
   const { t } = useTranslation()
@@ -352,7 +360,6 @@ function Tiles({ model, t, locale }: { model: ActionPlansListModel; t: Translate
         value={owner.unassigned}
         locale={locale}
         unit={t('actionPlans.next.ofTotal', { total: owner.open })}
-        valueAside={model.ownersAreSample ? <SampleChip t={t} /> : undefined}
         sub={
           <span className={owner.unassigned > 0 ? 'text-accent-amber-ink' : 'text-fg-label'}>
             {owner.unassigned > 0 ? t('actionPlans.next.ownerSub') : t('actionPlans.next.ownerAllAssigned')}
@@ -365,16 +372,15 @@ function Tiles({ model, t, locale }: { model: ActionPlansListModel; t: Translate
         locale={locale}
         unit={overdue.count === 1 ? t('actionPlans.next.overdueOne') : t('actionPlans.next.overdueMany')}
         aside={
-          overdue.count > 0 ? (
-            <Chip tone="critical" icon={<CircleAlert />} label={t('tracking.semaforo.rojo')} />
-          ) : undefined
+          // The semáforo's own chip — the seguimiento's Rojo, drawn as the tracking screens draw it.
+          overdue.count > 0 ? <SemaforoChip estado="Rojo" /> : undefined
         }
         sub={
           overdue.first ? (
             <span
-              // The artboard prints the place and the plan in full; a long title wraps to a
-              // second line rather than losing its end to an ellipsis, and stops there.
-              className="line-clamp-2 text-accent-red"
+              // One line, as the artboard's tile reads: the place and the plan, and where the
+              // plan's own title outruns the tile, an ellipsis — the whole of it in `title`.
+              className="block truncate text-accent-red"
               data-slot="seguimiento-first"
               data-source={overdue.source}
               title={overdue.first.placeName ? `${overdue.first.placeName} · ${overdue.first.name}` : overdue.first.name}
@@ -557,24 +563,25 @@ function PlanTable({
             <th className={HEAD}>
               <span className="flex items-center gap-1.5">
                 {t('actionPlans.next.colPlan')}
-                {(model.findingsAreSample || model.ownersAreSample) && <SampleChip t={t} className={FOLDED_ONLY} />}
+                {model.findingsAreSample && <SampleChip t={t} className={FOLDED_ONLY} />}
               </span>
             </th>
-            <th className={cn(HEAD, WIDE_ONLY, 'w-[268px]')}>
+            <th className={cn(HEAD, WIDE_ONLY, 'w-[222px]')} data-col="finding">
               <span className="flex items-center gap-1.5">
                 {t('actionPlans.next.colFinding')}
                 {model.findingsAreSample && <SampleChip t={t} />}
               </span>
             </th>
-            <th className={cn(HEAD, WIDE_ONLY, 'w-[214px]')}>
-              <span className="flex items-center gap-1.5">
-                {t('actionPlans.next.colOwner')}
-                {model.ownersAreSample && <SampleChip t={t} />}
-              </span>
+            <th className={cn(HEAD, WIDE_ONLY, 'w-[162px]')} data-col="owner">
+              {t('actionPlans.next.colOwner')}
             </th>
-            <th className={cn(HEAD, 'w-[136px]')}>{t('actionPlans.next.colDue')}</th>
-            <th className={cn(HEAD, 'w-[92px]')}>{t('actionPlans.next.colPriority')}</th>
-            <th className={cn(HEAD, 'w-[124px]')}>
+            <th className={cn(HEAD, 'w-[132px]')} data-col="due">
+              {t('actionPlans.next.colDue')}
+            </th>
+            <th className={cn(HEAD, 'w-[92px]')} data-col="priority">
+              {t('actionPlans.next.colPriority')}
+            </th>
+            <th className={cn(HEAD, 'w-[144px]')} data-col="actions">
               <span className="sr-only">{t('common.actions')}</span>
             </th>
           </tr>

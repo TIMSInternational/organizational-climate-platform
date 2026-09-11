@@ -79,6 +79,8 @@ export interface TableroPlanCard extends PlanLine {
   fechaUltimaActualizacion: string
   /** A progress update is on record — `derive.hasRecordedProgress`. */
   hasProgress: boolean
+  /** The responsable is the viewer themselves (their `sub` claim is the plan's responsable). */
+  responsableIsViewer: boolean
   /** The payload row, for `canRecordProgress(plan)` and the write calls. */
   plan: PlanAccion
 }
@@ -90,19 +92,22 @@ export interface TableroModel {
   conteos: SemaforoCounts
   /** Ordered by compromiso, nearest first — "ordenados por compromiso". */
   plans: TableroPlanCard[]
-  /** SAMPLE — the bitácora is not on `PlanResponse`; see `sampleModel.ts`. */
-  avancesRegistrados: number
-  avancesAreSample: boolean
+  /**
+   * The board's fourth tile, read off the payload (`derive.avancesReading`). `PlanResponse`
+   * carries no bitácora, so the tile counts what the payload CAN say exactly — which plans
+   * have an avance on record, and the latest day one was recorded — never a count of avances.
+   */
+  avances: AvancesReading
 }
 
-/** One avance in a plan's bitácora. SAMPLE until the API exposes `_bitacora`. */
-export interface BitacoraAvance {
-  /** `DateOnly`. */
-  fecha: string
-  autorName: string
-  /** Whole percentage points. */
-  percent: number
-  comentario: string | null
+/** What the payload says about the avances on a set of plans — `derive.avancesReading`. */
+export interface AvancesReading {
+  /** How many of the plans have an avance on record (`derive.hasRecordedProgress`). */
+  withProgress: number
+  /** How many plans were read. */
+  total: number
+  /** The latest `fechaUltimaActualizacion` among the plans with an avance, or `null`. */
+  latest: string | null
 }
 
 export interface PlanDetailModel {
@@ -113,7 +118,4 @@ export interface PlanDetailModel {
   /** `null` when `liderExternalId` is blank — "Sin asignar". */
   lider: PersonaRef | null
   involucrados: PersonaRef[]
-  /** SAMPLE — see `sampleModel.ts`. */
-  bitacora: { creatorName: string | null; avances: BitacoraAvance[] }
-  bitacoraIsSample: boolean
 }

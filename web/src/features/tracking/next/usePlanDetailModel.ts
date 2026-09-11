@@ -15,7 +15,6 @@ import { getNodoNames, listPersonaOptions, type PersonaPickerItem } from '../api
 import { todayIso } from '../planDates'
 import { isNotFound, resolvePersona } from './derive'
 import type { PlanDetailModel } from './model'
-import { SAMPLE_AVANCES_BY_CODE, SAMPLE_CREATOR_BY_CODE } from './sampleModel'
 import { readViewer } from './viewer'
 
 export interface PlanDetailState {
@@ -47,7 +46,11 @@ export interface PlanDetailState {
  * and is not sent — they name themselves from their token and their own nodo from
  * `GET /profile` when their department is the plan's nodo.
  *
- * The bitácora is SAMPLE (`sampleModel.ts`): `PlanResponse` does not carry it.
+ * Nothing here is sample-fed. `PlanResponse` does not carry the bitácora
+ * (`PlanDeAccionDtos.cs`), so the Bitácora card prints what the plan itself says — its
+ * creation, and its latest avance (`porcentajeAvance` on `fechaUltimaActualizacion`) — and
+ * never a person the payload does not name: the creator is only in the bitácora's first
+ * entry (`PlanesAccionEndpoints.CreateAsync`), which is not on the wire.
  */
 export function usePlanDetailModel(id: string | undefined): PlanDetailState {
   const { t } = useTranslation()
@@ -125,11 +128,6 @@ export function usePlanDetailModel(id: string | undefined): PlanDetailState {
       responsable: resolvePersona(plan.responsableEjecucionExternalId, byId, viewer),
       lider: plan.liderExternalId.trim() === '' ? null : resolvePersona(plan.liderExternalId, byId, viewer),
       involucrados: plan.involucradosExternalIds.map((personaId) => resolvePersona(personaId, byId, viewer)),
-      bitacora: {
-        creatorName: SAMPLE_CREATOR_BY_CODE[plan.planCode] ?? null,
-        avances: [...(SAMPLE_AVANCES_BY_CODE[plan.planCode] ?? [])],
-      },
-      bitacoraIsSample: true,
     }
   }, [directory, nodoNames, ownDepartment, plan, viewer])
 

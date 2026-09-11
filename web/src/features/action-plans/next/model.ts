@@ -47,7 +47,11 @@ export interface PlanRow {
   createdAt: string
   /** SAMPLE — see `sampleModel.ts`. `null` means the sample names no finding for the plan. */
   finding: PlanFinding | null
-  /** SAMPLE — see `sampleModel.ts`. `null` reads "Sin asignar". */
+  /**
+   * Always `null` today, and that is the reading, not a gap: the action-plan entity has no
+   * owner (`ActionPlan.cs`), so no plan has one and every row reads "Sin asignar" — the
+   * artboard's reading on all four. Phase 2 adds the field; this is where it lands.
+   */
   ownerName: string | null
 }
 
@@ -72,7 +76,5 @@ export interface ActionPlansListModel {
   rows: readonly PlanRow[]
   /** The findings column and its tile are sample-fed: no endpoint carries a plan's finding. */
   findingsAreSample: boolean
-  /** The owner column and its tile are sample-fed: no endpoint carries a plan's owner. */
-  ownersAreSample: boolean
   overdue: OverdueReading
 }

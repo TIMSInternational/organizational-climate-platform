@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { CalendarDays, CircleDot, Download } from 'lucide-react'
+import { CalendarDays, Download } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { KpiTile } from '../../../components/charts'
@@ -9,6 +9,7 @@ import { useCompanyName } from '../../../company-context/useCompanyName'
 import { calendarDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { KpiRow } from '../../dashboard/components/dashboardGrammar'
+import { RailPlansIcon } from '../../../navigation/railIcons'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import { exportPlanesAccionSheet, trackingSheetFileName, type SemaforoCounts } from '../api/trackingApi'
 import SemaforoChip, { SemaforoGlyph } from '../components/SemaforoChip'
@@ -104,7 +105,8 @@ export default function ConsolidadoNextPage() {
             </Button>
             <Button asChild variant="outline">
               <Link to="/tracking/planes">
-                <CircleDot aria-hidden="true" />
+                {/* The Planes de Acción row's own mark, as the artboard draws "Ver planes". */}
+                <RailPlansIcon aria-hidden="true" data-slot="view-plans-icon" />
                 {t('tracking.next.viewPlans')}
               </Link>
             </Button>
@@ -385,34 +387,67 @@ function CompromisoReading({
   )
 }
 
+/** The plan's code, linked to its detail — the NODO · PLAN column of a plan row. */
+function PlanCode({ plan }: { plan: PlanLine }) {
+  return (
+    <Link
+      to={`/tracking/planes/${plan.id}`}
+      className="rounded-sm bg-surface-icon-box px-1.5 py-px font-mono text-xs text-fg-secondary no-underline hover:underline"
+    >
+      {plan.code}
+    </Link>
+  )
+}
+
+/** What will be done and by whom — the QUÉ SE HARÁ column, or the head of the folded cell. */
+function QueReading({ plan, t, className }: { plan: PlanLine; t: TranslateFn; className?: string }) {
+  return (
+    <div className={cn('flex min-w-0 flex-col', className)}>
+      <span className="truncate text-base text-fg-primary" title={plan.que}>
+        {plan.que}
+      </span>
+      <span className="truncate text-xs text-fg-label">
+        {plan.responsable.name
+          ? t('tracking.next.responsableNamed', { name: plan.responsable.name })
+          : plan.responsable.id === ''
+            ? t('tracking.next.responsableUnassigned')
+            : t('tracking.next.responsableUnnamed')}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * One plan under its nodo.
+ *
+ * From 1360px it is the artboard's row: the code under NODO · PLAN, the four count columns
+ * empty, then the qué, the Avance and the Compromiso in their columns (eight). Below that the
+ * sheet has six columns, and a plan row is the code plus ONE cell across the other five
+ * holding the qué, the semáforo with its bar and the compromiso side by side — so at 1024 the
+ * qué has the width four empty count cells were holding, and the row stays the two lines the
+ * wide one is, rather than stacking Avance and Compromiso under a narrow qué.
+ */
 function PlanRow({ plan, t, locale }: { plan: PlanLine; t: TranslateFn; locale: string }) {
   const overdue = !plan.cumplido && plan.daysToCompromiso < 0
   return (
     <tr className="border-b border-line-light" data-plan={plan.code}>
       <td className="border-0 py-2.5 pl-7 pr-3">
-        <Link
-          to={`/tracking/planes/${plan.id}`}
-          className="rounded-sm bg-surface-icon-box px-1.5 py-px font-mono text-xs text-fg-secondary no-underline hover:underline"
-        >
-          {plan.code}
-        </Link>
+        <PlanCode plan={plan} />
       </td>
-      <td className="border-0" colSpan={4} />
-      <td className="border-0 px-3 py-2.5">
-        <div className="flex min-w-0 flex-col">
-          <span className="truncate text-base text-fg-primary">{plan.que}</span>
-          <span className="text-xs text-fg-label">
-            {plan.responsable.name
-              ? t('tracking.next.responsableNamed', { name: plan.responsable.name })
-              : plan.responsable.id === ''
-                ? t('tracking.next.responsableUnassigned')
-                : t('tracking.next.responsableUnnamed')}
-          </span>
-          <div data-slot="plan-row-folded" className={cn('mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1.5', FOLDED_ONLY)}>
-            <AvanceReading plan={plan} overdue={overdue} stretch={false} t={t} />
-            <CompromisoReading plan={plan} overdue={overdue} inline t={t} locale={locale} />
+      <td colSpan={5} className={cn('border-0 px-3 py-2.5', FOLDED_ONLY)} data-slot="plan-row-folded">
+        <div className="flex min-w-0 items-center gap-4">
+          <QueReading plan={plan} t={t} className="flex-1" />
+          <div className="w-[150px] shrink-0">
+            <AvanceReading plan={plan} overdue={overdue} stretch t={t} />
+          </div>
+          <div className="w-[104px] shrink-0">
+            <CompromisoReading plan={plan} overdue={overdue} inline={false} t={t} locale={locale} />
           </div>
         </div>
+      </td>
+      <td className={cn('border-0', WIDE_ONLY)} colSpan={4} />
+      <td className={cn('border-0 px-3 py-2.5', WIDE_ONLY)}>
+        <QueReading plan={plan} t={t} />
       </td>
       <td className={cn('border-0 px-3 py-2.5', WIDE_ONLY)}>
         <AvanceReading plan={plan} overdue={overdue} stretch t={t} />

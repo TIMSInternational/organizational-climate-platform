@@ -1785,7 +1785,8 @@
     "commandPalette": "Paleta de comandos",
     "commandPaletteHint": "Escribe para filtrar y pulsa Intro para abrir una página.",
     "commandPaletteEmpty": "No se encontraron resultados.",
-    "commandPaletteResults": "Resultados"
+    "commandPaletteResults": "Resultados",
+    "roleWithDepartment": "{role} · {department}"
   },
   "success": {
     "saved": "Guardado exitosamente",
@@ -3917,7 +3918,16 @@
       "addByAdmin": "Agregar personas lo hace la administración, que tiene el directorio.",
       "exporting": "Exportando la hoja…",
       "exportFailed": "No se pudo descargar la hoja del seguimiento. Inténtelo de nuevo en un momento.",
-      "fieldFechaPlaceholder": "Elija la fecha"
+      "fieldFechaPlaceholder": "Elija la fecha",
+      "tilePlanesConAvance": "Planes con avance",
+      "ofPlansLatest": "de {total} · el último el {date}",
+      "jefaturaDelNodo": "jefatura del nodo",
+      "fieldQueSeHizoPlaceholderOn": "Lo que se hizo el {date}",
+      "noAvancesYet": "Aún no hay avances registrados.",
+      "bitacoraLastOn": "último registro el {date}",
+      "latestAvanceRow": "Avance registrado: {percent} %",
+      "cumplidoRow": "Plan marcado como cumplido",
+      "earlierNotListed": "Se muestra el último registro; los anteriores quedan en la bitácora del servicio de seguimiento, que esta pantalla todavía no recibe."
     }
   },
   "privacy": {

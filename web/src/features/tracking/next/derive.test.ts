@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { PlanAccion } from '../api/trackingApi'
 import {
   asSentence,
+  avancesReading,
   byCompromiso,
   dayDiff,
   hasRecordedProgress,
@@ -62,6 +63,22 @@ describe('hasRecordedProgress', () => {
   it('reads an avance off a percentage above zero, or a last update after creation', () => {
     expect(hasRecordedProgress({ ...PLAN_00001, porcentajeAvance: 0.25 })).toBe(true)
     expect(hasRecordedProgress({ ...PLAN_00001, fechaUltimaActualizacion: '2026-09-12' })).toBe(true)
+  })
+})
+
+describe('avancesReading', () => {
+  it('reads no plan with an avance, and no latest day, off plans exactly as creation left them', () => {
+    expect(avancesReading([PLAN_00001])).toEqual({ withProgress: 0, total: 1, latest: null })
+    expect(avancesReading([])).toEqual({ withProgress: 0, total: 0, latest: null })
+  })
+
+  it('counts the plans that carry an avance and takes the latest day among them — never a number of avances', () => {
+    const plans = [
+      PLAN_00001,
+      { ...PLAN_00001, porcentajeAvance: 0.25, fechaUltimaActualizacion: '2026-09-12' },
+      { ...PLAN_00001, fechaUltimaActualizacion: '2026-09-11' },
+    ]
+    expect(avancesReading(plans)).toEqual({ withProgress: 2, total: 3, latest: '2026-09-12' })
   })
 })
 

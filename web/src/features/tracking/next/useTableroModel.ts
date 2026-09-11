@@ -9,9 +9,8 @@ import { getTrackingApiBaseUrl } from '../api/config'
 import { getTablero, registrarAvance, type PlanAccion, type RegistrarAvanceInput } from '../api/trackingApi'
 import { getNodoNames, listPersonaOptions, type PersonaPickerItem } from '../api/trackingPickers'
 import { todayIso } from '../planDates'
-import { byCompromiso, hasRecordedProgress, planLine } from './derive'
+import { avancesReading, byCompromiso, hasRecordedProgress, planLine } from './derive'
 import type { TableroModel, TableroPlanCard } from './model'
-import { SAMPLE_AVANCES_BY_CODE } from './sampleModel'
 import { readViewer } from './viewer'
 
 /**
@@ -52,6 +51,11 @@ export interface TableroState {
  * (`TrackingPickerEndpoints.cs:19-21`) but their own department IS their nodo — the
  * `nodoId` claim is the department's external id (`TrackingIdentifiers.NodoIdClaimForUser`)
  * — so `GET /profile` names it when its `departmentId` is that nodo.
+ *
+ * Nothing here is sample-fed. The fourth tile reads the avances off the plans themselves
+ * (`derive.avancesReading`): `PlanResponse` carries no bitácora, so the board says how many
+ * plans have an avance on record and when the latest was, never a count of entries it
+ * cannot see.
  */
 export function useTableroModel(): TableroState {
   const { t } = useTranslation()
@@ -120,6 +124,8 @@ export function useTableroModel(): TableroState {
         fechaCreacion: plan.fechaCreacion,
         fechaUltimaActualizacion: plan.fechaUltimaActualizacion,
         hasProgress: hasRecordedProgress(plan),
+        responsableIsViewer:
+          plan.responsableEjecucionExternalId !== '' && plan.responsableEjecucionExternalId === viewer.personaExternalId,
         plan,
       }))
       .sort(byCompromiso)
@@ -129,8 +135,7 @@ export function useTableroModel(): TableroState {
       nodoName,
       conteos: board.conteos,
       plans,
-      avancesRegistrados: plans.reduce((sum, card) => sum + (SAMPLE_AVANCES_BY_CODE[card.code]?.length ?? 0), 0),
-      avancesAreSample: true,
+      avances: avancesReading(board.planes),
     })
     setStatus('ready')
   }, [adminView, baseUrl, companyId, gate, nodoId, t, viewer, withDirectory])

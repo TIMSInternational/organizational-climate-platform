@@ -14,7 +14,7 @@ import { SEMAFORO_ORDER, fromPercent, semaforoCount, semaforoPresentation } from
 import { canCreatePlan, readTrackingClaims } from '../trackingAccess'
 import { fullDay, leadingEstado, nextCompromiso } from './derive'
 import type { TableroModel, TableroPlanCard } from './model'
-import { InfoBox, NodoTile, ProgressTrack, SampleChip } from './parts'
+import { InfoBox, NodoTile, ProgressTrack } from './parts'
 import { useTableroModel, type TableroState } from './useTableroModel'
 
 /** "1 verde", "0 amarillo", "0 rojo" — the board's tile counts each state by its colour word. */
@@ -42,10 +42,12 @@ const COUNT_KEY: Record<keyof SemaforoCounts, string> = {
  * board is the leader's and pointed at Mis tareas. The write form shows only where
  * `canRecordProgress(plan)` holds — `PlanAccessHandler`, claim for claim.
  *
- * ## Sample data
+ * ## Nothing is sample-fed
  *
- * "Avances registrados" sums the bitácora, which `PlanResponse` does not carry
- * (`sampleModel.ts`); that tile wears the "Datos de muestra" chip and nothing else does.
+ * `PlanResponse` carries no bitácora, so the fourth tile never counts avances it cannot
+ * see: while no plan of the nodo has one on record it reads "Avances registrados 0", which
+ * the payload states exactly (`derive.hasRecordedProgress`); once one has, it reads how many
+ * plans carry an avance and the day of the latest (`derive.avancesReading`).
  */
 export default function TableroNextPage() {
   const { t } = useTranslation()
@@ -136,7 +138,7 @@ function TableroBody({ state }: { state: TableroState }) {
           {state.status === 'loading' || !state.model ? (
             <SkeletonText lines={6} />
           ) : (
-            <Board model={state.model} onRecord={state.recordAvance} t={t} locale={locale} />
+            <Board model={state.model} adminView={state.adminView} onRecord={state.recordAvance} t={t} locale={locale} />
           )}
         </LoadingRegion>
       )
@@ -159,11 +161,13 @@ function VariantCard({ title, body, actions }: { title: string; body: string; ac
 
 function Board({
   model,
+  adminView,
   onRecord,
   t,
   locale,
 }: {
   model: TableroModel
+  adminView: boolean
   onRecord: (plan: PlanAccion, input: RegistrarAvanceInput) => Promise<void>
   t: TranslateFn
   locale: string
@@ -225,16 +229,29 @@ function Board({
               </>
             )}
           </NodoTile>
-          <NodoTile label={t('tracking.next.tileAvances')} note={model.avancesAreSample ? <SampleChip /> : undefined}>
-            <span className="font-mono text-3xl leading-none text-fg-primary tabular-nums">{model.avancesRegistrados}</span>
-            <span className="text-sm text-fg-label">
-              {model.avancesRegistrados > 0
-                ? t('tracking.next.avancesInBitacora')
-                : anyWritable
-                  ? t('tracking.next.firstBelow')
-                  : t('tracking.next.noneYet')}
-            </span>
-          </NodoTile>
+          {model.avances.withProgress === 0 || model.avances.latest === null ? (
+            // Exact: no plan of the nodo has an avance on record, so none has been registered.
+            <NodoTile label={t('tracking.next.tileAvances')}>
+              <span className="font-mono text-3xl leading-none text-fg-primary tabular-nums" data-slot="avances-reading">
+                0
+              </span>
+              <span className="text-sm text-fg-label">{anyWritable ? t('tracking.next.firstBelow') : t('tracking.next.noneYet')}</span>
+            </NodoTile>
+          ) : (
+            // Once any has, the payload says which plans carry one and the latest day — never
+            // how many avances there are, which only the bitácora knows.
+            <NodoTile label={t('tracking.next.tilePlanesConAvance')}>
+              <span className="font-mono text-3xl leading-none text-fg-primary tabular-nums" data-slot="avances-reading">
+                {model.avances.withProgress}
+              </span>
+              <span className="text-sm text-fg-label">
+                {t('tracking.next.ofPlansLatest', {
+                  total: model.avances.total,
+                  date: calendarDay(Date.parse(model.avances.latest), locale),
+                })}
+              </span>
+            </NodoTile>
+          )}
         </div>
       </section>
 
@@ -266,6 +283,7 @@ function Board({
               key={card.id}
               card={card}
               nodoName={model.nodoName}
+              adminView={adminView}
               writable={!card.cumplido && capabilities.canRecordProgress(card.plan)}
               onRecord={onRecord}
               t={t}
@@ -287,6 +305,7 @@ function daysNote(t: TranslateFn, days: number): string {
 function PlanCard({
   card,
   nodoName,
+  adminView,
   writable,
   onRecord,
   t,
@@ -294,6 +313,7 @@ function PlanCard({
 }: {
   card: TableroPlanCard
   nodoName: string | null
+  adminView: boolean
   writable: boolean
   onRecord: (plan: PlanAccion, input: RegistrarAvanceInput) => Promise<void>
   t: TranslateFn
@@ -359,7 +379,15 @@ function PlanCard({
         <InfoBox
           label={t('tracking.next.boxResponsable')}
           value={card.responsable.name ?? t('tracking.next.personaUnnamed')}
-          sub={card.responsable.name ? card.responsable.email ?? undefined : t('tracking.next.personaUnnamedSub')}
+          sub={
+            // The board is its leader's own: a responsable who is the viewer is the nodo's
+            // jefatura, as the TrackingTablero artboard says of Luis Mora.
+            card.responsableIsViewer && !adminView
+              ? t('tracking.next.jefaturaDelNodo')
+              : card.responsable.name
+                ? (card.responsable.email ?? undefined)
+                : t('tracking.next.personaUnnamedSub')
+          }
         />
       </div>
 
@@ -465,9 +493,17 @@ function AvanceInlineForm({
               aria-invalid={invalid || undefined}
               aria-describedby={invalid ? `${idBase}-range` : undefined}
               disabled={saving}
-              className="pr-7 font-mono"
+              className="pl-2.5 pr-2 font-mono text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
-            <span aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 font-mono text-sm text-fg-label">
+            {/* The unit follows the figure, "25 %" as the artboard prints it. In the mono face
+                every digit is one `ch`, so the sign sits a space after however many digits
+                are typed — the field's 10px padding, the digits, one space. */}
+            <span
+              aria-hidden="true"
+              data-slot="avance-unit"
+              className="pointer-events-none absolute top-1/2 -translate-y-1/2 font-mono text-base text-fg-primary"
+              style={{ left: `calc(0.625rem + ${Math.max(1, percent.length) + 1}ch)` }}
+            >
               %
             </span>
           </div>
@@ -497,7 +533,7 @@ function AvanceInlineForm({
             id={`${idBase}-que`}
             value={comentario}
             onChange={(event) => setComentario(event.target.value)}
-            placeholder={t('tracking.next.fieldQueSeHizoPlaceholder')}
+            placeholder={t('tracking.next.fieldQueSeHizoPlaceholderOn', { date: calendarDayLong(Date.parse(fecha), locale) })}
             disabled={saving}
           />
         </div>

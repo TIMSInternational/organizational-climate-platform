@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { ArrowRight, Check, Clock, Ellipsis, Plus, ShieldCheck } from 'lucide-react'
+import { ArrowRight, Check, Clock, Ellipsis, Plus, ShieldCheck, TrendingUp } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import {
@@ -33,7 +33,7 @@ import { todayIso } from '../planDates'
 import { toPercent } from '../semaforo'
 import { asSentence, dayDiff, fullDay, hasRecordedProgress, isOverdue } from './derive'
 import type { PersonaRef, PlanDetailModel } from './model'
-import { InfoBox, PersonaAvatar, ProgressTrack, SampleChip } from './parts'
+import { InfoBox, PersonaAvatar, ProgressTrack, RowGlyph } from './parts'
 import { usePlanDetailModel, type PlanDetailState } from './usePlanDetailModel'
 
 /**
@@ -60,10 +60,14 @@ import { usePlanDetailModel, type PlanDetailState } from './usePlanDetailModel'
  * The hallazgo is shown as a reference, never a link: a route from a named plan into
  * survey responses is the drill-through the anonymity rule forbids.
  *
- * ## Sample data
+ * ## Nothing is sample-fed
  *
- * The Bitácora is not on `PlanResponse` (`sampleModel.ts`); that card wears the
- * "Datos de muestra" chip and nothing else here does.
+ * `PlanResponse` carries no bitácora (`PlanDeAccionDtos.cs`), so the Bitácora card prints the
+ * entries the plan itself states: its creation (the day, the responsable, the compromiso)
+ * and, once an avance is on record, the latest one (`porcentajeAvance` on
+ * `fechaUltimaActualizacion`, or the day it was marked cumplido). It names no author — the
+ * payload names none — and says that earlier entries are not shown rather than implying
+ * there were none.
  */
 export default function PlanDetailNextPage() {
   const { t } = useTranslation()
@@ -215,7 +219,7 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
         <div className="flex min-w-0 flex-col gap-4">
           <AvanceCard model={model} percent={percent} overdue={overdue} progressed={progressed} days={days} t={t} locale={locale} />
           <QueComoCard model={model} t={t} />
-          <BitacoraCard model={model} progressed={progressed} t={t} locale={locale} />
+          <BitacoraCard model={model} percent={percent} progressed={progressed} writable={writable} t={t} locale={locale} />
         </div>
         <div className="flex min-w-0 flex-col gap-4">
           <FichaCard model={model} overdue={overdue} tableroHref={tableroHref} t={t} locale={locale} />
@@ -392,36 +396,43 @@ function personaName(t: TranslateFn, persona: PersonaRef): string {
   return persona.name ?? t('tracking.next.personaUnnamed')
 }
 
-function BitacoraCard({ model, progressed, t, locale }: { model: PlanDetailModel; progressed: boolean; t: TranslateFn; locale: string }) {
-  const { plan, bitacora } = model
-  const entries = 1 + bitacora.avances.length
+function BitacoraCard({
+  model,
+  percent,
+  progressed,
+  writable,
+  t,
+  locale,
+}: {
+  model: PlanDetailModel
+  percent: number
+  progressed: boolean
+  writable: boolean
+  t: TranslateFn
+  locale: string
+}) {
+  const { plan } = model
+  const row = 'grid grid-cols-[96px_28px_minmax(0,1fr)] items-start gap-3 border-t border-line-light py-2.5'
   return (
     <Card labelledBy="plan-bitacora">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <span className="flex items-center gap-2">
-          <h2 id="plan-bitacora" className="m-0">
-            {t('tracking.next.bitacoraHeading')}
-          </h2>
-          {model.bitacoraIsSample && <SampleChip />}
-        </span>
-        <span className="text-xs text-fg-label">
-          {entries === 1 ? t('tracking.next.entriesOne') : t('tracking.next.entriesMany', { count: entries })}
+        <h2 id="plan-bitacora" className="m-0">
+          {t('tracking.next.bitacoraHeading')}
+        </h2>
+        <span className="text-xs text-fg-label" data-slot="bitacora-count">
+          {/* One entry, exactly, while the plan stands as creation left it (its "Plan creado");
+              past that the payload knows only the latest, so the count gives way to its day. */}
+          {progressed
+            ? t('tracking.next.bitacoraLastOn', { date: calendarDay(Date.parse(plan.fechaUltimaActualizacion), locale) })
+            : t('tracking.next.entriesOne')}
         </span>
       </div>
-      <ol className="m-0 flex list-none flex-col p-0">
-        <li className="grid grid-cols-[96px_28px_minmax(0,1fr)] items-start gap-3 border-t border-line-light py-2.5">
+      <ol className="m-0 flex list-none flex-col p-0" data-slot="bitacora">
+        <li className={row} data-entry="created">
           <span className="pt-1.5 font-mono text-sm text-fg-label">{calendarDay(Date.parse(plan.fechaCreacion), locale)}</span>
-          <PersonaAvatar name={bitacora.creatorName} />
+          <RowGlyph icon={<Plus />} />
           <div className="flex flex-col gap-0.5 pt-1">
-            <span className="text-base text-fg-primary">
-              {bitacora.creatorName ? (
-                <>
-                  {t('tracking.next.createdBy')} <b className="font-semibold">{bitacora.creatorName}</b>
-                </>
-              ) : (
-                t('tracking.next.created')
-              )}
-            </span>
+            <span className="text-base text-fg-primary">{t('tracking.next.created')}</span>
             <span className="text-sm text-fg-label">
               {t('tracking.next.createdMeta', {
                 name: personaName(t, model.responsable),
@@ -430,34 +441,33 @@ function BitacoraCard({ model, progressed, t, locale }: { model: PlanDetailModel
             </span>
           </div>
         </li>
-        {bitacora.avances.map((avance) => (
-          <li key={`${avance.fecha}-${avance.autorName}`} className="grid grid-cols-[96px_28px_minmax(0,1fr)] items-start gap-3 border-t border-line-light py-2.5">
-            <span className="pt-1.5 font-mono text-sm text-fg-label">{calendarDay(Date.parse(avance.fecha), locale)}</span>
-            <PersonaAvatar name={avance.autorName} />
+        {progressed && (
+          <li className={row} data-entry="latest">
+            <span className="pt-1.5 font-mono text-sm text-fg-label">{calendarDay(Date.parse(plan.fechaUltimaActualizacion), locale)}</span>
+            <RowGlyph icon={plan.cumplido ? <Check /> : <TrendingUp />} />
             <div className="flex flex-col gap-0.5 pt-1">
               <span className="text-base text-fg-primary">
-                {t('tracking.next.avanceBy', { name: avance.autorName, percent: avance.percent })}
+                {plan.cumplido ? t('tracking.next.cumplidoRow') : t('tracking.next.latestAvanceRow', { percent })}
               </span>
-              {avance.comentario && <span className="text-sm text-fg-label">{avance.comentario}</span>}
             </div>
           </li>
-        ))}
+        )}
       </ol>
-      {bitacora.avances.length === 0 && (
-        <div className="flex items-center gap-3 rounded-md border border-dashed border-line-default px-3 py-3 text-base text-fg-label">
-          <Clock aria-hidden="true" className="size-4 shrink-0" />
-          <span>
-            {progressed ? (
-              t('tracking.next.avancesNotListed', { date: calendarDayLong(Date.parse(plan.fechaUltimaActualizacion), locale) })
-            ) : (
-              <>
-                {t('tracking.next.noAvancesLead')} <b className="font-semibold text-fg-primary">{t('tracking.actions.registrarAvance')}</b>
-                {t('tracking.next.noAvancesTail')}
-              </>
-            )}
-          </span>
-        </div>
-      )}
+      <div className="flex items-center gap-3 rounded-md border border-dashed border-line-default px-3 py-3 text-base text-fg-label">
+        <Clock aria-hidden="true" className="size-4 shrink-0" />
+        <span>
+          {progressed ? (
+            t('tracking.next.earlierNotListed')
+          ) : writable && !plan.cumplido ? (
+            <>
+              {t('tracking.next.noAvancesLead')} <b className="font-semibold text-fg-primary">{t('tracking.actions.registrarAvance')}</b>
+              {t('tracking.next.noAvancesTail')}
+            </>
+          ) : (
+            t('tracking.next.noAvancesYet')
+          )}
+        </span>
+      </div>
     </Card>
   )
 }

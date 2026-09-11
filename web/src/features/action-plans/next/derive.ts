@@ -220,33 +220,52 @@ export function isFiltering(filters: PlanFilters): boolean {
   return filters.q.trim() !== '' || filters.status !== '' || filters.priority !== ''
 }
 
-/** How many characters one line of a timeline label holds at the axis's 10px. */
-export const TIMELINE_LABEL_CHARS = 26
+export type TimelineAnchor = 'start' | 'middle' | 'end'
+
+/** Where one plan's label sits under its dot: how it hangs from the dot, and how wide it may run. */
+export interface TimelineLabelSlot {
+  anchor: TimelineAnchor
+  /** Pixels the label may take before it would meet its neighbour's; the rest ends in an ellipsis. */
+  room: number
+}
+
+/** Room kept clear between two labels. */
+const LABEL_GAP = 8
+/** Half of today's own label ("10 sept" over "hoy"), which the first plan's label must clear. */
+const TODAY_HALF = 28
+/** A dot this close to an end of the axis hangs its label inward rather than centring it. */
+const EDGE_ANCHOR = 60
 
 /**
- * A plan's name as the timeline prints it under its date: the whole title, broken at a word
- * onto at most two lines of `chars` characters. Only a title longer than two lines loses its
- * end, and then to an ellipsis on the second line, never a cut on the first.
+ * The one-line label under each plan's dot on "Cuándo vence cada plan", as the ActionPlansList
+ * artboard draws them: one line each, no stagger, so the drawing keeps the artboard's 64px.
  *
- * The artboard's labels are hand-shortened ("Carga · Operaciones"): half of each is the
- * finding's dimension, which no endpoint carries (`sampleModel.ts`), so the label is the
- * plan's own title, printed in full wherever two lines hold it.
+ * Each label is the plan's own title (the artboard's hand-shortened "Carga · Operaciones" is
+ * half finding dimension, which no endpoint carries — `sampleModel.ts`). It prints whole where
+ * the axis leaves it room and ends in an ellipsis only where a neighbour's label begins, so a
+ * wide screen shows more of each title and a narrow one less, never two labels over each other.
+ *
+ * Laid out left to right: a centred label takes the same room either side of its dot, up to
+ * the end of the label before it and the midpoint to the dot after it; a label at an end of
+ * the axis hangs inward and takes the room on that side.
+ *
+ * `xs` are the dots' x positions in pixels, ascending; `width` is the drawing's.
  */
-export function timelineLabelLines(name: string, chars: number = TIMELINE_LABEL_CHARS): string[] {
-  const words = name.trim().split(/\s+/).filter(Boolean)
-  const lines: string[] = []
-  let current = ''
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word
-    if (candidate.length <= chars || current === '') {
-      current = candidate
-      continue
-    }
-    lines.push(current)
-    current = word
-  }
-  if (current) lines.push(current)
-  const clip = (line: string) => (line.length > chars ? `${line.slice(0, chars - 1).trimEnd()}…` : line)
-  if (lines.length <= 2) return lines.map(clip)
-  return [clip(lines[0]), `${lines.slice(1).join(' ').slice(0, chars - 1).trimEnd()}…`]
+export function timelineLabelSlots(xs: readonly number[], axisStart: number, axisEnd: number, width: number): TimelineLabelSlot[] {
+  let leftLimit = axisStart + TODAY_HALF + LABEL_GAP
+  return xs.map((x, index) => {
+    const next = xs[index + 1]
+    const rightLimit = next === undefined ? width : (x + next) / 2 - LABEL_GAP / 2
+    const anchor: TimelineAnchor = x < axisStart + EDGE_ANCHOR ? 'start' : x > axisEnd - EDGE_ANCHOR ? 'end' : 'middle'
+    const room =
+      anchor === 'start'
+        ? rightLimit - Math.max(x, leftLimit)
+        : anchor === 'end'
+          ? x - leftLimit
+          : 2 * Math.min(x - leftLimit, rightLimit - x)
+    const clamped = Math.max(0, Math.floor(room))
+    const rightEdge = anchor === 'start' ? x + clamped : anchor === 'end' ? x : x + clamped / 2
+    leftLimit = rightEdge + LABEL_GAP
+    return { anchor, room: clamped }
+  })
 }

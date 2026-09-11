@@ -20,7 +20,7 @@ import { sortPlans } from '../../tracking/planOrder'
 import { semaforoPresentation, toSemaforoEstado } from '../../tracking/semaforo'
 import { firstOverdue, groupOf } from './derive'
 import type { ActionPlansListModel, OverdueReading, PlanRow } from './model'
-import { SAMPLE_FINDING_BY_TITLE, SAMPLE_OWNER_BY_TITLE } from './sampleModel'
+import { SAMPLE_FINDING_BY_TITLE } from './sampleModel'
 
 export interface ActionPlansListState {
   /** `idle` while there is no company to ask about — the page says why instead. */
@@ -79,7 +79,8 @@ function toRow(plan: ActionPlan, departmentNames: ReadonlyMap<string, string>): 
     dueDate: plan.dueDate,
     createdAt: plan.createdAt,
     finding: SAMPLE_FINDING_BY_TITLE[plan.title] ?? null,
-    ownerName: SAMPLE_OWNER_BY_TITLE[plan.title] ?? null,
+    // No plan has an owner: the entity has no such field (`ActionPlan.cs`). Real, not sample.
+    ownerName: null,
   }
 }
 
@@ -187,7 +188,6 @@ export function useActionPlansListModel(): ActionPlansListState {
       asOf,
       rows,
       findingsAreSample: true,
-      ownersAreSample: true,
       overdue: tracking ?? overdueFromPlans(rows, asOf),
     }),
     [companyName, asOf, rows, tracking],
