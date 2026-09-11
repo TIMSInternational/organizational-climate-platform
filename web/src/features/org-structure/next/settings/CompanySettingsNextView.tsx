@@ -4,11 +4,11 @@ import { Check, FileText, Upload } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
-import { Button, EmptyState, Input, NetworkError, SkeletonText, Switch } from '../../../../components/ui'
+import { Button, EmptyState, Input, NetworkError, SkeletonText } from '../../../../components/ui'
 import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { updateCompanySettings } from '../../api/companySettings'
 import { surveyFrequencyLabelKey } from '../../labels'
-import { CanvasChip, CanvasSelect, Field, Panel } from '../super/parts'
+import { CanvasSelect, Field, Panel } from '../super/parts'
 import {
   HEX_COLOUR,
   changesOf,
@@ -308,28 +308,11 @@ function SettingsForm({
             <Field fieldLabel={t(`${K}.floor`)} helper={t(`${K}.floorHelp`, { threshold: ANONYMITY_FLOOR })}>
               <Readout>{t(`${K}.floorValue`, { threshold: ANONYMITY_FLOOR })}</Readout>
             </Field>
-            <Field fieldLabel={t(`${K}.microclimates`)} helper={t(`${K}.microclimatesHelp`)}>
-              <label className="m-0 flex h-control-lg items-center gap-2 text-sm text-fg-secondary">
-                <Switch
-                  checked={draft.microclimateEnabled}
-                  onCheckedChange={(checked) => set({ microclimateEnabled: checked })}
-                  className="data-[state=checked]:bg-accent-green"
-                  aria-label={t(`${K}.microclimates`)}
-                />
-                {draft.microclimateEnabled ? t(`${K}.on`) : t(`${K}.off`)}
-              </label>
-            </Field>
-            <Field fieldLabel={t(`${K}.aiInsights`)} helper={t(`${K}.aiInsightsHelp`)}>
-              <label className="m-0 flex h-control-lg items-center gap-2 text-sm text-fg-secondary">
-                <Switch
-                  checked={draft.aiInsightsEnabled}
-                  onCheckedChange={(checked) => set({ aiInsightsEnabled: checked })}
-                  className="data-[state=checked]:bg-accent-green"
-                  aria-label={t(`${K}.aiInsights`)}
-                />
-                {draft.aiInsightsEnabled ? t(`${K}.on`) : t(`${K}.off`)}
-              </label>
-            </Field>
+            {/* The artboard's six fields and no more. No Microclimas / Información de IA
+                switch: no endpoint reads either flag (`MicroclimateEnabled` and
+                `AiInsightsEnabled` appear only on the entity, the settings PUT and its DTOs),
+                so a switch here would change nothing; the super administrator's company view
+                keeps the microclimate switch (`SuperCompanyDetailView`). */}
           </div>
         </Panel>
 
@@ -381,18 +364,12 @@ function SettingsForm({
                     />
                   </div>
                 </Field>
-                <Field
-                  fieldLabel={t(`${K}.sender`)}
-                  helper={
-                    // The field keeps the artboard's full width; the sample mark rides on its
-                    // helper line, because no endpoint stores a sender name (sampleModel.ts).
-                    <span data-slot="sender-helper" className="flex items-start justify-between gap-2">
-                      <span className="min-w-0">{t(`${K}.senderHelp`)}</span>
-                      <CanvasChip tone="warning" label={t('dashboard.next.sampleChip')} data-slot="sample-chip" />
-                    </span>
-                  }
-                >
-                  <Readout>{name}</Readout>
+                <Field fieldLabel={t(`${K}.sender`)} helper={t(`${K}.senderPlatform`)}>
+                  {/* The sender of every tenant's mail is the platform's `Email:FromName`
+                      (`SmtpEmailTransport.cs:222-225`), one value per deployment that no payload
+                      carries and no company sets — so the reading is a dash and the helper says
+                      who sets it, never the company's own name as if it were the sender. */}
+                  <Readout>{DASH}</Readout>
                 </Field>
               </div>
             </div>

@@ -10,15 +10,18 @@ import { plainTitle, waveOf } from '../../../dashboard/next/super/derive'
  * payloads `useCompanySettingsModel` reads; nothing is typed as a string.
  */
 
-/** Every field the form edits, as the controls hold it. */
+/**
+ * Every field the form edits, as the controls hold it — the artboard's fields that a
+ * company administrator may change on `PUT /admin/companies/{id}/settings`. The microclimate
+ * and AI flags are not among them: the artboard draws no control for either and no endpoint
+ * reads them, so this form never sends them.
+ */
 export interface SettingsDraft {
   language: string
   surveyFrequency: string
   anonymousSurveys: boolean
   dataRetentionDays: number
   timezone: string
-  microclimateEnabled: boolean
-  aiInsightsEnabled: boolean
   primaryColor: string
 }
 
@@ -32,8 +35,6 @@ export function draftOf(response: CompanySettingsResponse): SettingsDraft {
     anonymousSurveys: settings.anonymousSurveys,
     dataRetentionDays: settings.dataRetentionDays,
     timezone: settings.timezone,
-    microclimateEnabled: settings.microclimateEnabled,
-    aiInsightsEnabled: settings.aiInsightsEnabled,
     primaryColor: branding.primaryColor,
   }
 }
@@ -50,8 +51,6 @@ export function changesOf(initial: SettingsDraft, draft: SettingsDraft): UpdateC
   if (draft.anonymousSurveys !== initial.anonymousSurveys) changes.anonymousSurveys = draft.anonymousSurveys
   if (draft.dataRetentionDays !== initial.dataRetentionDays && draft.dataRetentionDays >= 1) changes.dataRetentionDays = draft.dataRetentionDays
   if (draft.timezone !== initial.timezone && draft.timezone.trim()) changes.timezone = draft.timezone
-  if (draft.microclimateEnabled !== initial.microclimateEnabled) changes.microclimateEnabled = draft.microclimateEnabled
-  if (draft.aiInsightsEnabled !== initial.aiInsightsEnabled) changes.aiInsightsEnabled = draft.aiInsightsEnabled
   if (draft.primaryColor !== initial.primaryColor && HEX_COLOUR.test(draft.primaryColor)) changes.primaryColor = draft.primaryColor
   return changes
 }
@@ -76,7 +75,11 @@ export function timezoneOptions(current: string): readonly string[] {
   return current && !TIMEZONES.includes(current) ? [current, ...TIMEZONES] : TIMEZONES
 }
 
-/** `America/Costa_Rica` → `UTC−6`, read from the platform's own zone data; `null` if unknown. */
+/**
+ * `America/Costa_Rica` → `UTC−6`, read from the platform's own zone data; `null` if unknown.
+ * A zero offset is `UTC` itself: ICU names `UTC` "GMT+0" (Node 22 and Chromium both do), and
+ * "UTC (UTC+0)" would print the zone twice.
+ */
 export function utcOffset(timeZone: string, at: Date): string | null {
   try {
     const name =
@@ -85,8 +88,10 @@ export function utcOffset(timeZone: string, at: Date): string | null {
         .find((part) => part.type === 'timeZoneName')?.value ?? ''
     const match = /^GMT(?:([+-])(\d{1,2})(?::(\d{2}))?)?$/.exec(name)
     if (!match) return null
-    if (!match[1]) return 'UTC'
-    return `UTC${match[1] === '-' ? '−' : '+'}${Number(match[2])}${match[3] ? `:${match[3]}` : ''}`
+    const hours = Number(match[2] ?? 0)
+    const minutes = Number(match[3] ?? 0)
+    if (!match[1] || (hours === 0 && minutes === 0)) return 'UTC'
+    return `UTC${match[1] === '-' ? '−' : '+'}${hours}${match[3] ? `:${match[3]}` : ''}`
   } catch {
     return null
   }

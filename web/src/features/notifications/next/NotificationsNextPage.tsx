@@ -3,12 +3,11 @@ import { Link } from 'react-router'
 import { Bell, Check, CircleAlert, ClipboardList, FileText, Mail, Send, Settings } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
-import { Button, NetworkError, SkeletonText, Switch, buttonVariants, chipVariants } from '../../../components/ui'
+import { Button, EmptyState, NetworkError, SkeletonText, Switch, chipVariants } from '../../../components/ui'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { cn } from '../../../lib/cn'
 import { CanvasChip, CanvasSelect, Panel } from '../../org-structure/next/super/parts'
 import { PERIODS, facetCounts, matchesFacet, oldestShown, rowOf, withinPeriod, type Facet, type InboxRow, type RowIcon } from './derive'
-import { sampleRows } from './sampleModel'
 import { useNotificationsModel } from './useNotificationsModel'
 
 const K = 'notifications.next'
@@ -32,8 +31,10 @@ const ICONS: Record<RowIcon, { Icon: typeof Bell; tone: string }> = {
  * written to `/notifications/preferences`. Self-service for every role — the only role-shaped
  * thing is the results action, drawn only when `canOpenResults` allows it.
  *
- * An empty inbox is the norm on the local stack (mail to `.test` is refused), so when the real
- * inbox is empty the artboard's six rows stand in under the "Datos de muestra" chip, inert.
+ * Every row, count and date here is one `GET /notifications/mine` returned — the endpoint the
+ * shell's bell polls — so the two unread readings on the screen are one reading. An empty
+ * inbox is that payload's answer, not missing data: it is drawn as an empty inbox, with no
+ * rows, no counts and nothing to mark read.
  */
 export default function NotificationsNextPage() {
   const { t, locale } = useTranslation()
@@ -43,17 +44,16 @@ export default function NotificationsNextPage() {
   const [period, setPeriod] = useState(90)
   const [now] = useState(() => new Date())
 
-  const realRows = useMemo(
+  const rows = useMemo(
     () => state.notifications.map((notification) => rowOf(notification, capabilities.canOpenResults)),
     [state.notifications, capabilities],
   )
-  const isSample = state.status === 'ready' && realRows.length === 0
-  const rows = isSample ? sampleRows(t) : realRows
-  const inPeriod = isSample ? rows : rows.filter((row) => withinPeriod(row, period, now))
+  const empty = state.status === 'ready' && rows.length === 0
+  const inPeriod = rows.filter((row) => withinPeriod(row, period, now))
   const counts = facetCounts(inPeriod)
   const shown = inPeriod.filter((row) => matchesFacet(row, facet))
-  const oldest = oldestShown(inPeriod, isSample ? 0 : state.notifications.length)
-  const unread = realRows.filter((row) => row.unread).length
+  const oldest = oldestShown(inPeriod, state.notifications.length)
+  const unread = rows.filter((row) => row.unread).length
   const day = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' })
   const longDay = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' })
   const localMail = state.email !== null && /\.test$/i.test(state.email.split('@')[1] ?? '')
@@ -66,10 +66,14 @@ export default function NotificationsNextPage() {
         description={t(`${K}.description`)}
         actions={
           <>
-            <Button variant="outline" size="canvas" disabled={unread === 0} onClick={() => void state.markAllRead()}>
-              <Check aria-hidden="true" />
-              {t(`${K}.markAll`)}
-            </Button>
+            {/* Nothing to mark on an empty inbox, so the action is not offered there; with rows
+                it keeps the artboard's weight and is disabled only while none is unread. */}
+            {!empty && (
+              <Button variant="outline" size="canvas" disabled={unread === 0} onClick={() => void state.markAllRead()}>
+                <Check aria-hidden="true" />
+                {t(`${K}.markAll`)}
+              </Button>
+            )}
             <Button asChild variant="outline" size="canvas">
               <Link to="/settings/notifications">
                 <Settings aria-hidden="true" />
@@ -82,72 +86,77 @@ export default function NotificationsNextPage() {
 
       <div className="-mt-1 grid gap-4 xl:grid-cols-[minmax(0,8fr)_minmax(0,4fr)]">
         <section aria-label={t(`${K}.inboxLabel`)} className="min-w-0 overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <div role="group" aria-label={t(`${K}.facetsLabel`)} className="flex flex-wrap items-center gap-1.5">
-              {FACETS.filter((value) => value !== 'other' || counts.other > 0).map((value) => {
-                const selected = facet === value
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={selected}
-                    data-slot="facet-chip"
-                    onClick={() => setFacet(value)}
-                    className={cn(
-                      chipVariants({ tone: selected ? 'critical' : 'neutral' }),
-                      'h-6.5 cursor-pointer px-2.5 text-sm',
-                      selected ? 'border-chip-critical-ink/20' : 'bg-surface-card hover:border-line-hover',
-                    )}
-                  >
-                    {t(`${K}.facetCount`, { label: t(`${K}.facet.${value}`), count: counts[value] })}
-                  </button>
-                )
-              })}
-              {isSample && <CanvasChip tone="warning" label={t('dashboard.next.sampleChip')} data-slot="sample-chip" />}
-            </div>
-            <CanvasSelect
-              aria-label={t(`${K}.periodLabel`)}
-              className="w-37.5"
-              value={String(period)}
-              disabled={isSample}
-              onChange={(event) => setPeriod(Number(event.target.value))}
-            >
-              {PERIODS.map((days) => (
-                <option key={days} value={days}>
-                  {days === 0 ? t(`${K}.periodAll`) : t(`${K}.periodDays`, { days })}
-                </option>
-              ))}
-            </CanvasSelect>
-          </div>
-
-          {state.status === 'error' ? (
-            <div className="border-t border-line-light p-4">
-              <NetworkError title={t('notifications.loadFailed')} description={state.error ?? undefined} onRetry={state.reload} retryText={t('common.retry')} />
-            </div>
-          ) : state.status === 'loading' ? (
-            <div className="border-t border-line-light p-4">
-              <SkeletonText lines={6} />
+          {empty ? (
+            <div data-slot="inbox-empty" className="px-4 py-6">
+              <EmptyState icon={<Bell aria-hidden="true" className="size-6" />} title={t(`${K}.emptyTitle`)} description={t(`${K}.emptyBody`)} />
             </div>
           ) : (
             <>
-              <ul className="m-0 list-none p-0">
-                {shown.map((row) => (
-                  <Row
-                    key={row.id}
-                    row={row}
-                    sample={isSample}
-                    date={day.format(new Date(row.createdAt)).replace('.', '')}
-                    onOpen={() => {
-                      if (!isSample && row.unread) void state.markRead(row.id)
-                    }}
-                  />
-                ))}
-                {shown.length === 0 && <li className="border-t border-line-light px-4 py-3 text-xs text-fg-tertiary">{t(`${K}.nothingHere`)}</li>}
-              </ul>
-              {oldest && (
-                <p className="m-0 border-t border-line-light px-4 py-2.5 text-xs text-fg-tertiary">
-                  {t(`${K}.nothingBefore`, { date: longDay.format(new Date(oldest)) })}
-                </p>
+              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <div role="group" aria-label={t(`${K}.facetsLabel`)} className="flex flex-wrap items-center gap-1.5">
+                  {FACETS.filter((value) => value !== 'other' || counts.other > 0).map((value) => {
+                    const selected = facet === value
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={selected}
+                        data-slot="facet-chip"
+                        onClick={() => setFacet(value)}
+                        className={cn(
+                          chipVariants({ tone: selected ? 'critical' : 'neutral' }),
+                          'h-6.5 cursor-pointer px-2.5 text-sm',
+                          selected ? 'border-chip-critical-ink/20' : 'bg-surface-card hover:border-line-hover',
+                        )}
+                      >
+                        {t(`${K}.facetCount`, { label: t(`${K}.facet.${value}`), count: counts[value] })}
+                      </button>
+                    )
+                  })}
+                </div>
+                <CanvasSelect
+                  aria-label={t(`${K}.periodLabel`)}
+                  className="w-37.5"
+                  value={String(period)}
+                  onChange={(event) => setPeriod(Number(event.target.value))}
+                >
+                  {PERIODS.map((days) => (
+                    <option key={days} value={days}>
+                      {days === 0 ? t(`${K}.periodAll`) : t(`${K}.periodDays`, { days })}
+                    </option>
+                  ))}
+                </CanvasSelect>
+              </div>
+
+              {state.status === 'error' ? (
+                <div className="border-t border-line-light p-4">
+                  <NetworkError title={t('notifications.loadFailed')} description={state.error ?? undefined} onRetry={state.reload} retryText={t('common.retry')} />
+                </div>
+              ) : state.status === 'loading' ? (
+                <div className="border-t border-line-light p-4">
+                  <SkeletonText lines={6} />
+                </div>
+              ) : (
+                <>
+                  <ul className="m-0 list-none p-0">
+                    {shown.map((row) => (
+                      <Row
+                        key={row.id}
+                        row={row}
+                        date={day.format(new Date(row.createdAt)).replace('.', '')}
+                        onOpen={() => {
+                          if (row.unread) void state.markRead(row.id)
+                        }}
+                      />
+                    ))}
+                    {shown.length === 0 && <li className="border-t border-line-light px-4 py-3 text-xs text-fg-tertiary">{t(`${K}.nothingHere`)}</li>}
+                  </ul>
+                  {oldest && (
+                    <p className="m-0 border-t border-line-light px-4 py-2.5 text-xs text-fg-tertiary">
+                      {t(`${K}.nothingBefore`, { date: longDay.format(new Date(oldest)) })}
+                    </p>
+                  )}
+                </>
               )}
             </>
           )}
@@ -200,7 +209,9 @@ export default function NotificationsNextPage() {
             ) : (
               <p className="m-0 text-xs text-fg-tertiary">{t(`${K}.preferencesUnavailable`)}</p>
             )}
-            <Link to="/settings/notifications" className="text-xs">
+            {/* The artboard's link is the secondary ink (`a { color: #4a3d72 }`), not the
+                app's blue link colour the base layer gives every anchor. */}
+            <Link to="/settings/notifications" data-slot="by-type-link" className="text-xs text-fg-secondary">
               {t(`${K}.byType`)}
             </Link>
           </Panel>
@@ -222,7 +233,7 @@ export default function NotificationsNextPage() {
   )
 }
 
-function Row({ row, sample, date, onOpen }: { row: InboxRow; sample: boolean; date: string; onOpen: () => void }) {
+function Row({ row, date, onOpen }: { row: InboxRow; date: string; onOpen: () => void }) {
   const { t } = useTranslation()
   const { Icon, tone } = ICONS[row.icon]
   return (
@@ -249,18 +260,13 @@ function Row({ row, sample, date, onOpen }: { row: InboxRow; sample: boolean; da
         </time>
       </span>
       <span className="inline-flex w-37.5 shrink-0 justify-end">
-        {row.action &&
-          (sample || !row.action.href ? (
-            <span aria-disabled="true" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'pointer-events-none')}>
+        {row.action && (
+          <Button asChild variant="outline" size="sm">
+            <Link to={row.action.href} onClick={onOpen}>
               {t(row.action.labelKey)}
-            </span>
-          ) : (
-            <Button asChild variant="outline" size="sm">
-              <Link to={row.action.href} onClick={onOpen}>
-                {t(row.action.labelKey)}
-              </Link>
-            </Button>
-          ))}
+            </Link>
+          </Button>
+        )}
       </span>
     </li>
   )

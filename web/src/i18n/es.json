@@ -1710,32 +1710,8 @@
       "eyebrow": "Comunicación",
       "markAll": "Marcar todo como leído",
       "localMailDomain": ".test",
-      "sample": {
-        "planOverdue": {
-          "title": "Plan atrasado en Finanzas",
-          "body": "Reponer la reunión de handover entre turnos venció el 20 de agosto. Responsable Adriana Marín · 0 % de avance."
-        },
-        "reportQ3": {
-          "title": "Informe de la Encuesta de Clima Q3 listo",
-          "body": "Se generó con las 24 respuestas. Se puede compartir por enlace o exportar."
-        },
-        "q3Closed": {
-          "title": "Encuesta de Clima Q3 cerró",
-          "body": "24 de 24 respuestas · 100 %. Los resultados por grupo ya se pueden ver; Finanzas queda protegido."
-        },
-        "q3Reminder": {
-          "title": "Recordatorio enviado · Encuesta de Clima Q3",
-          "body": "A las personas que aún no habían respondido. No se registra quiénes son."
-        },
-        "q2Closed": {
-          "title": "Encuesta de Clima Q2 cerró",
-          "body": "24 respuestas. Los resultados ya se pueden ver."
-        },
-        "reportQ2": {
-          "title": "Informe de la Encuesta de Clima Q2 listo",
-          "body": "Se generó con las 24 respuestas."
-        }
-      }
+      "emptyTitle": "No tiene notificaciones",
+      "emptyBody": "Aquí aparecerán las invitaciones, los recordatorios y los informes programados que le lleguen."
     }
   },
   "profile": {
@@ -3155,7 +3131,21 @@
         "libraryAction": "Importar desde la biblioteca",
         "footnote": "Una plantilla aporta las preguntas, con sus dimensiones, valores de opción y etiquetas de escala intactos. La encuesta creada se puede editar sin tocar la plantilla.",
         "countOne": "{count} plantilla",
-        "questionsOne": "{count} pregunta"
+        "questionsOne": "{count} pregunta",
+        "newTemplate": "Nueva plantilla",
+        "newTitle": "Nueva plantilla",
+        "newDescription": "Guarda las preguntas de una encuesta de la empresa, con sus dimensiones, valores de opción y escalas, como una plantilla para las próximas.",
+        "newFromSurvey": "Preguntas de",
+        "newFromSurveyHelp": "La plantilla copia sus preguntas; la encuesta no cambia.",
+        "newPickSurvey": "Elija una encuesta",
+        "newNoSurveys": "Esta empresa todavía no tiene encuestas con preguntas.",
+        "newSurveysFailed": "No se pudieron leer las encuestas de la empresa.",
+        "newName": "Nombre",
+        "newDescriptionLabel": "Descripción",
+        "newCategory": "Categoría",
+        "newCreate": "Crear plantilla",
+        "newCreating": "Creando…",
+        "newFailed": "No se pudo crear la plantilla. Revise los campos e inténtelo de nuevo."
       }
     }
   },
@@ -3330,12 +3320,6 @@
       "floor": "Umbral de privacidad",
       "floorValue": "{threshold} respuestas por grupo",
       "floorHelp": "Fijo. Ningún grupo con menos de {threshold} respuestas muestra cifras en ninguna pantalla.",
-      "microclimates": "Microclimas",
-      "microclimatesHelp": "Sondeos cortos entre olas.",
-      "aiInsights": "Información de IA",
-      "aiInsightsHelp": "Lecturas automáticas de los resultados.",
-      "on": "Activados",
-      "off": "Desactivados",
       "brandHeading": "Marca",
       "brandMeta": "en invitaciones, informes y enlaces",
       "logo": "Logotipo",
@@ -3345,7 +3329,6 @@
       "colourHelp": "Botones y acentos en las pantallas de respuesta.",
       "colourInvalid": "Use el formato #rrggbb.",
       "sender": "Nombre del remitente",
-      "senderHelp": "Aparece como remitente de invitaciones y recordatorios.",
       "uploadLogo": "Subir logotipo",
       "uploadUnavailable": "Todavía no hay dónde subir un archivo: el logotipo se guarda como un enlace.",
       "companyHeading": "Empresa",
@@ -3367,7 +3350,8 @@
       "departmentsActiveOne": "{count} activo",
       "departmentsActiveMany": "{count} activos",
       "departmentsInactiveOne": "{count} inactivo",
-      "departmentsInactiveMany": "{count} inactivos"
+      "departmentsInactiveMany": "{count} inactivos",
+      "senderPlatform": "Lo define la plataforma para todas las empresas; aparece como remitente de invitaciones y recordatorios."
     }
   },
   "wizard": {

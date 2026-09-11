@@ -318,7 +318,11 @@ function DepartmentsView({
             </h2>
             <span className="text-xs text-fg-tertiary">{t(`${K}.listMeta`)}</span>
           </div>
-          <div className="overflow-hidden rounded-lg border border-line-light">
+          {/* `relative` makes this box the containing block of the table's `sr-only` spans (the
+              actions heading, the Personas label below xl). Without it they are positioned
+              against the page, escape the table's scroll container at their static place past
+              its right edge, and widen the document: 649px at a 390 viewport. */}
+          <div data-slot="departments-list" className="relative overflow-hidden rounded-lg border border-line-light">
             <Table className="m-0 w-full table-auto border-collapse text-sm xl:min-w-215 xl:table-fixed">
                 {/* The artboard's list grid — 3fr 90px 3fr 2fr 3fr 90px 150px, 12px gaps — as
                     columns: each fr track takes its share of what the 90/90/150 tracks and the

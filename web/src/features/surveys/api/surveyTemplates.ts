@@ -223,3 +223,59 @@ export async function instantiateSurveyTemplate(
 export async function deleteSurveyTemplate(baseUrl: string, id: string): Promise<void> {
   await authFetch(`${baseUrl}/survey-templates/${id}`, { method: 'DELETE' })
 }
+
+/**
+ * One question of `POST /survey-templates` — `CreateSurveyTemplateQuestionInput`
+ * (`SurveyTemplateDtos.cs`), validated by `SurveyTemplateQuestions.TryPrepare` rule for rule as a
+ * survey's own. Every text is a `LocalizedInput`; the locale-keyed form is accepted whatever the
+ * content language (`LocalizedInput.TryResolve`), a bare string only for a single-language one.
+ */
+export interface CreateSurveyTemplateQuestionInput {
+  text: LocalizedInput
+  type: string
+  /** `value` is the stable key a survey made from the template keeps; omitted, the server derives one from the label. */
+  options?: { value?: string; label?: LocalizedInput }[]
+  scaleMin?: number
+  scaleMax?: number
+  scaleLabelMin?: LocalizedInput
+  scaleLabelMax?: LocalizedInput
+  required?: boolean
+  commentRequired?: boolean
+  commentPrompt?: LocalizedInput
+  /** Unique within the template — the server refuses two questions sharing one. */
+  order: number
+  /** The dimension key (`psychological_safety`), never a display name. */
+  category?: string
+}
+
+/**
+ * The body of `POST /survey-templates` — `CreateSurveyTemplateRequest`. `name`, `description`
+ * and a non-blank `category` are required (`CreateAsync` answers 400 without them). `companyId`
+ * scopes the template to one tenant: a `company_admin` may write only their own company's
+ * (`CanWriteTemplate`; a null company is a GLOBAL template, super-admin only). `language` only
+ * attributes bare strings; a bare name or description under `'both'` is filed under the
+ * author's own language (#210).
+ */
+export interface CreateSurveyTemplateInput {
+  name: LocalizedInput
+  description: LocalizedInput
+  category: string
+  companyId: string
+  questions: CreateSurveyTemplateQuestionInput[]
+  /** The survey the questions were copied from; the server checks that it exists. */
+  sourceSurveyId?: string
+  language?: string
+}
+
+/** `POST /survey-templates` answers `201` with the new template's detail. */
+export async function createSurveyTemplate(
+  baseUrl: string,
+  input: CreateSurveyTemplateInput,
+  lang?: string,
+): Promise<SurveyTemplateDetail> {
+  const response = await authFetch(withQuery(baseUrl, '/survey-templates', { lang }), {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return response.json() as Promise<SurveyTemplateDetail>
+}

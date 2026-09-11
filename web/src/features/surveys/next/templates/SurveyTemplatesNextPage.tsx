@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, Download, FileText, Filter, Rows2 } from 'lucide-react'
+import { ArrowRight, Download, FileText, Filter, Plus, Rows2 } from 'lucide-react'
 import { RailQuestionLibraryIcon } from '../../../../navigation/railIcons'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { Button, EmptyState, Input, NetworkError, SkeletonText, chipVariants } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
+import { useCompanyScope } from '../../../../company-context'
 import { cn } from '../../../../lib/cn'
 import { CanvasChip } from '../../../org-structure/next/super/parts'
 import type { SurveyTemplateListItem } from '../../api/surveyTemplates'
 import { KNOWN_CATEGORIES, byUsage, categoriesOf, countByCategory, type TemplateShape } from './derive'
+import NewTemplateDialog from './NewTemplateDialog'
 import { useTemplatesModel } from './useTemplatesModel'
 
 const K = 'surveys.next.templates'
@@ -33,24 +35,45 @@ function dimensionName(t: TranslateFn, key: string): string {
  * dimensions and scale its questions declare, how often it was used, and the way in. "Usar"
  * opens the survey wizard with the template (`/surveys/new?template=`), drawn only for a viewer
  * who may author a survey (`canAuthorSurveys` — `POST /survey-templates/{id}/use` is
- * `CanAdminister`); "Vista previa" opens the template's own page for any admin.
+ * `CanAdminister`); "Vista previa" opens the template's own page for any admin. "Nueva plantilla"
+ * makes one from a company survey's questions (`NewTemplateDialog`).
  */
 export default function SurveyTemplatesNextPage() {
   const { t, locale } = useTranslation()
   const capabilities = useViewerCapabilities()
+  const scope = useCompanyScope()
   const [draft, setDraft] = useState('')
   const [q, setQ] = useState('')
   const [category, setCategory] = useState('')
+  const [creating, setCreating] = useState(false)
   const state = useTemplatesModel(q)
   const counts = countByCategory(state.templates)
   const visible = byUsage(
     state.templates.filter((template) => !category || template.category === category),
     locale,
   )
+  // `POST /survey-templates` naming this company: `CanWriteTemplate` admits a super_admin, and a
+  // company_admin only for their own tenant — the admin-with-a-company shape `canAuthorSurveys`
+  // mirrors, with the company the request will carry. A super_admin with none selected is offered
+  // nothing, because the only company-less template is a GLOBAL one.
+  const createFor = capabilities.canAuthorSurveys && scope.status === 'ready' ? (scope.companyId ?? null) : null
 
   return (
     <div>
-      <PageTopBar eyebrow={t(`${K}.eyebrow`)} title={t('navigation.surveyTemplates')} description={t(`${K}.description`)} />
+      <PageTopBar
+        eyebrow={t(`${K}.eyebrow`)}
+        title={t('navigation.surveyTemplates')}
+        description={t(`${K}.description`)}
+        actions={
+          createFor ? (
+            <Button variant="outline" size="canvas" onClick={() => setCreating(true)}>
+              <Plus aria-hidden="true" />
+              {t(`${K}.newTemplate`)}
+            </Button>
+          ) : undefined
+        }
+      />
+      {createFor && <NewTemplateDialog open={creating} onOpenChange={setCreating} companyId={createFor} />}
 
       <form
         role="search"

@@ -11,7 +11,6 @@ import { getNotificationPreferences, updateNotificationPreferences, type Notific
 import { getProfile, type Profile } from '../../profile/api/profile'
 import NotificationsNextPage from './NotificationsNextPage'
 import en from '../../../i18n/en.json'
-import es from '../../../i18n/es.json'
 
 const copy = en.notifications.next
 
@@ -31,6 +30,7 @@ vi.mock('../../profile/api/profile', async (importOriginal) => ({
 }))
 
 const prefs: NotificationPreferences = { emailSurveys: true, emailMicroclimates: true, emailActionPlans: true, emailReminders: true, digestFrequency: 'weekly' }
+const DAY = 24 * 60 * 60 * 1000
 
 function closed(over: Partial<NotificationDetail> = {}): NotificationDetail {
   return {
@@ -39,6 +39,15 @@ function closed(over: Partial<NotificationDetail> = {}): NotificationDetail {
     scheduledFor: new Date().toISOString(), sentAt: null, deliveredAt: null, openedAt: null, failedAt: null, failureReason: null, retryCount: 0,
     createdAt: new Date().toISOString(), ...over,
   }
+}
+
+/** Three rows as `GET /notifications/mine` could answer them: two unread, one read, the oldest two days back. */
+function inbox(): NotificationDetail[] {
+  return [
+    closed({ id: 'a', createdAt: new Date(Date.now() - DAY / 2).toISOString() }),
+    closed({ id: 'b', title: 'Q2 closed', openedAt: new Date().toISOString(), status: 'opened', createdAt: new Date(Date.now() - 2 * DAY).toISOString() }),
+    closed({ id: 'c', type: 'deadline_reminder', title: 'Plan due', data: JSON.stringify({ actionPlanId: 'p1' }), createdAt: new Date(Date.now() - DAY).toISOString() }),
+  ]
 }
 
 function renderAs(claims: Record<string, unknown>) {
@@ -69,31 +78,49 @@ describe('NotificationsNextPage (/notifications)', () => {
     window.localStorage.removeItem(COMPANY_CONTEXT_STORAGE_KEY)
   })
 
-  it('stands the sample rows in — marked — only when the real inbox loaded empty', async () => {
+  it('draws an empty inbox as exactly that — no rows, no counts, no sample chip, nothing to mark — when the inbox answers none', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
-    expect(await screen.findByText(copy.sample.planOverdue.title)).toBeTruthy()
-    expect(document.querySelectorAll('[data-slot="sample-chip"]')).toHaveLength(1)
-    cleanup()
+    expect(await screen.findByText(copy.emptyTitle)).toBeTruthy()
+    expect(screen.getByText(copy.emptyBody)).toBeTruthy()
+    expect(document.querySelectorAll('[data-slot="notification-row"]')).toHaveLength(0)
+    expect(document.querySelectorAll('[data-slot="facet-chip"]')).toHaveLength(0)
+    expect(document.querySelectorAll('[data-slot="sample-chip"]')).toHaveLength(0)
+    expect(screen.queryByText(new RegExp(copy.nothingBefore.split('{date}')[0]))).toBeNull()
+    expect(screen.queryByRole('button', { name: copy.markAll })).toBeNull()
+  })
 
-    vi.mocked(listMyNotifications).mockResolvedValue([closed()])
+  it('counts only the rows the inbox returned, dates the footer from the oldest of them, and offers "Mark all as read" while one is unread', async () => {
+    const rows = inbox()
+    vi.mocked(listMyNotifications).mockResolvedValue(rows)
     renderAs({ role: 'company_admin', companyId: 'c1' })
-    expect(await screen.findByText('Q3 closed')).toBeTruthy()
-    expect(screen.queryByText(copy.sample.planOverdue.title)).toBeNull()
+    expect(await screen.findByText('Plan due')).toBeTruthy()
+    expect(document.querySelectorAll('[data-slot="notification-row"]')).toHaveLength(3)
+    const chips = [...document.querySelectorAll('[data-slot="facet-chip"]')].map((node) => node.textContent)
+    expect(chips).toEqual([
+      `${copy.facet.all} 3`,
+      `${copy.facet.unread} 2`,
+      `${copy.facet.surveys} 2`,
+      `${copy.facet.plans} 1`,
+      `${copy.facet.reports} 0`,
+    ])
+    const oldest = new Intl.DateTimeFormat('en', { day: 'numeric', month: 'long' }).format(new Date(rows[1].createdAt))
+    expect(screen.getByText(copy.nothingBefore.replace('{date}', oldest))).toBeTruthy()
+    expect((screen.getByRole('button', { name: copy.markAll }) as HTMLButtonElement).disabled).toBe(false)
     expect(document.querySelectorAll('[data-slot="sample-chip"]')).toHaveLength(0)
   })
 
-  it('writes the stand-in rows in the viewer’s language, from the catalogue', async () => {
-    renderAs({ role: 'company_admin', companyId: 'c1' })
-    expect(await screen.findByText('Overdue plan in Finanzas')).toBeTruthy()
-    expect(screen.getByText(copy.sample.q3Reminder.body)).toBeTruthy()
-    expect(screen.queryByText('Plan atrasado en Finanzas')).toBeNull()
-    cleanup()
+  it('keeps "Mark all as read" on the bar but disabled while nothing is unread', async () => {
+    vi.mocked(listMyNotifications).mockResolvedValue(inbox().map((row) => ({ ...row, openedAt: new Date().toISOString() })))
+    renderAs({ role: 'employee', companyId: 'c1' })
+    await screen.findByText('Plan due')
+    expect((screen.getByRole('button', { name: copy.markAll }) as HTMLButtonElement).disabled).toBe(true)
+  })
 
-    window.localStorage.setItem('preferredLocale', 'es')
-    renderAs({ role: 'company_admin', companyId: 'c1' })
-    expect(await screen.findByText('Plan atrasado en Finanzas')).toBeTruthy()
-    expect(screen.getByText(es.notifications.next.sample.q3Reminder.body)).toBeTruthy()
-    expect(document.querySelectorAll('[data-slot="notification-row"]')).toHaveLength(6)
+  it('draws "Adjust by kind of notice" in the secondary ink, as the artboard does, not the blue link colour', async () => {
+    renderAs({ role: 'employee', companyId: 'c1' })
+    const link = await screen.findByRole('link', { name: copy.byType })
+    expect(link.getAttribute('href')).toBe('/settings/notifications')
+    expect(link.className.split(/\s+/)).toContain('text-fg-secondary')
   })
 
   it('offers the results only to a viewer who may open them', async () => {

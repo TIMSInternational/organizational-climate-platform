@@ -1710,32 +1710,8 @@
       "eyebrow": "Communication",
       "markAll": "Mark all as read",
       "localMailDomain": ".test",
-      "sample": {
-        "planOverdue": {
-          "title": "Overdue plan in Finanzas",
-          "body": "Restoring the shift handover meeting was due on 20 August. Owner Adriana Marín · 0% progress."
-        },
-        "reportQ3": {
-          "title": "Climate Survey Q3 report ready",
-          "body": "Generated from the 24 responses. It can be shared by link or exported."
-        },
-        "q3Closed": {
-          "title": "Climate Survey Q3 closed",
-          "body": "24 of 24 responses · 100%. Results by group can now be seen; Finanzas stays protected."
-        },
-        "q3Reminder": {
-          "title": "Reminder sent · Climate Survey Q3",
-          "body": "To the people who had not answered yet. Who they are is not recorded."
-        },
-        "q2Closed": {
-          "title": "Climate Survey Q2 closed",
-          "body": "24 responses. The results can now be seen."
-        },
-        "reportQ2": {
-          "title": "Climate Survey Q2 report ready",
-          "body": "Generated from the 24 responses."
-        }
-      }
+      "emptyTitle": "You have no notifications",
+      "emptyBody": "Invitations, reminders and scheduled reports sent to you will appear here."
     }
   },
   "profile": {
@@ -3155,7 +3131,21 @@
         "libraryAction": "Import from the library",
         "footnote": "A template brings the questions, with their dimensions, option values and scale labels intact. The survey created from it can be edited without touching the template.",
         "countOne": "{count} template",
-        "questionsOne": "{count} question"
+        "questionsOne": "{count} question",
+        "newTemplate": "New template",
+        "newTitle": "New template",
+        "newDescription": "Saves the questions of one of the company's surveys, with their dimensions, option values and scales, as a template for the next ones.",
+        "newFromSurvey": "Questions from",
+        "newFromSurveyHelp": "The template copies its questions; the survey does not change.",
+        "newPickSurvey": "Choose a survey",
+        "newNoSurveys": "This company has no surveys with questions yet.",
+        "newSurveysFailed": "The company's surveys could not be read.",
+        "newName": "Name",
+        "newDescriptionLabel": "Description",
+        "newCategory": "Category",
+        "newCreate": "Create template",
+        "newCreating": "Creating…",
+        "newFailed": "The template could not be created. Check the fields and try again."
       }
     }
   },
@@ -3330,12 +3320,6 @@
       "floor": "Privacy threshold",
       "floorValue": "{threshold} responses per group",
       "floorHelp": "Fixed. No group with fewer than {threshold} responses shows figures on any screen.",
-      "microclimates": "Microclimates",
-      "microclimatesHelp": "Short pulses between waves.",
-      "aiInsights": "AI insights",
-      "aiInsightsHelp": "Automatic readings of the results.",
-      "on": "On",
-      "off": "Off",
       "brandHeading": "Brand",
       "brandMeta": "on invitations, reports and links",
       "logo": "Logo",
@@ -3345,7 +3329,6 @@
       "colourHelp": "Buttons and accents on the answering screens.",
       "colourInvalid": "Use the #rrggbb form.",
       "sender": "Sender name",
-      "senderHelp": "Shown as the sender of invitations and reminders.",
       "uploadLogo": "Upload logo",
       "uploadUnavailable": "There is nowhere to upload a file yet: the logo is stored as a link.",
       "companyHeading": "Company",
@@ -3367,7 +3350,8 @@
       "departmentsActiveOne": "{count} active",
       "departmentsActiveMany": "{count} active",
       "departmentsInactiveOne": "{count} inactive",
-      "departmentsInactiveMany": "{count} inactive"
+      "departmentsInactiveMany": "{count} inactive",
+      "senderPlatform": "The platform sets it for every company; it appears as the sender of invitations and reminders."
     }
   },
   "wizard": {

@@ -152,24 +152,28 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
     expect(vi.mocked(updateCompanySettings)).not.toHaveBeenCalled()
   })
 
-  it('marks the sender name — no endpoint stores one — as the only sample region, on its helper line, the reading at full width', async () => {
+  it('reads the sender as a dash with the platform’s helper — never the company’s name as the sender — and marks nothing as sample', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByLabelText(new RegExp(copy.language))
-    const chips = document.querySelectorAll('[data-slot="sample-chip"]')
-    expect(chips).toHaveLength(1)
     const field = screen.getByText(copy.sender).parentElement as HTMLElement
-    // The chip rides on the sender field's helper line, beside the helper's own sentence…
-    const helper = chips[0].closest('[data-slot="field-helper"]') as HTMLElement | null
-    expect(helper).not.toBeNull()
-    expect(helper!.parentElement).toBe(field)
-    expect(helper!.textContent).toContain(copy.senderHelp)
-    // …so the reading is the field's own child — the whole width of the column, like the
-    // artboard's — and shares no row with the chip.
     const reading = field.querySelector('[data-slot="settings-readout"]') as HTMLElement
+    // The field's own child, the whole width of the column, like the artboard's.
     expect(reading.parentElement).toBe(field)
     expect(reading.className).not.toMatch(/(^|\s)w-/)
-    expect(reading.textContent).toBe('Grupo Meridiano S.A.')
-    expect(chips[0].parentElement!.contains(reading)).toBe(false)
+    expect(reading.textContent).toBe('—')
+    expect(field.querySelector('[data-slot="field-helper"]')!.textContent).toBe(copy.senderPlatform)
+    expect(field.textContent).not.toContain('Grupo Meridiano S.A.')
+    expect(document.querySelectorAll('[data-slot="sample-chip"]')).toHaveLength(0)
+  })
+
+  it('draws the artboard’s six survey fields — no microclimate or AI switch — and prints the UTC zone once', async () => {
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByLabelText(new RegExp(copy.language))
+    expect(screen.queryAllByRole('switch')).toHaveLength(0)
+    const zone = screen.getByLabelText(new RegExp(copy.timezone)) as HTMLSelectElement
+    expect(zone.value).toBe('UTC')
+    expect(zone.options[zone.selectedIndex].textContent).toBe('UTC')
+    expect([...zone.options].map((option) => option.textContent)).toContain('America/Costa_Rica (UTC−6)')
   })
 
   it('names the running survey in the anonymity helper as it was created, and the stored period in the retention helper — the artboard’s sentences with the tenant’s values', async () => {
