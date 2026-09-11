@@ -48,3 +48,14 @@ export function weekdayLong(date: Date, locale: string): string {
 export function weekdayDay(date: Date, locale: string): string {
   return date.toLocaleDateString(locale, { weekday: 'short', day: 'numeric' })
 }
+
+/**
+ * "14/09/2026 · 08:00" — Crear's Apertura and Cierre as the MicroclimateCreate board writes
+ * them: the numeric day in the page's locale (day first in Spanish) and the 24-hour `clock`,
+ * whatever the browser's own locale. The native `datetime-local` it replaced printed the
+ * browser's format, so a Spanish screen in an en-US browser read "09/10/2026, 10:30 PM".
+ */
+export function numericDayTime(date: Date, locale: string): string {
+  const day = date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return `${day} · ${clock(date.toISOString(), locale)}`
+}

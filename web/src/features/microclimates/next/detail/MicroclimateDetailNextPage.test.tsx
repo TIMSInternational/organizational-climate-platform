@@ -112,6 +112,26 @@ describe('MicroclimateDetailNextPage', () => {
     expect(screen.getByText(copy.detail.invitationsEmptyTitle)).toBeTruthy()
   })
 
+  it('draws the board’s glyphs in the Después boxes — the waves for Ver en vivo, the bars for Resultados — and one arrow at each row’s end', async () => {
+    const { container } = renderAs({ role: 'company_admin', companyId: COMPANY })
+    const live = await waitFor(() => {
+      const link = container.querySelector<HTMLAnchorElement>('li a[href="/microclimates/m1/live"]')
+      expect(link).not.toBeNull()
+      return link!
+    })
+    const results = container.querySelector<HTMLAnchorElement>('li a[href="/microclimates/m1/results"]')
+    expect(results).not.toBeNull()
+    const glyphs = (row: Element) =>
+      [...row.querySelectorAll('svg')].map((svg) => [...svg.querySelectorAll('path')].map((path) => path.getAttribute('d')).join(''))
+    // MicroclimateDetail.dc.html, "Después": each row is its box glyph, then one trailing arrow.
+    expect(glyphs(live)).toHaveLength(2)
+    expect(glyphs(live)[0]).toBe('M2 5c2-2 4 2 6 0s4-2 6 0M2 8.5c2-2 4 2 6 0s4-2 6 0M2 12c2-2 4 2 6 0s4-2 6 0')
+    expect(glyphs(results!)).toHaveLength(2)
+    expect(glyphs(results!)[0]).toBe('M3 13V8M8 13V4M13 13V6')
+    expect(glyphs(live)[1]).toBe(glyphs(results!)[1])
+    expect(glyphs(live)[1]).not.toBe(glyphs(live)[0])
+  })
+
   it('draws the anonymous ladder from the payload: up to opened, started and completed struck', async () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     await screen.findByText(copy.detail.ladderTitle)

@@ -1619,7 +1619,10 @@
         "launchNote": "Lanzar crea la sesión y la abre ahora; se cierra sola el {date} a las {time}. Después: compartir el enlace o el código QR.",
         "launchNoteFuture": "Lanzar la abre ahora, aunque la apertura diga {date} a las {time}: una sesión no se abre sola en su fecha. Para abrirla ese día, guárdela como borrador y lánzela entonces.",
         "launchNoteUnset": "Elija la apertura y el cierre para lanzar.",
-        "titleFromPrevious": "{name} — semana del {date}"
+        "titleFromPrevious": "{name} — semana del {date}",
+        "pickDateTime": "Elegir fecha y hora",
+        "time": "Hora",
+        "timeInvalid": "Escriba la hora en formato de 24 horas, como 08:00."
       },
       "detail": {
         "eyebrow": "Espacio de trabajo · Compartir",

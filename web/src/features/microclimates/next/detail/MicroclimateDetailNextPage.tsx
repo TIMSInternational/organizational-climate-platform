@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { ArrowRight, ChartColumn, ChevronRight, Clock, Copy, Ellipsis, EyeOff, Link2, Mail, Plus, Send } from 'lucide-react'
+import { ArrowRight, ChevronRight, Clock, Copy, Ellipsis, EyeOff, Link2, Mail, Plus, Send } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { CanvasCard, FactList, IconBox, NoteBand, PageMeta } from '../../../../components/canvas'
@@ -19,6 +19,9 @@ import {
   SkeletonText,
 } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
+// The Después card's boxes carry the board's own glyphs, which are the rail's: the waves of
+// Microclimas for "Ver en vivo" and the three bars of Analítica for "Resultados".
+import { RailAnalyticsIcon, RailMicroclimatesIcon } from '../../../../navigation/railIcons'
 import type { MicroclimateDetail } from '../../api/microclimates'
 import type { MicroclimateInvitationList } from '../../api/microclimateInvitations'
 import { JourneyRail } from '../JourneyRail'
@@ -180,7 +183,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
             )}
             <Button asChild variant="outline">
               <Link to={`/microclimates/${detail.id}/results`}>
-                <ChartColumn aria-hidden="true" />
+                <RailAnalyticsIcon strokeWidth={2} />
                 {t('microclimates.results')}
               </Link>
             </Button>
@@ -325,14 +328,14 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
                 {isLive && (
                   <AfterRow
                     to={`/microclimates/${detail.id}/live`}
-                    icon={<ArrowRight />}
+                    icon={<RailMicroclimatesIcon strokeWidth={1.8} />}
                     title={t('microclimates.next.viewLive')}
                     note={t('microclimates.next.detail.afterLive', { floor: FLOOR })}
                   />
                 )}
                 <AfterRow
                   to={`/microclimates/${detail.id}/results`}
-                  icon={<ChartColumn />}
+                  icon={<RailAnalyticsIcon strokeWidth={1.8} />}
                   title={t('microclimates.results')}
                   note={
                     isClosed

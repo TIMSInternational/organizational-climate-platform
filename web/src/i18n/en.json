@@ -1619,7 +1619,10 @@
         "launchNote": "Launch creates the session and opens it now; it closes by itself on {date} at {time}. Next: share the link or the QR code.",
         "launchNoteFuture": "Launch opens it now, even though the opening says {date} at {time}: a session does not open by itself on its date. To open it that day, save it as a draft and launch it then.",
         "launchNoteUnset": "Choose the opening and closing times to launch.",
-        "titleFromPrevious": "{name} — week of {date}"
+        "titleFromPrevious": "{name} — week of {date}",
+        "pickDateTime": "Pick a date and time",
+        "time": "Time",
+        "timeInvalid": "Type the time on a 24-hour clock, like 08:00."
       },
       "detail": {
         "eyebrow": "Workspace · Share",

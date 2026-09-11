@@ -138,6 +138,48 @@ describe('MicroclimateCreateNextPage', () => {
     ).toBeTruthy()
   })
 
+  it('writes Apertura and Cierre as the board does — a leading calendar glyph, the day first, a 24-hour clock — with no native datetime field', async () => {
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await waitFor(async () => expect((await nameField()).value).not.toBe(''))
+    const opens = screen.getByRole('button', { name: new RegExp(`^${copy.opens} `) })
+    const closes = screen.getByRole('button', { name: new RegExp(`^${copy.closes} `) })
+    // MicroclimateCreate.dc.html, Programación: "14/09/2026 · 08:00" behind the calendar glyph.
+    expect(opens.textContent).toBe('10/09/2026 · 21:00')
+    expect(closes.textContent).toBe('12/09/2026 · 21:00')
+    expect(opens.firstElementChild?.tagName.toLowerCase()).toBe('svg')
+    // The native field printed the browser's format: "09/10/2026, 09:00 PM" in an en-US browser.
+    expect(document.querySelector('input[type="datetime-local"]')).toBeNull()
+  })
+
+  it('moves Cierre through its picker — a day, then an hh:mm — and the save carries the datetime-local string', async () => {
+    const { baseElement } = renderAs({ role: 'company_admin', companyId: COMPANY })
+    await waitFor(async () => expect((await nameField()).value).not.toBe(''))
+    await userEvent.click(screen.getByRole('button', { name: new RegExp(`^${copy.closes} `) }))
+    await screen.findByRole('grid')
+    const day = baseElement.querySelector<HTMLElement>('td[data-day="2026-09-11"] button')
+    expect(day).not.toBeNull()
+    await userEvent.click(day!)
+    const time = screen.getByRole('textbox', { name: copy.time })
+    // The day keeps the time it had.
+    expect((time as HTMLInputElement).value).toBe('21:00')
+    await userEvent.clear(time)
+    // A half-typed time moves nothing and says how to write one.
+    await userEvent.type(time, '8:3')
+    expect(screen.getByText(copy.timeInvalid)).toBeTruthy()
+    expect(screen.getByRole('button', { name: new RegExp(`^${copy.closes} `) }).textContent).toBe('11/09/2026 · 21:00')
+    await userEvent.type(time, '0')
+    expect(screen.queryByText(copy.timeInvalid)).toBeNull()
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('grid')).toBeNull())
+    expect(screen.getByRole('button', { name: new RegExp(`^${copy.closes} `) }).textContent).toBe('11/09/2026 · 08:30')
+    await userEvent.click(screen.getByRole('button', { name: copy.saveDraft }))
+    await waitFor(() => expect(createMicroclimate).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(createMicroclimate).mock.calls[0]?.[1]).toMatchObject({
+      startTime: '2026-09-10T21:00',
+      endTime: '2026-09-11T08:30',
+    })
+  })
+
   it('says what launching does: it opens the session now, and the sweep closes it at the end', async () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     await waitFor(async () => expect((await nameField()).value).not.toBe(''))

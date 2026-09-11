@@ -47,6 +47,7 @@ import { MicroclimateGate } from '../MicroclimateGate'
 import { FLOOR, typeCounts, windowLength, windowMs } from '../derive'
 import { clock, shortDay, weekdayDay, weekdayLong } from '../format'
 import { canvasTypeLabel } from '../vocabulary'
+import { DateTimeField } from './DateTimeField'
 import { useMicroclimateCreateModel, type MicroclimateCreateState, type StartFrom } from './useMicroclimateCreateModel'
 
 /**
@@ -628,39 +629,6 @@ function AnswerCard({ value, selected, title, body }: { value: string; selected:
         <span className="text-sm leading-normal text-fg-secondary">{body}</span>
       </span>
     </RadioGroupPrimitive.Item>
-  )
-}
-
-function DateTimeField({
-  id,
-  label,
-  value,
-  disabled,
-  onChange,
-}: {
-  id: string
-  label: string
-  value: string
-  disabled: boolean
-  onChange: (value: string) => void
-}) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <label htmlFor={id} className="m-0 text-sm font-semibold leading-normal text-fg-secondary">
-        {label}
-      </label>
-      {/* The native `datetime-local` brings its own calendar button; a second glyph beside it
-          read as two controls. Its text is the browser's own locale format, which is why the
-          board's "14/09/2026 · 08:00" reads "09/14/2026, 08:00 AM" in an en-US browser. */}
-      <Input
-        id={id}
-        type="datetime-local"
-        className="font-mono tabular-nums"
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </div>
   )
 }
 
