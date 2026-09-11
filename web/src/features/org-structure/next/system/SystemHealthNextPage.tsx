@@ -46,6 +46,14 @@ function statusWord(t: TranslateFn, token: string): string {
   return key ? t(key) : token
 }
 
+/**
+ * The canvas's `.chip` is 22px of content box plus its 1px border — 24px outside — where the
+ * shared `Chip` is 22 border-box (`chipVariants.ts` reads the rule as 22 outside). The chips on
+ * this page opt in to the board's box, as `size="canvas"` does for the button; flipping the
+ * primitive for every screen is the integrator's call across lanes.
+ */
+const BOARD_CHIP = 'h-6'
+
 /** The chip for a tone, with the canvas's glyph: a tick when good, a warning mark otherwise. */
 function StatusChip({ tone, label, glyph }: { tone: HealthTone; label: string; glyph?: 'clock' }) {
   const chipTone: ChipTone = tone
@@ -57,7 +65,7 @@ function StatusChip({ tone, label, glyph }: { tone: HealthTone; label: string; g
     ) : (
       <CircleAlert className="size-3" />
     )
-  return <Chip tone={chipTone} icon={icon} label={label} />
+  return <Chip className={BOARD_CHIP} tone={chipTone} icon={icon} label={label} />
 }
 
 /** "Cada 15 min" — the cadence as the existing catalogue says it. */
@@ -249,7 +257,7 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
                 {status.build.commit === 'unknown' ? (
                   <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 xl:flex-nowrap">
                     <span className="shrink-0 font-mono text-sm text-fg-label">{t('systemHealth.next.unknown')}</span>
-                    <span className="min-w-0 text-xs text-fg-label">{t('systemHealth.next.commitUnknownNote')}</span>
+                    <span className="min-w-0 text-xs leading-normal text-fg-label">{t('systemHealth.next.commitUnknownNote')}</span>
                   </span>
                 ) : (
                   // The running commit appears nowhere else in the shell (#69).
@@ -269,7 +277,7 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
                 <span className="font-mono text-sm text-fg-primary">{`.NET ${status.build.runtime}`}</span>
               </Fact>
               <Fact label={t('systemHealth.environment')}>
-                <Chip tone="neutral" label={status.environment} />
+                <Chip className={BOARD_CHIP} tone="neutral" label={status.environment} />
               </Fact>
             </Facts>
           </Panel>
@@ -288,19 +296,20 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
                 {/* #220: the port is a fact on a page rather than a coin flip. */}
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 xl:flex-nowrap">
                   <Chip
+                    className={BOARD_CHIP}
                     tone={db.usesTransactionPoolerPort ? 'critical' : 'good'}
                     label={t(
                       db.usesTransactionPoolerPort ? 'systemHealth.next.poolerTransaction' : 'systemHealth.next.poolerSession',
                       { port: db.port },
                     )}
                   />
-                  <span className="min-w-0 text-xs text-fg-label">{t('systemHealth.next.poolerNote')}</span>
+                  <span className="min-w-0 text-xs leading-normal text-fg-label">{t('systemHealth.next.poolerNote')}</span>
                 </span>
               </Fact>
               <Fact label={t('systemHealth.next.maxPool')}>
                 <span className="flex items-center gap-1.5">
                   <span className="font-mono text-sm tabular-nums text-fg-primary">{db.maxPoolSize}</span>
-                  {db.maxPoolSizeDefaulted && <span className="text-xs text-fg-label">{t('systemHealth.next.defaultedWord')}</span>}
+                  {db.maxPoolSizeDefaulted && <span className="text-xs leading-normal text-fg-label">{t('systemHealth.next.defaultedWord')}</span>}
                 </span>
               </Fact>
             </Facts>
@@ -399,10 +408,11 @@ function Tile({ eyebrow, chip, title, sub }: { eyebrow: string; chip: ReactNode;
       className="flex min-w-0 flex-col gap-2 rounded-lg border border-line-default bg-surface-card px-4 py-3.5 shadow-xs"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-2xs font-bold uppercase tracking-tile text-fg-label">{eyebrow}</span>
+        <span className="text-2xs font-bold uppercase leading-normal tracking-tile text-fg-label">{eyebrow}</span>
         {chip}
       </div>
-      <span className="text-lg font-semibold text-fg-primary">{title}</span>
+      {/* The board's tile reading is 15px, between the 14px and 16px steps of the type scale. */}
+      <span data-slot="tile-title" className="text-[15px] leading-normal font-semibold text-fg-primary">{title}</span>
       <span className="text-sm text-fg-tertiary">{sub}</span>
     </div>
   )
@@ -428,9 +438,10 @@ function Panel({ heading, meta, id, children }: { heading: string; meta?: string
 function Stat({ label, value, sub }: { label: string; value: number; sub?: string }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <span className="text-2xs font-bold uppercase tracking-label text-fg-label">{label}</span>
-      <span className="font-mono text-2xl tabular-nums text-fg-primary">{value}</span>
-      {sub && <span className="text-xs text-fg-label">{sub}</span>}
+      {/* The board sets the queue's reading in its 1.5 body leading: a 30px line for a 20px figure. */}
+      <span className="text-2xs font-bold uppercase leading-normal tracking-label text-fg-label">{label}</span>
+      <span data-slot="queue-figure" className="font-mono text-2xl leading-normal tabular-nums text-fg-primary">{value}</span>
+      {sub && <span className="text-xs leading-normal text-fg-label">{sub}</span>}
     </div>
   )
 }
@@ -532,14 +543,14 @@ function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[];
                 <tbody>
                   {jobs.map((job) => (
                     <tr key={job.jobName} data-job={job.jobName} className="border-b border-line-light">
-                      <td className="py-2.5 pr-0 pl-3 font-mono text-sm text-fg-primary">{job.jobName}</td>
-                      <td className="py-2.5 pr-0 pl-3 text-sm text-fg-secondary">{intervalText(t, job.intervalSeconds)}</td>
-                      <td className="py-2.5 pr-0 pl-3 font-mono text-sm tabular-nums text-fg-primary">{instant(job.lastAttemptAt)}</td>
-                      <td className="py-2.5 pr-0 pl-3 font-mono text-sm tabular-nums text-fg-primary">{instant(job.lastSuccessAt)}</td>
-                      <td className="py-2.5 pr-0 pl-3 text-right font-mono text-sm tabular-nums text-fg-tertiary">
+                      <td className="py-2.25 pr-0 pl-3 font-mono text-sm text-fg-primary">{job.jobName}</td>
+                      <td className="py-2.25 pr-0 pl-3 text-sm text-fg-secondary">{intervalText(t, job.intervalSeconds)}</td>
+                      <td className="py-2.25 pr-0 pl-3 font-mono text-sm tabular-nums text-fg-primary">{instant(job.lastAttemptAt)}</td>
+                      <td className="py-2.25 pr-0 pl-3 font-mono text-sm tabular-nums text-fg-primary">{instant(job.lastSuccessAt)}</td>
+                      <td className="py-2.25 pr-0 pl-3 text-right font-mono text-sm tabular-nums text-fg-tertiary">
                         {job.consecutiveFailures}
                       </td>
-                      <td className="px-3 py-2.5 text-right">
+                      <td className="px-3 py-2.25 text-right">
                         <StatusChip tone={componentTone(job.status)} label={statusWord(t, job.status)} />
                       </td>
                     </tr>

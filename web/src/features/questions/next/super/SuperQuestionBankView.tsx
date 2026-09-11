@@ -285,9 +285,11 @@ function BankTable({ model, onEdit }: { model: QuestionBankModelState; onEdit: (
           <thead>
             <tr>
               <th className={HEAD}>{t('questionBank.next.colQuestion')}</th>
-              <th className={HEAD}>{t('questionBank.next.colOwner')}</th>
-              <th className={HEAD}>{t('questionBank.next.colCategory')}</th>
-              <th className={HEAD}>{t('questionBank.next.colType')}</th>
+              {/* The fixed text columns pad their right edge only: each <col> already carries the
+                  board's 12px gap, so the words start on the board's column edge (637 · 769 · 911). */}
+              <th className={cn(HEAD, 'pl-0')}>{t('questionBank.next.colOwner')}</th>
+              <th className={cn(HEAD, 'pl-0')}>{t('questionBank.next.colCategory')}</th>
+              <th className={cn(HEAD, 'pl-0')}>{t('questionBank.next.colType')}</th>
               <th className={cn(HEAD, 'text-right')}>{t('questionBank.next.colAsked')}</th>
               <th className={cn(HEAD, 'text-right')}>{t('questionBank.next.colAnswered')}</th>
               <th className={cn(HEAD, 'text-right')}>{t('questionBank.next.colSkipped')}</th>
@@ -317,7 +319,7 @@ function BankTable({ model, onEdit }: { model: QuestionBankModelState; onEdit: (
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-3 align-top">
+                    <td className="py-3 pr-3 pl-0 align-top">
                       {item.companyId === null ? (
                         <Chip tone="neutral" label={t('questionBank.next.ownerGlobalChip')} />
                       ) : (
@@ -326,11 +328,11 @@ function BankTable({ model, onEdit }: { model: QuestionBankModelState; onEdit: (
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-3 align-top text-sm text-fg-secondary">
+                    <td className="py-3 pr-3 pl-0 align-top text-sm text-fg-secondary">
                       {item.category}
                       {item.subcategory ? ` · ${item.subcategory}` : ''}
                     </td>
-                    <td className="px-3 py-3 align-top text-sm text-fg-secondary">{questionTypeLabel(t, item.type)}</td>
+                    <td className="py-3 pr-3 pl-0 align-top text-sm text-fg-secondary">{questionTypeLabel(t, item.type)}</td>
                     <td className="px-3 py-3 text-right align-top font-mono text-sm tabular-nums text-fg-primary">
                       {counts ? numbers.format(counts.asked) : '—'}
                     </td>

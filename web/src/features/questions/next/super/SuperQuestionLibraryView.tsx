@@ -427,7 +427,8 @@ function Field({ label, required, help, children, className }: { label: string; 
         )}
       </span>
       {children}
-      {help && <span className="text-sm leading-snug text-fg-tertiary">{help}</span>}
+      {/* The board's help line: 12px on a 1.45 leading — 17.4px a line, where snug set 16.2. */}
+      {help && <span data-slot="field-help" className="text-sm leading-[1.45] text-fg-tertiary">{help}</span>}
     </div>
   )
 }
@@ -627,12 +628,13 @@ function ItemEditor({
         </Field>
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-line-light pt-2.5">
-        <span className="min-w-0 flex-1 text-xs text-fg-label">{readOnly ? t('questionLibraryAdmin.next.readOnlyNote') : t('questionLibraryAdmin.next.saveNote')}</span>
+        <span className="min-w-0 flex-1 text-xs leading-normal text-fg-label">{readOnly ? t('questionLibraryAdmin.next.readOnlyNote') : t('questionLibraryAdmin.next.saveNote')}</span>
         {!readOnly && (
           <div className="flex shrink-0 gap-2">
             <Button
               type="button"
               variant="outline"
+              size="canvas"
               onClick={() => {
                 model.setFormError(null)
                 if (creating) onDone()
@@ -641,7 +643,7 @@ function ItemEditor({
             >
               {t('common.cancel')}
             </Button>
-            <Button type="submit" variant="primary" disabled={model.saving}>
+            <Button type="submit" variant="primary" size="canvas" disabled={model.saving}>
               <Check aria-hidden="true" />
               {t('questionLibraryAdmin.next.saveQuestion')}
             </Button>

@@ -145,6 +145,23 @@ describe('QuestionBankNextPage (the old page\'s guarantees, on the redesigned sc
     expect((table.closest('section') as HTMLElement).className.split(/\s+/)).toContain('pt-2')
   })
 
+  it('starts the owner, category and type columns on the board\'s column edge — right-padded only, inside <col>s that carry the gap', async () => {
+    serve({ items: [item()], metrics: [effectiveness('q1', 40, 30)] })
+    renderPage()
+    await waitFor(() => expect(rowOf('q1')).not.toBeNull())
+    const table = rowOf('q1').closest('table') as HTMLElement
+    expect([...table.querySelectorAll('col')].map((col) => col.className)).toEqual(['', 'w-33', 'w-35.5', 'w-28', 'w-25.5', 'w-25.5', 'w-23', 'w-21'])
+    const heads = [...table.querySelectorAll('th')]
+    const cells = [...rowOf('q1').querySelectorAll('td')]
+    for (const cell of [heads[1], heads[2], heads[3], cells[1], cells[2], cells[3]]) {
+      const classes = cell.className.split(/\s+/)
+      expect(classes).toContain('pl-0')
+      expect(classes.includes('pr-3') || classes.includes('px-3')).toBe(true)
+    }
+    // The question column keeps the card's 12px on its left.
+    for (const cell of [heads[0], cells[0]]) expect(cell.className.split(/\s+/)).not.toContain('pl-0')
+  })
+
   it('still lists the corpus when the effectiveness read fails — dashes, never zeros', async () => {
     serve({ items: [item()], metrics: 'fail' })
     renderPage()

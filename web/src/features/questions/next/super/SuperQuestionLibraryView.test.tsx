@@ -287,4 +287,19 @@ describe('QuestionLibraryNextPage — the artboard\'s order, names and chips', (
     // A 31px header row: the card's 8px above the labels, 8px below, nothing on the <th>.
     for (const head of table.querySelectorAll('th')) expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['pt-0', 'pb-2']))
   })
+
+  it('sets the editor\'s help lines on the board\'s 1.45 leading and its two buttons at the canvas\'s 34px', async () => {
+    serveWithAcme()
+    renderPage()
+    const save = await screen.findByRole('button', { name: next.saveQuestion })
+    const editor = save.closest('[data-slot="library-editor"]') as HTMLElement
+    const helps = [...editor.querySelectorAll('[data-slot="field-help"]')]
+    expect(helps.length).toBeGreaterThanOrEqual(4)
+    for (const help of helps) {
+      expect(help.className.split(/\s+/)).toContain('leading-[1.45]')
+      expect(help.className.split(/\s+/)).not.toContain('leading-snug')
+    }
+    const cancel = [...editor.querySelectorAll('button')].find((button) => button.textContent === en.common.cancel) as HTMLElement
+    for (const button of [save, cancel]) expect(button.className.split(/\s+/)).toContain('h-control-canvas')
+  })
 })

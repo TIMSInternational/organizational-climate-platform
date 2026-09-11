@@ -16,6 +16,32 @@ import type { CompanyPick, InsightRow, InsightsTally } from './insightsModel'
 import { useAIInsightsModel, type AIInsightsModelState } from './useAIInsightsModel'
 
 /**
+ * The canvas's `.chip` is 22px of content box plus its 1px border — 24px outside — where the
+ * shared `Chip` is 22 border-box (`chipVariants.ts` reads the rule as 22 outside). The chips on
+ * this page opt in to the board's box, as `size="canvas"` does for the button; flipping the
+ * primitive for every screen is the integrator's call across lanes.
+ */
+const BOARD_CHIP = 'h-6'
+
+/** Stands in for the score inside a translated sentence, so the number can take the mono face. */
+const SCORE_SLOT = '\u0001'
+
+/** The sentence with its score in the canvas's mono face (`confianza <span class="mono">82</span> %`). */
+function withMonoScore(sentence: string, value: string) {
+  const [before, ...rest] = sentence.split(SCORE_SLOT)
+  if (rest.length === 0) return sentence
+  return (
+    <>
+      {before}
+      <span data-slot="score" className="font-mono tabular-nums">
+        {value}
+      </span>
+      {rest.join(value)}
+    </>
+  )
+}
+
+/**
  * `/analytics/ai-insights` — the redesigned Información de IA, which replaced
  * `AIInsightsPage` on this route (the old page stays in the tree, unrouted, as the wiring
  * reference), drawn as the per-role canvas's two boards of it (10 Sep): SuperAIInsights —
@@ -296,9 +322,9 @@ function chipTone(tone: ReturnType<typeof priorityTone>): ChipTone {
 function InsightChips({ row, t }: { row: InsightRow; t: TranslateFn }) {
   return (
     <span className="flex flex-wrap gap-1.5">
-      <Chip tone={chipTone(priorityTone(row.item.priority))} label={insightPriorityLabel(t, row.item.priority)} />
-      <Chip tone="neutral" label={insightTypeLabel(t, row.item.type)} />
-      {row.item.isAcknowledged && <Chip tone="good" icon={<Check className="size-3" />} label={t('insights.acknowledged')} />}
+      <Chip className={BOARD_CHIP} tone={chipTone(priorityTone(row.item.priority))} label={insightPriorityLabel(t, row.item.priority)} />
+      <Chip className={BOARD_CHIP} tone="neutral" label={insightTypeLabel(t, row.item.type)} />
+      {row.item.isAcknowledged && <Chip className={BOARD_CHIP} tone="good" icon={<Check className="size-3" />} label={t('insights.acknowledged')} />}
     </span>
   )
 }
@@ -358,7 +384,7 @@ function InsightCard({
           {/* Machine-authored prose in whatever language it was generated in (#92); the page
               does not claim which. */}
           <span className="text-base font-semibold text-fg-primary">{row.item.title}</span>
-          {meta.length > 0 && <span className="text-xs text-fg-tertiary">{meta.join(' · ')}</span>}
+          {meta.length > 0 && <span className="text-xs leading-normal text-fg-tertiary">{meta.join(' · ')}</span>}
         </span>
         <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-fg-label" />
       </span>
@@ -377,7 +403,7 @@ function InsightPanel({ row, model }: { row: InsightRow; model: AIInsightsModelS
       data-slot="insight-panel"
       className="flex min-w-0 flex-col gap-3 rounded-lg border border-line-default border-l-[3px] border-l-fg-primary bg-surface-card px-5 pt-4 pb-4.5 shadow-xs"
     >
-      <span className="text-2xs font-bold uppercase tracking-tile text-fg-label">{t('insights.selectedInsight')}</span>
+      <span className="text-2xs font-bold uppercase leading-normal tracking-tile text-fg-label">{t('insights.selectedInsight')}</span>
       <h2 id="insight-selected" className="m-0 text-2xl">
         {row.item.title}
       </h2>
@@ -387,10 +413,12 @@ function InsightPanel({ row, model }: { row: InsightRow; model: AIInsightsModelS
       ) : (
         <>
           <p className="m-0 text-base text-fg-secondary">{detail.description}</p>
-          <span className="text-xs text-fg-label">{t('insights.next.confidence', { score: detail.confidenceScore })}</span>
+          <span data-slot="insight-confidence" className="text-xs leading-normal text-fg-label">
+            {withMonoScore(t('insights.next.confidence', { score: SCORE_SLOT }), String(detail.confidenceScore))}
+          </span>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-2xs font-bold uppercase tracking-label text-fg-label">{t('insights.next.evidence')}</span>
+              <span className="text-2xs font-bold uppercase leading-normal tracking-label text-fg-label">{t('insights.next.evidence')}</span>
               {detail.surveyId ? (
                 <Link to={`/surveys/${detail.surveyId}`} className="text-sm">
                   {model.surveyTitles.get(detail.surveyId) || t('insights.next.linkedSurvey')}
@@ -400,11 +428,11 @@ function InsightPanel({ row, model }: { row: InsightRow; model: AIInsightsModelS
               )}
             </div>
             <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-2xs font-bold uppercase tracking-label text-fg-label">{t('insights.affectedSegments')}</span>
+              <span className="text-2xs font-bold uppercase leading-normal tracking-label text-fg-label">{t('insights.affectedSegments')}</span>
               {detail.affectedSegments.length > 0 ? (
                 <span className="flex flex-wrap items-center gap-1.5">
                   {detail.affectedSegments.map((segment) => (
-                    <Chip key={segment} tone="neutral" label={segment} />
+                    <Chip key={segment} className={BOARD_CHIP} tone="neutral" label={segment} />
                   ))}
                 </span>
               ) : (
@@ -414,7 +442,7 @@ function InsightPanel({ row, model }: { row: InsightRow; model: AIInsightsModelS
           </div>
           {detail.recommendedActions.length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <span className="text-2xs font-bold uppercase tracking-label text-fg-label">{t('insights.recommendedActions')}</span>
+              <span className="text-2xs font-bold uppercase leading-normal tracking-label text-fg-label">{t('insights.recommendedActions')}</span>
               <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
                 {detail.recommendedActions.map((action) => (
                   <li key={action} className="mb-0 flex items-start gap-2 text-sm text-fg-secondary">

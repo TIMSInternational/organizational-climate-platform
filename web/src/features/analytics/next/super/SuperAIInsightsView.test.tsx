@@ -276,6 +276,36 @@ describe('AIInsightsNextPage — reading and acknowledging (moved and extended)'
     expect(card.textContent).toContain('Support')
   })
 
+  it('sets the selected finding on the board\'s line boxes — 15px labels, 24px chips, the score in mono', async () => {
+    routeFetch([
+      [/\/admin\/ai-insights\/i1$/, json(insightDetail({ isAcknowledged: true, acknowledgedAt: '2026-08-13T15:00:00Z' }))],
+      [/\/admin\/ai-insights\?companyId=/, json([listRow({ isAcknowledged: true })])],
+    ])
+    renderPage()
+    const panel = await waitFor(() => {
+      const found = document.querySelector('[data-slot="insight-panel"]') as HTMLElement | null
+      expect(found?.querySelector('[data-slot="insight-confidence"]')).toBeTruthy()
+      return found as HTMLElement
+    })
+    // The canvas's body leading (1.5) on every label: 15px lines where snug set 13.5.
+    for (const label of [copy.selectedInsight, next.evidence, copy.affectedSegments, copy.recommendedActions]) {
+      expect(within(panel).getByText(label).className.split(/\s+/)).toContain('leading-normal')
+    }
+    // "confianza 82 %" on a 1.5 line, its figure in the canvas's mono face.
+    const confidence = panel.querySelector('[data-slot="insight-confidence"]') as HTMLElement
+    expect(confidence.className.split(/\s+/)).toContain('leading-normal')
+    expect(confidence.textContent).toBe(next.confidence.replace('{score}', '82'))
+    expect((confidence.querySelector('[data-slot="score"]') as HTMLElement).textContent).toBe('82')
+    // The board's chip is 24px outside: three on the card, three in the panel, and the segment.
+    const card = document.querySelector('[data-slot="insight-card"]') as HTMLElement
+    const chips = [...document.querySelectorAll('[data-slot="chip"]')].filter((chip) => panel.contains(chip) || card.contains(chip))
+    expect(chips).toHaveLength(7)
+    for (const chip of chips) expect(chip.className.split(/\s+/)).toContain('h-6')
+    // The card's meta line sits on the board's 16.5px line, not snug's 14.85.
+    const meta = [...card.querySelectorAll('span')].find((span) => span.children.length === 0 && (span.textContent ?? '').includes(next.confidence.replace('{score}', '82')))
+    expect(meta?.className.split(/\s+/)).toContain('leading-normal')
+  })
+
   it('renders the type and priority in Spanish, and an unrecognised value verbatim rather than blank', async () => {
     routeFetch([
       [/\/admin\/ai-insights\/i1$/, json(insightDetail())],

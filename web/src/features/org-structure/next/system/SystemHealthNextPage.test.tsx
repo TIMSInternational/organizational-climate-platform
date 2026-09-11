@@ -124,8 +124,8 @@ describe('SystemHealthNextPage', () => {
     }
     expect(heads[5].className.split(/\s+/)).toContain('pr-3')
     expect(cells[5].className.split(/\s+/)).toContain('px-3')
-    // 10px above and below the 22px chip is the board's 43px row (9px + its 24px chip).
-    for (const cell of cells) expect(cell.className.split(/\s+/)).toContain('py-2.5')
+    // 9px above and below the board's 24px chip, and the 1px rule, is the board's 43px row.
+    for (const cell of cells) expect(cell.className.split(/\s+/)).toContain('py-2.25')
     // The wrapper's 8px is the only space above the labels.
     for (const head of heads) expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['pt-0', 'pb-2']))
     expect((document.querySelector('#health-jobs-table > div') as HTMLElement).className.split(/\s+/)).toContain('pt-2')
@@ -134,6 +134,33 @@ describe('SystemHealthNextPage', () => {
     expect(toggle.className.split(/\s+/)).toEqual(expect.arrayContaining(['h-auto', 'py-0']))
     // 11px around it: with the toggle's 1px border the label sits 12px in, and the bar is 44px.
     expect((document.querySelector('[data-slot="jobs-bar"]') as HTMLElement).className.split(/\s+/)).toContain('py-2.75')
+  })
+
+  it('sets the tiles and cards above the jobs on the board\'s line boxes — 24px chips, a 15px reading, 1.5 leading on labels and notes', async () => {
+    serve(status())
+    renderPage()
+    await screen.findByText('notification-dispatch')
+    const tiles = [...document.querySelectorAll('[data-slot="health-tile"]')]
+    expect(tiles).toHaveLength(4)
+    for (const tile of tiles) {
+      const title = tile.querySelector('[data-slot="tile-title"]') as HTMLElement
+      expect(title.className.split(/\s+/)).toEqual(expect.arrayContaining(['text-[15px]', 'leading-normal']))
+      expect((tile.firstElementChild?.firstElementChild as HTMLElement).className.split(/\s+/)).toContain('leading-normal')
+    }
+    // Every chip on the page is the board's 24px box (22px of content plus its 1px border).
+    const chips = [...document.querySelectorAll('[data-slot="chip"]')]
+    expect(chips.length).toBeGreaterThanOrEqual(10)
+    for (const chip of chips) expect(chip.className.split(/\s+/)).toContain('h-6')
+    // The queue's figures sit on a 30px line, their labels on 15px and the note under them on 16.5.
+    const figures = [...document.querySelectorAll('[data-slot="queue-figure"]')]
+    expect(figures).toHaveLength(3)
+    for (const figure of figures) {
+      expect(figure.className.split(/\s+/)).toContain('leading-normal')
+      expect((figure.previousElementSibling as HTMLElement).className.split(/\s+/)).toContain('leading-normal')
+    }
+    expect(screen.getByText(next.deadLetteredSub).className.split(/\s+/)).toContain('leading-normal')
+    // The pooler note wraps on the board's 16.5px lines.
+    expect(screen.getByText(next.poolerNote).className.split(/\s+/)).toContain('leading-normal')
   })
 
   it('counts every chip that is not OK beside the verdict — the failing job, the dispatcher and the stored SMTP switch', async () => {
