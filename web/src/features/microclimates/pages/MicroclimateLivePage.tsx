@@ -1,3 +1,14 @@
+/**
+ * NOT ROUTED. `/microclimates/:id/live` renders the redesigned live session
+ * (`../next/MicroclimateLiveNextPage`, the MicroclimateLive artboard of 10 Sep), which
+ * replaced this page. Nothing in `router.tsx` reaches this file.
+ *
+ * It stays in the tree on purpose, as the wiring reference: `useMicroclimateLiveModel`
+ * makes this page's three requests (the detail once, `/live-results` on `usePolling`
+ * only while open), and what this file still pins is what the redesign removed — the
+ * four KPI tiles, the trend, the sentiment notice, the plate. Its behaviour is pinned by
+ * `MicroclimateLivePage.test.tsx`, which renders it directly.
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useTranslation } from '../../../i18n'

@@ -1,0 +1,80 @@
+{
+  "_comment": "Grupo Meridiano S.A., the demo tenant, for the two redesigned microclimate screens (/microclimates and /microclimates/:id/live). Every entry is what the local API answered to a read-only GET after POST /auth/login as the company administrator: the shell entries and the list/detail are copied from redesign-meridiano.json (10 Sep), and GET /microclimates/*/live-results is the 11 Sep answer for the weekly pulse (5e4cf7fd-d792-4cf5-9750-11f7748bd37e), whose list and detail were re-read the same day and had not moved. No field is invented. Shoot with --role company_admin --company 16c97c29-07f8-4522-86fc-e6cc56298829 --lang es --name 'Ana Rojas'.",
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+  "GET /profile": {
+    "id": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "companyName": "Grupo Meridiano S.A.",
+    "email": "ana.rojas@meridiano.test",
+    "name": "Ana Rojas",
+    "role": "company_admin",
+    "departmentId": null,
+    "departmentName": null,
+    "managerId": null,
+    "isActive": true,
+    "hasPassword": true,
+    "lastLoginAt": "2026-09-10T17:15:46.58381+00:00",
+    "createdAt": "2026-09-10T01:58:51.849247+00:00",
+    "demographics": {}
+  },
+  "GET /microclimates/*/live-results": {
+    "sentimentScore": 0,
+    "engagementLevel": "medium",
+    "wordCloud": [],
+    "responseCount": 0,
+    "targetParticipantCount": 20
+  },
+  "GET /microclimates/*": {
+    "id": "5e4cf7fd-d792-4cf5-9750-11f7748bd37e",
+    "title": "Pulso semanal — ¿cómo fue la semana?",
+    "description": "Cinco minutos, dos preguntas, anónimo.",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "createdBy": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+    "status": "active",
+    "responseCount": 0,
+    "targetParticipantCount": 20,
+    "startTime": "2026-09-10T02:06:08.991+00:00",
+    "endTime": "2026-09-12T02:06:08.992+00:00",
+    "anonymousResponses": true,
+    "showLiveResults": true,
+    "questions": [
+      {
+        "id": "7ab07c7b-9cb1-42ca-a8ca-0d6fa59ac52e",
+        "text": "¿Cómo se sintió esta semana?",
+        "type": "likert",
+        "options": null,
+        "required": true,
+        "order": 0,
+        "emojiOptions": null
+      },
+      {
+        "id": "fc09b434-c0a5-4027-9672-2c38a2c4db62",
+        "text": "En una palabra, ¿qué ayudaría más?",
+        "type": "open_ended",
+        "options": null,
+        "required": false,
+        "order": 1,
+        "emojiOptions": null
+      }
+    ],
+    "language": "en",
+    "resolvedLocale": "es",
+    "fallbackFields": []
+  },
+  "GET /microclimates": {
+    "microclimates": [
+      {
+        "id": "5e4cf7fd-d792-4cf5-9750-11f7748bd37e",
+        "title": "Pulso semanal — ¿cómo fue la semana?",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "status": "active",
+        "language": "en",
+        "responseCount": 0,
+        "targetParticipantCount": 20,
+        "createdAt": "2026-09-10T02:06:08.994263+00:00"
+      }
+    ]
+  }
+}

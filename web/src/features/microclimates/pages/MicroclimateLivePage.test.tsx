@@ -8,6 +8,16 @@ import { LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { setToken, clearToken } from '../../../auth/token'
 import type { LiveResults, MicroclimateDetail } from '../api/microclimates'
 
+/**
+ * The live session `/microclimates/:id/live` drew until the redesign replaced it with
+ * `../next/MicroclimateLiveNextPage` (the MicroclimateLive artboard) — the module
+ * comment on the page says why it is still in the tree. Rendered directly, because
+ * nothing routes to it any more; the route's own guarantees (the figure moves on a
+ * later poll, only an open session polls, a failed read keeps the last good figure, the
+ * words under the floor of 5, who may watch and close) are asserted against the new
+ * screen in `../next/MicroclimateLiveNextPage.test.tsx`.
+ */
+
 function detail(overrides: Partial<MicroclimateDetail> = {}): MicroclimateDetail {
   return {
     id: 'm1',
