@@ -202,7 +202,7 @@ function SettingsBody({
               <PolicyRow t={t} label={t('settings.next.number')} on={policy.requireNumbers} />
               <PolicyRow t={t} label={t('settings.next.special')} on={policy.requireSpecialChars} />
             </dl>
-            <p className="m-0 text-xs text-fg-light">{t('settings.next.passwordNote')}</p>
+            <p className="m-0 text-xs text-fg-label">{t('settings.next.passwordNote')}</p>
           </Panel>
 
           <Panel id="settings-mail" heading={t('settings.next.mailHeading')} meta={t('settings.next.readOnly')}>
@@ -218,11 +218,11 @@ function SettingsBody({
               <MailRow t={t} label={t('settings.next.fromAddress')} value={mail.fromEmail} />
               <MailRow t={t} label={t('settings.next.smtpServer')} value={mail.smtpHost} />
               <dt className="text-fg-tertiary">{t('settings.next.port')}</dt>
-              <dd className={mail.smtpPort === null ? 'm-0 text-fg-light' : 'm-0 font-mono text-fg-primary'}>
+              <dd className={mail.smtpPort === null ? 'm-0 text-fg-label' : 'm-0 font-mono text-fg-primary'}>
                 {mail.smtpPort ?? '—'}
               </dd>
             </dl>
-            <p className="m-0 text-xs text-fg-light">{t('settings.next.mailNote')}</p>
+            <p className="m-0 text-xs text-fg-label">{t('settings.next.mailNote')}</p>
           </Panel>
         </div>
       </div>
@@ -239,10 +239,10 @@ function SettingsBody({
         <span className="text-fg-tertiary">
           {t('settings.next.updatedOn', { date: calendarDayWithYear(Date.parse(settings.updatedAt), locale) })}
         </span>
-        <span aria-hidden="true" className="text-fg-light">
+        <span aria-hidden="true" className="text-fg-label">
           ·
         </span>
-        <span className="text-fg-light">{t('settings.next.saveScope')}</span>
+        <span className="text-fg-label">{t('settings.next.saveScope')}</span>
         {saved && (
           <span role="status" className="text-accent-green-ink">
             {t('settings.savedNote')}
@@ -272,7 +272,7 @@ function MailRow({ t, label, value }: { t: TranslateFn; label: string; value: st
   return (
     <>
       <dt className="text-fg-tertiary">{label}</dt>
-      <dd className={value ? 'm-0 font-mono text-fg-primary' : 'm-0 text-fg-light'}>{value ?? t('settings.next.notConfigured')}</dd>
+      <dd className={value ? 'm-0 font-mono text-fg-primary' : 'm-0 text-fg-label'}>{value ?? t('settings.next.notConfigured')}</dd>
     </>
   )
 }

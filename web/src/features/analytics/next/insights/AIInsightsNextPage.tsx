@@ -115,7 +115,7 @@ function ChooseCompany({ picks, error }: { picks: readonly CompanyPick[] | null;
           {t('insights.next.chooseTitle')}
         </h2>
         <p className="m-0 max-w-prose text-base text-fg-secondary">{t('insights.next.chooseBody')}</p>
-        <p className="m-0 text-sm text-fg-light">{t('insights.next.chooseNote')}</p>
+        <p className="m-0 text-sm text-fg-label">{t('insights.next.chooseNote')}</p>
       </div>
       <div className="flex flex-col">
         {error !== null ? (
@@ -350,7 +350,7 @@ function InsightCard({
           <span className="text-base font-semibold text-fg-primary">{row.item.title}</span>
           {meta.length > 0 && <span className="text-xs text-fg-tertiary">{meta.join(' · ')}</span>}
         </span>
-        <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-fg-light" />
+        <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-fg-label" />
       </span>
     </button>
   )
@@ -377,7 +377,7 @@ function InsightPanel({ row, model }: { row: InsightRow; model: AIInsightsModelS
       ) : (
         <>
           <p className="m-0 text-base text-fg-secondary">{detail.description}</p>
-          <span className="text-xs text-fg-light">{t('insights.next.confidence', { score: detail.confidenceScore })}</span>
+          <span className="text-xs text-fg-label">{t('insights.next.confidence', { score: detail.confidenceScore })}</span>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <div className="flex min-w-0 flex-col gap-0.5">
               <span className="text-2xs font-bold uppercase tracking-label text-fg-label">{t('insights.next.evidence')}</span>

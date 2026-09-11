@@ -17,6 +17,7 @@ import {
   Input,
   SkeletonText,
   Switch,
+  Table,
 } from '../../../../components/ui'
 import { useCompanyScope } from '../../../../company-context'
 import { readViewerClaims } from '../../../../auth/viewerCapabilities'
@@ -267,7 +268,7 @@ function BankTable({ model, onEdit }: { model: QuestionBankModelState; onEdit: (
   return (
     <section aria-label={t('navigation.questionBank')} className="overflow-hidden rounded-lg border border-line-default bg-surface-card pt-2 shadow-xs">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-200 table-fixed border-collapse">
+        <Table className="w-full min-w-200 table-fixed border-collapse">
           <colgroup>
             <col />
             <col className="w-33" />
@@ -365,7 +366,7 @@ function BankTable({ model, onEdit }: { model: QuestionBankModelState; onEdit: (
               })}
             </tbody>
           )}
-        </table>
+        </Table>
       </div>
       {model.loading ? (
         <div className="px-3 py-4">

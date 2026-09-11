@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Check, ChevronDown, CircleAlert, Clock } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
-import { Button, Chip, NetworkError, SkeletonText, type ChipTone } from '../../../../components/ui'
+import { Button, Chip, NetworkError, SkeletonText, Table, type ChipTone } from '../../../../components/ui'
 import { useHeaderSwitcherStandDown } from '../../../../company-context/useHeaderSwitcherStandDown'
 import { cn } from '../../../../lib/cn'
 import type { SystemJobStatus, SystemStatusResponse } from '../../api/systemStatus'
@@ -248,8 +248,8 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
               <Fact label={t('systemHealth.commit')}>
                 {status.build.commit === 'unknown' ? (
                   <span className="flex items-center gap-2">
-                    <span className="shrink-0 font-mono text-sm text-fg-light">{t('systemHealth.next.unknown')}</span>
-                    <span className="text-xs text-fg-light">{t('systemHealth.next.commitUnknownNote')}</span>
+                    <span className="shrink-0 font-mono text-sm text-fg-label">{t('systemHealth.next.unknown')}</span>
+                    <span className="text-xs text-fg-label">{t('systemHealth.next.commitUnknownNote')}</span>
                   </span>
                 ) : (
                   // The running commit appears nowhere else in the shell (#69).
@@ -258,7 +258,7 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
               </Fact>
               <Fact label={t('systemHealth.builtAt')}>
                 {status.build.builtAt === 'unknown' || Number.isNaN(Date.parse(status.build.builtAt)) ? (
-                  <span className="text-sm text-fg-light">{t('systemHealth.next.unknown')}</span>
+                  <span className="text-sm text-fg-label">{t('systemHealth.next.unknown')}</span>
                 ) : (
                   <span className="font-mono text-sm tabular-nums text-fg-primary">
                     {`${localDay(status.build.builtAt, locale)} · ${clockTime(status.build.builtAt, locale)}`}
@@ -294,13 +294,13 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
                       { port: db.port },
                     )}
                   />
-                  <span className="text-xs text-fg-light">{t('systemHealth.next.poolerNote')}</span>
+                  <span className="text-xs text-fg-label">{t('systemHealth.next.poolerNote')}</span>
                 </span>
               </Fact>
               <Fact label={t('systemHealth.next.maxPool')}>
                 <span className="flex items-center gap-1.5">
                   <span className="font-mono text-sm tabular-nums text-fg-primary">{db.maxPoolSize}</span>
-                  {db.maxPoolSizeDefaulted && <span className="text-xs text-fg-light">{t('systemHealth.next.defaultedWord')}</span>}
+                  {db.maxPoolSizeDefaulted && <span className="text-xs text-fg-label">{t('systemHealth.next.defaultedWord')}</span>}
                 </span>
               </Fact>
             </Facts>
@@ -413,7 +413,7 @@ function Stat({ label, value, sub }: { label: string; value: number; sub?: strin
     <div className="flex min-w-0 flex-col gap-0.5">
       <span className="text-2xs font-bold uppercase tracking-label text-fg-label">{label}</span>
       <span className="font-mono text-2xl tabular-nums text-fg-primary">{value}</span>
-      {sub && <span className="text-xs text-fg-light">{sub}</span>}
+      {sub && <span className="text-xs text-fg-label">{sub}</span>}
     </div>
   )
 }
@@ -486,7 +486,7 @@ function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[];
             </p>
           ) : (
             <div className="overflow-x-auto pt-2">
-              <table className="w-full min-w-180 table-fixed border-collapse">
+              <Table className="w-full min-w-180 table-fixed border-collapse">
                 <colgroup>
                   <col />
                   <col className="w-33" />
@@ -521,7 +521,7 @@ function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[];
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </Table>
             </div>
           )}
           <p className="m-0 px-4 py-2.5 text-sm text-fg-tertiary">{t('systemHealth.next.jobsFootnote')}</p>

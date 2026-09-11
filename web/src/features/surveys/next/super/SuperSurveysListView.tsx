@@ -18,6 +18,7 @@ import {
   LoadingRegion,
   NetworkError,
   SkeletonText,
+  Table,
   chipVariants,
   type ChipTone,
 } from '../../../../components/ui'
@@ -171,7 +172,7 @@ export default function SuperSurveysListView() {
               </option>
             ))}
           </FilterSelect>
-          <p data-slot="list-summary" className="m-0 text-sm whitespace-nowrap text-fg-tertiary sm:ml-auto">
+          <p data-slot="list-summary" className="m-0 text-sm whitespace-nowrap text-fg-label sm:ml-auto">
             {companies === 1
               ? t('surveys.next.super.summaryOneCompany', { count: model.rows.length })
               : t('surveys.next.super.summary', { count: model.rows.length, companies })}
@@ -327,7 +328,7 @@ function SectionBlock({
           <span className="font-mono text-sm tabular-nums text-fg-label">{rows.length}</span>
         </div>
         {note && (
-          <p data-slot="section-note" className="m-0 text-sm text-fg-tertiary sm:text-right">
+          <p data-slot="section-note" className="m-0 text-sm text-fg-label sm:text-right">
             {note}
           </p>
         )}
@@ -337,7 +338,7 @@ function SectionBlock({
             between — with each fixed column carrying the gap before it; narrower than that the
             table scrolls inside this card and never pushes the page. */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-230 table-fixed border-collapse">
+          <Table className="w-full min-w-230 table-fixed border-collapse">
             <colgroup>
               <col />
               <col className="w-45.5" />
@@ -365,10 +366,10 @@ function SectionBlock({
                 <SuperRow key={row.id} row={row} model={model} t={t} locale={locale} />
               ))}
             </tbody>
-          </table>
+          </Table>
         </div>
       </div>
-      {archived && <p className="m-0 text-sm text-fg-light">{t('surveys.next.list.archivedNote')}</p>}
+      {archived && <p className="m-0 text-sm text-fg-label">{t('surveys.next.list.archivedNote')}</p>}
     </section>
   )
 }
@@ -419,7 +420,7 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
         : t('surveys.next.list.createdOn', { date: calendarDay(Date.parse(row.createdAt), locale) })
   const meta = [questions, ...(upcoming && language ? [language] : []), when].join(' · ')
   const line = closeLine(row, section, model.readings.get(row.id) ?? null, model, t, locale)
-  const ink = archived ? 'text-fg-light' : 'text-fg-primary'
+  const ink = archived ? 'text-fg-label' : 'text-fg-primary'
   const company = model.companyNames.get(row.companyId) ?? t('surveys.next.super.otherCompany')
 
   return (
@@ -429,7 +430,7 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
           <Link to={`/surveys/${row.id}`} aria-label={t('surveys.openNamed', { title: name })} className={cn('truncate text-base font-semibold', ink)}>
             {name}
           </Link>
-          <span className="truncate text-xs text-fg-light">{meta}</span>
+          <span className="truncate text-xs text-fg-label">{meta}</span>
         </div>
       </td>
       <td className="py-3 pr-3 pl-0">
@@ -442,14 +443,14 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
       </td>
       <td className="py-3 pr-3 pl-0 whitespace-nowrap">
         {upcoming ? (
-          <span className="text-sm text-fg-tertiary">{t('surveys.next.super.unpublished')}</span>
+          <span className="text-sm text-fg-label">{t('surveys.next.super.unpublished')}</span>
         ) : (
           <span className="flex items-baseline gap-1.5">
             <span className={cn('font-mono text-lg tabular-nums', ink)}>{counts.count}</span>
             {section === 'closed' ? (
               <span className="text-sm text-fg-secondary">{t('surveys.next.list.completedUnit')}</span>
             ) : counts.target !== null ? (
-              <span className={cn('text-sm', archived ? 'text-fg-light' : 'text-fg-secondary')}>
+              <span className={cn('text-sm', archived ? 'text-fg-label' : 'text-fg-secondary')}>
                 {t('surveys.next.list.ofAudience', { target: counts.target })}
               </span>
             ) : null}
@@ -458,13 +459,13 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
       </td>
       <td className="py-3 pr-3 pl-0">
         {upcoming || (archived && counts.count === 0) ? (
-          <span className="text-sm text-fg-light">{t('surveys.next.list.noSubmissions')}</span>
+          <span className="text-sm text-fg-label">{t('surveys.next.list.noSubmissions')}</span>
         ) : counts.percent === null ? (
-          <span data-slot="no-invite-list" className="text-sm text-fg-tertiary">
+          <span data-slot="no-invite-list" className="text-sm text-fg-label">
             {t('surveys.next.list.noInviteList')}
           </span>
         ) : archived ? (
-          <span className="font-mono text-sm tabular-nums text-fg-light">{formatMetric(counts.percent, { kind: 'percentage' }, locale)}</span>
+          <span className="font-mono text-sm tabular-nums text-fg-label">{formatMetric(counts.percent, { kind: 'percentage' }, locale)}</span>
         ) : (
           <span className="flex items-center gap-2">
             <span aria-hidden="true" className="h-1.5 w-22.5 shrink-0 overflow-hidden rounded-full bg-line-light">
@@ -476,14 +477,14 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
       </td>
       <td className="py-3 pr-3 pl-0 whitespace-nowrap">
         {archived ? (
-          <span aria-hidden="true" className="text-base text-fg-light">
+          <span aria-hidden="true" className="text-base text-fg-label">
             —
           </span>
         ) : (
           <span className="flex flex-col">
             <span className="font-mono text-base tabular-nums text-fg-primary">{calendarDay(Date.parse(row.endDate), locale)}</span>
             {line && (
-              <span data-slot={section === 'closed' ? 'wave-move' : 'close-note'} className="text-xs text-fg-light">
+              <span data-slot={section === 'closed' ? 'wave-move' : 'close-note'} className="text-xs text-fg-label">
                 {line}
               </span>
             )}

@@ -85,7 +85,7 @@ export default function CompanyContextBar({ note }: { note: string }) {
           data-slot="company-context-select"
           value={selectedCompanyId ?? ''}
           onChange={(event) => selectCompany(event.target.value === '' ? null : event.target.value)}
-          className={cn('mt-0 block w-full appearance-none pr-8', !chosen && 'text-fg-light')}
+          className={cn('mt-0 block w-full appearance-none pr-8', !chosen && 'text-fg-label')}
         >
           <option value="">{t('companyContext.noneSelected')}</option>
           {companies.map((company) => (

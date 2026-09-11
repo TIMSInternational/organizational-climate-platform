@@ -3,7 +3,7 @@ import { ArrowRight, Check, ChevronDown, ChevronRight, Plus, X } from 'lucide-re
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import CompanyContextBar from '../../../../components/layout/CompanyContextBar'
-import { Alert, AlertDescription, Button, Chip, ErrorState, Input, SkeletonText, Textarea, chipVariants } from '../../../../components/ui'
+import { Alert, AlertDescription, Button, Chip, ErrorState, Input, SkeletonText, Table, Textarea, chipVariants } from '../../../../components/ui'
 import { useCompanyScope } from '../../../../company-context'
 import { readViewerClaims } from '../../../../auth/viewerCapabilities'
 import { cn } from '../../../../lib/cn'
@@ -234,7 +234,7 @@ function CategoryTreeCard({
           {t('questionLibraryAdmin.next.newCategory')}
         </Button>
       </div>
-      <p className="m-0 text-xs text-fg-light">{t('questionLibraryAdmin.next.categoryFootnote')}</p>
+      <p className="m-0 text-xs text-fg-label">{t('questionLibraryAdmin.next.categoryFootnote')}</p>
     </section>
   )
 }
@@ -272,7 +272,7 @@ function CategoryQuestions({ model, onOpen }: { model: QuestionLibraryModelState
       </div>
       <div className="overflow-hidden rounded-lg border border-line-default bg-surface-card pt-2 shadow-xs">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-180 table-fixed border-collapse">
+          <Table className="w-full min-w-180 table-fixed border-collapse">
             <colgroup>
               <col className="w-[31%]" />
               <col className="w-[25%]" />
@@ -309,7 +309,7 @@ function CategoryQuestions({ model, onOpen }: { model: QuestionLibraryModelState
                 />
               ))}
             </tbody>
-          </table>
+          </Table>
         </div>
         {rows.length === 0 && <p className="m-0 px-3 py-4 text-sm text-fg-secondary">{t('questionLibraryAdmin.next.emptyCategory')}</p>}
         {copies.length > 0 && <CopyNote category={category} copies={copies} model={model} rows={rows} t={t} />}
@@ -610,7 +610,7 @@ function ItemEditor({
         </Field>
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-line-light pt-2.5">
-        <span className="min-w-0 flex-1 text-xs text-fg-light">{readOnly ? t('questionLibraryAdmin.next.readOnlyNote') : t('questionLibraryAdmin.next.saveNote')}</span>
+        <span className="min-w-0 flex-1 text-xs text-fg-label">{readOnly ? t('questionLibraryAdmin.next.readOnlyNote') : t('questionLibraryAdmin.next.saveNote')}</span>
         {!readOnly && (
           <div className="flex shrink-0 gap-2">
             <Button
