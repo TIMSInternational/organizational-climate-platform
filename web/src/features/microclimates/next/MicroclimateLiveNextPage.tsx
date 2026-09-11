@@ -236,7 +236,10 @@ function ArrivalsCard({ model }: { model: MicroclimateLiveNextModel }) {
         {isOpen && <LiveStamp lastUpdatedAt={model.lastUpdatedAt} isStale={model.isStale} />}
       </div>
 
-      <div className="flex flex-wrap items-end gap-x-5 gap-y-2 pt-2 pb-1">
+      {/* No wrap, as the artboard draws the row (flex, items at the end): the sentence
+          narrows and wraps in its own column. A wrapping row dropped it under the
+          figure once the count reached two digits (the 12-response shot, 11 Sep). */}
+      <div className="flex items-end gap-5 pt-2 pb-1">
         <span
           data-slot="live-figure"
           className="flex-none whitespace-nowrap font-mono text-[4.5rem] leading-none tabular-nums text-fg-primary"

@@ -169,6 +169,18 @@ describe('the figure', () => {
     expect(screen.queryByText(/^Live · /)).toBeNull()
   })
 
+  it('keeps the sentence beside the figure however many digits the count grows to', async () => {
+    routeFetch(detail(), results({ responseCount: 1234, targetParticipantCount: 2000 }))
+    renderPage()
+    await waitFor(() => expect(figure()).toBe('1,234'))
+    // The artboard's row is flex with its items at the end and no wrap: the sentence
+    // narrows and wraps inside its own column. A wrapping row dropped it under the figure
+    // the moment the count reached two digits (the 12-response shot, 11 Sep).
+    const row = document.querySelector('[data-slot="live-figure"]')!.parentElement!
+    expect(row.className.split(/\s+/)).not.toContain('flex-wrap')
+    expect(row.lastElementChild!.className.split(/\s+/)).toContain('min-w-0')
+  })
+
   it('prints nothing derived from a target the session does not have', async () => {
     routeFetch(detail({ targetParticipantCount: 0 }), results({ targetParticipantCount: 0, responseCount: 31 }))
     renderPage()
