@@ -214,7 +214,9 @@ function FlowCard({ step, session }: { step: FlowStep | null; session: string | 
   const reached = step ?? 0
 
   return (
-    <section aria-labelledby="mc-flow" className={cn(CARD, 'flex flex-col gap-3 px-5 pt-4 pb-4.5')}>
+    // `-mt-1`: the artboard sets its first section 20px under the header's rule, and
+    // `PageTopBar` keeps 24px below itself for every screen.
+    <section aria-labelledby="mc-flow" className={cn(CARD, '-mt-1 flex flex-col gap-3 px-5 pt-4 pb-4.5')}>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h2 id="mc-flow" className="m-0 text-2xl">
           {t('microclimates.next.list.flowTitle')}
