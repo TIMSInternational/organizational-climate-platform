@@ -10,9 +10,12 @@ export function Switch({ className, ...props }: SwitchProps) {
     <SwitchPrimitive.Root
       data-slot="switch"
       className={cn(
-        // `p-0`: the root is a <button>, and index.css pads every bare button 12px a side —
-        // on a 28px track that left the thumb a 2px sliver (seen on the authoring shots).
-        'peer inline-flex h-4 w-7 shrink-0 items-center rounded-full border border-transparent p-0',
+        // The root is a <button>, and index.css (`button`, ~l. 298) gives every bare button
+        // 12px of padding a side and `justify-content: center`. `p-0`: the padding squeezed
+        // the thumb to a 2px sliver on the 28px track. `justify-start`: centring put the thumb
+        // mid-track before its translate, so an off switch read as on and an on switch's knob
+        // ran past the track's right end (crop-bank-switch.png, crop-checked-switch.png).
+        'peer inline-flex h-4 w-7 shrink-0 items-center justify-start rounded-full border border-transparent p-0',
         'transition-colors ease-out',
         'bg-line-default data-[state=checked]:bg-accent-blue',
         'disabled:cursor-not-allowed disabled:opacity-50',

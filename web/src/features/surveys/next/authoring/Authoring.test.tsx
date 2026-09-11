@@ -243,10 +243,14 @@ describe('SurveyQuestionsEditorPage — scale, library and dimension check', () 
     arrangeSurvey('draft', 0)
     renderAt('/surveys/s1/questions')
     expect((await screen.findByTestId('dimension-check')).textContent).toBe(a.everyDimensionCovered)
+    // The open question is q0, the only 'trust' question; q1 ('workload') stays.
     await userEvent.click(screen.getByRole('button', { name: a.remove }))
     const check = screen.getByTestId('dimension-check').textContent ?? ''
     expect(check.startsWith(a.dimensionsWithout.split('{')[0])).toBe(true)
     expect(check).not.toBe(a.everyDimensionCovered)
+    // It names the dimension the removal emptied, and only that one.
+    expect(check).toContain(en.surveyRespond.dimensions.trust)
+    expect(check).not.toContain(en.surveyRespond.dimensions.workload)
   })
 
   it('centres every toggle with the buttons beside it — no label margin in the row', async () => {

@@ -98,6 +98,8 @@ describe('QuestionBankNextPage', () => {
     vi.mocked(listQuestionLibraryItems).mockResolvedValue(items)
     renderAs(<QuestionBankNextPage />)
     expect(await screen.findByText(bank.emptyTitle)).toBeTruthy()
+    // The board's eyebrow: "PROPUESTA · GRUPO MERIDIANO S.A." (uppercased by CSS).
+    expect(screen.getByText(`${en.insights.next.proposal} · Grupo Meridiano S.A.`)).toBeTruthy()
     expect(screen.getByText(bank.emptyMeanwhile.replace('{company}', 'Grupo Meridiano S.A.'))).toBeTruthy()
     // 3 of the 4 items and all 3 categories are global.
     expect(screen.getByText(new RegExp(bank.splitCounts.replace('{questions}', '3').replace('{categories}', '3')))).toBeTruthy()
@@ -187,8 +189,19 @@ describe('QuestionLibraryNextPage — drawer link, multiple choice, vocabulary',
     arrange()
     renderLibraryAt('/admin/question-library?new=1')
     expect(await screen.findByRole('button', { name: lib.createQuestion })).toBeTruthy()
+    const drawer = screen.getByRole('complementary')
+    const list = drawer.parentElement?.querySelector('section')
     // Below xl the drawer spans both columns instead of the 14rem category column.
-    expect(screen.getByRole('complementary').className.split(' ')).toEqual(expect.arrayContaining(['lg:col-span-2', 'xl:col-span-1']))
+    expect(drawer.className.split(' ')).toContain('lg:col-span-2')
+    // From xl it overlays the list, as the board draws it: the list's own grid cell, pinned to
+    // its right edge at the board's 392px, painted above the rows. happy-dom has no layout, so
+    // the classes are the pin and library-new-light.png is the evidence.
+    expect(drawer.className.split(' ')).toEqual(
+      expect.arrayContaining(['xl:col-[2]', 'xl:row-[1]', 'xl:justify-self-end', 'xl:w-[24.5rem]', 'xl:z-1']),
+    )
+    expect(list?.className.split(' ')).toEqual(expect.arrayContaining(['xl:col-[2]', 'xl:row-[1]']))
+    // …and never as a third column that narrows the list.
+    expect(drawer.parentElement?.className ?? '').not.toMatch(/xl:grid-cols-/)
   })
 
   it('opens nothing from ?new=1 for a role that cannot write', async () => {

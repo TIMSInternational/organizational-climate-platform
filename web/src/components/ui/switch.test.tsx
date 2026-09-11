@@ -42,4 +42,15 @@ describe('Switch', () => {
     expect(root.className.split(' ')).toContain('p-0')
     expect(root.querySelector('[data-slot="switch-thumb"]')?.className.split(' ')).toContain('shrink-0')
   })
+
+  it('starts the thumb at the track’s left edge, so the translate alone says on or off', () => {
+    // index.css also gives every bare <button> `justify-content: center`. Centred first and then
+    // translated, an off knob sat mid-track and read as on, and an on knob ran past the right
+    // end (bank-light.png, draft-light.png). The class is the pin; the shots are the evidence.
+    for (const checked of [false, true]) {
+      cleanup()
+      render(<Switch aria-label="Login enabled" checked={checked} />)
+      expect(screen.getByRole('switch').className.split(' ')).toContain('justify-start')
+    }
+  })
 })

@@ -170,6 +170,8 @@ describe('AnalyticsNextPage', () => {
   it('reads each reference against the latest wave, with the cohort size from its detail', async () => {
     arrange(detail([42, 40]))
     const row = await screen.findByTestId('benchmark-row')
+    // The board's eyebrow: "PROPUESTA · GRUPO MERIDIANO S.A." (uppercased by CSS).
+    expect(screen.getByText(`${insightsCopy.proposal} · Grupo Meridiano S.A.`)).toBeTruthy()
     expect(within(row).getByText('42')).toBeTruthy()
     expect(within(row).getByText(analyticsCopy.qualityPending)).toBeTruthy()
     expect(within(row).getByText(analyticsCopy.scopeGlobal)).toBeTruthy()

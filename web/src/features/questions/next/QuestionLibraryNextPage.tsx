@@ -261,12 +261,10 @@ export default function QuestionLibraryNextPage() {
           }
         />
       ) : (
-        <div
-          className={cn(
-            'grid items-start gap-4 lg:grid-cols-[14.25rem_minmax(0,1fr)]',
-            drawer.mode !== 'closed' && 'xl:grid-cols-[14.25rem_minmax(0,1fr)_24.5rem]',
-          )}
-        >
+        // Two columns from lg. From xl an open drawer overlays the list instead of taking a third
+        // column, as the board draws it (QuestionLibrary.dc.html: the drawer shares the list's
+        // grid cell — `grid-area: 1 / 1; justify-self: end; width: 392px; z-index: 1`).
+        <div className="grid items-start gap-4 lg:grid-cols-[14.25rem_minmax(0,1fr)]">
           <nav aria-label={t('questionLibrary.next.categories')} className="rounded-lg border border-line-default bg-surface-card p-4">
             <h2 className="m-0 text-xl">{t('questionLibrary.next.categories')}</h2>
             <p className="mb-3 mt-0.5 text-xs text-fg-secondary">
@@ -309,7 +307,7 @@ export default function QuestionLibraryNextPage() {
             )}
           </nav>
 
-          <section aria-labelledby="library-selected" className="min-w-0">
+          <section aria-labelledby="library-selected" className="min-w-0 xl:col-[2] xl:row-[1]">
             {selected ? (
               <>
                 <div className="flex flex-wrap items-center gap-2">
@@ -379,9 +377,10 @@ export default function QuestionLibraryNextPage() {
           {drawer.mode !== 'closed' && (
             <aside
               aria-labelledby="library-drawer-title"
-              // Below xl the grid has two columns; the drawer takes a full row under the list
-              // rather than the 14rem category column (library-new-light-1024.png).
-              className="rounded-lg border border-line-default border-l-2 border-l-fg-primary bg-surface-card shadow-md lg:col-span-2 xl:col-span-1"
+              // Below xl the drawer takes a full row under the list rather than the 14rem category
+              // column (library-new-light-1024.png). From xl it lies over the list's right edge in
+              // the list's own cell, at the board's 392px, 3px ink edge and lifted shadow.
+              className="rounded-lg border border-line-default border-l-3 border-l-fg-primary bg-surface-card shadow-md lg:col-span-2 xl:col-[2] xl:row-[1] xl:justify-self-end xl:w-[24.5rem] xl:z-1 xl:shadow-lg"
             >
               <div className="flex items-start justify-between gap-2 border-b border-line-light p-4">
                 <div>
