@@ -73,7 +73,7 @@ export function PersonaAvatar({ name, size = 'md' }: { name: string | null; size
       className={cn(
         'inline-flex shrink-0 items-center justify-center rounded-full border bg-surface-icon-box font-semibold text-fg-secondary',
         size === 'sm' ? 'size-6 text-2xs' : 'size-7 text-xs',
-        name ? 'border-line-default' : 'border-dashed border-line-default text-fg-light',
+        name ? 'border-line-default' : 'border-dashed border-line-default text-fg-label',
       )}
     >
       {name ? initials(name) : '·'}
@@ -91,8 +91,8 @@ export function SampleChip({ className }: { className?: string }) {
 export function NodoTile({ label, children, aside }: { label: string; children: ReactNode; aside?: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-line-default bg-surface-card px-4 py-3.5 shadow-sm" data-slot="nodo-tile">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-2xs font-bold uppercase tracking-label text-fg-label">{label}</span>
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <span className="whitespace-nowrap text-2xs font-bold uppercase tracking-label text-fg-label">{label}</span>
         {aside}
       </div>
       <div className="flex min-h-7 flex-wrap items-baseline gap-1.5">{children}</div>

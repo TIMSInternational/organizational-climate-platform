@@ -151,6 +151,7 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
     <div>
       <PageTopBar
         breadcrumbs={[{ label: t('tracking.planes.title'), href: '/tracking/planes' }, { label: plan.planCode }]}
+        tightBreadcrumb
         eyebrow={model.nodoName ? t('tracking.next.detailEyebrow', { nodo: model.nodoName }) : t('tracking.detail.title')}
         title={plan.descripcionQue}
         meta={

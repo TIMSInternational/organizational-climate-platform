@@ -90,6 +90,8 @@ export interface KpiTileProps {
    * Already translated; the chip carries its own word, never colour alone.
    */
   aside?: React.ReactNode
+  /** A chip at the right end of the value row — where a sample-fed tile wears its chip. */
+  valueAside?: React.ReactNode
   /** BCP-47 locale. Defaults to the document's language. */
   locale?: string
   className?: string
@@ -105,6 +107,7 @@ export default function KpiTile({
   changeLabel,
   unit,
   aside,
+  valueAside,
   locale,
   className,
 }: KpiTileProps) {
@@ -150,8 +153,8 @@ export default function KpiTile({
           `data-slot="kpi-label"` is how a test finds a tile by its label: "Completed"
           is also a badge and a filter option on the list pages, so text alone is not. */}
       {aside ? (
-        <div className="flex items-center justify-between gap-2">
-          <div data-slot="kpi-label" className="text-2xs font-bold uppercase tracking-tile text-fg-label">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+          <div data-slot="kpi-label" className="whitespace-nowrap text-2xs font-bold uppercase tracking-tile text-fg-label">
             {label}
           </div>
           {aside}
@@ -168,6 +171,7 @@ export default function KpiTile({
           {value === null ? EM_DASH : formatMetric(value, format, locale)}
         </span>
         {unit && <span className="text-sm text-fg-secondary">{unit}</span>}
+        {valueAside && <span className="ml-auto self-center">{valueAside}</span>}
       </div>
       {/* Same measurement as the label above; this line is 12px, the canvas's sentence size. */}
       <div className="mt-1.5 flex items-center gap-1 text-sm text-fg-secondary">

@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from 'react'
+import { cn } from '../../lib/cn'
 import { Link, useLocation } from 'react-router'
 import { useTranslation } from '../../i18n'
 import { getToken } from '../../auth/token'
@@ -150,6 +151,11 @@ export interface PageTopBarProps {
    * translated; rendered after the description, in the text column.
    */
   meta?: ReactNode
+  /**
+   * 14px between the breadcrumb and the header instead of 38px — the Main (plan detail)
+   * artboard of 10 Sep, whose breadcrumb carries only its own margin.
+   */
+  tightBreadcrumb?: boolean
 }
 
 export function PageTopBar({
@@ -161,6 +167,7 @@ export function PageTopBar({
   badge,
   actions,
   meta,
+  tightBreadcrumb = false,
 }: PageTopBarProps) {
   const { t } = useTranslation()
   const derivedEyebrow = useSectionEyebrow()
@@ -175,7 +182,10 @@ export function PageTopBar({
     // `--admin-size-section-gap`. UI-0 had it at 8px / 14px / 16px.
     <div
       data-slot="page-top-bar"
-      className="mb-section flex flex-col gap-9.5 border-b border-line-light pb-4"
+      className={cn(
+        'mb-section flex flex-col border-b border-line-light pb-4',
+        tightBreadcrumb ? 'gap-3.5' : 'gap-9.5',
+      )}
     >
       {breadcrumbs && breadcrumbs.length > 0 && (
         <Breadcrumb aria-label={breadcrumbLabel ?? t('shell.breadcrumb')}>

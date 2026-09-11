@@ -67,7 +67,7 @@ export function Chip({ label, tone, icon, className, ...props }: ChipProps) {
   return (
     <span data-slot="chip" className={cn(chipVariants({ tone }), className)} {...props}>
       {icon && (
-        <span aria-hidden="true" className="inline-flex shrink-0 items-center">
+        <span aria-hidden="true" className="inline-flex shrink-0 items-center [&>svg]:size-3">
           {icon}
         </span>
       )}

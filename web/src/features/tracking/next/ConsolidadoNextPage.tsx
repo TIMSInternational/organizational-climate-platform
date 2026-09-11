@@ -237,7 +237,7 @@ function ByNodo({ model, t, locale }: { model: ConsolidadoModel; t: TranslateFn;
               {SEMAFORO_ORDER.map((estado) => (
                 <CountCell key={estado} estado={estado} counts={model.conteos} />
               ))}
-              <td colSpan={3} className="border-0 px-3 py-2.5 text-xs text-fg-light">
+              <td colSpan={3} className="border-0 px-3 py-2.5 text-xs text-fg-label">
                 {withoutPlans === null
                   ? t('tracking.next.nodosWithPlans', { count: withPlans })
                   : t('tracking.next.nodosWithAndWithout', { with: withPlans, without: withoutPlans })}
@@ -257,7 +257,7 @@ function ByNodo({ model, t, locale }: { model: ConsolidadoModel; t: TranslateFn;
             </span>
           )
         })}
-        <span className="ml-auto text-xs text-fg-light">
+        <span className="ml-auto text-xs text-fg-label">
           {t('tracking.next.consultedAt', {
             date: calendarDay(Date.parse(model.asOf), locale),
             time: consulted.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
@@ -275,7 +275,7 @@ function CountCell({ estado, counts }: { estado: SemaforoEstado; counts: Semafor
     <td
       className={cn(
         'border-0 px-3 py-2.5 text-center font-mono tabular-nums',
-        count > 0 ? TONE_INK[presentation.tone] : 'text-fg-light',
+        count > 0 ? TONE_INK[presentation.tone] : 'text-fg-label',
       )}
     >
       {count}
@@ -332,7 +332,7 @@ function PlanRow({ plan, t, locale }: { plan: PlanLine; t: TranslateFn; locale: 
       <td className="border-0 px-3 py-2.5">
         <div className="flex min-w-0 flex-col">
           <span className="truncate text-base text-fg-primary">{plan.que}</span>
-          <span className="text-xs text-fg-light">
+          <span className="text-xs text-fg-label">
             {plan.responsable.name
               ? t('tracking.next.responsableNamed', { name: plan.responsable.name })
               : plan.responsable.id === ''
@@ -360,7 +360,7 @@ function PlanRow({ plan, t, locale }: { plan: PlanLine; t: TranslateFn; locale: 
           <span className={cn('font-mono text-sm tabular-nums', overdue ? 'text-accent-red' : 'text-fg-primary')}>
             {calendarDay(Date.parse(plan.fechaCompromiso), locale)}
           </span>
-          <span className={cn('text-xs', overdue ? 'text-accent-red' : 'text-fg-light')}>
+          <span className={cn('text-xs', overdue ? 'text-accent-red' : 'text-fg-label')}>
             {plan.cumplido
               ? t('tracking.detail.cumplido')
               : overdue

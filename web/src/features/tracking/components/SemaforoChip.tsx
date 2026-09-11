@@ -90,7 +90,7 @@ const SHAPE_ICONS: Record<SemaforoShape, ReactNode> = {
  */
 export function SemaforoGlyph({ estado, className }: { estado: SemaforoEstado; className?: string }) {
   return (
-    <span aria-hidden="true" className={cn('inline-flex shrink-0 items-center', className)}>
+    <span aria-hidden="true" className={cn('inline-flex shrink-0 items-center [&>svg]:size-full', className)}>
       {SHAPE_ICONS[semaforoPresentation(estado).shape]}
     </span>
   )

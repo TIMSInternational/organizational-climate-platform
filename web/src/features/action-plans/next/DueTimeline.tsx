@@ -64,10 +64,10 @@ export default function DueTimeline({
   const todayLabel = calendarDay(Date.parse(asOf), locale)
 
   return (
-    <>
+    <div className="overflow-x-auto">
       <svg
         viewBox={`0 0 ${VIEW_WIDTH} ${height}`}
-        className="block h-auto w-full"
+        className="block h-auto w-full min-w-[880px]"
         aria-hidden="true"
         data-slot="due-timeline"
       >
@@ -119,6 +119,6 @@ export default function DueTimeline({
           </li>
         ))}
       </ul>
-    </>
+    </div>
   )
 }

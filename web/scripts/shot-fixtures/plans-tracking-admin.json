@@ -1,0 +1,610 @@
+{
+  "_comment": "Plans-and-tracking lane, company_admin (ana.rojas@meridiano.test) on the Grupo Meridiano demo tenant. Every body is a response captured read-only from the local stack on 2026-09-10 (GET only, after POST /auth/login) and pasted verbatim; nothing is shaped by hand. The tablero body is the Ingeniería board as GET /api/tablero-seguimiento?nodoId= answers it.",
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+  "GET /profile": {
+    "id": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "companyName": "Grupo Meridiano S.A.",
+    "email": "ana.rojas@meridiano.test",
+    "name": "Ana Rojas",
+    "role": "company_admin",
+    "departmentId": null,
+    "departmentName": null,
+    "managerId": null,
+    "isActive": true,
+    "hasPassword": true,
+    "lastLoginAt": "2026-09-11T00:30:21.372994+00:00",
+    "createdAt": "2026-09-10T01:58:51.849247+00:00",
+    "demographics": {}
+  },
+  "GET /action-plans": {
+    "actionPlans": [
+      {
+        "id": "1164cd20-3605-4c46-9297-6fc9ab6bb868",
+        "title": "Programa de reconocimiento entre pares",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "dueDate": "2026-09-30T02:05:50.251+00:00",
+        "status": "not_started",
+        "priority": "high",
+        "createdAt": "2026-09-10T02:05:50.263923+00:00"
+      },
+      {
+        "id": "433a542b-de20-4b71-9ff2-e8ab3cb3d625",
+        "title": "Buzón anónimo de sugerencias",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": null,
+        "dueDate": "2026-10-10T00:00:00+00:00",
+        "status": "cancelled",
+        "priority": "medium",
+        "createdAt": "2026-09-10T02:12:06.466863+00:00"
+      },
+      {
+        "id": "f5227d88-fd88-428f-a971-a109ee18ff32",
+        "title": "Almuerzos mensuales por departamento",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": null,
+        "dueDate": "2026-10-10T00:00:00+00:00",
+        "status": "cancelled",
+        "priority": "medium",
+        "createdAt": "2026-09-10T02:13:38.941573+00:00"
+      },
+      {
+        "id": "dec1b555-22e9-4519-8c43-c74c9615ea05",
+        "title": "Piloto de horario flexible en Ventas",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": null,
+        "dueDate": "2026-10-10T00:00:00+00:00",
+        "status": "cancelled",
+        "priority": "medium",
+        "createdAt": "2026-09-10T02:14:40.726189+00:00"
+      },
+      {
+        "id": "4f973f47-4ab2-4a5b-9606-af5db05670b8",
+        "title": "Reducir la carga de trabajo en Operaciones",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "dueDate": "2026-10-15T02:05:50.278+00:00",
+        "status": "not_started",
+        "priority": "high",
+        "createdAt": "2026-09-10T02:05:50.280646+00:00"
+      },
+      {
+        "id": "1276d432-b001-46e6-920d-08fa96618d52",
+        "title": "Reuniones abiertas con la dirección",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": null,
+        "dueDate": "2026-10-25T02:05:50.292+00:00",
+        "status": "not_started",
+        "priority": "medium",
+        "createdAt": "2026-09-10T02:05:50.294635+00:00"
+      },
+      {
+        "id": "b3797ec7-780c-4ca2-b5e6-ceb015855560",
+        "title": "Plan de desarrollo de carrera en Ingeniería",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "dueDate": "2026-11-09T03:05:50.285+00:00",
+        "status": "not_started",
+        "priority": "medium",
+        "createdAt": "2026-09-10T02:05:50.287727+00:00"
+      }
+    ]
+  },
+  "GET /admin/departments": {
+    "departments": [
+      {
+        "id": "78c94025-0ae2-4f46-a8ab-763ddd8dd3b1",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Calidad 18",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": false,
+        "employeeCount": 0
+      },
+      {
+        "id": "6a4bc103-9ed9-4610-bf9c-03f707ab6fd0",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Calidad 406",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": false,
+        "employeeCount": 0
+      },
+      {
+        "id": "3eae2136-3f12-4e80-a731-d84517915655",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Calidad 547",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": false,
+        "employeeCount": 0
+      },
+      {
+        "id": "e027a77c-0713-4539-995f-a5d53f991383",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Calidad 636",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": false,
+        "employeeCount": 0
+      },
+      {
+        "id": "2f56f8ba-f5ed-4531-811d-c32cbfb30153",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Calidad 79",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": false,
+        "employeeCount": 0
+      },
+      {
+        "id": "7bdd7b17-ceab-447c-bb6e-91ca4d694079",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Calidad 797",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": false,
+        "employeeCount": 0
+      },
+      {
+        "id": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Finanzas",
+        "description": "Finanzas y contabilidad",
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 6
+      },
+      {
+        "id": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Ingeniería",
+        "description": "Desarrollo de producto y plataforma",
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 14
+      },
+      {
+        "id": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Operaciones",
+        "description": "Operaciones y logística",
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 7
+      },
+      {
+        "id": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Personas",
+        "description": "Talento humano y cultura",
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 7
+      },
+      {
+        "id": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Ventas",
+        "description": "Equipos comerciales regionales",
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 7
+      }
+    ]
+  },
+  "GET /action-plan-templates": {
+    "templates": []
+  },
+  "GET /tracking/picker/nodos": {
+    "nodos": [
+      {
+        "id": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+        "name": "Finanzas"
+      },
+      {
+        "id": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "name": "Ingeniería"
+      },
+      {
+        "id": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "name": "Operaciones"
+      },
+      {
+        "id": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "name": "Personas"
+      },
+      {
+        "id": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+        "name": "Ventas"
+      }
+    ]
+  },
+  "GET /tracking/picker/personas": {
+    "personas": [
+      {
+        "id": "77fbfc92-76bb-452e-8be3-8ae588464994",
+        "name": "Adriana Marín",
+        "email": "adriana.marin@meridiano.test"
+      },
+      {
+        "id": "1553edb1-e100-4bb1-a397-90882b3a3e9e",
+        "name": "Alejandro Retana",
+        "email": "alejandro.retana@meridiano.test"
+      },
+      {
+        "id": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+        "name": "Ana Rojas",
+        "email": "ana.rojas@meridiano.test"
+      },
+      {
+        "id": "4189a6e9-0354-42fc-a653-31906cb33dfc",
+        "name": "Andrés Segura",
+        "email": "andres.segura@meridiano.test"
+      },
+      {
+        "id": "1ccb3318-9751-4b89-9fe0-0ddcf7885be3",
+        "name": "Camila Montero",
+        "email": "camila.montero@meridiano.test"
+      },
+      {
+        "id": "cb2b9759-0e4b-494a-9073-ed859744ba0d",
+        "name": "Carla Jiménez",
+        "email": "carla.jimenez@meridiano.test"
+      },
+      {
+        "id": "091b20f1-e4f0-4fa5-aa2e-5111faf2e3b4",
+        "name": "Carlos Mata",
+        "email": "carlos.mata@meridiano.test"
+      },
+      {
+        "id": "90db77e2-ba9d-488a-90a0-3b8e37b501a1",
+        "name": "Carolina Herrera",
+        "email": "carolina.herrera@meridiano.test"
+      },
+      {
+        "id": "dae0a508-07d8-4c4d-8395-f3a158e78a7e",
+        "name": "Daniel Salas",
+        "email": "daniel.salas@meridiano.test"
+      },
+      {
+        "id": "395b00b6-48e9-466b-80bf-6042ad9e0c5f",
+        "name": "Daniela Bolaños",
+        "email": "daniela.bolanos@meridiano.test"
+      },
+      {
+        "id": "581f933a-dd90-44a6-a85d-125f568e14a9",
+        "name": "Diego Solano",
+        "email": "diego.solano@meridiano.test"
+      },
+      {
+        "id": "6c396734-5d67-4d4f-9344-6ef53433958f",
+        "name": "Elena Quesada",
+        "email": "elena.quesada@meridiano.test"
+      },
+      {
+        "id": "6d94d70f-1588-413c-a713-f714e137d4f3",
+        "name": "Esteban Méndez",
+        "email": "esteban.mendez@meridiano.test"
+      },
+      {
+        "id": "fcede401-926d-48cc-a287-bf7db851a78b",
+        "name": "Felipe Sandoval",
+        "email": "felipe.sandoval@meridiano.test"
+      },
+      {
+        "id": "9a32b026-9e7d-4e78-b561-8598254d57f4",
+        "name": "Fernanda Fallas",
+        "email": "fernanda.fallas@meridiano.test"
+      },
+      {
+        "id": "b0a84adb-7722-41a5-82d5-721723f76e67",
+        "name": "Gabriel Aguilar",
+        "email": "gabriel.aguilar@meridiano.test"
+      },
+      {
+        "id": "f7560211-2be5-447c-a225-8fdac4013461",
+        "name": "Ignacio Espinoza",
+        "email": "ignacio.espinoza@meridiano.test"
+      },
+      {
+        "id": "9ae250a8-6127-41ef-b562-2c96ca97f170",
+        "name": "Isabel Guzmán",
+        "email": "isabel.guzman@meridiano.test"
+      },
+      {
+        "id": "0dc1c3a2-f8d2-434f-92a6-202385e768bc",
+        "name": "Javier Araya",
+        "email": "javier.araya@meridiano.test"
+      },
+      {
+        "id": "7c1d3f71-7e4c-4ba9-91ee-198068173fbb",
+        "name": "Jorge Zúñiga",
+        "email": "jorge.zuniga@meridiano.test"
+      },
+      {
+        "id": "dd6320ca-38b9-4d1f-9e3d-434b867b2aa3",
+        "name": "José Arias",
+        "email": "jose.arias@meridiano.test"
+      },
+      {
+        "id": "967f586f-af23-46e5-a01e-7dea1ac64ab1",
+        "name": "Laura Barrantes",
+        "email": "laura.barrantes@meridiano.test"
+      },
+      {
+        "id": "b139ad6b-7e6b-4c1f-97e0-3dd2ce2c1d3d",
+        "name": "Lucía Brenes",
+        "email": "lucia.brenes@meridiano.test"
+      },
+      {
+        "id": "64fa2a68-3cef-4644-a7b0-ee3a7315c671",
+        "name": "Luis Mora",
+        "email": "luis.mora@meridiano.test"
+      },
+      {
+        "id": "78bdb7e0-155b-4635-a874-dbd4fef42f65",
+        "name": "Marco Castro",
+        "email": "marco.castro@meridiano.test"
+      },
+      {
+        "id": "c9eace72-d15a-4e0f-8693-175236aea56d",
+        "name": "Mariana Leiva",
+        "email": "mariana.leiva@meridiano.test"
+      },
+      {
+        "id": "b4efd72c-893b-4a2e-b202-eb68d8a46a5f",
+        "name": "María Chaves",
+        "email": "maria.chaves@meridiano.test"
+      },
+      {
+        "id": "9a3c64fe-b1ae-4ec8-8a51-4475909364e7",
+        "name": "Mauricio Céspedes",
+        "email": "mauricio.cespedes@meridiano.test"
+      },
+      {
+        "id": "ee3f169b-2608-41b5-ac34-4a7e1590e1b1",
+        "name": "Melissa Coto",
+        "email": "melissa.coto@meridiano.test"
+      },
+      {
+        "id": "270be315-7829-41ee-a825-381d9ee9529b",
+        "name": "Natalia Campos",
+        "email": "natalia.campos@meridiano.test"
+      },
+      {
+        "id": "c3c198f0-be0a-4ded-84f4-26a79bf244ac",
+        "name": "Pablo Solís",
+        "email": "pablo.solis@meridiano.test"
+      },
+      {
+        "id": "b7346b13-8ece-4ab5-84ca-fb8e1e3c2564",
+        "name": "Patricia Pacheco",
+        "email": "patricia.pacheco@meridiano.test"
+      },
+      {
+        "id": "037052e4-9120-4930-9308-ce83853806d4",
+        "name": "Paula Madrigal",
+        "email": "paula.madrigal@meridiano.test"
+      },
+      {
+        "id": "6a543cf4-d958-4dc5-bb1e-62bab06f6e71",
+        "name": "Ricardo Ramírez",
+        "email": "ricardo.ramirez@meridiano.test"
+      },
+      {
+        "id": "21913ed8-cbcd-4c31-9571-6c2369cb08ab",
+        "name": "Roberto Ulate",
+        "email": "roberto.ulate@meridiano.test"
+      },
+      {
+        "id": "496e6366-51fb-4b5d-9f39-e170649b3925",
+        "name": "Rodrigo Alvarado",
+        "email": "rodrigo.alvarado@meridiano.test"
+      },
+      {
+        "id": "dffb4537-85a4-4b37-afaf-4d832b76dcc4",
+        "name": "Sebastián Villalobos",
+        "email": "sebastian.villalobos@meridiano.test"
+      },
+      {
+        "id": "4f19257b-3d96-4d5a-8ab4-42aeefdb6101",
+        "name": "Silvia Umaña",
+        "email": "silvia.umana@meridiano.test"
+      },
+      {
+        "id": "8006070f-a571-46bf-8e08-18ddfe95909e",
+        "name": "Sofía Vargas",
+        "email": "sofia.vargas@meridiano.test"
+      },
+      {
+        "id": "c3c58a00-d916-431c-9a27-594e69dff76b",
+        "name": "Valeria Porras",
+        "email": "valeria.porras@meridiano.test"
+      },
+      {
+        "id": "dedaca2a-20fc-4db6-9ac9-0e7f1589d3aa",
+        "name": "Verónica Cordero",
+        "email": "veronica.cordero@meridiano.test"
+      },
+      {
+        "id": "e9b3fec5-fdcb-490a-8936-8c7e9fe46eb3",
+        "name": "Óscar Vindas",
+        "email": "oscar.vindas@meridiano.test"
+      }
+    ]
+  },
+  "GET /api/consolidado": {
+    "conteos": {
+      "rojo": 1,
+      "amarillo": 0,
+      "verde": 2
+    },
+    "porNodo": [
+      {
+        "nodoExternalId": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+        "conteos": {
+          "rojo": 1,
+          "amarillo": 0,
+          "verde": 0
+        },
+        "totalPlanes": 1
+      },
+      {
+        "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "conteos": {
+          "rojo": 0,
+          "amarillo": 0,
+          "verde": 1
+        },
+        "totalPlanes": 1
+      },
+      {
+        "nodoExternalId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "conteos": {
+          "rojo": 0,
+          "amarillo": 0,
+          "verde": 1
+        },
+        "totalPlanes": 1
+      }
+    ]
+  },
+  "GET /api/planes-accion": [
+    {
+      "id": "01a08b9e-6367-75aa-942c-1ec0efd04176",
+      "planCode": "PA-2026-00001",
+      "nodoExternalId": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+      "liderExternalId": "",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Reponer la reunión de handover entre turnos",
+      "metodologiaComo": "Sesión de 20 minutos al cierre de cada turno, con acta breve.",
+      "responsableEjecucionExternalId": "77fbfc92-76bb-452e-8be3-8ae588464994",
+      "fechaCreacion": "2026-09-10",
+      "fechaCompromiso": "2026-08-20",
+      "porcentajeAvance": 0.0,
+      "estadoSemaforo": "Rojo",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-09-10",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "77fbfc92-76bb-452e-8be3-8ae588464994"
+      ]
+    },
+    {
+      "id": "01a08b9e-63d1-7f20-8a5d-62a31ac71d53",
+      "planCode": "PA-2026-00002",
+      "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+      "liderExternalId": "",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Publicar el rol de fines de semana con dos semanas de antelación",
+      "metodologiaComo": "Calendario compartido, actualizado los lunes por la jefatura del nodo.",
+      "responsableEjecucionExternalId": "1553edb1-e100-4bb1-a397-90882b3a3e9e",
+      "fechaCreacion": "2026-09-10",
+      "fechaCompromiso": "2026-09-15",
+      "porcentajeAvance": 0.0,
+      "estadoSemaforo": "Verde",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-09-10",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "1553edb1-e100-4bb1-a397-90882b3a3e9e"
+      ]
+    },
+    {
+      "id": "01a08b9e-63e0-7880-9789-494dd9369976",
+      "planCode": "PA-2026-00003",
+      "nodoExternalId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+      "liderExternalId": "",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Programa de reconocimiento entre pares",
+      "metodologiaComo": "Nominaciones mensuales, resultado comunicado en la reunión general.",
+      "responsableEjecucionExternalId": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+      "fechaCreacion": "2026-09-10",
+      "fechaCompromiso": "2026-11-09",
+      "porcentajeAvance": 0.0,
+      "estadoSemaforo": "Verde",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-09-10",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "7b34dd6e-3472-4180-9873-ec5cf7d2af65"
+      ]
+    }
+  ],
+  "GET /api/planes-accion/*": {
+    "id": "01a08b9e-6367-75aa-942c-1ec0efd04176",
+    "planCode": "PA-2026-00001",
+    "nodoExternalId": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+    "liderExternalId": "",
+    "hallazgoExternalId": null,
+    "descripcionQue": "Reponer la reunión de handover entre turnos",
+    "metodologiaComo": "Sesión de 20 minutos al cierre de cada turno, con acta breve.",
+    "responsableEjecucionExternalId": "77fbfc92-76bb-452e-8be3-8ae588464994",
+    "fechaCreacion": "2026-09-10",
+    "fechaCompromiso": "2026-08-20",
+    "porcentajeAvance": 0.0,
+    "estadoSemaforo": "Rojo",
+    "cicloEncuestaExternalId": null,
+    "fechaUltimaActualizacion": "2026-09-10",
+    "cumplido": false,
+    "involucradosExternalIds": [
+      "77fbfc92-76bb-452e-8be3-8ae588464994"
+    ]
+  },
+  "GET /api/tablero-seguimiento": {
+    "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+    "conteos": {
+      "rojo": 0,
+      "amarillo": 0,
+      "verde": 1
+    },
+    "planes": [
+      {
+        "id": "01a08b9e-63d1-7f20-8a5d-62a31ac71d53",
+        "planCode": "PA-2026-00002",
+        "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "liderExternalId": "",
+        "hallazgoExternalId": null,
+        "descripcionQue": "Publicar el rol de fines de semana con dos semanas de antelación",
+        "metodologiaComo": "Calendario compartido, actualizado los lunes por la jefatura del nodo.",
+        "responsableEjecucionExternalId": "1553edb1-e100-4bb1-a397-90882b3a3e9e",
+        "fechaCreacion": "2026-09-10",
+        "fechaCompromiso": "2026-09-15",
+        "porcentajeAvance": 0.0,
+        "estadoSemaforo": "Verde",
+        "cicloEncuestaExternalId": null,
+        "fechaUltimaActualizacion": "2026-09-10",
+        "cumplido": false,
+        "involucradosExternalIds": [
+          "1553edb1-e100-4bb1-a397-90882b3a3e9e"
+        ]
+      }
+    ]
+  },
+  "GET /api/mis-tareas": [
+    {
+      "id": "01a08b9e-63e0-7880-9789-494dd9369976",
+      "planCode": "PA-2026-00003",
+      "nodoExternalId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+      "liderExternalId": "",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Programa de reconocimiento entre pares",
+      "metodologiaComo": "Nominaciones mensuales, resultado comunicado en la reunión general.",
+      "responsableEjecucionExternalId": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+      "fechaCreacion": "2026-09-10",
+      "fechaCompromiso": "2026-11-09",
+      "porcentajeAvance": 0.0,
+      "estadoSemaforo": "Verde",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-09-10",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "7b34dd6e-3472-4180-9873-ec5cf7d2af65"
+      ]
+    }
+  ]
+}

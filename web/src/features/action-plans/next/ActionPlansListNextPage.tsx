@@ -333,7 +333,7 @@ function Tiles({ model, t, locale }: { model: ActionPlansListModel; t: Translate
         value={finding.withFinding}
         locale={locale}
         unit={t('actionPlans.next.ofTotal', { total: finding.open })}
-        aside={model.findingsAreSample ? <SampleChip t={t} /> : undefined}
+        valueAside={model.findingsAreSample ? <SampleChip t={t} /> : undefined}
         sub={
           <span className="text-fg-label">
             {finding.dimensionKeys.length > 0
@@ -347,7 +347,7 @@ function Tiles({ model, t, locale }: { model: ActionPlansListModel; t: Translate
         value={owner.unassigned}
         locale={locale}
         unit={t('actionPlans.next.ofTotal', { total: owner.open })}
-        aside={model.ownersAreSample ? <SampleChip t={t} /> : undefined}
+        valueAside={model.ownersAreSample ? <SampleChip t={t} /> : undefined}
         sub={
           <span className={owner.unassigned > 0 ? 'text-accent-amber-ink' : 'text-fg-label'}>
             {owner.unassigned > 0 ? t('actionPlans.next.ownerSub') : t('actionPlans.next.ownerAllAssigned')}
@@ -366,7 +366,11 @@ function Tiles({ model, t, locale }: { model: ActionPlansListModel; t: Translate
         }
         sub={
           overdue.first ? (
-            <span className="text-accent-red" data-source={overdue.source}>
+            <span
+              className="block truncate text-accent-red"
+              data-source={overdue.source}
+              title={overdue.first.placeName ? `${overdue.first.placeName} · ${overdue.first.name}` : overdue.first.name}
+            >
               {overdue.first.placeName
                 ? t('actionPlans.next.overdueFirst', { place: overdue.first.placeName, name: overdue.first.name })
                 : overdue.first.name}
@@ -428,7 +432,7 @@ function Filters({
   return (
     <div className="flex flex-wrap items-center gap-3">
       <div className="relative w-full sm:w-70">
-        <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-light" />
+        <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-label" />
         <Input
           type="search"
           aria-label={t('actionPlans.next.searchPlaceholder')}
@@ -534,26 +538,26 @@ function PlanTable({
 }) {
   return (
     <div className="rounded-lg border border-line-default bg-surface-card pt-2 shadow-sm">
-      <Table className="min-w-[860px] table-fixed">
+      <Table className="min-w-[1000px] table-fixed">
         <colgroup>
           <col />
           <col className="w-[222px]" />
           <col className="w-[162px]" />
-          <col className="w-[132px]" />
+          <col className="w-[150px]" />
           <col className="w-[92px]" />
           <col className="w-[132px]" />
         </colgroup>
         <thead>
           <tr className="border-b border-line-default">
             <th className={HEAD}>{t('actionPlans.next.colPlan')}</th>
-            <th className={HEAD}>
-              <span className="inline-flex items-center gap-1.5">
+            <th className={cn(HEAD, 'whitespace-normal')}>
+              <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                 {t('actionPlans.next.colFinding')}
                 {model.findingsAreSample && <SampleChip t={t} />}
               </span>
             </th>
-            <th className={HEAD}>
-              <span className="inline-flex items-center gap-1.5">
+            <th className={cn(HEAD, 'whitespace-normal')}>
+              <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                 {t('actionPlans.next.colOwner')}
                 {model.ownersAreSample && <SampleChip t={t} />}
               </span>
@@ -624,7 +628,7 @@ function PlanTableRow({
           >
             {row.name}
           </Link>
-          <span className="text-xs text-fg-light">
+          <span className="text-xs text-fg-label">
             {open
               ? t('actionPlans.next.createdMeta', { date: calendarDay(Date.parse(row.createdAt), locale), note: progressNote })
               : t('actionPlans.next.createdOn', { date: calendarDay(Date.parse(row.createdAt), locale) })}
@@ -638,11 +642,11 @@ function PlanTableRow({
         <div className="flex items-center gap-2">
           <span
             aria-hidden="true"
-            className="inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-dashed border-line-default bg-surface-icon-box text-xs text-fg-light"
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-dashed border-line-default bg-surface-icon-box text-xs text-fg-label"
           >
             {row.ownerName ? row.ownerName.slice(0, 1) : '·'}
           </span>
-          <span className={cn('truncate text-sm', row.ownerName ? 'text-fg-primary' : 'text-fg-light')}>
+          <span className={cn('truncate text-sm', row.ownerName ? 'text-fg-primary' : 'text-fg-label')}>
             {row.ownerName ?? t('actionPlans.next.unassigned')}
           </span>
         </div>
@@ -653,7 +657,7 @@ function PlanTableRow({
             {calendarDay(Date.parse(row.dueDate), locale)}
           </span>
           {open && days !== null && (
-            <span className={cn('text-xs', urgent ? 'text-accent-red' : 'text-fg-light')}>{dueNote(t, days, isDueThisMonth(row, asOf))}</span>
+            <span className={cn('whitespace-nowrap text-xs', urgent ? 'text-accent-red' : 'text-fg-label')}>{dueNote(t, days, isDueThisMonth(row, asOf))}</span>
           )}
         </div>
       </td>
@@ -702,7 +706,7 @@ function dueNote(t: TranslateFn, days: number, thisMonth: boolean): string {
 function FindingCell({ row, t }: { row: PlanRow; t: TranslateFn }): ReactNode {
   if (!row.departmentId) {
     return (
-      <span className="text-sm text-fg-light">
+      <span className="text-sm text-fg-label">
         {row.finding
           ? t('actionPlans.next.findingCompanyWide', { dimension: dimensionName(t, row.finding.dimensionKey) })
           : t('actionPlans.next.noFinding')}
@@ -746,8 +750,8 @@ function CancelledGroup({
             <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-fg-label" />
           )}
           <span className="text-base font-semibold text-fg-secondary">{t(GROUP_HEADING.cancelled)}</span>
-          <span className="font-mono text-xs text-fg-light tabular-nums">{rows.length}</span>
-          <span className="truncate text-xs text-fg-light">
+          <span className="font-mono text-xs text-fg-label tabular-nums">{rows.length}</span>
+          <span className="truncate text-xs text-fg-label">
             {allCompanyWide ? t('actionPlans.next.cancelledSummaryCompanyWide', { names }) : names}
           </span>
         </div>

@@ -353,7 +353,7 @@ function PlanCard({
         <InfoBox
           label={t('tracking.next.boxUltimoAvance')}
           value={card.hasProgress ? fullDay(card.fechaUltimaActualizacion, locale) : '—'}
-          sub={card.hasProgress ? t('tracking.next.percentRecorded', { percent: card.percent }) : t('tracking.next.noneYetLower')}
+          sub={card.hasProgress ? t('tracking.next.percentRecorded', { percent: card.percent }) : t('tracking.next.noneYet')}
           mono
         />
         <InfoBox
