@@ -615,25 +615,13 @@ export function scheduledDays(values: SurveyWizardValues): number | null {
 }
 
 /**
- * The request body.
- *
- * Only the fields the wizard actually asked about are sent. `SurveySettingsInput`'s
- * fifteen members are all "leave this alone when omitted", so sending the whole
- * record with invented defaults would overwrite twelve settings this flow never
- * showed anyone.
- *
- * Call it only when `wizardStepErrors(...).review` is empty — it assumes a title and
- * both dates are present, which is exactly what that guarantees.
+ * The `questions` of `buildCreateInput`, on their own: one `CreateSurveyQuestionInput` per row,
+ * in order. Split out so the builder can send a row the author added beside a template's copied
+ * questions (`next/authoring/templateRows.ts`) exactly as `POST /surveys` would, without building
+ * — and so without requiring — the rest of the create body.
  */
-export function buildCreateInput(
-  values: SurveyWizardValues,
-  companyId: string,
-): CreateSurveyInput {
-  const title = localizedFor(values.language, values.titleEn, values.titleEs)
-  const description = localizedFor(values.language, values.descriptionEn, values.descriptionEs)
-  const target = Number(values.targetAudienceCount)
-
-  const questions: CreateSurveyQuestionInput[] = values.questions.map((question, index) => {
+export function buildQuestionInputs(values: SurveyWizardValues): CreateSurveyQuestionInput[] {
+  return values.questions.map((question, index) => {
     const built: CreateSurveyQuestionInput = {
       // Non-null by the guard above: `questionErrors` rejects a blank text.
       text: localizedFor(values.language, question.textEn, question.textEs) as LocalizedInput,
@@ -684,6 +672,28 @@ export function buildCreateInput(
     }
     return built
   })
+}
+
+/**
+ * The request body.
+ *
+ * Only the fields the wizard actually asked about are sent. `SurveySettingsInput`'s
+ * fifteen members are all "leave this alone when omitted", so sending the whole
+ * record with invented defaults would overwrite twelve settings this flow never
+ * showed anyone.
+ *
+ * Call it only when `wizardStepErrors(...).review` is empty — it assumes a title and
+ * both dates are present, which is exactly what that guarantees.
+ */
+export function buildCreateInput(
+  values: SurveyWizardValues,
+  companyId: string,
+): CreateSurveyInput {
+  const title = localizedFor(values.language, values.titleEn, values.titleEs)
+  const description = localizedFor(values.language, values.descriptionEn, values.descriptionEs)
+  const target = Number(values.targetAudienceCount)
+
+  const questions = buildQuestionInputs(values)
 
   const input: CreateSurveyInput = {
     title: title as LocalizedInput,

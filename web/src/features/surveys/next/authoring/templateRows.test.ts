@@ -84,7 +84,7 @@ describe('arrangedQuestions', () => {
     const rows = materialiseTemplate([read('es')], ['k0', 'k1']).reverse()
     rows[1] = { ...rows[1], required: true }
     const values: SurveyWizardValues = { ...emptyWizardValues('es'), templateId: 't1', titleEs: 'Q1', questions: rows }
-    const sent = arrangedQuestions(values, copied, 'c1') as Record<string, unknown>[]
+    const sent = arrangedQuestions(values, copied) as Record<string, unknown>[]
     expect(sent.map((q) => [q.text, q.order, q.required])).toEqual([
       [{ es: 'Mi carga es sostenible.' }, 0, true],
       [{ es: '¿Cómo llega?' }, 1, true],
@@ -97,7 +97,7 @@ describe('arrangedQuestions', () => {
     const rows = materialiseTemplate([read('es')], ['k0', 'k1'])
     const added = { ...rows[1], key: 'x', templateOrder: undefined, textEs: 'Del banco.', sourceQuestionBankItemId: 'b1' }
     const values: SurveyWizardValues = { ...emptyWizardValues('es'), templateId: 't1', titleEs: 'Q1', questions: [...rows, added] }
-    const sent = arrangedQuestions(values, copied, 'c1') as Record<string, unknown>[]
+    const sent = arrangedQuestions(values, copied) as Record<string, unknown>[]
     expect(sent).toHaveLength(3)
     expect(sent[2]).toMatchObject({ text: 'Del banco.', order: 2, sourceQuestionBankItemId: 'b1' })
   })

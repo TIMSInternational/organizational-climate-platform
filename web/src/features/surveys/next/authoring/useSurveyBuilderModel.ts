@@ -206,7 +206,7 @@ export function useSurveyBuilderModel(companyId: string) {
       if (template !== null && arrangementChanged(values.questions, template)) {
         try {
           const copied = await getSurveyQuestionAuthoring(baseUrl, created.id)
-          await replaceSurveyQuestions(baseUrl, created.id, arrangedQuestions(values, copied.questions, companyId))
+          await replaceSurveyQuestions(baseUrl, created.id, arrangedQuestions(values, copied.questions))
         } catch (error) {
           // The survey exists with the template's questions. The draft goes — submitting it
           // again would create a second survey — and the author is sent to the editor that

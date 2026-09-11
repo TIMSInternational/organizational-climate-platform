@@ -924,9 +924,12 @@ describe('SurveyCreatePage template mode', () => {
     expect(body.title).toBe('Standard Climate Instrument')
     expect(body.companyId).toBe('company-1')
     expect(body.startDate).toEqual(expect.any(String))
-    // Each of these would be a silent downgrade if the wizard sent it.
+    // The questions would be a silent downgrade if the wizard sent them back.
     expect(body.questions).toBeUndefined()
-    expect(body.language).toBeUndefined()
+    // The language is sent — `UseSurveyTemplateRequest.Language` is honoured ahead of the
+    // inference (`SurveyTemplateEndpoints.UseAsync`) — and this wizard sends the template's own,
+    // the value the server would have inferred: never a language the template holds no text in.
+    expect(body.language).toBe('en')
     // And the blank path must not have run at all.
     expect(calls.some((call) => call.method === 'POST' && /\/surveys(\?|$)/.test(call.url))).toBe(
       false,

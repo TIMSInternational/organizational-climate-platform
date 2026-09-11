@@ -24,8 +24,8 @@ function values(over: Partial<SurveyWizardValues> = {}): SurveyWizardValues {
 describe('buildCreateInput — bank provenance (#110)', () => {
   it('sends sourceQuestionBankItemId for a question picked from the bank, and nothing for one written here', () => {
     const input = buildCreateInput(values(), 'c1')
-    expect(input.questions[0].sourceQuestionBankItemId).toBe('b1')
-    expect('sourceQuestionBankItemId' in input.questions[1]).toBe(false)
+    expect(input.questions?.[0]?.sourceQuestionBankItemId).toBe('b1')
+    expect('sourceQuestionBankItemId' in (input.questions?.[1] ?? {})).toBe(false)
   })
 })
 

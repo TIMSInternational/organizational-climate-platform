@@ -3143,8 +3143,10 @@
         "copyLoadFailed": "The invitation text could not be read.",
         "remindersOne": "1 reminder sent.",
         "reminder": {
-          "scheduled": "One scheduled for {date}, {days} days after the last send, only to those who have not answered.",
-          "scheduledOneDay": "One scheduled for {date}, a day after the last send, only to those who have not answered.",
+          "scheduled": "One scheduled for {date}, {days} days before the close, only to those who have not answered.",
+          "scheduledOneDay": "One scheduled for {date}, a day before the close, only to those who have not answered.",
+          "scheduledCloseDay": "One scheduled for {date}, on the day of the close, only to those who have not answered.",
+          "scheduledPlain": "One scheduled for {date}, only to those who have not answered.",
           "awaiting": "They go out on their own every {days} days after the invitation, up to {max}, only to those who have not answered.",
           "awaitingOneDay": "They go out on their own every day after the invitation, up to {max}, only to those who have not answered.",
           "off": "Automatic reminders are off for this survey.",

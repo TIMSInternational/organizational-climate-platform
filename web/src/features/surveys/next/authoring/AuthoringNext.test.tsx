@@ -11,7 +11,8 @@ import type { SurveyDetail } from '../../api/surveys'
 import type { SurveyInvitationDetail, SurveyInvitationList } from '../../api/surveyDistribution'
 import type { AuthoringQuestion } from '../../api/surveyQuestionAuthoring'
 import { SurveyDetailView } from './SurveyDetailNextPage'
-import SurveyDistributionNextPage, { DistributionView, INVITATION_COLUMNS, INVITATION_PREVIEW_ROWS } from './SurveyDistributionNextPage'
+import SurveyDistributionNextPage, { DistributionView, INVITATION_PREVIEW_ROWS } from './SurveyDistributionNextPage'
+import { INVITATION_COLUMNS } from './launch'
 import SurveyBuilderNextPage from './SurveyBuilderNextPage'
 import type { DistributionActions, DistributionModel } from './useDistributionModel'
 import * as drafts from '../../api/surveyDrafts'
@@ -346,11 +347,18 @@ describe('Distribución (Distribution artboard)', () => {
     expect(reading('tile-reach')).toBe('41')
   })
 
-  it('dates the next automatic reminder from the schedule the worker runs, and never says they go by hand', () => {
-    distribution(invitationList(2, { sentAt: '2026-09-10T15:30:00Z' }))
+  it('dates the next automatic reminder from the schedule the worker runs, in the artboard\'s words, and never says they go by hand', () => {
+    // Sent 10 Sep, every 3 days: due 13 Sep; the survey closes 10 Oct — 27 days later.
+    distribution(invitationList(2, { sentAt: '2026-09-10T12:00:00Z' }))
     const text = screen.getByTestId('step-reminders').textContent ?? ''
-    expect(text).toContain('Ningún recordatorio enviado todavía. Uno programado para el 13 sep, 3 días después del último envío')
+    expect(text).toContain(
+      'Ningún recordatorio enviado todavía. Uno programado para el 13 sep, 27 días antes del cierre, solo a quienes no hayan respondido.',
+    )
     expect(text).not.toContain('a mano')
+    cleanup()
+    // Sent 6 Oct: due 9 Oct, the day before the close.
+    distribution(invitationList(2, { sentAt: '2026-10-06T12:00:00Z' }))
+    expect(screen.getByTestId('step-reminders').textContent).toContain('Uno programado para el 9 oct, un día antes del cierre,')
   })
 
   it('says the reminders are off when the survey turned them off', () => {
@@ -465,7 +473,11 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     expect(list.querySelectorAll('[data-slot="drag-grip"]')).toHaveLength(2)
     const switches = within(list).getAllByRole('switch')
     expect(switches).toHaveLength(2)
-    for (const toggle of switches) expect(toggle.hasAttribute('disabled')).toBe(false)
+    for (const toggle of switches) {
+      expect(toggle.hasAttribute('disabled')).toBe(false)
+      // The artboard's bright green (#12945b, SurveyBuilder.dc.html), not the darker chip ink.
+      expect(toggle.getAttribute('class')).toContain('data-[state=checked]:bg-accent-green')
+    }
     await userEvent.click(within(list).getByRole('button', { name: 'Acciones de la pregunta 1' }))
     expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Subir', 'Bajar', 'Eliminar'])
   })
@@ -484,7 +496,10 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     vi.mocked(templatesApi.getSurveyTemplate).mockImplementation(async (_base, _id, lang) => templateRead(lang === 'en' ? 'en' : 'es', 'both'))
     restoreDraft(4)
     await openBuilder()
-    await waitFor(() => expect(templatesApi.getSurveyTemplate).toHaveBeenCalledWith(expect.anything(), 't1', 'en'))
+    await waitFor(() =>
+      expect(vi.mocked(templatesApi.getSurveyTemplate).mock.calls.some(([, id, lang]) => id === 't1' && lang === 'en')).toBe(true),
+    )
+    await within(await screen.findByTestId('builder-questions')).findByText('Confío en la dirección.')
     const language = screen.getByRole('combobox', { name: 'Idioma del contenido' })
     expect(language.textContent).toContain('Español')
     expect(language.hasAttribute('disabled')).toBe(false)
@@ -495,8 +510,7 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     vi.mocked(templatesApi.instantiateSurveyTemplate).mockResolvedValue({ id: 'new-survey' } as never)
     restoreDraft(5)
     await openBuilder()
-    await waitFor(() => expect(templatesApi.getSurveyTemplate).toHaveBeenCalled())
-    await screen.findByText('2')
+    await waitFor(() => expect(screen.getByTestId('builder-step').textContent).toContain('Preguntas2'))
     await userEvent.click(screen.getByRole('button', { name: 'Crear el borrador' }))
     await waitFor(() => expect(templatesApi.instantiateSurveyTemplate).toHaveBeenCalledTimes(1))
     expect(vi.mocked(templatesApi.instantiateSurveyTemplate).mock.calls[0][2]).toMatchObject({ language: 'es', title: 'Clima Q1' })

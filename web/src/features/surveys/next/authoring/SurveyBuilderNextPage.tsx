@@ -344,8 +344,10 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                           </span>
                         </button>
                         <label className="mb-0 inline-flex shrink-0 items-center gap-2 text-sm text-fg-secondary">
+                          {/* The artboard's switch is #12945b (SurveyBuilder.dc.html), the accent
+                              green — the chip ink is a darker, text-weight green. */}
                           <Switch
-                            className="data-[state=checked]:bg-chip-good-ink"
+                            className="data-[state=checked]:bg-accent-green"
                             checked={question.required}
                             onCheckedChange={(value) => patchQuestion(own.key, { required: value === true })}
                           />

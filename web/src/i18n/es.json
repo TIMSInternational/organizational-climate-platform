@@ -3143,8 +3143,10 @@
         "copyLoadFailed": "No se pudo leer el texto de la invitación.",
         "remindersOne": "1 recordatorio enviado.",
         "reminder": {
-          "scheduled": "Uno programado para el {date}, {days} días después del último envío, solo a quienes no hayan respondido.",
-          "scheduledOneDay": "Uno programado para el {date}, un día después del último envío, solo a quienes no hayan respondido.",
+          "scheduled": "Uno programado para el {date}, {days} días antes del cierre, solo a quienes no hayan respondido.",
+          "scheduledOneDay": "Uno programado para el {date}, un día antes del cierre, solo a quienes no hayan respondido.",
+          "scheduledCloseDay": "Uno programado para el {date}, el mismo día del cierre, solo a quienes no hayan respondido.",
+          "scheduledPlain": "Uno programado para el {date}, solo a quienes no hayan respondido.",
           "awaiting": "Salen solos cada {days} días después de la invitación, hasta {max}, solo a quienes no hayan respondido.",
           "awaitingOneDay": "Salen solos cada día después de la invitación, hasta {max}, solo a quienes no hayan respondido.",
           "off": "Los recordatorios automáticos están apagados para esta encuesta.",

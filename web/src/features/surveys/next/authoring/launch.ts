@@ -9,6 +9,13 @@ import type { Department } from '../../../org-structure/api/departments'
  * typed. No region of either screen is sample-fed.
  */
 
+/**
+ * The invitation table's columns, placed where the Distribution artboard's grid puts them
+ * (`3fr 4fr 2fr 2fr`, 12px gaps and padding, measured at Correo x≈568, Departamento 872, Estado
+ * 1029 inside 325–1187): the same text positions as fractions of a fixed-layout table.
+ */
+export const INVITATION_COLUMNS = ['26.8%', '35.3%', '18.3%', '19.6%'] as const
+
 /** Share of the stated audience that answered, whole percent — or null when no audience was stated. */
 export function responseRate(responses: number, target: number | null): number | null {
   if (target === null || target <= 0) return null
@@ -99,8 +106,12 @@ const MIN_FREQUENCY_DAYS = 1
 const OUTSTANDING: ReadonlySet<string> = new Set(['pending', 'sent', 'opened', 'started'])
 
 export type ReminderOutlook =
-  /** The earliest reminder the sweep will raise, as an ISO instant. */
-  | { kind: 'scheduled'; at: string }
+  /**
+   * The earliest reminder the sweep will raise, as an ISO instant, and how many calendar days
+   * before the close it leaves (the dates the line prints, in the reader's timezone) — null when
+   * the close cannot be read.
+   */
+  | { kind: 'scheduled'; at: string; beforeClose: number | null }
   /** `settings.notificationSendReminders` is off: the sweep skips the survey. */
   | { kind: 'off' }
   /** The sweep reads active surveys only (`InvitationReminderJob.SweepSurveysAsync`). */
@@ -145,7 +156,10 @@ export function nextReminder(input: {
   }
   if (earliest !== null) {
     // An overdue reminder leaves on the sweep's next tick, so it is today's, not a past date's.
-    return { kind: 'scheduled', at: new Date(Math.max(earliest, input.now.getTime())).toISOString() }
+    const at = new Date(Math.max(earliest, input.now.getTime()))
+    // The artboard's clause — "tres días antes del cierre" — with the real distance, counted
+    // over the two dates the line and the tiles print.
+    return { kind: 'scheduled', at: at.toISOString(), beforeClose: daysFrom(input.endDate, at) }
   }
   return input.invitations.some((invitation) => invitation.sentAt !== null) ? { kind: 'none' } : { kind: 'awaiting' }
 }

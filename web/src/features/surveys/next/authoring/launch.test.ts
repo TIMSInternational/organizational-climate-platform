@@ -111,21 +111,26 @@ describe('surveyAudience', () => {
 describe('nextReminder (ReminderSchedule.Evaluate over the invitation list)', () => {
   const now = new Date('2026-09-11T12:00:00Z')
   const row = (over: Record<string, unknown> = {}) => ({
-    id: 'i', status: 'sent', sentAt: '2026-09-10T15:30:00Z', completedAt: null, reminderCount: 0,
-    lastReminderSent: null, expiresAt: '2026-10-10T02:03:39Z', ...over,
+    id: 'i', status: 'sent', sentAt: '2026-09-10T12:00:00Z', completedAt: null, reminderCount: 0,
+    lastReminderSent: null, expiresAt: '2026-10-10T12:00:00Z', ...over,
   }) as never
   const outlook = (invitations: never[] | null, over: Record<string, unknown> = {}) =>
-    nextReminder({ invitations, status: 'active', endDate: '2026-10-10T02:03:39Z', sendReminders: true, frequencyDays: 3, now, ...over })
+    nextReminder({ invitations, status: 'active', endDate: '2026-10-10T12:00:00Z', sendReminders: true, frequencyDays: 3, now, ...over })
 
-  it('schedules the first reminder frequencyDays after the invitation went out', () => {
-    expect(outlook([row()])).toEqual({ kind: 'scheduled', at: '2026-09-13T15:30:00.000Z' })
+  it('schedules the first reminder frequencyDays after the invitation went out, and counts the days left to the close', () => {
+    expect(outlook([row()])).toEqual({ kind: 'scheduled', at: '2026-09-13T12:00:00.000Z', beforeClose: 27 })
   })
 
   it('anchors on the last reminder once one went out, and takes the earliest due', () => {
-    expect(outlook([row({ reminderCount: 1, lastReminderSent: '2026-09-12T08:00:00Z' }), row({ sentAt: '2026-09-11T09:00:00Z' })])).toEqual({
+    expect(outlook([row({ reminderCount: 1, lastReminderSent: '2026-09-12T12:00:00Z' }), row({ sentAt: '2026-09-11T12:00:00Z' })])).toEqual({
       kind: 'scheduled',
-      at: '2026-09-14T09:00:00.000Z',
+      at: '2026-09-14T12:00:00.000Z',
+      beforeClose: 26,
     })
+  })
+
+  it('counts a reminder due the day before the close as one day before it', () => {
+    expect(outlook([row({ sentAt: '2026-10-06T12:00:00Z' })])).toEqual({ kind: 'scheduled', at: '2026-10-09T12:00:00.000Z', beforeClose: 1 })
   })
 
   it('stops at the cap, skips the answered and the revoked, and never schedules past the close or the expiry', () => {
@@ -145,8 +150,8 @@ describe('nextReminder (ReminderSchedule.Evaluate over the invitation list)', ()
   })
 
   it('floors the interval at one day and dates an overdue reminder today, not in the past', () => {
-    expect(outlook([row()], { frequencyDays: 0 })).toEqual({ kind: 'scheduled', at: '2026-09-11T15:30:00.000Z' })
-    expect(outlook([row({ sentAt: '2026-09-01T00:00:00Z' })])).toEqual({ kind: 'scheduled', at: now.toISOString() })
+    expect(outlook([row()], { frequencyDays: 0 })).toEqual({ kind: 'scheduled', at: '2026-09-11T12:00:00.000Z', beforeClose: 29 })
+    expect(outlook([row({ sentAt: '2026-09-01T12:00:00Z' })])).toEqual({ kind: 'scheduled', at: now.toISOString(), beforeClose: 29 })
   })
 })
 

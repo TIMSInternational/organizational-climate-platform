@@ -42,6 +42,7 @@ import ShareLinkQr from '../../components/ShareLinkQr'
 import { IconBox, TH_CLASS } from '../../../shared-next/parts'
 import { Card, Meter, ReadingTile, ShareLinkField, WithReading, type ShareLinkAction } from './parts'
 import {
+  INVITATION_COLUMNS,
   MAX_REMINDERS,
   dayMonth,
   daysFrom,
@@ -65,13 +66,6 @@ import {
 
 /** How many invitation rows the checklist shows before "Ver las n". */
 export const INVITATION_PREVIEW_ROWS = 4
-
-/**
- * The invitation table's columns, placed where the Distribution artboard's grid puts them
- * (`3fr 4fr 2fr 2fr`, 12px gaps and padding, measured at Correo x≈568, Departamento 872, Estado
- * 1029 inside 325–1187): the same text positions as fractions of a fixed-layout table.
- */
-export const INVITATION_COLUMNS = ['26.8%', '35.3%', '18.3%', '19.6%'] as const
 
 /**
  * Distribución, redesigned (canvas board "Distribution") — `/surveys/:surveyId/distribution`.
@@ -459,10 +453,10 @@ export function DistributionView({
                 </TableBody>
               </Table>
               {invitations.invitations.length > INVITATION_PREVIEW_ROWS && (
-                <p className="m-0 border-t border-line-light px-3 py-2 text-sm text-fg-tertiary">
+                <p className="m-0 border-t border-line-light px-3 py-2 text-sm text-fg-secondary">
                   {!showAll && `${copy('more', { count: invitations.invitations.length - INVITATION_PREVIEW_ROWS })} · `}
-                  {/* The artboard's link ink (#4a3d72, measured in Distribution.png), not the
-                      accent blue of the link variant. */}
+                  {/* The artboard's link ink — `a { color: #4a3d72 }` in Distribution.dc.html, the
+                      secondary ink (tokens.css) — not the accent blue of the link variant. */}
                   <Button
                     type="button"
                     variant="link"
@@ -628,7 +622,8 @@ const REACH_UNIT = { invited: 'reachInvited', directory: 'reachAudience', stated
 
 /**
  * The reminders' second sentence: when the next automatic one leaves, in the artboard's words
- * ("Uno programado para el 7 oct, …") with the real date — or why none is scheduled.
+ * ("Uno programado para el 7 oct, tres días antes del cierre, …") with the real date and the real
+ * distance to the close — or why none is scheduled.
  */
 function ReminderLine({
   outlook,
@@ -643,10 +638,19 @@ function ReminderLine({
 }) {
   const every = Math.max(1, days)
   if (outlook.kind === 'scheduled') {
+    const before = outlook.beforeClose
     return (
       <WithReading
         reading={dayMonth(outlook.at, locale)}
-        text={(date) => (every === 1 ? copy('reminder.scheduledOneDay', { date }) : copy('reminder.scheduled', { date, days: every }))}
+        text={(date) =>
+          before === null || before < 0
+            ? copy('reminder.scheduledPlain', { date })
+            : before === 0
+              ? copy('reminder.scheduledCloseDay', { date })
+              : before === 1
+                ? copy('reminder.scheduledOneDay', { date })
+                : copy('reminder.scheduled', { date, days: before })
+        }
       />
     )
   }

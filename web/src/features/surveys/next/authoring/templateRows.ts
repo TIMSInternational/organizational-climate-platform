@@ -2,7 +2,7 @@ import type { QuestionBankItemDetail } from '../../../questions/api/questionBank
 import { toQuestionInputs, type AuthoringQuestion } from '../../api/surveyQuestionAuthoring'
 import type { SurveyTemplateDetail } from '../../api/surveyTemplates'
 import {
-  buildCreateInput,
+  buildQuestionInputs,
   emptyQuestion,
   type ContentLanguage,
   type SurveyQuestionValues,
@@ -105,13 +105,9 @@ export function arrangementChanged(rows: readonly SurveyQuestionValues[], templa
  * required flag. A row the author added sends what `POST /surveys` would, bank provenance
  * included.
  */
-export function arrangedQuestions(
-  values: SurveyWizardValues,
-  copied: readonly AuthoringQuestion[],
-  companyId: string,
-): unknown[] {
+export function arrangedQuestions(values: SurveyWizardValues, copied: readonly AuthoringQuestion[]): unknown[] {
   const byOrder = new Map(copied.map((question) => [question.order, question]))
-  const own = buildCreateInput(values, companyId).questions ?? []
+  const own = buildQuestionInputs(values)
   return values.questions.map((row, index) => {
     const source = row.templateOrder === undefined ? undefined : byOrder.get(row.templateOrder)
     if (source !== undefined) return toQuestionInputs([{ ...source, required: row.required, order: index }])[0]
