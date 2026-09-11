@@ -34,7 +34,7 @@ const same = (a: NotificationPreferences, b: NotificationPreferences) =>
   EMAILS.every(({ key }) => a[key] === b[key]) && a.digestFrequency === b.digestFrequency
 
 /** "los 4 correos configurables activados y resumen semanal", from what the account holds. */
-export function savedSummary(t: TranslateFn, saved: NotificationPreferences): string {
+function savedSummary(t: TranslateFn, saved: NotificationPreferences): string {
   const on = EMAILS.filter(({ key }) => saved[key]).length
   const emails =
     on === EMAILS.length
