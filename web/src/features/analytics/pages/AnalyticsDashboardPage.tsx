@@ -25,6 +25,8 @@ import {
 import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router'
 import { KpiRow, SectionHeading } from '../../dashboard/components/dashboardGrammar'
+import { readViewerClaims } from '../../../auth/viewerCapabilities'
+import SuperAnalyticsView from '../next/super/SuperAnalyticsView'
 
 /**
  * The analytics dashboard for one company: benchmarks, and the AI insights raised against
@@ -58,6 +60,14 @@ import { KpiRow, SectionHeading } from '../../dashboard/components/dashboardGram
  * measured 2026-09-03, it does.)
  */
 export default function AnalyticsDashboardPage() {
+  // The per-role canvas (10 Sep): a super administrator reading one tenant's analytics gets
+  // `../next/super/SuperAnalyticsView` — the tenant named, the switcher on the page, and a
+  // disabled-insights tenant as a sentence. Read off the claim so this page still renders
+  // outside `CompanyContextProvider`. A company administrator keeps this page.
+  return readViewerClaims().role === 'super_admin' ? <SuperAnalyticsView /> : <AnalyticsDashboardPageForAdmins />
+}
+
+function AnalyticsDashboardPageForAdmins() {
   const { t, locale } = useTranslation()
   const { companyId } = useParams<{ companyId: string }>()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string

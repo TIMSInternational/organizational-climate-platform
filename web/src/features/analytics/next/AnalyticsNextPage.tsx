@@ -3,11 +3,13 @@ import { Link, useParams } from 'react-router'
 import { PageTopBar } from '../../../components/layout'
 import { Button, Chip, ErrorState, LoadingRegion, SkeletonText, Table } from '../../../components/ui'
 import { useCompanyName } from '../../../company-context/useCompanyName'
+import { readViewerClaims } from '../../../auth/viewerCapabilities'
 import { useTranslation } from '../../../i18n'
 import { insightPriorityLabel } from '../insightVocabulary'
 import { EmptyRow, IconBox, PanelHeading, TABLE_CARD_CLASS, TH_CLASS } from '../../shared-next/parts'
 import { openInsightCount, priorityTone, type BenchmarkRow } from './model'
 import { useAnalyticsModel } from './useAnalyticsModels'
+import SuperAnalyticsView from './super/SuperAnalyticsView'
 
 /**
  * Analítica, redesigned (canvas board "AnalyticsDashboard"): one job — which references
@@ -23,6 +25,14 @@ import { useAnalyticsModel } from './useAnalyticsModels'
 const MAX_INSIGHTS_BESIDE = 3
 
 export default function AnalyticsNextPage() {
+  // The route's one role branch (#471): a super administrator reading one tenant's analytics gets
+  // the per-role canvas's `./super/SuperAnalyticsView`, as the old AnalyticsDashboardPage dispatched
+  // before this page replaced it on the route. Read off the claim, as that page does, so it renders
+  // outside CompanyContextProvider. Every other role gets the company administrator's board.
+  return readViewerClaims().role === 'super_admin' ? <SuperAnalyticsView /> : <AnalyticsNextPageForAdmins />
+}
+
+function AnalyticsNextPageForAdmins() {
   const { t } = useTranslation()
   const { companyId } = useParams<{ companyId: string }>()
   const companyName = useCompanyName()

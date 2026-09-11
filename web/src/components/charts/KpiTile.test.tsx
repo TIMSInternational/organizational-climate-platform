@@ -159,6 +159,15 @@ describe('KpiTile eyebrow', () => {
   })
 })
 
+describe('KpiTile valueText', () => {
+  it('prints a reading that is a name, not a number, in the instrument face: the canvas’s "Q3"', () => {
+    render(<KpiTile label="Last closed survey" value={null} valueText="Q3" unit="closed 6 Aug" />)
+    const reading = screen.getByText('Q3')
+    expect(reading.className).toContain('font-mono')
+    expect(screen.queryByText('—')).toBeNull()
+  })
+})
+
 describe('KpiTile canvas line box', () => {
   it('sets the hero and large labels in the 15px line box of the artboards’ `.label` and `.eyebrow`', () => {
     render(<KpiTile label="Hero" value={24} size="hero" />)

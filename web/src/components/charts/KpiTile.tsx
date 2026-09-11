@@ -83,6 +83,12 @@ export interface KpiTileProps {
    * this off.
    */
   unit?: React.ReactNode
+  /**
+   * The reading as text, for a tile whose reading is a name rather than a number — the
+   * per-role canvas's "Q3" under *Última encuesta cerrada*. Wins over `value` when
+   * given, and is still set in the instrument face.
+   */
+  valueText?: string
   /** BCP-47 locale. Defaults to the document's language. */
   locale?: string
   /**
@@ -114,6 +120,7 @@ export default function KpiTile({
   sub,
   changeLabel,
   unit,
+  valueText,
   locale,
   size = 'default',
   className,
@@ -168,7 +175,7 @@ export default function KpiTile({
           second line, which is what `sub` is for. */}
       <div className="mt-1.5 flex flex-wrap items-baseline gap-2">
         <span data-slot="kpi-value" className={cn('font-mono tabular-nums', SIZES[size].value)}>
-          {value === null ? EM_DASH : formatMetric(value, format, locale)}
+          {valueText ?? (value === null ? EM_DASH : formatMetric(value, format, locale))}
         </span>
         {unit && <span className="text-sm text-fg-secondary">{unit}</span>}
       </div>

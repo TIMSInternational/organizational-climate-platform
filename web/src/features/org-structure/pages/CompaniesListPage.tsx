@@ -1,3 +1,9 @@
+/**
+ * **Unrouted since 10 Sep 2026 — kept as the wiring reference.** `/admin/companies` is now
+ * `../next/super/CompaniesListNextPage` (the per-role canvas's *Empresas*), which makes the
+ * same `GET`/`POST /admin/companies` calls through the same `CompanyForm`. Nothing imports
+ * this file; it stays until that page has shipped a release.
+ */
 import { useEffect, useState } from 'react'
 import { listCompanies, createCompany, type Company } from '../api/companies'
 import CompanyList from '../components/CompanyList'

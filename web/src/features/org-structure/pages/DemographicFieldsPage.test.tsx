@@ -80,7 +80,10 @@ function serve(fields: () => DemographicField[], people?: number) {
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn())
-  setToken(tokenFor({ role: 'super_admin', companyId: '' }))
+  // company_admin, not super_admin: a super administrator now gets
+  // `next/super/SuperDemographicFieldsView` (the per-role canvas, 10 Sep), pinned by its own tests. This file
+  // pins the page every other admin still gets.
+  setToken(tokenFor({ role: 'company_admin', companyId: COMPANY }))
 })
 
 afterEach(() => {
