@@ -153,7 +153,7 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
         {!collapsed && (
           <>
             <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-              <span style={{ display: 'block', fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ display: 'block', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {name ?? t('shell.account')}
               </span>
               {/* Truncated like the name above it. Without this the role wrapped to
@@ -166,7 +166,7 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
                   title={t(roleKey)}
                   style={{
                     display: 'block',
-                    fontSize: 10,
+                    fontSize: 11,
                     color: 'var(--admin-font-tertiary)',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',

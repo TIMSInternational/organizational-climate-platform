@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, within } from '@testing-library/react'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { render, screen, cleanup, within, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import AdminDashboardNextView from './AdminDashboardNextView'
+import { getCompanyDashboardExport } from '../api/dashboardExport'
+import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import { sampleModel } from './sampleModel'
 import type { AdminDashboardModel, RegionStatuses } from './model'
 import { TranslationProvider } from '../../../i18n'
@@ -9,8 +12,15 @@ import { CompanyContextProvider } from '../../../company-context'
 import { setToken } from '../../../auth/token'
 import { tokenFor } from '../../../test/jwtFixture'
 import en from '../../../i18n/en.json'
+import { calendarDay } from '../../../lib/calendarDay'
 
 const copy = en.dashboard.next
+
+vi.mock('../api/dashboardExport', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api/dashboardExport')>()),
+  getCompanyDashboardExport: vi.fn(),
+}))
+vi.mock('../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
 
 /**
  * The view reads the viewer's capabilities off the stored token, so every render names a
@@ -46,6 +56,8 @@ describe('AdminDashboardNextView', () => {
   beforeEach(() => {
     window.localStorage.clear()
     window.localStorage.setItem('preferredLocale', 'en')
+    vi.mocked(getCompanyDashboardExport).mockReset()
+    vi.mocked(downloadBlobFile).mockReset()
   })
   afterEach(() => {
     cleanup()
@@ -75,6 +87,15 @@ describe('AdminDashboardNextView', () => {
     )
   })
 
+  it('opens its first section 20px under the rule, as Dashboard.dc.html does (margin-top: 20px)', () => {
+    // PageTopBar leaves 24px, the list's and the trends' gap; the dashboard pulls up 4px.
+    // happy-dom has no layout, so the class is what can be pinned; the 1440 shot reads the
+    // tiles at y=237 against the artboard's 238.
+    renderView()
+    const sections = document.querySelector('[data-slot="dashboard-sections"]')
+    expect(sections?.className.split(/\s+/)).toContain('-mt-1')
+  })
+
   it('prints no digit anywhere on a protected map row', () => {
     renderView()
     const header = screen.getByRole('rowheader', { name: /Finanzas/ })
@@ -88,7 +109,8 @@ describe('AdminDashboardNextView', () => {
 
   it('marks exactly the two dimensions below the target as below target', () => {
     renderView()
-    const chips = screen.getAllByText(copy.belowTarget)
+    // Counted on the cards: the map's key says the same words, "bajo la meta", by design.
+    const chips = screen.getAllByText(copy.belowTarget).filter((chip) => chip.closest('[data-slot="trend-card"]'))
     expect(chips).toHaveLength(2)
     const dimensions = chips
       .map((chip) => chip.closest('[data-slot="trend-card"]')?.getAttribute('data-dimension'))
@@ -128,11 +150,14 @@ describe('AdminDashboardNextView', () => {
     expect(linksMatching(/^\/microclimates\/[^/]+\/live$/)).toEqual([])
   })
 
-  it('offers a leader their own node’s progress action and their export, and nothing else', () => {
+  it('offers a leader their own node’s progress action, and not the company’s export', () => {
     renderView(sampleModel, { role: 'leader', nodoId: 'nodo-finanzas' })
     expect(screen.queryByRole('link', { name: copy.newSurvey })).toBeNull()
     expect(screen.queryByRole('link', { name: copy.launchMicroclimate })).toBeNull()
-    expect(screen.getByRole('button', { name: copy.export })).toBeTruthy()
+    // The button now fetches `/dashboard/company-admin/export`, which is the whole
+    // company's file: an admin with a company. A leader's export is the department's
+    // (`DashboardEndpoints.cs:124`), on the dashboard a leader actually lands on.
+    expect(screen.queryByRole('button', { name: copy.export })).toBeNull()
     const items = Array.from(document.querySelectorAll('[data-slot="attention-item"]')) as HTMLElement[]
     expect(items).toHaveLength(3)
     expect(within(items[0]).queryByRole('link')).toBeNull()
@@ -220,5 +245,192 @@ describe('AdminDashboardNextView', () => {
     expect(tiles[1].textContent).toContain('100%')
     expect(tiles[1].textContent).toContain('Finanzas')
     expect(tiles[3].textContent).toContain('Finanzas')
+  })
+  it('wires Exportar to the file the server renders: one button, two formats, fetched with the bearer', async () => {
+    vi.mocked(getCompanyDashboardExport).mockResolvedValue(new Blob(['csv']))
+    renderView()
+    await userEvent.click(screen.getByRole('button', { name: copy.export }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: en.dashboard.exportCsv }))
+    await waitFor(() => expect(vi.mocked(downloadBlobFile)).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(getCompanyDashboardExport).mock.calls[0]?.slice(1)).toEqual(['csv', { companyId: undefined, lang: 'en' }])
+  })
+
+  it('says so when the export fails, and does not swallow it', async () => {
+    vi.mocked(getCompanyDashboardExport).mockRejectedValue(new Error('Request failed: 500'))
+    renderView()
+    await userEvent.click(screen.getByRole('button', { name: copy.export }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: en.dashboard.exportPdf }))
+    expect((await screen.findByRole('alert')).textContent).toBe(en.dashboard.exportFailed)
+    expect(vi.mocked(downloadBlobFile)).not.toHaveBeenCalled()
+  })
+
+  it('judges "below target" at the decimal the card prints: a 3.67 reads 3.7 and is on target', () => {
+    const dimensions = sampleModel.dimensions.map((dimension) =>
+      dimension.key === 'confianza' ? { ...dimension, values: [2.96, 3.33, 3.67] } : dimension,
+    )
+    renderView({ ...sampleModel, dimensions })
+    const card = document.querySelector('[data-slot="trend-card"][data-dimension="confianza"]') as HTMLElement
+    expect(card.textContent).toContain('3.7')
+    expect(card.getAttribute('data-below-target')).toBe('false')
+    expect(within(card).queryByText(copy.belowTarget)).toBeNull()
+  })
+
+  it('draws the trend cards highest latest reading first, whatever order the model holds them in', () => {
+    renderView({ ...sampleModel, dimensions: [...sampleModel.dimensions].reverse() })
+    const order = [...document.querySelectorAll('[data-slot="trend-card"]')].map((card) => card.getAttribute('data-dimension'))
+    // 4.0, then the two 3.8s in the order they came, then 3.7, 3.4, 3.3.
+    expect(order).toEqual(['pertenencia', 'seguridad', 'desarrollo', 'confianza', 'reconocimiento', 'carga'])
+  })
+
+  it('shows the climate move signed and without an arrow, in the good-news ink when it rose', () => {
+    renderView()
+    const move = document.querySelector('[data-slot="climate-move"]') as HTMLElement
+    expect(move.textContent).toContain('+0.32')
+    expect(move.textContent).not.toMatch(/[▲▼]/)
+    expect(move.className).toContain('text-accent-green-ink')
+  })
+
+  it('projects the next quarter as a hollow "to plan" step when nothing is planned after the open wave', () => {
+    renderView({ ...sampleModel, waves: sampleModel.waves.filter((wave) => wave.status !== 'planned') })
+    const steps = [...document.querySelectorAll('[data-slot="cycle-step"]')]
+    expect(steps).toHaveLength(5)
+    expect(steps[4].textContent).toContain('Q1 2027')
+    expect(steps[4].textContent).toContain(copy.wavePlanned)
+    // The open wave names itself as the canvas does, "Q4 open", over what its date means.
+    expect(steps[3].textContent).toContain(copy.waveOpen.replace('{code}', 'Q4'))
+    expect(steps[3].textContent).toContain(copy.waveCloses.replace('{date}', calendarDay(Date.parse('2026-10-10'), 'en')))
+  })
+
+  it('writes the overdue plan’s due date in words and its progress as the percentage it is', () => {
+    renderView()
+    const items = document.querySelectorAll('[data-slot="attention-item"]')
+    expect(items[1].textContent).toContain('August 20')
+    expect(items[1].textContent).toContain('0%')
+  })
+  it('draws the six sparklines on one scale, so their slopes compare', () => {
+    renderView()
+    const rules = [...document.querySelectorAll('[data-slot="trend-card"] line[data-slot="trend-target"]')]
+    expect(rules).toHaveLength(6)
+    // Fitted one by one, each target rule would sit at its own height.
+    expect(new Set(rules.map((rule) => rule.getAttribute('y1'))).size).toBe(1)
+  })
+
+  it('dates the live microclimate by the reader’s clock, since its end is an instant', () => {
+    // 02:06 UTC on the 12th is 20:06 on the 11th in Costa Rica; the canvas says "11 Sept".
+    const ambient = process.env.TZ
+    process.env.TZ = 'America/Costa_Rica'
+    try {
+      const live = sampleModel.liveMicroclimate!
+      renderView({ ...sampleModel, liveMicroclimate: { ...live, closesAt: '2026-09-12T02:06:08.992+00:00' } })
+      const sentence = (date: string) => copy.liveSub.replace('{date}', date).replace('{floor}', '5')
+      expect(document.body.textContent).toContain(sentence('Sep 11'))
+      expect(document.body.textContent).not.toContain(sentence('Sep 12'))
+    } finally {
+      if (ambient === undefined) delete process.env.TZ
+      else process.env.TZ = ambient
+    }
+  })
+
+  it('fits the shared scale to every reading, so no card draws a point outside its plot', () => {
+    // The first dimension reads 3.3–4.0; the last is far below it. A scale taken from any
+    // one dimension would push the other's points off the 60px sparkline.
+    const dimensions = sampleModel.dimensions.map((dimension, index) =>
+      index === sampleModel.dimensions.length - 1 ? { ...dimension, values: [1.6, 1.8, 2.0] } : dimension,
+    )
+    renderView({ ...sampleModel, dimensions })
+    const cards = [...document.querySelectorAll('[data-slot="trend-card"]')]
+    expect(cards).toHaveLength(6)
+    for (const card of cards) {
+      const svg = card.querySelector('svg[data-slot="trend-sparkline"]') as SVGElement
+      const height = Number(svg.getAttribute('viewBox')?.split(' ')[3])
+      const ys = [...card.querySelectorAll('circle')].map((circle) => Number(circle.getAttribute('cy')))
+      expect(ys.length).toBeGreaterThan(0)
+      for (const cy of ys) {
+        expect(cy).toBeGreaterThanOrEqual(0)
+        expect(cy).toBeLessThanOrEqual(height)
+      }
+    }
+  })
+
+  it('paints every map cell the step the Dashboard artboard paints it, rings none, and keys the steps by word', () => {
+    renderView()
+    const rows = [...document.querySelectorAll('table tbody tr')].filter(
+      (row) => row.querySelector('th[scope="row"]')?.textContent !== 'Finanzas',
+    )
+    const steps = rows.map((row) =>
+      [...row.querySelectorAll('td div')].map((cell) =>
+        (cell as HTMLElement).style.backgroundColor.replace(/^var\(--admin-chart-div-(.*)\)$/, '$1'),
+      ),
+    )
+    // build_admin.py tint() over the artboard's own cells: Ingeniería, Operaciones, Personas, Ventas.
+    expect(steps).toEqual([
+      ['pos-1', 'mid', 'pos-1', 'mid', 'pos-2', 'pos-2'],
+      ['neg-2', 'neg-2', 'neg-1', 'neg-1', 'neg-1', 'neg-1'],
+      ['pos-2', 'pos-1', 'pos-1', 'mid', 'pos-2', 'pos-2'],
+      ['pos-1', 'neg-1', 'pos-1', 'mid', 'pos-1', 'pos-1'],
+    ])
+    expect([...document.querySelectorAll('table td div')].some((cell) => (cell as HTMLElement).style.outline !== '')).toBe(false)
+    const legend = document.querySelector('[data-slot="climate-map-legend"]') as HTMLElement
+    expect(
+      [...legend.querySelectorAll('[data-legend]')].map((group) => [group.textContent, group.querySelectorAll('span').length]),
+    ).toEqual([
+      [en.charts.next.legendBelow, 2],
+      [en.charts.next.legendOn, 1],
+      [en.charts.next.legendAbove, 2],
+    ])
+    expect(legend.textContent).toContain(en.charts.next.legendProtected.replace('{threshold}', '5'))
+  })
+
+  it('heads the map with whole dimension names in the model’s column order, the whole name on hover', () => {
+    renderView()
+    const heads = [...document.querySelectorAll('table thead th')]
+    expect(heads.map((head) => head.textContent)).toEqual([
+      'Seguridad psicológica',
+      'Carga de trabajo',
+      'Confianza',
+      'Reconocimiento',
+      'Desarrollo',
+      'Pertenencia',
+    ])
+    expect(heads.map((head) => head.getAttribute('title'))).toEqual(heads.map((head) => head.textContent))
+  })
+
+  it('prints each card’s move as the difference of the readings it prints: 3,33 → 3,67 is +0,4', () => {
+    const dimensions = sampleModel.dimensions.map((dimension) =>
+      dimension.key === 'confianza' ? { ...dimension, values: [2.96, 3.33, 3.67] } : dimension,
+    )
+    renderView({ ...sampleModel, dimensions })
+    const card = document.querySelector('[data-slot="trend-card"][data-dimension="confianza"]') as HTMLElement
+    expect(card.querySelector('[data-slot="trend-move"]')?.textContent).toBe('+0.4')
+  })
+
+  it('words the climate tile, the moves legend and the rail as the artboard does', () => {
+    renderView()
+    expect(document.querySelector('[data-slot="climate-move"]')?.textContent).toContain(copy.riseOrdinal['2'])
+    expect(document.body.textContent).toContain(
+      copy.movedLegend.replace('{target}', '3.7').replace('{count}', copy.countWord['3']),
+    )
+    const steps = [...document.querySelectorAll('[data-slot="cycle-step"]')]
+    // The verb is on screen, not only for a screen reader.
+    expect(steps[0].textContent).toContain(copy.waveClosed.replace('{date}', calendarDay(Date.parse('2026-02-12'), 'en')))
+    expect(steps[0].querySelector('.sr-only')).toBeNull()
+  })
+
+  it('names the open survey as a sentence does and the live pulse by its head', () => {
+    const openSurvey = sampleModel.openSurvey ? { ...sampleModel.openSurvey, name: 'Encuesta de Clima Q4 (abierta)' } : null
+    renderView({ ...sampleModel, openSurvey })
+    const items = document.querySelectorAll('[data-slot="attention-item"]')
+    expect(items[2].textContent).toContain('Encuesta de Clima Q4 has')
+    expect(items[2].textContent).not.toContain('(abierta)')
+    const live = document.querySelector('[data-slot="live-microclimate"]') as HTMLElement
+    expect(live.textContent).toContain(copy.liveNamed.replace('{name}', 'Pulso semanal'))
+    expect(live.textContent).not.toContain('¿cómo fue la semana?')
+  })
+
+  it('sets the four tiles at the artboard’s hero size', () => {
+    renderView()
+    const values = [...document.querySelectorAll('[data-slot="kpi-value"]')]
+    expect(values).toHaveLength(4)
+    expect(values.every((value) => value.className.includes('text-kpi-hero'))).toBe(true)
   })
 })

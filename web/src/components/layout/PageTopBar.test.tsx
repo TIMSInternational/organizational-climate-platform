@@ -158,7 +158,7 @@ describe('PageTopBar', () => {
       return element!
     }
 
-    it('closes itself with a hairline rule, 16px under the content', () => {
+    it('closes itself with a hairline rule, 16px under the content, as every artboard does', () => {
       const { container } = renderTopBar({ title: 'Companies' })
       const classes = topBar(container).className.split(/\s+/)
       expect(classes).toContain('border-b')
@@ -171,7 +171,9 @@ describe('PageTopBar', () => {
       const { container } = renderTopBar({ title: 'Companies' })
       // `mb-section` is --admin-size-section-gap, 24px: the gap every artboard of
       // 10 Sep leaves under the header's hairline. UI-0 had narrowed it to 16px.
-      expect(topBar(container).className.split(/\s+/)).toContain('mb-section')
+      const classes = topBar(container).className.split(/\s+/)
+      expect(classes).toContain('mb-section')
+      expect(classes).not.toContain('mb-panel')
     })
 
     it('keeps 38px between the breadcrumb and the header, and 6px between its lines', () => {
@@ -200,7 +202,9 @@ describe('PageTopBar', () => {
       // canvas (10 Sep) draws every page title at 24px, and the class says so rather
       // than leaning on index.css's bare-`h1` size.
       const { container } = renderTopBar({ title: 'Companies' })
-      expect(container.querySelector('h1')!.className.split(/\s+/)).toContain('text-3xl')
+      const classes = container.querySelector('h1')!.className.split(/\s+/)
+      expect(classes).toContain('text-3xl')
+      expect(classes).not.toContain('text-2xl')
     })
 
     it('caps the description and nothing else', () => {

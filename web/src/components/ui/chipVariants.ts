@@ -19,18 +19,20 @@ import { cn } from '../../lib/cn'
  *
  * ## Geometry
  *
- * The prototype's `.chip` is `height:20px; border-radius:6px; font-size:11px;
- * font-weight:600; padding:0 7px; gap:5px`. Here: `h-5` (5 × the 4px
- * `--spacing` token = 20px), `rounded-lg` (`--admin-radius-lg`, 6px, which the
- * token file already labels "badges, chips"), `text-xs` (`--admin-text-xs`,
- * 11px) and `font-semibold` (600). Padding and gap round to the nearest step on
- * the 4px scale — `px-1.5` is 6px against the prototype's 7, `gap-1` is 4px
- * against its 5. Neither is worth a one-off token; the 20px height, which is
- * what makes a chip line up with a table row, is exact.
+ * The approved canvas's `.chip` (10 Sep, `shell.py`, drawn on every artboard) is
+ * `height:22px; border-radius:6px; padding:0 8px; gap:6px; font-size:11px;
+ * font-weight:500` with a 1px border in the tone's own tint — `rgba(18,148,91,.2)`
+ * on the green chip, `rgba(221,12,21,.2)` on the red, `#e0dbee` on the neutral.
+ * Here: `h-5.5` (5.5 × the 4px `--spacing` token = 22px), `rounded-lg`
+ * (`--admin-radius-lg`, 6px), `px-2` (8px), `gap-1.5` (6px), `text-xs`
+ * (`--admin-text-xs`, 11px) and `font-medium` (500). The first cut followed an
+ * earlier prototype (20px, 600, a hairline on `neutral` only); beside the
+ * artboards it read as a heavier, borderless tag.
  *
- * The transparent border is load-bearing, not decoration: `neutral` is the only
- * tone with a visible hairline, and without a transparent one on the other four
- * they would be 2px shorter than it.
+ * The borders are the `accent-*-ring` tokens, which ARE the canvas's tints
+ * (`--admin-accent-border-green` is `rgba(18,148,91,.2)`), and the neutral one is
+ * the default hairline. A border is not text, so `chipVariantContrast.test.ts`,
+ * which measures fill against ink, is unaffected by it.
  *
  * ## Why both the fill and the ink are chip tokens
  *
@@ -58,18 +60,18 @@ import { cn } from '../../lib/cn'
  */
 export const chipVariants = cva(
   cn(
-    'inline-flex h-5 w-fit shrink-0 items-center gap-1 whitespace-nowrap',
-    'rounded-lg border border-transparent px-1.5 text-xs font-semibold',
+    'inline-flex h-5.5 w-fit shrink-0 items-center gap-1.5 whitespace-nowrap',
+    'rounded-lg border px-2 text-xs font-medium',
     '[&>svg]:pointer-events-none [&>svg]:size-3',
   ),
   {
     variants: {
       tone: {
-        good: 'bg-chip-good-fill text-chip-good-ink',
-        warning: 'bg-chip-warning-fill text-chip-warning-ink',
-        critical: 'bg-chip-critical-fill text-chip-critical-ink',
-        accent: 'bg-chip-accent-fill text-chip-accent-ink',
-        neutral: 'border-line-light bg-chip-neutral-fill text-chip-neutral-ink',
+        good: 'border-accent-green-ring bg-chip-good-fill text-chip-good-ink',
+        warning: 'border-accent-amber-ring bg-chip-warning-fill text-chip-warning-ink',
+        critical: 'border-accent-red-ring bg-chip-critical-fill text-chip-critical-ink',
+        accent: 'border-accent-blue-ring bg-chip-accent-fill text-chip-accent-ink',
+        neutral: 'border-line-default bg-chip-neutral-fill text-chip-neutral-ink',
       },
     },
     defaultVariants: {

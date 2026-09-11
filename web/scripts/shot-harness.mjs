@@ -122,7 +122,15 @@ export function compileFixtures(raw) {
   return Object.entries(raw).map(([key, body]) => {
     const parts = key.trim().split(/\s+/)
     const method = parts.length > 1 ? parts[0].toUpperCase() : 'GET'
-    const path = parts.length > 1 ? parts[1] : parts[0]
+    const target = parts.length > 1 ? parts[1] : parts[0]
+    // An optional query in the key, `?groupBy=department`, narrows the fixture to
+    // requests carrying every one of those parameters. Two calls to ONE path with
+    // different queries — `/surveys/climate-trends` ungrouped and grouped by
+    // department, which every screen that reads a climate map makes back to back —
+    // are different payloads, and before this a fixture could only answer both with
+    // one body. A key with no query still matches any query, as it always has.
+    const [path, search = ''] = target.split('?', 2)
+    const query = Object.fromEntries(new URLSearchParams(search).entries())
     // Only a bare integer is a status. Anything else in that position is a malformed
     // key, and failing loudly beats silently photographing a 200 the author did not ask
     // for.
@@ -134,20 +142,36 @@ export function compileFixtures(raw) {
       .split('/')
       .map((segment) => (segment === '*' ? '[^/]+' : segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
       .join('/')
-    return { key, method, regex: new RegExp(`^${pattern}$`), status, body }
+    return { key, method, regex: new RegExp(`^${pattern}$`), query, status, body }
   })
 }
 
 /**
- * The first fixture whose method and path match, or `null`.
+ * The fixture whose method and path match, preferring the one whose query names the most
+ * parameters the request carries, or `null`.
  *
- * The query string never reaches here — callers pass `new URL(...).pathname` — because
- * several endpoints append `?lang=` or `?unreadOnly=true` and a fixture should not have
- * to spell that out.
+ * `path` may carry the request's query string (`/surveys/climate-trends?groupBy=department&lang=es`).
+ * A fixture key with no query matches whatever the request appended — several endpoints
+ * add `?lang=` or `?unreadOnly=true` and a fixture should not have to spell that out — and
+ * a key with a query matches only a request carrying every one of its parameters with the
+ * same value. Among matches the most specific wins, so `/surveys/climate-trends` and
+ * `/surveys/climate-trends?groupBy=department` can sit side by side in one file and each
+ * answer its own request.
  */
 export function matchFixture(fixtures, method, path) {
   const wanted = method.toUpperCase()
-  return fixtures.find((fixture) => fixture.method === wanted && fixture.regex.test(path)) ?? null
+  const [pathname, search = ''] = path.split('?', 2)
+  const params = new URLSearchParams(search)
+  const candidates = fixtures.filter(
+    (fixture) =>
+      fixture.method === wanted &&
+      fixture.regex.test(pathname) &&
+      Object.entries(fixture.query ?? {}).every(([name, value]) => params.get(name) === value),
+  )
+  if (candidates.length === 0) return null
+  return candidates.reduce((best, fixture) =>
+    Object.keys(fixture.query ?? {}).length > Object.keys(best.query ?? {}).length ? fixture : best,
+  )
 }
 
 /**

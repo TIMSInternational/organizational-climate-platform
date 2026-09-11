@@ -6,8 +6,9 @@
  *
  * It stays in the tree on purpose, as the wiring reference: `useClimateTrendsModel`
  * already makes this page's request through `getClimateTrends` with the resolved
- * company (the #124 rule below), and the redesign keeps this page's grid beneath its
- * charts. What this file still pins is the one-grouping-at-a-time reading and the
+ * company (the #124 rule below). The redesign draws the same numbers beneath its charts
+ * as a table of its own (`TrendsNumbersTable`), not this page's `ClimateMap` grid, and it
+ * leaves archived surveys out of the window. What this file still pins is the one-grouping-at-a-time reading and the
  * refetch-on-regroup it argues for below, which the redesign replaced with two
  * requests up front. Delete it when that argument has no other reader. Until then its
  * behaviour is pinned by `ClimateTrendsPage.test.tsx`, which renders it directly.

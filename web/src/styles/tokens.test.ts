@@ -6,6 +6,7 @@ import themeCss from './theme.css?raw'
 import indexCss from '../index.css?raw'
 import adminThemeSource from '../theme/adminTheme.ts?raw'
 import respondShellSource from '../components/layout/RespondShell.tsx?raw'
+import sidebarBrandSource from '../components/layout/SidebarBrand.tsx?raw'
 
 /**
  * The token layer is a port, not a design. These tests pin the two things a
@@ -85,8 +86,12 @@ describe('type scale', () => {
     const sizes = [...tokensCss.matchAll(/^\s*--admin-text-[\w-]+:\s*([^;]+);/gm)].map((m) =>
       m[1].trim(),
     )
-    expect(sizes.length).toBe(8)
+    // The legacy eight, and the canvas's four named steps (10 Sep): 9, 22, 26 and 28px.
+    expect(sizes.length).toBe(12)
     for (const size of sizes) expect(size).toMatch(/rem$/)
+    expect([token('--admin-text-3xs'), token('--admin-text-reading'), token('--admin-text-kpi-lg'), token('--admin-text-kpi-hero')]).toEqual(
+      ['0.5625rem', '1.375rem', '1.625rem', '1.75rem'],
+    )
   })
 
   it('does not pin the root font size', () => {
@@ -295,9 +300,59 @@ describe('class detection', () => {
   })
 })
 
+describe('hairlines in the dark palette', () => {
+  it('never draws a hairline in the colour of the surface it rules', () => {
+    // At #1f173b `--admin-border-light` WAS `--admin-bg-card`, so every light rule on a card
+    // — the dashboard's sparkline cards, the survey list's rows and participation track —
+    // vanished in dark.
+    expect(darkToken('--admin-border-light')).not.toBe(darkToken('--admin-bg-card'))
+    expect(darkToken('--admin-border-light')).not.toBe(darkToken('--admin-bg-panel'))
+  })
+})
+
+describe('the canvas shell', () => {
+  it('draws the rail at the canvas width: 220px of rows inside 8px gutters', () => {
+    // Every artboard: `<aside style="width: 220px; padding: 12px 8px">`, content-box.
+    expect(token('--admin-size-sidebar')).toBe('236px')
+  })
+
+  it('paints the at-target step in the canvas lavender, not a neutral grey', () => {
+    // Dashboard.png (Ingeniería 3,7) and ClimateTrends.png (Confianza Q3 3,7) sample
+    // rgb(207,205,217). The map, the trends table, the "en la meta" chip and the legend
+    // swatch all read this one token.
+    expect(token('--admin-chart-div-mid').toLowerCase()).toBe('#cfcdd9')
+  })
+
+  it('sets the wordmark in the canvas two tones, the tail in the muted lavender', () => {
+    expect(token('--admin-brand-lead').toLowerCase()).toBe('#e1ddee')
+    expect(token('--admin-brand-tail').toLowerCase()).toBe('#a69bc9')
+    expect(sidebarBrandSource).toContain("color: 'var(--admin-brand-lead)'")
+    expect(sidebarBrandSource).toContain("color: 'var(--admin-brand-tail)'")
+  })
+})
+
 describe('the shell rail', () => {
   it('is the canvas rail: a 220px column inside 8px gutters, 236px in all', () => {
     // Every artboard of 10 Sep draws it so; at 220px "Cerrar sesión" was cut.
     expect(token('--admin-size-sidebar')).toBe('236px')
+  })
+})
+
+/** A token's value with every `var()` followed and rem read at 16px — what the browser paints. */
+function paints(name: string): string {
+  let value = token(name).trim()
+  for (let hop = 0; hop < 6; hop++) {
+    const ref = /^var\((--[\w-]+)\)$/.exec(value)
+    if (!ref) break
+    value = token(ref[1]).trim()
+  }
+  const rem = /^([\d.]+)rem$/.exec(value)
+  return rem ? `${Number(rem[1]) * 16}px` : value
+}
+
+describe('the canvas section rhythm', () => {
+  it('leaves 24px between sections, as every artboard does (PageTopBar mb-section, the lists gap-section)', () => {
+    // A class test cannot see this: `mb-section` stays `mb-section` whatever the token says.
+    expect(paints('--admin-size-section-gap')).toBe('24px')
   })
 })
