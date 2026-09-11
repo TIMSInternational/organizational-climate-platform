@@ -11,6 +11,7 @@ import { getNotificationPreferences, updateNotificationPreferences, type Notific
 import { getProfile, type Profile } from '../../profile/api/profile'
 import NotificationsNextPage from './NotificationsNextPage'
 import en from '../../../i18n/en.json'
+import es from '../../../i18n/es.json'
 
 const copy = en.notifications.next
 
@@ -70,15 +71,29 @@ describe('NotificationsNextPage (/notifications)', () => {
 
   it('stands the sample rows in — marked — only when the real inbox loaded empty', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
-    expect(await screen.findByText('Plan atrasado en Finanzas')).toBeTruthy()
+    expect(await screen.findByText(copy.sample.planOverdue.title)).toBeTruthy()
     expect(document.querySelectorAll('[data-slot="sample-chip"]')).toHaveLength(1)
     cleanup()
 
     vi.mocked(listMyNotifications).mockResolvedValue([closed()])
     renderAs({ role: 'company_admin', companyId: 'c1' })
     expect(await screen.findByText('Q3 closed')).toBeTruthy()
-    expect(screen.queryByText('Plan atrasado en Finanzas')).toBeNull()
+    expect(screen.queryByText(copy.sample.planOverdue.title)).toBeNull()
     expect(document.querySelectorAll('[data-slot="sample-chip"]')).toHaveLength(0)
+  })
+
+  it('writes the stand-in rows in the viewer’s language, from the catalogue', async () => {
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    expect(await screen.findByText('Overdue plan in Finanzas')).toBeTruthy()
+    expect(screen.getByText(copy.sample.q3Reminder.body)).toBeTruthy()
+    expect(screen.queryByText('Plan atrasado en Finanzas')).toBeNull()
+    cleanup()
+
+    window.localStorage.setItem('preferredLocale', 'es')
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    expect(await screen.findByText('Plan atrasado en Finanzas')).toBeTruthy()
+    expect(screen.getByText(es.notifications.next.sample.q3Reminder.body)).toBeTruthy()
+    expect(document.querySelectorAll('[data-slot="notification-row"]')).toHaveLength(6)
   })
 
   it('offers the results only to a viewer who may open them', async () => {

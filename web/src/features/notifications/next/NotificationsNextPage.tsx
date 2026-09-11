@@ -8,7 +8,7 @@ import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { cn } from '../../../lib/cn'
 import { CanvasChip, CanvasSelect, Panel } from '../../org-structure/next/super/parts'
 import { PERIODS, facetCounts, matchesFacet, oldestShown, rowOf, withinPeriod, type Facet, type InboxRow, type RowIcon } from './derive'
-import { SAMPLE_ROWS } from './sampleModel'
+import { sampleRows } from './sampleModel'
 import { useNotificationsModel } from './useNotificationsModel'
 
 const K = 'notifications.next'
@@ -48,7 +48,7 @@ export default function NotificationsNextPage() {
     [state.notifications, capabilities],
   )
   const isSample = state.status === 'ready' && realRows.length === 0
-  const rows = isSample ? SAMPLE_ROWS : realRows
+  const rows = isSample ? sampleRows(t) : realRows
   const inPeriod = isSample ? rows : rows.filter((row) => withinPeriod(row, period, now))
   const counts = facetCounts(inPeriod)
   const shown = inPeriod.filter((row) => matchesFacet(row, facet))
@@ -237,7 +237,7 @@ function Row({ row, sample, date, onOpen }: { row: InboxRow; sample: boolean; da
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className={cn('text-base text-fg-primary', row.unread ? 'font-semibold' : 'font-medium')}>
-          {row.name}
+          {row.title}
           <span className="sr-only"> · {row.unread ? t('notifications.unread') : t('notifications.read')}</span>
         </span>
         <span className="text-sm text-fg-secondary">{row.body}</span>

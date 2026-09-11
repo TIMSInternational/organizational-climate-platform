@@ -1135,7 +1135,21 @@
       "inactiveHidden": "{count} departamentos inactivos ocultos. Conservan su historial de encuestas y no reciben invitaciones.",
       "inactiveShown": "{count} departamentos inactivos a la vista. Conservan su historial de encuestas y no reciben invitaciones.",
       "showInactive": "Mostrar inactivos",
-      "newDepartment": "Nuevo departamento"
+      "newDepartment": "Nuevo departamento",
+      "overdueInMany": "{count} atrasados · {department}",
+      "overdueMany": "{count} atrasados",
+      "plansOverdueMany": "{open} · {overdue} atrasados",
+      "tileActiveUnitOne": "departamento",
+      "tileInactiveUnitOne": "oculto",
+      "tilePlansUnitOne": "abierto",
+      "peopleUnitOne": "persona",
+      "rootDepartmentsOne": "{count} departamento activo",
+      "rootDepartmentsMany": "{count} departamentos activos",
+      "rootPeopleOne": "{count} persona",
+      "rootPeopleMany": "{count} personas",
+      "meanOfOne": "· media de {count} dimensión",
+      "inactiveHiddenOne": "{count} departamento inactivo oculto. Conserva su historial de encuestas y no recibe invitaciones.",
+      "inactiveShownOne": "{count} departamento inactivo a la vista. Conserva su historial de encuestas y no recibe invitaciones."
     }
   },
   "demographicFields": {
@@ -1695,7 +1709,33 @@
       "localMailAfter": ", así que en este entorno los avisos solo existen aquí, dentro de la aplicación. En producción también llegan por correo al remitente configurado.",
       "eyebrow": "Comunicación",
       "markAll": "Marcar todo como leído",
-      "localMailDomain": ".test"
+      "localMailDomain": ".test",
+      "sample": {
+        "planOverdue": {
+          "title": "Plan atrasado en Finanzas",
+          "body": "Reponer la reunión de handover entre turnos venció el 20 de agosto. Responsable Adriana Marín · 0 % de avance."
+        },
+        "reportQ3": {
+          "title": "Informe de la Encuesta de Clima Q3 listo",
+          "body": "Se generó con las 24 respuestas. Se puede compartir por enlace o exportar."
+        },
+        "q3Closed": {
+          "title": "Encuesta de Clima Q3 cerró",
+          "body": "24 de 24 respuestas · 100 %. Los resultados por grupo ya se pueden ver; Finanzas queda protegido."
+        },
+        "q3Reminder": {
+          "title": "Recordatorio enviado · Encuesta de Clima Q3",
+          "body": "A las personas que aún no habían respondido. No se registra quiénes son."
+        },
+        "q2Closed": {
+          "title": "Encuesta de Clima Q2 cerró",
+          "body": "24 respuestas. Los resultados ya se pueden ver."
+        },
+        "reportQ2": {
+          "title": "Informe de la Encuesta de Clima Q2 listo",
+          "body": "Se generó con las 24 respuestas."
+        }
+      }
     }
   },
   "profile": {
@@ -3113,7 +3153,9 @@
         "libraryHeading": "Instrumento de PROCOMER",
         "libraryBody": "Cuando el instrumento final llegue, se importa a la Biblioteca de preguntas y aparece aquí como una plantilla más, con sus dimensiones y su escala. Hasta entonces esta fila queda vacía a propósito.",
         "libraryAction": "Importar desde la biblioteca",
-        "footnote": "Una plantilla aporta las preguntas, con sus dimensiones, valores de opción y etiquetas de escala intactos. La encuesta creada se puede editar sin tocar la plantilla."
+        "footnote": "Una plantilla aporta las preguntas, con sus dimensiones, valores de opción y etiquetas de escala intactos. La encuesta creada se puede editar sin tocar la plantilla.",
+        "countOne": "{count} plantilla",
+        "questionsOne": "{count} pregunta"
       }
     }
   },
@@ -3317,7 +3359,15 @@
       "surveysValue": "{total} · {active} activas",
       "notAllowedTitle": "Esta configuración no está a su cargo",
       "notAllowedBody": "Solo la administración de esta empresa la cambia.",
-      "loadFailed": "No se pudo leer la configuración de la empresa."
+      "loadFailed": "No se pudo leer la configuración de la empresa.",
+      "anonymityHelpAnonymous": "La encuesta {wave} se creó como anónima; este valor solo aplica a encuestas nuevas.",
+      "anonymityHelpNamed": "La encuesta {wave} se creó como no anónima; este valor solo aplica a encuestas nuevas.",
+      "retentionHelpPeriod": "Cuánto tiempo se conservan las respuestas cerradas. {period} hasta que se fije otro plazo.",
+      "surveysValueOne": "{total} · {active} activa",
+      "departmentsActiveOne": "{count} activo",
+      "departmentsActiveMany": "{count} activos",
+      "departmentsInactiveOne": "{count} inactivo",
+      "departmentsInactiveMany": "{count} inactivos"
     }
   },
   "wizard": {

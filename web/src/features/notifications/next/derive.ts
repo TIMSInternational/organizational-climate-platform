@@ -16,8 +16,8 @@ export interface InboxRow {
   kind: NotificationKind
   icon: RowIcon
   unread: boolean
-  /** `name`, not `title`: payload content, which `noHardcodedStrings.test.ts` would read as copy. */
-  name: string
+  /** The notification's own title and message, or a stand-in's catalogue copy (`sampleModel.ts`). */
+  title: string
   body: string
   createdAt: string
   action: { labelKey: string; href: string } | null
@@ -93,7 +93,7 @@ export function rowOf(
     kind,
     icon: iconOf(notification, kind),
     unread: isUnread(notification),
-    name: notification.title,
+    title: notification.title,
     body: notification.message,
     createdAt: notification.createdAt,
     action: actionOf(notification, canOpenResults),

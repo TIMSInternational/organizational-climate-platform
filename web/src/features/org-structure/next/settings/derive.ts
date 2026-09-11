@@ -1,5 +1,8 @@
 import type { CompanySettingsResponse, UpdateCompanySettingsInput } from '../../api/companySettings'
 import type { Department } from '../../api/departments'
+import type { DashboardSurveySummary } from '../../../dashboard/api/dashboard'
+import type { SurveyDetail } from '../../../surveys/api/surveys'
+import { plainTitle, waveOf } from '../../../dashboard/next/super/derive'
 
 /**
  * Pure rules behind the CompanySettings artboard (`/admin/companies/:id` for a company
@@ -96,6 +99,30 @@ export function retentionOptions(current: number): readonly number[] {
   return current >= 1 && !RETENTION_DAYS.includes(current)
     ? [...RETENTION_DAYS, current].sort((a, b) => a - b)
     : RETENTION_DAYS
+}
+
+/**
+ * The survey the anonymity helper names — the artboard's "La encuesta Q4 sembrada se creó como
+ * no anónima": of the surveys running now (`ongoingSurveys` on `GET /dashboard/company-admin`),
+ * the one that started last; `null` when none is running.
+ */
+export function latestOngoing(surveys: readonly DashboardSurveySummary[]): DashboardSurveySummary | null {
+  return surveys.reduce<DashboardSurveySummary | null>(
+    (latest, survey) => (latest === null || survey.startDate > latest.startDate ? survey : latest),
+    null,
+  )
+}
+
+export interface SurveyAnonymity {
+  /** "Q4" for "Encuesta de Clima Q4 (abierta)"; the title without its parentheticals otherwise. */
+  wave: string
+  anonymous: boolean
+}
+
+/** What `GET /surveys/{id}` says about that survey: its wave and whether it was created anonymous. */
+export function anonymityOf(detail: Pick<SurveyDetail, 'title' | 'settings'>): SurveyAnonymity | null {
+  const wave = waveOf(detail.title) ?? plainTitle(detail.title)
+  return wave === null ? null : { wave, anonymous: detail.settings.anonymous }
 }
 
 export interface DepartmentReading {

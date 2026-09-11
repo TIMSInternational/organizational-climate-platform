@@ -3,7 +3,8 @@ import { useTranslation } from '../../../../i18n'
 import { updateCompanySettings, type CompanySettingsResponse } from '../../api/companySettings'
 import { listDepartments } from '../../api/departments'
 import { getCompanyAdminDashboard } from '../../../dashboard/api/dashboard'
-import { departmentReading, type DepartmentReading } from './derive'
+import { getSurvey } from '../../../surveys/api/surveys'
+import { anonymityOf, departmentReading, latestOngoing, type DepartmentReading, type SurveyAnonymity } from './derive'
 
 export interface CompanySettingsModel {
   companyName: string | null
@@ -12,6 +13,12 @@ export interface CompanySettingsModel {
   departments: DepartmentReading | null
   /** `null` when `GET /dashboard/company-admin` failed, for the same reason. */
   surveys: { total: number; active: number } | null
+  /**
+   * The running survey the anonymity helper names, and how it was created (`GET /surveys/{id}`
+   * of the latest of `ongoingSurveys`); `null` when none runs or either read failed — the helper
+   * then says only that the value applies to new surveys.
+   */
+  latestSurvey: SurveyAnonymity | null
 }
 
 export interface CompanySettingsModelState {
@@ -33,7 +40,9 @@ export interface CompanySettingsModelState {
  *   nullable and `CompanyEndpoints.UpdateSettingsAsync` assigns only the ones present, so `{}`
  *   writes nothing and answers the current record — the same read the old page made);
  * - the department counts — `GET /admin/departments`;
- * - the survey counts and the tenant's name — `GET /dashboard/company-admin`.
+ * - the survey counts and the tenant's name — `GET /dashboard/company-admin`;
+ * - how the running survey was created — `GET /surveys/{id}` for the latest of that payload's
+ *   `ongoingSurveys`, so the anonymity helper can name it as the artboard does.
  *
  * The settings are the page; the other two are readings on it and fail on their own.
  * `companyId === null` means the viewer may not manage this company, and nothing is asked.
@@ -56,6 +65,8 @@ export function useCompanySettingsModel(companyId: string | null): CompanySettin
       listDepartments(baseUrl, companyId),
       getCompanyAdminDashboard(baseUrl, { lang: locale }),
     ])
+    const running = dashboard.status === 'fulfilled' ? latestOngoing(dashboard.value.ongoingSurveys ?? []) : null
+    const [detail] = await Promise.allSettled(running ? [getSurvey(baseUrl, running.id, locale)] : [])
     if (settings.status === 'rejected') {
       const reason: unknown = settings.reason
       setState((current) => ({
@@ -77,6 +88,7 @@ export function useCompanySettingsModel(companyId: string | null): CompanySettin
           dashboard.status === 'fulfilled'
             ? { total: dashboard.value.surveyCount, active: dashboard.value.activeSurveyCount }
             : null,
+        latestSurvey: detail?.status === 'fulfilled' ? anonymityOf(detail.value) : null,
       },
     }))
   }, [baseUrl, companyId, locale, t])

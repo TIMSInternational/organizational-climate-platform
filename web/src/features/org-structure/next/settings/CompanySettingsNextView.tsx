@@ -43,6 +43,11 @@ function retentionLabel(t: TranslateFn, locale: string, days: number): string {
   return years === 1 ? t(`${K}.retentionYear`) : t(`${K}.retentionYears`, { years })
 }
 
+/** The key for `count`: its singular when the count is one, the plural otherwise. */
+function byCount(count: number, one: string, many: string): string {
+  return count === 1 ? one : many
+}
+
 function frequencyHelpKey(frequency: string): string {
   return FREQUENCIES.includes(frequency) ? `${K}.frequencyHelp.${frequency}` : `${K}.frequencyHelp.other`
 }
@@ -144,6 +149,12 @@ function SettingsForm({
   const logoUrl = model.settings.branding.logoUrl
   const name = model.companyName ?? DASH
   const now = new Date()
+  // The artboard's pattern, with the tenant's own survey and how it was really created.
+  const anonymityHelp = model.latestSurvey
+    ? t(model.latestSurvey.anonymous ? `${K}.anonymityHelpAnonymous` : `${K}.anonymityHelpNamed`, {
+        wave: model.latestSurvey.wave,
+      })
+    : t(`${K}.anonymityHelp`)
 
   async function save() {
     const changes = changesOf(initial, draft)
@@ -244,7 +255,7 @@ function SettingsForm({
                 })}
               </CanvasSelect>
             </Field>
-            <Field fieldLabel={t(`${K}.anonymity`)} htmlFor={`${ids}-anonymity`} helper={t(`${K}.anonymityHelp`)}>
+            <Field fieldLabel={t(`${K}.anonymity`)} htmlFor={`${ids}-anonymity`} helper={anonymityHelp}>
               <CanvasSelect
                 id={`${ids}-anonymity`}
                 className="w-full"
@@ -255,7 +266,11 @@ function SettingsForm({
                 <option value="named">{t(`${K}.named`)}</option>
               </CanvasSelect>
             </Field>
-            <Field fieldLabel={t(`${K}.retention`)} htmlFor={`${ids}-retention`} helper={t(`${K}.retentionHelp`)}>
+            <Field
+              fieldLabel={t(`${K}.retention`)}
+              htmlFor={`${ids}-retention`}
+              helper={t(`${K}.retentionHelpPeriod`, { period: retentionLabel(t, locale, draft.dataRetentionDays) })}
+            >
               <CanvasSelect
                 id={`${ids}-retention`}
                 className="w-full"
@@ -367,7 +382,7 @@ function SettingsForm({
                   helper={
                     // The field keeps the artboard's full width; the sample mark rides on its
                     // helper line, because no endpoint stores a sender name (sampleModel.ts).
-                    <span className="flex items-start justify-between gap-2">
+                    <span data-slot="sender-helper" className="flex items-start justify-between gap-2">
                       <span className="min-w-0">{t(`${K}.senderHelp`)}</span>
                       <CanvasChip tone="warning" label={t('dashboard.next.sampleChip')} data-slot="sample-chip" />
                     </span>
@@ -396,21 +411,34 @@ function SettingsForm({
             <Field fieldLabel={t(`${K}.name`)} required>
               <Readout>{name}</Readout>
             </Field>
-            <Field fieldLabel={t(`${K}.country`)} helper={t(`${K}.companyHelp`)}>
+            <Field fieldLabel={t(`${K}.country`)}>
               <Readout>{DASH}</Readout>
+              {/* No visible line: the artboard draws none. `GET /admin/companies/{id}` is
+                  super-admin only (`CompanyEndpoints.cs:113`), so no country reaches this
+                  viewer and neither reading can be edited here — said to a screen reader. */}
+              <span className="sr-only">{t(`${K}.companyHelp`)}</span>
             </Field>
             <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 border-t border-line-light pt-1 text-xs">
               <dt className="text-fg-tertiary">{t(`${K}.departmentsReading`)}</dt>
               <dd className="m-0 font-mono tabular-nums">
                 {model.departments
-                  ? t(`${K}.departmentsValue`, { active: model.departments.active, inactive: model.departments.inactive })
+                  ? `${t(byCount(model.departments.active, `${K}.departmentsActiveOne`, `${K}.departmentsActiveMany`), {
+                      count: model.departments.active,
+                    })} · ${t(byCount(model.departments.inactive, `${K}.departmentsInactiveOne`, `${K}.departmentsInactiveMany`), {
+                      count: model.departments.inactive,
+                    })}`
                   : DASH}
               </dd>
               <dt className="text-fg-tertiary">{t(`${K}.peopleReading`)}</dt>
               <dd className="m-0 font-mono tabular-nums">{model.departments ? model.departments.people : DASH}</dd>
               <dt className="text-fg-tertiary">{t(`${K}.surveysReading`)}</dt>
               <dd className="m-0 font-mono tabular-nums">
-                {model.surveys ? t(`${K}.surveysValue`, { total: model.surveys.total, active: model.surveys.active }) : DASH}
+                {model.surveys
+                  ? t(byCount(model.surveys.active, `${K}.surveysValueOne`, `${K}.surveysValue`), {
+                      total: model.surveys.total,
+                      active: model.surveys.active,
+                    })
+                  : DASH}
               </dd>
             </dl>
           </Panel>

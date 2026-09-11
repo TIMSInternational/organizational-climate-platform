@@ -1135,7 +1135,21 @@
       "inactiveHidden": "{count} inactive departments hidden. They keep their survey history and receive no invitations.",
       "inactiveShown": "{count} inactive departments shown. They keep their survey history and receive no invitations.",
       "showInactive": "Show inactive",
-      "newDepartment": "New department"
+      "newDepartment": "New department",
+      "overdueInMany": "{count} overdue · {department}",
+      "overdueMany": "{count} overdue",
+      "plansOverdueMany": "{open} · {overdue} overdue",
+      "tileActiveUnitOne": "department",
+      "tileInactiveUnitOne": "hidden",
+      "tilePlansUnitOne": "open",
+      "peopleUnitOne": "person",
+      "rootDepartmentsOne": "{count} active department",
+      "rootDepartmentsMany": "{count} active departments",
+      "rootPeopleOne": "{count} person",
+      "rootPeopleMany": "{count} people",
+      "meanOfOne": "· mean of {count} dimension",
+      "inactiveHiddenOne": "{count} inactive department hidden. It keeps its survey history and receives no invitations.",
+      "inactiveShownOne": "{count} inactive department shown. It keeps its survey history and receives no invitations."
     }
   },
   "demographicFields": {
@@ -1695,7 +1709,33 @@
       "localMailAfter": " addresses, so in this environment notices exist only here, inside the app. In production they also arrive by email from the configured sender.",
       "eyebrow": "Communication",
       "markAll": "Mark all as read",
-      "localMailDomain": ".test"
+      "localMailDomain": ".test",
+      "sample": {
+        "planOverdue": {
+          "title": "Overdue plan in Finanzas",
+          "body": "Restoring the shift handover meeting was due on 20 August. Owner Adriana Marín · 0% progress."
+        },
+        "reportQ3": {
+          "title": "Climate Survey Q3 report ready",
+          "body": "Generated from the 24 responses. It can be shared by link or exported."
+        },
+        "q3Closed": {
+          "title": "Climate Survey Q3 closed",
+          "body": "24 of 24 responses · 100%. Results by group can now be seen; Finanzas stays protected."
+        },
+        "q3Reminder": {
+          "title": "Reminder sent · Climate Survey Q3",
+          "body": "To the people who had not answered yet. Who they are is not recorded."
+        },
+        "q2Closed": {
+          "title": "Climate Survey Q2 closed",
+          "body": "24 responses. The results can now be seen."
+        },
+        "reportQ2": {
+          "title": "Climate Survey Q2 report ready",
+          "body": "Generated from the 24 responses."
+        }
+      }
     }
   },
   "profile": {
@@ -3113,7 +3153,9 @@
         "libraryHeading": "PROCOMER instrument",
         "libraryBody": "When the final instrument arrives it is imported into the Question library and appears here as one more template, with its dimensions and its scale. Until then this row stays empty on purpose.",
         "libraryAction": "Import from the library",
-        "footnote": "A template brings the questions, with their dimensions, option values and scale labels intact. The survey created from it can be edited without touching the template."
+        "footnote": "A template brings the questions, with their dimensions, option values and scale labels intact. The survey created from it can be edited without touching the template.",
+        "countOne": "{count} template",
+        "questionsOne": "{count} question"
       }
     }
   },
@@ -3317,7 +3359,15 @@
       "surveysValue": "{total} · {active} active",
       "notAllowedTitle": "These settings are not yours to change",
       "notAllowedBody": "Only this company's administration changes them.",
-      "loadFailed": "The company's settings could not be read."
+      "loadFailed": "The company's settings could not be read.",
+      "anonymityHelpAnonymous": "The {wave} survey was created as anonymous; this value applies to new surveys only.",
+      "anonymityHelpNamed": "The {wave} survey was created as not anonymous; this value applies to new surveys only.",
+      "retentionHelpPeriod": "How long closed responses are kept. {period} until another period is set.",
+      "surveysValueOne": "{total} · {active} active",
+      "departmentsActiveOne": "{count} active",
+      "departmentsActiveMany": "{count} active",
+      "departmentsInactiveOne": "{count} inactive",
+      "departmentsInactiveMany": "{count} inactive"
     }
   },
   "wizard": {

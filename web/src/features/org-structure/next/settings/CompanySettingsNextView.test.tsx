@@ -9,8 +9,10 @@ import { tokenFor } from '../../../../test/jwtFixture'
 import { updateCompanySettings, type CompanySettingsResponse } from '../../api/companySettings'
 import { listDepartments, type Department } from '../../api/departments'
 import { getCompanyAdminDashboard, type CompanyAdminDashboard } from '../../../dashboard/api/dashboard'
+import { getSurvey, type SurveyDetail } from '../../../surveys/api/surveys'
 import CompanyDetailPage from '../../pages/CompanyDetailPage'
 import en from '../../../../i18n/en.json'
+import es from '../../../../i18n/es.json'
 
 const copy = en.companySettings.next
 
@@ -25,6 +27,10 @@ vi.mock('../../api/departments', async (importOriginal) => ({
 vi.mock('../../../dashboard/api/dashboard', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../dashboard/api/dashboard')>()),
   getCompanyAdminDashboard: vi.fn(),
+}))
+vi.mock('../../../surveys/api/surveys', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../surveys/api/surveys')>()),
+  getSurvey: vi.fn(),
 }))
 
 /** `CompanySettingsResponse` with the entity defaults (`Company.cs`), as the fixture carries it. */
@@ -46,12 +52,28 @@ function department(over: Partial<Department>): Department {
   return { id: 'd', companyId: 'c1', name: 'D', description: null, parentDepartmentId: null, isActive: true, employeeCount: 5, ...over }
 }
 
+const running = (id: string, title: string, startDate: string) => ({
+  id, title, status: 'active', startDate, endDate: '2026-10-10T00:00:00Z', responseCount: 3, targetAudienceCount: 24,
+})
+
+/** Meridiano's shape (`GET /dashboard/company-admin`, 11 Sep), with an older wave listed FIRST. */
 const dashboard = {
   companyId: 'c1',
   companyName: 'Grupo Meridiano S.A.',
   surveyCount: 5,
   activeSurveyCount: 1,
+  ongoingSurveys: [
+    running('s-q3', 'Encuesta de Clima Q3', '2026-07-16T02:05:22Z'),
+    running('s-q4', 'Encuesta de Clima Q4 (abierta)', '2026-09-03T02:03:39Z'),
+  ],
 } as CompanyAdminDashboard
+
+/** `GET /surveys/{id}`: the running Q4 was created not anonymous (measured 11 Sep); the older wave is flipped so picking it shows. */
+function surveyDetail(id: string): SurveyDetail {
+  return id === 's-q4'
+    ? ({ id, title: 'Encuesta de Clima Q4 (abierta)', settings: { anonymous: false } } as unknown as SurveyDetail)
+    : ({ id, title: 'Encuesta de Clima Q3', settings: { anonymous: true } } as unknown as SurveyDetail)
+}
 
 function renderAs(claims: Record<string, unknown>, id = 'c1') {
   setToken(tokenFor({ sub: 'u1', nodoId: '', ...claims }))
@@ -85,6 +107,8 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
     ])
     vi.mocked(getCompanyAdminDashboard).mockReset()
     vi.mocked(getCompanyAdminDashboard).mockResolvedValue(dashboard)
+    vi.mocked(getSurvey).mockReset()
+    vi.mocked(getSurvey).mockImplementation(async (_base, id) => surveyDetail(id))
   })
   afterEach(() => {
     cleanup()
@@ -128,15 +152,53 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
     expect(vi.mocked(updateCompanySettings)).not.toHaveBeenCalled()
   })
 
-  it('marks the sender name — no endpoint stores one — as the only sample region', async () => {
+  it('marks the sender name — no endpoint stores one — as the only sample region, on its helper line, the reading at full width', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByLabelText(new RegExp(copy.language))
     const chips = document.querySelectorAll('[data-slot="sample-chip"]')
     expect(chips).toHaveLength(1)
-    // The chip sits in the sender field (on its helper line, so the input keeps its full width).
-    const senderField = screen.getByText(copy.sender).closest('div') as HTMLElement
-    expect(senderField.contains(chips[0])).toBe(true)
-    expect(senderField.textContent).toContain('Grupo Meridiano S.A.')
+    const field = screen.getByText(copy.sender).parentElement as HTMLElement
+    // The chip rides on the sender field's helper line, beside the helper's own sentence…
+    const helper = chips[0].closest('[data-slot="field-helper"]') as HTMLElement | null
+    expect(helper).not.toBeNull()
+    expect(helper!.parentElement).toBe(field)
+    expect(helper!.textContent).toContain(copy.senderHelp)
+    // …so the reading is the field's own child — the whole width of the column, like the
+    // artboard's — and shares no row with the chip.
+    const reading = field.querySelector('[data-slot="settings-readout"]') as HTMLElement
+    expect(reading.parentElement).toBe(field)
+    expect(reading.className).not.toMatch(/(^|\s)w-/)
+    expect(reading.textContent).toBe('Grupo Meridiano S.A.')
+    expect(chips[0].parentElement!.contains(reading)).toBe(false)
+  })
+
+  it('names the running survey in the anonymity helper as it was created, and the stored period in the retention helper — the artboard’s sentences with the tenant’s values', async () => {
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByLabelText(new RegExp(copy.language))
+    // The latest of the running surveys by start, not the first listed.
+    expect(vi.mocked(getSurvey).mock.calls.map((call) => call[1])).toEqual(['s-q4'])
+    expect(screen.getByText('The Q4 survey was created as not anonymous; this value applies to new surveys only.')).toBeTruthy()
+    expect(screen.getByText('How long closed responses are kept. 7 years until another period is set.')).toBeTruthy()
+  })
+
+  it('says only that the anonymity applies to new surveys when no survey is running, and asks for none', async () => {
+    vi.mocked(getCompanyAdminDashboard).mockResolvedValue({ ...dashboard, ongoingSurveys: [] })
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByLabelText(new RegExp(copy.language))
+    expect(vi.mocked(getSurvey)).not.toHaveBeenCalled()
+    expect(screen.getByText(copy.anonymityHelp)).toBeTruthy()
+  })
+
+  it('reads in Spanish singulars where a count is one — “1 activo · 1 inactivo”, “5 · 1 activa”', async () => {
+    window.localStorage.setItem('preferredLocale', 'es')
+    vi.mocked(listDepartments).mockResolvedValue([department({ id: 'a' }), department({ id: 'x', isActive: false, employeeCount: 0 })])
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByLabelText(new RegExp(es.companySettings.next.language))
+    const readings = screen.getByText(es.companySettings.next.departmentsReading).closest('dl') as HTMLElement
+    expect(within(readings).getByText('1 activo · 1 inactivo')).toBeTruthy()
+    expect(within(readings).getByText('5 · 1 activa')).toBeTruthy()
+    expect(screen.getByText('La encuesta Q4 se creó como no anónima; este valor solo aplica a encuestas nuevas.')).toBeTruthy()
+    expect(screen.getByText('Cuánto tiempo se conservan las respuestas cerradas. 7 años hasta que se fije otro plazo.')).toBeTruthy()
   })
 
   it('derives the company readings from the payloads, and prints a dash — not a zero — for a reading whose request failed', async () => {

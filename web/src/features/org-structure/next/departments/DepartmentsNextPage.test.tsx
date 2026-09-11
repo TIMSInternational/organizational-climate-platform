@@ -11,6 +11,7 @@ import { listDepartments, type Department } from '../../api/departments'
 import { listUsers, type User } from '../../api/users'
 import { listActionPlans, type ActionPlan } from '../../../action-plans/api/actionPlans'
 import { getClimateTrends, type ClimateTrendsResponse } from '../../../surveys/api/climateTrends'
+import { getProfile, type Profile } from '../../../profile/api/profile'
 import DepartmentsNextPage from './DepartmentsNextPage'
 import en from '../../../../i18n/en.json'
 
@@ -31,6 +32,12 @@ vi.mock('../../../action-plans/api/actionPlans', async (importOriginal) => ({
 vi.mock('../../../surveys/api/climateTrends', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../surveys/api/climateTrends')>()),
   getClimateTrends: vi.fn(),
+}))
+// The eyebrow's company name comes from `/profile` (`useCompanyName`); unmocked it went to the
+// network from every test here (ECONNREFUSED 127.0.0.1:3000).
+vi.mock('../../../profile/api/profile', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../profile/api/profile')>()),
+  getProfile: vi.fn(),
 }))
 
 const dept = (id: string, name: string, employeeCount: number, isActive = true): Department => ({
@@ -94,6 +101,7 @@ describe('DepartmentsNextPage (/departments)', () => {
       plan('ing', 'completed', '2020-01-01T00:00:00Z'),
     ])
     vi.mocked(getClimateTrends).mockReset().mockResolvedValue(trends)
+    vi.mocked(getProfile).mockReset().mockResolvedValue({ companyName: 'Grupo Meridiano S.A.', departmentName: null } as Profile)
   })
   afterEach(() => {
     cleanup()
@@ -134,6 +142,26 @@ describe('DepartmentsNextPage (/departments)', () => {
     // Ingeniería's only plan is completed and long past due: no open plan, nothing overdue.
     expect(rowOf('Ingeniería')!.querySelectorAll('td')[3].textContent).toBe('—')
     expect(screen.getByText('1 overdue · Finanzas')).toBeTruthy()
+  })
+
+  it('inflects its Spanish counts: one “atrasado”, several “atrasados”, one “persona”, one hidden department', async () => {
+    window.localStorage.setItem('preferredLocale', 'es')
+    vi.mocked(listDepartments).mockResolvedValue([
+      dept('fin', 'Finanzas', 6), dept('ing', 'Ingeniería', 14), dept('ops', 'Operaciones', 7), dept('ven', 'Ventas', 1), dept('cal', 'Calidad 18', 0, false),
+    ])
+    vi.mocked(listActionPlans).mockResolvedValue([
+      { ...plan('fin', 'in_progress', '2020-01-01T00:00:00Z'), id: 'f1' },
+      { ...plan('fin', 'not_started', '2020-02-01T00:00:00Z'), id: 'f2' },
+      plan('ops', 'in_progress', '2020-03-01T00:00:00Z'),
+    ])
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByText('Finanzas', { selector: 'td' })
+    expect(rowOf('Finanzas')!.querySelectorAll('td')[3].textContent).toBe('2 · 2 atrasados')
+    expect(rowOf('Operaciones')!.querySelectorAll('td')[3].textContent).toBe('1 · 1 atrasado')
+    expect(screen.getByText('3 atrasados · Finanzas')).toBeTruthy()
+    expect(cardOf('Ventas').textContent).toContain('1persona')
+    expect(screen.getByText('4 departamentos activos · 28 personas')).toBeTruthy()
+    expect(screen.getByText('1 departamento inactivo oculto. Conserva su historial de encuestas y no recibe invitaciones.')).toBeTruthy()
   })
 
   it('keeps inactive departments behind the toggle', async () => {

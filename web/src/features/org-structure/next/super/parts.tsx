@@ -143,7 +143,11 @@ export function Field({
         )}
       </label>
       {children}
-      {helper !== undefined && <div className="m-0 text-xs leading-snug text-fg-tertiary">{helper}</div>}
+      {helper !== undefined && (
+        <div data-slot="field-helper" className="m-0 text-xs leading-snug text-fg-tertiary">
+          {helper}
+        </div>
+      )}
     </div>
   )
 }

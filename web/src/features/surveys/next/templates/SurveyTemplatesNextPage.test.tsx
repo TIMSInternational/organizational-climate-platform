@@ -72,6 +72,14 @@ describe('SurveyTemplatesNextPage (/surveys/templates)', () => {
     expect(screen.getByText(copy.dimensionsUnavailable)).toBeTruthy()
   })
 
+  it('counts in Spanish singulars: one “plantilla”, one “pregunta”', async () => {
+    window.localStorage.setItem('preferredLocale', 'es')
+    vi.mocked(listSurveyTemplates).mockResolvedValue([{ ...item('uno', 'Pulso corto', 'pulse', 0), questionCount: 1 }])
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    expect(await screen.findByRole('heading', { name: '1 plantilla' })).toBeTruthy()
+    expect(screen.getByText('Pulso · 1 pregunta')).toBeTruthy()
+  })
+
   it('offers "Use" only to a viewer who may author a survey', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByRole('heading', { name: '2 templates' })
@@ -92,6 +100,6 @@ describe('SurveyTemplatesNextPage (/surveys/templates)', () => {
     expect(vi.mocked(listSurveyTemplates).mock.calls.at(-1)?.[1]).toEqual({ q: 'pulse' })
     await screen.findByRole('heading', { name: '2 templates' })
     await userEvent.click(screen.getByRole('button', { name: 'Climate 1' }))
-    expect(screen.getByRole('heading', { name: '1 templates' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '1 template' })).toBeTruthy()
   })
 })

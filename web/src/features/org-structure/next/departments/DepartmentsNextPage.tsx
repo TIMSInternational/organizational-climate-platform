@@ -34,7 +34,15 @@ import { useDepartmentsModel, type DepartmentsModel } from './useDepartmentsMode
 
 const K = 'departments.next'
 const DASH = '—'
-const HEAD = 'px-3 py-2 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap'
+// Cells take 8px a side below xl and the artboard's 12px from it: the seven columns then fit
+// the 744px a 1024 viewport leaves the page, with no scroll and no cell wrapping to two lines.
+const HEAD = 'px-2 py-2 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap xl:px-3'
+const CELL = 'px-2 py-2.5 xl:px-3'
+
+/** The key for `count`: its singular when the count is one, the plural otherwise. */
+function byCount(count: number, one: string, many: string): string {
+  return count === 1 ? one : many
+}
 
 function score(value: number, locale: string): string {
   return formatMetric(value, { kind: 'number', decimals: 1 }, locale)
@@ -208,18 +216,22 @@ function DepartmentsView({
 
       <div className="-mt-1 flex flex-col gap-6">
         <section aria-label={t(`${K}.summaryLabel`)} className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Tile label={t(`${K}.tileActive`)} value={summary.active} unit={t(`${K}.tileActiveUnit`)} />
+          <Tile
+            label={t(`${K}.tileActive`)}
+            value={summary.active}
+            unit={t(byCount(summary.active, `${K}.tileActiveUnitOne`, `${K}.tileActiveUnit`))}
+          />
           <Tile label={t(`${K}.tilePeople`)} value={summary.people} unit={t(`${K}.tilePeopleUnit`)} />
           <Tile
             label={t(`${K}.tileInactive`)}
             value={summary.inactive}
-            unit={t(`${K}.tileInactiveUnit`)}
+            unit={t(byCount(summary.inactive, `${K}.tileInactiveUnitOne`, `${K}.tileInactiveUnit`))}
             sub={<span className="text-xs text-fg-tertiary">{t(`${K}.tileInactiveSub`)}</span>}
           />
           <Tile
             label={t(`${K}.tilePlans`)}
             value={summary.plans ? summary.plans.open : null}
-            unit={t(`${K}.tilePlansUnit`)}
+            unit={t(byCount(summary.plans?.open ?? 0, `${K}.tilePlansUnitOne`, `${K}.tilePlansUnit`))}
             sub={
               summary.plans === null ? (
                 <span className="text-xs text-fg-tertiary">{t(`${K}.plansUnavailable`)}</span>
@@ -227,8 +239,11 @@ function DepartmentsView({
                 <span data-slot="overdue-line" className="inline-flex items-center gap-1.5 text-xs text-accent-red">
                   <CircleAlert aria-hidden="true" className="size-3.5" />
                   {summary.plans.firstOverdue
-                    ? t(`${K}.overdueIn`, { count: summary.plans.overdue, department: summary.plans.firstOverdue })
-                    : t(`${K}.overdue`, { count: summary.plans.overdue })}
+                    ? t(byCount(summary.plans.overdue, `${K}.overdueIn`, `${K}.overdueInMany`), {
+                        count: summary.plans.overdue,
+                        department: summary.plans.firstOverdue,
+                      })
+                    : t(byCount(summary.plans.overdue, `${K}.overdue`, `${K}.overdueMany`), { count: summary.plans.overdue })}
                 </span>
               ) : (
                 <span className="text-xs text-fg-tertiary">{t(`${K}.noneOverdue`)}</span>
@@ -252,7 +267,10 @@ function DepartmentsView({
               <span className="flex flex-col">
                 <span className="text-base font-semibold">{companyName ?? DASH}</span>
                 <span className="text-2xs text-fg-tertiary">
-                  {t(`${K}.rootMeta`, { departments: summary.active, people: summary.people })}
+                  {`${t(byCount(summary.active, `${K}.rootDepartmentsOne`, `${K}.rootDepartmentsMany`), { count: summary.active })} · ${t(
+                    byCount(summary.people, `${K}.rootPeopleOne`, `${K}.rootPeopleMany`),
+                    { count: summary.people },
+                  )}`}
                 </span>
               </span>
             </div>
@@ -277,7 +295,7 @@ function DepartmentsView({
                 </div>
                 <div className="flex items-baseline gap-1.5">
                   <span className="font-mono text-2xl leading-none tabular-nums">{row.people}</span>
-                  <span className="text-xs text-fg-tertiary">{t(`${K}.peopleUnit`)}</span>
+                  <span className="text-xs text-fg-tertiary">{t(byCount(row.people, `${K}.peopleUnitOne`, `${K}.peopleUnit`))}</span>
                 </div>
                 <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-1 text-xs">
                   <dt className="text-fg-tertiary">{t(`${K}.leader`)}</dt>
@@ -301,12 +319,14 @@ function DepartmentsView({
             <span className="text-xs text-fg-tertiary">{t(`${K}.listMeta`)}</span>
           </div>
           <div className="overflow-hidden rounded-lg border border-line-light">
-            <Table className="m-0 w-full min-w-215 table-auto border-collapse text-sm xl:table-fixed">
+            <Table className="m-0 w-full table-auto border-collapse text-sm xl:min-w-215 xl:table-fixed">
                 {/* The artboard's list grid — 3fr 90px 3fr 2fr 3fr 90px 150px, 12px gaps — as
                     columns: each fr track takes its share of what the 90/90/150 tracks and the
                     cells' 12px padding leave, so the headings start where the artboard's do.
                     Fixed only from xl: below it the table lays out by content (its nowrap
-                    headings then never overlap) and scrolls inside its container. */}
+                    headings then never overlap), with narrower padding, the climate cell's
+                    "media de N dimensiones" note and the Personas label left to xl, so at
+                    1024 every column — the actions included — is on screen. */}
                 <colgroup>
                   <col style={{ width: '18.15%' }} />
                   <col style={{ width: '102px' }} />
@@ -332,24 +352,27 @@ function DepartmentsView({
                 <tbody>
                   {listed.map((row) => (
                     <tr key={row.id} data-department-row={row.name} className="border-t border-line-light">
-                      <td className="px-3 py-2.5 font-medium">{row.name}</td>
-                      <td className="px-3 py-2.5 font-mono tabular-nums">{row.people}</td>
-                      <td className="px-3 py-2.5 text-fg-secondary">
+                      <td className={cn(CELL, 'font-medium')}>{row.name}</td>
+                      <td className={cn(CELL, 'font-mono tabular-nums')}>{row.people}</td>
+                      <td className={cn(CELL, 'text-fg-secondary')}>
                         {row.leaders && row.leaders.length > 0 ? row.leaders.join(', ') : DASH}
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className={cn(CELL, 'whitespace-nowrap')}>
                         <PlansCell plans={row.plans} t={t} />
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className={cn(CELL, 'whitespace-nowrap')}>
                         <ClimateCell climate={row.climate} t={t} locale={locale} />
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className={CELL}>
                         {row.isActive ? <CanvasChip tone="good" label={t(`${K}.active`)} /> : <CanvasChip label={t(`${K}.inactive`)} />}
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className={CELL}>
                         <span className="flex justify-end gap-1.5">
                           <Button asChild variant="outline" size="sm">
-                            <Link to={`/admin/companies/${companyId}/users`}>{t(`${K}.people`)}</Link>
+                            <Link to={`/admin/companies/${companyId}/users`}>
+                              <Users aria-hidden="true" className="xl:hidden" />
+                              <span className="sr-only xl:not-sr-only">{t(`${K}.people`)}</span>
+                            </Link>
                           </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -379,8 +402,8 @@ function DepartmentsView({
                 {summary.inactive === 0
                   ? t(`${K}.noInactive`)
                   : showInactive
-                    ? t(`${K}.inactiveShown`, { count: summary.inactive })
-                    : t(`${K}.inactiveHidden`, { count: summary.inactive })}
+                    ? t(byCount(summary.inactive, `${K}.inactiveShownOne`, `${K}.inactiveShown`), { count: summary.inactive })
+                    : t(byCount(summary.inactive, `${K}.inactiveHiddenOne`, `${K}.inactiveHidden`), { count: summary.inactive })}
               </span>
               {summary.inactive > 0 && (
                 <label className="m-0 inline-flex items-center gap-2 text-xs text-fg-secondary">
@@ -412,7 +435,11 @@ function Tile({ label, value, unit, sub }: { label: string; value: number | null
 function PlansCell({ plans, t }: { plans: PlansReading | null; t: TranslateFn }) {
   if (!plans || plans.open === 0) return <span className="font-mono text-fg-tertiary">{DASH}</span>
   if (plans.overdue > 0) {
-    return <span className="font-mono text-accent-red">{t(`${K}.plansOverdue`, { open: plans.open, overdue: plans.overdue })}</span>
+    return (
+      <span className="font-mono text-accent-red">
+        {t(byCount(plans.overdue, `${K}.plansOverdue`, `${K}.plansOverdueMany`), { open: plans.open, overdue: plans.overdue })}
+      </span>
+    )
   }
   if (plans.notStarted === plans.open) {
     return <span className="font-mono text-accent-amber-ink">{t(`${K}.plansNotStarted`, { open: plans.open })}</span>
@@ -436,11 +463,14 @@ function ClimateCell({ climate, t, locale }: { climate: ClimateReading; t: Trans
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className="font-mono tabular-nums">{score(climate.mean, locale)}</span>
-      <span className="text-fg-tertiary">
-        {below
-          ? t(`${K}.belowTarget`, { target: score(CLIMATE_TARGET, locale) })
-          : t(`${K}.meanOf`, { count: climate.dimensions })}
-      </span>
+      {below ? (
+        <span className="text-fg-tertiary">{t(`${K}.belowTarget`, { target: score(CLIMATE_TARGET, locale) })}</span>
+      ) : (
+        // The note is the one thing left to xl: at 1024 it would push the actions off screen.
+        <span className="hidden text-fg-tertiary xl:inline">
+          {t(byCount(climate.dimensions, `${K}.meanOfOne`, `${K}.meanOf`), { count: climate.dimensions })}
+        </span>
+      )}
     </span>
   )
 }
