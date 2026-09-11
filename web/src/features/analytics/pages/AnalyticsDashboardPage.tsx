@@ -1,3 +1,7 @@
+/**
+ * NOT MOUNTED. The router serves the redesigned screen in `features/analytics/next/` at
+ * this route; this file stays in the tree as the wiring reference for it.
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import { listBenchmarks, type BenchmarkListItem } from '../api/benchmarks'

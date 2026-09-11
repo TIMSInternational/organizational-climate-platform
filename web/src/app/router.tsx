@@ -37,7 +37,7 @@ import PrivacySettingsPage from '../features/profile/pages/PrivacySettingsPage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
 import SurveyDistributionPage from '../features/surveys/pages/SurveyDistributionPage'
 import BenchmarksNextPage from '../features/analytics/next/benchmarks/BenchmarksNextPage'
-import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
+import AIInsightsNextPage from '../features/analytics/next/AIInsightsNextPage'
 import ReportsListNextPage from '../features/reports/next/ReportsListNextPage'
 import SharedReportPage from '../features/reports/pages/SharedReportPage'
 import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
@@ -45,13 +45,13 @@ import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrends
 import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPage'
 import SurveyCreatePage from '../features/surveys/pages/SurveyCreatePage'
 import SurveyDetailPage from '../features/surveys/pages/SurveyDetailPage'
-import SurveyQuestionsEditPage from '../features/surveys/pages/SurveyQuestionsEditPage'
+import SurveyQuestionsEditorPage from '../features/surveys/next/authoring/SurveyQuestionsEditorPage'
 import MySurveysPage from '../features/surveys/pages/MySurveysPage'
 import SurveyTemplatesPage from '../features/surveys/pages/SurveyTemplatesPage'
-import SurveyTemplateDetailPage from '../features/surveys/pages/SurveyTemplateDetailPage'
-import AnalyticsDashboardPage from '../features/analytics/pages/AnalyticsDashboardPage'
-import QuestionBankPage from '../features/questions/pages/QuestionBankPage'
-import QuestionLibraryPage from '../features/questions/pages/QuestionLibraryPage'
+import TemplateDetailNextPage from '../features/surveys/next/authoring/TemplateDetailNextPage'
+import AnalyticsNextPage from '../features/analytics/next/AnalyticsNextPage'
+import QuestionBankNextPage from '../features/questions/next/QuestionBankNextPage'
+import QuestionLibraryNextPage from '../features/questions/next/QuestionLibraryNextPage'
 import { resolveInitialRoute } from './resolveInitialRoute'
 
 // /admin/companies (the old unconditional target) is SuperAdmin-only -- a
@@ -319,7 +319,7 @@ export const router = createBrowserRouter([
               // The redesigned Informes replaced `ReportsListPage` here (ruled 10 Sep, the
               // same swap as `/surveys`); the old page stays unrouted as the wiring reference.
               { path: '/admin/companies/:companyId/reports', element: <ReportsListNextPage /> },
-              { path: '/admin/companies/:companyId/analytics', element: <AnalyticsDashboardPage /> },
+              { path: '/admin/companies/:companyId/analytics', element: <AnalyticsNextPage /> },
               { path: '/admin/system-settings', element: <SystemSettingsPage /> },
               { path: '/admin/system', element: <SystemHealthPage /> },
               // #114, the question BANK — not the question library, which is the
@@ -332,7 +332,7 @@ export const router = createBrowserRouter([
               // role, so a leader or employee who typed the URL gets the page's own
               // error state rather than another tenant's corpus. `navSections.ts` is
               // what keeps it out of their sidebar.
-              { path: '/admin/question-bank', element: <QuestionBankPage /> },
+              { path: '/admin/question-bank', element: <QuestionBankNextPage /> },
               // #423, the question LIBRARY's authoring screen. Its endpoints have
               // accepted POST and PUT since #112; until this route existed the only
               // way to reach them was `curl` or SQL, because `/dev/question-library`
@@ -343,7 +343,7 @@ export const router = createBrowserRouter([
               // every `/admin/question-*` endpoint checks `Roles.Admin` and then
               // scopes by role, so a leader who typed the URL meets the page's own
               // error state, never another tenant's corpus.
-              { path: '/admin/question-library', element: <QuestionLibraryPage /> },
+              { path: '/admin/question-library', element: <QuestionLibraryNextPage /> },
               // Flat, with no company id in the path (#142), like /surveys and
               // /action-plans: the page takes its company from `company-context`,
               // so one route and one nav entry serve both admin roles.
@@ -383,7 +383,7 @@ export const router = createBrowserRouter([
               // Same static-beats-dynamic ranking as `/surveys/my`, so `templates`
               // is never parsed as a survey id.
               { path: '/surveys/templates', element: <SurveyTemplatesPage /> },
-              { path: '/surveys/templates/:id', element: <SurveyTemplateDetailPage /> },
+              { path: '/surveys/templates/:id', element: <TemplateDetailNextPage /> },
               // Same static-beats-dynamic ranking again, so `climate-trends` is never
               // parsed as a survey id. Unlike `/surveys/:id/results` this one IS in the
               // sidebar: it is a company-level reading rather than a per-survey
@@ -408,7 +408,7 @@ export const router = createBrowserRouter([
               // but the page defends itself anyway, since this URL is typeable and the
               // server's second refusal (any response row exists) cannot be predicted from
               // a read.
-              { path: '/surveys/:id/questions', element: <SurveyQuestionsEditPage /> },
+              { path: '/surveys/:id/questions', element: <SurveyQuestionsEditorPage /> },
               // Not under /admin, and gated by nothing beyond RequireAuth: every
               // authenticated role — plain employees included — owns a profile, and
               // every endpoint behind this page resolves the caller from their own
@@ -433,7 +433,7 @@ export const router = createBrowserRouter([
               // The redesigned Puntos de Referencia replaced `BenchmarksPage` here (ruled
               // 10 Sep); the old page stays unrouted as the wiring reference.
               { path: '/analytics/benchmarks', element: <BenchmarksNextPage /> },
-              { path: '/analytics/ai-insights', element: <AIInsightsPage /> },
+              { path: '/analytics/ai-insights', element: <AIInsightsNextPage /> },
               // The tracking module (#125, #126). Inside `AdminLayout` like every
               // other work surface — these are administration screens, not a
               // respondent flow — and gated by nothing beyond `RequireAuth`,

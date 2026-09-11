@@ -8,11 +8,16 @@ import DashboardPage from '../features/dashboard/pages/DashboardPage'
 import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage'
 import UsersListPage from '../features/org-structure/pages/UsersListPage'
 import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
-import AnalyticsDashboardPage from '../features/analytics/pages/AnalyticsDashboardPage'
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
 import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
 import ReportsListNextPage from '../features/reports/next/ReportsListNextPage'
 import BenchmarksNextPage from '../features/analytics/next/benchmarks/BenchmarksNextPage'
+import SurveyQuestionsEditorPage from '../features/surveys/next/authoring/SurveyQuestionsEditorPage'
+import TemplateDetailNextPage from '../features/surveys/next/authoring/TemplateDetailNextPage'
+import QuestionBankNextPage from '../features/questions/next/QuestionBankNextPage'
+import QuestionLibraryNextPage from '../features/questions/next/QuestionLibraryNextPage'
+import AIInsightsNextPage from '../features/analytics/next/AIInsightsNextPage'
+import AnalyticsNextPage from '../features/analytics/next/AnalyticsNextPage'
 
 /**
  * A construction guard for the router.
@@ -297,6 +302,15 @@ describe('router', () => {
     // #468 swapped the results the same way: pinned on the element here, not only by a
     // source regex in the page's own test.
     expect(componentAt('/surveys/:id/results')).toBe(SurveyResultsNextPage)
+    // The authoring and analytics lane swapped six more, each on the path the sidebar or
+    // the survey page links to. Pinned on the element for the same reason: restoring the
+    // old page behind the same path would leave every path assertion green.
+    expect(componentAt('/surveys/:id/questions')).toBe(SurveyQuestionsEditorPage)
+    expect(componentAt('/surveys/templates/:id')).toBe(TemplateDetailNextPage)
+    expect(componentAt('/admin/question-bank')).toBe(QuestionBankNextPage)
+    expect(componentAt('/admin/question-library')).toBe(QuestionLibraryNextPage)
+    expect(componentAt('/analytics/ai-insights')).toBe(AIInsightsNextPage)
+    expect(componentAt('/admin/companies/:companyId/analytics')).toBe(AnalyticsNextPage)
     expect(byPath.has('/surveys/next')).toBe(false)
     expect(byPath.has('/surveys/climate-trends/next')).toBe(false)
     expect(byPath.has('/surveys/:id/results/next')).toBe(false)
@@ -314,6 +328,12 @@ describe('router', () => {
     expect(source).not.toMatch(/pages\/SurveyResultsPage'/)
     expect(source).not.toMatch(/pages\/ReportsListPage'/)
     expect(source).not.toMatch(/pages\/BenchmarksPage'/)
+    expect(source).not.toMatch(/pages\/SurveyQuestionsEditPage'/)
+    expect(source).not.toMatch(/pages\/SurveyTemplateDetailPage'/)
+    expect(source).not.toMatch(/pages\/QuestionBankPage'/)
+    expect(source).not.toMatch(/pages\/QuestionLibraryPage'/)
+    expect(source).not.toMatch(/pages\/AIInsightsPage'/)
+    expect(source).not.toMatch(/pages\/AnalyticsDashboardPage'/)
   })
 
   /**
@@ -361,10 +381,12 @@ describe('router', () => {
         'features/org-structure/pages/DemographicFieldsPage.tsx',
         'SuperDemographicFieldsView',
       ],
+      // #472 replaced this route's page with the redesigned AnalyticsNextPage, which carries the
+      // super administrator's branch the old AnalyticsDashboardPage held (#471).
       [
         '/admin/companies/:companyId/analytics',
-        AnalyticsDashboardPage,
-        'features/analytics/pages/AnalyticsDashboardPage.tsx',
+        AnalyticsNextPage,
+        'features/analytics/next/AnalyticsNextPage.tsx',
         'SuperAnalyticsView',
       ],
     ]

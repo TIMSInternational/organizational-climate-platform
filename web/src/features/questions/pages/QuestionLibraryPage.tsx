@@ -1,3 +1,7 @@
+/**
+ * NOT MOUNTED. The router serves the redesigned screen in `features/questions/next/` at
+ * this route; this file stays in the tree as the wiring reference for it.
+ */
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { PageTopBar } from '../../../components/layout'
 import {
