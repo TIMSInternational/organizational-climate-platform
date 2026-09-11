@@ -507,14 +507,16 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
               <p className="m-0 text-sm text-fg-secondary">{fromTemplate && template === null ? t('common.loading') : copy('previewEmpty')}</p>
             )}
             <div aria-hidden="true" className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-2.5">
-              <span className="inline-flex items-center gap-2 text-xs leading-normal text-fg-secondary">
+              <span data-slot="preview-answered" className="inline-flex items-center gap-2 text-xs leading-normal text-fg-label">
                 <span className="h-1.25 w-12 rounded-sm bg-surface-icon-box" />
                 {copy('answeredOf', { count: previewQuestions.length })}
               </span>
-              {/* Wraps: the two nowrap chips are ~330px together, wider than a 390px preview. */}
+              {/* Wraps: the two nowrap chips are ~330px together, wider than a 390px preview. Each is the
+                  artboard's `.btn` (weight 500) at `height: 28px` in a content box, so 30px with its
+                  borders: at 28px regular the preview card came out 2px short of the artboard's. */}
               <span className="flex flex-wrap gap-2" data-slot="preview-actions">
-                <span className="inline-flex h-7 items-center whitespace-nowrap rounded border border-line-default px-3 text-sm text-fg-primary">{copy('saveLater')}</span>
-                <span className="inline-flex h-7 items-center whitespace-nowrap rounded border border-accent-red-ring bg-chip-critical-fill px-3 text-sm text-chip-critical-ink">
+                <span className="inline-flex h-7.5 items-center whitespace-nowrap rounded border border-line-default px-3 text-sm font-medium text-fg-primary">{copy('saveLater')}</span>
+                <span className="inline-flex h-7.5 items-center whitespace-nowrap rounded border border-accent-red-ring bg-chip-critical-fill px-3 text-sm font-medium text-chip-critical-ink">
                   {copy('submitAnswers')}
                 </span>
               </span>

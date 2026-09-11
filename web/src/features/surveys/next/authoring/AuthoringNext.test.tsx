@@ -761,6 +761,18 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     expect(document.querySelector('[data-slot="preview-actions"]')?.className.split(' ')).toContain('flex-wrap')
   })
 
+  it("draws the preview's two buttons at the artboard's 30px in the medium weight, and the answered count in the label ink", async () => {
+    // SurveyBuilder.dc.html: `.btn` (font-weight 500) at `height: 28px` plus its 1px borders, 30px,
+    // and "0 de 6 respondidas" in #6e648b. At 28px regular the preview card measured 369.1 against
+    // the artboard's 371.1, and each button ~3px narrower than the artboard's.
+    renderAs('company_admin', <SurveyBuilderNextPage />)
+    await screen.findByRole('combobox', { name: 'Idioma del contenido' })
+    const buttons = [...(document.querySelector('[data-slot="preview-actions"]')?.children ?? [])]
+    expect(buttons).toHaveLength(2)
+    for (const button of buttons) expect(button.className.split(' ')).toEqual(expect.arrayContaining(['h-7.5', 'font-medium']))
+    expect(document.querySelector('[data-slot="preview-answered"]')?.className.split(' ')).toContain('text-fg-label')
+  })
+
   it("saves the draft under the artboard's plain page glyph, not a page of text lines", async () => {
     renderAs('company_admin', <SurveyBuilderNextPage />)
     const icon = (await screen.findByRole('button', { name: 'Guardar borrador' })).querySelector('[data-slot="save-draft-icon"]')
