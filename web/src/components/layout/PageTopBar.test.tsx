@@ -78,6 +78,17 @@ describe('PageTopBar', () => {
     expect(screen.queryByRole('link', { name: 'Users' })?.getAttribute('aria-disabled')).toBe('true')
   })
 
+  it('renders a link-less ancestor crumb as an ancestor, not as a second current page', () => {
+    // CompanySettings artboard (10 Sep): "Administración de Empresa" is a sidebar group with no
+    // page of its own, so it has no href — and it still reads muted, like any ancestor.
+    renderTopBar({ title: 'Settings', breadcrumbs: [{ label: 'Company admin' }, { label: 'Settings' }] })
+    const ancestor = screen.getByText('Company admin', { selector: '[data-slot="breadcrumb-ancestor"]' })
+    expect(ancestor.getAttribute('aria-current')).toBeNull()
+    const current = document.querySelectorAll('[aria-current="page"]')
+    expect(current).toHaveLength(1)
+    expect(current[0].textContent).toBe('Settings')
+  })
+
   it('names the breadcrumb nav from the catalogue rather than defaulting to English', () => {
     renderTopBar({ title: 'Users', breadcrumbs: [{ label: 'Acme' }] })
     // en.json shell.breadcrumb. The point is that it is *not* a literal in the
