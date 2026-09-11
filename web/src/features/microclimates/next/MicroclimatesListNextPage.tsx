@@ -239,8 +239,10 @@ function FlowCard({ step, session }: { step: FlowStep | null; session: string | 
             <div className="flex items-center gap-2">
               <span
                 aria-hidden="true"
+                // 26px outside: the artboard's 24px circle is content-box with a 1px
+                // border (measured off MicroclimatesList.png, 281-306 by 237-262).
                 className={cn(
-                  'inline-flex size-6 flex-none items-center justify-center rounded-full border font-mono text-xs tabular-nums',
+                  'inline-flex size-6.5 flex-none items-center justify-center rounded-full border font-mono text-xs tabular-nums',
                   n <= reached
                     ? 'border-accent-blue bg-accent-blue text-fg-on-accent'
                     : 'border-line-default bg-surface-card text-fg-tertiary',

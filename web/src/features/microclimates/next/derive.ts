@@ -159,8 +159,11 @@ export function wordBars(
   responseCount: number,
   max = MAX_WORD_BARS,
 ): WordBars {
+  // One guard, the shared one: under the floor `suppressWordCloud` hands back no words at
+  // all, so nothing below can draw a bar. A second early return here was a copy of it —
+  // breaking it changed nothing (mutation M1), which is how a floor ends up held in two
+  // places at two different values.
   const { words: kept, withheldCount, isSuppressed } = suppressWordCloud(words, responseCount)
-  if (isSuppressed) return { isSuppressed, bars: [], withheldCount }
   const top = kept
     .toSorted((a, b) => b.value - a.value || a.text.localeCompare(b.text))
     .slice(0, max)
