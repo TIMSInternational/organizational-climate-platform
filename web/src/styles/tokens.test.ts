@@ -119,6 +119,8 @@ describe('control density', () => {
     ['--admin-size-control-lg', '2rem'],
     // Sidebar.tsx nav rows and avatar tiles: `minHeight: 28` / `height: 28`.
     ['--admin-size-control-md', '1.75rem'],
+    // The canvas's `.btn`: `height: 32px` content-box plus a 1px border = 34px outside.
+    ['--admin-size-control-canvas', '2.125rem'],
     ['--admin-size-icon-box', '1.75rem'],
     // Legacy nav icons: `h-4 w-4`.
     ['--admin-size-icon', '16px'],

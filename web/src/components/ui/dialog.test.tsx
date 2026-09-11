@@ -1,4 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { render, screen, cleanup, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
@@ -35,6 +37,30 @@ function Example() {
 }
 
 describe('Dialog', () => {
+  /**
+   * The approved canvas dims the page behind a dialog with the ink at 45% (ReportShare,
+   * 10 Sep). It is its own token because `--admin-bg-overlay`, the white veil this used to
+   * paint, is re-pointed by `.on-shell` for the rail's popovers and must stay light there.
+   */
+  it('paints the canvas scrim behind the dialog, not the popover veil', async () => {
+    render(<Example />)
+    await userEvent.click(screen.getByRole('button', { name: 'Open' }))
+    const overlay = await waitFor(() => {
+      const found = document.querySelector('[data-slot="dialog-overlay"]')
+      expect(found).not.toBeNull()
+      return found!
+    })
+    expect(overlay.className).toContain('bg-surface-scrim')
+    expect(overlay.className).not.toContain('bg-surface-overlay')
+
+    const tokens = readFileSync(join(process.cwd(), 'src', 'styles', 'tokens.css'), 'utf8')
+    expect(tokens).toMatch(/--admin-bg-scrim:\s*rgba\(17, 10, 41, 0\.45\);/)
+    // Light and dark both declare it, so a theme switch cannot fall back to nothing.
+    expect(tokens.match(/--admin-bg-scrim:/g)).toHaveLength(2)
+    const theme = readFileSync(join(process.cwd(), 'src', 'styles', 'theme.css'), 'utf8')
+    expect(theme).toContain('--color-surface-scrim: var(--admin-bg-scrim);')
+  })
+
   it('is closed until the trigger is used', () => {
     render(<Example />)
     expect(screen.queryByRole('dialog')).toBeNull()
