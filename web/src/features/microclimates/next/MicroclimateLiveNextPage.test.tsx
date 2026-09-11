@@ -340,15 +340,23 @@ describe('to respond', () => {
 })
 
 describe('the glyphs', () => {
-  it('draws the artboard’s own glyphs: the solid page, the solid sheet, the clock and the padlock', async () => {
+  it('draws the artboard’s own glyphs, outlined: the page, the sheet, the clock and the padlock', async () => {
     routeFetch(detail(), results({ responseCount: 3 }))
     renderPage()
     await waitFor(() => expect(figure()).toBe('3'))
 
+    // The canvas's own paths in its 16-unit box, stroked 2 and never filled: the render
+    // measures as an outline (MicroclimateLive.png, the page glyph's rows 121-127).
     const resultsLink = screen.getByRole('link', { name: 'Results' })
-    expect(resultsLink.querySelector('path[d="M4 2h5l3 3v9H4z"]')?.getAttribute('fill')).toBe('currentColor')
+    const page = resultsLink.querySelector('path[d="M4 2h5l3 3v9H4z"]')
+    expect(page).toBeTruthy()
+    expect(page?.getAttribute('fill')).toBeNull()
+    expect(resultsLink.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 16 16')
+    expect(resultsLink.querySelector('svg')?.getAttribute('stroke-width')).toBe('2')
     const copy = screen.getByRole('button', { name: 'Copy' })
-    expect(copy.querySelector('rect[x="5"][y="5"]')?.getAttribute('fill')).toBe('currentColor')
+    const sheet = copy.querySelector('rect[x="5"][y="5"]')
+    expect(sheet).toBeTruthy()
+    expect(sheet?.getAttribute('fill')).toBeNull()
     const close = screen.getByRole('button', { name: 'Close the session' })
     expect(close.querySelector('path[d="M8 5v3l2 1.5"]')).toBeTruthy()
     expect(wordsBlock().querySelector('[data-slot="words-hatch"] path[d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"]')).toBeTruthy()
