@@ -20,7 +20,7 @@ import {
   clearSurveyDraftSessionId,
   surveyDraftSessionId,
 } from './draftSession'
-import type { SurveyWizardValues } from './wizardValues'
+import type { ContentLanguage, SurveyWizardValues } from './wizardValues'
 
 /**
  * Autosave and recovery for the survey creation wizard (#266).
@@ -94,6 +94,12 @@ export interface UseSurveyDraftOptions {
   baseUrl: string
   /** Display locale for server messages. Not the survey's content language. */
   locale: string
+  /**
+   * The content language a restored snapshot falls back to when it names no usable
+   * one. The page passes the same value it seeds a fresh wizard with, so a draft that
+   * lost its `language` restores exactly as an empty wizard would start.
+   */
+  fallbackLanguage: ContentLanguage
   /** False until the page has a company scope; the hook reports `off` and does nothing. */
   enabled: boolean
   /** Distinct from the page's own counter, so restored React keys cannot collide. */
@@ -113,6 +119,12 @@ export interface UseSurveyDraftResult {
   dismissRecovery: () => void
   /** Re-run the blocked save, ignoring the version guard. Only meaningful on `conflict`. */
   saveAnyway: () => void
+  /**
+   * Save now rather than after the debounce — the builder's "Guardar borrador". The same save
+   * autosave runs, version guard included, so it can never overwrite another tab; it does
+   * nothing while a conflict has stopped autosave or before there is anything to save.
+   */
+  saveNow: () => void
   /** Called once the survey exists: the draft has served its purpose. */
   discardAfterCreate: () => Promise<void>
 }
@@ -121,7 +133,8 @@ export interface UseSurveyDraftResult {
 const AUTOSAVE_DELAY_MS = 1500
 
 export function useSurveyDraft(options: UseSurveyDraftOptions): UseSurveyDraftResult {
-  const { baseUrl, locale, enabled, keyPrefix, values, currentStep, onRestore } = options
+  const { baseUrl, locale, fallbackLanguage, enabled, keyPrefix, values, currentStep, onRestore } =
+    options
 
   const [state, setState] = useState<SurveyDraftState>({
     status: enabled ? 'idle' : 'off',
@@ -230,7 +243,9 @@ export function useSurveyDraft(options: UseSurveyDraftOptions): UseSurveyDraftRe
       .then((draft) => {
         if (cancelled) return
         const restored =
-          draft === null ? null : draftValuesFrom(draft.content, `${keyPrefix}-r`, 'en')
+          draft === null
+            ? null
+            : draftValuesFrom(draft.content, `${keyPrefix}-r`, fallbackLanguage)
         if (draft !== null && restored !== null && hasDraftableContent(restored)) {
           setRecovery({ draft, values: restored })
           return
@@ -247,7 +262,7 @@ export function useSurveyDraft(options: UseSurveyDraftOptions): UseSurveyDraftRe
     return () => {
       cancelled = true
     }
-  }, [baseUrl, enabled, keyPrefix, locale])
+  }, [baseUrl, enabled, fallbackLanguage, keyPrefix, locale])
 
   // The debounce. Re-armed by any change to the values or the step.
   useEffect(() => {
@@ -326,6 +341,12 @@ export function useSurveyDraft(options: UseSurveyDraftOptions): UseSurveyDraftRe
     void save(true)
   }, [save])
 
+  const saveNow = useCallback(() => {
+    if (!enabled || !decided || blockedRef.current) return
+    if (timerRef.current !== null) clearTimeout(timerRef.current)
+    void save(false)
+  }, [decided, enabled, save])
+
   const discardAfterCreate = useCallback(async () => {
     const id = draftIdRef.current
     // Stop the unmount flush from recreating what is about to be deleted.
@@ -347,6 +368,7 @@ export function useSurveyDraft(options: UseSurveyDraftOptions): UseSurveyDraftRe
     discardRecovered,
     dismissRecovery,
     saveAnyway,
+    saveNow,
     discardAfterCreate,
   }
 }

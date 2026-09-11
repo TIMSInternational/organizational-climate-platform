@@ -141,6 +141,12 @@ export interface PageTopBarProps {
     /** Already-translated. */
     text: string
     variant?: BadgeVariantProps['variant']
+    /**
+     * Classes merged over the variant through `cn`, for a chip the variants do not draw — the
+     * SurveyBuilder artboard's small serif "Borrador". Optional; a page that passes none renders
+     * the variant exactly as before.
+     */
+    className?: string
   }
   /** Buttons, links, filters — whatever the page acts with. */
   actions?: ReactNode
@@ -262,7 +268,7 @@ export function PageTopBar({
                 which would double up with this container's `gap`. */}
             {/* 24px, `--admin-text-3xl`: every artboard's page title. */}
             <h1 className="mb-0 min-w-0 break-words text-3xl">{title}</h1>
-            {badge && <Badge variant={badge.variant}>{badge.text}</Badge>}
+            {badge && <Badge variant={badge.variant} className={badge.className}>{badge.text}</Badge>}
           </div>
           {/* `text-fg-secondary`, not `text-fg-tertiary`. Measured in Chrome:
               `--admin-font-tertiary` #818181 on the panel #ffffff is **3.90:1** at

@@ -1,3 +1,9 @@
+/*
+ * UNROUTED since the redesign (ruled 10 Sep): `/surveys/:surveyId/distribution` renders
+ * `next/authoring/SurveyDistributionNextPage`. Kept as the wiring reference -- and, until a ruling
+ * says otherwise, as the one place the invitation copy editor, the QR code and the link
+ * regenerate/revoke controls are drawn.
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import { useTranslation, type Locale } from '../../../i18n'

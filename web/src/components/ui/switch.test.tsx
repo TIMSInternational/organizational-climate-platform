@@ -53,4 +53,25 @@ describe('Switch', () => {
       expect(screen.getByRole('switch').className.split(' ')).toContain('justify-start')
     }
   })
+
+  it('draws the SurveyBuilder artboard’s 16×28 track and 12px knob at size sm, and the 18×32 default elsewhere', () => {
+    // SurveyBuilder.dc.html draws `width: 28px; height: 16px` with the knob at `left: 14px`;
+    // Departments.dc.html and Notifications.dc.html draw 32×18. The classes are the pin, the
+    // builder shot the evidence (switch measured 28×16 at the artboard's x, 1px apart).
+    render(<Switch aria-label="small" size="sm" checked />)
+    const small = screen.getByRole('switch')
+    expect(small.getAttribute('data-size')).toBe('sm')
+    expect(small.className.split(' ')).toEqual(expect.arrayContaining(['h-4', 'w-7']))
+    expect(small.querySelector('[data-slot="switch-thumb"]')?.className.split(' ')).toEqual(
+      expect.arrayContaining(['size-3', 'translate-x-px', 'data-[state=checked]:translate-x-3.25']),
+    )
+    cleanup()
+    render(<Switch aria-label="default" checked />)
+    const normal = screen.getByRole('switch')
+    expect(normal.getAttribute('data-size')).toBe('default')
+    expect(normal.className.split(' ')).toEqual(expect.arrayContaining(['h-4.5', 'w-8']))
+    expect(normal.querySelector('[data-slot="switch-thumb"]')?.className.split(' ')).toEqual(
+      expect.arrayContaining(['size-3.5', 'translate-x-0.5', 'data-[state=checked]:translate-x-3.5']),
+    )
+  })
 })

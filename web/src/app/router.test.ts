@@ -15,6 +15,9 @@ import ReportsListNextPage from '../features/reports/next/ReportsListNextPage'
 import BenchmarksNextPage from '../features/analytics/next/benchmarks/BenchmarksNextPage'
 import SurveyQuestionsEditorPage from '../features/surveys/next/authoring/SurveyQuestionsEditorPage'
 import TemplateDetailNextPage from '../features/surveys/next/authoring/TemplateDetailNextPage'
+import SurveyBuilderNextPage from '../features/surveys/next/authoring/SurveyBuilderNextPage'
+import SurveyDetailNextPage from '../features/surveys/next/authoring/SurveyDetailNextPage'
+import SurveyDistributionNextPage from '../features/surveys/next/authoring/SurveyDistributionNextPage'
 import QuestionBankNextPage from '../features/questions/next/QuestionBankNextPage'
 import QuestionLibraryNextPage from '../features/questions/next/QuestionLibraryNextPage'
 import AIInsightsNextPage from '../features/analytics/next/AIInsightsNextPage'
@@ -308,6 +311,13 @@ describe('router', () => {
     // old page behind the same path would leave every path assertion green.
     expect(componentAt('/surveys/:id/questions')).toBe(SurveyQuestionsEditorPage)
     expect(componentAt('/surveys/templates/:id')).toBe(TemplateDetailNextPage)
+    // The authoring lane (ruled 10 Sep): the builder, the detail and the launch checklist replace
+    // the wizard, the detail page and the distribution page at the routes the list links to.
+    expect(componentAt('/surveys/new')).toBe(SurveyBuilderNextPage)
+    expect(componentAt('/surveys/:id')).toBe(SurveyDetailNextPage)
+    expect(componentAt('/surveys/:surveyId/distribution')).toBe(SurveyDistributionNextPage)
+    expect(byPath.has('/surveys/new/next')).toBe(false)
+    expect(byPath.has('/surveys/:id/next')).toBe(false)
     expect(componentAt('/admin/question-bank')).toBe(QuestionBankNextPage)
     expect(componentAt('/admin/question-library')).toBe(QuestionLibraryNextPage)
     expect(componentAt('/analytics/ai-insights')).toBe(AIInsightsNextPage)

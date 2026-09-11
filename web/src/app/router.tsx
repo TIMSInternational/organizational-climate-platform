@@ -35,7 +35,7 @@ import NotificationPreferencesPage from '../features/notifications/pages/Notific
 import ProfilePage from '../features/profile/pages/ProfilePage'
 import PrivacySettingsPage from '../features/profile/pages/PrivacySettingsPage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
-import SurveyDistributionPage from '../features/surveys/pages/SurveyDistributionPage'
+import SurveyDistributionNextPage from '../features/surveys/next/authoring/SurveyDistributionNextPage'
 import BenchmarksNextPage from '../features/analytics/next/benchmarks/BenchmarksNextPage'
 import AIInsightsNextPage from '../features/analytics/next/AIInsightsNextPage'
 import ReportsListNextPage from '../features/reports/next/ReportsListNextPage'
@@ -43,8 +43,8 @@ import SharedReportPage from '../features/reports/pages/SharedReportPage'
 import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
 import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPage'
-import SurveyCreatePage from '../features/surveys/pages/SurveyCreatePage'
-import SurveyDetailPage from '../features/surveys/pages/SurveyDetailPage'
+import SurveyBuilderNextPage from '../features/surveys/next/authoring/SurveyBuilderNextPage'
+import SurveyDetailNextPage from '../features/surveys/next/authoring/SurveyDetailNextPage'
 import SurveyQuestionsEditorPage from '../features/surveys/next/authoring/SurveyQuestionsEditorPage'
 import MySurveysPage from '../features/surveys/pages/MySurveysPage'
 import SurveyTemplatesPage from '../features/surveys/pages/SurveyTemplatesPage'
@@ -375,7 +375,9 @@ export const router = createBrowserRouter([
               // Before `/surveys/:id` for the same static-beats-dynamic reason the
               // two entries below record: `new` is a literal segment and could never
               // be read as a survey id, so the order is readability only.
-              { path: '/surveys/new', element: <SurveyCreatePage /> },
+              // The redesigned builder replaced the step-by-step wizard here (ruled 10 Sep); the old
+              // `pages/SurveyCreatePage.tsx` stays unrouted as the wiring reference.
+              { path: '/surveys/new', element: <SurveyBuilderNextPage /> },
               // Before `/surveys/:id` for readability only -- react-router ranks a
               // static segment above a dynamic one regardless of declaration order,
               // so `/surveys/my` could never be swallowed as an id. (The API relies
@@ -396,7 +398,9 @@ export const router = createBrowserRouter([
               // The redesigned Clima en el tiempo replaced `ClimateTrendsPage` here (same
               // ruling as `/surveys`); the old page stays unrouted as the wiring reference.
               { path: '/surveys/climate-trends', element: <ClimateTrendsNextPage /> },
-              { path: '/surveys/:id', element: <SurveyDetailPage /> },
+              // Same ruling: the redesigned Detalle de encuesta; `pages/SurveyDetailPage.tsx` stays
+              // unrouted as the wiring reference.
+              { path: '/surveys/:id', element: <SurveyDetailNextPage /> },
               // `/surveys/:id/respond` used to be declared here. It is now a sibling
               // of this whole `AdminLayout` branch, one level up — see the comment
               // beside it for why the respondent surface is not in the admin shell.
@@ -434,7 +438,9 @@ export const router = createBrowserRouter([
               { path: '/notifications', element: <NotificationsInboxPage /> },
               // Reached from a survey, not from the sidebar: distribution is an action on
               // one survey rather than a destination, so it gets a route and no nav entry.
-              { path: '/surveys/:surveyId/distribution', element: <SurveyDistributionPage /> },
+              // Same ruling: the redesigned launch checklist; `pages/SurveyDistributionPage.tsx` stays
+              // unrouted as the wiring reference.
+              { path: '/surveys/:surveyId/distribution', element: <SurveyDistributionNextPage /> },
               // The redesigned Puntos de Referencia replaced `BenchmarksPage` here (ruled
               // 10 Sep); the old page stays unrouted as the wiring reference.
               { path: '/analytics/benchmarks', element: <BenchmarksNextPage /> },
