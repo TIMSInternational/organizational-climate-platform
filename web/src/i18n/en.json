@@ -3738,7 +3738,8 @@
     "next": {
       "toAnswerHeading": "To answer",
       "toAnswerMetaOne": "one open survey",
-      "toAnswerMetaMany": "{count} open surveys",
+      "toAnswerMetaAndOneMore": "one open survey, and one more",
+      "toAnswerMetaAndMore": "one open survey, and {count} more",
       "openChip": "Open",
       "closesOnDate": "on {date}",
       "canSaveLater": "You can save and finish later.",
@@ -3746,7 +3747,8 @@
       "previousMeta": "{survey} · closed",
       "plansStillOpen": "All {count} are still open; their leaders can see them too.",
       "plansStillOpenOne": "It is still open; its leaders can see it too.",
-      "resultsNote": "Your department's results are published when the survey closes. We will let you know by email, and this page will show what was done with them."
+      "resultsNote": "Your department's results are published when the survey closes. We will let you know by email, and this page will show what was done with them.",
+      "homeDescriptionMany": "{count} surveys are open to you. Everything else on this page is what the company did with the last one."
     }
   },
   "systemHealth": {

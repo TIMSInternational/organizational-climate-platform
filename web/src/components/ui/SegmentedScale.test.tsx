@@ -31,6 +31,13 @@ function renderScale(overrides: Partial<Parameters<typeof SegmentedScale>[0]> = 
 }
 
 describe('SegmentedScale', () => {
+  it('sets its points at the canvas’s 17px step (`text-question`)', () => {
+    renderScale()
+    for (const radio of screen.getAllByRole('radio')) {
+      expect(radio.className.split(/\s+/)).toContain('text-question')
+    }
+  })
+
   it('is one radiogroup with a segment per scale point', () => {
     renderScale()
     expect(screen.getByRole('radiogroup')).toBeTruthy()

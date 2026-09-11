@@ -658,6 +658,26 @@ describe('SurveyRespondForm numeric scales', () => {
     expect(screen.getByText('Siempre')).toBeTruthy()
   })
 
+  /**
+   * The canvas sets the question at 17px with line-height 1.4 and its scale points at 17px
+   * (RespondSurveyPhone.dc.html). The type scale had no 17px step, so both were drawn at
+   * 16px; `text-question` is that step (`tokens.css`, pinned in `tokens.test.ts`).
+   */
+  it('sets the question and its scale points at the canvas’s 17px step', async () => {
+    respondWith(view({ questions: [scaleQuestion()] }))
+    const { container } = renderForm()
+
+    const group = await screen.findByRole('radiogroup')
+    const text = container.querySelector('[data-slot="question-text"]') as HTMLElement
+    expect(text.className.split(/\s+/)).toContain('text-question')
+    expect(text.className.split(/\s+/)).not.toContain('text-xl')
+    // The step carries the canvas's 1.4; a `leading-*` beside it would override it.
+    expect(text.className).not.toMatch(/\bleading-/)
+    for (const point of within(group).getAllByRole('radio')) {
+      expect(point.className.split(/\s+/)).toContain('text-question')
+    }
+  })
+
   it('submits the scale point as the stored code', async () => {
     respondWith(view({ questions: [scaleQuestion()] }))
     renderForm()

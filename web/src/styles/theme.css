@@ -254,6 +254,9 @@
   --text-kpi-lg--line-height: 1;
   --text-kpi-hero: var(--admin-text-kpi-hero);
   --text-kpi-hero--line-height: 1;
+  /* The respond card's question: the canvas sets it at 17px with line-height 1.4. */
+  --text-question: var(--admin-text-question);
+  --text-question--line-height: 1.4;
 
   --leading-tight: var(--admin-leading-tight);
   --leading-snug: var(--admin-leading-snug);

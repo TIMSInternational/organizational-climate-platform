@@ -408,6 +408,22 @@ describe('MicroclimateRespondPage as a respondent surface', () => {
     expect(container.querySelector('form')?.closest('[data-slot="pulse-column"]')).toBe(column)
   })
 
+  /** RespondMicroclimatePhone.dc.html sets each question at 17px, line-height 1.4, as the survey card. */
+  it('sets each question at the canvas’s 17px step, as the survey card does', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(pulseMicroclimate()), { status: 200 }),
+    )
+    const { container } = renderPage()
+    await screen.findByRole('heading', { name: 'Pulso semanal' })
+
+    const texts = [...container.querySelectorAll('[data-slot="question-text"]')]
+    expect(texts).toHaveLength(pulseMicroclimate().questions.length)
+    for (const text of texts) {
+      expect(text.className.split(/\s+/)).toContain('text-question')
+      expect(text.className).not.toMatch(/\bleading-/)
+    }
+  })
+
   /**
    * The canvas's open answer is one 44px line with "Una palabra" in it and, under it, what
    * happens to the words — counts, never the text, and only from the floor up. A `<legend>`

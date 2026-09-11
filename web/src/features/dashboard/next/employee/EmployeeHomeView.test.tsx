@@ -187,6 +187,41 @@ describe('EmployeeHomeView', () => {
     }
   })
 
+  /**
+   * At 390px equal thirds are ~70px inside and "unos 4 min" is ~84px of mono, so it broke as
+   * "unos 4 / min" (home-390-light.png, fix round 1; and in the 1024 two-column card). A tile
+   * takes an equal third where a third holds its reading and is never narrower than its
+   * reading; one that does not fit moves to the next line. A reading's number is held to its
+   * unit besides.
+   */
+  it('holds each reading’s number to its unit, and never draws a tile narrower than its reading', async () => {
+    serves()
+    renderHome()
+
+    const lead = await waitFor(() => {
+      const found = document.querySelector('[data-slot="home-lead"]')
+      expect(found).toBeTruthy()
+      return found as HTMLElement
+    })
+    expect([...lead.querySelectorAll('dd')].map((value) => value.textContent)).toEqual([
+      '6',
+      es('employee.taskMinutes', { minutes: 4 }).replace(' min', '\u00a0min'),
+      '10\u00a0oct',
+    ])
+    const list = lead.querySelector('dl') as HTMLElement
+    const classes = list.className.split(/\s+/)
+    expect(classes).toEqual(expect.arrayContaining(['flex', 'flex-wrap']))
+    // Fixed thirds are what broke it: no grid track decides a tile's width.
+    expect(classes.some((name) => name.includes('grid'))).toBe(false)
+    for (const tile of list.children) {
+      const tileClasses = tile.className.split(/\s+/)
+      // Equal shares from a zero basis, floored at the reading: with `min-w-0` a tile shrank
+      // and "10 oct" broke as "10 oc / t" at 390px (fix round 2's first shot, read).
+      expect(tileClasses).toEqual(expect.arrayContaining(['flex-1', 'min-w-max']))
+      expect(tileClasses).not.toContain('min-w-0')
+    }
+  })
+
   it('makes the anonymity promise beside an anonymous survey, in the respond page’s words', async () => {
     serves()
     renderHome()
@@ -269,7 +304,89 @@ describe('EmployeeHomeView', () => {
       '/surveys/4c9c8c8c-03e1-4033-8224-8c80b242c558/respond',
       '/surveys/801a81a4-3551-4f08-96f4-d465e05b1605/respond',
     ])
-    expect(screen.getByText(es('employee.next.toAnswerMetaMany', { count: 2 }))).toBeTruthy()
+    // The canvas's pattern — the card's survey, then what else is open — with the real count.
+    expect(document.querySelector('[data-slot="home-to-answer-meta"]')?.textContent).toBe(
+      es('employee.next.toAnswerMetaAndOneMore'),
+    )
+    expect(screen.getByText(es('employee.next.homeDescriptionMany', { count: 2 }))).toBeTruthy()
+  })
+
+  /**
+   * "Hay una encuesta abierta para usted" is a count. With two open it sat over "2 encuestas
+   * abiertas" — one short of the section under it (home-390-light.png, fix round 1). Both
+   * sentences are counted from `pendingSurveyCount`.
+   */
+  it('counts the open surveys from the payload, under the greeting and in the section meta', async () => {
+    serves({
+      dashboard: home({
+        pendingSurveyCount: 3,
+        pendingSurveys: [
+          survey(),
+          survey({ id: '801a81a4-3551-4f08-96f4-d465e05b1605', title: 'Encuesta de Clima Q4 (abierta) (Copia)' }),
+          survey({ id: 'a7c4f1de-2b8e-4a55-9d1e-3f0b6c2d9e11', title: 'Pulso de bienvenida' }),
+        ],
+      }),
+    })
+    renderHome()
+
+    expect(await screen.findByText(es('employee.next.homeDescriptionMany', { count: 3 }))).toBeTruthy()
+    expect(screen.queryByText(es('employee.homeDescription'))).toBeNull()
+    expect(document.querySelector('[data-slot="home-to-answer-meta"]')?.textContent).toBe(
+      es('employee.next.toAnswerMetaAndMore', { count: 2 }),
+    )
+  })
+
+  it('counts the rest from the count, not from the page of the list the payload carries', async () => {
+    // `SurveyRowLimit` = 5: the list is a page of the open surveys, and the count is the truth.
+    const page = Array.from({ length: 5 }, (_, index) =>
+      survey({ id: `00000000-0000-4000-8000-00000000000${index}`, title: `Encuesta ${index + 1}` }),
+    )
+    serves({ dashboard: home({ pendingSurveyCount: 7, pendingSurveys: page }) })
+    renderHome()
+
+    expect(await screen.findByText(es('employee.next.homeDescriptionMany', { count: 7 }))).toBeTruthy()
+    expect(document.querySelector('[data-slot="home-to-answer-meta"]')?.textContent).toBe(
+      es('employee.next.toAnswerMetaAndMore', { count: 6 }),
+    )
+  })
+
+  it('keeps the one-survey sentences when one survey is open', async () => {
+    serves()
+    renderHome()
+
+    expect(await screen.findByText(es('employee.homeDescription'))).toBeTruthy()
+    expect(document.querySelector('[data-slot="home-to-answer-meta"]')?.textContent).toBe(
+      es('employee.next.toAnswerMetaOne'),
+    )
+  })
+
+  /**
+   * At 390px "Responder" dropped onto a line of its own under the row's text
+   * (home-390-light.png, fix round 1). The row is one line at every width: the title wraps
+   * inside its own column, and the way in keeps its place at the right.
+   */
+  it('keeps each other survey’s way in at the right of its row, never on a line of its own', async () => {
+    serves({
+      dashboard: home({
+        pendingSurveyCount: 2,
+        pendingSurveys: [
+          survey(),
+          survey({ id: '801a81a4-3551-4f08-96f4-d465e05b1605', title: 'Encuesta de Clima Q4 (abierta) (Copia)' }),
+        ],
+      }),
+    })
+    renderHome()
+
+    const row = await waitFor(() => {
+      const node = document.querySelector<HTMLElement>('[data-slot="home-also-open"]')
+      if (!node) throw new Error('no row yet')
+      return node
+    })
+    expect(row.className.split(/\s+/)).not.toContain('flex-wrap')
+    const [text, way] = [...row.children] as HTMLElement[]
+    expect(text.className.split(/\s+/)).toEqual(expect.arrayContaining(['min-w-0', 'flex-1']))
+    expect(way.tagName).toBe('A')
+    expect(way.className.split(/\s+/)).toContain('shrink-0')
   })
 
   it('answers an empty queue in words naming the department, and offers no way into a survey', async () => {

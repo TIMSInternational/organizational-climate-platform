@@ -149,7 +149,7 @@ export default function RespondQuestionField({
         </span>
         <span
           data-slot="question-text"
-          className="mt-3.5 block text-xl font-normal leading-snug text-fg-primary"
+          className="mt-3.5 block text-question font-normal text-fg-primary"
         >
           {question.text ?? t('untitledQuestion')}
           {question.required ? <span className="sr-only"> {t('requiredMarker')}</span> : null}

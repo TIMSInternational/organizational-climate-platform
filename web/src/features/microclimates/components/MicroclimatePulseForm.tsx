@@ -623,7 +623,7 @@ export default function MicroclimatePulseForm({
                     </span>
                     {/* The one thing being asked, the largest sans type on the card.
                       This is the whole page for most respondents. */}
-                    <span className="mt-3.5 block text-xl font-normal leading-snug text-fg-primary">
+                    <span data-slot="question-text" className="mt-3.5 block text-question font-normal text-fg-primary">
                       {question.text}
                     </span>
                   </legend>

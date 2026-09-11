@@ -44,9 +44,11 @@ import type { EmployeeHomeModel, HomeOutcome, HomeSurvey } from './model'
  *
  * ## Where it departs from the artboard, and why
  *
- * The section meta says how many surveys are open ("2 encuestas abiertas"); the artboard's
- * "una encuesta abierta, y su copia de ensayo" knows the second is a rehearsal copy, which
- * nothing on the payload does. "Puede guardar y terminar después." is printed only when the
+ * The section meta keeps the artboard's pattern — the survey on the card, then what else is
+ * open — and counts the rest ("una encuesta abierta, y otra más"): the artboard's "y su copia
+ * de ensayo" knows the second is a rehearsal copy, which nothing on the payload does. The
+ * sentence under the greeting counts too, from the same `pendingSurveyCount`, so the two can
+ * never disagree. "Puede guardar y terminar después." is printed only when the
  * lead survey's own `allowPartialResponses` says so. The anonymity block keeps the respond
  * page's copy, which this lane was told to leave unchanged.
  */
@@ -74,13 +76,7 @@ export default function EmployeeHomeView({
         // The greeting IS the heading: the one page in the product addressed to a person
         // rather than to an administrator.
         title={model ? t(greetingKey(new Date().getHours()), { name: model.personName }) : t('dashboard.myDashboard')}
-        description={
-          model
-            ? model.pendingCount > 0
-              ? t('employee.homeDescription')
-              : t('employee.homeDescriptionNothingDue')
-            : undefined
-        }
+        description={model ? homeDescription(model.pendingCount, t) : undefined}
       />
 
       {notice ? <div className="mb-section">{notice}</div> : null}
@@ -121,6 +117,29 @@ function greetingKey(hour: number): string {
   return 'employee.greetingEvening'
 }
 
+/**
+ * The sentence under the greeting. "Hay una encuesta abierta para usted" is a count, so it is
+ * printed only when one is open; with two open it sat over a section of two, one short.
+ */
+function homeDescription(pendingCount: number, t: TranslateFn): string {
+  if (pendingCount === 0) return t('employee.homeDescriptionNothingDue')
+  if (pendingCount === 1) return t('employee.homeDescription')
+  return t('employee.next.homeDescriptionMany', { count: pendingCount })
+}
+
+/**
+ * The section meta in the canvas's pattern — the survey on the card, then what else is open.
+ * The canvas says "una encuesta abierta, y su copia de ensayo" because its second survey is
+ * its demo's rehearsal copy; nothing on `DashboardPendingSurvey` says a survey is a copy, so
+ * the rest is counted: "una encuesta abierta, y otra más", "…, y 2 más". From
+ * `pendingSurveyCount`, never from the list, which is a page of it (`SurveyRowLimit` = 5).
+ */
+function toAnswerMeta(pendingCount: number, t: TranslateFn): string {
+  if (pendingCount === 1) return t('employee.next.toAnswerMetaOne')
+  if (pendingCount === 2) return t('employee.next.toAnswerMetaAndOneMore')
+  return t('employee.next.toAnswerMetaAndMore', { count: pendingCount - 1 })
+}
+
 function HomeBody({ model }: { model: EmployeeHomeModel }) {
   const { t } = useTranslation()
 
@@ -134,10 +153,8 @@ function HomeBody({ model }: { model: EmployeeHomeModel }) {
             {t('employee.next.toAnswerHeading')}
           </h2>
           {model.pendingCount > 0 ? (
-            <span className="text-sm text-fg-secondary">
-              {model.pendingCount === 1
-                ? t('employee.next.toAnswerMetaOne')
-                : t('employee.next.toAnswerMetaMany', { count: model.pendingCount })}
+            <span data-slot="home-to-answer-meta" className="text-sm text-fg-secondary">
+              {toAnswerMeta(model.pendingCount, t)}
             </span>
           ) : null}
         </div>
@@ -208,7 +225,9 @@ function LeadCard({ survey, allowsSaveForLater }: { survey: HomeSurvey; allowsSa
     <div
       data-slot="home-lead"
       className={cn(
-        'grid gap-6 rounded-xl border border-accent-blue bg-surface-card px-5 pb-5 pt-4.5 shadow-sm',
+        // 16px sides on a phone, the canvas's 20px from `sm`: the 8px given back is what lets
+        // the three readings sit on one line at 390px.
+        'grid gap-6 rounded-xl border border-accent-blue bg-surface-card px-4 pb-5 pt-4.5 shadow-sm sm:px-5',
         // The promise takes the right-hand column only when there is one to make; a
         // survey that records who answered gets the full width and no block.
         survey.anonymous && 'lg:grid-cols-[minmax(0,1fr)_320px]',
@@ -222,8 +241,12 @@ function LeadCard({ survey, allowsSaveForLater }: { survey: HomeSurvey; allowsSa
         <h3 className="m-0 font-store-serif text-2xl font-normal">{survey.name ?? t('surveys.untitled')}</h3>
 
         {/* Three readings, in mono, as the canvas sets them. `dl` because each is a
-            labelled value rather than a row of a table. */}
-        <dl className="m-0 grid max-w-120 grid-cols-3 gap-2.5">
+            labelled value rather than a row of a table. Equal thirds wherever a third holds
+            its reading — the canvas's 1440 — and never a tile narrower than its reading: a
+            tile that cannot have its third keeps its reading's width and the others share
+            the rest, and one that does not fit at all moves to the next line. Fixed thirds
+            broke "unos 4 min" as "unos 4 / min" at 390px and in the 1024 two-column card. */}
+        <dl className="m-0 flex max-w-120 flex-wrap gap-2 sm:gap-2.5">
           <Reading label={t('employee.taskQuestions')} value={survey.questionCount.toLocaleString(locale)} />
           <Reading label={t('employee.taskAbout')} value={t('employee.taskMinutes', { minutes: survey.minutes })} />
           <Reading label={t('employee.taskCloses')} value={calendarDay(Date.parse(survey.closesAt), locale)} />
@@ -249,14 +272,23 @@ function LeadCard({ survey, allowsSaveForLater }: { survey: HomeSurvey; allowsSa
   )
 }
 
+/**
+ * A reading's last word held to the one before it — "4 min", "10 oct" — so a tile too narrow
+ * for the whole reading breaks before the number, never between the number and its unit.
+ */
+function bindLastWord(value: string): string {
+  return value.replace(/ (?=\S+$)/, '\u00a0')
+}
+
 /** One labelled reading on the task card — the canvas's ground-coloured tile. */
 function Reading({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-surface-outer px-3 py-2.5">
+    // `flex-1` from a zero basis is the equal thirds; `min-w-max` is the floor — with
+    // `min-w-0` instead, a tile shrank below its reading and "10 oct" broke as "10 oc / t".
+    <div className="flex min-w-max flex-1 flex-col gap-0.5 rounded-lg bg-surface-outer px-2.5 py-2.5 sm:px-3">
       <dt className="text-2xs font-bold uppercase tracking-label text-fg-secondary">{label}</dt>
-      {/* Wraps rather than truncates: at 390px the three tiles are ~70px inside, and an
-          ellipsised "unos 4…" is a different reading from "unos 4 min". */}
-      <dd className="m-0 break-words font-mono text-lg tabular-nums text-fg-primary">{value}</dd>
+      {/* Never truncated: an ellipsised "unos 4…" is a different reading from "unos 4 min". */}
+      <dd className="m-0 break-words font-mono text-lg tabular-nums text-fg-primary">{bindLastWord(value)}</dd>
     </div>
   )
 }
@@ -273,11 +305,14 @@ function AlsoOpenRow({ survey }: { survey: HomeSurvey }) {
   const date = calendarDay(Date.parse(survey.closesAt), locale)
 
   return (
+    // One line at every width: the title wraps inside its own column, and the way in keeps
+    // its place at the right. With `flex-wrap`, at 390px "Responder" dropped onto a line of
+    // its own under the text.
     <li
       data-slot="home-also-open"
-      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line-light px-3.5 py-2.5"
+      className="flex items-center justify-between gap-3 rounded-lg border border-line-light px-3.5 py-2.5"
     >
-      <div className="flex min-w-0 items-center gap-2.5">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
         <span
           aria-hidden="true"
           className="grid size-7 shrink-0 place-items-center rounded-lg bg-surface-icon-box text-fg-secondary"

@@ -3738,7 +3738,8 @@
     "next": {
       "toAnswerHeading": "Para responder",
       "toAnswerMetaOne": "una encuesta abierta",
-      "toAnswerMetaMany": "{count} encuestas abiertas",
+      "toAnswerMetaAndOneMore": "una encuesta abierta, y otra más",
+      "toAnswerMetaAndMore": "una encuesta abierta, y {count} más",
       "openChip": "Abierta",
       "closesOnDate": "el {date}",
       "canSaveLater": "Puede guardar y terminar después.",
@@ -3746,7 +3747,8 @@
       "previousMeta": "{survey} · cerrada",
       "plansStillOpen": "Los {count} siguen abiertos; sus líderes también pueden verlos.",
       "plansStillOpenOne": "Sigue abierto; sus líderes también pueden verlo.",
-      "resultsNote": "Los resultados de su departamento se publican cuando la encuesta cierra. Le avisaremos por correo, y aquí verá qué se hizo con ellos."
+      "resultsNote": "Los resultados de su departamento se publican cuando la encuesta cierra. Le avisaremos por correo, y aquí verá qué se hizo con ellos.",
+      "homeDescriptionMany": "Hay {count} encuestas abiertas para usted. Todo lo demás en esta página es lo que la empresa hizo con la anterior."
     }
   },
   "systemHealth": {

@@ -195,9 +195,9 @@ export function SegmentedScale({
                 // what the height is for.
                 'h-13 flex-1 rounded-lg border',
                 // The instrument rule: a reading is mono with tabular figures, so
-                // the row does not shift as points are chosen. 16px because the
-                // canvas's 17px is not on the type scale.
-                'font-mono text-xl tabular-nums',
+                // the row does not shift as points are chosen. 17px, the canvas's
+                // size for the points, as the question above them (`text-question`).
+                'font-mono text-question tabular-nums',
                 'transition-[background-color,border-color,color] ease-out',
                 'disabled:cursor-not-allowed disabled:opacity-50',
                 checked
