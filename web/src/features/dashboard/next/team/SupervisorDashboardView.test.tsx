@@ -14,8 +14,11 @@ import en from '../../../../i18n/en.json'
 
 /**
  * The supervisor's Panel de Control — a proposal — drawn from a model composed the way the
- * hook composes it. Payloads shaped from Grupo Meridiano's supervisor on 11 Sep 2026
- * (`scripts/shot-fixtures/supervisor-meridiano.json`).
+ * hook composes it. Payloads shaped from Grupo Meridiano's supervisor on 11 Sep 2026: the
+ * department read and her surveys from `scripts/shot-fixtures/supervisor-meridiano.json`
+ * (verbatim; live, her mis-tareas is empty), and the plan she executes from the constructed
+ * state `supervisor-meridiano-involucrada.json` (PA-2026-00002 with her id among the
+ * involucrados).
  */
 
 const copy = en.dashboard.next.supervisor

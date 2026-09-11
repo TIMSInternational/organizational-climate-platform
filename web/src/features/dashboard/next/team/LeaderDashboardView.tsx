@@ -41,7 +41,12 @@ const PLANS_LISTED = 3
  *   "protegido", and the comparison beside them is dropped with them — half a comparison
  *   would give the other half back.
  * - **A sub-floor count.** The open survey's team count is `null` under the floor in the
- *   model, so the row can only draw "menos de 5 respuestas".
+ *   model, so the row can only draw "menos de 5 respuestas" — and the file behind
+ *   "Exportar" holds the same count to the same floor (`DashboardExport.TeamCountFloor`), so
+ *   the download cannot print what the row hatches.
+ * - **Another organisation's numbers as this one's.** The org. bar and the move against it
+ *   come from `sampleModel.ts`; every card that draws them carries the "Datos de muestra"
+ *   chip, and the legend names the organisation without the sample's respondent count.
  * - **A control the server would refuse.** "Exportar" is the department's file
  *   (`canExport` for a team role, `DashboardEndpoints.cs:124`). "Crear plan" is offered only
  *   where a tracking plan can be created for this team — a node leader on their own nodo,
