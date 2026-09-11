@@ -306,7 +306,7 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
 
       {manages && (
         <Dialog open={progressOpen} onOpenChange={setProgressOpen}>
-          <DialogContent>
+          <DialogContent closeLabel={t('common.close')}>
             <DialogHeader>
               <DialogTitle>{t('actionPlans.next.progressDialogTitle')}</DialogTitle>
               <DialogDescription>{t('actionPlans.next.progressDialogDescription')}</DialogDescription>

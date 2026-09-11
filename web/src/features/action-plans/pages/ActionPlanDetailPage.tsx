@@ -1,3 +1,11 @@
+/**
+ * NOT ROUTED. `/action-plans/:id` renders the redesigned board (`../next/ActionPlanDetailNextPage`),
+ * which replaced this page — ruled 10 Sep: a redesigned screen replaces its real route.
+ * Nothing in `router.tsx` reaches this file.
+ *
+ * It stays in the tree on purpose, as the wiring reference: `useActionPlanDetailModel` makes this page's read and its two writes,
+ * and this file's own test still pins what it did. Delete it when nothing reads it.
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { calendarDay } from '../../../lib/calendarDay'
 import { useParams } from 'react-router'
