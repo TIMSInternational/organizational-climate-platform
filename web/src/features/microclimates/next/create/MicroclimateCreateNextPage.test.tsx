@@ -162,7 +162,11 @@ describe('MicroclimateCreateNextPage', () => {
     const time = screen.getByRole('textbox', { name: copy.time })
     // The day keeps the time it had.
     expect((time as HTMLInputElement).value).toBe('21:00')
+    // A full keyboard, not a digit pad: a phone's digit pad has no ":".
+    expect(time.getAttribute('inputmode')).toBeNull()
     await userEvent.clear(time)
+    // An emptied field is not yet a wrong one.
+    expect(screen.queryByText(copy.timeInvalid)).toBeNull()
     // A half-typed time moves nothing and says how to write one.
     await userEvent.type(time, '8:3')
     expect(screen.getByText(copy.timeInvalid)).toBeTruthy()

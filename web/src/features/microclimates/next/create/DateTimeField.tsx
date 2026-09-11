@@ -49,7 +49,8 @@ export function DateTimeField({
   const [open, setOpen] = useState(false)
   const [time, setTime] = useState('')
   const date = parseLocal(value)
-  const timeValid = HOURS_MINUTES.test(time)
+  // An emptied field is not yet a wrong one: the hint waits for a time typed wrong.
+  const timeInvalid = time !== '' && !HOURS_MINUTES.test(time)
 
   function openChange(next: boolean) {
     // The time field starts from the value each time the picker opens, so a half-typed time
@@ -110,19 +111,20 @@ export function DateTimeField({
               <label htmlFor={timeId} className="m-0 text-sm font-semibold leading-normal text-fg-secondary">
                 {t('microclimates.next.create.time')}
               </label>
+              {/* No `inputMode="numeric"`: a phone's digit pad has no ":", so "08:30" could
+                  not be typed on one. */}
               <Input
                 id={timeId}
                 value={time}
-                inputMode="numeric"
                 autoComplete="off"
                 maxLength={5}
-                aria-invalid={!timeValid || undefined}
-                aria-describedby={timeValid ? undefined : timeHintId}
+                aria-invalid={timeInvalid || undefined}
+                aria-describedby={timeInvalid ? timeHintId : undefined}
                 className="h-8 w-20 px-2 text-center font-mono tabular-nums"
                 onChange={(event) => typeTime(event.target.value)}
               />
             </div>
-            {!timeValid && (
+            {timeInvalid && (
               <span id={timeHintId} className="text-xs text-accent-red">
                 {t('microclimates.next.create.timeInvalid')}
               </span>
