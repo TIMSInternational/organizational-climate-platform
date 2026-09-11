@@ -32,4 +32,14 @@ describe('Switch', () => {
     await userEvent.click(screen.getByRole('switch'))
     expect(onCheckedChange).not.toHaveBeenCalled()
   })
+
+  it('lays the thumb out as a knob: no button padding on the track, and a thumb that cannot shrink', () => {
+    // index.css pads every bare <button> 12px a side; on the 28px track that squeezed the
+    // flex-shrinking thumb to a 2px sliver. happy-dom has no layout, so the classes are the pin
+    // and the authoring screenshots are the evidence.
+    render(<Switch aria-label="Login enabled" checked />)
+    const root = screen.getByRole('switch')
+    expect(root.className.split(' ')).toContain('p-0')
+    expect(root.querySelector('[data-slot="switch-thumb"]')?.className.split(' ')).toContain('shrink-0')
+  })
 })

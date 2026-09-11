@@ -4,14 +4,27 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { PageTopBar } from '../../../../components/layout'
 import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, SkeletonText, Switch, Textarea } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
+import { useCompanyScope } from '../../../../company-context'
+import { QuestionLibraryBrowser } from '../../../../components/questions'
 import { useTranslation, type Locale } from '../../../../i18n'
 import { cn } from '../../../../lib/cn'
 import { getSurveyQuestionAuthoring, saveSurveyQuestions, type AuthoringQuestion, type SurveyQuestionAuthoring } from '../../api/surveyQuestionAuthoring'
 import { duplicateSurvey, getSurvey, type SurveyDetail } from '../../api/surveys'
 import { dimensionLabel } from '../../dimensionLabel'
-import { needsScaleLabels, questionTypeLabel, statusLabel, SUGGESTED_DIMENSION_KEYS, typeLabel } from '../../surveyVocabulary'
+import { needsScaleLabels, statusLabel, SUGGESTED_DIMENSION_KEYS, SURVEY_QUESTION_TYPES, typeLabel } from '../../surveyVocabulary'
 import { Eyebrow, IconBox, Note, Panel, PanelHeading, Segmented } from '../../../shared-next/parts'
-import { authoredLocales, blankQuestion, isEditable, moveQuestion, removeQuestion, summarise } from './model'
+import {
+  authoredLocales,
+  blankQuestion,
+  compatibleScaleTypes,
+  dimensionsWithout,
+  isEditable,
+  moveQuestion,
+  questionFromLibraryItem,
+  removeQuestion,
+  scaleName,
+  summarise,
+} from './model'
 
 /**
  * Editar preguntas, redesigned — both states of one route (canvas boards
@@ -57,8 +70,10 @@ export default function SurveyQuestionsEditorPage() {
   const { id } = useParams<{ id: string }>()
   const { t, locale } = useTranslation()
   const caps = useViewerCapabilities()
+  const scope = useCompanyScope()
   const navigate = useNavigate()
   const { state, reload } = useSurveyQuestionsModel(id)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   // null until the author changes something: the list on screen is the payload's until then,
   // so the first render already counts the real questions.
   const [edited, setEdited] = useState<AuthoringQuestion[] | null>(null)
@@ -99,6 +114,7 @@ export default function SurveyQuestionsEditorPage() {
   // The reader's language first, as the board orders ES · EN for a Spanish reader.
   const locales = [...authoring.locales].sort((x, y) => (x === locale ? -1 : y === locale ? 1 : 0))
   const summary = summarise(questions, locales)
+  const emptied = dimensionsWithout(authoring.questions, questions)
   const title = detail.title ?? t('surveys.untitled')
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.authoring.${key}`, vars)
   const shownLocale = locales.includes(previewLocale) ? previewLocale : locales[0]
@@ -328,9 +344,18 @@ export default function SurveyQuestionsEditorPage() {
                           </select>
                         </EditorField>
                         <EditorField label={copy('scale')} hint={copy('scaleHint')}>
-                          <div className="flex h-8 items-center rounded-md border border-line-light bg-surface-icon-box px-2 text-sm text-fg-primary">
-                            {scaleLong(t, question)}
-                          </div>
+                          <select
+                            className="h-8 rounded-md border border-line-default bg-surface-card px-2 text-sm text-fg-primary"
+                            value={question.type}
+                            disabled={compatibleScaleTypes(question).length < 2}
+                            onChange={(e) => update(index, { type: e.target.value })}
+                          >
+                            {compatibleScaleTypes(question).map((type) => (
+                              <option key={type} value={type}>
+                                {scaleLong(t, { ...question, type })}
+                              </option>
+                            ))}
+                          </select>
                         </EditorField>
                       </div>
                       {needsScaleLabels(question.type) &&
@@ -374,19 +399,39 @@ export default function SurveyQuestionsEditorPage() {
             })}
           </ol>
           {editable && (
-            <Button
-              type="button"
-              variant="ghost"
-              className="mt-2 h-10 w-full border border-dashed border-line-default text-sm"
-              onClick={() => {
-                setQuestions((current) => [...current, blankQuestion(current.length, locales)])
-                setOpenIndex(questions.length)
+            <div data-testid="add-question" className="mt-2 flex h-10 w-full items-center justify-center gap-1 rounded-lg border border-dashed border-line-default text-sm">
+              <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => setLibraryOpen(true)}>
+                <Plus aria-hidden="true" />
+                {copy('addQuestion')}
+                <span className="font-normal text-fg-secondary">{copy('addFromLibrary')}</span>
+              </Button>
+              <span className="text-fg-secondary">{copy('addOr')}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-8 px-1.5 font-normal text-fg-secondary"
+                onClick={() => {
+                  setQuestions((current) => [...current, blankQuestion(current.length, locales)])
+                  setOpenIndex(questions.length)
+                }}
+              >
+                {copy('addBlankLink')}
+              </Button>
+            </div>
+          )}
+          {editable && (
+            <QuestionLibraryBrowser
+              open={libraryOpen}
+              onOpenChange={setLibraryOpen}
+              companyId={scope.companyId ?? null}
+              allowedTypes={SURVEY_QUESTION_TYPES}
+              typeLabel={(type) => scaleName(t, type)}
+              onAdd={(picked) => {
+                // Functional: the browser can add several times before it closes.
+                setQuestions((current) => [...current, ...picked.map((item, i) => questionFromLibraryItem(item, current.length + i, locales))])
+                setOpenIndex(null)
               }}
-            >
-              <Plus aria-hidden="true" />
-              {copy('addQuestion')}
-              <span className="font-normal text-fg-secondary">{copy('addBlank')}</span>
-            </Button>
+            />
           )}
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line-light pt-3 text-xs text-fg-secondary">
             <span data-testid="questions-summary">
@@ -408,15 +453,20 @@ export default function SurveyQuestionsEditorPage() {
                 .filter(Boolean)
                 .join(' · ')}
             </span>
-            {!locked &&
-              (summary.uncategorised === 0 ? (
-                <span className="inline-flex items-center gap-1 text-chip-good-ink">
-                  <Check aria-hidden="true" className="size-3.5" />
-                  {copy('allHaveDimension')}
-                </span>
-              ) : (
-                <span className="text-accent-amber-ink">{copy('missingDimension', { count: summary.uncategorised })}</span>
-              ))}
+            {!locked && (
+              <span data-testid="dimension-check">
+                {summary.uncategorised > 0 ? (
+                  <span className="text-accent-amber-ink">{copy('missingDimension', { count: summary.uncategorised })}</span>
+                ) : emptied.length > 0 ? (
+                  <span className="text-accent-amber-ink">{copy('dimensionsWithout', { dimensions: emptied.map((key) => dimensionLabel(key, t)).join(', ') })}</span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-chip-good-ink">
+                    <Check aria-hidden="true" className="size-3.5" />
+                    {copy('everyDimensionCovered')}
+                  </span>
+                )}
+              </span>
+            )}
           </div>
         </Panel>
 
@@ -520,12 +570,12 @@ export default function SurveyQuestionsEditorPage() {
 }
 
 function scaleChip(t: (key: string) => string, q: AuthoringQuestion): string {
-  const type = questionTypeLabel(t, q.type)
+  const type = scaleName(t, q.type)
   return q.scaleMin !== null && q.scaleMax !== null ? `${type} ${q.scaleMin}–${q.scaleMax}` : type
 }
 
 function scaleLong(t: (key: string, vars?: Record<string, string | number>) => string, q: AuthoringQuestion): string {
-  const type = questionTypeLabel(t, q.type)
+  const type = scaleName(t, q.type)
   return q.scaleMin !== null && q.scaleMax !== null
     ? `${type} · ${t('surveys.next.authoring.fromTo', { min: q.scaleMin, max: q.scaleMax })}`
     : type

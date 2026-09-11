@@ -10,7 +10,9 @@ export function Switch({ className, ...props }: SwitchProps) {
     <SwitchPrimitive.Root
       data-slot="switch"
       className={cn(
-        'peer inline-flex h-4 w-7 shrink-0 items-center rounded-full border border-transparent',
+        // `p-0`: the root is a <button>, and index.css pads every bare button 12px a side —
+        // on a 28px track that left the thumb a 2px sliver (seen on the authoring shots).
+        'peer inline-flex h-4 w-7 shrink-0 items-center rounded-full border border-transparent p-0',
         'transition-colors ease-out',
         'bg-line-default data-[state=checked]:bg-accent-blue',
         'disabled:cursor-not-allowed disabled:opacity-50',
@@ -21,7 +23,7 @@ export function Switch({ className, ...props }: SwitchProps) {
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
         className={cn(
-          'pointer-events-none block size-3 rounded-full bg-surface-panel shadow-sm ring-0',
+          'pointer-events-none block size-3 shrink-0 rounded-full bg-surface-panel shadow-sm ring-0',
           'transition-transform ease-out',
           'translate-x-0.5 data-[state=checked]:translate-x-3.5',
         )}

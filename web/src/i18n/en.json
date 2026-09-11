@@ -2222,12 +2222,21 @@
         "editableUntilTitle": "Editable until the first response",
         "editableUntilBody": "With a single response these questions become fixed and this page turns read only. To change them afterwards, duplicate the survey: the copy goes back to draft.",
         "saveWritesOnly": "Saving writes only the questions: title, dates and audience stay as they are.",
-        "fromTo": "{min} to {max}"
+        "fromTo": "{min} to {max}",
+        "scaleName": {
+          "likert": "Likert",
+          "rating": "Rating"
+        },
+        "addFromLibrary": "· from the library",
+        "addOr": "or",
+        "addBlankLink": "blank",
+        "everyDimensionCovered": "Every dimension has at least one question",
+        "dimensionsWithout": "No question left for {dimensions}"
       },
       "template": {
         "eyebrow": "Survey template · {category}",
-        "descriptionBoth": "The {count} questions it brings, by dimension and in both languages. Using it creates a draft and opens its questions ready to edit.",
-        "descriptionOne": "The {count} questions it brings, by dimension. Using it creates a draft and opens its questions ready to edit.",
+        "descriptionBoth": "The {count} questions it carries, by dimension and in both languages. Using it creates a draft and opens the builder with them already in place.",
+        "descriptionOne": "The {count} questions it carries, by dimension. Using it creates a draft and opens the builder with them already in place.",
         "scopeGlobal": "Global",
         "scopeCompany": "Company",
         "language": {
@@ -2264,7 +2273,7 @@
         "created": "Created",
         "whenUsed": "When used",
         "step1": "A survey draft is created in {company} with these {count} questions, their dimensions and their scale.",
-        "step2": "It opens on Questions: you can remove, reorder or add before scheduling it.",
+        "step2": "The builder opens on Questions: you can remove, reorder or add from the library before scheduling it.",
         "step3": "The template does not change: the survey copies the questions, it does not link them.",
         "keysNote": "Options are copied with their key: surveys made from this template compare with each other in Climate over time.",
         "categories": {
@@ -2555,7 +2564,8 @@
       "acknowledge": "Mark as reviewed",
       "acknowledged": "Reviewed",
       "loadFailed": "The findings could not be loaded",
-      "thisCompany": "this company"
+      "thisCompany": "this company",
+      "proposal": "Proposal"
     }
   },
   "surveyRespond": {
@@ -3300,7 +3310,8 @@
       "parent": "Hangs from",
       "parentHint": "Optional: a category of your own can hang from a global one.",
       "noParent": "No parent category",
-      "createCategory": "Create category"
+      "createCategory": "Create category",
+      "ratingType": "Rating"
     }
   },
   "questionBank": {

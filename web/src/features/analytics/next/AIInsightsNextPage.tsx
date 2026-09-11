@@ -51,7 +51,7 @@ export default function AIInsightsNextPage() {
   return (
     <div>
       <PageTopBar
-        eyebrow={companyName}
+        eyebrow={[t('insights.next.proposal'), companyName].filter(Boolean).join(' · ')}
         title={t('insights.next.title')}
         description={t('insights.next.description')}
       />

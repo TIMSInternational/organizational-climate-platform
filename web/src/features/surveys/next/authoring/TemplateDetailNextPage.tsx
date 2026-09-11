@@ -10,9 +10,8 @@ import { useTranslation, type Locale } from '../../../../i18n'
 import { getSurveyTemplate, instantiateSurveyTemplate, type SurveyTemplateDetail } from '../../api/surveyTemplates'
 import { requiredLocalesFor } from '../../api/surveyInvitationCopy'
 import { dimensionLabel } from '../../dimensionLabel'
-import { questionTypeLabel } from '../../surveyVocabulary'
 import { Eyebrow, Note, Panel, PanelHeading, Segmented } from '../../../shared-next/parts'
-import { groupByDimension, uniformScale } from './model'
+import { groupByDimension, scaleName, uniformScale } from './model'
 
 /**
  * Detalle de plantilla, redesigned (canvas board "TemplateDetail"): the template's questions
@@ -98,7 +97,7 @@ export default function TemplateDetailNextPage() {
   const scaleSource = byLocale[firstLocale] ?? primary
   const firstScale = uniformScale(scaleSource.questions)
   const n = questions.length
-  const scaleName = scale ? `${questionTypeLabel(t, scale.type)} ${scale.min}–${scale.max}` : null
+  const scaleChipLabel = scale ? `${scaleName(t, scale.type)} ${scale.min}–${scale.max}` : null
   const needsCompany = scope.status !== 'ready'
   const created = new Intl.DateTimeFormat(locale === 'es' ? 'es-CR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(primary.createdAt))
   const scopeLabel = primary.isGlobal ? copy('scopeGlobal') : copy('scopeCompany')
@@ -128,7 +127,7 @@ export default function TemplateDetailNextPage() {
             <Chip tone="neutral" label={scopeLabel} />
             <Chip tone="neutral" label={categoryLabel(t, primary.category)} />
             <Chip tone="neutral" label={locales.map((l) => copy(`language.${l}`)).join(' · ')} />
-            {scaleName && <Chip tone="neutral" label={scaleName} />}
+            {scaleChipLabel && <Chip tone="neutral" label={scaleChipLabel} />}
             <span>{copy('countUsed', { count: n, used: primary.usageCount })}</span>
           </>
         }
@@ -227,7 +226,7 @@ export default function TemplateDetailNextPage() {
               {scale && (
                 <>
                   <dt className="text-fg-secondary">{copy('scale')}</dt>
-                  <dd className="m-0 text-fg-primary">{copy('scaleFact', { type: questionTypeLabel(t, scale.type), min: scale.min, max: scale.max, count: n })}</dd>
+                  <dd className="m-0 text-fg-primary">{copy('scaleFact', { type: scaleName(t, scale.type), min: scale.min, max: scale.max, count: n })}</dd>
                 </>
               )}
               <dt className="text-fg-secondary">{copy('used')}</dt>

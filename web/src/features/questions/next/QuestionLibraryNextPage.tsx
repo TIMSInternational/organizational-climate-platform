@@ -1,4 +1,5 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router'
 import { Check, ChevronDown, Lock, Plus, Search, X } from 'lucide-react'
 import { PageTopBar } from '../../../components/layout'
 import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, SkeletonText, Textarea, Table } from '../../../components/ui'
@@ -7,17 +8,18 @@ import { useCompanyScope } from '../../../company-context'
 import { useCompanyName } from '../../../company-context/useCompanyName'
 import { useTranslation } from '../../../i18n'
 import { cn } from '../../../lib/cn'
-import { questionTypeLabel } from '../../surveys/surveyVocabulary'
+import { needsScaleLabels } from '../../surveys/surveyVocabulary'
 import { getQuestionLibraryItem, type QuestionCategory, type QuestionLibraryItem } from '../api/questionLibrary'
 import {
   createQuestionCategory,
   createQuestionLibraryItem,
   QUESTION_LIBRARY_TYPES,
+  type QuestionLibraryOptionInput,
   requiresOptions,
   updateQuestionLibraryItem,
 } from '../api/questionLibraryAdmin'
 import { Eyebrow, TABLE_CARD_CLASS, TH_CLASS } from '../../shared-next/parts'
-import { categoryTree, flattenTree, matchesSearch, type CategoryNode } from './model'
+import { categoryTree, flattenTree, libraryTypeLabel, matchesSearch, parseOptions, type CategoryNode } from './model'
 import { useQuestionLibraryModel } from './useQuestionModels'
 import { SELECT_CLASS } from './QuestionBankNextPage'
 
@@ -52,9 +54,18 @@ interface ItemDraft {
   maxEn: string
   tags: string[]
   tagDraft: string
+  /** One option per line (multiple choice only). */
+  options: string
+  /**
+   * The options as the server holds them, and the text they were shown as. An edit that
+   * leaves the text alone sends these back verbatim — values and both languages — because
+   * `UpdateItemAsync` removes every option the request does not carry.
+   */
+  loadedOptions: QuestionLibraryOptionInput[] | null
+  loadedOptionsText: string
 }
 
-const EMPTY: ItemDraft = { categoryId: '', textEs: '', textEn: '', type: 'likert', dimension: '', minEs: '', maxEs: '', minEn: '', maxEn: '', tags: [], tagDraft: '' }
+const EMPTY: ItemDraft = { categoryId: '', textEs: '', textEn: '', type: 'likert', dimension: '', minEs: '', maxEs: '', minEn: '', maxEn: '', tags: [], tagDraft: '', options: '', loadedOptions: null, loadedOptionsText: '' }
 
 export default function QuestionLibraryNextPage() {
   const { t, locale } = useTranslation()
@@ -87,6 +98,19 @@ export default function QuestionLibraryNextPage() {
   const primary = (item: QuestionLibraryItem) => (locale === 'es' ? item.textEs : item.textEn)
   const secondary = (item: QuestionLibraryItem) => (locale === 'es' ? item.textEn : item.textEs)
 
+  // `?new=1` opens the create drawer on arrival — the board's own state, and a deep link to
+  // "Nueva pregunta" for a role that may author. A role that may not is shown the list.
+  const [searchParams] = useSearchParams()
+  const wantsNew = searchParams.get('new') === '1'
+  const firstCategoryId = selected?.category.id ?? ''
+  const openedFromLink = useRef(false)
+  useEffect(() => {
+    if (!wantsNew || !canAuthor || openedFromLink.current || state.status !== 'ready') return
+    openedFromLink.current = true
+    setDraft({ ...EMPTY, categoryId: firstCategoryId })
+    setDrawer({ mode: 'create' })
+  }, [wantsNew, canAuthor, state.status, firstCategoryId])
+
   const itemsOf = (categoryId: string) =>
     state.status === 'ready'
       ? state.data.items.filter((item) => item.questionCategoryId === categoryId && matchesSearch(item, search) && (!type || item.type === type))
@@ -107,6 +131,9 @@ export default function QuestionLibraryNextPage() {
       const detail = await getQuestionLibraryItem(import.meta.env.VITE_API_BASE_URL as string, item.id)
       setDraft((current) => ({
         ...current,
+        options: detail.options.map((o) => o.labelEn ?? o.value).join('\n'),
+        loadedOptionsText: detail.options.map((o) => o.labelEn ?? o.value).join('\n'),
+        loadedOptions: detail.options.map((o) => ({ value: o.value, labelEn: o.labelEn ?? undefined, labelEs: o.labelEs ?? undefined })),
         minEs: detail.scaleLabelMinEs ?? '',
         maxEs: detail.scaleLabelMaxEs ?? '',
         minEn: detail.scaleLabelMinEn ?? '',
@@ -128,6 +155,12 @@ export default function QuestionLibraryNextPage() {
       setFormError(t('questionLibraryAdmin.categoryRequired'))
       return
     }
+    const options =
+      draft.loadedOptions && draft.options === draft.loadedOptionsText ? draft.loadedOptions : parseOptions(draft.options)
+    if (requiresOptions(draft.type) && options.length === 0) {
+      setFormError(t('questionLibraryAdmin.optionsRequired'))
+      return
+    }
     const ends = {
       scaleLabelMinEs: draft.minEs.trim() || undefined,
       scaleLabelMaxEs: draft.maxEs.trim() || undefined,
@@ -144,6 +177,7 @@ export default function QuestionLibraryNextPage() {
           textEs: draft.textEs.trim(),
           dimension: draft.dimension.trim() || undefined,
           tags: draft.tags,
+          options: options.length > 0 ? options : undefined,
           ...ends,
         })
       } else {
@@ -154,6 +188,7 @@ export default function QuestionLibraryNextPage() {
           type: draft.type,
           dimension: draft.dimension.trim() || undefined,
           tags: draft.tags,
+          options: options.length > 0 ? options : undefined,
           companyId: scope.isSuperAdmin ? undefined : scope.companyId,
           ...ends,
         })
@@ -198,7 +233,7 @@ export default function QuestionLibraryNextPage() {
   return (
     <div>
       <PageTopBar
-        eyebrow={companyName}
+        eyebrow={[t('insights.next.proposal'), companyName].filter(Boolean).join(' · ')}
         title={t('questionLibrary.next.title')}
         description={t('questionLibrary.next.description', { company })}
         actions={
@@ -296,13 +331,13 @@ export default function QuestionLibraryNextPage() {
                   <label className="relative min-w-60 flex-1">
                     <span className="sr-only">{t('questionLibrary.next.search')}</span>
                     <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-tertiary" />
-                    <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('questionLibrary.next.search')} className="pl-8" />
+                    <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('questionLibrary.next.search')} className="mt-0 pl-8" />
                   </label>
                   <select aria-label={t('questionBank.next.allTypes')} className={`${SELECT_CLASS} w-40`} value={type} onChange={(e) => setType(e.target.value)}>
                     <option value="">{t('questionBank.next.allTypes')}</option>
                     {QUESTION_LIBRARY_TYPES.map((value) => (
                       <option key={value} value={value}>
-                        {questionTypeLabel(t, value)}
+                        {libraryTypeLabel(t, value)}
                       </option>
                     ))}
                   </select>
@@ -412,9 +447,9 @@ export default function QuestionLibraryNextPage() {
                           disabled={drawer.mode !== 'create'}
                           onChange={(e) => setDraft({ ...draft, type: e.target.value })}
                         >
-                          {QUESTION_LIBRARY_TYPES.filter((value) => !requiresOptions(value) || value === draft.type).map((value) => (
+                          {QUESTION_LIBRARY_TYPES.map((value) => (
                             <option key={value} value={value}>
-                              {questionTypeLabel(t, value)}
+                              {libraryTypeLabel(t, value)}
                             </option>
                           ))}
                         </select>
@@ -423,6 +458,13 @@ export default function QuestionLibraryNextPage() {
                         <Input value={draft.dimension} onChange={(e) => setDraft({ ...draft, dimension: e.target.value })} />
                       </Field>
                     </div>
+                    {requiresOptions(draft.type) && (
+                      <Field label={t('questionLibraryAdmin.options')} hint={t('questionLibraryAdmin.optionsHint')}>
+                        <Textarea rows={4} value={draft.options} onChange={(e) => setDraft({ ...draft, options: e.target.value })} />
+                      </Field>
+                    )}
+                    {needsScaleLabels(draft.type) && (
+                      <>
                     <Field label={t('questionLibrary.next.endsEs')}>
                       <div className="grid grid-cols-2 gap-2">
                         <Input aria-label={t('questionLibrary.next.endMinEs')} placeholder={t('questionLibrary.next.endMinEs')} value={draft.minEs} onChange={(e) => setDraft({ ...draft, minEs: e.target.value })} />
@@ -435,6 +477,8 @@ export default function QuestionLibraryNextPage() {
                         <Input aria-label={t('questionLibrary.next.endMaxEn')} placeholder={t('questionLibrary.next.endMaxEn')} value={draft.maxEn} onChange={(e) => setDraft({ ...draft, maxEn: e.target.value })} />
                       </div>
                     </Field>
+                      </>
+                    )}
                     <Field label={t('questionLibrary.next.tags')}>
                       <div className="flex flex-wrap items-center gap-1.5">
                         {draft.tags.map((tag) => (
@@ -541,7 +585,7 @@ function CategoryList({
 
 function ItemRow({ item, primary, secondary, owner, action, onOpen }: { item: QuestionLibraryItem; primary: string; secondary: string; owner: string; action: string; onOpen: () => void }) {
   const { t } = useTranslation()
-  const meta = [questionTypeLabel(t, item.type), item.dimension ? t('questionLibrary.next.dimensionOf', { dimension: item.dimension }) : null, t('questionLibrary.next.version', { version: item.version })]
+  const meta = [libraryTypeLabel(t, item.type), item.dimension ? t('questionLibrary.next.dimensionOf', { dimension: item.dimension }) : null, t('questionLibrary.next.version', { version: item.version })]
     .filter(Boolean)
     .join(' · ')
   return (

@@ -1,4 +1,7 @@
 import type { AuthoringQuestion } from '../../api/surveyQuestionAuthoring'
+import type { AuthoredText } from '../../api/surveyInvitationCopy'
+import type { QuestionLibraryItemDetail } from '../../../questions/api/questionLibrary'
+import { questionTypeLabel } from '../../surveyVocabulary'
 import type { SurveyTemplateQuestion } from '../../api/surveyTemplates'
 import type { Locale } from '../../../../i18n'
 
@@ -109,5 +112,70 @@ export function blankQuestion(order: number, locales: Locale[]): AuthoringQuesti
     scaleLabelMax: empty(),
     commentPrompt: Object.fromEntries(locales.map((locale) => [locale, { text: '', authored: false }])) as AuthoringQuestion['text'],
     options: null,
+  }
+}
+
+/** The two types that are a numeric scale — the only ones a scale can be swapped between. */
+export function isScaleType(type: string): boolean {
+  return type === 'likert' || type === 'rating'
+}
+
+/**
+ * The scale choices the Escala select may offer for one question: the scaled types at the
+ * question's OWN range. A different range would change the answers' numbers and break the
+ * comparison with earlier waves the field's hint promises, and a non-scaled type has no
+ * compatible change at all — so it offers only itself and the select is disabled.
+ */
+export function compatibleScaleTypes(question: Pick<AuthoringQuestion, 'type' | 'scaleMin' | 'scaleMax'>): string[] {
+  if (question.scaleMin === null || question.scaleMax === null || !isScaleType(question.type)) return [question.type]
+  return ['likert', 'rating']
+}
+
+/** The short name the boards print on a scale chip: "Likert 1–5", not "Escala Likert 1–5". */
+export function scaleName(t: Parameters<typeof questionTypeLabel>[0], type: string): string {
+  return isScaleType(type) ? t(`surveys.next.authoring.scaleName.${type}`) : questionTypeLabel(t, type)
+}
+
+/**
+ * The dimensions the survey was loaded with that the edited list no longer asks about. A
+ * dimension left without a question disappears from the results map and from the
+ * comparison with earlier waves, so the footer names it instead of ticking.
+ */
+export function dimensionsWithout(original: AuthoringQuestion[], current: AuthoringQuestion[]): string[] {
+  const asked = new Set(current.map((q) => q.category).filter((c): c is string => !!c))
+  return [...new Set(original.map((q) => q.category).filter((c): c is string => !!c))].filter((c) => !asked.has(c))
+}
+
+/**
+ * A library question copied into the survey being edited. Every option keeps the library's
+ * stored `value` verbatim — the aggregation key (see `surveyQuestionAuthoring.ts`) — and a
+ * language the library row has no text for arrives unauthored, so the summary says
+ * "falta traducir" rather than filing one language's words under the other.
+ */
+export function questionFromLibraryItem(item: QuestionLibraryItemDetail, order: number, locales: Locale[]): AuthoringQuestion {
+  const pick = (enText: string | null, esText: string | null) =>
+    Object.fromEntries(
+      locales.map((locale) => {
+        const text = (locale === 'es' ? esText : enText) ?? ''
+        return [locale, { text, authored: text.trim() !== '' }]
+      }),
+    ) as Record<Locale, AuthoredText>
+  return {
+    id: `library-${item.id}-${order}-${Date.now()}`,
+    type: item.type,
+    order,
+    category: item.dimension,
+    required: true,
+    commentRequired: false,
+    scaleMin: item.scaleMin,
+    scaleMax: item.scaleMax,
+    text: pick(item.textEn, item.textEs),
+    scaleLabelMin: pick(item.scaleLabelMinEn, item.scaleLabelMinEs),
+    scaleLabelMax: pick(item.scaleLabelMaxEn, item.scaleLabelMaxEs),
+    commentPrompt: pick(null, null),
+    options:
+      item.options.length > 0
+        ? [...item.options].sort((x, y) => x.order - y.order).map((option) => ({ value: option.value, label: pick(option.labelEn, option.labelEs) }))
+        : null,
   }
 }

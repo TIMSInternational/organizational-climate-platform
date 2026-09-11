@@ -1,4 +1,5 @@
 import type { QuestionCategory, QuestionLibraryItem } from '../api/questionLibrary'
+import { questionTypeLabel } from '../../surveys/surveyVocabulary'
 import type { QuestionBankEffectivenessItem, QuestionBankItem, QuestionBankMetrics } from '../api/questionBank'
 
 /**
@@ -98,4 +99,21 @@ export function matchesSearch(item: QuestionLibraryItem, query: string): boolean
   const q = fold(query.trim())
   if (!q) return true
   return fold(item.textEs).includes(q) || fold(item.textEn).includes(q)
+}
+
+/**
+ * The library's name for a question type. The boards print "Valoración" for `rating`, where
+ * the survey vocabulary says "Calificación"; every other type keeps the shared name.
+ */
+export function libraryTypeLabel(t: Parameters<typeof questionTypeLabel>[0], type: string): string {
+  return type === 'rating' ? t('questionLibrary.next.ratingType') : questionTypeLabel(t, type)
+}
+
+/** One option per line, the same text in both languages — the previous page's rule (`pages/QuestionLibraryPage.tsx`). */
+export function parseOptions(raw: string): { labelEn: string; labelEs: string }[] {
+  return raw
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '')
+    .map((line) => ({ labelEn: line, labelEs: line }))
 }

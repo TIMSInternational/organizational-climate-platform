@@ -51,7 +51,7 @@ export default function QuestionBankNextPage() {
 
   return (
     <div>
-      <PageTopBar eyebrow={companyName} title={t('questionBank.next.title')} description={t('questionBank.next.description')} />
+      <PageTopBar eyebrow={[t('insights.next.proposal'), companyName].filter(Boolean).join(' · ')} title={t('questionBank.next.title')} description={t('questionBank.next.description')} />
 
       <div className="mb-panel-gap flex flex-wrap items-center gap-3 rounded-lg border border-line-default bg-surface-card p-4">
         <IconBox>
@@ -86,7 +86,7 @@ export default function QuestionBankNextPage() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t('questionBank.next.searchPlaceholder')}
-            className="pl-8"
+            className="mt-0 pl-8"
           />
         </label>
         <select aria-label={t('questionBank.next.allCategories')} className={`${SELECT_CLASS} w-50`} value={category} onChange={(e) => setCategory(e.target.value)}>

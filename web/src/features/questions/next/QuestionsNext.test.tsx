@@ -6,12 +6,12 @@ import { TranslationProvider } from '../../../i18n'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider } from '../../../company-context'
 import { tokenFor } from '../../../test/jwtFixture'
-import { listQuestionCategories, listQuestionLibraryItems, type QuestionCategory, type QuestionLibraryItem } from '../api/questionLibrary'
+import { getQuestionLibraryItem, listQuestionCategories, listQuestionLibraryItems, type QuestionCategory, type QuestionLibraryItem, type QuestionLibraryItemDetail } from '../api/questionLibrary'
 import { listQuestionBankCategories, listQuestionBankEffectiveness, listQuestionBankItems, type QuestionBankItem } from '../api/questionBank'
-import { createQuestionLibraryItem } from '../api/questionLibraryAdmin'
+import { createQuestionLibraryItem, updateQuestionLibraryItem } from '../api/questionLibraryAdmin'
 import QuestionBankNextPage from './QuestionBankNextPage'
 import QuestionLibraryNextPage from './QuestionLibraryNextPage'
-import { bankRows, categoryTree } from './model'
+import { bankRows, categoryTree, libraryTypeLabel } from './model'
 import en from '../../../i18n/en.json'
 
 vi.mock('../api/questionLibrary', async (orig) => ({
@@ -29,6 +29,7 @@ vi.mock('../api/questionBank', async (orig) => ({
 vi.mock('../api/questionLibraryAdmin', async (orig) => ({
   ...(await orig<typeof import('../api/questionLibraryAdmin')>()),
   createQuestionLibraryItem: vi.fn(),
+  updateQuestionLibraryItem: vi.fn(),
 }))
 vi.mock('../../../company-context/useCompanyName', () => ({
   useCompanyName: () => 'Grupo Meridiano S.A.',
@@ -160,5 +161,91 @@ describe('QuestionLibraryNextPage', () => {
     await screen.findAllByTestId('library-row')
     expect(screen.queryByRole('button', { name: lib.newQuestion })).toBeNull()
     expect(screen.queryByRole('button', { name: lib.newCategory })).toBeNull()
+  })
+})
+
+describe('QuestionLibraryNextPage — drawer link, multiple choice, vocabulary', () => {
+  function renderLibraryAt(path: string, role = 'company_admin') {
+    setToken(tokenFor({ sub: 'u1', nodoId: '', role, companyId: COMPANY }))
+    return render(
+      <TranslationProvider>
+        <MemoryRouter initialEntries={[path]}>
+          <CompanyContextProvider>
+            <QuestionLibraryNextPage />
+          </CompanyContextProvider>
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+  }
+  function arrange() {
+    vi.mocked(listQuestionCategories).mockResolvedValue(categories)
+    vi.mocked(listQuestionLibraryItems).mockResolvedValue(items)
+  }
+  const label = (text: string) => new RegExp(`^${text.replace(/[()]/g, '\\$&')}`)
+
+  it('opens the create drawer from ?new=1 for a company administrator', async () => {
+    arrange()
+    renderLibraryAt('/admin/question-library?new=1')
+    expect(await screen.findByRole('button', { name: lib.createQuestion })).toBeTruthy()
+  })
+
+  it('opens nothing from ?new=1 for a role that cannot write', async () => {
+    arrange()
+    renderLibraryAt('/admin/question-library?new=1', 'leader')
+    await screen.findAllByTestId('library-row')
+    expect(screen.queryByRole('button', { name: lib.createQuestion })).toBeNull()
+  })
+
+  it('offers multiple choice, refuses it without options, and sends the options it is given', async () => {
+    arrange()
+    vi.mocked(createQuestionLibraryItem).mockResolvedValue({} as never)
+    renderAs(<QuestionLibraryNextPage />)
+    await userEvent.click(await screen.findByRole('button', { name: lib.newQuestion }))
+    await userEvent.type(screen.getByLabelText(label(lib.textEs)), 'Pregunta')
+    await userEvent.type(screen.getByLabelText(label(lib.textEn)), 'Question')
+    await userEvent.selectOptions(screen.getByLabelText(label(lib.type)), 'multiple_choice')
+    await userEvent.click(screen.getByRole('button', { name: lib.createQuestion }))
+    expect(screen.getByText(en.questionLibraryAdmin.optionsRequired)).toBeTruthy()
+    expect(createQuestionLibraryItem).not.toHaveBeenCalled()
+    await userEvent.type(screen.getByLabelText(label(en.questionLibraryAdmin.options)), 'Daily{enter}Weekly')
+    await userEvent.click(screen.getByRole('button', { name: lib.createQuestion }))
+    expect(vi.mocked(createQuestionLibraryItem).mock.calls[0][1]).toMatchObject({
+      type: 'multiple_choice',
+      options: [{ labelEn: 'Daily', labelEs: 'Daily' }, { labelEn: 'Weekly', labelEs: 'Weekly' }],
+    })
+  })
+
+  it('sends an edited multiple-choice question back with its options verbatim — keys and both languages', async () => {
+    arrange()
+    const own = item({ id: 'mc', companyId: COMPANY, type: 'multiple_choice', textEn: 'Own MC' })
+    vi.mocked(listQuestionLibraryItems).mockResolvedValue([own])
+    vi.mocked(getQuestionLibraryItem).mockResolvedValueOnce({
+      ...own, language: 'both', scaleMin: null, scaleMax: null, scaleLabelMinEn: null, scaleLabelMinEs: null, scaleLabelMaxEn: null, scaleLabelMaxEs: null,
+      previousVersionId: null, createdAt: '2026-09-01T00:00:00Z', updatedAt: '2026-09-01T00:00:00Z',
+      options: [{ order: 0, value: 'yes-key', labelEn: 'Yes', labelEs: 'Sí' }],
+    } as QuestionLibraryItemDetail)
+    vi.mocked(updateQuestionLibraryItem).mockResolvedValue({} as never)
+    renderAs(<QuestionLibraryNextPage />)
+    const [row] = await screen.findAllByTestId('library-row')
+    await userEvent.click(within(row).getByRole('button', { name: lib.edit }))
+    await screen.findByDisplayValue('Yes')
+    await userEvent.type(screen.getByLabelText(label(lib.textEn)), ' edited')
+    await userEvent.click(screen.getByRole('button', { name: en.common.save }))
+    expect(vi.mocked(updateQuestionLibraryItem).mock.calls[0][2]).toMatchObject({
+      textEn: 'Own MC edited',
+      options: [{ value: 'yes-key', labelEn: 'Yes', labelEs: 'Sí' }],
+    })
+  })
+
+  it('names rating as the library board does, and every other type by the shared vocabulary', () => {
+    expect(libraryTypeLabel((key) => key, 'rating')).toBe('questionLibrary.next.ratingType')
+    expect(libraryTypeLabel((key) => key, 'likert')).toBe('surveys.questionTypeLikert')
+  })
+
+  it('heads the page with the proposal eyebrow and the company, and sits the search on the row', async () => {
+    arrange()
+    renderAs(<QuestionLibraryNextPage />)
+    expect(await screen.findByText(`${en.insights.next.proposal} · Grupo Meridiano S.A.`)).toBeTruthy()
+    expect(screen.getByPlaceholderText(lib.search).className.split(' ')).toContain('mt-0')
   })
 })

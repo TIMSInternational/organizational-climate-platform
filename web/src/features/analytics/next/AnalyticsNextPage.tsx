@@ -34,7 +34,7 @@ export default function AnalyticsNextPage() {
   return (
     <div>
       <PageTopBar
-        eyebrow={companyName}
+        eyebrow={[t('insights.next.proposal'), companyName].filter(Boolean).join(' · ')}
         title={t('analytics.next.title')}
         description={t('analytics.next.description')}
         breadcrumbs={undefined}

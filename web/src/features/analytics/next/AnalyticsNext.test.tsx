@@ -104,6 +104,12 @@ describe('sortInsights / groupSizeOf / latestClosedSurvey', () => {
 })
 
 describe('AIInsightsNextPage', () => {
+  it('heads the page with the proposal eyebrow and the company', async () => {
+    vi.mocked(listAIInsights).mockResolvedValue([])
+    renderAt('/analytics/ai-insights', <AIInsightsNextPage />, '/analytics/ai-insights')
+    expect(await screen.findByText(`${insightsCopy.proposal} · Grupo Meridiano S.A.`)).toBeTruthy()
+  })
+
   it('says why an empty list is empty, naming the company, and prints a count of 0', async () => {
     vi.mocked(listAIInsights).mockResolvedValue([])
     renderAt('/analytics/ai-insights', <AIInsightsNextPage />, '/analytics/ai-insights')

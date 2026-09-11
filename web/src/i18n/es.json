@@ -2222,12 +2222,21 @@
         "editableUntilTitle": "Se edita hasta la primera respuesta",
         "editableUntilBody": "Con una sola respuesta, estas preguntas quedan fijas y esta página pasa a solo lectura. Para cambiarlas después, se duplica la encuesta: la copia vuelve a borrador.",
         "saveWritesOnly": "Guardar escribe solo las preguntas: título, fechas y audiencia quedan como están.",
-        "fromTo": "de {min} a {max}"
+        "fromTo": "de {min} a {max}",
+        "scaleName": {
+          "likert": "Likert",
+          "rating": "Valoración"
+        },
+        "addFromLibrary": "· de la biblioteca",
+        "addOr": "o",
+        "addBlankLink": "en blanco",
+        "everyDimensionCovered": "Cada dimensión tiene al menos una pregunta",
+        "dimensionsWithout": "Sin pregunta: {dimensions}"
       },
       "template": {
         "eyebrow": "Plantilla de encuesta · {category}",
-        "descriptionBoth": "Las {count} preguntas que trae, por dimensión y en los dos idiomas. Usarla crea un borrador y abre sus preguntas ya puestas.",
-        "descriptionOne": "Las {count} preguntas que trae, por dimensión. Usarla crea un borrador y abre sus preguntas ya puestas.",
+        "descriptionBoth": "Las {count} preguntas que trae, por dimensión y en los dos idiomas. Usarla crea un borrador y abre el asistente con ellas ya puestas.",
+        "descriptionOne": "Las {count} preguntas que trae, por dimensión. Usarla crea un borrador y abre el asistente con ellas ya puestas.",
         "scopeGlobal": "Global",
         "scopeCompany": "Empresa",
         "language": {
@@ -2264,7 +2273,7 @@
         "created": "Creada",
         "whenUsed": "Al usarla",
         "step1": "Se crea un borrador de encuesta en {company} con estas {count} preguntas, sus dimensiones y su escala.",
-        "step2": "Se abre en Preguntas: puede quitar, reordenar o agregar antes de programarla.",
+        "step2": "El asistente abre en Preguntas: puede quitar, reordenar o agregar desde la biblioteca antes de programarla.",
         "step3": "La plantilla no cambia: la encuesta copia las preguntas, no las enlaza.",
         "keysNote": "Las opciones se copian con su clave: las encuestas hechas con esta plantilla se comparan entre sí en Clima en el tiempo.",
         "categories": {
@@ -2555,7 +2564,8 @@
       "acknowledge": "Marcar como revisado",
       "acknowledged": "Revisado",
       "loadFailed": "No se pudieron cargar los hallazgos",
-      "thisCompany": "esta empresa"
+      "thisCompany": "esta empresa",
+      "proposal": "Propuesta"
     }
   },
   "surveyRespond": {
@@ -3300,7 +3310,8 @@
       "parent": "Cuelga de",
       "parentHint": "Opcional: una categoría propia puede colgar de una global.",
       "noParent": "Sin categoría superior",
-      "createCategory": "Crear categoría"
+      "createCategory": "Crear categoría",
+      "ratingType": "Valoración"
     }
   },
   "questionBank": {
