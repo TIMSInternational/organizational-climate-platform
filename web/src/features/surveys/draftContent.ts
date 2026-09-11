@@ -75,6 +75,13 @@ interface DraftQuestion {
   scaleLabelMaxEs: string
   scaleMin: number | null
   scaleMax: number | null
+  /**
+   * Additive and optional, like the seven above: the template question a builder row was
+   * copied from, and the bank item a row was picked from. Absent in every older draft and on
+   * every hand-written row — which restores exactly as it always did.
+   */
+  templateOrder?: number
+  sourceQuestionBankItemId?: string
 }
 
 /** The wire shape. Changing a member here changes what is already in the database. */
@@ -132,6 +139,8 @@ export function toDraftContent(values: SurveyWizardValues): SurveyDraftContent {
       scaleLabelMaxEs: question.scaleLabelMaxEs,
       scaleMin: question.scaleMin,
       scaleMax: question.scaleMax,
+      ...(question.templateOrder !== undefined ? { templateOrder: question.templateOrder } : {}),
+      ...(question.sourceQuestionBankItemId ? { sourceQuestionBankItemId: question.sourceQuestionBankItemId } : {}),
     })),
   }
 }
@@ -207,8 +216,19 @@ function questionsFrom(source: Record<string, unknown>, keyPrefix: string): Surv
       scaleLabelMaxEs: str(question, 'scaleLabelMaxEs'),
       scaleMin: intOrNull(question, 'scaleMin'),
       scaleMax: intOrNull(question, 'scaleMax'),
+      ...optionalProvenance(question),
     }
   })
+}
+
+/** The two optional provenance fields, present only when stored with a usable value. */
+function optionalProvenance(question: Record<string, unknown>): Pick<SurveyQuestionValues, 'templateOrder' | 'sourceQuestionBankItemId'> {
+  const out: Pick<SurveyQuestionValues, 'templateOrder' | 'sourceQuestionBankItemId'> = {}
+  const order = intOrNull(question, 'templateOrder')
+  if (order !== null) out.templateOrder = order
+  const bank = str(question, 'sourceQuestionBankItemId')
+  if (bank !== '') out.sourceQuestionBankItemId = bank
+  return out
 }
 
 /**

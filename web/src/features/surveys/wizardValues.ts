@@ -148,6 +148,21 @@ export interface SurveyQuestionValues {
    */
   scaleMin: number | null
   scaleMax: number | null
+  /**
+   * The `order` of the template question this row was copied from — set only by the builder's
+   * template mode (`next/authoring/useSurveyBuilderModel`), which draws a template's questions as
+   * rows the author can reorder, drop or make optional. `POST /survey-templates/{id}/use` still
+   * copies the questions whole (values, comment prompts and all); the rows' arrangement is then
+   * applied to that copy by `order`, so the payload of `/use` never changes. Absent on every row
+   * the author added.
+   */
+  templateOrder?: number
+  /**
+   * `CreateSurveyQuestionInput.SourceQuestionBankItemId` (#110): the question-bank item this row
+   * was picked from. Provenance, not a reference — it is what makes bank usage and effectiveness
+   * a count over real rows (`QuestionBankMetrics`). Absent on every row not picked from the bank.
+   */
+  sourceQuestionBankItemId?: string
 }
 
 export interface SurveyWizardValues {
@@ -633,6 +648,7 @@ export function buildCreateInput(
     // server's own null is the honest value for it.
     const category = question.category.trim()
     if (category !== '') built.category = category
+    if (question.sourceQuestionBankItemId) built.sourceQuestionBankItemId = question.sourceQuestionBankItemId
     if (needsScaleLabels(question.type)) {
       // The bounds go with the words, and both are gated on the type for the same
       // reason: a card typed as a likert and then switched to `open_ended` keeps the
@@ -706,10 +722,12 @@ export function buildCreateInput(
  * — so the case where the fallback is least wanted is also the case where it fails — and
  * an author who has typed a title in the wizard should get the title they typed.
  *
- * `language` is *not* sent, deliberately. The server infers it from the template's own
- * questions, and that is the only value that cannot produce a survey declaring a
- * language it holds no text for. The wizard reflects that language rather than offering
- * a choice, which is why `values.language` is read here only through `localizedFor`.
+ * `language` is sent: `UseSurveyTemplateRequest.Language` is honoured ahead of the
+ * inference (`SurveyTemplateEndpoints.UseAsync`: `NormaliseLanguage(request.Language) ??
+ * SurveyTemplateLanguage.Infer(questions) ?? …`). A caller must offer only a language the
+ * template's questions are written in — the builder disables the others — or the survey
+ * would declare a language it holds no text for; the previous wizard sets `values.language`
+ * to the template's own language, so for it the value sent is the one the server infers.
  */
 export function buildInstantiateInput(
   values: SurveyWizardValues,
@@ -720,6 +738,7 @@ export function buildInstantiateInput(
 
   const input: InstantiateSurveyTemplateInput = {
     companyId,
+    language: values.language,
     title: localizedFor(values.language, values.titleEn, values.titleEs) as LocalizedInput,
     type: values.type,
     startDate: new Date(values.startDate).toISOString(),

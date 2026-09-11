@@ -354,7 +354,9 @@ async function main() {
     await page.evaluate(() => document.fonts.ready)
     await page.waitForTimeout(settleMs)
     for (const name of values.click ?? []) {
-      await page.getByRole('button', { name }).first().click()
+      // A menu's entries are `menuitem`s, not buttons: "--click" reaches both, so a state behind
+      // a "•••" menu (a revealed share link) is one more flag, never a script.
+      await page.getByRole('button', { name }).or(page.getByRole('menuitem', { name })).first().click()
       await page.waitForLoadState('networkidle').catch(() => {})
       await page.waitForTimeout(settleMs)
     }

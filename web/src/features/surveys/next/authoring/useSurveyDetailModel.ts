@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useTranslation } from '../../../../i18n'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
+import { useCompanyScope } from '../../../../company-context'
 import { listDepartments, type Department } from '../../../org-structure/api/departments'
+import { listUsers, type User } from '../../../org-structure/api/users'
 import { duplicateSurvey, getSurvey, updateSurveyStatus, type SurveyDetail } from '../../api/surveys'
 import {
   getSurveyDistribution,
@@ -19,6 +21,12 @@ export interface SurveyDetailModel {
   distribution: SurveyDistributionDetail | null | undefined
   /** `GET /surveys/{id}/invitations`, or null when unread. */
   invitations: SurveyInvitationList | null
+  /**
+   * `GET /admin/users` for the survey's company — the directory the audience resolves from — or
+   * null when unread. Read under Distribución's own rule (an administrator working in the
+   * survey's company), so the two pages resolve the same audience for the same viewer.
+   */
+  users: User[] | null
 }
 
 export type SurveyDetailState =
@@ -39,6 +47,7 @@ export type SurveyDetailState =
 export function useSurveyDetailModel(id: string | undefined) {
   const { t, locale } = useTranslation()
   const caps = useViewerCapabilities()
+  const scope = useCompanyScope()
   const navigate = useNavigate()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [state, setState] = useState<SurveyDetailState>({ status: 'loading' })
@@ -52,13 +61,15 @@ export function useSurveyDetailModel(id: string | undefined) {
     try {
       const survey = await getSurvey(baseUrl, id, locale)
       if (!readsContext) {
-        setState({ status: 'ready', model: { survey, departments: null, distribution: undefined, invitations: null } })
+        setState({ status: 'ready', model: { survey, departments: null, distribution: undefined, invitations: null, users: null } })
         return
       }
-      const [distribution, invitations, departments] = await Promise.allSettled([
+      const scoped = scope.status === 'ready' && scope.companyId === survey.companyId
+      const [distribution, invitations, departments, users] = await Promise.allSettled([
         getSurveyDistribution(baseUrl, id),
         listSurveyInvitations(baseUrl, id, {}, locale),
         listDepartments(baseUrl, survey.companyId),
+        scoped ? listUsers(baseUrl, survey.companyId) : Promise.resolve(null),
       ])
       setState({
         status: 'ready',
@@ -67,12 +78,13 @@ export function useSurveyDetailModel(id: string | undefined) {
           distribution: distribution.status === 'fulfilled' ? distribution.value : undefined,
           invitations: invitations.status === 'fulfilled' ? invitations.value : null,
           departments: departments.status === 'fulfilled' && Array.isArray(departments.value) ? departments.value : null,
+          users: users.status === 'fulfilled' && Array.isArray(users.value) ? users.value : null,
         },
       })
     } catch (error) {
       setState({ status: 'error', message: error instanceof Error ? error.message : t('errors.generic') })
     }
-  }, [baseUrl, id, locale, readsContext, t])
+  }, [baseUrl, id, locale, readsContext, scope.companyId, scope.status, t])
 
   useEffect(() => {
     void load()

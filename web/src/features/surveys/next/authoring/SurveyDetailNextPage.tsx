@@ -1,9 +1,9 @@
-import { useState } from 'react'
 import { BarChart3, Copy, Lock, Send, ShieldCheck } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { PageTopBar } from '../../../../components/layout'
 import { Alert, AlertDescription, Button, Chip, ErrorState, LoadingRegion, SkeletonText } from '../../../../components/ui'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
+import { estimateAudience } from '../../../../components/distribution'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { useTranslation } from '../../../../i18n'
 import ContentFallbackNotice from '../../components/ContentFallbackNotice'
@@ -12,16 +12,15 @@ import type { SurveyDetail } from '../../api/surveys'
 import { languageLabel, statusLabel, typeLabel } from '../../surveyVocabulary'
 import { Note, PanelHeading } from '../../../shared-next/parts'
 import { PreviewQuestion, PreviewSection } from './QuestionPreview'
-import { Card, Meter, ReadingTile } from './parts'
+import { Card, Meter, ReadingTile, ShareLinkField } from './parts'
 import {
-  absoluteLink,
   dayMonth,
   daysFrom,
   dimensionSections,
   fullDay,
-  maskedLink,
   remindersSent,
   responseRate,
+  surveyAudience,
   targetedDepartments,
   yearOf,
   sentenceCase,
@@ -94,10 +93,17 @@ export function SurveyDetailView({
 }) {
   const { t, locale } = useTranslation()
   const caps = useViewerCapabilities()
-  const { survey, departments, distribution, invitations } = model
+  const { survey, departments, distribution, invitations, users } = model
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.detail.${key}`, vars)
   const title = survey.title ?? t('surveys.untitled')
-  const rate = responseRate(survey.responseCount, survey.targetAudienceCount)
+  // ONE audience, the one Distribución prints (`surveyAudience`): the invited once invitations
+  // exist, the directory's resolution before that, the stated target only when neither is read.
+  const audience = surveyAudience({
+    invited: invitations?.summary.total ?? null,
+    resolved: users === null ? null : estimateAudience('allTargeted', users, [], [], survey.departmentIds).length,
+    stated: survey.targetAudienceCount,
+  })
+  const rate = responseRate(survey.responseCount, audience?.count ?? null)
   const targets = targetedDepartments(survey.departmentIds, departments)
   const closesIn = daysFrom(survey.endDate, now)
   const opensIn = daysFrom(survey.startDate, now)
@@ -160,9 +166,9 @@ export function SurveyDetailView({
           label={copy('responses')}
           value={survey.responseCount}
           unit={
-            survey.targetAudienceCount === null || rate === null
+            audience === null || rate === null
               ? copy('responsesNoTarget')
-              : copy('responsesOf', { target: survey.targetAudienceCount, rate })
+              : copy('responsesOf', { target: audience.count, rate })
           }
         >
           {rate !== null && <Meter percent={rate} label={copy('responses')} />}
@@ -170,7 +176,7 @@ export function SurveyDetailView({
         <ReadingTile
           testId="tile-audience"
           label={copy('audience')}
-          value={survey.targetAudienceCount}
+          value={audience?.count ?? null}
           unit={
             survey.departmentIds.length === 0
               ? copy('audienceCompany')
@@ -251,8 +257,8 @@ export function SurveyDetailView({
               <dd className="m-0">{languageLabel(t, survey.language)}</dd>
               <dt className="text-fg-secondary">{copy('floor')}</dt>
               <dd className="m-0">{copy('floorValue', { floor: ANONYMITY_FLOOR })}</dd>
-              <dt className="text-fg-secondary">{copy('anonymity')}</dt>
-              <dd className="m-0">{survey.settings.anonymous ? copy('anonymous') : copy('identified')}</dd>
+              {/* No "Plantilla" row: `SurveyDetail` carries no template id or name
+                  (SurveyDtos.cs:83-111), and a name matched by title would be a guess. */}
             </dl>
           </Card>
           <Card className="flex flex-col gap-2.5 px-5 pb-4.5 pt-4" data-testid="detail-departments">
@@ -345,8 +351,6 @@ function StatusTile({
 function LinkCard({ link }: { link: string | null }) {
   const { t } = useTranslation()
   const copy = (key: string) => t(`surveys.next.detail.${key}`)
-  const [copied, setCopied] = useState(false)
-  const origin = typeof window === 'undefined' ? '' : window.location.origin
   return (
     <Card className="flex flex-col gap-2 px-4 py-3.5" data-testid="detail-link">
       <span className="text-2xs font-bold uppercase tracking-wider text-fg-label">{copy('link')}</span>
@@ -354,22 +358,7 @@ function LinkCard({ link }: { link: string | null }) {
         <p className="m-0 text-sm text-fg-secondary">{copy('noLink')}</p>
       ) : (
         <>
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 min-w-0 flex-1 items-center overflow-hidden text-ellipsis whitespace-nowrap rounded border border-line-default bg-surface-card px-2.5 font-mono text-sm text-fg-primary">
-              {maskedLink(link, origin)}
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label={copied ? copy('copied') : copy('copyLink')}
-              onClick={() => {
-                void navigator.clipboard?.writeText(absoluteLink(link, origin)).then(() => setCopied(true))
-              }}
-            >
-              <Copy aria-hidden="true" className="size-icon" />
-            </Button>
-          </div>
+          <ShareLinkField link={link} />
           <span className="text-sm text-fg-secondary">{copy('linkHelp')}</span>
         </>
       )}

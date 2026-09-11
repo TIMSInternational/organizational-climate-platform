@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { ArrowRight, Check, EyeOff, FileText, GripVertical, Lock, MoreHorizontal, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import { PageTopBar } from '../../../../components/layout'
 import {
@@ -53,7 +54,6 @@ import {
   questionFromLibrary,
   scheduledDays,
   startsFromTemplate,
-  surveyQuestionCount,
   wizardStepErrors,
   type ContentLanguage,
   type SurveyQuestionValues,
@@ -62,8 +62,10 @@ import {
 } from '../../wizardValues'
 import { Eyebrow, PanelHeading } from '../../../shared-next/parts'
 import { PreviewQuestion, PreviewSection } from './QuestionPreview'
+import { QuestionBankPicker } from './QuestionBankPicker'
 import { Card } from './parts'
 import { dimensionSections } from './launch'
+import { templateCovers } from './templateRows'
 import { useSurveyBuilderModel } from './useSurveyBuilderModel'
 
 const NO_TEMPLATE = '__none__'
@@ -74,8 +76,9 @@ const NO_TEMPLATE = '__none__'
  * The wizard as a two-pane editor. The five steps are a progress rail, not pages; the left pane
  * holds the current step, the right pane is the respondent's own view of what is being built —
  * the survey's header as it is typed and the selected question as the respond page will draw it.
- * The questions step is the artboard's: rows with a drag handle, the dimension and scale chips and
- * a required switch, "Agregar pregunta" from the library or blank.
+ * The questions step is the artboard's: rows with a drag handle, the dimension and scale chips, a
+ * live required switch and a "•••" menu — a template's questions included, which are rows like
+ * any other (`templateRows.ts`) — and "Agregar pregunta" from the bank, the library or blank.
  *
  * State, draft and submit are the previous wizard's (`useSurveyBuilderModel`); only an author the
  * server would accept reaches the builder (`canAuthorSurveys` — `POST /surveys` is `CanAdminister`).
@@ -105,10 +108,21 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
   const [editing, setEditing] = useState<string | null>(null)
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
-  const [addNote, setAddNote] = useState(false)
+  const [bankOpen, setBankOpen] = useState(false)
 
   const fromTemplate = startsFromTemplate(values)
-  const errors = wizardStepErrors(values, t, template === null ? null : template.questions.length)
+  const baseErrors = wizardStepErrors(values, t, template === null ? null : template.questions.length)
+  // A template's questions are rows once they arrive (`templateRows.ts`), so they are validated
+  // as rows; until then the wizard's own "the template is loading" stands.
+  const questionErrors =
+    fromTemplate && template === null && values.questions.length === 0
+      ? baseErrors.questions
+      : wizardStepErrors({ ...values, templateId: '' }, t).questions
+  const errors = {
+    ...baseErrors,
+    questions: questionErrors,
+    review: [...baseErrors.basics, ...baseErrors.schedule, ...baseErrors.audience, ...questionErrors],
+  }
   const step = SURVEY_WIZARD_STEPS[stepIndex]
   const last = stepIndex === SURVEY_WIZARD_STEPS.length - 1
   const both = values.language === 'both'
@@ -116,9 +130,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
   const shown: 'en' | 'es' = values.language === 'both' ? (locale === 'es' ? 'es' : 'en') : values.language
   const title = (shown === 'es' ? values.titleEs : values.titleEn).trim()
   const description = (shown === 'es' ? values.descriptionEs : values.descriptionEn).trim()
-  const previewQuestions: SurveyRespondQuestion[] = fromTemplate
-    ? (template?.questions ?? []).map((q, index) => ({ ...q, order: index, category: (q as { category?: string | null }).category ?? null }))
-    : values.questions.map((q, index) => respondShape(q, index, shown))
+  const previewQuestions: SurveyRespondQuestion[] = values.questions.map((q, index) => respondShape(q, index, shown))
   const sections = dimensionSections(previewQuestions)
   const focus = Math.min(selected, Math.max(previewQuestions.length - 1, 0))
   const focusSection = sections.find((section) => section.questions.some((entry) => entry.position === focus + 1))
@@ -177,6 +189,14 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
       {m.submitError && (
         <Alert variant="destructive" role="alert" className="mb-4">
           <AlertDescription>{m.submitError}</AlertDescription>
+        </Alert>
+      )}
+      {m.unsaved && (
+        <Alert variant="destructive" role="alert" className="mb-4">
+          <AlertDescription>
+            {copy('questionsNotSaved', { message: m.unsaved.message })}{' '}
+            <Link to={`/surveys/${m.unsaved.id}/questions`}>{copy('openQuestionEditor')}</Link>
+          </AlertDescription>
         </Alert>
       )}
       {draft.recovery !== null && (
@@ -242,13 +262,15 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
           <span id="builder-language" className="whitespace-nowrap text-sm font-semibold text-fg-secondary">
             {t('surveys.contentLanguage')}
           </span>
-          <Select value={values.language} disabled={fromTemplate} onValueChange={(next) => patch({ language: next as ContentLanguage })}>
+          {/* Live in both modes: `/use` honours a language (`buildInstantiateInput`). From a
+              template, only the languages its questions are written in are offered. */}
+          <Select value={values.language} onValueChange={(next) => patch({ language: next as ContentLanguage })}>
             <SelectTrigger aria-labelledby="builder-language" className="w-38">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {CONTENT_LANGUAGES.map((code) => (
-                <SelectItem key={code} value={code}>
+                <SelectItem key={code} value={code} disabled={fromTemplate && template !== null && !templateCovers(template.language, code)}>
                   {languageLabel(t, code)}
                 </SelectItem>
               ))}
@@ -257,18 +279,19 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
         </div>
       </Card>
 
-      <div className="mt-5 grid items-start gap-4 xl:grid-cols-2">
+      {/* `items-stretch`: the artboard's two panes end together, the preview as tall as the list. */}
+      <div className="mt-5 grid items-stretch gap-4 xl:grid-cols-2" data-testid="builder-panes">
         <Card className="flex min-w-0 flex-col gap-3 px-5 pb-4.5 pt-4" data-testid="builder-step">
           {step === 'questions' ? (
             <>
               <PanelHeading
                 title={copy('questionsTitle')}
-                count={surveyQuestionCount(values, template === null ? null : template.questions.length)}
+                count={values.questions.length}
                 aside={fromTemplate && template ? copy('fromTemplate', { name: template.name }) : undefined}
               />
               <p className="-mt-2 mb-0 flex items-start gap-2 text-sm text-fg-secondary">
-                {fromTemplate ? <Lock aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" /> : <GripVertical aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />}
-                {fromTemplate ? copy('templateHint') : copy('dragHint')}
+                <GripVertical aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                {copy('dragHint')}
               </p>
               {m.templateError && (
                 <Alert variant="destructive" role="alert">
@@ -277,14 +300,17 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
               )}
               <ol className="m-0 flex list-none flex-col gap-2 p-0" data-testid="builder-questions">
                 {previewQuestions.map((question, index) => {
-                  const own = fromTemplate ? null : values.questions[index]
+                  const own = values.questions[index]
+                  // A template's question: reordered, dropped or made optional here, and its
+                  // words edited after creation, in Editar preguntas (`templateRows.ts`).
+                  const copied = own.templateOrder !== undefined
                   const isSelected = index === focus
                   return (
                     <li
-                      key={own?.key ?? question.id}
-                      draggable={!fromTemplate}
+                      key={own.key}
+                      draggable
                       onDragStart={() => setDragFrom(index)}
-                      onDragOver={(event) => !fromTemplate && event.preventDefault()}
+                      onDragOver={(event) => event.preventDefault()}
                       onDrop={() => {
                         if (dragFrom !== null) move(dragFrom, index)
                         setDragFrom(null)
@@ -293,11 +319,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                       className={cn('rounded-lg border', isSelected ? 'border-accent-blue bg-surface-icon-box' : 'border-line-default bg-surface-card')}
                     >
                       <div className="flex items-center gap-2.5 py-2.5 pl-2 pr-3">
-                        {fromTemplate ? (
-                          <Lock aria-hidden="true" className="size-4 shrink-0 text-fg-label" />
-                        ) : (
-                          <GripVertical aria-hidden="true" className="size-4 shrink-0 cursor-grab text-fg-label" />
-                        )}
+                        <GripVertical aria-hidden="true" data-slot="drag-grip" className="size-4 shrink-0 cursor-grab text-fg-label" />
                         <span className="w-5.5 shrink-0 text-center font-mono text-sm text-fg-secondary tabular-nums">{index + 1}</span>
                         <button
                           type="button"
@@ -325,32 +347,31 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                           <Switch
                             className="data-[state=checked]:bg-chip-good-ink"
                             checked={question.required}
-                            disabled={fromTemplate}
-                            onCheckedChange={(value) => own && patchQuestion(own.key, { required: value === true })}
+                            onCheckedChange={(value) => patchQuestion(own.key, { required: value === true })}
                           />
                           {copy('required')}
                         </label>
-                        {own && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button type="button" variant="outline" size="icon" className="size-7" aria-label={copy('questionMenu', { position: index + 1 })}>
-                                <MoreHorizontal aria-hidden="true" className="size-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button type="button" variant="outline" size="icon" className="size-7" aria-label={copy('questionMenu', { position: index + 1 })}>
+                              <MoreHorizontal aria-hidden="true" className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {!copied && (
                               <DropdownMenuItem onSelect={() => { setSelected(index); setEditing(editing === own.key ? null : own.key) }}>
                                 {editing === own.key ? copy('closeEditor') : copy('edit')}
                               </DropdownMenuItem>
-                              <DropdownMenuItem disabled={index === 0} onSelect={() => move(index, index - 1)}>{copy('moveUp')}</DropdownMenuItem>
-                              <DropdownMenuItem disabled={index === previewQuestions.length - 1} onSelect={() => move(index, index + 1)}>{copy('moveDown')}</DropdownMenuItem>
-                              <DropdownMenuItem onSelect={() => { setQuestions((questions) => questions.filter((q) => q.key !== own.key)); setEditing(null) }}>
-                                {copy('remove')}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
+                            )}
+                            <DropdownMenuItem disabled={index === 0} onSelect={() => move(index, index - 1)}>{copy('moveUp')}</DropdownMenuItem>
+                            <DropdownMenuItem disabled={index === previewQuestions.length - 1} onSelect={() => move(index, index + 1)}>{copy('moveDown')}</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => { setQuestions((questions) => questions.filter((q) => q.key !== own.key)); setEditing(null) }}>
+                              {copy('remove')}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
-                      {own && editing === own.key && (
+                      {!copied && editing === own.key && (
                         <QuestionEditor
                           t={t}
                           question={own}
@@ -365,53 +386,34 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   )
                 })}
               </ol>
-              {/* The add row in both modes, as the artboard draws it. From a template the server
-                  copies the template's questions whole (`buildInstantiateInput` sends none), so
-                  the row says where a question is added instead of adding one here. */}
+              {/* The add row, as the artboard draws it: the bank, the library or blank — from a
+                  template too, whose copy the added rows join (`arrangedQuestions`). */}
               <div className="flex min-h-10 flex-wrap items-center justify-center gap-x-1.5 rounded-lg border border-dashed border-line-default px-2 py-1" data-testid="add-question">
-                {fromTemplate ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-8 px-2"
-                    aria-expanded={addNote}
-                    aria-controls="add-question-note"
-                    onClick={() => setAddNote(!addNote)}
-                  >
-                    <Plus aria-hidden="true" className="size-4" />
-                    {copy('addQuestion')}
-                  </Button>
-                ) : (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button type="button" variant="ghost" className="h-8 px-2">
-                        <Plus aria-hidden="true" className="size-4" />
-                        {copy('addQuestion')}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      <DropdownMenuItem onSelect={() => setLibraryOpen(true)}>{copy('addFromLibrary')}</DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() => {
-                          const [key] = m.takeKeys(1)
-                          setQuestions((questions) => [...questions, emptyQuestion(key)])
-                          setSelected(values.questions.length)
-                          setEditing(key)
-                        }}
-                      >
-                        {copy('addBlank')}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="ghost" className="h-8 px-2">
+                      <Plus aria-hidden="true" className="size-4" />
+                      {copy('addQuestion')}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onSelect={() => setBankOpen(true)}>{copy('addFromBank')}</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setLibraryOpen(true)}>{copy('addFromLibrary')}</DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        const [key] = m.takeKeys(1)
+                        setQuestions((questions) => [...questions, emptyQuestion(key)])
+                        setSelected(values.questions.length)
+                        setEditing(key)
+                      }}
+                    >
+                      {copy('addBlank')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <span className="text-sm text-fg-label">{copy('addTail')}</span>
-                {fromTemplate && addNote && (
-                  <p id="add-question-note" className="m-0 basis-full pb-1.5 text-center text-sm text-fg-secondary">
-                    {copy('templateAddNote')}
-                  </p>
-                )}
               </div>
-              <QuestionsFooter t={t} values={values} questions={previewQuestions} fromTemplate={fromTemplate} />
+              <QuestionsFooter t={t} values={values} questions={previewQuestions} />
               <QuestionLibraryBrowser
                 open={libraryOpen}
                 onOpenChange={setLibraryOpen}
@@ -422,6 +424,13 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   const keys = m.takeKeys(picked.length)
                   setQuestions((questions) => [...questions, ...picked.map((item, index) => questionFromLibrary(item, keys[index]))])
                 }}
+              />
+              <QuestionBankPicker
+                open={bankOpen}
+                onOpenChange={setBankOpen}
+                companyId={companyId}
+                takeKey={() => m.takeKeys(1)[0]}
+                onAdd={(question) => setQuestions((questions) => [...questions, question])}
               />
             </>
           ) : (
@@ -496,7 +505,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
           <Button type="button" variant="outline" disabled={stepIndex === 0} onClick={() => setStepIndex(stepIndex - 1)}>
             {copy('back')}
           </Button>
-          <Button type="button" variant="primary" disabled={m.submitting} onClick={goNext}>
+          <Button type="button" variant="primary" disabled={m.submitting || m.unsaved !== null} onClick={goNext}>
             {last ? <Check aria-hidden="true" className="size-icon" /> : <ArrowRight aria-hidden="true" className="size-icon" />}
             {last ? copy('create') : copy('next')}
           </Button>
@@ -542,18 +551,14 @@ function QuestionsFooter({
   t,
   values,
   questions,
-  fromTemplate,
 }: {
   t: TranslateFn
   values: SurveyWizardValues
   questions: SurveyRespondQuestion[]
-  fromTemplate: boolean
 }) {
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.builder.${key}`, vars)
-  const dimensions = fromTemplate
-    ? new Set(questions.map((q) => q.category).filter((c): c is string => !!c)).size
-    : chosenDimensions(values).length
-  const missing = fromTemplate ? questions.filter((q) => !q.category).length : positionsWithoutDimension(values).length
+  const dimensions = chosenDimensions(values).length
+  const missing = positionsWithoutDimension(values).length
   const required = questions.filter((q) => q.required).length
   const open = questions.filter((q) => q.type === 'open_ended').length
   if (questions.length === 0) return null
@@ -715,7 +720,7 @@ function StepForm({
           <SelectField
             label={t('surveys.startFromTemplate')}
             value={values.templateId === '' ? NO_TEMPLATE : values.templateId}
-            onChange={(next) => patch({ templateId: next === NO_TEMPLATE ? '' : next })}
+            onChange={(next) => m.chooseTemplate(next === NO_TEMPLATE ? '' : next)}
             options={[{ value: NO_TEMPLATE, label: t('surveys.startBlank') }, ...templates.map((option) => ({ value: option.id, label: option.name }))]}
           />
           <SelectField
@@ -743,7 +748,6 @@ function StepForm({
             onChange={(next) => patch(col === 'es' ? { descriptionEs: next } : { descriptionEn: next })}
           />
         ))}
-        {fromTemplate && <p className="m-0 text-sm text-fg-secondary">{t('surveys.contentLanguageFromTemplate')}</p>}
       </>
     )
   }
@@ -820,7 +824,7 @@ function StepForm({
     [t('surveys.startDate'), reviewDate(values.startDate, locale)],
     [t('surveys.endDate'), reviewDate(values.endDate, locale)],
     [t('surveys.departmentsLabel'), values.departmentIds.length === 0 ? t('surveys.departmentsAll') : named.join(', ') || t('surveys.readingDepartmentsUnlisted')],
-    [copy('questionsTitle'), String(surveyQuestionCount(values, template === null ? null : template.questions.length))],
+    [copy('questionsTitle'), String(values.questions.length)],
   ]
   return (
     <>

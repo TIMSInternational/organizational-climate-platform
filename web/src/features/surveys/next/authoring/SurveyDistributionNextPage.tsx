@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { AlertCircle, Check, ClipboardList, Clock, Copy, Mail, Send, ShieldCheck } from 'lucide-react'
+import { AlertCircle, Check, ClipboardList, Clock, HelpCircle, Mail, MoreHorizontal, Send, ShieldCheck } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { PageTopBar } from '../../../../components/layout'
 import {
@@ -12,6 +12,10 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   ErrorState,
   LoadingRegion,
   SkeletonText,
@@ -23,30 +27,51 @@ import {
   TableRow,
 } from '../../../../components/ui'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
-import { AudienceSelector, audienceSelection, estimateAudience, type AudienceMode } from '../../../../components/distribution'
+import {
+  AudienceSelector,
+  InvitationCopyEditor,
+  audienceSelection,
+  estimateAudience,
+  type AudienceMode,
+} from '../../../../components/distribution'
 import { useTranslation } from '../../../../i18n'
 import { cn } from '../../../../lib/cn'
 import { canDistribute } from '../../api/surveyInvitationCopy'
 import { isKnownInvitationStatus } from '../../api/surveyDistribution'
+import ShareLinkQr from '../../components/ShareLinkQr'
 import { IconBox, TH_CLASS } from '../../../shared-next/parts'
-import { Card, Meter, ReadingTile } from './parts'
+import { Card, Meter, ReadingTile, ShareLinkField, WithReading, type ShareLinkAction } from './parts'
 import {
-  absoluteLink,
+  MAX_REMINDERS,
   dayMonth,
   daysFrom,
   invitationBuckets,
   launchChecklist,
-  maskedLink,
+  nextReminder,
   readySteps,
   remindersSent,
   responseRate,
+  surveyAudience,
   targetedDepartments,
   type LaunchStepState,
+  type ReminderOutlook,
 } from './launch'
-import { useDistributionModel, type DistributionModel } from './useDistributionModel'
+import {
+  useDistributionModel,
+  type DistributionActions,
+  type DistributionModel,
+  type InvitationCopyState,
+} from './useDistributionModel'
 
 /** How many invitation rows the checklist shows before "Ver las n". */
 export const INVITATION_PREVIEW_ROWS = 4
+
+/**
+ * The invitation table's columns, placed where the Distribution artboard's grid puts them
+ * (`3fr 4fr 2fr 2fr`, 12px gaps and padding, measured at Correo x≈568, Departamento 872, Estado
+ * 1029 inside 325–1187): the same text positions as fractions of a fixed-layout table.
+ */
+export const INVITATION_COLUMNS = ['26.8%', '35.3%', '18.3%', '19.6%'] as const
 
 /**
  * Distribución, redesigned (canvas board "Distribution") — `/surveys/:surveyId/distribution`.
@@ -87,11 +112,11 @@ export default function SurveyDistributionNextPage() {
     <DistributionView
       model={state.model}
       busy={model.busy}
+      busyInvitationId={model.busyInvitationId}
       notice={model.notice}
       actionError={model.actionError}
-      onInvite={(selection) => void model.invite(selection)}
-      onRemind={() => void model.remind()}
-      onCreateLink={() => void model.createLink()}
+      copyState={model.copy}
+      actions={model.actions}
     />
   )
 }
@@ -99,20 +124,20 @@ export default function SurveyDistributionNextPage() {
 export function DistributionView({
   model,
   busy,
+  busyInvitationId = null,
   notice,
   actionError,
-  onInvite,
-  onRemind,
-  onCreateLink,
+  copyState = { status: 'idle' },
+  actions,
   now = new Date(),
 }: {
   model: DistributionModel
   busy: boolean
+  busyInvitationId?: string | null
   notice: string | null
   actionError: string | null
-  onInvite: (selection: NonNullable<ReturnType<typeof audienceSelection>>) => void
-  onRemind: () => void
-  onCreateLink: () => void
+  copyState?: InvitationCopyState
+  actions: DistributionActions
   now?: Date
 }) {
   const { t, locale } = useTranslation()
@@ -124,35 +149,53 @@ export function DistributionView({
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
   const [audienceOpen, setAudienceOpen] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [linkConfirm, setLinkConfirm] = useState<'regenerate' | 'revoke' | null>(null)
+  const [qrOpen, setQrOpen] = useState(false)
+  const [copyOpen, setCopyOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
-  const [copied, setCopied] = useState(false)
 
   const actionable = scoped && canDistribute(survey.status)
   // The audience the server would resolve for the survey as targeted — `ResolveAudienceAsync`,
   // mirrored by `estimateAudience`. Unknown (null), never 0, for a viewer who cannot read users.
-  const audience = scoped ? estimateAudience('allTargeted', users, [], [], survey.departmentIds).length : null
+  const resolved = scoped ? estimateAudience('allTargeted', users, [], [], survey.departmentIds).length : null
   const recipients = estimateAudience(mode, users, selectedDepartmentIds, selectedUserIds, survey.departmentIds).length
   const selection = audienceSelection(mode, selectedDepartmentIds, selectedUserIds)
   const summary = invitations.summary
   const buckets = invitationBuckets(summary)
   const reminders = remindersSent(invitations.invitations)
-  const steps = launchChecklist({ audience, publicLink: distribution?.publicLink ?? null, summary, reminders })
+  const steps = launchChecklist({ audience: resolved, publicLink: distribution?.publicLink ?? null, summary, reminders })
   const ready = readySteps(steps)
   const firstMissing = steps.find((step) => step.state === 'missing')
+  const firstUnknown = steps.find((step) => step.state === 'unknown')
   const closesIn = daysFrom(survey.endDate, now)
   const targets = targetedDepartments(survey.departmentIds, scoped ? departments : null)
   const stateOf = (id: string): LaunchStepState => steps.find((step) => step.id === id)?.state ?? 'missing'
-  const origin = typeof window === 'undefined' ? '' : window.location.origin
   const userById = new Map(users.map((user) => [user.id, user]))
   const departmentName = new Map(departments.map((department) => [department.id, department.name]))
   const rows = showAll ? invitations.invitations : invitations.invitations.slice(0, INVITATION_PREVIEW_ROWS)
-  // ONE audience per screen: the people invited once invitations exist, the people the server
-  // would resolve before that. The same number is the reach, the response rate's denominator and
-  // the audience line's count — the stated `targetAudienceCount` only stands in for a viewer who
-  // cannot read the directory. Measured on the Meridiano survey: 41 resolved, 24 stated, and the
-  // screen printed both (fidelity refuter, 11 Sep).
-  const reach = summary.total > 0 ? summary.total : audience
-  const rate = responseRate(survey.responseCount, reach ?? survey.targetAudienceCount)
+  // ONE audience, shared with the detail page (`surveyAudience`): the invited once invitations
+  // exist, the directory's resolution before that, the stated target only when neither is known.
+  // It is the reach, the response rate's denominator and the audience line's count at once.
+  const audience = surveyAudience({ invited: summary.total, resolved, stated: survey.targetAudienceCount })
+  const rate = responseRate(survey.responseCount, audience?.count ?? null)
+  const outlook = nextReminder({
+    invitations: invitations.invitations,
+    status: survey.status,
+    endDate: survey.endDate,
+    sendReminders: survey.settings.notificationSendReminders,
+    frequencyDays: survey.settings.notificationReminderFrequencyDays,
+    now,
+  })
+  const linkActions: ShareLinkAction[] = []
+  if (distribution?.publicLink && distribution.accessType === 'public') {
+    linkActions.push({ label: t('surveys.next.shareLink.qr'), onSelect: () => setQrOpen(true) })
+  }
+  if (actionable) {
+    linkActions.push(
+      { label: t('surveys.distribution.shareLinkRegenerate'), onSelect: () => setLinkConfirm('regenerate'), disabled: busy },
+      { label: t('surveys.distribution.shareLinkRevoke'), onSelect: () => setLinkConfirm('revoke'), disabled: busy },
+    )
+  }
 
   return (
     <div>
@@ -191,14 +234,14 @@ export function DistributionView({
         <ReadingTile
           testId="tile-reach"
           label={copy('reach')}
-          value={reach}
-          unit={summary.total > 0 ? copy('reachInvited') : copy('reachAudience')}
+          value={audience?.count ?? null}
+          unit={audience === null ? undefined : copy(REACH_UNIT[audience.source])}
         />
         <ReadingTile
           testId="tile-responses"
           label={copy('responses')}
           value={survey.responseCount}
-          unit={rate === null ? copy('responsesNoTarget') : copy('responsesOf', { target: reach ?? survey.targetAudienceCount ?? 0, rate })}
+          unit={rate === null || audience === null ? copy('responsesNoTarget') : copy('responsesOf', { target: audience.count, rate })}
         >
           {rate !== null && <Meter percent={rate} label={copy('responses')} />}
         </ReadingTile>
@@ -219,8 +262,10 @@ export function DistributionView({
           }
         />
         <ReadingTile testId="tile-ready" label={copy('ready')} value={ready} unit={copy('readyOf', { count: steps.length })}>
-          <span className={cn('text-sm', firstMissing ? 'text-accent-amber-ink' : 'text-chip-good-ink')}>
-            {firstMissing ? copy(`missing.${firstMissing.id}`) : copy('allReady')}
+          <span
+            className={cn('text-sm', firstMissing ? 'text-accent-amber-ink' : firstUnknown ? 'text-fg-secondary' : 'text-chip-good-ink')}
+          >
+            {firstMissing ? copy(`missing.${firstMissing.id}`) : firstUnknown ? copy(`unknown.${firstUnknown.id}`) : copy('allReady')}
           </span>
         </ReadingTile>
       </section>
@@ -236,7 +281,13 @@ export function DistributionView({
         <Step
           testId="step-audience"
           state={stateOf('audience')}
-          title={stateOf('audience') === 'done' ? copy('audienceTitle') : copy('audienceMissingTitle')}
+          title={
+            stateOf('audience') === 'done'
+              ? copy('audienceTitle')
+              : stateOf('audience') === 'unknown'
+                ? copy('audienceUnknownTitle')
+                : copy('audienceMissingTitle')
+          }
           action={
             actionable && (
               <Button type="button" variant="outline" disabled={busy} onClick={() => setAudienceOpen(true)}>
@@ -246,13 +297,15 @@ export function DistributionView({
           }
         >
           <p className="m-0 text-sm text-fg-secondary">
-            {audience === null
-              ? t('surveys.distribution.outOfScope')
+            {resolved === null
+              ? summary.total > 0
+                ? copy('audienceInvited', { people: summary.total })
+                : t('surveys.distribution.outOfScope')
               : survey.departmentIds.length === 0
-                ? copy('audienceCompany', { people: reach ?? audience })
+                ? copy('audienceCompany', { people: audience?.count ?? resolved })
                 : copy(survey.departmentIds.length === 1 ? 'audienceOne' : 'audienceLine', {
                     count: survey.departmentIds.length,
-                    people: reach ?? audience,
+                    people: audience?.count ?? resolved,
                     names: joinNames(targets.names, copy('and')),
                   })}
           </p>
@@ -265,7 +318,7 @@ export function DistributionView({
           action={
             distribution?.publicLink == null &&
             actionable && (
-              <Button type="button" variant="outline" disabled={busy} onClick={onCreateLink}>
+              <Button type="button" variant="outline" disabled={busy} onClick={actions.createLink}>
                 {copy('createLink')}
               </Button>
             )
@@ -273,23 +326,7 @@ export function DistributionView({
         >
           {distribution?.publicLink ? (
             <>
-              <div className="flex max-w-140 items-center gap-2">
-                <div className="flex h-8 min-w-0 flex-1 items-center overflow-hidden text-ellipsis whitespace-nowrap rounded border border-line-default bg-surface-card px-2.5 font-mono text-sm text-fg-primary">
-                  {maskedLink(distribution.publicLink, origin)}
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label={copied ? copy('copied') : copy('copyLink')}
-                  onClick={() => {
-                    const link = distribution.publicLink
-                    if (link) void navigator.clipboard?.writeText(absoluteLink(link, origin)).then(() => setCopied(true))
-                  }}
-                >
-                  <Copy aria-hidden="true" className="size-icon" />
-                </Button>
-              </div>
+              <ShareLinkField link={distribution.publicLink} actions={linkActions} />
               <p className="m-0 text-sm text-fg-secondary">
                 {distribution.accessRules.requireLogin ? copy('linkHelpLogin') : copy('linkHelpOpen')}
               </p>
@@ -305,10 +342,37 @@ export function DistributionView({
           title={copy('invitationsTitle')}
           action={
             actionable && (
-              <Button type="button" variant="outline" disabled={busy || audience === 0} onClick={() => { setMode('allTargeted'); setConfirming(true) }}>
-                <Mail aria-hidden="true" className="size-icon" />
-                {copy('sendInvitations')}
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy || resolved === 0}
+                  onClick={() => {
+                    setMode('allTargeted')
+                    setConfirming(true)
+                  }}
+                >
+                  <Mail aria-hidden="true" className="size-icon" />
+                  {copy('sendInvitations')}
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" size="icon" aria-label={copy('invitationsMenu')}>
+                      <MoreHorizontal aria-hidden="true" className="size-icon" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setCopyOpen(true)
+                        actions.openCopy()
+                      }}
+                    >
+                      {t('surveys.distribution.copyTitle')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
             )
           }
         >
@@ -320,8 +384,13 @@ export function DistributionView({
           {invitations.invitations.length === 0 ? (
             <p className="m-0 text-sm text-fg-secondary">{copy('invitationsNone')}</p>
           ) : (
-            <div className="overflow-x-auto rounded-md border border-line-light">
-              <Table className="min-w-[36rem] text-sm">
+            <div className="rounded-md border border-line-light">
+              <Table className="min-w-[36rem] table-fixed text-sm" data-testid="invitation-table">
+                <colgroup>
+                  {INVITATION_COLUMNS.map((width) => (
+                    <col key={width} style={{ width }} />
+                  ))}
+                </colgroup>
                 <TableHeader className="bg-surface-icon-box">
                   <TableRow>
                     <TableHead scope="col" className={TH_CLASS}>{copy('person')}</TableHead>
@@ -333,22 +402,56 @@ export function DistributionView({
                 <TableBody>
                   {rows.map((invitation) => {
                     const person = userById.get(invitation.userId)
+                    const rowBusy = busy || busyInvitationId === invitation.id
                     return (
                       <TableRow key={invitation.id} className="border-t border-line-light">
-                        <TableCell className="px-3 py-2 font-medium">{person?.name ?? '—'}</TableCell>
-                        <TableCell className="px-3 py-2 font-mono text-xs text-fg-secondary">{invitation.email}</TableCell>
-                        <TableCell className="px-3 py-2 text-fg-secondary">
+                        <TableCell className="truncate px-3 py-2 font-medium">{person?.name ?? '—'}</TableCell>
+                        <TableCell className="truncate px-3 py-2 font-mono text-xs text-fg-secondary">{invitation.email}</TableCell>
+                        <TableCell className="truncate px-3 py-2 text-fg-secondary">
                           {person?.departmentId ? (departmentName.get(person.departmentId) ?? '—') : '—'}
                         </TableCell>
-                        <TableCell className="px-3 py-2">
-                          <Chip
-                            tone={invitation.status === 'revoked' || invitation.status === 'pending' ? 'warning' : 'neutral'}
-                            label={
-                              isKnownInvitationStatus(invitation.status)
-                                ? t(`surveys.distribution.status.${invitation.status}`)
-                                : invitation.status
-                            }
-                          />
+                        <TableCell className="px-3 py-1.5">
+                          <span className="flex items-center justify-between gap-2">
+                            <Chip
+                              tone={invitation.status === 'revoked' || invitation.status === 'pending' ? 'warning' : 'neutral'}
+                              label={
+                                isKnownInvitationStatus(invitation.status)
+                                  ? t(`surveys.distribution.status.${invitation.status}`)
+                                  : invitation.status
+                              }
+                            />
+                            {actionable && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-7"
+                                    aria-label={copy('rowMenu', { email: invitation.email })}
+                                  >
+                                    <MoreHorizontal aria-hidden="true" className="size-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {/* The server refuses a resend on a completed invitation with a 409
+                                      (`ResendInvitationAsync`), so it is never offered on one. */}
+                                  <DropdownMenuItem
+                                    disabled={rowBusy || invitation.status === 'completed'}
+                                    onSelect={() => actions.resendInvitation(invitation.id)}
+                                  >
+                                    {t('surveys.distribution.resend')}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={rowBusy || invitation.status === 'revoked'}
+                                    onSelect={() => actions.revokeInvitation(invitation.id)}
+                                  >
+                                    {t('surveys.distribution.revoke')}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                          </span>
                         </TableCell>
                       </TableRow>
                     )
@@ -356,9 +459,16 @@ export function DistributionView({
                 </TableBody>
               </Table>
               {invitations.invitations.length > INVITATION_PREVIEW_ROWS && (
-                <p className="m-0 border-t border-line-light px-3 py-2 text-sm text-fg-secondary">
+                <p className="m-0 border-t border-line-light px-3 py-2 text-sm text-fg-tertiary">
                   {!showAll && `${copy('more', { count: invitations.invitations.length - INVITATION_PREVIEW_ROWS })} · `}
-                  <Button type="button" variant="link" className="h-auto p-0 text-sm" onClick={() => setShowAll(!showAll)}>
+                  {/* The artboard's link ink (#4a3d72, measured in Distribution.png), not the
+                      accent blue of the link variant. */}
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto p-0 text-sm text-fg-secondary"
+                    onClick={() => setShowAll(!showAll)}
+                  >
                     {showAll ? copy('seeFewer') : copy('seeAll', { count: invitations.invitations.length })}
                   </Button>
                 </p>
@@ -373,7 +483,7 @@ export function DistributionView({
           title={copy('remindersTitle')}
           action={
             actionable && (
-              <Button type="button" variant="primary" disabled={busy || summary.total === 0} onClick={onRemind}>
+              <Button type="button" variant="primary" disabled={busy || summary.total === 0} onClick={actions.remind}>
                 <Send aria-hidden="true" className="size-icon" />
                 {copy('sendReminder')}
               </Button>
@@ -382,8 +492,18 @@ export function DistributionView({
         >
           <p className="m-0 text-sm text-fg-secondary">
             {reminders === null || reminders === 0
-              ? copy('remindersNone', { days: survey.settings.notificationReminderFrequencyDays })
-              : copy('remindersSome', { count: reminders, days: survey.settings.notificationReminderFrequencyDays })}
+              ? copy('remindersNone')
+              : reminders === 1
+                ? copy('remindersOne')
+                : copy('remindersSome', { count: reminders })}{' '}
+            {outlook !== null && (
+              <ReminderLine
+                outlook={outlook}
+                days={survey.settings.notificationReminderFrequencyDays}
+                locale={locale}
+                copy={copy}
+              />
+            )}
           </p>
         </Step>
 
@@ -392,7 +512,8 @@ export function DistributionView({
           className="flex items-start gap-3.5 rounded-lg border border-accent-green-ring bg-chip-good-fill px-5 py-4"
         >
           <IconBox>
-            <ShieldCheck />
+            {/* The artboard's shield is the good ink (#0f7f4e) in the lavender tile. */}
+            <ShieldCheck data-slot="guarantee-shield" className="text-chip-good-ink" />
           </IconBox>
           <div className="flex min-w-0 flex-col gap-1.5">
             <p className="m-0 text-2xs font-bold uppercase tracking-eyebrow text-chip-good-ink">
@@ -437,6 +558,56 @@ export function DistributionView({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={copyOpen} onOpenChange={setCopyOpen}>
+        <DialogContent closeLabel={t('common.close')} className="max-h-[90vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t('surveys.distribution.copyTitle')}</DialogTitle>
+          </DialogHeader>
+          {copyState.status === 'error' ? (
+            <Alert variant="destructive" role="alert">
+              <AlertDescription>{copy('copyLoadFailed')}</AlertDescription>
+            </Alert>
+          ) : copyState.status === 'ready' ? (
+            <InvitationCopyEditor
+              copy={copyState.draft}
+              requiredLocales={copyState.context.requiredLocales}
+              onChange={actions.editCopy}
+              onSave={() => void actions.saveCopy().then((saved) => saved && setCopyOpen(false))}
+              saving={busy}
+              editable={copyState.context.editable}
+            />
+          ) : (
+            <SkeletonText lines={4} />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {distribution?.publicLink && (
+        <Dialog open={qrOpen} onOpenChange={setQrOpen}>
+          <DialogContent closeLabel={t('common.close')}>
+            <DialogHeader>
+              <DialogTitle>{t('surveys.next.shareLink.qr')}</DialogTitle>
+            </DialogHeader>
+            <ShareLinkQr publicLink={distribution.publicLink} accessType={distribution.accessType} surveyId={survey.id} />
+          </DialogContent>
+        </Dialog>
+      )}
+
+      <ConfirmationDialog
+        open={linkConfirm !== null}
+        onOpenChange={(open) => !open && setLinkConfirm(null)}
+        title={linkConfirm === 'revoke' ? t('surveys.next.shareLink.revokeTitle') : t('surveys.next.shareLink.regenerateTitle')}
+        description={linkConfirm === 'revoke' ? t('surveys.next.shareLink.revokeBody') : t('surveys.next.shareLink.regenerateBody')}
+        confirmText={linkConfirm === 'revoke' ? t('surveys.distribution.shareLinkRevoke') : t('surveys.distribution.shareLinkRegenerate')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => {
+          const which = linkConfirm
+          setLinkConfirm(null)
+          if (which === 'revoke') actions.revokeLink()
+          else if (which === 'regenerate') actions.regenerateLink()
+        }}
+      />
+
       <ConfirmationDialog
         open={confirming}
         onOpenChange={setConfirming}
@@ -446,11 +617,43 @@ export function DistributionView({
         cancelText={t('common.cancel')}
         onConfirm={() => {
           setConfirming(false)
-          if (selection !== null) onInvite(selection)
+          if (selection !== null) actions.invite(selection)
         }}
       />
     </div>
   )
+}
+
+const REACH_UNIT = { invited: 'reachInvited', directory: 'reachAudience', stated: 'reachStated' } as const
+
+/**
+ * The reminders' second sentence: when the next automatic one leaves, in the artboard's words
+ * ("Uno programado para el 7 oct, …") with the real date — or why none is scheduled.
+ */
+function ReminderLine({
+  outlook,
+  days,
+  locale,
+  copy,
+}: {
+  outlook: ReminderOutlook
+  days: number
+  locale: string
+  copy: (key: string, vars?: Record<string, string | number>) => string
+}) {
+  const every = Math.max(1, days)
+  if (outlook.kind === 'scheduled') {
+    return (
+      <WithReading
+        reading={dayMonth(outlook.at, locale)}
+        text={(date) => (every === 1 ? copy('reminder.scheduledOneDay', { date }) : copy('reminder.scheduled', { date, days: every }))}
+      />
+    )
+  }
+  if (outlook.kind === 'awaiting') {
+    return <>{every === 1 ? copy('reminder.awaitingOneDay', { max: MAX_REMINDERS }) : copy('reminder.awaiting', { days: every, max: MAX_REMINDERS })}</>
+  }
+  return <>{copy(`reminder.${outlook.kind}`)}</>
 }
 
 function joinNames(names: string[], and: string): string {
@@ -479,10 +682,10 @@ function Step({
           'flex size-7 shrink-0 items-center justify-center rounded-full border [&>svg]:size-3.5',
           state === 'done' && 'border-accent-green-ring bg-chip-good-fill text-chip-good-ink',
           state === 'missing' && 'border-accent-amber-ring bg-chip-warning-fill text-chip-warning-ink',
-          state === 'idle' && 'border-line-default bg-surface-icon-box text-fg-secondary',
+          (state === 'idle' || state === 'unknown') && 'border-line-default bg-surface-icon-box text-fg-secondary',
         )}
       >
-        {state === 'done' ? <Check /> : state === 'missing' ? <AlertCircle /> : <Clock />}
+        {state === 'done' ? <Check /> : state === 'missing' ? <AlertCircle /> : state === 'unknown' ? <HelpCircle /> : <Clock />}
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <h3 className="m-0 text-base font-semibold text-fg-primary">{title}</h3>
