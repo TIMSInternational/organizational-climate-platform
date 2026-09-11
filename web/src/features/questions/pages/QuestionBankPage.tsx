@@ -1,3 +1,7 @@
+/**
+ * NOT ROUTED. `/admin/question-bank` renders `features/questions/next/bank/QuestionBankNextPage` since the per-role canvas redesign (10 Sep);
+ * this page stays in the tree as the wiring reference for its payload and submit path.
+ */
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { PageTopBar } from '../../../components/layout'
 import {

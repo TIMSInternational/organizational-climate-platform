@@ -50,8 +50,8 @@ import MySurveysPage from '../features/surveys/pages/MySurveysPage'
 import SurveyTemplatesPage from '../features/surveys/pages/SurveyTemplatesPage'
 import SurveyTemplateDetailPage from '../features/surveys/pages/SurveyTemplateDetailPage'
 import AnalyticsDashboardPage from '../features/analytics/pages/AnalyticsDashboardPage'
-import QuestionBankPage from '../features/questions/pages/QuestionBankPage'
-import QuestionLibraryPage from '../features/questions/pages/QuestionLibraryPage'
+import QuestionBankNextPage from '../features/questions/next/bank/QuestionBankNextPage'
+import QuestionLibraryNextPage from '../features/questions/next/library/QuestionLibraryNextPage'
 import { resolveInitialRoute } from './resolveInitialRoute'
 
 // /admin/companies (the old unconditional target) is SuperAdmin-only -- a
@@ -330,7 +330,9 @@ export const router = createBrowserRouter([
               // role, so a leader or employee who typed the URL gets the page's own
               // error state rather than another tenant's corpus. `navSections.ts` is
               // what keeps it out of their sidebar.
-              { path: '/admin/question-bank', element: <QuestionBankPage /> },
+              // The redesigned Banco de preguntas (the per-role canvas, 10 Sep) replaced
+              // QuestionBankPage here; the old page stays in the tree unrouted, as the wiring reference.
+              { path: '/admin/question-bank', element: <QuestionBankNextPage /> },
               // #423, the question LIBRARY's authoring screen. Its endpoints have
               // accepted POST and PUT since #112; until this route existed the only
               // way to reach them was `curl` or SQL, because `/dev/question-library`
@@ -341,7 +343,9 @@ export const router = createBrowserRouter([
               // every `/admin/question-*` endpoint checks `Roles.Admin` and then
               // scopes by role, so a leader who typed the URL meets the page's own
               // error state, never another tenant's corpus.
-              { path: '/admin/question-library', element: <QuestionLibraryPage /> },
+              // The redesigned Biblioteca de preguntas (the per-role canvas, 10 Sep) replaced
+              // QuestionLibraryPage here; the old page stays in the tree unrouted, as the wiring reference.
+              { path: '/admin/question-library', element: <QuestionLibraryNextPage /> },
               // Flat, with no company id in the path (#142), like /surveys and
               // /action-plans: the page takes its company from `company-context`,
               // so one route and one nav entry serve both admin roles.
