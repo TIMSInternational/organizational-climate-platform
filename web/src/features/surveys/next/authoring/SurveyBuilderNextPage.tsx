@@ -216,7 +216,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                         'text-xs',
                         state === 'done' && 'text-chip-good-ink',
                         state === 'open' && 'text-accent-amber-ink',
-                        state === 'current' && 'text-accent-red',
+                        state === 'current' && 'text-chip-critical-ink',
                         state === 'pending' && 'text-fg-label',
                       )}
                     >

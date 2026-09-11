@@ -15,6 +15,12 @@ import {
   ErrorState,
   LoadingRegion,
   SkeletonText,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '../../../../components/ui'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
 import { AudienceSelector, audienceSelection, estimateAudience, type AudienceMode } from '../../../../components/distribution'
@@ -309,26 +315,26 @@ export function DistributionView({
             <p className="m-0 text-sm text-fg-secondary">{copy('invitationsNone')}</p>
           ) : (
             <div className="overflow-x-auto rounded-md border border-line-light">
-              <table className="w-full min-w-[36rem] border-collapse text-sm">
-                <thead className="bg-surface-icon-box">
-                  <tr>
-                    <th scope="col" className={TH_CLASS}>{copy('person')}</th>
-                    <th scope="col" className={TH_CLASS}>{copy('email')}</th>
-                    <th scope="col" className={TH_CLASS}>{copy('department')}</th>
-                    <th scope="col" className={TH_CLASS}>{copy('state')}</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table className="min-w-[36rem] text-sm">
+                <TableHeader className="bg-surface-icon-box">
+                  <TableRow>
+                    <TableHead scope="col" className={TH_CLASS}>{copy('person')}</TableHead>
+                    <TableHead scope="col" className={TH_CLASS}>{copy('email')}</TableHead>
+                    <TableHead scope="col" className={TH_CLASS}>{copy('department')}</TableHead>
+                    <TableHead scope="col" className={TH_CLASS}>{copy('state')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {rows.map((invitation) => {
                     const person = userById.get(invitation.userId)
                     return (
-                      <tr key={invitation.id} className="border-t border-line-light">
-                        <td className="px-3 py-2 font-medium">{person?.name ?? '—'}</td>
-                        <td className="px-3 py-2 font-mono text-xs text-fg-secondary">{invitation.email}</td>
-                        <td className="px-3 py-2 text-fg-secondary">
+                      <TableRow key={invitation.id} className="border-t border-line-light">
+                        <TableCell className="px-3 py-2 font-medium">{person?.name ?? '—'}</TableCell>
+                        <TableCell className="px-3 py-2 font-mono text-xs text-fg-secondary">{invitation.email}</TableCell>
+                        <TableCell className="px-3 py-2 text-fg-secondary">
                           {person?.departmentId ? (departmentName.get(person.departmentId) ?? '—') : '—'}
-                        </td>
-                        <td className="px-3 py-2">
+                        </TableCell>
+                        <TableCell className="px-3 py-2">
                           <Chip
                             tone={invitation.status === 'revoked' || invitation.status === 'pending' ? 'warning' : 'neutral'}
                             label={
@@ -337,12 +343,12 @@ export function DistributionView({
                                 : invitation.status
                             }
                           />
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     )
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
               {invitations.invitations.length > INVITATION_PREVIEW_ROWS && (
                 <p className="m-0 border-t border-line-light px-3 py-2 text-sm text-fg-secondary">
                   {!showAll && `${copy('more', { count: invitations.invitations.length - INVITATION_PREVIEW_ROWS })} · `}
