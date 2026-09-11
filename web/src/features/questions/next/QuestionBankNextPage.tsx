@@ -26,7 +26,7 @@ import { useQuestionBankModel } from './useQuestionModels'
  */
 
 export const SELECT_CLASS =
-  'h-8 rounded-md border border-line-default bg-surface-card px-2 text-sm text-fg-primary'
+  'h-8 rounded-md border border-line-default bg-surface-card px-2 text-base text-fg-primary'
 
 export default function QuestionBankNextPage() {
   const { t, locale } = useTranslation()
@@ -59,8 +59,8 @@ export default function QuestionBankNextPage() {
           <SquareLibrary />
         </IconBox>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <p className="m-0 text-sm font-semibold text-fg-primary">{t('questionBank.next.splitTitle')}</p>
-          <p className="m-0 text-xs leading-normal text-fg-secondary">
+          <p className="m-0 text-base font-semibold text-fg-primary">{t('questionBank.next.splitTitle')}</p>
+          <p className="m-0 text-sm leading-normal text-fg-secondary">
             {t('questionBank.next.splitBody')}
             {state.status === 'ready' && state.data.library && (
               <>
@@ -73,7 +73,7 @@ export default function QuestionBankNextPage() {
             )}
           </p>
         </div>
-        <Link to="/admin/question-library" className="inline-flex items-center gap-1 text-xs text-fg-secondary">
+        <Link to="/admin/question-library" className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-fg-secondary">
           {t('questionBank.next.openLibrary')}
           <ArrowRight aria-hidden="true" className="size-3" />
         </Link>
@@ -135,7 +135,7 @@ export default function QuestionBankNextPage() {
       ) : (
         <div className={TABLE_CARD_CLASS}>
           <div className="overflow-x-auto">
-            <Table className="w-full border-collapse text-sm">
+            <Table className="w-full border-collapse text-base">
               <thead className="border-b border-line-light">
                 <tr>
                   <th scope="col" className={TH_CLASS}>{t('questionBank.next.colQuestion')}</th>
@@ -203,7 +203,7 @@ export default function QuestionBankNextPage() {
         </div>
       )}
 
-      <p className="mt-3 mb-0 text-xs text-fg-secondary">
+      <p className="mt-3 mb-0 text-sm text-fg-tertiary">
         {t('questionBank.next.attentionRule', { min: MIN_ASKINGS_FOR_A_VERDICT, rate: LOW_RESPONSE_RATE })}
       </p>
     </div>

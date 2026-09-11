@@ -266,8 +266,8 @@ export default function QuestionLibraryNextPage() {
         // grid cell — `grid-area: 1 / 1; justify-self: end; width: 392px; z-index: 1`).
         <div className="grid items-start gap-4 lg:grid-cols-[14.25rem_minmax(0,1fr)]">
           <nav aria-label={t('questionLibrary.next.categories')} className="rounded-lg border border-line-default bg-surface-card p-4">
-            <h2 className="m-0 text-xl">{t('questionLibrary.next.categories')}</h2>
-            <p className="mb-3 mt-0.5 text-xs text-fg-secondary">
+            <h2 className="m-0 text-2xl">{t('questionLibrary.next.categories')}</h2>
+            <p className="mb-3 mt-0.5 text-sm text-fg-tertiary">
               {t('questionLibrary.next.categoriesSummary', {
                 globals: globalCategoryCount,
                 own:
@@ -283,7 +283,7 @@ export default function QuestionLibraryNextPage() {
             <CategoryList nodes={tree.globals} selectedId={selected?.category.id ?? null} onSelect={setSelectedId} nameOf={nameOf} />
             <Eyebrow className="mb-1.5 mt-4 px-2.5 tracking-wider">{company}</Eyebrow>
             {tree.own.length === 0 ? (
-              <p className="m-0 rounded-md border border-dashed border-line-default p-2.5 text-xs text-fg-secondary">
+              <p className="m-0 rounded-md border border-dashed border-line-default p-2.5 text-sm text-fg-tertiary">
                 {t('questionLibrary.next.noOwnCategories')}
               </p>
             ) : (
@@ -311,9 +311,9 @@ export default function QuestionLibraryNextPage() {
             {selected ? (
               <>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 id="library-selected" className="m-0 flex items-baseline gap-2 text-xl">
+                  <h2 id="library-selected" className="m-0 flex items-baseline gap-2 text-2xl">
                     {nameOf(selected.category)}
-                    <span className="font-mono text-xs text-fg-secondary tabular-nums">{selected.count}</span>
+                    <span className="font-mono text-sm text-fg-tertiary tabular-nums">{selected.count}</span>
                   </h2>
                   <Chip
                     tone="neutral"
@@ -321,7 +321,7 @@ export default function QuestionLibraryNextPage() {
                     label={selected.category.companyId === null ? t('questionLibrary.next.global') : company}
                   />
                 </div>
-                <p className="mb-3 mt-1 max-w-measure text-xs text-fg-secondary">
+                <p data-testid="library-category-description" className="mb-3 mt-1 max-w-[30rem] text-sm leading-normal text-fg-secondary">
                   {descriptionOf(selected.category) ? `${descriptionOf(selected.category)} ` : ''}
                   {usageSentence(t, selected, state.data.items)}
                 </p>
@@ -344,7 +344,7 @@ export default function QuestionLibraryNextPage() {
                   </select>
                 </div>
                 <div className={TABLE_CARD_CLASS}>
-                  <Table className="w-full border-collapse text-sm">
+                  <Table className="w-full border-collapse text-base">
                     <thead className="border-b border-line-light">
                       <tr>
                         <th scope="col" className={TH_CLASS}>{t('questionLibrary.next.colQuestion')}</th>
@@ -370,7 +370,7 @@ export default function QuestionLibraryNextPage() {
                   {/* The board caps this note at 480px of text (a content-box max-width; 31.5rem here
                       with the 12px pads), so it wraps before the drawer that overlays the list. The last
                       row's own hairline is the separator above it, as on the board. */}
-                  <p data-testid="library-globals-note" className="m-0 max-w-[31.5rem] px-3 py-2.5 text-xs leading-normal text-fg-tertiary">
+                  <p data-testid="library-globals-note" className="m-0 max-w-[31.5rem] px-3 py-2.5 text-sm leading-normal text-fg-tertiary">
                     {t('questionLibrary.next.globalsNote')}
                   </p>
                 </div>
@@ -386,12 +386,13 @@ export default function QuestionLibraryNextPage() {
               // Below xl the drawer takes a full row under the list rather than the 14rem category
               // column (library-new-light-1024.png). From xl it lies over the list's right edge in
               // the list's own cell, at the board's 392px, 3px ink edge and lifted shadow.
-              className="rounded-lg border border-line-default border-l-3 border-l-fg-primary bg-surface-card shadow-md lg:col-span-2 xl:col-[2] xl:row-[1] xl:justify-self-end xl:w-[24.5rem] xl:z-1 xl:shadow-lg"
+              className="overflow-hidden rounded-lg border border-line-default border-l-3 border-l-fg-primary bg-surface-card shadow-md lg:col-span-2 xl:col-[2] xl:row-[1] xl:justify-self-end xl:w-[24.5rem] xl:z-1 xl:shadow-lg"
             >
-              <div className="flex items-start justify-between gap-2 border-b border-line-light p-4">
-                <div>
+              {/* The board's drawer header: 14px 18px 12px, 4px from the eyebrow to the 20px title. */}
+              <div className="flex items-start justify-between gap-3 border-b border-line-light px-4.5 pb-3 pt-3.5">
+                <div className="flex flex-col gap-1">
                   <Eyebrow className="tracking-wider">{company}</Eyebrow>
-                  <h2 id="library-drawer-title" className="m-0 text-xl">
+                  <h2 id="library-drawer-title" className="m-0 text-2xl">
                     {drawer.mode === 'category'
                       ? t('questionLibrary.next.newCategory')
                       : drawer.mode === 'create'
@@ -407,7 +408,7 @@ export default function QuestionLibraryNextPage() {
               </div>
               {drawer.mode === 'category' ? (
                 <form onSubmit={(e) => void submitCategory(e)}>
-                  <div className="flex flex-col gap-3 p-4 text-sm">
+                  <div className="flex flex-col gap-3.5 px-4.5 py-4 text-base">
                     <Field label={t('questionLibrary.next.nameEs')} required>
                       <Input value={category.nameEs} onChange={(e) => setCategory({ ...category, nameEs: e.target.value })} />
                     </Field>
@@ -430,7 +431,7 @@ export default function QuestionLibraryNextPage() {
                 </form>
               ) : (
                 <form onSubmit={(e) => void submitItem(e)}>
-                  <fieldset disabled={readOnly || saving} className="m-0 flex flex-col gap-3 border-0 p-4 text-sm">
+                  <fieldset disabled={readOnly || saving} className="m-0 flex flex-col gap-3.5 border-0 px-4.5 py-4 text-base">
                     <Field label={t('questionLibrary.next.category')} hint={t('questionLibrary.next.categoryHint')}>
                       <select className={`${SELECT_CLASS} w-full`} value={draft.categoryId} onChange={(e) => setDraft({ ...draft, categoryId: e.target.value })}>
                         {all.map((node) => (
@@ -441,10 +442,10 @@ export default function QuestionLibraryNextPage() {
                       </select>
                     </Field>
                     <Field label={t('questionLibrary.next.textEs')} required>
-                      <Textarea rows={2} value={draft.textEs} onChange={(e) => setDraft({ ...draft, textEs: e.target.value })} />
+                      <Textarea rows={2} className="min-h-[3.375rem]" value={draft.textEs} onChange={(e) => setDraft({ ...draft, textEs: e.target.value })} />
                     </Field>
                     <Field label={t('questionLibrary.next.textEn')} required hint={t('questionLibrary.next.bothRequired')}>
-                      <Textarea rows={2} value={draft.textEn} onChange={(e) => setDraft({ ...draft, textEn: e.target.value })} />
+                      <Textarea rows={2} className="min-h-[3.375rem]" value={draft.textEn} onChange={(e) => setDraft({ ...draft, textEn: e.target.value })} />
                     </Field>
                     <div className="grid grid-cols-2 gap-3">
                       <Field label={t('questionLibrary.next.type')} hint={t('questionLibrary.next.typeHint')}>
@@ -568,7 +569,7 @@ function CategoryList({
             aria-current={node.category.id === selectedId ? 'true' : undefined}
             onClick={() => onSelect(node.category.id)}
             className={cn(
-              'h-8 w-full justify-between gap-2 px-2.5 text-sm font-normal',
+              'h-8 w-full justify-between gap-2 px-2.5 text-base font-normal',
               depth > 0 && 'pl-10',
               node.category.id === selectedId ? 'bg-surface-icon-box font-semibold text-fg-primary' : 'text-fg-primary',
             )}
@@ -579,7 +580,7 @@ function CategoryList({
               )}
               <span className="truncate">{nameOf(node.category)}</span>
             </span>
-            <span className="font-mono text-xs text-fg-secondary tabular-nums">{node.count}</span>
+            <span className="font-mono text-xs text-fg-tertiary tabular-nums">{node.count}</span>
           </Button>
           {node.children.length > 0 && node.category.id === selectedId && (
             <CategoryList nodes={node.children} selectedId={selectedId} onSelect={onSelect} nameOf={nameOf} depth={depth + 1} />
@@ -598,9 +599,9 @@ function ItemRow({ item, primary, secondary, owner, action, onOpen }: { item: Qu
   return (
     <tr data-testid="library-row" className="border-b border-line-light">
       <td className="px-3 py-2.5 align-top">
-        <div className="text-fg-primary">{primary}</div>
-        <div className="text-xs text-fg-secondary">{secondary}</div>
-        <div className="mt-0.5 text-2xs text-fg-tertiary">{meta}</div>
+        <div className="font-medium text-fg-primary">{primary}</div>
+        <div className="text-sm text-fg-tertiary">{secondary}</div>
+        <div className="mt-0.5 text-xs text-fg-tertiary">{meta}</div>
       </td>
       <td className="px-3 py-2.5 align-top">
         <Chip tone="neutral" icon={item.companyId === null ? <Lock className="size-3" /> : undefined} label={owner} />
@@ -621,7 +622,7 @@ function ChildSection({ child, parentName, nameOf, children }: { child: Category
       <tr className="border-b border-line-light bg-surface-icon-box">
         <th scope="rowgroup" colSpan={3} className="px-3 py-1.5 text-left font-normal">
           <span className="text-2xs font-bold uppercase tracking-wider text-fg-label">{nameOf(child.category)}</span>{' '}
-          <span className="text-xs text-fg-secondary">
+          <span className="text-xs text-fg-tertiary">
             {t('questionLibrary.next.subcategoryOf', { parent: parentName, count: child.count })}
           </span>
         </th>
@@ -632,16 +633,17 @@ function ChildSection({ child, parentName, nameOf, children }: { child: Category
 }
 
 // `mb-0`: index.css gives every <label> a 12px bottom margin; the drawer's own gap spaces the
-// fields, and the margin made it 56px taller than the board.
+// fields, and the margin made it 56px taller than the board. The `[&>…]:mt-0` drop the 4px
+// index.css adds above a label's own control (index.css:252-258): the board sets it 6px under.
 function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
-    <label className="mb-0 flex flex-col gap-1">
-      <span className="text-sm font-semibold text-fg-primary">
+    <label className="mb-0 flex flex-col gap-1.5 [&>input]:mt-0 [&>select]:mt-0 [&>textarea]:mt-0">
+      <span className="text-sm font-semibold text-fg-secondary">
         {label}
         {required && <span className="text-chip-critical-ink"> *</span>}
       </span>
       {children}
-      {hint && <span className="text-xs text-fg-secondary">{hint}</span>}
+      {hint && <span className="text-sm leading-[1.45] text-fg-tertiary">{hint}</span>}
     </label>
   )
 }
@@ -657,7 +659,7 @@ function FormError({ message }: { message: string }) {
 function DrawerFooter({ saving, submitLabel, onCancel }: { saving: boolean; submitLabel: string; onCancel: () => void }) {
   const { t } = useTranslation()
   return (
-    <div className="flex justify-end gap-2 border-t border-line-light p-4">
+    <div className="flex justify-end gap-2 border-t border-line-light bg-surface-outer px-4.5 py-3">
       <Button type="button" variant="outline" onClick={onCancel}>
         {t('common.cancel')}
       </Button>

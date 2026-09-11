@@ -84,7 +84,7 @@ export default function AIInsightsNextPage() {
         />
       ) : (
         <div className={TABLE_CARD_CLASS}>
-          <Table className="w-full border-collapse text-sm">
+          <Table className="w-full border-collapse text-base">
             <thead className="border-b border-line-light">
               <tr>
                 <th scope="col" className={`${TH_CLASS} w-28`}>{t('insights.next.colPriority')}</th>

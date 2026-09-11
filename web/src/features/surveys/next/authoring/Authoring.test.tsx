@@ -197,6 +197,17 @@ describe('TemplateDetailNextPage', () => {
     await screen.findAllByTestId('template-question')
     expect(screen.queryByRole('button', { name: tp.use })).toBeNull()
   })
+
+  it("sets the two columns and the Ficha / 'Al usarla' stack 16px apart, under 20px headings", async () => {
+    vi.mocked(getSurveyTemplate).mockImplementation(async (_b, _id, lang) => template(lang ?? 'en'))
+    renderAt('/surveys/templates/t1')
+    await screen.findAllByTestId('template-question')
+    // TemplateDetail.dc.html: `minmax(0, 1fr) 360px; gap: 16px` and a 16px column; happy-dom has no
+    // layout, so the classes are the pin and template-light.png is the evidence.
+    expect(screen.getByTestId('template-columns').className.split(' ')).toContain('gap-4')
+    expect(screen.getByTestId('template-aside').className.split(' ')).toContain('gap-4')
+    expect(screen.getByRole('heading', { name: tp.facts }).className.split(' ')).toContain('text-2xl')
+  })
 })
 
 describe('SurveyQuestionsEditorPage — scale, library and dimension check', () => {
@@ -265,5 +276,64 @@ describe('SurveyQuestionsEditorPage — scale, library and dimension check', () 
     renderAt('/surveys/s1/questions')
     const cards = await screen.findAllByTestId('question-card')
     expect(within(cards[0]).getByText(`${a.scaleName.likert} 1–5`)).toBeTruthy()
+  })
+})
+
+// The boards' spacing, inks and type (SurveyQuestionsEditor / …Locked .dc.html). happy-dom has no
+// layout: the classes are the pin, and draft-light.png / locked-light.png are the evidence.
+describe('SurveyQuestionsEditorPage — the boards\' spacing, inks and type', () => {
+  it('sets the two columns and the preview stack 16px apart, and rules the save note off under a full-width hairline', async () => {
+    arrangeSurvey('draft', 0)
+    renderAt('/surveys/s1/questions')
+    const columns = await screen.findByTestId('editor-columns')
+    expect(columns.className.split(' ')).toContain('gap-4')
+    expect(screen.getByTestId('editor-aside').className.split(' ')).toContain('gap-4')
+    const note = screen.getByTestId('save-note')
+    expect(note.textContent).toBe(a.saveWritesOnly)
+    expect(note.className.split(' ')).toEqual(expect.arrayContaining(['mt-5', 'border-t', 'pt-4']))
+    // Full width: a sibling of the columns, not inside either one.
+    expect(columns.contains(note)).toBe(false)
+  })
+
+  it('sets every question field without the 12px margin index.css gives a <label>', async () => {
+    arrangeSurvey('draft', 0)
+    renderAt('/surveys/s1/questions')
+    const card = (await screen.findAllByTestId('question-card'))[0]
+    const fields = [...card.querySelectorAll('label')].filter((label) => label.className.split(' ').includes('flex-col'))
+    expect(fields.length).toBeGreaterThanOrEqual(4)
+    for (const field of fields) {
+      // …nor the 4px index.css puts above a label's own control (index.css:252-258): the board sets
+      // the control 6px under its label, the field's gap and nothing more.
+      expect(field.className.split(' ')).toEqual(expect.arrayContaining(['mb-0', 'gap-1.5', '[&>input]:mt-0', '[&>select]:mt-0', '[&>textarea]:mt-0']))
+    }
+  })
+
+  it("prints the add row's tail at 12px in the tertiary ink after the 13px label", async () => {
+    arrangeSurvey('draft', 0)
+    renderAt('/surveys/s1/questions')
+    const tail = await screen.findByTestId('add-tail')
+    expect(tail.textContent).toBe(a.addFromLibrary)
+    expect(tail.className.split(' ')).toEqual(expect.arrayContaining(['text-sm', 'font-normal', 'text-fg-tertiary']))
+  })
+
+  it("prints the boards' type: 20px card headings, 13px question text, 12px hints in the tertiary ink", async () => {
+    arrangeSurvey('draft', 0)
+    renderAt('/surveys/s1/questions')
+    const card = (await screen.findAllByTestId('question-card'))[0]
+    expect(screen.getByRole('heading', { name: new RegExp(`^${a.questions}`) }).className.split(' ')).toContain('text-2xl')
+    expect(screen.getByRole('heading', { name: a.preview }).className.split(' ')).toContain('text-2xl')
+    expect(within(card).getByText(/^First/, { selector: 'p' }).className.split(' ')).toContain('text-base')
+    expect(screen.getByText(a.dimensionHint).className.split(' ')).toEqual(expect.arrayContaining(['text-sm', 'text-fg-tertiary']))
+  })
+
+  it('paints the locked banner on the ground tint under a white tile, 20px above the panels', async () => {
+    arrangeSurvey('active', 1)
+    renderAt('/surveys/s1/questions')
+    const banner = await screen.findByTestId('locked-banner')
+    const classes = banner.className.split(' ')
+    expect(classes).toEqual(expect.arrayContaining(['bg-surface-outer', 'mb-5']))
+    expect(classes).not.toContain('bg-surface-card')
+    const tile = banner.querySelector('[data-tone]')
+    expect(tile?.getAttribute('data-tone')).toBe('card')
   })
 })

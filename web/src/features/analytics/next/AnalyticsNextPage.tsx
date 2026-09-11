@@ -81,7 +81,7 @@ export default function AnalyticsNextPage() {
             />
             <div className={TABLE_CARD_CLASS}>
               <div className="overflow-x-auto">
-                <Table className="w-full border-collapse text-sm">
+                <Table className="w-full border-collapse text-base">
                   <thead className="border-b border-line-light">
                     <tr>
                       <th scope="col" className={TH_CLASS}>{t('analytics.next.colReference')}</th>
@@ -123,8 +123,8 @@ export default function AnalyticsNextPage() {
                   <IconBox>
                     <Sparkles />
                   </IconBox>
-                  <div className="flex min-w-0 flex-col items-start gap-1.5 text-xs">
-                    <p className="m-0 text-sm font-semibold text-fg-primary">{t('insights.next.emptyTitle')}</p>
+                  <div className="flex min-w-0 flex-col items-start gap-1.5 text-sm">
+                    <p className="m-0 text-base font-semibold text-fg-primary">{t('insights.next.emptyTitle')}</p>
                     <p className="m-0 leading-normal text-fg-secondary">
                       {state.data.insights.length === 0
                         ? t('analytics.next.insightsEmpty')
@@ -142,12 +142,12 @@ export default function AnalyticsNextPage() {
                     .filter((insight) => !insight.isAcknowledged)
                     .slice(0, MAX_INSIGHTS_BESIDE)
                     .map((insight) => (
-                      <li key={insight.id} data-testid="analytics-insight" className="flex items-start gap-2 p-3 text-sm">
+                      <li key={insight.id} data-testid="analytics-insight" className="flex items-start gap-2 p-3 text-base">
                         <Chip tone={priorityTone(insight.priority)} label={insightPriorityLabel(t, insight.priority)} />
                         <span className="min-w-0 text-fg-primary">{insight.title}</span>
                       </li>
                     ))}
-                  <li className="p-3 text-xs">
+                  <li className="p-3 text-sm">
                     <Link to="/analytics/ai-insights" className="inline-flex items-center gap-1 text-fg-secondary">
                       {t('analytics.next.openInsights')}
                       <ArrowRight aria-hidden="true" className="size-3" />
@@ -184,7 +184,7 @@ function BenchmarkTableRow({ row }: { row: BenchmarkRow }) {
     <tr data-testid="benchmark-row" className="border-b border-line-light last:border-b-0">
       <td className="px-3 py-2.5 align-top">
         <div className="font-semibold text-fg-primary">{row.name}</div>
-        <div className="text-xs text-fg-secondary">{facts.join(' · ')}</div>
+        <div className="text-xs text-fg-tertiary">{facts.join(' · ')}</div>
       </td>
       <td className="px-3 py-2.5 align-middle">
         <Chip
@@ -192,21 +192,21 @@ function BenchmarkTableRow({ row }: { row: BenchmarkRow }) {
           label={row.isGlobal ? t('analytics.next.scopeGlobal') : t('analytics.next.scopeOwn')}
         />
       </td>
-      <td className="px-3 py-2.5 align-middle text-fg-secondary">
+      <td className="px-3 py-2.5 align-middle text-sm text-fg-tertiary">
         {row.groupSize === null ? (
           '—'
         ) : (
           <>
-            <span className="font-mono text-fg-primary tabular-nums">{row.groupSize}</span>{' '}
+            <span className="font-mono text-base text-fg-primary tabular-nums">{row.groupSize}</span>{' '}
             {t('analytics.next.companies')}
           </>
         )}
       </td>
-      <td className="px-3 py-2.5 align-middle text-fg-secondary">
+      <td className="px-3 py-2.5 align-middle text-sm text-fg-tertiary">
         {row.qualityScore === null ? (
           t('analytics.next.qualityPending')
         ) : (
-          <span className="font-mono text-fg-primary tabular-nums">{row.qualityScore}</span>
+          <span className="font-mono text-base text-fg-primary tabular-nums">{row.qualityScore}</span>
         )}
       </td>
     </tr>

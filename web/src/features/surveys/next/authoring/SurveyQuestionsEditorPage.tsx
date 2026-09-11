@@ -223,8 +223,8 @@ export default function SurveyQuestionsEditorPage() {
           <IconBox tone="card">
             <Lock />
           </IconBox>
-          <div className="flex min-w-0 flex-col gap-1 text-xs text-fg-secondary">
-            <p className="m-0 text-sm font-semibold text-fg-primary">
+          <div className="flex min-w-0 flex-col gap-1 text-sm text-fg-secondary">
+            <p className="m-0 text-base font-semibold text-fg-primary">
               {detail.responseCount > 0 ? copy('lockedHasResponses') : copy('lockedByStatus')}
             </p>
             <p className="m-0 max-w-[96ch] leading-normal">
@@ -256,7 +256,7 @@ export default function SurveyQuestionsEditorPage() {
             aside={locked ? copy('readOnlyOpened', { date: formatDay(detail.startDate, locale, 'short') }) : copy('inAnswerOrder')}
           />
           {editable && (
-            <p className="mb-3 mt-0 flex items-center gap-1.5 text-xs text-fg-secondary">
+            <p className="mb-3 mt-0 flex items-center gap-1.5 text-sm text-fg-secondary">
               <GripVertical aria-hidden="true" className="size-3.5" />
               {copy('dragHint')}
             </p>
@@ -284,9 +284,10 @@ export default function SurveyQuestionsEditorPage() {
                     ) : (
                       <Lock aria-hidden="true" className="size-3.5 shrink-0 text-fg-secondary" />
                     )}
-                    <span className="w-4 shrink-0 font-mono text-xs text-fg-secondary tabular-nums">{index + 1}</span>
+                    <span className="w-4 shrink-0 font-mono text-sm text-fg-tertiary tabular-nums">{index + 1}</span>
                     <div className="min-w-0 flex-1">
-                      <p className="m-0 text-sm font-semibold text-fg-primary">
+                      {/* The board: 13px, 600 on the open card and 500 on the others, in the secondary ink once locked. */}
+                      <p className={cn('m-0 text-base', open ? 'font-semibold' : 'font-medium', locked ? 'text-fg-secondary' : 'text-fg-primary')}>
                         {question.text[locale]?.text || question.text[locales[0]]?.text || copy('noText')}
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -297,7 +298,7 @@ export default function SurveyQuestionsEditorPage() {
                         )}
                         <Chip tone="neutral" label={scaleChip(t, question)} />
                         {locked && question.commentRequired && <Chip tone="neutral" label={copy('withComment')} />}
-                        <span className="inline-flex items-center gap-1 text-2xs font-semibold text-chip-good-ink">
+                        <span className="inline-flex items-center gap-1 font-mono text-2xs text-chip-good-ink">
                           {written.length === locales.length && <Check aria-hidden="true" className="size-3" />}
                           {locales.map((l) => l.toUpperCase()).join(' · ')}
                         </span>
@@ -329,12 +330,12 @@ export default function SurveyQuestionsEditorPage() {
                       <div className="grid gap-3 md:grid-cols-2">
                         {locales.map((loc) => (
                           <EditorField key={loc} label={copy(`textIn.${loc}`)} required>
-                            <Textarea rows={2} value={question.text[loc]?.text ?? ''} onChange={(e) => setText(index, 'text', loc, e.target.value)} />
+                            <Textarea rows={2} className="min-h-[3.375rem]" value={question.text[loc]?.text ?? ''} onChange={(e) => setText(index, 'text', loc, e.target.value)} />
                           </EditorField>
                         ))}
                         <EditorField label={copy('dimension')} hint={copy('dimensionHint')}>
                           <select
-                            className="h-8 rounded-md border border-line-default bg-surface-card px-2 text-sm text-fg-primary"
+                            className="h-8 rounded-md border border-line-default bg-surface-card px-2 text-base text-fg-primary"
                             value={question.category ?? ''}
                             onChange={(e) => update(index, { category: e.target.value || null })}
                           >
@@ -348,7 +349,7 @@ export default function SurveyQuestionsEditorPage() {
                         </EditorField>
                         <EditorField label={copy('scale')} hint={copy('scaleHint')}>
                           <select
-                            className="h-8 rounded-md border border-line-default bg-surface-card px-2 text-sm text-fg-primary"
+                            className="h-8 rounded-md border border-line-default bg-surface-card px-2 text-base text-fg-primary"
                             value={question.type}
                             disabled={compatibleScaleTypes(question).length < 2}
                             onChange={(e) => update(index, { type: e.target.value })}
@@ -410,13 +411,13 @@ export default function SurveyQuestionsEditorPage() {
               <Button type="button" variant="ghost" className="h-8 pl-2 pr-0" onClick={() => setLibraryOpen(true)}>
                 <Plus aria-hidden="true" />
                 {copy('addQuestion')}
-                <span data-testid="add-tail" className="text-xs font-normal text-fg-tertiary">{copy('addFromLibrary')}</span>
+                <span data-testid="add-tail" className="text-sm font-normal text-fg-tertiary">{copy('addFromLibrary')}</span>
               </Button>
-              <span className="whitespace-pre text-xs text-fg-tertiary">{` ${copy('addOr')} `}</span>
+              <span className="whitespace-pre text-sm text-fg-tertiary">{` ${copy('addOr')} `}</span>
               <Button
                 type="button"
                 variant="ghost"
-                className="h-8 px-0 text-xs font-normal text-fg-tertiary"
+                className="h-8 px-0 text-sm font-normal text-fg-tertiary"
                 onClick={() => {
                   setQuestions((current) => [...current, blankQuestion(current.length, locales)])
                   setOpenIndex(questions.length)
@@ -440,7 +441,7 @@ export default function SurveyQuestionsEditorPage() {
               }}
             />
           )}
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line-light pt-3 text-xs text-fg-secondary">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line-light pt-3 text-sm text-fg-tertiary">
             <span data-testid="questions-summary">
               {[
                 copy('dimensionsCount', { count: summary.dimensions }),
@@ -480,7 +481,7 @@ export default function SurveyQuestionsEditorPage() {
         <div data-testid="editor-aside" className="flex flex-col gap-4">
           <Panel aria-labelledby="preview-heading">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h2 id="preview-heading" className="m-0 text-xl">
+              <h2 id="preview-heading" className="m-0 text-2xl">
                 {copy('preview')}
               </h2>
               <div className="flex items-center gap-2">
@@ -495,11 +496,11 @@ export default function SurveyQuestionsEditorPage() {
                 )}
               </div>
             </div>
-            <p className="mb-3 mt-0 text-xs text-fg-secondary">{locked ? copy('previewLocked') : copy('previewDraft')}</p>
+            <p className="mb-3 mt-0 text-sm text-fg-tertiary">{locked ? copy('previewLocked') : copy('previewDraft')}</p>
             <div data-testid="respondent-preview" className="rounded-lg border border-line-default p-4">
               <Eyebrow>{copy('surveyEyebrow')}</Eyebrow>
-              <p className="m-0 font-serif text-xl text-fg-primary">{title}</p>
-              <p className="mb-3 mt-0.5 text-xs text-fg-secondary">
+              <p className="m-0 font-serif text-[1.125rem] text-fg-primary">{title}</p>
+              <p className="mb-3 mt-0.5 text-sm text-fg-secondary">
                 {locked
                   ? authoring.status === 'active'
                     ? copy('openUntil', { date: formatDay(detail.endDate, locale, 'long') })
@@ -511,26 +512,26 @@ export default function SurveyQuestionsEditorPage() {
                   <div className="mb-2 flex items-center gap-2 border-t border-line-light pt-3">
                     <Eyebrow className="tracking-wider">{openQuestion.category ? dimensionLabel(openQuestion.category, t) : copy('noDimension')}</Eyebrow>
                     <span className="h-px flex-1 bg-line-light" />
-                    <span className="font-mono text-2xs text-fg-secondary">{copy('positionOf', { position: openPosition, count: questions.length })}</span>
+                    <span className="font-mono text-xs text-fg-tertiary">{copy('positionOf', { position: openPosition, count: questions.length })}</span>
                   </div>
                   <div className="rounded-lg border border-line-default p-3">
-                    <p className="m-0 flex items-start gap-2 text-sm">
-                      <span className="rounded bg-surface-icon-box px-1.5 font-mono text-2xs text-fg-secondary">{`${openPosition}/${questions.length}`}</span>
+                    <p className="m-0 flex items-start gap-2 text-base">
+                      <span className="rounded bg-surface-icon-box px-1.5 font-mono text-xs font-medium text-fg-secondary">{`${openPosition}/${questions.length}`}</span>
                       <span>
                         <strong className="text-fg-primary">{openQuestion.text[shownLocale]?.text || copy('noText')}</strong>{' '}
-                        {openQuestion.required && <span className="text-fg-secondary">{copy('requiredParen')}</span>}
+                        {openQuestion.required && <span className="text-fg-tertiary">{copy('requiredParen')}</span>}
                       </span>
                     </p>
                     {openQuestion.scaleMin !== null && openQuestion.scaleMax !== null && (
                       <>
                         <div className="mt-3 grid gap-2" style={{ gridTemplateColumns: `repeat(${openQuestion.scaleMax - openQuestion.scaleMin + 1}, minmax(0, 1fr))` }}>
                           {Array.from({ length: openQuestion.scaleMax - openQuestion.scaleMin + 1 }, (_, i) => (
-                            <span key={i} className="flex h-9 items-center justify-center rounded-md border border-line-default text-sm text-fg-primary">
+                            <span key={i} className="flex h-9 items-center justify-center rounded-md border border-line-default font-mono text-base text-fg-secondary">
                               {openQuestion.scaleMin! + i}
                             </span>
                           ))}
                         </div>
-                        <div className="mt-1.5 flex justify-between text-2xs text-fg-secondary">
+                        <div className="mt-1.5 flex justify-between text-xs text-fg-secondary">
                           <span>{openQuestion.scaleLabelMin[shownLocale]?.text}</span>
                           <span>{openQuestion.scaleLabelMax[shownLocale]?.text}</span>
                         </div>
@@ -538,14 +539,14 @@ export default function SurveyQuestionsEditorPage() {
                     )}
                     {openQuestion.commentRequired && (
                       <div className="mt-3">
-                        <p className="m-0 text-xs font-semibold text-fg-primary">
-                          {copy('comment')} <span className="font-normal text-fg-secondary">{copy('requiredParenMasc')}</span>
+                        <p className="m-0 text-xs font-semibold text-fg-secondary">
+                          {copy('comment')} <span className="font-normal text-fg-tertiary">{copy('requiredParenMasc')}</span>
                         </p>
                         <div className="mt-1 h-10 rounded-md border border-line-default" />
                       </div>
                     )}
                   </div>
-                  <div className="mt-3 flex items-center gap-2 border-t border-line-light pt-3 text-2xs text-fg-secondary">
+                  <div className="mt-3 flex items-center gap-2 border-t border-line-light pt-3 text-xs text-fg-tertiary">
                     <span className="h-1 w-12 rounded-full bg-line-light" />
                     {copy('answeredOf', { count: questions.length })}
                   </div>
@@ -554,13 +555,13 @@ export default function SurveyQuestionsEditorPage() {
             </div>
           </Panel>
           {!locked && (
-            <Panel className="flex items-start gap-3">
+            <Panel className="flex items-start gap-3 px-4 py-3.5">
               <IconBox>
                 <Lock />
               </IconBox>
-              <div className="text-xs text-fg-secondary">
-                <p className="m-0 text-sm font-semibold text-fg-primary">{copy('editableUntilTitle')}</p>
-                <p className="m-0">{copy('editableUntilBody')}</p>
+              <div className="flex flex-col gap-1 text-sm text-fg-secondary">
+                <p className="m-0 text-base font-semibold text-fg-primary">{copy('editableUntilTitle')}</p>
+                <p className="m-0 leading-normal">{copy('editableUntilBody')}</p>
               </div>
             </Panel>
           )}
@@ -569,7 +570,7 @@ export default function SurveyQuestionsEditorPage() {
 
       {/* The board's footer: the page column's 20px, a full-width hairline, 16px, then the line. */}
       {!locked && (
-        <p data-testid="save-note" className="mb-0 mt-5 flex items-center gap-2 border-t border-line-light pt-4 text-xs text-fg-tertiary">
+        <p data-testid="save-note" className="mb-0 mt-5 flex items-center gap-2 border-t border-line-light pt-4 text-sm text-fg-tertiary">
           <Lock aria-hidden="true" className="size-3.5 shrink-0" />
           {copy('saveWritesOnly')}
         </p>
@@ -591,16 +592,18 @@ function scaleLong(t: (key: string, vars?: Record<string, string | number>) => s
 }
 
 // `mb-0`: index.css gives every <label> a 12px bottom margin for the old stacked forms; here the
-// grid's gap spaces the fields, and the margin made the open card 46px taller than the board.
+// grid's gap spaces the fields, and the margin made the open card 46px taller than the board. The
+// `[&>…]:mt-0` drop the 4px index.css adds above a label's own control (index.css:252-258): the
+// board sets the control 6px under its label, the field's gap and nothing more.
 function EditorField({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
-    <label className="mb-0 flex flex-col gap-1">
-      <span className="text-sm font-semibold text-fg-primary">
+    <label className="mb-0 flex flex-col gap-1.5 [&>input]:mt-0 [&>select]:mt-0 [&>textarea]:mt-0">
+      <span className="text-sm font-semibold text-fg-secondary">
         {label}
         {required && <span className="text-chip-critical-ink"> *</span>}
       </span>
       {children}
-      {hint && <span className="text-xs text-fg-secondary">{hint}</span>}
+      {hint && <span className="text-sm leading-[1.45] text-fg-tertiary">{hint}</span>}
     </label>
   )
 }

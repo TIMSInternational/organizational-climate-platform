@@ -34,13 +34,13 @@ export function PanelHeading({
 }) {
   return (
     <div className="mb-3 flex flex-wrap items-baseline justify-between gap-inline">
-      <h2 id={id} className="m-0 flex items-baseline gap-2 text-xl">
+      <h2 id={id} className="m-0 flex items-baseline gap-2 text-2xl">
         {title}
         {count !== undefined && (
-          <span className="font-mono text-xs text-fg-secondary tabular-nums">{count}</span>
+          <span className="font-mono text-sm text-fg-tertiary tabular-nums">{count}</span>
         )}
       </h2>
-      {aside && <div className="text-xs text-fg-secondary">{aside}</div>}
+      {aside && <div className="text-sm text-fg-tertiary">{aside}</div>}
     </div>
   )
 }
@@ -101,11 +101,11 @@ export function EmptyRow({
     <div data-slot="empty-row" className={cn('flex items-start gap-3.5 px-4 py-5', className)}>
       <IconBox tone={iconTone}>{icon}</IconBox>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <p className="m-0 text-sm font-semibold text-fg-primary">{title}</p>
+        <p className="m-0 text-base font-semibold text-fg-primary">{title}</p>
         {lines.map((line, index) => (
           <p
             key={index}
-            className={cn('m-0 text-xs leading-normal', index === 0 ? 'text-fg-secondary' : 'text-fg-tertiary', measure)}
+            className={cn('m-0 text-sm leading-normal', index === 0 ? 'text-fg-secondary' : 'text-fg-tertiary', measure)}
           >
             {line}
           </p>
@@ -120,7 +120,7 @@ export function Note({ icon, children, className }: { icon: ReactNode; children:
     <div
       data-slot="note"
       className={cn(
-        'flex items-start gap-2 rounded-lg bg-surface-icon-box px-4 py-3 text-xs text-fg-secondary [&>svg]:mt-0.5 [&>svg]:size-3.5 [&>svg]:shrink-0',
+        'flex items-start gap-2.5 rounded-md bg-surface-icon-box px-3.5 py-3 text-sm leading-normal text-fg-secondary [&>svg]:mt-0.5 [&>svg]:size-3.5 [&>svg]:shrink-0',
         className,
       )}
     >
@@ -157,7 +157,7 @@ export function Segmented<T extends string>({
           aria-pressed={option.value === value}
           onClick={() => onChange(option.value)}
           className={cn(
-            'h-7 px-3 text-xs',
+            'h-7 px-3 text-sm',
             option.value === value
               ? 'bg-surface-card text-fg-primary shadow-sm'
               : 'text-fg-secondary hover:text-fg-primary',

@@ -168,13 +168,13 @@ export default function TemplateDetailNextPage() {
               ) : null
             }
           />
-          <p className="mb-3 mt-0 text-xs text-fg-secondary">{locales.length > 1 ? copy('groupedBoth', { language: copy(`languageLower.${secondLocale}`) }) : copy('groupedOne')}</p>
+          <p className="mb-3 mt-0 text-sm text-fg-secondary">{locales.length > 1 ? copy('groupedBoth', { language: copy(`languageLower.${secondLocale}`) }) : copy('groupedOne')}</p>
           {scale && firstScale && (
-            <div data-testid="scale-strip" className="mb-4 flex flex-wrap items-center gap-2 rounded-md bg-surface-icon-box px-3 py-2 text-xs text-fg-secondary">
-              <span className="font-semibold text-fg-primary">{copy('scaleIn', { count: n })}</span>
+            <div data-testid="scale-strip" className="mb-4 flex flex-wrap items-center gap-2 rounded-md bg-surface-icon-box px-3 py-2 text-sm text-fg-tertiary">
+              <span className="font-semibold text-fg-secondary">{copy('scaleIn', { count: n })}</span>
               <span>{firstScale.minLabel}</span>
               {Array.from({ length: scale.max - scale.min + 1 }, (_, i) => (
-                <span key={i} className="flex size-6 items-center justify-center rounded border border-line-default bg-surface-card font-mono text-fg-primary">
+                <span key={i} className="flex size-6 items-center justify-center rounded border border-line-default bg-surface-card font-mono text-xs text-fg-secondary">
                   {scale.min + i}
                 </span>
               ))}
@@ -187,14 +187,14 @@ export default function TemplateDetailNextPage() {
               <div className="mb-1.5 flex items-center gap-2">
                 <Eyebrow className="tracking-wider">{group.key ? dimensionLabel(group.key, t) : copy('noDimension')}</Eyebrow>
                 <span className="h-px flex-1 bg-line-light" />
-                <span className="text-2xs text-fg-secondary">{copy(group.questions.length === 1 ? 'oneQuestion' : 'manyQuestions', { count: group.questions.length })}</span>
+                <span className="text-xs text-fg-tertiary">{copy(group.questions.length === 1 ? 'oneQuestion' : 'manyQuestions', { count: group.questions.length })}</span>
               </div>
               {group.questions.map((question) => (
                 <div key={question.id} data-testid="template-question" className="mb-2 flex items-start gap-3 rounded-lg border border-line-default px-3 py-2.5">
-                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-icon-box font-mono text-2xs text-fg-secondary">{questions.indexOf(question) + 1}</span>
-                  <div className="min-w-0 text-sm">
-                    <p className="m-0 text-fg-primary">{textOf(firstLocale, question.id) ?? question.text}</p>
-                    {secondLocale && <p className="m-0 text-xs text-fg-secondary">{textOf(secondLocale, question.id)}</p>}
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-icon-box font-mono text-xs font-semibold text-fg-secondary">{questions.indexOf(question) + 1}</span>
+                  <div className="min-w-0 text-base">
+                    <p className="m-0 font-medium text-fg-primary">{textOf(firstLocale, question.id) ?? question.text}</p>
+                    {secondLocale && <p className="m-0 text-sm text-fg-tertiary">{textOf(secondLocale, question.id)}</p>}
                   </div>
                 </div>
               ))}
@@ -204,48 +204,48 @@ export default function TemplateDetailNextPage() {
 
         <div data-testid="template-aside" className="flex flex-col gap-4">
           <Panel aria-labelledby="template-facts">
-            <h2 id="template-facts" className="mb-3 mt-0 text-xl">
+            <h2 id="template-facts" className="mb-3 mt-0 text-2xl">
               {copy('facts')}
             </h2>
-            <dl className="m-0 grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 text-sm">
-              <dt className="text-fg-secondary">{copy('category')}</dt>
+            <dl className="m-0 grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 text-base">
+              <dt className="text-fg-tertiary">{copy('category')}</dt>
               <dd className="m-0 text-fg-primary">{categoryLabel(t, primary.category)}</dd>
-              <dt className="text-fg-secondary">{copy('scope')}</dt>
+              <dt className="text-fg-tertiary">{copy('scope')}</dt>
               <dd className="m-0 flex flex-col items-start gap-1">
                 <Chip tone="neutral" label={scopeLabel} />
-                <span className="text-xs text-fg-secondary">{primary.isGlobal ? copy('scopeGlobalNote') : copy('scopeCompanyNote', { company: companyName ?? t('insights.next.thisCompany') })}</span>
+                <span className="text-sm text-fg-tertiary">{primary.isGlobal ? copy('scopeGlobalNote') : copy('scopeCompanyNote', { company: companyName ?? t('insights.next.thisCompany') })}</span>
               </dd>
-              <dt className="text-fg-secondary">{copy('languages')}</dt>
+              <dt className="text-fg-tertiary">{copy('languages')}</dt>
               <dd className="m-0 flex flex-col items-start gap-1">
                 <span className="flex flex-wrap gap-1.5">
                   {locales.map((l) => (
                     <Chip key={l} tone="good" icon={<Check className="size-3" />} label={copy(`language.${l}`)} />
                   ))}
                 </span>
-                <span className="text-xs text-fg-secondary">{copy(locales.length === 2 ? 'allInBoth' : 'allInOne', { count: n })}</span>
+                <span className="text-sm text-fg-tertiary">{copy(locales.length === 2 ? 'allInBoth' : 'allInOne', { count: n })}</span>
               </dd>
               {scale && (
                 <>
-                  <dt className="text-fg-secondary">{copy('scale')}</dt>
+                  <dt className="text-fg-tertiary">{copy('scale')}</dt>
                   <dd className="m-0 text-fg-primary">{copy('scaleFact', { type: scaleName(t, scale.type), min: scale.min, max: scale.max, count: n })}</dd>
                 </>
               )}
-              <dt className="text-fg-secondary">{copy('used')}</dt>
-              <dd className="m-0 text-fg-secondary">
-                <span className="font-mono text-fg-primary">{primary.usageCount}</span> {copy('times')}
+              <dt className="text-fg-tertiary">{copy('used')}</dt>
+              <dd className="m-0 text-sm text-fg-tertiary">
+                <span className="font-mono text-base text-fg-primary">{primary.usageCount}</span> {copy('times')}
               </dd>
-              <dt className="text-fg-secondary">{copy('created')}</dt>
+              <dt className="text-fg-tertiary">{copy('created')}</dt>
               <dd className="m-0 font-mono text-fg-primary">{created}</dd>
             </dl>
           </Panel>
           <Panel aria-labelledby="template-using">
-            <h2 id="template-using" className="mb-3 mt-0 text-xl">
+            <h2 id="template-using" className="mb-3 mt-0 text-2xl">
               {copy('whenUsed')}
             </h2>
             <ol className="m-0 flex list-none flex-col gap-3 p-0 text-sm text-fg-secondary">
               {[copy('step1', { company: companyName ?? t('insights.next.thisCompany'), count: n }), copy('step2'), copy('step3')].map((step, index) => (
                 <li key={index} className="flex items-start gap-3">
-                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-icon-box font-mono text-2xs text-fg-secondary">{index + 1}</span>
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-icon-box font-mono text-xs font-semibold text-fg-secondary">{index + 1}</span>
                   <span>{step}</span>
                 </li>
               ))}

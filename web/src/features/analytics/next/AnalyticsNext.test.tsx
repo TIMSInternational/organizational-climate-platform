@@ -186,4 +186,30 @@ describe('AnalyticsNextPage', () => {
     const group = within(row).getAllByRole('cell')[2]
     expect(group.textContent).toBe('—')
   })
+
+  it('sets the two columns 16px apart, and the no-own row on the ground tint under a white tile', async () => {
+    arrange(detail([42, 40]))
+    await screen.findByTestId('benchmark-row')
+    // AnalyticsDashboard.dc.html: `minmax(0, 1fr) 360px; gap: 16px`, and the row `background: #f8f7fb`
+    // under a `#ffffff` tile. happy-dom has no layout: analytics-light.png is the evidence.
+    expect(screen.getByTestId('analytics-columns').className.split(' ')).toContain('gap-4')
+    const row = screen.getByText(analyticsCopy.noOwnTitle.replace('{company}', 'Grupo Meridiano S.A.')).closest('[data-slot="empty-row"]')
+    expect(row?.className.split(' ')).toContain('bg-surface-outer')
+    expect(row?.querySelector('[data-tone]')?.getAttribute('data-tone')).toBe('card')
+    // One line at the row's full width, as the board: no reading-measure cap.
+    expect(screen.getByText(analyticsCopy.noOwnBody).className.split(' ')).not.toContain('max-w-measure')
+  })
+})
+
+describe('AIInsightsNextPage — the board\'s spacing and inks', () => {
+  it("sets the note 24px under the table, and runs the empty row's lines full width in the board's inks", async () => {
+    vi.mocked(listAIInsights).mockResolvedValue([])
+    renderAt('/analytics/ai-insights', <AIInsightsNextPage />, '/analytics/ai-insights')
+    const reason = (await screen.findByText(insightsCopy.emptyReason.replace('{company}', 'Grupo Meridiano S.A.'))).className.split(' ')
+    expect(reason).toContain('text-fg-secondary')
+    expect(reason).not.toContain('max-w-measure')
+    expect(screen.getByText(insightsCopy.emptyNext).className.split(' ')).toContain('text-fg-tertiary')
+    // AIInsights.dc.html: the page column's 24px between the table and the privacy note.
+    expect(screen.getByText(insightsCopy.privacy).closest('[data-slot="note"]')?.className.split(' ')).toContain('mt-section')
+  })
 })

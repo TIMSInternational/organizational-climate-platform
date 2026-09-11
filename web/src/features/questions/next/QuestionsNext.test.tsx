@@ -280,3 +280,64 @@ describe('QuestionLibraryNextPage — drawer link, multiple choice, vocabulary',
     expect(screen.getByPlaceholderText(lib.search).className.split(' ')).toContain('max-w-none')
   })
 })
+
+// The boards' spacing, inks and type (QuestionBank / QuestionLibrary .dc.html). happy-dom has no
+// layout: the classes are the pin, and bank-light.png / library-new-light.png are the evidence.
+describe('question bank and library — the boards\' spacing, inks and type', () => {
+  function arrangeLibrary() {
+    vi.mocked(listQuestionCategories).mockResolvedValue(categories)
+    vi.mocked(listQuestionLibraryItems).mockResolvedValue(items)
+  }
+  function arrangeEmptyBank() {
+    vi.mocked(listQuestionBankItems).mockResolvedValue({ items: [], total: 0 })
+    vi.mocked(listQuestionBankCategories).mockResolvedValue([])
+    vi.mocked(listQuestionBankEffectiveness).mockResolvedValue([])
+    arrangeLibrary()
+  }
+
+  it("keeps the intro card 24px above the filters, the board's column gap", async () => {
+    arrangeEmptyBank()
+    renderAs(<QuestionBankNextPage />)
+    await screen.findByText(bank.emptyTitle)
+    expect(screen.getByTestId('bank-split').className.split(' ')).toContain('mb-section')
+  })
+
+  it("runs the empty bank's lines to the board's 100ch, the reason secondary and the rest tertiary", async () => {
+    arrangeEmptyBank()
+    renderAs(<QuestionBankNextPage />)
+    const reason = (await screen.findByText(bank.emptyWhen)).className.split(' ')
+    expect(reason).toEqual(expect.arrayContaining(['max-w-[100ch]', 'text-sm', 'leading-normal', 'text-fg-secondary']))
+    expect(reason).not.toContain('max-w-measure')
+    expect(screen.getByText(bank.emptyMeanwhile.replace('{company}', 'Grupo Meridiano S.A.')).className.split(' ')).toContain('text-fg-tertiary')
+  })
+
+  it("sets the drawer's fields without the label margin, under the board's 20px title", async () => {
+    arrangeLibrary()
+    renderAs(<QuestionLibraryNextPage />)
+    await userEvent.click(await screen.findByRole('button', { name: lib.newQuestion }))
+    const drawer = screen.getByRole('complementary')
+    const fields = [...drawer.querySelectorAll('label')].filter((label) => label.className.split(' ').includes('flex-col'))
+    expect(fields.length).toBeGreaterThanOrEqual(6)
+    for (const field of fields) {
+      expect(field.className.split(' ')).toEqual(expect.arrayContaining(['mb-0', 'gap-1.5', '[&>input]:mt-0', '[&>select]:mt-0', '[&>textarea]:mt-0']))
+    }
+    expect(within(drawer).getByRole('heading', { name: lib.newQuestion }).className.split(' ')).toContain('text-2xl')
+  })
+
+  it("caps the category description at the board's 480px, so it wraps before the drawer", async () => {
+    arrangeLibrary()
+    renderAs(<QuestionLibraryNextPage />)
+    const description = await screen.findByTestId('library-category-description')
+    // QuestionLibrary.dc.html: `max-width: 480px; line-height: 1.5` — library-new-light.png shows it
+    // wrapping at "Ninguna de sus 4 / preguntas…", clear of the drawer, as the board does.
+    expect(description.className.split(' ')).toEqual(expect.arrayContaining(['max-w-[30rem]', 'leading-normal']))
+  })
+
+  it("caps the globals note at the board's 480px of text, so it wraps before the drawer", async () => {
+    arrangeLibrary()
+    renderAs(<QuestionLibraryNextPage />)
+    const note = await screen.findByTestId('library-globals-note')
+    expect(note.textContent).toBe(lib.globalsNote)
+    expect(note.className.split(' ')).toContain('max-w-[31.5rem]')
+  })
+})
