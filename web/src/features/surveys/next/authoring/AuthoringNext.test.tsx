@@ -205,6 +205,15 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     expect(sheet.textContent).not.toContain('Con nombre')
   })
 
+  it('heads the Ficha and Departamentos cards as the artboard does: 10px above the rows, no panel margin', () => {
+    detail(survey())
+    for (const id of ['detail-sheet', 'detail-departments']) {
+      const card = screen.getByTestId(id)
+      expect(card.getAttribute('class')).toContain('gap-2.5')
+      expect(card.querySelector('h2')?.parentElement?.getAttribute('class')).not.toContain('mb-3')
+    }
+  })
+
   it('states when results are computed as the product computes them: at every read, never "al cerrar"', () => {
     detail(survey())
     expect(document.body.textContent).toContain('Los resultados se calculan cada vez que se leen. Nadie ve las respuestas una por una.')
@@ -257,6 +266,8 @@ describe('Distribución (Distribution artboard)', () => {
     distribution(invitationList())
     expect(screen.getByTestId('guarantee').textContent).toContain('Frase del servidor sobre lo que se registra.')
     expect(screen.getByTestId('guarantee').querySelector('[data-slot="guarantee-shield"]')?.getAttribute('class')).toContain('text-chip-good-ink')
+    // The artboard's 18px serif, not the 14px `text-lg`.
+    expect(screen.getByText('Frase del servidor sobre lo que se registra.').getAttribute('class')).toContain('text-[1.125rem]')
   })
 
   it('reads 3 of 4 steps and names the invitations as what is missing', () => {
@@ -480,6 +491,11 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     }
     await userEvent.click(within(list).getByRole('button', { name: 'Acciones de la pregunta 1' }))
     expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Subir', 'Bajar', 'Eliminar'])
+    // The two panes end together, as the artboard's do: the row stretches the preview to the
+    // list's height (measured in the shot; happy-dom has no layout, so the class is the proxy).
+    expect(screen.getByTestId('builder-panes').getAttribute('class')).toContain('items-stretch')
+    // The preview's survey title in the artboard's 18px serif.
+    expect(within(screen.getByTestId('builder-preview')).getByText('Clima Q1').getAttribute('class')).toContain('text-[1.125rem]')
   })
 
   it('adds from the bank, the library or blank — from a template too', async () => {

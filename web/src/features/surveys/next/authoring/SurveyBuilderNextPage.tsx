@@ -461,7 +461,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
           <div className="flex flex-col gap-3.5 rounded-lg border border-line-default bg-surface-card px-4.5 pb-4.5 pt-4 shadow-xs">
             <div className="flex flex-col gap-1 border-b border-line-light pb-3">
               <Eyebrow>{copy('surveyEyebrow')}</Eyebrow>
-              <p className="m-0 font-serif text-lg text-fg-primary">{title || copy('untitled')}</p>
+              <p className="m-0 font-serif text-[1.125rem] text-fg-primary">{title || copy('untitled')}</p>
               {description && <p className="m-0 text-sm text-fg-secondary">{description}</p>}
             </div>
             {focusSection ? (

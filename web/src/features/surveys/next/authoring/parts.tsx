@@ -59,6 +59,20 @@ export function Meter({ percent, label }: { percent: number; label: string }) {
   )
 }
 
+/**
+ * A card's heading as the SurveyDetail artboard sets it on Ficha and Departamentos: the serif 20px
+ * `h2` with no margin of its own, so the card's 10px gap is the whole distance to the rows below.
+ * (`PanelHeading` in shared-next adds a 12px margin that its other screens rely on; the measured
+ * shot had 22px here against the artboard's 10px.)
+ */
+export function CardHeading({ title }: { title: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <h2 className="m-0 text-2xl">{title}</h2>
+    </div>
+  )
+}
+
 /** A white card with the canvas hairline, as every artboard section draws it. */
 export function Card({ className, children, ...rest }: HTMLAttributes<HTMLElement>) {
   return (

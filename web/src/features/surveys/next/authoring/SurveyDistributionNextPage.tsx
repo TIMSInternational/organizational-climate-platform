@@ -513,7 +513,7 @@ export function DistributionView({
             <p className="m-0 text-2xs font-bold uppercase tracking-eyebrow text-chip-good-ink">
               {invitations.anonymity.anonymous ? copy('guaranteeAnonymous') : copy('guaranteeRecorded')}
             </p>
-            <p className="m-0 font-serif text-lg leading-snug text-fg-primary">{invitations.anonymity.guarantee}</p>
+            <p className="m-0 font-serif text-[1.125rem] leading-snug text-fg-primary">{invitations.anonymity.guarantee}</p>
             <p className="m-0 text-sm text-fg-secondary">{copy('guaranteeSub', { floor: ANONYMITY_FLOOR })}</p>
           </div>
         </div>

@@ -12,7 +12,7 @@ import type { SurveyDetail } from '../../api/surveys'
 import { languageLabel, statusLabel, typeLabel } from '../../surveyVocabulary'
 import { Note, PanelHeading } from '../../../shared-next/parts'
 import { PreviewQuestion, PreviewSection } from './QuestionPreview'
-import { Card, Meter, ReadingTile, ShareLinkField } from './parts'
+import { Card, CardHeading, Meter, ReadingTile, ShareLinkField } from './parts'
 import {
   dayMonth,
   daysFrom,
@@ -245,7 +245,7 @@ export function SurveyDetailView({
         <div className="flex min-w-0 flex-col gap-4">
           {distribution !== undefined && <LinkCard link={distribution?.publicLink ?? null} />}
           <Card className="flex flex-col gap-2.5 px-5 pb-4.5 pt-4" data-testid="detail-sheet">
-            <PanelHeading title={copy('sheet')} />
+            <CardHeading title={copy('sheet')} />
             <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
               <dt className="text-fg-secondary">{copy('type')}</dt>
               <dd className="m-0">{sentenceCase(typeLabel(t, survey.type), locale)}</dd>
@@ -262,7 +262,7 @@ export function SurveyDetailView({
             </dl>
           </Card>
           <Card className="flex flex-col gap-2.5 px-5 pb-4.5 pt-4" data-testid="detail-departments">
-            <PanelHeading title={copy('departments')} />
+            <CardHeading title={copy('departments')} />
             {survey.departmentIds.length === 0 ? (
               <p className="m-0 text-sm">{copy('wholeCompany')}</p>
             ) : targets.names.length === 0 ? (
