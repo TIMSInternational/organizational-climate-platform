@@ -4,7 +4,7 @@ import { useState } from 'react'
 import userEvent from '@testing-library/user-event'
 import { TranslationProvider, LOCALE_STORAGE_KEY } from '../i18n'
 import { setToken, clearToken } from '../auth/token'
-import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '.'
+import { CompanyContext, CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '.'
 import { CompanyContextSwitcher } from '../components/layout/CompanyContextSwitcher'
 import CompanyContextBar from '../components/layout/CompanyContextBar'
 import { useHeaderSwitcherStandDown } from './useHeaderSwitcherStandDown'
@@ -108,6 +108,31 @@ describe('the header switcher stands down under a page that asks', () => {
     expect(screen.getByText(en.companyContext.next.unchosen)).toBeTruthy()
     expect(screen.queryByText(en.companyContext.next.active)).toBeNull()
     expect((screen.getByLabelText(en.companyContext.label) as HTMLSelectElement).value).toBe('')
+  })
+
+  it('asks to clear an unlisted company, and reads it as unchosen for as long as the selection still names it', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    setToken(tokenFor({ role: 'super_admin' }))
+    stubCompanies()
+    // A provider whose selectCompany only records the call: the id stays, so the chip's own rule shows.
+    const selectCompany = vi.fn()
+    render(
+      <TranslationProvider>
+        <CompanyContext.Provider
+          value={{
+            scope: { role: 'super_admin', isSuperAdmin: true, status: 'ready', companyId: 'co-gone' },
+            selectedCompanyId: 'co-gone',
+            selectCompany,
+          }}
+        >
+          <CompanyContextBar note="note" />
+        </CompanyContext.Provider>
+      </TranslationProvider>,
+    )
+    await screen.findByRole('option', { name: 'Acme Corporation' })
+    await waitFor(() => expect(selectCompany).toHaveBeenCalledWith(null))
+    expect(screen.getByText(en.companyContext.next.unchosen)).toBeTruthy()
+    expect(screen.queryByText(en.companyContext.next.active)).toBeNull()
   })
 
   it('keeps a listed company chosen, and keeps any stored company when the list cannot be read', async () => {
