@@ -1,3 +1,4 @@
+import { INVITABLE_ROLES } from '../labels'
 import { useState } from 'react'
 import RoleSelector from './RoleSelector'
 import type { Invitation } from '../api/invitations'
@@ -45,7 +46,7 @@ export default function ShareableLinkPanel({ onCreate }: ShareableLinkPanelProps
       <div className="flex flex-wrap items-end gap-inline">
         <label className="mb-0">
           {t('users.role')}
-          <RoleSelector value={role} onChange={setRole} />
+          <RoleSelector value={role} roles={INVITABLE_ROLES} onChange={setRole} />
         </label>
         <Button onClick={handleCreate} disabled={creating}>
           {creating ? t('common.creating') : t('users.createShareableLink')}

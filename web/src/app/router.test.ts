@@ -6,7 +6,7 @@ import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPa
 import CompaniesListNextPage from '../features/org-structure/next/super/CompaniesListNextPage'
 import DashboardPage from '../features/dashboard/pages/DashboardPage'
 import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage'
-import UsersListPage from '../features/org-structure/pages/UsersListPage'
+import UsersNextPage from '../features/org-structure/next/UsersNextPage'
 import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
 import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
@@ -375,7 +375,7 @@ describe('router', () => {
     const dispatchers: ReadonlyArray<[string, unknown, string, string]> = [
       ['/dashboard', DashboardPage, 'features/dashboard/pages/DashboardPage.tsx', 'PlatformDashboardView'],
       ['/admin/companies/:id', CompanyDetailPage, 'features/org-structure/pages/CompanyDetailPage.tsx', 'SuperCompanyDetailView'],
-      ['/admin/companies/:companyId/users', UsersListPage, 'features/org-structure/pages/UsersListPage.tsx', 'SuperUsersView'],
+      ['/admin/companies/:companyId/users', UsersNextPage, 'features/org-structure/next/UsersNextPage.tsx', 'SuperUsersView'],
       [
         '/admin/companies/:companyId/demographic-fields',
         DemographicFieldsPage,

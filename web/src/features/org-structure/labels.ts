@@ -35,6 +35,14 @@
 export const ROLES = ['employee', 'supervisor', 'leader', 'company_admin', 'super_admin']
 
 /**
+ * The roles an invitation or a shareable link may carry. The server refuses the two
+ * administrator roles on both, for every caller (`InvitationEndpoints.cs:80-82` and
+ * `:176-178`, 400), so offering them only produced a form that failed on submit; a company
+ * administrator is made through the super administrator's `company_admin_setup` invitation.
+ */
+export const INVITABLE_ROLES: readonly string[] = ['employee', 'supervisor', 'leader']
+
+/**
  * A `Map`, not an object literal, and that is not stylistic. `{}['toString']`
  * resolves up the prototype chain to `Function`, so an object-literal lookup
  * typed `Record<string, string>` hands back a function for a handful of ordinary

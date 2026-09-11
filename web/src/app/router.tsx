@@ -12,7 +12,7 @@ import RouteErrorBoundary from './RouteErrorBoundary'
 import DashboardPage from '../features/dashboard/pages/DashboardPage'
 import CompaniesListNextPage from '../features/org-structure/next/super/CompaniesListNextPage'
 import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage'
-import UsersListPage from '../features/org-structure/pages/UsersListPage'
+import UsersNextPage from '../features/org-structure/next/UsersNextPage'
 import SystemSettingsPage from '../features/org-structure/pages/SystemSettingsPage'
 import SystemHealthPage from '../features/org-structure/pages/SystemHealthPage'
 import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
@@ -316,7 +316,9 @@ export const router = createBrowserRouter([
               // reference. Super-only on the server, and the page says so to anyone else.
               { path: '/admin/companies', element: <CompaniesListNextPage /> },
               { path: '/admin/companies/:id', element: <CompanyDetailPage /> },
-              { path: '/admin/companies/:companyId/users', element: <UsersListPage /> },
+              // The per-role canvas's Usuarios replaced `UsersListPage` here (10 Sep); the old page
+              // stays in the tree unrouted, as the wiring reference. `UsersNextPage` dispatches on the role.
+              { path: '/admin/companies/:companyId/users', element: <UsersNextPage /> },
               { path: '/admin/companies/:companyId/demographic-fields', element: <DemographicFieldsPage /> },
               // The redesigned Informes replaced `ReportsListPage` here (ruled 10 Sep, the
               // same swap as `/surveys`); the old page stays unrouted as the wiring reference.

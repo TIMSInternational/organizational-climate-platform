@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
-import UsersListPage from './UsersListPage'
+import UsersNextPage from './UsersNextPage'
 import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../i18n'
 import { CompanyContextProvider } from '../../../company-context'
 import { setToken, clearToken } from '../../../auth/token'
@@ -11,12 +11,12 @@ import es from '../../../i18n/es.json'
 
 /**
  * The route's dispatcher, rendered — not its source text. `/admin/companies/:companyId/users`
- * mounts `UsersListPage`; for a super administrator it must return the per-role canvas's
+ * mounts `UsersNextPage`; for a super administrator it must return the per-role canvas's
  * `SuperUsersView`, whose "Editar a <persona>" panel (opened by `?editar=<id>`) only that
  * view draws. A branch made unreachable renders the company administrator's roster
  * instead, and this fails.
  */
-describe('UsersListPage for a super administrator', () => {
+describe('UsersNextPage for a super administrator', () => {
   beforeEach(() => {
     localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
     vi.stubGlobal('fetch', vi.fn(superMeridianoFetch))
@@ -36,7 +36,7 @@ describe('UsersListPage for a super administrator', () => {
         <MemoryRouter initialEntries={[`/admin/companies/${MERIDIANO_ID}/users?editar=${LUIS_MORA_ID}`]}>
           <CompanyContextProvider>
             <Routes>
-              <Route path="/admin/companies/:companyId/users" element={<UsersListPage />} />
+              <Route path="/admin/companies/:companyId/users" element={<UsersNextPage />} />
             </Routes>
           </CompanyContextProvider>
         </MemoryRouter>
