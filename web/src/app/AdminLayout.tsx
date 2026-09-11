@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Outlet, useNavigate } from 'react-router'
+import { Outlet, useLocation, useNavigate } from 'react-router'
 import RoleBasedNav from '../navigation/RoleBasedNav'
 import { buildNavSections, withUnreadBadge } from '../navigation/navSections'
 import { isTrackingEnabled } from '../features/tracking/api/config'
@@ -18,6 +18,8 @@ import {
 } from '../components/layout'
 import { CompanyContextProvider, writeSelectedCompanyId } from '../company-context'
 import { NotificationBell } from '../features/notifications/components/NotificationBell'
+import { useCompanyContext } from '../company-context'
+import { headerSwitcherStandsDown } from './headerScope'
 
 /**
  * The app shell: sidebar, mobile navigation, and the scrolling content column.
@@ -158,7 +160,8 @@ function AdminShell() {
               card below is the only panel. */}
           <header
             className="on-shell flex shrink-0 items-center justify-end gap-inline"
-            style={{ minHeight: 40, padding: '10px 12px 10px 16px' }}
+            // The canvas's strip: 52px, 20px in from the edge (every artboard).
+            style={{ minHeight: 52, padding: '0 20px' }}
           >
             {/* #124's company-context selector. Renders `null` for every role but
                 SuperAdmin, so the strip is unchanged for everyone else — the bell
@@ -166,7 +169,7 @@ function AdminShell() {
                 `ShellControls` for the reason that block is hidden on a collapsed
                 rail and below `md`: a global scope switch that disappears while
                 the pages it scopes stay visible is worse than none. */}
-            <CompanyContextSwitcher />
+            <HeaderCompanySwitcher />
             {/* ForMaps puts the search glyph and its Cmd+K chip immediately before
                 the bell in this same strip, and so does this. It opens the palette
                 by dispatching a window event rather than by holding shared state —
@@ -237,7 +240,7 @@ function AdminShell() {
                 which reads as content that failed to load rather than as a page
                 with little on it. The panel is the page's surface, so it should be
                 the height of the page. */}
-            <div className="flex min-h-full w-full flex-col overflow-x-auto rounded-xl border border-line-panel bg-surface-panel p-panel pb-20 md:pb-panel">
+            <div className="flex min-h-full w-full flex-col overflow-x-auto rounded-xl border border-line-panel bg-surface-panel px-6 pb-20 pt-5 md:pb-8">
               <Outlet />
             </div>
           </main>
@@ -252,4 +255,14 @@ function AdminShell() {
       <CommandPalette sections={sections} />
     </div>
   )
+}
+
+/**
+ * #124's header switcher, standing down where the page names its own company — the tenant
+ * list and pages, and the platform overview while nothing is chosen (`headerScope.ts`).
+ */
+function HeaderCompanySwitcher() {
+  const { pathname } = useLocation()
+  const { selectedCompanyId } = useCompanyContext()
+  return headerSwitcherStandsDown(pathname, selectedCompanyId) ? null : <CompanyContextSwitcher />
 }

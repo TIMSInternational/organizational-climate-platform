@@ -55,9 +55,8 @@ describe('Chip', () => {
 
   it('defaults to the neutral tone', () => {
     // Compared against a rendered neutral chip rather than against
-    // `chipVariants({ tone: 'neutral' })`: `cn` runs tailwind-merge, which drops
-    // the base `border-transparent` once `border-line-light` overrides it, so the
-    // raw table string and the rendered string are legitimately different.
+    // `chipVariants({ tone: 'neutral' })`: `cn` runs tailwind-merge over the table,
+    // so the raw table string and the rendered string can legitimately differ.
     render(<Chip label="Draft" />)
     render(<Chip tone="neutral" label="Explicitly neutral" />)
     expect(screen.getByText('Draft').className).toBe(
@@ -73,27 +72,32 @@ describe('Chip', () => {
     expect(screen.getByText('Live').className).not.toBe(screen.getByText('Draft').className)
   })
 
-  it('is a fixed 20px tall and 11px semibold, in every tone', () => {
-    // The geometry is what makes a chip line up with a table row, and it lives in
-    // the shared part of the table rather than per tone. h-5 is 5 x the 4px
-    // --spacing token.
+  it('is the canvas chip — 22px tall, 11px at 500, 8px across — in every tone', () => {
+    // The approved canvas's `.chip` (10 Sep): height 22px, radius 6px, padding 0 8px,
+    // 11px at weight 500. It lives in the shared part of the table rather than per
+    // tone; h-5.5 is 5.5 x the 4px --spacing token.
     for (const tone of ['good', 'warning', 'critical', 'accent', 'neutral'] as const) {
       const classes = chipVariants({ tone }).split(/\s+/)
-      expect(classes, tone).toContain('h-5')
+      expect(classes, tone).toContain('h-5.5')
+      expect(classes, tone).toContain('px-2')
       expect(classes, tone).toContain('text-xs')
-      expect(classes, tone).toContain('font-semibold')
+      expect(classes, tone).toContain('font-medium')
       expect(classes, tone).toContain('rounded-lg')
+      expect(classes, tone).not.toContain('font-semibold')
     }
   })
 
-  it('keeps every tone the same height by bordering the four that have no rule', () => {
-    // `neutral` is the only tone with a visible hairline. Without a transparent
-    // border on the others they would be 2px shorter, which is invisible in a
-    // test and obvious in a row of chips.
-    for (const tone of ['good', 'warning', 'critical', 'accent'] as const) {
-      expect(chipVariants({ tone }).split(/\s+/), tone).toContain('border-transparent')
+  it("borders every tone in its own tint, the canvas's hairline, so all five are one height", () => {
+    // The canvas draws the green chip with rgba(18,148,91,.2), the red with
+    // rgba(221,12,21,.2), the neutral with the default hairline — the `accent-*-ring`
+    // tokens are those tints. Every tone carries a border, so none is 2px shorter.
+    const ring = { good: 'border-accent-green-ring', warning: 'border-accent-amber-ring', critical: 'border-accent-red-ring', accent: 'border-accent-blue-ring', neutral: 'border-line-default' } as const
+    for (const [tone, border] of Object.entries(ring) as [keyof typeof ring, string][]) {
+      const classes = chipVariants({ tone }).split(/\s+/)
+      expect(classes, tone).toContain('border')
+      expect(classes, tone).toContain(border)
+      expect(classes, tone).not.toContain('border-transparent')
     }
-    expect(chipVariants({ tone: 'neutral' })).toContain('border-line-light')
   })
 
   it('passes through the rest of its span props', () => {

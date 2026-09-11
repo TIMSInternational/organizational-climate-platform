@@ -210,7 +210,9 @@ describe('AdminLayout', () => {
     renderShell()
     const panel = document.getElementById('main')!.firstElementChild!.className
     expect(panel).toContain('pb-20')
-    expect(panel).toContain('md:pb-panel')
+    // From md up, the canvas's 32px under the content (`padding: 20px 24px 32px` on
+    // every artboard's content card).
+    expect(panel).toContain('md:pb-8')
   })
 
   it('scrolls the content column rather than the page, so the sidebar stays put', () => {

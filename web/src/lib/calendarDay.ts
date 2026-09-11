@@ -69,6 +69,48 @@ export function calendarDay(value: number | Date, locale: string, now: number | 
 }
 
 /**
+ * The day an INSTANT falls on, in the reader's own zone, written like `calendarDay`.
+ *
+ * `calendarDay` is for calendar days — a survey's `StartDate`/`EndDate` — which the API
+ * stores as whole days and this product therefore reads in UTC. A microclimate's
+ * `endTime` is not one: it is the minute a live session stops taking answers, and the
+ * microclimate's own pages print it with `toLocaleString` in the reader's zone
+ * (`MicroclimateLivePage.tsx`, `MicroclimateDetailPage.tsx`). Read in UTC, the demo
+ * tenant's weekly pulse (`2026-09-12T02:06:08Z`) said "abierto hasta el 12 sept" on the
+ * Panel de Control while its own page said the evening of the 11th in Costa Rica.
+ *
+ * `timeZone` is injectable only so the zone can be pinned in a test; callers omit it.
+ */
+export function instantDay(
+  value: number | Date,
+  locale: string,
+  { now = Date.now(), timeZone }: { now?: number | Date; timeZone?: string } = {},
+): string {
+  const date = new Date(value)
+  const yearOf = (instant: Date) => Number(instant.toLocaleDateString('en', { timeZone, year: 'numeric' }))
+  const sameYear = yearOf(date) === yearOf(new Date(now))
+  return date.toLocaleDateString(locale, {
+    timeZone,
+    day: 'numeric',
+    month: 'short',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  })
+}
+
+/**
+ * Today as an ISO calendar day — "2026-09-10" — in the reader's own calendar: the `asOf`
+ * every "en N días" and "a N días del cierre" counts from, on every screen. A day, not an
+ * instant. Counted from `new Date().toISOString()`, a survey closing on 10 Oct read "en 29
+ * días" on the survey list at three in the afternoon while the Panel de Control, which
+ * counts from the day, said "a 30 días del cierre" in the same minute.
+ */
+export function todayCalendarDay(now: Date = new Date()): string {
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}
+
+/**
  * The same calendar day with the month written out — `6 de agosto`, `August 6` — for
  * a sentence that names the day rather than a table that lists it: the survey
  * results header says "cerró el 6 de agosto" (SurveyResults artboard, 10 Sep).

@@ -115,6 +115,20 @@ describe('categorical series palette', () => {
 })
 
 describe('sequential and diverging scales', () => {
+  it('has a near-neutral diverging midpoint, not a hue', () => {
+    // A hue at the midpoint reads as a third category rather than as "neither". The canvas
+    // paints "en la meta" in a lavender grey, rgb(207,205,217) (Dashboard.png, ClimateTrends.png):
+    // near-neutral, its channels within 12 of each other, where the two poles spread by 60+.
+    expect(light('--admin-chart-div-mid').toLowerCase()).toBe('#cfcdd9')
+    for (const read of [light, dark]) {
+      const mid = read('--admin-chart-div-mid')
+      const [, r, g, b] = /^#(\w{2})(\w{2})(\w{2})$/.exec(mid) ?? []
+      const channels = [r, g, b].map((channel) => parseInt(channel, 16))
+      expect(channels.every((channel) => Number.isFinite(channel))).toBe(true)
+      expect(Math.max(...channels) - Math.min(...channels)).toBeLessThanOrEqual(12)
+    }
+  })
+
   it('has a neutral gray diverging midpoint, not a hue', () => {
     // A hue at the midpoint reads as a third category rather than as "neither".
     // Neutral means no channel strays more than 16/255 from the others: the canvas's

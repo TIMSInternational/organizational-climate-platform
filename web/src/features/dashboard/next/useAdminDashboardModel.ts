@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { ANONYMITY_FLOOR } from '../../../components/charts'
 import { createTranslator, useTranslation } from '../../../i18n'
+import { todayCalendarDay } from '../../../lib/calendarDay'
 import { CATALOGUES, FALLBACK_LOCALE } from '../../../i18n/locale'
 import { getTrackingApiBaseUrl, isTrackingEnabled } from '../../tracking/api/config'
 import { useDashboardData } from '../useDashboardData'
@@ -16,14 +17,6 @@ export interface AdminDashboardModelState {
   failed: boolean
   error: string | null
   reload: () => void
-}
-
-/** Today as an ISO date, in the reader's own calendar. */
-function today(): string {
-  const now = new Date()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${month}-${day}`
 }
 
 /**
@@ -62,7 +55,7 @@ export function useAdminDashboardModel(companyId?: string): AdminDashboardModelS
         trackingBaseUrl: isTrackingEnabled() ? getTrackingApiBaseUrl() : null,
         companyId,
         lang: locale,
-        asOf: today(),
+        asOf: todayCalendarDay(),
         floor: ANONYMITY_FLOOR,
         dimensionName,
       }),

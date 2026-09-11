@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router'
-import { ChevronRight } from 'lucide-react'
 import { useTranslation } from '../i18n'
 import { activeHref, type NavSection, type NavItem as NavItemType } from './navSections'
 
@@ -129,13 +128,26 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
     setFlyout({ key, top: rect.top, left: rect.right })
   }
 
-  function renderItem(item: NavItemType) {
+  function renderItem(item: NavItemType, options?: { neverSelected?: boolean }) {
+    // A `flat` group (the super administrator's "Administración del Sistema") is drawn
+    // as the 10 Sep per-role canvas draws it: the group's own row, then its children as
+    // plain rows beside it — no chevron, no elbow, nothing to expand. Its row links to its
+    // `href` and is never the selected one: that `href` is its first child's, and the
+    // child's row carries the selection. Collapsed, it keeps the flyout below.
+    if (item.flat && item.sub?.length && !collapsed) {
+      return (
+        <Fragment key={item.labelKey}>
+          {renderItem({ ...item, sub: undefined, flat: undefined }, { neverSelected: true })}
+          {item.sub.map((sub) => renderItem(sub))}
+        </Fragment>
+      )
+    }
     const hasChildren = Boolean(item.sub?.length)
     // While collapsed a grouped row is a plain link with a flyout (see `collapsed`
     // above), so it gets a leaf's selected styling too.
     const hasSub = hasChildren && !collapsed
     const hasFlyout = hasChildren && collapsed
-    const isActive = item.href === selectedHref
+    const isActive = !options?.neverSelected && item.href === selectedHref
     const childSelected = item.sub?.some((sub) => sub.href === selectedHref) ?? false
     // A collapsed group stands in for its whole sub-tree — the children are not
     // rendered in the rail at all — so it carries the selection when one of them
@@ -167,7 +179,8 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
       minWidth: 0,
       minHeight: 'var(--admin-size-control-md)',
       height: 'auto',
-      padding: collapsed ? 'var(--admin-space-4)' : `var(--admin-space-4) var(--admin-space-8)`,
+      // The canvas's `.nav-row { padding: 0 10px }`: icons at x=18, labels at x=42.
+      padding: collapsed ? 'var(--admin-space-4)' : `var(--admin-space-4) var(--admin-space-10)`,
       border: 'none',
       borderRadius: 'var(--admin-radius-md)',
       fontFamily: 'inherit',
@@ -244,25 +257,17 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
               onClick={() => toggleExpand(item.labelKey)}
               aria-expanded={isExpanded}
               // See the `title` note on the leaf row below. A group row is the
-              // tightest of the lot: the chevron and its gap take another 24px,
-              // leaving the label 156px of the 236px rail — while carrying the
-              // longest label in the nav, `navigation.systemAdministration`
-              // ("Administración del Sistema", 26 characters).
+              // tightest of the lot: it carries the longest label in the nav,
+              // `navigation.systemAdministration` ("Administración del Sistema",
+              // 26 characters), in the 176px a 236px rail leaves a label.
               title={label}
               style={rowStyle}
             >
+              {/* No chevron: the canvas draws the group row as a plain row, and at 13px
+                  "Administración de Empresa" fills most of the 176px a 236px rail leaves the
+                  label — a chevron and its gap would cut it to "Administración de E…".
+                  `aria-expanded` above still announces the sub-tree and its state. */}
               {rowContent}
-              <ChevronRight
-                aria-hidden="true"
-                style={{
-                  width: 'var(--admin-size-icon)',
-                  height: 'var(--admin-size-icon)',
-                  flexShrink: 0,
-                  color: 'var(--admin-font-tertiary)',
-                  transform: isExpanded ? 'rotate(90deg)' : 'none',
-                  transition: 'transform var(--admin-duration-base) var(--admin-ease-out)',
-                }}
-              />
             </button>
           ) : (
             <Link
@@ -292,16 +297,14 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
               // is cut with no way to read the rest, and the box is narrow while
               // the rail is expanded: the rail is 236px
               // (`--admin-size-sidebar`), of which 16px goes to the `<nav>`'s own
-              // `4px 8px 8px 8px` gutter, 16px to this row's `var(--admin-space-4)
-              // var(--admin-space-8)` padding, 16px to the icon
+              // `4px 8px 8px 8px` gutter, 20px to this row's `var(--admin-space-4)
+              // var(--admin-space-10)` padding, 16px to the icon
               // (`--admin-size-icon`) and 8px to the gap
-              // (`--admin-size-inline-gap`) — 180px for the label, less again on a
+              // (`--admin-size-inline-gap`) — 176px for the label, less again on a
               // row carrying a badge. Whether a given label survives that depends
               // on the locale and on the reader's font settings, neither of which
               // this component can see, so the tooltip is set for all of them
-              // rather than guessed at. Widening the rail means changing
-              // `--admin-size-sidebar`, which is shared token surface (#208 is
-              // queued on tokens.css).
+              // rather than guessed at.
               title={label}
               style={rowStyle}
             >
@@ -414,9 +417,14 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
       {sections.map((section, index) => (
         <div key={section.titleKey || index} style={{ marginBottom: 8 }}>
           {section.titleKey && !collapsed && (
-            <div className="nav-section-title">{t(section.titleKey)}</div>
+            // The canvas's section head (`.nav-section`, every artboard): 8px more under it than
+            // `.nav-section-title` keeps elsewhere — its 6px plus the nav's 2px gap — and the rows'
+            // 10px inset. At 6px every row under a heading sat 2px high, 6px by the rail's foot.
+            <div className="nav-section-title" data-slot="nav-section-title" style={{ padding: 'var(--admin-space-8) var(--admin-space-10)' }}>
+              {t(section.titleKey)}
+            </div>
           )}
-          {section.items.map(renderItem)}
+          {section.items.map((item) => renderItem(item))}
         </div>
       ))}
     </nav>

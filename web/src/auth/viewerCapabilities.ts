@@ -148,6 +148,21 @@ export interface ViewerCapabilities {
    * selection for this role anyway.
    */
   canOpenResults: (survey: { companyId: string }) => boolean
+  /**
+   * The tenant directory and every read or write of a tenant's profile: `GET`/`POST
+   * /admin/companies` and `GET`/`PUT /admin/companies/{id}` each open with
+   * `if (currentUser.Role != Roles.SuperAdmin) return Results.Forbid()`
+   * (`CompanyEndpoints.cs:29`, `:49`, `:113`, `:137`). A `super_admin`, whatever is
+   * selected — the company in these requests is the one in the path, not the scope.
+   */
+  canManageCompanies: boolean
+  /**
+   * `PUT /admin/users/{id}/role` — `UserEndpoints.cs:284-287` forbids every caller but a
+   * `super_admin`, who may then assign any of `Roles.All` (`:289-292`), company
+   * administrator included. A `company_admin` edits a person's name, department and
+   * status, never their role.
+   */
+  canAssignRoles: boolean
 }
 
 const SUPER_ADMIN = 'super_admin'
@@ -201,6 +216,8 @@ export function capabilitiesFor(claims: ViewerClaims, scope: CompanyScope): View
     canRecordProgress: (plan) => canManagePlan(plan, trackingClaims),
     canOpenResults: (survey) =>
       role === SUPER_ADMIN || (role === COMPANY_ADMIN && claims.companyId !== undefined && claims.companyId === survey.companyId),
+    canManageCompanies: role === SUPER_ADMIN,
+    canAssignRoles: role === SUPER_ADMIN,
   }
 }
 

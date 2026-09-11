@@ -6,6 +6,8 @@ import DemographicFieldList from '../components/DemographicFieldList'
 import DemographicFieldForm, { type DemographicFieldFormValues } from '../components/DemographicFieldForm'
 import { peoplePerValue } from '../components/demographicReach'
 import { useTranslation } from '../../../i18n'
+import { readViewerClaims } from '../../../auth/viewerCapabilities'
+import SuperDemographicFieldsView from '../next/super/SuperDemographicFieldsView'
 import { PageTopBar } from '../../../components/layout'
 import { KpiTile, isSuppressed } from '../../../components/charts'
 import {
@@ -69,6 +71,13 @@ import {
 const FLOOR = 5
 
 export default function DemographicFieldsPage() {
+  // The per-role canvas (10 Sep): the super administrator's view of a tenant's fields is
+  // its own, `../next/super/SuperDemographicFieldsView`. Read off the claim so this page
+  // still renders outside `CompanyContextProvider`. Everyone else keeps this page.
+  return readViewerClaims().role === 'super_admin' ? <SuperDemographicFieldsView /> : <DemographicFieldsPageForAdmins />
+}
+
+function DemographicFieldsPageForAdmins() {
   const { t, locale } = useTranslation()
   const { companyId } = useParams<{ companyId: string }>()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string

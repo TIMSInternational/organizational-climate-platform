@@ -3,6 +3,12 @@ import { readFileSync, globSync } from 'node:fs'
 import { join } from 'node:path'
 import { router } from './router'
 import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPage'
+import CompaniesListNextPage from '../features/org-structure/next/super/CompaniesListNextPage'
+import DashboardPage from '../features/dashboard/pages/DashboardPage'
+import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage'
+import UsersListPage from '../features/org-structure/pages/UsersListPage'
+import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
+import AnalyticsDashboardPage from '../features/analytics/pages/AnalyticsDashboardPage'
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
 import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
 import ActionPlansListNextPage from '../features/action-plans/next/ActionPlansListNextPage'
@@ -279,6 +285,14 @@ describe('router', () => {
     const componentAt = (path: string) => (byPath.get(path) as { type?: unknown } | undefined)?.type
     expect(componentAt('/surveys')).toBe(SurveysListNextPage)
     expect(componentAt('/surveys/climate-trends')).toBe(ClimateTrendsNextPage)
+    // `/dashboard` is role-dispatched, so the route mounts the dispatcher and the
+    // dispatcher mounts the redesigned Panel de Control for a company administrator
+    // (`DashboardPage.test.tsx` renders that branch). The old company view stays in the
+    // tree as the wiring reference and must not be reachable from here.
+    expect(componentAt('/dashboard')).toBe(DashboardPage)
+    const dispatcher = readFileSync(join(process.cwd(), 'src', 'features', 'dashboard', 'pages', 'DashboardPage.tsx'), 'utf8')
+    expect(dispatcher).toMatch(/from '\.\.\/next\/AdminDashboardNextView'/)
+    expect(dispatcher).not.toMatch(/from '\.\.\/components\/CompanyAdminDashboardView'/)
     // #468 swapped the results the same way: pinned on the element here, not only by a
     // source regex in the page's own test.
     expect(componentAt('/surveys/:id/results')).toBe(SurveyResultsNextPage)
@@ -291,6 +305,67 @@ describe('router', () => {
     expect(source).not.toMatch(/pages\/SurveysListPage'/)
     expect(source).not.toMatch(/pages\/ClimateTrendsPage'/)
     expect(source).not.toMatch(/pages\/SurveyResultsPage'/)
+  })
+
+  /**
+   * The per-role canvas's Empresas replaced `CompaniesListPage` on `/admin/companies`, the
+   * route the super administrator's sidebar links as Empresas. Same ruling, same check: the
+   * element, not the path, and the old page imported for no route at all.
+   */
+  it('mounts the redesigned Empresas on /admin/companies and routes the old page nowhere', () => {
+    const byPath = new Map<string, unknown>()
+    function walk(routes: typeof router.routes): void {
+      for (const route of routes) {
+        if (route.path) byPath.set(route.path, route.element)
+        if (route.children) walk(route.children as typeof router.routes)
+      }
+    }
+    walk(router.routes)
+    expect((byPath.get('/admin/companies') as { type?: unknown } | undefined)?.type).toBe(CompaniesListNextPage)
+    expect(byPath.has('/admin/companies/next')).toBe(false)
+    const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
+    expect(source).not.toMatch(/pages\/CompaniesListPage'/)
+  })
+
+  /**
+   * The super administrator's other five screens share their route with another role, so each
+   * route keeps its page and the page dispatches on the role. Pinned here at the route: the
+   * element each path mounts, and the one role branch in that page that returns the per-role
+   * canvas's view — so a route re-pointed elsewhere, or a branch dropped, fails in this file.
+   */
+  it('mounts the five role-dispatched super administrator routes on pages that branch to the canvas views', () => {
+    const byPath = new Map<string, unknown>()
+    function walk(routes: typeof router.routes): void {
+      for (const route of routes) {
+        if (route.path) byPath.set(route.path, route.element)
+        if (route.children) walk(route.children as typeof router.routes)
+      }
+    }
+    walk(router.routes)
+    const dispatchers: ReadonlyArray<[string, unknown, string, string]> = [
+      ['/dashboard', DashboardPage, 'features/dashboard/pages/DashboardPage.tsx', 'PlatformDashboardView'],
+      ['/admin/companies/:id', CompanyDetailPage, 'features/org-structure/pages/CompanyDetailPage.tsx', 'SuperCompanyDetailView'],
+      ['/admin/companies/:companyId/users', UsersListPage, 'features/org-structure/pages/UsersListPage.tsx', 'SuperUsersView'],
+      [
+        '/admin/companies/:companyId/demographic-fields',
+        DemographicFieldsPage,
+        'features/org-structure/pages/DemographicFieldsPage.tsx',
+        'SuperDemographicFieldsView',
+      ],
+      [
+        '/admin/companies/:companyId/analytics',
+        AnalyticsDashboardPage,
+        'features/analytics/pages/AnalyticsDashboardPage.tsx',
+        'SuperAnalyticsView',
+      ],
+    ]
+    for (const [path, page, file, view] of dispatchers) {
+      expect((byPath.get(path) as { type?: unknown } | undefined)?.type, path).toBe(page)
+      expect(byPath.has(`${path}/next`), path).toBe(false)
+      const source = readFileSync(join(process.cwd(), 'src', file), 'utf8')
+      expect(source, file).toMatch(/role === 'super_admin'|\bisSuperAdmin\b/)
+      expect(source, file).toMatch(new RegExp(`<${view}\\b`))
+    }
   })
 
   /**

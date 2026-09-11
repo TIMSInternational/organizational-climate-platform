@@ -21,6 +21,8 @@ import {
   SkeletonText,
 } from '../../../components/ui'
 import { UserPlus, Upload } from 'lucide-react'
+import { readViewerClaims } from '../../../auth/viewerCapabilities'
+import SuperUsersView from '../next/super/SuperUsersView'
 
 /**
  * The roster, and the invite path (UI redesign).
@@ -46,6 +48,14 @@ import { UserPlus, Upload } from 'lucide-react'
  * query that matches nothing looks identical to a company with no users.
  */
 export default function UsersListPage() {
+  // The per-role canvas (10 Sep): the super administrator's roster of a tenant is its own
+  // view, `../next/super/SuperUsersView` — the only role that may assign any role
+  // (`canAssignRoles`, `UserEndpoints.cs:284`). Read off the claim so this page still
+  // renders outside `CompanyContextProvider`. Everyone else keeps this page.
+  return readViewerClaims().role === 'super_admin' ? <SuperUsersView /> : <UsersListPageForAdmins />
+}
+
+function UsersListPageForAdmins() {
   const { t } = useTranslation()
   const { companyId } = useParams<{ companyId: string }>()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string

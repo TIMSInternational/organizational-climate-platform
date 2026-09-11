@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TranslationProvider } from '../../i18n'
-import ClimateMap, { type ClimateMapDimension, type ClimateMapRow } from './ClimateMap'
+import ClimateMap, { type ClimateMapDimension, type ClimateMapRow, type ClimateMapStep } from './ClimateMap'
+import en from '../../i18n/en.json'
 
 afterEach(cleanup)
 
@@ -452,5 +453,70 @@ describe('ClimateMap', () => {
     // And the label column is the one that shrinks, so the slack lands on the
     // readings rather than on the group names.
     expect((container.querySelector('th[scope="row"]') as HTMLElement).className).toContain('w-px')
+  })
+})
+
+describe('ClimateMap, drawn as the canvas', () => {
+  /** A caller-owned rule, as the Panel de Control's `targetStep` is: the canvas's bands at 3.7. */
+  const step = (score: number): ClimateMapStep =>
+    score <= 2.6 ? 0 : score <= 3.4 ? 1 : score <= 3.7 ? 2 : score <= 4.0 ? 3 : 4
+
+  it('takes its tint and its words from the caller’s step, rings nothing, and keys the steps by word', () => {
+    const { container } = render(
+      <ClimateMap variant="canvas" dimensions={DIMENSIONS} rows={rowsAt([2.4, 3.5])} target={3.7} tintStep={step} decimals={1} />,
+    )
+    const cells = [...container.querySelectorAll('td div')] as HTMLElement[]
+    expect(cells[0].style.backgroundColor).toContain('--admin-chart-div-neg-2')
+    expect(cells[1].style.backgroundColor).toContain('--admin-chart-div-mid')
+    // The far-below cell carries no ring: the deep red is the mark.
+    expect(cells[0].style.outline).toBe('')
+    // The words follow the step: by the caller's bands 3.5 is on target, not below it.
+    expect(cells[1].textContent).toContain(en.charts.onTarget.replace('{target}', '3.7'))
+    const legend = container.querySelector('[data-slot="climate-map-legend"]') as HTMLElement
+    expect([...legend.querySelectorAll('[data-legend]')].map((group) => group.getAttribute('data-legend'))).toEqual([
+      'below',
+      'on',
+      'above',
+    ])
+  })
+
+  it('lays the grid out as the artboard: a fixed 120px label column, equal reading columns, whole names cut by CSS', () => {
+    const { container } = render(
+      <ClimateMap variant="canvas" dimensions={DIMENSIONS} rows={rowsAt([3.0, 3.5])} target={3.7} tintStep={step} />,
+    )
+    expect((container.querySelector('table') as HTMLElement).className).toContain('table-fixed')
+    const cols = [...container.querySelectorAll('colgroup col')]
+    expect(cols).toHaveLength(3)
+    expect(cols[0].className).toBe('w-30')
+    const heads = [...container.querySelectorAll('thead th')]
+    expect(heads.map((head) => head.getAttribute('title'))).toEqual(['Psychological safety', 'Workload'])
+    expect(heads.every((head) => head.className.includes('truncate'))).toBe(true)
+    // No rules: `index.css` draws one under every bare th and td, and the artboard's grid has none.
+    expect([...container.querySelectorAll('th, td')].every((cell) => cell.className.includes('border-0'))).toBe(true)
+  })
+
+  it('leaves the default map as it was: a far-below cell is still ringed there', () => {
+    const { container } = render(<ClimateMap dimensions={[DIMENSIONS[0]]} rows={rowsAt([55])} target={70} />)
+    expect((container.querySelector('td div') as HTMLElement).style.outline).toContain('--admin-chart-div-neg-2')
+  })
+})
+
+describe('ClimateMap, the canvas grid', () => {
+  const band = (score: number): ClimateMapStep => (score < 3.7 ? 1 : 3)
+  it('is the artboard grid: 4px between rows and columns, none outside, no base cell padding', () => {
+    const { container } = render(
+      <ClimateMap variant="canvas" dimensions={DIMENSIONS} rows={rowsAt([3.0, 3.5])} target={3.7} tintStep={band} />,
+    )
+    const classes = (element: Element | null) => (element?.getAttribute('class') ?? '').split(/\s+/)
+    // border-spacing-1 put 4px outside the grid too, and index.css's 8px/12px th padding made
+    // each row 39.5px, not the artboard's 38.
+    expect(classes(container.querySelector('table'))).toEqual(expect.arrayContaining(['border-separate', 'border-spacing-0']))
+    expect(classes(container.querySelector('tbody th[scope="row"]'))).toEqual(expect.arrayContaining(['p-0', 'pt-1', 'pr-2']))
+    for (const cell of container.querySelectorAll('tbody td')) {
+      expect(classes(cell)).toEqual(expect.arrayContaining(['p-0', 'pt-1', 'pl-1']))
+    }
+    for (const head of container.querySelectorAll('thead th')) {
+      expect(classes(head)).toEqual(expect.arrayContaining(['p-0', 'pt-1', 'pl-1']))
+    }
   })
 })

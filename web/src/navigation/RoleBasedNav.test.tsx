@@ -77,8 +77,16 @@ const GROUPS = [
   },
 ] as const
 
+/**
+ * The groups the expanded rail draws as a disclosure. The super administrator's
+ * "System Administration" is `flat` (navSections.ts): the 10 Sep per-role canvas draws it
+ * as four flat rows, so it has no button to expand — pinned in "RoleBasedNav flat group".
+ * Collapsed, both groups keep the flyout, so the flyout tests still cover both.
+ */
+const DISCLOSURE_GROUPS = GROUPS.filter((entry) => entry.role !== 'super_admin')
+
 describe('RoleBasedNav nesting', () => {
-  it.each(GROUPS)('renders $group as a collapsed disclosure, not a link', ({ role, group, children }) => {
+  it.each(DISCLOSURE_GROUPS)('renders $group as a collapsed disclosure, not a link', ({ role, group, children }) => {
     renderNav(buildNavSections(role, COMPANY), '/notifications')
 
     const toggle = screen.getByRole('button', { name: group })
@@ -89,7 +97,7 @@ describe('RoleBasedNav nesting', () => {
     }
   })
 
-  it.each(GROUPS)('reveals exactly $group’s own children when expanded', async ({ role, group, children }) => {
+  it.each(DISCLOSURE_GROUPS)('reveals exactly $group’s own children when expanded', async ({ role, group, children }) => {
     renderNav(buildNavSections(role, COMPANY), '/notifications')
     const before = screen.getAllByRole('link').length
 
@@ -104,7 +112,7 @@ describe('RoleBasedNav nesting', () => {
     expect(screen.getAllByRole('link').length).toBe(before + children.length)
   })
 
-  it.each(GROUPS)('closes $group again on a second click', async ({ role, group, children }) => {
+  it.each(DISCLOSURE_GROUPS)('closes $group again on a second click', async ({ role, group, children }) => {
     renderNav(buildNavSections(role, COMPANY), '/notifications')
     const toggle = screen.getByRole('button', { name: group })
 
@@ -115,7 +123,7 @@ describe('RoleBasedNav nesting', () => {
     expect(screen.queryByRole('link', { name: children[0] })).toBeNull()
   })
 
-  it.each(GROUPS)('opens $group on first render when the page is one of its children', ({ role, group, children, childPath }) => {
+  it.each(DISCLOSURE_GROUPS)('opens $group on first render when the page is one of its children', ({ role, group, children, childPath }) => {
     renderNav(buildNavSections(role, COMPANY), childPath)
 
     expect(screen.getByRole('button', { name: group }).getAttribute('aria-expanded')).toBe('true')
@@ -316,7 +324,7 @@ describe('RoleBasedNav collapsed flyout', () => {
     expect(screen.queryByRole('group', { name: group })).toBeNull()
   })
 
-  it.each(GROUPS)('shows no flyout for $group while the rail is expanded', async ({ role, group }) => {
+  it.each(DISCLOSURE_GROUPS)('shows no flyout for $group while the rail is expanded', async ({ role, group }) => {
     // The children are drawn in the rail there, so a panel would be a second copy
     // of them — the duplicate-row defect, arrived at from the other direction.
     renderNav(buildNavSections(role, COMPANY), '/notifications')
@@ -481,5 +489,40 @@ describe('RoleBasedNav row states', () => {
       expect(inline, `${row.textContent} still styles its own fill`).not.toMatch(/(^|;)\s*background/)
       expect(inline, `${row.textContent} still styles its own text colour`).not.toMatch(/(^|;)\s*color/)
     }
+  })
+})
+
+describe('RoleBasedNav flat group', () => {
+  it('draws System Administration as the canvas does: its row a link, its children plain rows, nothing to expand', () => {
+    renderNav(buildNavSections('super_admin', COMPANY), '/admin/companies')
+
+    const group = screen.getByRole('link', { name: 'System Administration' })
+    expect(group.getAttribute('href')).toBe('/admin/companies')
+    expect(group.hasAttribute('aria-expanded')).toBe(false)
+    expect(screen.queryByRole('button', { name: 'System Administration' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Companies' }).getAttribute('href')).toBe('/admin/companies')
+    expect(screen.getByRole('link', { name: 'System Settings' }).getAttribute('href')).toBe('/admin/system-settings')
+  })
+
+  it('lights the child that owns the page, never the group row that shares its href', () => {
+    renderNav(buildNavSections('super_admin', COMPANY), '/admin/companies')
+
+    expect(screen.getByRole('link', { name: 'Companies' }).getAttribute('data-nav-state')).toBe('selected')
+    expect(screen.getByRole('link', { name: 'System Administration' }).getAttribute('data-nav-state')).toBeNull()
+    expect(document.querySelectorAll("[data-nav-state='selected']")).toHaveLength(1)
+  })
+})
+
+describe('RoleBasedNav on the canvas rail', () => {
+  const source = readFileSync(join(process.cwd(), 'src', 'navigation', 'RoleBasedNav.tsx'), 'utf8')
+  it('heads each section as the canvas does: 8px above and below, 10px in', () => {
+    // `.nav-section { padding: 14px 10px 6px }` plus the nav's 2px gap; at 6px under the head
+    // every row under it sat 2px high on the shot, 6px by the rail's foot.
+    expect(source).toMatch(
+      /<div className="nav-section-title" data-slot="nav-section-title" style=\{\{ padding: 'var\(--admin-space-8\) var\(--admin-space-10\)' \}\}>/,
+    )
+  })
+  it('insets each row 10px, as `.nav-row { padding: 0 10px }` does', () => {
+    expect(source).toContain("padding: collapsed ? 'var(--admin-space-4)' : `var(--admin-space-4) var(--admin-space-10)`")
   })
 })

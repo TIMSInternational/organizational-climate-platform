@@ -10,7 +10,7 @@ import RequireAuth from './RequireAuth'
 import AdminLayout from './AdminLayout'
 import RouteErrorBoundary from './RouteErrorBoundary'
 import DashboardPage from '../features/dashboard/pages/DashboardPage'
-import CompaniesListPage from '../features/org-structure/pages/CompaniesListPage'
+import CompaniesListNextPage from '../features/org-structure/next/super/CompaniesListNextPage'
 import CompanyDetailPage from '../features/org-structure/pages/CompanyDetailPage'
 import UsersListPage from '../features/org-structure/pages/UsersListPage'
 import SystemSettingsPage from '../features/org-structure/pages/SystemSettingsPage'
@@ -311,7 +311,10 @@ export const router = createBrowserRouter([
               // role, and each role's endpoint refuses the other three, so there is no
               // per-role route to gate and nothing a wrong guess here could leak.
               { path: '/dashboard', element: <DashboardPage /> },
-              { path: '/admin/companies', element: <CompaniesListPage /> },
+              // The redesigned Empresas replaced `CompaniesListPage` here (the per-role
+              // canvas, 10 Sep); the old page stays in the tree unrouted, as the wiring
+              // reference. Super-only on the server, and the page says so to anyone else.
+              { path: '/admin/companies', element: <CompaniesListNextPage /> },
               { path: '/admin/companies/:id', element: <CompanyDetailPage /> },
               { path: '/admin/companies/:companyId/users', element: <UsersListPage /> },
               { path: '/admin/companies/:companyId/demographic-fields', element: <DemographicFieldsPage /> },

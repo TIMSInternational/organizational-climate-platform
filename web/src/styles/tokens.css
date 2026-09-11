@@ -71,6 +71,11 @@
   --admin-text-xl: 1rem; /* 16px — h3/h4 (globals h6) */
   --admin-text-2xl: 1.25rem; /* 20px — h2 (globals h4) */
   --admin-text-3xl: 1.5rem; /* 24px — h1; legacy admin page titles are text-2xl */
+  /* The canvas's four named steps (the 10 Sep artboards), so no primitive spells a size in px: */
+  --admin-text-3xs: 0.5625rem; /* 9px — column heads over a dense grid (the map, the trends table) */
+  --admin-text-reading: 1.375rem; /* 22px — a reading on a card (sparkline cards, trend charts) */
+  --admin-text-kpi-lg: 1.625rem; /* 26px — the KPI reading on Clima en el tiempo and SurveyResults */
+  --admin-text-kpi-hero: 1.75rem; /* 28px — the KPI reading on the Panel de Control */
 
   --admin-leading-tight: 1.2; /* headings — globals.css h1..h6 */
   --admin-leading-snug: 1.35; /* dense table/data rows */
@@ -83,6 +88,7 @@
 
   --admin-tracking-tight: -0.025em; /* headings — globals.css h1..h6 */
   --admin-tracking-normal: 0;
+  --admin-tracking-kpi: 0.12em; /* the KPI label on Clima en el tiempo and SurveyResults */
   --admin-tracking-label: 0.06em; /* uppercase section labels — legacy
                                      RoleBasedNav `tracking-[0.06em]` */
   --admin-tracking-eyebrow: 0.2em; /* the page eyebrow over an <h1> — ForMaps
@@ -147,6 +153,11 @@
                                   ForMaps' EXPANDED_W was 220px gutters included,
                                   which cut "Configuración" and "Cerrar sesión". */
   --admin-size-sidebar-collapsed: 52px;
+  /* The wordmark on the rail, as every artboard draws it: `CLIMA` in #e1ddee, `TE` in the
+     muted lavender #a69bc9 (`<span style="color: #a69bc9;">TE</span>`). The rail is the same
+     dark ground in both themes, so one pair serves both. */
+  --admin-brand-lead: #e1ddee;
+  --admin-brand-tail: #a69bc9;
   --admin-size-content-max: 1280px;
   /* The block a page-level empty state reserves for itself, so its message centres
      in the screen rather than clinging to the heading with the rest of the card
@@ -708,7 +719,13 @@
   --admin-border-default: #2f235a;
   --admin-border-hover: #32245e;
   --admin-hatch-stripe: #32245e; /* 1.30:1 on #1b1433; the artboards draw no dark theme */
-  --admin-border-light: #1f173b;
+  /* Measured, not by eye: at #1f173b this hairline WAS the card (`--admin-bg-card`
+     #1f173b), so every `border-line-light` / `divide-line-light` / `bg-line-light` drawn
+     on a card -- the Panel de Control's sparkline cards and attention rules, the survey
+     list's row rules and participation track -- vanished in dark. #2a2150 sits 1.151:1
+     off the card, the light palette's own relation (#eeedf6 on #ffffff is 1.162:1), and
+     stays lighter than `--admin-border-default`. */
+  --admin-border-light: #2a2150;
   --admin-border-panel: #2f235a;
 
   /* The same #83 re-valuation, in the other direction: dark ink lightens where

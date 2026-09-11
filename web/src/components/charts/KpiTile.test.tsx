@@ -132,6 +132,21 @@ describe('KpiTile', () => {
   })
 })
 
+describe('KpiTile sizes', () => {
+  it('sets the artboards’ two tiles: hero 28px under a .06em label, large 26px under a .12em label', () => {
+    render(<KpiTile label="Hero" value={24} size="hero" />)
+    expect(screen.getByText('24').className).toContain('text-kpi-hero')
+    expect(screen.getByText('Hero').className).toContain('tracking-label')
+    cleanup()
+    render(<KpiTile label="Large" value={3} size="large" />)
+    expect(screen.getByText('3').className).toContain('text-kpi-lg')
+    expect(screen.getByText('Large').className).toContain('tracking-kpi')
+    cleanup()
+    render(<KpiTile label="Default" value={7} />)
+    expect(screen.getByText('7').className).toContain('text-3xl')
+  })
+})
+
 describe('KpiTile eyebrow', () => {
   it('sets its label as the artboards do: the label ink, spaced .12em, findable by its slot', () => {
     const { container } = render(<KpiTile label="Clima · Q3" value={3.65} />)
@@ -141,5 +156,24 @@ describe('KpiTile eyebrow', () => {
     expect(label.className.split(/\s+/)).toEqual(
       expect.arrayContaining(['text-2xs', 'font-bold', 'uppercase', 'tracking-tile', 'text-fg-label']),
     )
+  })
+})
+
+describe('KpiTile valueText', () => {
+  it('prints a reading that is a name, not a number, in the instrument face: the canvas’s "Q3"', () => {
+    render(<KpiTile label="Last closed survey" value={null} valueText="Q3" unit="closed 6 Aug" />)
+    const reading = screen.getByText('Q3')
+    expect(reading.className).toContain('font-mono')
+    expect(screen.queryByText('—')).toBeNull()
+  })
+})
+
+describe('KpiTile canvas line box', () => {
+  it('sets the hero and large labels in the 15px line box of the artboards’ `.label` and `.eyebrow`', () => {
+    render(<KpiTile label="Hero" value={24} size="hero" />)
+    expect(screen.getByText('Hero').className.split(/\s+/)).toContain('leading-normal')
+    cleanup()
+    render(<KpiTile label="Large" value={3} size="large" />)
+    expect(screen.getByText('Large').className.split(/\s+/)).toContain('leading-normal')
   })
 })

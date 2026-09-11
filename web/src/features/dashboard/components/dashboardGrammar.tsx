@@ -18,13 +18,15 @@ import type { TranslateFn, TranslateParams } from '../../../i18n'
 /**
  * A section heading inside a dashboard.
  *
- * `text-base` — this theme's 13px shell default — rather than the bare `h2` rule's 20px,
- * because the redesign's section headings are deliberately quieter than its readings. A
- * heading that competes with the number beside it is the thing that made the old screens
- * read as a page of boxes rather than an instrument.
+ * `text-2xl` — 20px, in the serif the bare `h2` rule already sets — with 10px under it,
+ * which is the approved canvas's `h2` (10 Sep: "Dónde está la organización", "Qué se
+ * movió", "Los mismos números, en tabla" are all `class="serif"` at 20px). The first cut
+ * set these at the 13px shell default so they would sit quieter than the readings; drawn
+ * beside the artboards that made every section read as a caption, and the canvas answers
+ * the competition with the numbers by the mono face, not by shrinking the heading.
  */
 export function SectionHeading({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-inline text-base">{children}</h2>
+  return <h2 className="mb-2.5 text-2xl">{children}</h2>
 }
 
 /**

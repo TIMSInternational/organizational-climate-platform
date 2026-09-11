@@ -1,0 +1,1239 @@
+{
+  "_comment": "The platform as the local API answered on 10 Sep 2026, verbatim: the super-admin endpoints from the session's capture, and Grupo Meridiano S.A.'s own reads from GETs as its company administrator. Only Grupo Meridiano S.A.'s settings are here (its detail page's read): the Empresas list no longer reads any tenant's settings, because that read is an audited PUT. GET /admin/benchmarks is keyed ?lang=es with the Spanish body the real API returns for that request. Shoot the super administrator's screens with --role super_admin --company '' --lang es --name 'Rebeca Solís' (the platform overview needs no tenant selected), or --company 16c97c29-07f8-4522-86fc-e6cc56298829 for a tenant's pages. GET /surveys/4c9c8c8c-03e1-4033-8224-8c80b242c558 is the open Q4 wave's detail, captured 10 Sep 2026 as ana.rojas (company administrator) with GET /surveys/4c9c8c8c-03e1-4033-8224-8c80b242c558?lang=es; the detail page reads the wave's own anonymity from its settings.anonymous (false).",
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+  "GET /dashboard/super-admin": {
+    "companyCount": 3,
+    "userCount": 92,
+    "activeUserCount": 91,
+    "surveyCount": 12,
+    "activeSurveyCount": 2,
+    "responseCount": 149,
+    "completedResponseCount": 149,
+    "companies": [
+      {
+        "id": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Grupo Meridiano S.A.",
+        "userCount": 42,
+        "activeSurveyCount": 1,
+        "completedResponseCount": 76,
+        "createdAt": "2026-09-10T01:58:51.790823+00:00"
+      },
+      {
+        "id": "22cc8ed9-2e02-401a-8d52-52068ff5e6c0",
+        "name": "Acme Corporation",
+        "userCount": 45,
+        "activeSurveyCount": 1,
+        "completedResponseCount": 73,
+        "createdAt": "2026-08-07T15:44:32.177245+00:00"
+      },
+      {
+        "id": "5e98bdaa-16d3-4b4a-86cc-254c23b7ca95",
+        "name": "Verify Co",
+        "userCount": 1,
+        "activeSurveyCount": 0,
+        "completedResponseCount": 0,
+        "createdAt": "2026-07-31T20:42:50.963471+00:00"
+      }
+    ]
+  },
+  "GET /admin/companies": {
+    "companies": [
+      {
+        "id": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Grupo Meridiano S.A.",
+        "emailDomain": "meridiano.test",
+        "industry": "Servicios",
+        "size": "medium",
+        "country": "Costa Rica",
+        "subscriptionTier": "basic",
+        "createdAt": "2026-09-10T01:58:51.790823+00:00"
+      },
+      {
+        "id": "22cc8ed9-2e02-401a-8d52-52068ff5e6c0",
+        "name": "Acme Corporation",
+        "emailDomain": "acme.test",
+        "industry": "Manufacturing",
+        "size": "500-1000",
+        "country": "Colombia",
+        "subscriptionTier": "enterprise",
+        "createdAt": "2026-08-07T15:44:32.177245+00:00"
+      },
+      {
+        "id": "5e98bdaa-16d3-4b4a-86cc-254c23b7ca95",
+        "name": "Verify Co",
+        "emailDomain": "verifyco.test",
+        "industry": null,
+        "size": null,
+        "country": null,
+        "subscriptionTier": null,
+        "createdAt": "2026-07-31T20:42:50.963471+00:00"
+      }
+    ]
+  },
+  "GET /admin/companies/16c97c29-07f8-4522-86fc-e6cc56298829": {
+    "id": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "name": "Grupo Meridiano S.A.",
+    "emailDomain": "meridiano.test",
+    "industry": "Servicios",
+    "size": "medium",
+    "country": "Costa Rica",
+    "subscriptionTier": "basic",
+    "createdAt": "2026-09-10T01:58:51.790823+00:00",
+    "userCount": 42
+  },
+  "PUT /admin/companies/16c97c29-07f8-4522-86fc-e6cc56298829/settings": {
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "settings": {
+      "surveyFrequency": "quarterly",
+      "microclimateEnabled": true,
+      "aiInsightsEnabled": true,
+      "anonymousSurveys": true,
+      "dataRetentionDays": 2555,
+      "timezone": "America/Costa_Rica",
+      "language": "es"
+    },
+    "branding": {
+      "logoUrl": null,
+      "primaryColor": "#0d9488",
+      "secondaryColor": "#0f766e",
+      "fontFamily": "Poppins",
+      "customCss": null
+    }
+  },
+  "GET /admin/system/status": {
+    "service": "climate-project-api",
+    "status": "ok",
+    "checkedAt": "2026-09-10T19:20:37.785451+00:00",
+    "environment": "Development",
+    "build": {
+      "commit": "unknown",
+      "builtAt": "unknown",
+      "runtime": "10.0.10"
+    },
+    "database": {
+      "status": "ok",
+      "latencyMs": 1,
+      "port": 5432,
+      "usesTransactionPoolerPort": false,
+      "maxPoolSize": 10,
+      "maxPoolSizeDefaulted": true
+    },
+    "notificationQueue": {
+      "status": "ok",
+      "pending": 0,
+      "due": 0,
+      "deadLettered": 0,
+      "oldestDueAgeSeconds": null
+    },
+    "dispatcher": {
+      "status": "never-run",
+      "lastDispatchAt": null
+    },
+    "jobs": [
+      {
+        "jobName": "digests",
+        "intervalSeconds": 900,
+        "lastAttemptAt": "2026-09-10T19:15:46.095118+00:00",
+        "lastSuccessAt": "2026-09-10T19:15:46.095118+00:00",
+        "consecutiveFailures": 0,
+        "status": "ok"
+      },
+      {
+        "jobName": "invitation-reminders",
+        "intervalSeconds": 900,
+        "lastAttemptAt": "2026-09-10T19:16:00.828241+00:00",
+        "lastSuccessAt": "2026-09-10T19:16:00.828241+00:00",
+        "consecutiveFailures": 0,
+        "status": "ok"
+      },
+      {
+        "jobName": "microclimate-lifecycle",
+        "intervalSeconds": 300,
+        "lastAttemptAt": "2026-09-10T19:16:00.627099+00:00",
+        "lastSuccessAt": "2026-09-10T19:16:00.627099+00:00",
+        "consecutiveFailures": 0,
+        "status": "ok"
+      },
+      {
+        "jobName": "notification-dispatch",
+        "intervalSeconds": 60,
+        "lastAttemptAt": "2026-09-10T19:20:09.023071+00:00",
+        "lastSuccessAt": "2026-09-10T19:20:09.023071+00:00",
+        "consecutiveFailures": 0,
+        "status": "ok"
+      },
+      {
+        "jobName": "retention-cleanup",
+        "intervalSeconds": 86400,
+        "lastAttemptAt": "2026-09-10T03:01:05.154588+00:00",
+        "lastSuccessAt": "2026-09-10T03:01:05.154588+00:00",
+        "consecutiveFailures": 0,
+        "status": "ok"
+      },
+      {
+        "jobName": "scheduled-reports",
+        "intervalSeconds": 300,
+        "lastAttemptAt": "2026-09-10T19:15:56.931188+00:00",
+        "lastSuccessAt": "2026-09-10T19:15:56.931188+00:00",
+        "consecutiveFailures": 0,
+        "status": "ok"
+      },
+      {
+        "jobName": "survey-draft-retention",
+        "intervalSeconds": 3600,
+        "lastAttemptAt": "2026-09-10T19:00:53.762122+00:00",
+        "lastSuccessAt": "2026-09-10T19:00:53.762122+00:00",
+        "consecutiveFailures": 0,
+        "status": "ok"
+      },
+      {
+        "jobName": "survey-lifecycle",
+        "intervalSeconds": 300,
+        "lastAttemptAt": "2026-09-10T19:16:04.256329+00:00",
+        "lastSuccessAt": "2026-09-10T19:16:04.256329+00:00",
+        "consecutiveFailures": 0,
+        "status": "ok"
+      }
+    ]
+  },
+  "GET /admin/system-settings": {
+    "loginEnabled": true,
+    "maintenanceMode": false,
+    "maintenanceMessage": null,
+    "maxLoginAttempts": 5,
+    "sessionTimeoutMinutes": 60,
+    "passwordPolicy": {
+      "minLength": 8,
+      "requireUppercase": true,
+      "requireLowercase": true,
+      "requireNumbers": true,
+      "requireSpecialChars": false
+    },
+    "emailSettings": {
+      "smtpEnabled": false,
+      "fromEmail": null,
+      "smtpHost": null,
+      "smtpPort": null
+    },
+    "updatedAt": "2026-08-12T02:47:06.118205+00:00",
+    "resolvedLocale": "en",
+    "maintenanceMessageIsFallback": false
+  },
+  "GET /surveys": {
+    "surveys": [
+      {
+        "id": "801a81a4-3551-4f08-96f4-d465e05b1605",
+        "title": "Encuesta de Clima Q4 (abierta) (Copia)",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "archived",
+        "language": "both",
+        "startDate": "2026-09-03T02:03:39.148+00:00",
+        "endDate": "2026-10-10T02:03:39.148+00:00",
+        "responseCount": 1,
+        "targetAudienceCount": 24,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:42:10.457905+00:00"
+      },
+      {
+        "id": "38b2002f-66da-468d-b136-ec112ba3204b",
+        "title": "Encuesta de Clima Q3",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "closed",
+        "language": "both",
+        "startDate": "2026-07-16T02:05:22.92+00:00",
+        "endDate": "2026-08-06T02:05:22.922+00:00",
+        "responseCount": 24,
+        "targetAudienceCount": null,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:05:22.928985+00:00"
+      },
+      {
+        "id": "4c9c8c8c-03e1-4033-8224-8c80b242c558",
+        "title": "Encuesta de Clima Q4 (abierta)",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "active",
+        "language": "both",
+        "startDate": "2026-09-03T02:03:39.148+00:00",
+        "endDate": "2026-10-10T02:03:39.148+00:00",
+        "responseCount": 3,
+        "targetAudienceCount": 24,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:03:39.158774+00:00"
+      },
+      {
+        "id": "7321a9bb-9e83-465a-a31d-73bdc186d626",
+        "title": "Encuesta de Clima Q2",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "closed",
+        "language": "both",
+        "startDate": "2026-04-22T02:03:12.138+00:00",
+        "endDate": "2026-05-13T02:03:12.138+00:00",
+        "responseCount": 24,
+        "targetAudienceCount": null,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:03:12.144854+00:00"
+      },
+      {
+        "id": "f82beb53-29a0-45b6-b4e3-3d0b8b7173c3",
+        "title": "Encuesta de Clima Q1",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "closed",
+        "language": "both",
+        "startDate": "2026-01-22T03:02:44.908+00:00",
+        "endDate": "2026-02-12T03:02:44.911+00:00",
+        "responseCount": 24,
+        "targetAudienceCount": null,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:02:44.947694+00:00"
+      },
+      {
+        "id": "d51ac522-d2ce-4786-816f-f074bdb16a15",
+        "title": "Encuesta de Clima Q4 (abierta)",
+        "companyId": "22cc8ed9-2e02-401a-8d52-52068ff5e6c0",
+        "type": "periodic",
+        "status": "active",
+        "language": "both",
+        "startDate": "2026-08-20T18:21:20.555+00:00",
+        "endDate": "2026-09-26T18:21:20.555+00:00",
+        "responseCount": 1,
+        "targetAudienceCount": 24,
+        "questionCount": 6,
+        "createdAt": "2026-08-27T18:21:20.562+00:00"
+      },
+      {
+        "id": "54b006f1-7190-40e7-af89-2cbe0aff4242",
+        "title": "Q2 Encuesta de Clima",
+        "companyId": "22cc8ed9-2e02-401a-8d52-52068ff5e6c0",
+        "type": "periodic",
+        "status": "closed",
+        "language": "both",
+        "startDate": "2026-04-08T18:20:53.697+00:00",
+        "endDate": "2026-04-29T18:20:53.697+00:00",
+        "responseCount": 24,
+        "targetAudienceCount": null,
+        "questionCount": 6,
+        "createdAt": "2026-08-27T18:20:53.704169+00:00"
+      },
+      {
+        "id": "9fc14792-7bb6-47d7-b7c2-15ece21935d2",
+        "title": "Q1 Encuesta de Clima",
+        "companyId": "22cc8ed9-2e02-401a-8d52-52068ff5e6c0",
+        "type": "periodic",
+        "status": "closed",
+        "language": "both",
+        "startDate": "2026-01-08T19:20:26.575+00:00",
+        "endDate": "2026-01-29T19:20:26.577+00:00",
+        "responseCount": 24,
+        "targetAudienceCount": null,
+        "questionCount": 6,
+        "createdAt": "2026-08-27T18:20:26.626619+00:00"
+      },
+      {
+        "id": "fafbda45-b7e4-4134-b127-36c7d87462c0",
+        "title": "Encuesta de Clima Q3",
+        "companyId": "22cc8ed9-2e02-401a-8d52-52068ff5e6c0",
+        "type": "periodic",
+        "status": "closed",
+        "language": "both",
+        "startDate": "2026-07-15T00:00:00+00:00",
+        "endDate": "2026-08-05T23:59:59+00:00",
+        "responseCount": 24,
+        "targetAudienceCount": null,
+        "questionCount": 6,
+        "createdAt": "2026-08-12T20:49:19.588074+00:00"
+      },
+      {
+        "id": "988fc310-436b-4b09-9063-962369ad6403",
+        "title": "Engagement Check",
+        "companyId": "22cc8ed9-2e02-401a-8d52-52068ff5e6c0",
+        "type": "periodic",
+        "status": "draft",
+        "language": "en",
+        "startDate": "2026-09-01T14:00:00+00:00",
+        "endDate": "2026-09-15T22:00:00+00:00",
+        "responseCount": 0,
+        "targetAudienceCount": null,
+        "questionCount": 1,
+        "createdAt": "2026-08-08T04:30:13.477824+00:00"
+      },
+      {
+        "id": "de7c5d56-6d99-48f4-8fea-ea5c765e6a7e",
+        "title": "Onboarding Pulse",
+        "companyId": "22cc8ed9-2e02-401a-8d52-52068ff5e6c0",
+        "type": "periodic",
+        "status": "draft",
+        "language": "en",
+        "startDate": "2026-09-01T14:00:00+00:00",
+        "endDate": "2026-09-15T22:00:00+00:00",
+        "responseCount": 0,
+        "targetAudienceCount": null,
+        "questionCount": 1,
+        "createdAt": "2026-08-08T04:06:46.71971+00:00"
+      },
+      {
+        "id": "6ca1a413-0e15-478b-a225-2e82ef13f494",
+        "title": "Q3 Climate Pulse",
+        "companyId": "22cc8ed9-2e02-401a-8d52-52068ff5e6c0",
+        "type": "periodic",
+        "status": "draft",
+        "language": "en",
+        "startDate": "2026-09-01T14:00:00+00:00",
+        "endDate": "2026-09-15T22:00:00+00:00",
+        "responseCount": 0,
+        "targetAudienceCount": null,
+        "questionCount": 1,
+        "createdAt": "2026-08-08T04:04:24.088008+00:00"
+      }
+    ]
+  },
+  "GET /surveys?companyId=16c97c29-07f8-4522-86fc-e6cc56298829": {
+    "surveys": [
+      {
+        "id": "801a81a4-3551-4f08-96f4-d465e05b1605",
+        "title": "Encuesta de Clima Q4 (abierta) (Copia)",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "archived",
+        "language": "both",
+        "startDate": "2026-09-03T02:03:39.148+00:00",
+        "endDate": "2026-10-10T02:03:39.148+00:00",
+        "responseCount": 1,
+        "targetAudienceCount": 24,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:42:10.457905+00:00"
+      },
+      {
+        "id": "38b2002f-66da-468d-b136-ec112ba3204b",
+        "title": "Encuesta de Clima Q3",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "closed",
+        "language": "both",
+        "startDate": "2026-07-16T02:05:22.92+00:00",
+        "endDate": "2026-08-06T02:05:22.922+00:00",
+        "responseCount": 24,
+        "targetAudienceCount": null,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:05:22.928985+00:00"
+      },
+      {
+        "id": "4c9c8c8c-03e1-4033-8224-8c80b242c558",
+        "title": "Encuesta de Clima Q4 (abierta)",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "active",
+        "language": "both",
+        "startDate": "2026-09-03T02:03:39.148+00:00",
+        "endDate": "2026-10-10T02:03:39.148+00:00",
+        "responseCount": 3,
+        "targetAudienceCount": 24,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:03:39.158774+00:00"
+      },
+      {
+        "id": "7321a9bb-9e83-465a-a31d-73bdc186d626",
+        "title": "Encuesta de Clima Q2",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "closed",
+        "language": "both",
+        "startDate": "2026-04-22T02:03:12.138+00:00",
+        "endDate": "2026-05-13T02:03:12.138+00:00",
+        "responseCount": 24,
+        "targetAudienceCount": null,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:03:12.144854+00:00"
+      },
+      {
+        "id": "f82beb53-29a0-45b6-b4e3-3d0b8b7173c3",
+        "title": "Encuesta de Clima Q1",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "type": "periodic",
+        "status": "closed",
+        "language": "both",
+        "startDate": "2026-01-22T03:02:44.908+00:00",
+        "endDate": "2026-02-12T03:02:44.911+00:00",
+        "responseCount": 24,
+        "targetAudienceCount": null,
+        "questionCount": 6,
+        "createdAt": "2026-09-10T02:02:44.947694+00:00"
+      }
+    ]
+  },
+  "GET /surveys/4c9c8c8c-03e1-4033-8224-8c80b242c558": {
+    "id": "4c9c8c8c-03e1-4033-8224-8c80b242c558",
+    "title": "Encuesta de Clima Q4 (abierta)",
+    "description": "Abierta a respuestas. Sembrada para que las pantallas de respuesta y distribución tengan una encuesta viva.",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "createdBy": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+    "type": "periodic",
+    "status": "active",
+    "language": "both",
+    "resolvedLocale": "es",
+    "fallbackFields": [],
+    "startDate": "2026-09-03T02:03:39.148+00:00",
+    "endDate": "2026-10-10T02:03:39.148+00:00",
+    "responseCount": 3,
+    "targetAudienceCount": 24,
+    "version": 1,
+    "departmentIds": [
+      "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+      "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+      "5bfdb04e-8847-4baa-89c8-d4411654a129",
+      "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+      "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9"
+    ],
+    "questions": [
+      {
+        "id": "bdca477a-e031-4a51-87b3-c762151dbb46",
+        "text": "Puedo plantear preocupaciones sin miedo a represalias.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 0,
+        "category": "psychological_safety"
+      },
+      {
+        "id": "4c133f33-8be3-4b0c-83a0-02af8c25e0d6",
+        "text": "Mi carga de trabajo es sostenible a largo plazo.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 1,
+        "category": "workload"
+      },
+      {
+        "id": "633bafd9-f254-4490-8c12-7e7690e0b4b3",
+        "text": "Confío en las decisiones que toma la dirección.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 2,
+        "category": "trust"
+      },
+      {
+        "id": "8dfa854f-ae7a-4c6f-b4aa-87970ffabdd1",
+        "text": "Aquí se reconoce el buen trabajo.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 3,
+        "category": "recognition"
+      },
+      {
+        "id": "2f0169a2-28a7-4fee-9101-7fb217bda38e",
+        "text": "Veo un camino para crecer en esta organización.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 4,
+        "category": "growth"
+      },
+      {
+        "id": "c5664edb-3234-42c3-ba89-494ecf145661",
+        "text": "Siento que pertenezco a mi equipo.",
+        "type": "likert",
+        "options": null,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleLabelMin": "Muy en desacuerdo",
+        "scaleLabelMax": "Muy de acuerdo",
+        "required": true,
+        "commentRequired": true,
+        "commentPrompt": null,
+        "order": 5,
+        "category": "belonging"
+      }
+    ],
+    "settings": {
+      "anonymous": false,
+      "allowPartialResponses": true,
+      "randomizeQuestions": false,
+      "showProgress": true,
+      "autoSave": true,
+      "timeLimitMinutes": null,
+      "responseLimit": null,
+      "notificationSendInvitations": true,
+      "notificationSendReminders": true,
+      "notificationReminderFrequencyDays": 3,
+      "invitationCustomMessage": null,
+      "invitationCustomSubject": null,
+      "invitationIncludeCredentials": false,
+      "invitationSendImmediately": false,
+      "invitationBrandingEnabled": false
+    },
+    "allowedStatusTransitions": [
+      "closed"
+    ],
+    "isContentEditable": false,
+    "createdAt": "2026-09-10T02:03:39.158774+00:00",
+    "updatedAt": "2026-09-10T02:03:39.181241+00:00"
+  },
+  "GET /dashboard/company-admin": {
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "companyName": "Grupo Meridiano S.A.",
+    "userCount": 42,
+    "activeUserCount": 42,
+    "departmentCount": 5,
+    "surveyCount": 5,
+    "activeSurveyCount": 1,
+    "draftSurveyCount": 0,
+    "responseCount": 76,
+    "completedResponseCount": 76,
+    "openActionPlanCount": 4,
+    "overdueActionPlanCount": 0,
+    "ongoingSurveys": [
+      {
+        "id": "4c9c8c8c-03e1-4033-8224-8c80b242c558",
+        "title": "Encuesta de Clima Q4 (abierta)",
+        "status": "active",
+        "startDate": "2026-09-03T02:03:39.148+00:00",
+        "endDate": "2026-10-10T02:03:39.148+00:00",
+        "responseCount": 3,
+        "targetAudienceCount": 24
+      }
+    ],
+    "departments": [
+      {
+        "id": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+        "name": "Finanzas",
+        "memberCount": 6,
+        "completedResponseCount": 9
+      },
+      {
+        "id": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "name": "Ingeniería",
+        "memberCount": 14,
+        "completedResponseCount": 22
+      },
+      {
+        "id": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "name": "Operaciones",
+        "memberCount": 7,
+        "completedResponseCount": 15
+      },
+      {
+        "id": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "name": "Personas",
+        "memberCount": 7,
+        "completedResponseCount": 15
+      },
+      {
+        "id": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+        "name": "Ventas",
+        "memberCount": 7,
+        "completedResponseCount": 15
+      }
+    ]
+  },
+  "GET /admin/users": {
+    "users": [
+      {
+        "id": "77fbfc92-76bb-452e-8be3-8ae588464994",
+        "email": "adriana.marin@meridiano.test",
+        "name": "Adriana Marín",
+        "role": "employee",
+        "departmentId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:40.404386+00:00",
+        "createdAt": "2026-09-10T02:00:16.077465+00:00"
+      },
+      {
+        "id": "1553edb1-e100-4bb1-a397-90882b3a3e9e",
+        "email": "alejandro.retana@meridiano.test",
+        "name": "Alejandro Retana",
+        "role": "employee",
+        "departmentId": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:18.879121+00:00",
+        "createdAt": "2026-09-10T01:59:59.279331+00:00"
+      },
+      {
+        "id": "7b34dd6e-3472-4180-9873-ec5cf7d2af65",
+        "email": "ana.rojas@meridiano.test",
+        "name": "Ana Rojas",
+        "role": "company_admin",
+        "departmentId": null,
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T20:33:51.150848+00:00",
+        "createdAt": "2026-09-10T01:58:51.849247+00:00"
+      },
+      {
+        "id": "4189a6e9-0354-42fc-a653-31906cb33dfc",
+        "email": "andres.segura@meridiano.test",
+        "name": "Andrés Segura",
+        "role": "employee",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:04.58072+00:00",
+        "createdAt": "2026-09-10T01:59:25.555759+00:00"
+      },
+      {
+        "id": "1ccb3318-9751-4b89-9fe0-0ddcf7885be3",
+        "email": "camila.montero@meridiano.test",
+        "name": "Camila Montero",
+        "role": "employee",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:00.994799+00:00",
+        "createdAt": "2026-09-10T01:59:35.676512+00:00"
+      },
+      {
+        "id": "cb2b9759-0e4b-494a-9073-ed859744ba0d",
+        "email": "carla.jimenez@meridiano.test",
+        "name": "Carla Jiménez",
+        "role": "leader",
+        "departmentId": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+        "isActive": true,
+        "lastLoginAt": null,
+        "createdAt": "2026-09-10T01:58:58.586597+00:00"
+      },
+      {
+        "id": "091b20f1-e4f0-4fa5-aa2e-5111faf2e3b4",
+        "email": "carlos.mata@meridiano.test",
+        "name": "Carlos Mata",
+        "role": "employee",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T14:22:27.312986+00:00",
+        "createdAt": "2026-09-10T02:42:03.722253+00:00"
+      },
+      {
+        "id": "90db77e2-ba9d-488a-90a0-3b8e37b501a1",
+        "email": "carolina.herrera@meridiano.test",
+        "name": "Carolina Herrera",
+        "role": "employee",
+        "departmentId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:43.988502+00:00",
+        "createdAt": "2026-09-10T02:00:22.826545+00:00"
+      },
+      {
+        "id": "dae0a508-07d8-4c4d-8395-f3a158e78a7e",
+        "email": "daniel.salas@meridiano.test",
+        "name": "Daniel Salas",
+        "role": "employee",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "isActive": true,
+        "lastLoginAt": null,
+        "createdAt": "2026-09-10T01:59:32.306999+00:00"
+      },
+      {
+        "id": "395b00b6-48e9-466b-80bf-6042ad9e0c5f",
+        "email": "daniela.bolanos@meridiano.test",
+        "name": "Daniela Bolaños",
+        "role": "employee",
+        "departmentId": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:47.595135+00:00",
+        "createdAt": "2026-09-10T02:00:29.537208+00:00"
+      },
+      {
+        "id": "581f933a-dd90-44a6-a85d-125f568e14a9",
+        "email": "diego.solano@meridiano.test",
+        "name": "Diego Solano",
+        "role": "employee",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T20:07:31.711332+00:00",
+        "createdAt": "2026-09-10T02:06:09.356914+00:00"
+      },
+      {
+        "id": "6c396734-5d67-4d4f-9344-6ef53433958f",
+        "email": "elena.quesada@meridiano.test",
+        "name": "Elena Quesada",
+        "role": "leader",
+        "departmentId": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "isActive": true,
+        "lastLoginAt": null,
+        "createdAt": "2026-09-10T01:59:05.319155+00:00"
+      },
+      {
+        "id": "6d94d70f-1588-413c-a713-f714e137d4f3",
+        "email": "esteban.mendez@meridiano.test",
+        "name": "Esteban Méndez",
+        "role": "employee",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:08.143907+00:00",
+        "createdAt": "2026-09-10T01:59:39.050012+00:00"
+      },
+      {
+        "id": "fcede401-926d-48cc-a287-bf7db851a78b",
+        "email": "felipe.sandoval@meridiano.test",
+        "name": "Felipe Sandoval",
+        "role": "employee",
+        "departmentId": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "isActive": true,
+        "lastLoginAt": null,
+        "createdAt": "2026-09-10T02:00:26.194865+00:00"
+      },
+      {
+        "id": "9a32b026-9e7d-4e78-b561-8598254d57f4",
+        "email": "fernanda.fallas@meridiano.test",
+        "name": "Fernanda Fallas",
+        "role": "employee",
+        "departmentId": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:26.062055+00:00",
+        "createdAt": "2026-09-10T01:59:55.906035+00:00"
+      },
+      {
+        "id": "b0a84adb-7722-41a5-82d5-721723f76e67",
+        "email": "gabriel.aguilar@meridiano.test",
+        "name": "Gabriel Aguilar",
+        "role": "employee",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:15.309384+00:00",
+        "createdAt": "2026-09-10T01:59:45.78355+00:00"
+      },
+      {
+        "id": "f7560211-2be5-447c-a225-8fdac4013461",
+        "email": "ignacio.espinoza@meridiano.test",
+        "name": "Ignacio Espinoza",
+        "role": "employee",
+        "departmentId": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+        "isActive": true,
+        "lastLoginAt": null,
+        "createdAt": "2026-09-10T02:00:46.400379+00:00"
+      },
+      {
+        "id": "9ae250a8-6127-41ef-b562-2c96ca97f170",
+        "email": "isabel.guzman@meridiano.test",
+        "name": "Isabel Guzmán",
+        "role": "employee",
+        "departmentId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "isActive": true,
+        "lastLoginAt": null,
+        "createdAt": "2026-09-10T02:00:09.36553+00:00"
+      },
+      {
+        "id": "0dc1c3a2-f8d2-434f-92a6-202385e768bc",
+        "email": "javier.araya@meridiano.test",
+        "name": "Javier Araya",
+        "role": "employee",
+        "departmentId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:29.651435+00:00",
+        "createdAt": "2026-09-10T02:00:12.720812+00:00"
+      },
+      {
+        "id": "7c1d3f71-7e4c-4ba9-91ee-198068173fbb",
+        "email": "jorge.zuniga@meridiano.test",
+        "name": "Jorge Zúñiga",
+        "role": "employee",
+        "departmentId": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:05:12.662817+00:00",
+        "createdAt": "2026-09-10T02:00:53.137362+00:00"
+      },
+      {
+        "id": "dd6320ca-38b9-4d1f-9e3d-434b867b2aa3",
+        "email": "jose.arias@meridiano.test",
+        "name": "José Arias",
+        "role": "employee",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "isActive": true,
+        "lastLoginAt": null,
+        "createdAt": "2026-09-10T01:59:18.805726+00:00"
+      },
+      {
+        "id": "967f586f-af23-46e5-a01e-7dea1ac64ab1",
+        "email": "laura.barrantes@meridiano.test",
+        "name": "Laura Barrantes",
+        "role": "employee",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:11.7353+00:00",
+        "createdAt": "2026-09-10T01:59:22.183467+00:00"
+      },
+      {
+        "id": "b139ad6b-7e6b-4c1f-97e0-3dd2ce2c1d3d",
+        "email": "lucia.brenes@meridiano.test",
+        "name": "Lucía Brenes",
+        "role": "employee",
+        "departmentId": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:54.770134+00:00",
+        "createdAt": "2026-09-10T02:00:36.273062+00:00"
+      },
+      {
+        "id": "64fa2a68-3cef-4644-a7b0-ee3a7315c671",
+        "email": "luis.mora@meridiano.test",
+        "name": "Luis Mora",
+        "role": "leader",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T20:06:59.930192+00:00",
+        "createdAt": "2026-09-10T01:58:55.206569+00:00"
+      },
+      {
+        "id": "78bdb7e0-155b-4635-a874-dbd4fef42f65",
+        "email": "marco.castro@meridiano.test",
+        "name": "Marco Castro",
+        "role": "leader",
+        "departmentId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "isActive": true,
+        "lastLoginAt": null,
+        "createdAt": "2026-09-10T01:59:01.956362+00:00"
+      },
+      {
+        "id": "c9eace72-d15a-4e0f-8693-175236aea56d",
+        "email": "mariana.leiva@meridiano.test",
+        "name": "Mariana Leiva",
+        "role": "employee",
+        "departmentId": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+        "isActive": true,
+        "lastLoginAt": null,
+        "createdAt": "2026-09-10T02:00:02.656661+00:00"
+      },
+      {
+        "id": "b4efd72c-893b-4a2e-b202-eb68d8a46a5f",
+        "email": "maria.chaves@meridiano.test",
+        "name": "María Chaves",
+        "role": "employee",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "isActive": true,
+        "lastLoginAt": null,
+        "createdAt": "2026-09-10T01:59:15.426209+00:00"
+      },
+      {
+        "id": "9a3c64fe-b1ae-4ec8-8a51-4475909364e7",
+        "email": "mauricio.cespedes@meridiano.test",
+        "name": "Mauricio Céspedes",
+        "role": "employee",
+        "departmentId": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:51.177874+00:00",
+        "createdAt": "2026-09-10T02:00:39.647393+00:00"
+      },
+      {
+        "id": "ee3f169b-2608-41b5-ac34-4a7e1590e1b1",
+        "email": "melissa.coto@meridiano.test",
+        "name": "Melissa Coto",
+        "role": "employee",
+        "departmentId": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:05:19.815898+00:00",
+        "createdAt": "2026-09-10T02:01:03.235598+00:00"
+      },
+      {
+        "id": "270be315-7829-41ee-a825-381d9ee9529b",
+        "email": "natalia.campos@meridiano.test",
+        "name": "Natalia Campos",
+        "role": "employee",
+        "departmentId": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:22.472809+00:00",
+        "createdAt": "2026-09-10T01:59:49.145234+00:00"
+      },
+      {
+        "id": "c3c198f0-be0a-4ded-84f4-26a79bf244ac",
+        "email": "pablo.solis@meridiano.test",
+        "name": "Pablo Solís",
+        "role": "leader",
+        "departmentId": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+        "isActive": true,
+        "lastLoginAt": null,
+        "createdAt": "2026-09-10T01:59:08.686927+00:00"
+      },
+      {
+        "id": "b7346b13-8ece-4ab5-84ca-fb8e1e3c2564",
+        "email": "patricia.pacheco@meridiano.test",
+        "name": "Patricia Pacheco",
+        "role": "employee",
+        "departmentId": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:05:16.223987+00:00",
+        "createdAt": "2026-09-10T02:00:49.766236+00:00"
+      },
+      {
+        "id": "037052e4-9120-4930-9308-ce83853806d4",
+        "email": "paula.madrigal@meridiano.test",
+        "name": "Paula Madrigal",
+        "role": "employee",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:03:57.406982+00:00",
+        "createdAt": "2026-09-10T01:59:42.426843+00:00"
+      },
+      {
+        "id": "6a543cf4-d958-4dc5-bb1e-62bab06f6e71",
+        "email": "ricardo.ramirez@meridiano.test",
+        "name": "Ricardo Ramírez",
+        "role": "employee",
+        "departmentId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:36.818517+00:00",
+        "createdAt": "2026-09-10T02:00:06.014273+00:00"
+      },
+      {
+        "id": "21913ed8-cbcd-4c31-9571-6c2369cb08ab",
+        "email": "roberto.ulate@meridiano.test",
+        "name": "Roberto Ulate",
+        "role": "employee",
+        "departmentId": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:05:05.487897+00:00",
+        "createdAt": "2026-09-10T02:00:59.870242+00:00"
+      },
+      {
+        "id": "496e6366-51fb-4b5d-9f39-e170649b3925",
+        "email": "rodrigo.alvarado@meridiano.test",
+        "name": "Rodrigo Alvarado",
+        "role": "employee",
+        "departmentId": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:33.233117+00:00",
+        "createdAt": "2026-09-10T02:00:19.447479+00:00"
+      },
+      {
+        "id": "dffb4537-85a4-4b37-afaf-4d832b76dcc4",
+        "email": "sebastian.villalobos@meridiano.test",
+        "name": "Sebastián Villalobos",
+        "role": "employee",
+        "departmentId": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+        "isActive": true,
+        "lastLoginAt": null,
+        "createdAt": "2026-09-10T01:59:52.52551+00:00"
+      },
+      {
+        "id": "4f19257b-3d96-4d5a-8ab4-42aeefdb6101",
+        "email": "silvia.umana@meridiano.test",
+        "name": "Silvia Umaña",
+        "role": "employee",
+        "departmentId": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:05:09.075552+00:00",
+        "createdAt": "2026-09-10T02:00:56.496061+00:00"
+      },
+      {
+        "id": "8006070f-a571-46bf-8e08-18ddfe95909e",
+        "email": "sofia.vargas@meridiano.test",
+        "name": "Sofía Vargas",
+        "role": "supervisor",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T20:07:18.107927+00:00",
+        "createdAt": "2026-09-10T01:59:12.066925+00:00"
+      },
+      {
+        "id": "c3c58a00-d916-431c-9a27-594e69dff76b",
+        "email": "valeria.porras@meridiano.test",
+        "name": "Valeria Porras",
+        "role": "employee",
+        "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "isActive": true,
+        "lastLoginAt": null,
+        "createdAt": "2026-09-10T01:59:28.93033+00:00"
+      },
+      {
+        "id": "dedaca2a-20fc-4db6-9ac9-0e7f1589d3aa",
+        "email": "veronica.cordero@meridiano.test",
+        "name": "Verónica Cordero",
+        "role": "employee",
+        "departmentId": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:04:58.34452+00:00",
+        "createdAt": "2026-09-10T02:00:43.021805+00:00"
+      },
+      {
+        "id": "e9b3fec5-fdcb-490a-8936-8c7e9fe46eb3",
+        "email": "oscar.vindas@meridiano.test",
+        "name": "Óscar Vindas",
+        "role": "employee",
+        "departmentId": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "isActive": true,
+        "lastLoginAt": "2026-09-10T02:05:01.913695+00:00",
+        "createdAt": "2026-09-10T02:00:32.909029+00:00"
+      }
+    ]
+  },
+  "GET /admin/invitations": {
+    "invitations": []
+  },
+  "GET /admin/departments": {
+    "departments": [
+      {
+        "id": "78c94025-0ae2-4f46-a8ab-763ddd8dd3b1",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Calidad 18",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": false,
+        "employeeCount": 0
+      },
+      {
+        "id": "6a4bc103-9ed9-4610-bf9c-03f707ab6fd0",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Calidad 406",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": false,
+        "employeeCount": 0
+      },
+      {
+        "id": "3eae2136-3f12-4e80-a731-d84517915655",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Calidad 547",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": false,
+        "employeeCount": 0
+      },
+      {
+        "id": "e027a77c-0713-4539-995f-a5d53f991383",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Calidad 636",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": false,
+        "employeeCount": 0
+      },
+      {
+        "id": "2f56f8ba-f5ed-4531-811d-c32cbfb30153",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Calidad 79",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": false,
+        "employeeCount": 0
+      },
+      {
+        "id": "7bdd7b17-ceab-447c-bb6e-91ca4d694079",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Calidad 797",
+        "description": null,
+        "parentDepartmentId": null,
+        "isActive": false,
+        "employeeCount": 0
+      },
+      {
+        "id": "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Finanzas",
+        "description": "Finanzas y contabilidad",
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 6
+      },
+      {
+        "id": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Ingeniería",
+        "description": "Desarrollo de producto y plataforma",
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 14
+      },
+      {
+        "id": "0a9d7637-814c-4d4a-8407-45cfbca3f4e7",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Operaciones",
+        "description": "Operaciones y logística",
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 7
+      },
+      {
+        "id": "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Personas",
+        "description": "Talento humano y cultura",
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 7
+      },
+      {
+        "id": "07f5a4d4-27d8-4df0-afdc-b50db1371062",
+        "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+        "name": "Ventas",
+        "description": "Equipos comerciales regionales",
+        "parentDepartmentId": null,
+        "isActive": true,
+        "employeeCount": 7
+      }
+    ]
+  },
+  "GET /admin/demographic-fields": {
+    "fields": []
+  },
+  "GET /admin/reports": [
+    {
+      "id": "20eaebbc-9a52-410b-8df5-f8faf974e1d9",
+      "title": "Datos de clima — T3 2026",
+      "type": "climate_summary",
+      "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+      "status": "completed",
+      "format": "csv",
+      "createdAt": "2026-09-10T02:06:09.10143+00:00",
+      "isRecurring": false,
+      "recurrencePattern": null,
+      "nextGeneration": null
+    },
+    {
+      "id": "41c72c81-751e-4779-bb13-6980ae576232",
+      "title": "Clima organizacional — T3 2026",
+      "type": "climate_summary",
+      "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+      "status": "completed",
+      "format": "pdf",
+      "createdAt": "2026-09-10T02:06:09.032145+00:00",
+      "isRecurring": false,
+      "recurrencePattern": null,
+      "nextGeneration": null
+    }
+  ],
+  "GET /admin/benchmarks?lang=es": [
+    {
+      "id": "d8c10838-d47a-413c-9b3b-0cfac7b413e7",
+      "name": "Manufactura · 500–1000 personas",
+      "type": "industry",
+      "category": "climate",
+      "companyId": null,
+      "isActive": true,
+      "qualityScore": 0,
+      "priorPeriodStatus": "unlinked"
+    }
+  ],
+  "GET /admin/benchmarks?companyId=16c97c29-07f8-4522-86fc-e6cc56298829&lang=es": [],
+  "GET /admin/ai-insights": []
+}
