@@ -115,7 +115,9 @@ function HomeBody({ model }: { model: EmployeeHomeModel }) {
 
   return (
     <div className="flex flex-col">
-      <section aria-labelledby="home-to-answer" className="mt-5 flex flex-col gap-3">
+      {/* No top margin: `PageTopBar` already ends with the 24px section gap under its
+          hairline, which is the canvas's space between the greeting and this heading. */}
+      <section aria-labelledby="home-to-answer" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h2 id="home-to-answer" className="m-0">
             {t('employee.next.toAnswerHeading')}
