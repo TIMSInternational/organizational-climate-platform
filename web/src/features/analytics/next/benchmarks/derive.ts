@@ -63,54 +63,52 @@ export function signedDelta(delta: number, locale?: string): string {
   return `${delta > 0 ? '+' : '−'}${Math.abs(delta).toLocaleString(locale)}`
 }
 
-// ── The index and the percentile ───────────────────────────────────────────────────────
+// ── The index, and the percentile no payload gives ─────────────────────────────────────
 
-export type Band = 'upper' | 'middle' | 'lower'
-
-/** Thirds, as `CohortReadoutSection` has labelled them since the first read-out. */
-export function percentileBand(percentile: number): Band {
-  if (percentile >= 67) return 'upper'
-  if (percentile >= 34) return 'middle'
-  return 'lower'
+/**
+ * An index as the tiles print it: a whole number on the 0–100 scale. Every gap the page
+ * prints between two readings is taken AFTER this, so a printed change is always the
+ * difference of the printed readings — a company at 67 against a median of 67.6 reads
+ * "68" and "1 punto bajo la mediana", never "67,6" beside a gap of one point.
+ */
+export function printedIndex(value: number | null): number | null {
+  // `|| 0` folds the `-0` that `Math.round(-0.4)` returns into a plain zero.
+  return value === null ? null : Math.round(value) || 0
 }
 
-const BAND_UNIT: Record<Band, string> = {
-  upper: 'benchmarks.next.bandUpper',
-  middle: 'benchmarks.next.bandMiddle',
-  lower: 'benchmarks.next.bandLower',
-}
-
-const BAND_PHRASE: Record<Band, string> = {
-  upper: 'benchmarks.next.bandUpperPhrase',
-  middle: 'benchmarks.next.bandMiddlePhrase',
-  lower: 'benchmarks.next.bandLowerPhrase',
-}
-
-export function bandUnit(t: TranslateFn, percentile: number | null): string | undefined {
-  return percentile === null ? undefined : t(BAND_UNIT[percentileBand(percentile)])
-}
-
-/** "1 punto bajo la mediana" — the company's index against the cohort's, rounded. */
+/** "1 punto bajo la mediana" — the printed index against the printed median. */
 export function indexGapPhrase(t: TranslateFn, yourIndex: number | null, median: number | null): string | null {
-  if (yourIndex === null || median === null) return null
-  const gap = Math.round(yourIndex - median)
+  const mine = printedIndex(yourIndex)
+  const theirs = printedIndex(median)
+  if (mine === null || theirs === null) return null
+  const gap = mine - theirs
   if (gap === 0) return t('benchmarks.next.gapLevel')
   const points = Math.abs(gap)
   if (gap < 0) return points === 1 ? t('benchmarks.next.gapBelowOne') : t('benchmarks.next.gapBelow', { count: points })
   return points === 1 ? t('benchmarks.next.gapAboveOne') : t('benchmarks.next.gapAbove', { count: points })
 }
 
-/** "1 punto bajo la mediana, por encima de dos tercios del grupo". */
-export function percentileSub(
-  t: TranslateFn,
-  yourIndex: number | null,
-  median: number | null,
-  percentile: number | null,
-): string | null {
+/**
+ * The line under "Tu percentil" — a tile that prints no percentile, and says why.
+ *
+ * The one percentile any payload carries here is `percentile` on the COHORT's
+ * `overall_index` reading (`BenchmarkMetric.Percentile`, `GET /admin/benchmarks/{id}`).
+ * That is a property of the reading, not of a company: the decision record scores it as
+ * the reading's own position in the cohort's distribution
+ * (`docs/decisions/benchmark-analytics-endpoints.md`, the `distribution` component), and it
+ * is stored once on a reference every tenant reads — so every company got the same number
+ * whatever its index. Printed as "Tu percentil · tercio superior", it told Meridiano, one
+ * point BELOW its group's median, that it sat above two thirds of the group.
+ *
+ * A company's percentile needs the group's distribution, which no endpoint returns. So the
+ * tile reads "— sin calcular" (ruling 9 in PR #473), and this line keeps only what the
+ * payload does measure — the gap to the median, whose sign is the gap's own — and names
+ * what is missing. There is no band, so nothing here can disagree with that sign.
+ */
+export function percentileNote(t: TranslateFn, yourIndex: number | null, median: number | null): string | null {
+  if (printedIndex(median) === null) return null
   const gap = indexGapPhrase(t, yourIndex, median)
-  const band = percentile === null ? null : t(BAND_PHRASE[percentileBand(percentile)])
-  if (gap !== null && band !== null) return t('benchmarks.next.percentileSub', { gap, band })
-  return gap ?? band
+  return gap === null ? t('benchmarks.next.percentileNoteNoGap') : t('benchmarks.next.percentileNote', { gap })
 }
 
 // ── References ─────────────────────────────────────────────────────────────────────────

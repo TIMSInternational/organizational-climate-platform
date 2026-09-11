@@ -197,6 +197,7 @@
   --spacing-control-sm: var(--admin-size-control-sm);
   --spacing-control-md: var(--admin-size-control-md);
   --spacing-control-lg: var(--admin-size-control-lg);
+  --spacing-control-canvas: var(--admin-size-control-canvas);
   --spacing-icon: var(--admin-size-icon);
   --spacing-icon-box: var(--admin-size-icon-box);
   --spacing-sidebar: var(--admin-size-sidebar);

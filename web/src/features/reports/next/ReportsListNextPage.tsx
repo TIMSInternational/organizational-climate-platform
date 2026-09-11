@@ -159,7 +159,7 @@ export default function ReportsListNextPage() {
         ]}
         actions={
           mayRead ? (
-            <Button type="button" variant="primary" onClick={() => setCreating(true)}>
+            <Button type="button" variant="primary" size="canvas" onClick={() => setCreating(true)}>
               <Plus aria-hidden="true" />
               {t('reports.newReport')}
             </Button>
@@ -504,10 +504,11 @@ function ReportTableRow({
           <Button
             type="button"
             variant="outline"
+            size="canvas"
             disabled={!completed || downloading}
             onClick={onDownload}
             aria-label={t('reports.download')}
-            className="max-xl:size-control-lg max-xl:gap-0 max-xl:p-0"
+            className="max-xl:size-control-canvas max-xl:gap-0 max-xl:p-0"
           >
             <Download aria-hidden="true" />
             <span className="hidden xl:inline">{t('reports.download')}</span>
@@ -517,7 +518,10 @@ function ReportTableRow({
               <Button
                 type="button"
                 variant="outline"
-                size="icon"
+                size="icon-canvas"
+                // 28px wide from xl, as the artboard draws it: its 150px actions column
+                // shrinks the canvas's 34px square once Descargar and the 8px gap are in.
+                className="xl:w-7"
                 data-slot="row-menu"
                 aria-label={t('reports.next.moreActions', { title: row.title })}
               >

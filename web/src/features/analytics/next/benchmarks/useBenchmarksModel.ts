@@ -31,6 +31,7 @@ import {
 } from '../../benchmarkScope'
 import { buildCohortReadout } from '../../cohortReadout'
 import type { BenchmarkFormValues } from '../../components/BenchmarkForm'
+import { printedIndex } from './derive'
 import type { BenchmarkReference, ReadoutState } from './model'
 
 export type BenchmarksStatus = 'forbidden' | 'loading' | 'ready' | 'error'
@@ -182,8 +183,10 @@ export function useBenchmarksModel(): BenchmarksState {
             // resolves in the survey's own fallback language.
             survey: { title: latest.title ?? t('surveys.untitled'), responses: latest.responseCount ?? null },
             yourIndex: built.yourIndex,
-            cohortMedian: built.cohortMedian,
-            percentile: built.percentile,
+            // At the precision the tile prints it, so "1 punto bajo la mediana" is the
+            // difference of the two numbers on screen. `built.percentile` is not carried:
+            // it is the cohort reading's own, not this company's (`percentileNote`).
+            cohortMedian: printedIndex(built.cohortMedian),
             dimensions: built.dimensions.map((dimension) => ({
               key: dimension.key,
               name: dimensionLabel(dimension.key, t),

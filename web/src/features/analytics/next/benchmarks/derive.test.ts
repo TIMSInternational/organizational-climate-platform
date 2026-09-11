@@ -2,14 +2,13 @@ import { describe, it, expect } from 'vitest'
 import { createTranslator } from '../../../../i18n'
 import { CATALOGUES } from '../../../../i18n/locale'
 import {
-  bandUnit,
   belowSummary,
   benchmarkCategoryLabel,
   benchmarkTypeLabel,
   dimensionStanding,
   indexGapPhrase,
-  percentileBand,
-  percentileSub,
+  percentileNote,
+  printedIndex,
   qualityReading,
   scopeKey,
   signedDelta,
@@ -88,27 +87,44 @@ describe('benchmarks derive — standing', () => {
   })
 })
 
-describe('benchmarks derive — index and percentile', () => {
-  it('reads 67 against 68 at the 68th percentile as the artboard does', () => {
+describe('benchmarks derive — the index, and the percentile no payload gives', () => {
+  it('takes every gap between printed readings, so the change is their difference', () => {
+    expect(printedIndex(67.6)).toBe(68)
+    expect(printedIndex(67.4)).toBe(67)
+    expect(Object.is(printedIndex(-0.4), 0)).toBe(true)
+    expect(printedIndex(null)).toBeNull()
+    // Meridiano on 10 Sep: 67 against 68.
     expect(indexGapPhrase(es, 67, 68)).toBe('1 punto bajo la mediana')
-    expect(percentileBand(68)).toBe('upper')
-    expect(bandUnit(es, 68)).toBe('tercio superior')
-    expect(percentileSub(es, 67, 68, 68)).toBe('1 punto bajo la mediana, por encima de dos tercios del grupo')
+    // 67 against 67.6 prints "67" and "68": one point, not the 0.6 between the raw values.
+    expect(indexGapPhrase(es, 67, 67.6)).toBe('1 punto bajo la mediana')
+    // 66.6 against 67.4 prints "67" and "67": level, though the raw gap rounds to −1.
+    expect(indexGapPhrase(es, 66.6, 67.4)).toBe('en la mediana')
+    expect(indexGapPhrase(es, 71, 68)).toBe('3 puntos sobre la mediana')
+    expect(indexGapPhrase(es, 69, 68)).toBe('1 punto sobre la mediana')
+    expect(indexGapPhrase(es, 60, 68)).toBe('8 puntos bajo la mediana')
+    expect(indexGapPhrase(es, null, 68)).toBeNull()
+    expect(indexGapPhrase(es, 67, null)).toBeNull()
   })
 
-  it('bands the thirds at 67 and 34, as the first read-out did', () => {
-    expect(percentileBand(67)).toBe('upper')
-    expect(percentileBand(66)).toBe('middle')
-    expect(percentileBand(34)).toBe('middle')
-    expect(percentileBand(33)).toBe('lower')
+  it('prints no band under "Tu percentil": the gap it keeps has the gap\'s own sign', () => {
+    // Meridiano sits one point BELOW its median. The retired line added "por encima de dos
+    // tercios del grupo" off the cohort's stored 68 — above two thirds while below the median.
+    const below = percentileNote(es, 67, 68)
+    expect(below).toBe('1 punto bajo la mediana · sin la distribución del grupo no hay percentil')
+    const above = percentileNote(es, 75, 68)
+    expect(above).toBe('7 puntos sobre la mediana · sin la distribución del grupo no hay percentil')
+    expect(percentileNote(es, 68, 68)).toBe('en la mediana · sin la distribución del grupo no hay percentil')
+    for (const line of [below, above]) {
+      expect(line).not.toMatch(/tercio|encima de|debajo de/)
+    }
   })
 
   it('says nothing it cannot measure', () => {
-    expect(indexGapPhrase(es, null, 68)).toBeNull()
-    expect(percentileSub(es, null, null, null)).toBeNull()
-    expect(bandUnit(es, null)).toBeUndefined()
-    expect(indexGapPhrase(es, 71, 68)).toBe('3 puntos sobre la mediana')
-    expect(indexGapPhrase(es, 68, 68)).toBe('en la mediana')
+    // No index to compare: the missing piece is still named, and no gap is invented.
+    expect(percentileNote(es, null, 68)).toBe('sin la distribución del grupo no hay percentil')
+    // No median: no gap, and no sentence about a group the page could not read.
+    expect(percentileNote(es, 67, null)).toBeNull()
+    expect(percentileNote(es, null, null)).toBeNull()
   })
 })
 

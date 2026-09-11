@@ -30,11 +30,10 @@ import BenchmarkPriorPeriodPanel from '../../components/BenchmarkPriorPeriodPane
 import BenchmarkTrend from '../../components/BenchmarkTrend'
 import CohortDimensionBars from '../../components/CohortDimensionBars'
 import {
-  bandUnit,
   belowSummary,
   benchmarkCategoryLabel,
   benchmarkTypeLabel,
-  percentileSub,
+  percentileNote,
   qualityReading,
   scopeKey,
 } from './derive'
@@ -52,10 +51,10 @@ const GAP_CELL = 'pl-0'
  * unrouted, as the wiring reference), drawn as the Benchmarks artboard.
  *
  * The bars are the hero: this company's index per dimension with the group's median as a
- * tick, and a word beside every bar ("bajo / en / sobre la mediana"). The three tiles
- * above say the same thing in one number each; the references the read-out is built from
- * are demoted under a disclosure, with their type and category as words and "sin calcular"
- * for a reference nobody has scored. Selecting rows still opens the comparison, the detail,
+ * tick, and a word beside every bar ("bajo / en / sobre la mediana"). The tiles above
+ * give the index and the median, and "Tu percentil" says why it prints none; the
+ * references the read-out is built from are demoted under a disclosure, with their type
+ * and category as words and "sin calcular" for a reference nobody has scored. Selecting rows still opens the comparison, the detail,
  * the prior period and the trend exactly as before.
  *
  * Roles, mirroring `BenchmarkEndpoints` through `benchmarkScope.ts`: both admin roles read
@@ -80,7 +79,7 @@ export default function BenchmarksNextPage() {
         description={t('benchmarks.description')}
         actions={
           state.createCompanyId !== undefined ? (
-            <Button type="button" variant="outline" onClick={() => setCreating(true)}>
+            <Button type="button" variant="outline" size="canvas" onClick={() => setCreating(true)}>
               <Plus aria-hidden="true" />
               {t('benchmarks.newBenchmark')}
             </Button>
@@ -281,7 +280,7 @@ function Readout({ readout, t, locale }: { readout: CohortReadoutModel; t: Trans
     readout.cohort.size === null
       ? readout.cohort.name
       : t('benchmarks.next.cohortSub', { count: readout.cohort.size, cohort: readout.cohort.name })
-  const percentileLine = percentileSub(t, readout.yourIndex, readout.cohortMedian, readout.percentile)
+  const percentileLine = percentileNote(t, readout.yourIndex, readout.cohortMedian)
 
   return (
     <>
@@ -302,12 +301,15 @@ function Readout({ readout, t, locale }: { readout: CohortReadoutModel; t: Trans
           unit={readout.cohortMedian === null ? undefined : t('benchmarks.next.indexUnit')}
           sub={<span className="text-fg-label">{cohortSub}</span>}
         />
+        {/* "Tu percentil" with no percentile: the payload's only one is the cohort reading's
+            own, the same for every tenant, and a company's rank needs the group's
+            distribution, which no endpoint returns (`percentileNote`; ruling 9). */}
         <KpiTile
           size="large"
           label={t('benchmarks.yourPercentile')}
-          value={readout.percentile}
+          value={null}
           locale={locale}
-          unit={bandUnit(t, readout.percentile)}
+          unit={t('benchmarks.next.percentileUncomputed')}
           sub={percentileLine ? <span className="text-fg-label">{percentileLine}</span> : undefined}
         />
       </div>

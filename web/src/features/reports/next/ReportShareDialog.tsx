@@ -215,7 +215,7 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
             <DialogDescription className="m-0 text-sm text-fg-secondary">{t('reports.next.shareSub')}</DialogDescription>
           </DialogHeader>
           <DialogClose asChild>
-            <Button type="button" variant="outline" size="icon" aria-label={t('common.close')}>
+            <Button type="button" variant="outline" size="icon-canvas" aria-label={t('common.close')}>
               <X aria-hidden="true" />
             </Button>
           </DialogClose>
@@ -263,7 +263,7 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
             </div>
           </div>
           <span className="flex-1" />
-          <Button type="button" variant="primary" disabled={busy} onClick={() => void handleMint()}>
+          <Button type="button" variant="primary" size="canvas" disabled={busy} onClick={() => void handleMint()}>
             <Link2 aria-hidden="true" />
             {t('reports.shareCreate')}
           </Button>
@@ -339,12 +339,18 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
                       </div>
                       <div className="flex gap-2">
                         {isMinted && (
-                          <Button type="button" variant="outline" onClick={() => void handleCopy(mintedUrl)}>
+                          <Button type="button" variant="outline" size="canvas" onClick={() => void handleCopy(mintedUrl)}>
                             <Copy aria-hidden="true" />
                             {t('reports.next.copy')}
                           </Button>
                         )}
-                        <Button type="button" variant="outline" disabled={busy} onClick={() => void handleRevoke(share.id)}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="canvas"
+                          disabled={busy}
+                          onClick={() => void handleRevoke(share.id)}
+                        >
                           {t('reports.shareRevoke')}
                         </Button>
                       </div>
@@ -424,7 +430,10 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
         </LoadingRegion>
 
         <div className="flex justify-end gap-2 border-t border-line-light pt-3.5">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          {/* Every control here is the canvas's 34px `.btn` (`size="canvas"`): at the app's
+              32 the link card and the footer each came out 2px short and the dialog ended 3px
+              above the artboard's. */}
+          <Button type="button" variant="outline" size="canvas" onClick={() => onOpenChange(false)}>
             {t('common.close')}
           </Button>
         </div>
@@ -458,7 +467,7 @@ function MintedLink({
         <span className="text-xs text-fg-label">{t('reports.shareExpiresOn', { date: expiresAt })}</span>
         <span className="text-xs text-accent-amber-ink">{t('reports.next.mintedNote')}</span>
       </div>
-      <Button type="button" variant="outline" onClick={() => void onCopy(url)}>
+      <Button type="button" variant="outline" size="canvas" onClick={() => void onCopy(url)}>
         <Copy aria-hidden="true" />
         {t('reports.next.copy')}
       </Button>

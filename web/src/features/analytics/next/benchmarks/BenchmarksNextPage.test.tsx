@@ -156,9 +156,14 @@ describe('BenchmarksNextPage — the read-out', () => {
     expect(tiles[0]).toContain('Encuesta de Clima Q3 · 24 respuestas')
     expect(tiles[1]).toContain('68')
     expect(tiles[1]).toContain('42 empresas · Manufactura · 500–1000 personas')
-    expect(tiles[2]).toContain('68')
-    expect(tiles[2]).toContain('tercio superior')
-    expect(tiles[2]).toContain('1 punto bajo la mediana, por encima de dos tercios del grupo')
+    // "Tu percentil" prints no percentile: the cohort reading's stored 68 is the same for
+    // every tenant, and a company's rank needs a distribution no endpoint returns.
+    expect(tiles[2]).toContain('Tu percentil')
+    expect(tiles[2]).toContain('—')
+    expect(tiles[2]).toContain('sin calcular')
+    expect(tiles[2]).toContain('1 punto bajo la mediana · sin la distribución del grupo no hay percentil')
+    expect(tiles[2]).not.toContain('68')
+    expect(tiles[2]).not.toMatch(/tercio/)
 
     // One bar per dimension the SURVEY scored, in the order it asked them; the cohort
     // carries `safety`, not `psychological_safety`, so that row has no tick and says so.
@@ -180,6 +185,55 @@ describe('BenchmarksNextPage — the read-out', () => {
     expect(document.querySelector('[data-slot="page-top-bar"]')?.textContent).toContain('Manufactura · 500–1000 personas')
     // Every region is real: no sample chip anywhere on this screen.
     expect(screen.queryByText('Datos de muestra')).toBeNull()
+  })
+
+  it('never prints the cohort\'s stored percentile, nor a band, whatever that number is', async () => {
+    // A cohort whose stored reading would band the company "tercio inferior" while the
+    // company sits seven points ABOVE the median: the retired tile printed both at once.
+    routeFetch([
+      [
+        new RegExp(`/admin/benchmarks/${COHORT}(\\?|$)`),
+        () => ({
+          ...cohortDetail,
+          metrics: cohortDetail.metrics.map((m) => (m.metricName === 'overall_index' ? metric('overall_index', 60, 20) : m)),
+        }),
+      ],
+    ])
+    renderAs({ role: 'company_admin', companyId: CID })
+    const tiles = [...(await readout()).querySelectorAll('[data-slot="kpi-tile"]')].map((tile) => tile.textContent ?? '')
+    expect(tiles[1]).toContain('60')
+    expect(tiles[2]).toContain('7 puntos sobre la mediana')
+    expect(tiles[2]).toContain('sin calcular')
+    expect(tiles[2]).not.toContain('20')
+    expect(tiles[2]).not.toMatch(/tercio|encima de|debajo de/)
+  })
+
+  it('prints the median at the precision the gap is taken, so the change is the difference on screen', async () => {
+    routeFetch([
+      [
+        new RegExp(`/admin/benchmarks/${COHORT}(\\?|$)`),
+        () => ({
+          ...cohortDetail,
+          metrics: cohortDetail.metrics.map((m) => (m.metricName === 'overall_index' ? metric('overall_index', 67.6, 68) : m)),
+        }),
+      ],
+    ])
+    renderAs({ role: 'company_admin', companyId: CID })
+    const tiles = [...(await readout()).querySelectorAll('[data-slot="kpi-tile"]')]
+    const value = (tile: Element) => tile.querySelector('[data-slot="kpi-value"]')?.textContent
+    // 67 and 68 on screen, one point apart — never "67,6" beside "1 punto".
+    expect(value(tiles[0])).toBe('67')
+    expect(value(tiles[1])).toBe('68')
+    expect(tiles[2].textContent).toContain('1 punto bajo la mediana')
+  })
+
+  it('draws Nueva referencia as the canvas\'s 34px button', async () => {
+    routeFetch()
+    renderAs({ role: 'company_admin', companyId: CID })
+    await readout()
+    const classes = screen.getByRole('button', { name: 'Nueva referencia' }).className
+    expect(classes).toContain('h-control-canvas')
+    expect(classes).not.toContain('h-control-lg')
   })
 
   it('asks for the list, the cohort and the surveys in the reader\'s language, the surveys for this company\'s closed ones', async () => {

@@ -268,6 +268,21 @@ describe('ReportsListNextPage — one action per row', () => {
     expect(await menuItems('r-csv')).toEqual(['Compartir', 'Programar'])
   })
 
+  it('draws Nuevo informe, Descargar and ··· as the canvas\'s 34px buttons', async () => {
+    routeFetch()
+    renderAs(ADMIN)
+    await screen.findByText('Datos de clima — T3 2026')
+    expect(screen.getByRole('button', { name: 'Nuevo informe' }).className).toContain('h-control-canvas')
+    const row = within(rowOf('r-csv'))
+    const download = row.getByRole('button', { name: 'Descargar' }).className
+    expect(download).toContain('h-control-canvas')
+    expect(download).not.toContain('h-control-lg')
+    const more = row.getByRole('button', { name: 'Más acciones para Datos de clima — T3 2026' }).className
+    expect(more).toContain('size-control-canvas')
+    // 28 wide from xl, as the artboard's 150px actions column draws it.
+    expect(more).toContain('xl:w-7')
+  })
+
   it('offers Compartir only for a completed report, and Descargar only once there is a file', async () => {
     routeFetch({ list: [csv, generating] })
     renderAs(ADMIN)

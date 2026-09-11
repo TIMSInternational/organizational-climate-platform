@@ -145,6 +145,12 @@
   --admin-size-control-sm: 1.5rem; /* 24px — icon button */
   --admin-size-control-md: 1.75rem; /* 28px — nav row (Sidebar minHeight: 28) */
   --admin-size-control-lg: 2rem; /* 32px — button/input/select (h-8) */
+  /* 34px — the canvas's `.btn`. Every artboard of 10 Sep (26 of 26) declares it
+     `height: 32px` with a 1px border and no `box-sizing`, so it is 32px of content box
+     and 34px outside; the canvas's one `box-sizing: border-box` is on its text input,
+     which is why this is a token of its own and not a new `control-lg` (that one sizes
+     inputs and selects too, and they are 32 outside on the canvas as well). */
+  --admin-size-control-canvas: 2.125rem;
   --admin-size-icon: 16px; /* legacy `h-4 w-4`; an SVG box, so px */
   --admin-size-icon-box: 1.75rem; /* 28px — Sidebar avatar/icon tile */
 

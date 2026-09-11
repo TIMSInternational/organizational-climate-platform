@@ -8,12 +8,17 @@
  * | Field                                  | Endpoint                                                  |
  * |----------------------------------------|-----------------------------------------------------------|
  * | `references`                           | `GET /admin/benchmarks?lang` (`listBenchmarks`)            |
- * | `cohort`, the medians, the percentile  | `GET /admin/benchmarks/{id}?lang` → `metrics[]` (`getBenchmark`) |
+ * | `cohort`, the medians                  | `GET /admin/benchmarks/{id}?lang` → `metrics[]` (`getBenchmark`) |
  * | `survey`                               | `GET /surveys?companyId&status=closed&lang` (`listSurveys`) |
  * | `yourIndex`, `dimensions[].score`      | `GET /surveys/{id}/analytics` → `questions[].average`, through `buildCohortReadout` |
  *
  * Every number the page prints — the gap to the median, "3 dimensions below", the widest
- * gap, the band — is derived from this shape in `derive.ts`, never typed.
+ * gap — is derived from this shape in `derive.ts`, never typed.
+ *
+ * Not in the model: the `percentile` the cohort's `overall_index` reading stores. It is
+ * the reading's own figure, one number for every tenant, not this company's rank, and a
+ * rank would need the group's distribution, which no endpoint returns — `percentileNote`
+ * in `derive.ts` is why "Tu percentil" prints none.
  */
 
 /** One dimension of the latest closed survey, against the cohort's median for it. */
@@ -52,9 +57,11 @@ export interface CohortReadoutModel {
   /** The survey the index is measured on: the company's most recently closed one. */
   survey: { title: string; responses: number | null }
   yourIndex: number | null
+  /**
+   * The cohort's overall median as the tile prints it — a whole index, through
+   * `printedIndex` — so the gap beside it is the difference of two printed numbers.
+   */
   cohortMedian: number | null
-  /** Where the company sits in the cohort, 0–100, or `null` when not published. */
-  percentile: number | null
   dimensions: readonly BenchmarkDimension[]
 }
 

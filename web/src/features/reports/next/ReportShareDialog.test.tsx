@@ -123,6 +123,29 @@ describe('ReportShareDialog', () => {
     expect(document.querySelector('[data-slot="inactive-links"]')?.textContent).toContain('revocado el 10 sept')
   })
 
+  it('draws every control at the canvas\'s 34px, the app\'s 32 nowhere', async () => {
+    // The ReportShare artboard's `.btn` is 32px of content box plus a 1px border: 34 outside.
+    // At the app's 32 the link card and the footer each came out 2px short (fix round 3).
+    routeFetch()
+    renderDialog()
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(dialog.querySelectorAll('[data-slot="active-link"]').length).toBe(1))
+    for (const name of ['Crear enlace', 'Revocar']) {
+      const classes = within(dialog).getByRole('button', { name }).className
+      expect(classes, name).toContain('h-control-canvas')
+      expect(classes, name).not.toContain('h-control-lg')
+    }
+    // "×" and the footer's Cerrar share a name; the square one is first.
+    const [close, footer] = within(dialog).getAllByRole('button', { name: 'Cerrar' })
+    expect(close.className).toContain('size-control-canvas')
+    expect(close.className).not.toContain('size-control-lg')
+    expect(footer.className).toContain('h-control-canvas')
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Crear enlace' }))
+    const copy = await within(dialog).findByRole('button', { name: 'Copiar' })
+    expect(copy.className).toContain('h-control-canvas')
+  })
+
   it('never shows a token for a link minted earlier, and offers no Copiar it could not honour', async () => {
     routeFetch()
     renderDialog()
