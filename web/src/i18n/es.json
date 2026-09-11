@@ -3268,7 +3268,7 @@
       },
       "frequency": "Frecuencia de encuestas",
       "frequencyHelp": {
-        "quarterly": "Cuatro olas al año.",
+        "quarterly": "Cuatro olas al año: Q1 en febrero, Q2 en mayo, Q3 en agosto, Q4 en octubre.",
         "monthly": "Doce olas al año.",
         "weekly": "Una ola por semana.",
         "daily": "Una ola por día.",

@@ -89,6 +89,9 @@ describe('DepartmentsNextPage (/departments)', () => {
       plan('ops', 'not_started', '2099-10-15T00:00:00Z'),
       plan('fin', 'in_progress', '2020-01-01T00:00:00Z'),
       plan('ven', 'cancelled', '2020-01-01T00:00:00Z'),
+      // Past due but done: a closed plan is not open, so it is neither counted nor overdue.
+      plan('fin', 'completed', '2020-01-01T00:00:00Z'),
+      plan('ing', 'completed', '2020-01-01T00:00:00Z'),
     ])
     vi.mocked(getClimateTrends).mockReset().mockResolvedValue(trends)
   })
@@ -128,6 +131,8 @@ describe('DepartmentsNextPage (/departments)', () => {
     expect(rowOf('Finanzas')!.querySelectorAll('td')[3].textContent).toBe('1 · 1 overdue')
     expect(rowOf('Operaciones')!.querySelectorAll('td')[3].textContent).toBe('1 · not started')
     expect(rowOf('Ventas')!.querySelectorAll('td')[3].textContent).toBe('—')
+    // Ingeniería's only plan is completed and long past due: no open plan, nothing overdue.
+    expect(rowOf('Ingeniería')!.querySelectorAll('td')[3].textContent).toBe('—')
     expect(screen.getByText('1 overdue · Finanzas')).toBeTruthy()
   })
 
@@ -145,6 +150,8 @@ describe('DepartmentsNextPage (/departments)', () => {
     await screen.findByText('Finanzas', { selector: 'td' })
     expect(screen.getByRole('link', { name: copy.importPeople }).getAttribute('href')).toBe('/admin/companies/c1/users?import=1')
     expect(rowOf('Finanzas')!.querySelectorAll('td')[2].textContent).toBe('—')
+    // The org chart's card reads the same absence the same way: its Líder line is a dash too.
+    expect(cardOf('Finanzas').querySelector('dd')!.textContent).toBe('—')
   })
 
   it('offers a leader nothing and asks for nothing: /admin/departments is admin-only', async () => {

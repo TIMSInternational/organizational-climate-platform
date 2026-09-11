@@ -216,8 +216,15 @@ export function PageTopBar({
                       <BreadcrumbLink asChild className="text-fg-secondary hover:text-fg-primary">
                         <Link to={crumb.href}>{crumb.label}</Link>
                       </BreadcrumbLink>
-                    ) : (
+                    ) : isLast ? (
                       <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                    ) : (
+                      // An ancestor with nowhere to go (a sidebar group, say) is still an
+                      // ancestor: muted like the links beside it, and not `aria-current` —
+                      // only the last crumb is the page (CompanySettings artboard, 10 Sep).
+                      <span data-slot="breadcrumb-ancestor" className="text-fg-secondary">
+                        {crumb.label}
+                      </span>
                     )}
                   </BreadcrumbItem>
                 </Fragment>

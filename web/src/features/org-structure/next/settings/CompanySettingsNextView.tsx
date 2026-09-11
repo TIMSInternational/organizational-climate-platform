@@ -167,6 +167,7 @@ function SettingsForm({
     <div>
       <PageTopBar
         breadcrumbs={crumbs}
+        tightBreadcrumb
         eyebrow={model.companyName}
         title={t(`${K}.title`)}
         description={t(`${K}.description`)}
@@ -363,14 +364,16 @@ function SettingsForm({
                 </Field>
                 <Field
                   fieldLabel={t(`${K}.sender`)}
-                  helper={t(`${K}.senderHelp`)}
+                  helper={
+                    // The field keeps the artboard's full width; the sample mark rides on its
+                    // helper line, because no endpoint stores a sender name (sampleModel.ts).
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="min-w-0">{t(`${K}.senderHelp`)}</span>
+                      <CanvasChip tone="warning" label={t('dashboard.next.sampleChip')} data-slot="sample-chip" />
+                    </span>
+                  }
                 >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <div className="min-w-0 flex-1">
-                      <Readout>{name}</Readout>
-                    </div>
-                    <CanvasChip tone="warning" label={t('dashboard.next.sampleChip')} data-slot="sample-chip" />
-                  </div>
+                  <Readout>{name}</Readout>
                 </Field>
               </div>
             </div>

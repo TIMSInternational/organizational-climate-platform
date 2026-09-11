@@ -133,7 +133,10 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
     await screen.findByLabelText(new RegExp(copy.language))
     const chips = document.querySelectorAll('[data-slot="sample-chip"]')
     expect(chips).toHaveLength(1)
-    expect(chips[0].closest('div')?.textContent).toContain('Grupo Meridiano S.A.')
+    // The chip sits in the sender field (on its helper line, so the input keeps its full width).
+    const senderField = screen.getByText(copy.sender).closest('div') as HTMLElement
+    expect(senderField.contains(chips[0])).toBe(true)
+    expect(senderField.textContent).toContain('Grupo Meridiano S.A.')
   })
 
   it('derives the company readings from the payloads, and prints a dash — not a zero — for a reading whose request failed', async () => {

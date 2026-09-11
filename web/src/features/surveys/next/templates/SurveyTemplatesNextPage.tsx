@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, Download, FileText, Filter, Library, Rows2 } from 'lucide-react'
+import { ArrowRight, Download, FileText, Filter, Rows2 } from 'lucide-react'
+import { RailQuestionLibraryIcon } from '../../../../navigation/railIcons'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { Button, EmptyState, Input, NetworkError, SkeletonText, chipVariants } from '../../../../components/ui'
@@ -126,7 +127,7 @@ export default function SurveyTemplatesNextPage() {
           {capabilities.canAuthorSurveys && (
             <div data-slot="library-row" className="flex flex-wrap items-start gap-3.5 rounded-lg border border-dashed border-line-default bg-surface-card px-5 py-4.5">
               <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-icon-box text-fg-secondary">
-                <Library aria-hidden="true" className="size-4" />
+                <RailQuestionLibraryIcon aria-hidden="true" className="size-4" />
               </span>
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                 <span className="text-lg font-semibold">{t(`${K}.libraryHeading`)}</span>

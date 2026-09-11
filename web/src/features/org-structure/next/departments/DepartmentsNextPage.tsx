@@ -301,7 +301,19 @@ function DepartmentsView({
             <span className="text-xs text-fg-tertiary">{t(`${K}.listMeta`)}</span>
           </div>
           <div className="overflow-hidden rounded-lg border border-line-light">
-            <Table className="m-0 w-full min-w-215 border-collapse text-xs">
+            <Table className="m-0 w-full min-w-215 table-fixed border-collapse text-sm">
+                {/* The artboard's list grid — 3fr 90px 3fr 2fr 3fr 90px 150px, 12px gaps — as
+                    columns: each fr track takes its share of what the 90/90/150 tracks and the
+                    cells' 12px padding leave, so the headings start where the artboard's do. */}
+                <colgroup>
+                  <col style={{ width: '18.15%' }} />
+                  <col style={{ width: '102px' }} />
+                  <col style={{ width: '18.15%' }} />
+                  <col style={{ width: '12.45%' }} />
+                  <col style={{ width: '18.15%' }} />
+                  <col style={{ width: '102px' }} />
+                  <col style={{ width: '174px' }} />
+                </colgroup>
                 <thead className="bg-surface-icon-box">
                   <tr>
                     <th scope="col" className={HEAD}>{t(`${K}.colDepartment`)}</th>

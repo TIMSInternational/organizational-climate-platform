@@ -240,7 +240,7 @@ function Row({ row, sample, date, onOpen }: { row: InboxRow; sample: boolean; da
           {row.name}
           <span className="sr-only"> · {row.unread ? t('notifications.unread') : t('notifications.read')}</span>
         </span>
-        <span className="text-xs text-fg-secondary">{row.body}</span>
+        <span className="text-sm text-fg-secondary">{row.body}</span>
       </div>
       <span className="inline-flex shrink-0 flex-col items-end gap-1">
         <CanvasChip label={t(`${K}.facet.${row.kind}`)} />

@@ -3268,7 +3268,7 @@
       },
       "frequency": "Survey cadence",
       "frequencyHelp": {
-        "quarterly": "Four waves a year.",
+        "quarterly": "Four waves a year: Q1 in February, Q2 in May, Q3 in August, Q4 in October.",
         "monthly": "Twelve waves a year.",
         "weekly": "One wave a week.",
         "daily": "One wave a day.",
