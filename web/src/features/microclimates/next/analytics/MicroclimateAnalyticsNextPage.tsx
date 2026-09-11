@@ -243,7 +243,10 @@ function SessionsTable({ rows }: { rows: readonly SessionRow[] }) {
     // `Table`, not a bare `<table>`: the primitive is the scroll container, so at 1024 the
     // eight columns scroll inside the card instead of pushing the page wide (#218).
     <div className="rounded-xl border border-line-default bg-surface-card pt-2 shadow-xs">
-      <Table className="min-w-[56rem]">
+      {/* `relative`: the sr-only "Acciones" header and caption are absolutely positioned, and
+          with no positioned ancestor inside the scroll container they escaped its clip — at
+          1024 the page measured 1051px wide (document scrollWidth), 27px past the viewport. */}
+      <Table className="relative min-w-[56rem]">
         <caption className="sr-only">{t('microclimates.next.analytics.sessionsTitle')}</caption>
         <thead>
           <tr>

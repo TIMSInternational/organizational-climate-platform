@@ -114,6 +114,16 @@ describe('MicroclimateAnalyticsNextPage', () => {
     expect(getLiveResults).not.toHaveBeenCalled()
   })
 
+  it('keeps the sessions table the positioning context of its sr-only header, so nothing escapes the scroll container', async () => {
+    // Measured with the shot harness at 1024 before this: the sr-only "Acciones" span sat at
+    // right=1051 outside the Table primitive's clip. happy-dom has no layout, so the guard
+    // pins the cause: the table is positioned, and the header's text is inside it.
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    const table = (await screen.findByRole('heading', { name: copy.sessionsTitle })).closest('section')!.querySelector('table')!
+    expect(table.className.split(/\s+/)).toContain('relative')
+    expect(within(table).getByText(copy.colActions).className).toContain('sr-only')
+  })
+
   it('at the floor counts the words a session may show — after both floors — and still prints no pulse figure', async () => {
     const open = session({ id: 'm2', title: 'Pulso de agosto', status: 'closed', responseCount: 6, createdAt: '2026-08-20T00:00:00Z' })
     vi.mocked(listMicroclimates).mockResolvedValue([session({}), open])
