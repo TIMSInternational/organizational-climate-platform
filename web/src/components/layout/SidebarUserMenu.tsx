@@ -15,6 +15,7 @@ import { useTranslation } from '../../i18n'
 import { LOCALES, isLocale } from '../../i18n/locale'
 import { getToken } from '../../auth/token'
 import { decodeJwtPayload } from '../../auth/jwt'
+import { useOwnDepartmentName } from '../../company-context/useCompanyName'
 import {
   readAdminThemeMode,
   setAdminThemeMode,
@@ -56,6 +57,13 @@ const ROLE_LABEL_KEY: Record<string, string> = {
   employee: 'users.employee',
 }
 
+/**
+ * The roles a department belongs to, whose rail line names it after the role — "Líder ·
+ * Ingeniería", as every such role's artboard prints it (10 Sep). The two administrator roles
+ * belong to no department and keep the role alone.
+ */
+const DEPARTMENT_ROLES: ReadonlySet<string> = new Set(['leader', 'supervisor', 'employee'])
+
 const THEME_OPTIONS: readonly { mode: AdminThemeMode; labelKey: string; icon: typeof Sun }[] = [
   { mode: 'light', labelKey: 'shell.themeLight', icon: Sun },
   { mode: 'dark', labelKey: 'shell.themeDark', icon: Moon },
@@ -96,6 +104,12 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
   const name = typeof claims?.name === 'string' ? claims.name : undefined
   const role = typeof claims?.role === 'string' ? claims.role : undefined
   const roleKey = role ? ROLE_LABEL_KEY[role] : undefined
+  const departmentName = useOwnDepartmentName(role !== undefined && DEPARTMENT_ROLES.has(role))
+  const roleLine = roleKey
+    ? departmentName
+      ? t('shell.roleWithDepartment', { role: t(roleKey), department: departmentName })
+      : t(roleKey)
+    : null
 
   function close() {
     setOpen(false)
@@ -164,9 +178,10 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
                   the 150px this column had in a 220px rail -- which grew the block
                   and pushed it into the Settings/Sign-out row beneath. Rendered in
                   Chrome at 1440x900 with `preferredLocale=es`. */}
-              {roleKey ? (
+              {roleLine ? (
                 <span
-                  title={t(roleKey)}
+                  data-slot="sidebar-role"
+                  title={roleLine}
                   style={{
                     display: 'block',
                     fontSize: 11,
@@ -176,7 +191,7 @@ export function SidebarUserMenu({ onSignOut, collapsed = false, onExpand }: Side
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {t(roleKey)}
+                  {roleLine}
                 </span>
               ) : null}
             </span>
