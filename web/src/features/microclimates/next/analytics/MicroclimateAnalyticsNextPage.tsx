@@ -234,8 +234,15 @@ function PulsePoint({ row }: { row: SessionRow }) {
   )
 }
 
-const HEAD = 'px-3 pt-2 pb-2 text-left align-bottom text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
-const CELL = 'px-3 py-3 align-middle border-b border-line-light'
+/**
+ * The seven fixed columns of the sessions table in px — the board's `90px 100px 150px 110px
+ * 110px 80px 110px`, each plus the 12px gap before it (the last plus the row's 12px right
+ * padding too), because the table's cells carry that gap as their left padding.
+ */
+const SESSION_COLUMNS = [102, 112, 162, 122, 122, 92, 134] as const
+
+const HEAD = 'pl-3 pr-0 pt-2 pb-2 text-left align-bottom text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
+const CELL = 'pl-3 pr-0 py-3 align-middle border-b border-line-light'
 
 function SessionsTable({ rows }: { rows: readonly SessionRow[] }) {
   const { t, locale } = useTranslation()
@@ -246,18 +253,32 @@ function SessionsTable({ rows }: { rows: readonly SessionRow[] }) {
       {/* `relative`: the sr-only "Acciones" header and caption are absolutely positioned, and
           with no positioned ancestor inside the scroll container they escaped its clip — at
           1024 the page measured 1051px wide (document scrollWidth), 27px past the viewport. */}
-      <Table className="relative min-w-[56rem]">
+      {/* The board's row is a grid, `minmax(0,1fr) 90px 100px 150px 110px 110px 80px 110px`
+          with a 12px gap and 12px side padding (MicroclimateAnalytics.dc.html). A table has no
+          gap, so each cell carries the 12px before it as `pl-3` and none after, and each
+          fixed column is the board's width plus that 12px (the last also its 12px right
+          padding): every header then starts where the board's does. `table-fixed` holds those
+          widths; the session column takes the rest. The test asserts the `<col>` widths.
+          Below the min width (1024) the table scrolls inside the card, the session column
+          still 226px wide. */}
+      <Table className="relative min-w-[67rem] table-fixed">
         <caption className="sr-only">{t('microclimates.next.analytics.sessionsTitle')}</caption>
+        <colgroup>
+          <col />
+          {SESSION_COLUMNS.map((width, index) => (
+            <col key={index} style={{ width }} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             <th scope="col" className={HEAD}>{t('microclimates.next.analytics.colSession')}</th>
-            <th scope="col" className={cn(HEAD, 'w-[90px]')}>{t('microclimates.next.analytics.colStatus')}</th>
-            <th scope="col" className={cn(HEAD, 'w-[100px]')}>{t('microclimates.next.analytics.colResponses')}</th>
-            <th scope="col" className={cn(HEAD, 'w-[150px]')}>{t('microclimates.next.analytics.colParticipation')}</th>
-            <th scope="col" className={cn(HEAD, 'w-[110px]')}>{t('microclimates.next.analytics.colPulse')}</th>
-            <th scope="col" className={cn(HEAD, 'w-[110px]')}>{t('microclimates.next.analytics.colWords')}</th>
-            <th scope="col" className={cn(HEAD, 'w-[80px]')}>{t('microclimates.next.analytics.colOpened')}</th>
-            <th scope="col" className={cn(HEAD, 'w-[110px]')}>
+            <th scope="col" className={HEAD}>{t('microclimates.next.analytics.colStatus')}</th>
+            <th scope="col" className={HEAD}>{t('microclimates.next.analytics.colResponses')}</th>
+            <th scope="col" className={HEAD}>{t('microclimates.next.analytics.colParticipation')}</th>
+            <th scope="col" className={HEAD}>{t('microclimates.next.analytics.colPulse')}</th>
+            <th scope="col" className={HEAD}>{t('microclimates.next.analytics.colWords')}</th>
+            <th scope="col" className={HEAD}>{t('microclimates.next.analytics.colOpened')}</th>
+            <th scope="col" className={cn(HEAD, 'pr-3')}>
               <span className="sr-only">{t('microclimates.next.analytics.colActions')}</span>
             </th>
           </tr>
@@ -334,7 +355,7 @@ function SessionsTable({ rows }: { rows: readonly SessionRow[] }) {
                 <td className={cn(cell, 'whitespace-nowrap font-mono text-sm tabular-nums text-fg-secondary')}>
                   {row.detail.status === 'ready' ? shortDay(row.detail.value.startTime, locale) : shortDay(session.createdAt, locale)}
                 </td>
-                <td className={cn(cell, 'text-right')}>
+                <td className={cn(cell, 'pr-3 text-right')}>
                   <Button asChild variant="outline" size="canvas">
                     <Link to={`/microclimates/${session.id}/results`}>{t('microclimates.results')}</Link>
                   </Button>

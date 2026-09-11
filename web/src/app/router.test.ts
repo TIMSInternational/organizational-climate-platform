@@ -577,12 +577,14 @@ describe('router', () => {
       const source = readFileSync(join(src, 'app', 'router.tsx'), 'utf8')
       const pageNames =
         'ConsolidadoPage|TableroSeguimientoPage|PlanesAccionListPage|PlanDeAccionDetailPage|MisTareasPage|ConsolidadoNextPage|TableroNextPage|PlanDetailNextPage'
-      expect(source).not.toMatch(new RegExp(`^import .*(${pageNames}).*$`, 'm'))
+      // Whole names only (a regex \b): the Detalle de plan's `ActionPlanDetailNextPage` contains
+      // `PlanDetailNextPage` and is a static import of an action-plans page, not a tracking one.
+      expect(source).not.toMatch(new RegExp(`^import .*\\b(${pageNames})\\b.*$`, 'm'))
 
       const offenders = globSync('**/*.{ts,tsx}', { cwd: src })
         .filter((file) => !file.includes('features/tracking/') && !/\.test\.tsx?$/.test(file))
         .filter((file) =>
-          new RegExp(`^\\s*import\\s[^\\n]*(${pageNames})`, 'm').test(
+          new RegExp(`^\\s*import\\s[^\\n]*\\b(${pageNames})\\b`, 'm').test(
             readFileSync(join(src, file), 'utf8'),
           ),
         )

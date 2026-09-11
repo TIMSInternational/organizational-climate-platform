@@ -14,9 +14,13 @@ const DOWNLOAD_PIXELS = 1024
  * board's 150px "QR" square, filled, in a `150px | 1fr` row.
  *
  * Built from `ShareLinkQr`'s own exported parts (`qrModules`, `qrPathData`, `qrSvgMarkup`,
- * `qrPngBlob`, `resolveQrColors` — `qrcode-generator`, already a dependency) and its plaque:
- * modules in `text-accent-blue-fill` on `fill-fg-on-accent`, the one ink/paper pair defined
- * identically in both palettes, so the code never inverts in the dark theme.
+ * `qrPngBlob`, `resolveQrColors` — `qrcode-generator`, already a dependency) and its plaque,
+ * but not its ink. The board's QR plaque is neutral beside the red primary "Copiar enlace",
+ * so the modules are `text-surface-shell` (`--admin-bg-shell`: #1f114c light, #120b2b dark —
+ * the near-black of the board's #110a29 ink, and dark in BOTH palettes) on
+ * `fill-fg-on-accent` (#ffffff in both): the code never inverts in the dark theme and never
+ * reads as a second red action. `resolveQrColors` reads the same computed pair, so the
+ * downloaded PNG is painted with what the screen shows. `SessionQr.test.tsx` pins both.
  *
  * Unlike a survey's share link this one is shown at once, not behind a reveal: the survey
  * link is a bearer token, while a microclimate's respond URL is its id, which the board
@@ -63,7 +67,7 @@ export function SessionQr({ url, microclimateId, children }: { url: string; micr
           viewBox={`0 0 ${extent} ${extent}`}
           shapeRendering="crispEdges"
           data-qr-modules={modules.length}
-          className="block size-full text-accent-blue-fill"
+          className="block size-full text-surface-shell"
         >
           <title>{t('microclimates.next.detail.qrAlt')}</title>
           <rect data-slot="qr-paper" width={extent} height={extent} className="fill-fg-on-accent" />
