@@ -12,10 +12,12 @@ import { tokenFor } from '../../../../test/jwtFixture'
 import type { SurveyDetail } from '../../api/surveys'
 import type { SurveyInvitationDetail, SurveyInvitationList } from '../../api/surveyDistribution'
 import type { AuthoringQuestion } from '../../api/surveyQuestionAuthoring'
+import type { SurveyRespondQuestion } from '../../api/surveyResponses'
 import { SurveyDetailView } from './SurveyDetailNextPage'
 import SurveyDistributionNextPage, { DistributionView, INVITATION_PREVIEW_ROWS } from './SurveyDistributionNextPage'
 import { INVITATION_COLUMNS } from './launch'
 import SurveyBuilderNextPage from './SurveyBuilderNextPage'
+import { PreviewQuestion } from './QuestionPreview'
 import type { DistributionActions, DistributionModel } from './useDistributionModel'
 import * as drafts from '../../api/surveyDrafts'
 import * as creating from '../../api/surveyCreate'
@@ -420,6 +422,24 @@ describe('Distribución (Distribution artboard)', () => {
     expect(openCopy).toHaveBeenCalledTimes(1)
   })
 
+  it("keeps the Estado column to its chip, as the artboard does: an invitation's menu shows on the row's hover or focus, and always where nothing can hover", async () => {
+    // distribution-light.png drew a "•••" in every row's Estado cell, which the artboard does not.
+    // The menu is the old route's resend and revoke (#22), so it stays — hidden only on a device
+    // that can hover, and shown on the row's hover, on focus inside the row, and while it is open.
+    // happy-dom has no layout and no media queries: the classes are the pin, the shot the evidence.
+    distribution(invitationList(3), 'company_admin', true)
+    const trigger = screen.getByRole('button', { name: 'Acciones de la invitación de persona0@meridiano.test' })
+    const classes = trigger.className.split(' ')
+    expect(classes).toEqual(
+      expect.arrayContaining(['[@media(hover:hover)]:opacity-0', 'group-hover/row:opacity-100', 'group-focus-within/row:opacity-100', 'data-[state=open]:opacity-100']),
+    )
+    // Never hidden outright: a touch screen cannot hover, so there the menu must stay drawn.
+    expect(classes).not.toContain('opacity-0')
+    expect(trigger.closest('tr')?.className.split(' ')).toContain('group/row')
+    await userEvent.click(trigger)
+    expect(await screen.findByRole('menuitem', { name: 'Revocar' })).toBeTruthy()
+  })
+
   it("puts a step's action under its body below sm, and stacks it in its own column from sm", () => {
     // distribution-390.png: a flex-1 body shrank instead of wrapping — one word per line, a 10px
     // sliver of table — and the buttons sat on the step titles. At 1440 the send button's "•••"
@@ -483,6 +503,42 @@ describe('Distribución — the role half of the rule, through the page model', 
       expect(screen.queryByRole('button', { name })).toBeNull()
     }
     expect(usersApi.listUsers).not.toHaveBeenCalled()
+  })
+})
+
+describe('PreviewQuestion (the respondent card on SurveyBuilder and SurveyDetail)', () => {
+  const question = (over: Partial<SurveyRespondQuestion> = {}): SurveyRespondQuestion => ({
+    id: 'q0', text: 'Puedo plantear preocupaciones.', type: 'likert', options: null, scaleMin: 1, scaleMax: 5,
+    scaleLabelMin: 'Muy en desacuerdo', scaleLabelMax: 'Muy de acuerdo', required: true,
+    commentRequired: false, commentPrompt: null, order: 0, category: 'psychological_safety', ...over,
+  })
+  const cells = () => [...document.querySelectorAll<HTMLElement>('[data-slot="preview-choice"]')]
+
+  it("lets a numeric scale's five cells shrink into a 390px card, and keeps a choice row's 40px cells, which wrap", () => {
+    // builder-390.png: five 40px cells and four 8px gaps (232px) ran past the 208px inside the
+    // preview card. A numeric row never wraps, so its cells may shrink; a choice row wraps instead.
+    // happy-dom has no layout: the classes are the pin, the 390 shot the evidence.
+    render(
+      <TranslationProvider>
+        <PreviewQuestion question={question()} position={1} total={6} />
+      </TranslationProvider>,
+    )
+    expect(cells().map((cell) => cell.textContent)).toEqual(['1', '2', '3', '4', '5'])
+    for (const cell of cells()) {
+      expect(cell.className.split(' ')).toContain('min-w-0')
+      expect(cell.className.split(' ')).not.toContain('min-w-10')
+    }
+    expect(cells()[0].parentElement?.className.split(' ')).not.toContain('flex-wrap')
+    cleanup()
+    const options = ['Siempre', 'A veces', 'Nunca'].map((label, order) => ({ order, value: `o${order}`, label }))
+    render(
+      <TranslationProvider>
+        <PreviewQuestion question={question({ type: 'multiple_choice', options })} position={2} total={6} />
+      </TranslationProvider>,
+    )
+    expect(cells().map((cell) => cell.textContent)).toEqual(['Siempre', 'A veces', 'Nunca'])
+    for (const cell of cells()) expect(cell.className.split(' ')).toContain('min-w-10')
+    expect(cells()[0].parentElement?.className.split(' ')).toContain('flex-wrap')
   })
 })
 

@@ -400,7 +400,7 @@ export function DistributionView({
                     const person = userById.get(invitation.userId)
                     const rowBusy = busy || busyInvitationId === invitation.id
                     return (
-                      <TableRow key={invitation.id} className="border-t border-line-light">
+                      <TableRow key={invitation.id} className="group/row border-t border-line-light">
                         <TableCell className="truncate px-3 py-2 font-medium">{person?.name ?? '—'}</TableCell>
                         <TableCell className="truncate px-3 py-2 font-mono text-xs text-fg-secondary">{invitation.email}</TableCell>
                         <TableCell className="truncate px-3 py-2 text-fg-secondary">
@@ -423,7 +423,11 @@ export function DistributionView({
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    className="size-7"
+                                    // The artboard's Estado cell holds the chip alone. The menu is the old
+                                    // route's resend and revoke (#22), so it stays: hidden only where a
+                                    // pointer can hover, and shown on the row's hover, on focus inside the
+                                    // row and while open. A touch screen, which cannot hover, always shows it.
+                                    className="size-7 [@media(hover:hover)]:opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 data-[state=open]:opacity-100"
                                     aria-label={copy('rowMenu', { email: invitation.email })}
                                   >
                                     <MoreHorizontal aria-hidden="true" className="size-4" />
@@ -733,8 +737,9 @@ function Bucket({ label, value, warn = false }: { label: string; value: number; 
         warn ? 'border-accent-amber-ring bg-chip-warning-fill' : 'border-line-light',
       )}
     >
-      <span className={cn('text-2xs font-bold uppercase tracking-wider', warn ? 'text-chip-warning-ink' : 'text-fg-label')}>{label}</span>
-      <span className={cn('font-mono text-2xl leading-tight tabular-nums', warn ? 'text-chip-warning-ink' : 'text-fg-primary')}>{value}</span>
+      {/* The artboard's bucket: a 10px label on 1.5 (15px) and a 20px mono reading on 1.1 (22px). */}
+      <span className={cn('text-2xs font-bold uppercase leading-normal tracking-wider', warn ? 'text-chip-warning-ink' : 'text-fg-label')}>{label}</span>
+      <span className={cn('font-mono text-2xl leading-[1.1] tabular-nums', warn ? 'text-chip-warning-ink' : 'text-fg-primary')}>{value}</span>
     </div>
   )
 }

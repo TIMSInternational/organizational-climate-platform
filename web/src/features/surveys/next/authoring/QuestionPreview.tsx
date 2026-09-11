@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from '../../../../i18n'
+import { cn } from '../../../../lib/cn'
 import type { SurveyRespondQuestion } from '../../api/surveyResponses'
 import { dimensionLabel } from '../../dimensionLabel'
 import { NUMERIC_SCALE_TYPES, answerShapeOf, choicesFor } from '../../respondAnswers'
@@ -69,7 +70,9 @@ export function PreviewQuestion({
       data-slot="preview-question"
       className="flex flex-col gap-2.5 rounded-lg border border-line-default bg-surface-card px-3.5 py-3"
     >
-      <p className="m-0 flex items-baseline gap-2 text-base font-semibold text-fg-primary">
+      {/* `items-center`, the artboards' `align-items: center`: baseline alignment pushed the row
+          1px past its 19.5px line, and every preview card 1px past the artboard's 118. */}
+      <p className="m-0 flex items-center gap-2 text-base font-semibold text-fg-primary">
         <span
           aria-hidden="true"
           className="shrink-0 rounded bg-surface-icon-box px-1.5 py-px font-mono text-xs font-medium leading-normal text-fg-secondary tabular-nums"
@@ -90,8 +93,14 @@ export function PreviewQuestion({
           {choices.map((choice, index) => (
             <span
               key={choice.value}
-              // 36px: the artboards' cells are `height: 34px` plus a 1px border each side.
-              className="inline-flex h-9 min-w-10 flex-1 items-center justify-center rounded border border-line-default bg-surface-card px-2 text-base text-fg-secondary"
+              data-slot="preview-choice"
+              // 36px: the artboards' cells are `height: 34px` plus a 1px border each side. A numeric
+              // row never wraps, so its cells may shrink (`min-w-0`): at 390px five 40px cells ran
+              // past the card's right edge (builder-390.png).
+              className={cn(
+                'inline-flex h-9 flex-1 items-center justify-center rounded border border-line-default bg-surface-card px-2 text-base text-fg-secondary',
+                numeric ? 'min-w-0' : 'min-w-10',
+              )}
             >
               {shape === 'ordered' ? `${index + 1}. ${label(choice.value, choice.label)}` : label(choice.value, choice.label)}
             </span>

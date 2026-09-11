@@ -507,7 +507,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
               <p className="m-0 text-sm text-fg-secondary">{fromTemplate && template === null ? t('common.loading') : copy('previewEmpty')}</p>
             )}
             <div aria-hidden="true" className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-2.5">
-              <span className="inline-flex items-center gap-2 text-xs text-fg-secondary">
+              <span className="inline-flex items-center gap-2 text-xs leading-normal text-fg-secondary">
                 <span className="h-1.25 w-12 rounded-sm bg-surface-icon-box" />
                 {copy('answeredOf', { count: previewQuestions.length })}
               </span>
@@ -606,8 +606,9 @@ function QuestionsFooter({
         {copy('coverage', { dimensions, required })} · {open === 0 ? copy('noOpen') : copy('someOpen', { count: open })}
       </span>
       {missing === 0 ? (
-        // 220px, the artboard's: "Cada dimensión tiene al menos / una pregunta" on two lines.
-        <span className="inline-flex max-w-55 items-start gap-1.5 text-chip-good-ink [&>svg]:mt-0.5">
+        // 216px: the artboard's two lines, "Cada dimensión tiene al menos / una pregunta" (at 220px
+        // "una" still fit on the first line in the shot).
+        <span className="inline-flex max-w-54 items-start gap-1.5 text-chip-good-ink [&>svg]:mt-0.5">
           <Check aria-hidden="true" className="size-3.5" />
           {copy('everyDimension')}
         </span>
