@@ -1,3 +1,5 @@
+import { WHOLE_COMPANY_KEY, type ClimateTrendsResponse } from '../../api/climateTrends'
+import { printedMove, targetStanding, type TargetStanding } from '../../../dashboard/next/derive'
 import type { TrendDimension } from './model'
 
 /**
@@ -6,19 +8,57 @@ import type { TrendDimension } from './model'
  * this file answers "what is the number", the view answers "how does it read".
  */
 
-export type Standing = 'above' | 'on' | 'below'
+export type Standing = TargetStanding
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10
 }
 
-/** Where a reading sits against the target, at the one-decimal precision the page prints. */
+/**
+ * Where a reading sits against the target: the Panel de Control's one rule
+ * (`targetStanding`), at the decimal the page prints and with the canvas's bands — so a
+ * chip, a red endpoint and a table tint on this page never disagree with each other or
+ * with the dashboard.
+ */
 export function standing(value: number, target: number): Standing {
-  const shown = round1(value)
-  const goal = round1(target)
-  if (shown > goal) return 'above'
-  if (shown < goal) return 'below'
-  return 'on'
+  return targetStanding(value, target)
+}
+
+/**
+ * The payload with every ARCHIVED survey taken out of it, and the points aligned to them.
+ *
+ * `GET /surveys/climate-trends` answers with the closed-and-archived window
+ * (`ReportGeneration.cs:92` names it), so a rehearsal copy that was archived arrives as
+ * the newest wave — and the first cut of this page read it as the latest survey: the
+ * CLIMA tile said "Encuesta de Clima Q4 (abierta) (Copia)" over an em dash. The list
+ * promises the opposite ("Una encuesta archivada no cuenta en Clima en el tiempo"), so
+ * an archived survey is removed here, once, before anything reads a wave.
+ *
+ * `suppressedGroupCount` is recounted over what is left: the server counts groups
+ * withheld in every wave of ITS window, and a group disclosed only in an archived wave
+ * is, after the cut, withheld in every wave this page shows.
+ */
+export function withoutArchived(payload: ClimateTrendsResponse): ClimateTrendsResponse {
+  const kept = payload.surveys.map((survey, index) => ({ survey, index })).filter(({ survey }) => survey.status !== 'archived')
+  const indexes = kept.map(({ index }) => index)
+  const groups = payload.groups.map((group) => ({
+    ...group,
+    points: indexes.flatMap((index) => {
+      const point = group.points[index]
+      return point === undefined ? [] : [point]
+    }),
+  }))
+  return {
+    ...payload,
+    surveys: kept.map(({ survey }) => survey),
+    groups,
+    suppressedGroupCount: groups.filter(
+      (group) =>
+        group.key !== WHOLE_COMPANY_KEY &&
+        group.points.length > 0 &&
+        group.points.every((point) => point.isSuppressed),
+    ).length,
+  }
 }
 
 /** Index of the latest disclosed reading, or `-1` when every wave is withheld. */
@@ -48,7 +88,9 @@ export function deltaSince(values: readonly (number | null)[], fromIndex: number
   const from = values[fromIndex]
   const latest = values[to]
   if (from === null || from === undefined || latest === null || latest === undefined) return null
-  return latest - from
+  // The difference of the two readings AS PRINTED (`printedMove`): Carga de trabajo's
+  // 2,75 → 3,33 prints "2,8" and "3,3", so its move is "+0,5", never the raw "+0,6".
+  return printedMove(latest, from)
 }
 
 /** Mean of the disclosed dimension readings of one wave, or `null` when there are none. */
@@ -64,22 +106,75 @@ export interface DimensionStanding {
   dimension: TrendDimension
   value: number
   standing: Standing
+  /** The move since the wave before the latest reading, or `null` when either end is withheld. */
+  lastMove: number | null
 }
 
 /** Every dimension with a latest reading, judged against the target. */
 export function standings(dimensions: readonly TrendDimension[], target: number): DimensionStanding[] {
   return dimensions.flatMap((dimension) => {
-    const value = latestValue(dimension)
-    return value === null ? [] : [{ dimension, value, standing: standing(value, target) }]
+    const index = latestIndex(dimension.values)
+    const value = index === -1 ? null : (dimension.values[index] ?? null)
+    return value === null
+      ? []
+      : [{ dimension, value, standing: standing(value, target), lastMove: index > 0 ? deltaSince(dimension.values, index - 1) : null }]
   })
 }
 
-/** The 0.5-step ticks that enclose every reading and the target — the chart's y axis. */
-export function axisTicks(values: readonly (number | null)[], target: number): number[] {
+/**
+ * The order the six dimensions are drawn in: by the whole company's latest reading,
+ * highest first, ties in the server's column order, a dimension with no reading last.
+ * It is the canvas's order (Pertenencia 4,0 … Carga de trabajo 3,3) and it is computed
+ * once, from the whole company, so choosing a department redraws the charts in place
+ * instead of shuffling them.
+ */
+export function orderByLatest<T extends TrendDimension>(dimensions: readonly T[]): T[] {
+  return dimensions
+    .map((dimension, index) => ({ dimension, index, value: latestValue(dimension) }))
+    .sort((a, b) => {
+      if (a.value === null && b.value === null) return a.index - b.index
+      if (a.value === null) return 1
+      if (b.value === null) return -1
+      return b.value - a.value || a.index - b.index
+    })
+    .map(({ dimension }) => dimension)
+}
+
+/**
+ * One chart's y axis. The DOMAIN runs from the half-point under every reading and the
+ * target (less a margin) to the half-point over them; the TICKS drawn and labelled are
+ * the half-points from the lowest printed reading up. That is the canvas's `linechart`
+ * (domain 2,5–4,5, gridlines and labels at 3,0 · 3,5 · 4,0 · 4,5 over readings down to
+ * 2,8): the domain's floor is room for the lowest point to sit in, not a reading, so it
+ * carries no gridline and no label.
+ */
+export interface TrendAxis {
+  low: number
+  high: number
+  ticks: number[]
+}
+
+export function trendAxis(values: readonly (number | null)[], target: number): TrendAxis {
   const present = values.filter((value): value is number => typeof value === 'number')
-  const low = Math.floor((Math.min(...present, target) - 0.2) * 2) / 2
+  const lowest = Math.min(...present, target)
+  const low = Math.floor((lowest - 0.2) * 2) / 2
   const high = Math.ceil((Math.max(...present, target) + 0.2) * 2) / 2
+  const first = Math.ceil(round1(lowest) * 2) / 2
   const ticks: number[] = []
-  for (let tick = low; tick <= high + 1e-9; tick += 0.5) ticks.push(round1(tick))
-  return ticks
+  for (let tick = first; tick <= high + 1e-9; tick += 0.5) ticks.push(round1(tick))
+  return { low, high, ticks }
+}
+
+/**
+ * ONE y axis for all six charts: the ticks that enclose every reading of every
+ * dimension, and the target. Small multiples on six different scales invite the eye to
+ * compare slopes that are not comparable — a 0,3 rise on a 1-point axis looks like a
+ * 0,6 rise on a half-point one — so the canvas draws all six on one axis and this does
+ * the same from the data.
+ */
+export function sharedTrendAxis(dimensions: readonly TrendDimension[], target: number): TrendAxis {
+  return trendAxis(
+    dimensions.flatMap((dimension) => dimension.values),
+    target,
+  )
 }

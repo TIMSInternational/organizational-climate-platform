@@ -1,25 +1,38 @@
-import { axisTicks, standing } from './derive'
+import { standing, trendAxis, type TrendAxis } from './derive'
 
 /**
- * One dimension across the closed waves, against the target — `TrendSparkline` from the
- * dashboard scaled up to a chart: a 0.5-step axis with gridlines, a dashed target rule
- * with its own label, a value printed at every point, and the wave under each point.
+ * One dimension across the closed waves, against the target — the canvas's chart
+ * (ClimateTrends artboard, 10 Sep): a 330×150 figure with a recessive 0.5-step grid, a
+ * dashed target rule labelled "meta 3,7", a 2px line with ringed 8px markers and the
+ * value over each, the latest marker a step larger, and the wave under each point.
+ *
+ * ## One axis for the page
+ *
+ * `axis` is the one the page computed for ALL six charts (`sharedTrendAxis`), so two
+ * slopes side by side are on the same scale. Left out, the chart derives its own from
+ * its values, which is what a chart drawn alone wants.
  *
  * ## A withheld wave breaks the line
  *
- * A `null` value is a wave the floor withheld (or one that never asked this dimension).
- * The line is drawn as one segment per run of disclosed readings and never across a
- * gap: a stroke from the wave before to the wave after would let a reader interpolate
- * the number the floor exists to protect. The gap is marked at the baseline with a
- * hollow marker and the word "withheld", so it reads as a decision rather than as a
- * missing point.
+ * A `null` value with `withheld[index]` set is a wave the floor withheld. The line is
+ * drawn as one segment per run of disclosed readings and never across a gap: a stroke
+ * from the wave before to the wave after would let a reader interpolate the number the
+ * floor exists to protect. The gap is marked at the baseline with a hollow marker and the
+ * word "protegido", so it reads as a decision rather than as a missing point. A `null`
+ * that is NOT withheld is a wave that did not ask this dimension: the line breaks there
+ * too, and nothing claims a protection that was not applied.
  *
- * Colour: the three hexes are the SVG marks only, as `TrendSparkline` fixes them for
- * both themes; every label is `currentColor`, so text follows the theme.
+ * Colour: the three hexes are the SVG marks only (line, below-target endpoint, target
+ * rule), as `TrendSparkline` fixes them for both themes; the grid, the marker rings and
+ * every label are theme tokens, so the figure follows the theme.
  */
 export interface DimensionTrendChartProps {
   values: readonly (number | null)[]
+  /** Per value: `true` when the floor withheld that wave. Omitted means none was. */
+  withheld?: readonly boolean[]
   target: number
+  /** The y axis, shared by every chart on the page; derived from `values` when omitted. */
+  axis?: TrendAxis
   /** One per value, drawn under the points. */
   labels: readonly string[]
   /** Already-translated accessible description of the whole figure. */
@@ -37,15 +50,31 @@ export interface DimensionTrendChartProps {
 const LINE = '#6a6ece'
 const BELOW_TARGET = '#dd0c15'
 const TARGET = '#b9b6cc'
-const GRID = 'currentColor'
-const PAD_LEFT = 34
-const PAD_RIGHT = 14
-const PAD_TOP = 14
-const PAD_BOTTOM = 22
+/** Where the plot starts; the tick labels end 6px before it. */
+const AXIS_LEFT = 30
+const AXIS_RIGHT = 24
+/** The first and last points sit this far inside the plot, as the canvas draws them. */
+const INSET = 22
+const PLOT_TOP = 16
+/** From the bottom edge: the x labels live in this band. */
+const LABEL_BAND = 26
+
+interface Box {
+  x1: number
+  x2: number
+  y1: number
+  y2: number
+}
+
+function overlaps(a: Box, b: Box): boolean {
+  return a.x1 < b.x2 && b.x1 < a.x2 && a.y1 < b.y2 && b.y1 < a.y2
+}
 
 export default function DimensionTrendChart({
   values,
+  withheld,
   target,
+  axis: sharedAxis,
   labels,
   label,
   withheldText,
@@ -54,15 +83,13 @@ export default function DimensionTrendChart({
   width = 330,
   height = 150,
 }: DimensionTrendChartProps) {
-  const ticks = axisTicks(values, target)
-  const low = ticks[0] ?? target - 0.5
-  const high = ticks[ticks.length - 1] ?? target + 0.5
-  const plotHeight = height - PAD_TOP - PAD_BOTTOM
-  const plotWidth = width - PAD_LEFT - PAD_RIGHT
-  const step = values.length > 1 ? plotWidth / (values.length - 1) : 0
-  const x = (index: number) => PAD_LEFT + index * step
-  const y = (value: number) => PAD_TOP + ((high - value) / (high - low)) * plotHeight
-  const baseline = PAD_TOP + plotHeight
+  const { low, high, ticks } = sharedAxis ?? trendAxis(values, target)
+  const plotBottom = height - LABEL_BAND
+  const firstX = AXIS_LEFT + INSET
+  const lastX = width - AXIS_RIGHT - INSET
+  const step = values.length > 1 ? (lastX - firstX) / (values.length - 1) : 0
+  const x = (index: number) => (values.length > 1 ? firstX + index * step : (firstX + lastX) / 2)
+  const y = (value: number) => PLOT_TOP + ((high - value) / (high - low)) * (plotBottom - PLOT_TOP)
 
   // Runs of consecutive disclosed readings, each its own path — never one across a gap.
   const segments: { x: number; y: number }[][] = []
@@ -77,31 +104,30 @@ export default function DimensionTrendChart({
   })
   const paths = segments
     .filter((points) => points.length > 1)
-    .map((points) =>
-      points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' '),
-    )
+    .map((points) => points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' '))
 
   let lastIndex = -1
   values.forEach((value, index) => {
     if (value !== null) lastIndex = index
   })
 
-  // The target's own label sits on the side whose endpoint is farther from the rule,
-  // below the rule unless that endpoint is just under it — the two labels would
-  // otherwise print on top of each other whenever a reading is near the target.
-  const firstValue = values.find((value): value is number => value !== null) ?? target
-  const lastValue = lastIndex === -1 ? target : (values[lastIndex] ?? target)
-  const gapLeft = Math.abs(y(firstValue) - y(target))
-  const gapRight = Math.abs(y(lastValue) - y(target))
-  const onLeft = gapLeft >= gapRight
-  const sideValue = onLeft ? firstValue : lastValue
-  const sideGap = onLeft ? gapLeft : gapRight
-  const crowdedBelow = sideValue < target && sideGap < 26
-  const targetLabel = {
-    x: onLeft ? PAD_LEFT + 2 : width - PAD_RIGHT,
-    y: crowdedBelow ? y(target) - 4 : y(target) + 11,
-    anchor: (onLeft ? 'start' : 'end') as 'start' | 'end',
-  }
+  // The target's label goes where it collides with no point and no value printed over
+  // one: left above the rule, then left below, then the same two on the right.
+  const taken: Box[] = values.flatMap((value, index) =>
+    value === null ? [] : [{ x1: x(index) - 16, x2: x(index) + 16, y1: y(value) - 21, y2: y(value) + 6 }],
+  )
+  const ruleY = y(target)
+  const labelWidth = targetText.length * 5.2
+  const candidates = [
+    { x: AXIS_LEFT + 2, y: ruleY - 4, anchor: 'start' as const, box: { x1: AXIS_LEFT, x2: AXIS_LEFT + 2 + labelWidth, y1: ruleY - 13, y2: ruleY - 2 } },
+    { x: AXIS_LEFT + 2, y: ruleY + 12, anchor: 'start' as const, box: { x1: AXIS_LEFT, x2: AXIS_LEFT + 2 + labelWidth, y1: ruleY + 2, y2: ruleY + 14 } },
+    { x: width - AXIS_RIGHT, y: ruleY - 4, anchor: 'end' as const, box: { x1: width - AXIS_RIGHT - labelWidth, x2: width - AXIS_RIGHT, y1: ruleY - 13, y2: ruleY - 2 } },
+    { x: width - AXIS_RIGHT, y: ruleY + 12, anchor: 'end' as const, box: { x1: width - AXIS_RIGHT - labelWidth, x2: width - AXIS_RIGHT, y1: ruleY + 2, y2: ruleY + 14 } },
+  ]
+  const targetLabel = candidates.find((candidate) => !taken.some((box) => overlaps(box, candidate.box))) ?? candidates[0]
+
+  const anchorAt = (index: number): 'start' | 'middle' | 'end' =>
+    values.length > 1 && index === 0 ? 'start' : values.length > 1 && index === values.length - 1 ? 'end' : 'middle'
 
   return (
     <svg
@@ -114,28 +140,35 @@ export default function DimensionTrendChart({
       {ticks.map((tick) => (
         <g key={tick}>
           <line
-            x1={PAD_LEFT}
-            x2={width - PAD_RIGHT}
+            x1={AXIS_LEFT}
+            x2={width - AXIS_RIGHT}
             y1={y(tick)}
             y2={y(tick)}
-            stroke={GRID}
-            strokeOpacity={0.12}
+            className="stroke-line-light"
             strokeWidth={1}
           />
-          <text x={PAD_LEFT - 6} y={y(tick) + 3} textAnchor="end" fill="currentColor" fontSize={9} className="font-mono">
+          <text
+            data-slot="trend-tick"
+            x={AXIS_LEFT - 6}
+            y={y(tick) + 3.5}
+            textAnchor="end"
+            fill="currentColor"
+            fontSize={10}
+            className="font-mono"
+          >
             {format(tick)}
           </text>
         </g>
       ))}
       <line
         data-slot="trend-target"
-        x1={PAD_LEFT}
-        x2={width - PAD_RIGHT}
-        y1={y(target)}
-        y2={y(target)}
+        x1={AXIS_LEFT}
+        x2={width - AXIS_RIGHT}
+        y1={ruleY}
+        y2={ruleY}
         stroke={TARGET}
         strokeWidth={1}
-        strokeDasharray="3 3"
+        strokeDasharray="4 3"
       />
       <text
         data-slot="trend-target-label"
@@ -143,19 +176,42 @@ export default function DimensionTrendChart({
         y={targetLabel.y}
         textAnchor={targetLabel.anchor}
         fill="currentColor"
-        fontSize={9}
+        fontSize={10}
       >
         {targetText}
       </text>
       {paths.map((d, index) => (
-        <path key={index} data-slot="trend-segment" d={d} fill="none" stroke={LINE} strokeWidth={1.5} />
+        <path
+          key={index}
+          data-slot="trend-segment"
+          d={d}
+          fill="none"
+          stroke={LINE}
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
       ))}
       {values.map((value, index) => {
         if (value === null) {
+          if (!withheld?.[index]) return null
           return (
             <g key={index} data-slot="trend-withheld">
-              <circle cx={x(index)} cy={baseline} r={3.5} fill="none" stroke={TARGET} strokeDasharray="2 2" />
-              <text x={x(index)} y={baseline - 8} textAnchor="middle" fill="currentColor" fontSize={9}>
+              <circle
+                cx={x(index)}
+                cy={plotBottom}
+                r={4}
+                className="fill-surface-card"
+                stroke={TARGET}
+                strokeDasharray="2 2"
+              />
+              <text
+                x={anchorAt(index) === 'start' ? x(index) - 4 : anchorAt(index) === 'end' ? x(index) + 4 : x(index)}
+                y={plotBottom - 9}
+                textAnchor={anchorAt(index)}
+                fill="currentColor"
+                fontSize={10}
+              >
                 {withheldText}
               </text>
             </g>
@@ -170,16 +226,17 @@ export default function DimensionTrendChart({
               data-below-target={isLast ? (below ? 'true' : 'false') : undefined}
               cx={x(index)}
               cy={y(value)}
-              r={isLast ? 3.5 : 2.5}
+              r={isLast ? 5 : 4}
               fill={below ? BELOW_TARGET : LINE}
+              className="stroke-surface-card"
+              strokeWidth={2}
             />
             <text
-              x={index === 0 ? x(index) + 2 : x(index)}
-              y={y(value) - 8}
-              textAnchor={index === 0 ? 'start' : index === values.length - 1 ? 'end' : 'middle'}
-              fill="currentColor"
-              fontSize={10}
-              className="font-mono"
+              x={x(index)}
+              y={y(value) - 10}
+              textAnchor="middle"
+              fontSize={11}
+              data-slot="trend-value" className="fill-fg-primary font-mono"
             >
               {format(value)}
             </text>
@@ -190,10 +247,11 @@ export default function DimensionTrendChart({
         <text
           key={`${index}-${text}`}
           x={x(index)}
-          y={height - 6}
-          textAnchor={index === 0 ? 'start' : index === labels.length - 1 ? 'end' : 'middle'}
+          y={height - 8}
+          textAnchor="middle"
           fill="currentColor"
-          fontSize={9}
+          fontSize={10}
+          className="font-mono"
         >
           {text}
         </text>

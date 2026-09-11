@@ -1,13 +1,18 @@
 import { getActionPlan, listActionPlans } from '../../action-plans/api/actionPlans'
 import { getMicroclimate, listMicroclimates } from '../../microclimates/api/microclimates'
 import { DEPARTMENT_GROUP, getClimateTrends } from '../../surveys/api/climateTrends'
-import { listSurveys } from '../../surveys/api/surveys'
+import { listSurveyInvitations } from '../../surveys/api/surveyDistribution'
+import { getSurvey, listSurveys } from '../../surveys/api/surveys'
 import { listPlanesAccion } from '../../tracking/api/trackingApi'
 import { getNodoNames, listPersonaOptions } from '../../tracking/api/trackingPickers'
 import { getCompanyAdminDashboard } from '../api/dashboard'
 import {
   composeModel,
   coveringPlan,
+  currentOpenSurvey,
+  latestClosedSurvey,
+  questionOrderOf,
+  remindersOf,
   type ActionPlansPart,
   type ComposedModel,
   type MicroclimatesPart,
@@ -77,7 +82,13 @@ export async function loadAdminDashboard(deps: LoadDeps): Promise<ComposedModel>
   const inherited: Part<never> =
     company.status === 'fallback' ? company : { status: 'fallback', reason: 'failed', error: null }
 
-  const [plans, tracking, microclimates] = await Promise.all([
+  // Two enrichments of the surveys region, read beside the scoped ones: the latest closed
+  // survey's question order (the map's columns) and the open survey's reminders.
+  const listed = surveys.status === 'live' ? surveys.value : []
+  const latestClosed = latestClosedSurvey(listed)
+  const open = currentOpenSurvey(listed)
+
+  const [plans, tracking, microclimates, questionOrder, reminders] = await Promise.all([
     tenant ? settle(() => listActionPlans(baseUrl, tenant, {}, lang)) : Promise.resolve(inherited),
     deps.trackingBaseUrl === null
       ? Promise.resolve<Part<TrackingPart>>({ status: 'off' })
@@ -85,12 +96,18 @@ export async function loadAdminDashboard(deps: LoadDeps): Promise<ComposedModel>
         ? settle(() => loadTracking(deps.trackingBaseUrl as string, baseUrl, tenant))
         : Promise.resolve(inherited),
     tenant ? settle(() => loadMicroclimates(baseUrl, tenant, lang)) : Promise.resolve(inherited),
+    latestClosed
+      ? settle(() => getSurvey(baseUrl, latestClosed.id, lang).then(questionOrderOf))
+      : Promise.resolve<Part<readonly string[]>>({ status: 'off' }),
+    open
+      ? settle(() => listSurveyInvitations(baseUrl, open.id, {}, lang).then(remindersOf))
+      : Promise.resolve<Part<number>>({ status: 'off' }),
   ])
 
   let actionPlans: Part<ActionPlansPart> =
     plans.status === 'live' ? { status: 'live', value: { plans: plans.value, covering: null } } : plans
   const options = { asOf: deps.asOf, floor: deps.floor, dimensionName: deps.dimensionName, sample: sampleModel }
-  const parts = { company, surveys, trends, map, tracking, microclimates }
+  const parts = { company, surveys, trends, map, tracking, microclimates, questionOrder, reminders }
 
   const first = composeModel({ ...parts, actionPlans }, options)
   if (actionPlans.status === 'live') {

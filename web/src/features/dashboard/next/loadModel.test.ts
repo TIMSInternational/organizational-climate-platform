@@ -65,6 +65,11 @@ function routes(): Route[] {
     },
     { match: (url) => url.includes('/tracking/picker/nodos'), body: { nodos: [{ id: 'd-fin', name: 'Finanzas' }] } },
     { match: (url) => url.includes('/tracking/picker/personas'), body: { personas: [{ id: 'p-1', name: 'Adriana Marín', email: 'a@x' }] } },
+    { match: (url) => url.includes('/surveys/sv-q3?'), body: { id: 'sv-q3', questions: [{ order: 0, category: 'workload' }] } },
+    {
+      match: (url) => url.includes('/surveys/sv-q4/invitations'),
+      body: { invitations: [{ reminderCount: 1 }, { reminderCount: 2 }], summary: {}, anonymity: {} },
+    },
   ]
 }
 
@@ -112,7 +117,8 @@ describe('loadAdminDashboard', () => {
     expect(model.attention).toEqual([
       { kind: 'lowest-cell', plan: { id: 'ap-ops', name: 'Reduce the workload in Operations', progress: 40 } },
       { kind: 'overdue-plan', nodo: 'Finanzas', plan: { id: 'tp-fin', name: 'Handover', progress: 0, owner: 'Adriana Marín', dueAt: '2026-08-20' } },
-      { kind: 'low-participation', surveyId: 'sv-q4', remindersSent: null },
+      // Read from the open survey's invitations: 1 + 2 reminders sent.
+      { kind: 'low-participation', surveyId: 'sv-q4', remindersSent: 3 },
     ])
     expect(model.liveMicroclimate).toMatchObject({ id: 'mc-pulse', closesAt: '2026-09-11T18:00:00Z' })
 
@@ -191,5 +197,14 @@ describe('loadAdminDashboard', () => {
     expect(regions.tracking).toEqual({ status: 'fallback', reason: 'failed', error: 'Service unavailable' })
     expect(regions.surveys).toEqual({ status: 'live' })
     expect(requested().some((url) => url.includes('/action-plans'))).toBe(false)
+  })
+
+  it('reads the latest closed survey’s question order and the open survey’s reminders beside the regions', async () => {
+    serve(routes())
+    const { model } = await loadAdminDashboard(deps())
+    const urls = requested()
+    expect(urls).toContain(`${API}/surveys/sv-q3?lang=es`)
+    expect(urls).toContain(`${API}/surveys/sv-q4/invitations?lang=es`)
+    expect(model.attention.find((item) => item.kind === 'low-participation')).toMatchObject({ remindersSent: 3 })
   })
 })

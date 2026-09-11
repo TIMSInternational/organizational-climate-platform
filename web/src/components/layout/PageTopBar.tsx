@@ -92,13 +92,12 @@ import {
  *   already has an `<h1>` in the caption above the shell; here the page title is
  *   the document's heading, every caller renders exactly one of them, and demoting
  *   it would break the heading outline for AT.
- * - **20px, not 19px.** `text-2xl` is the type scale's step here, and the scale
- *   is a checked port (`styles/tokens.test.ts` pins it at eight `rem` sizes). A
- *   ninth token for a 1px difference buys nothing; the change that matters is
- *   away from the bare `h1`'s 24px, which is 26% too heavy for this header.
- *   `tracking-tight` is -0.025em against the prototype's -0.02em, and
- *   `font-semibold` is 600 against its 640 — which no static Poppins weight can
- *   render anyway, `styles/fonts.css` loading 400/500/600/700.
+ * - **24px — `text-3xl`.** The approved canvas (10 Sep, every artboard) sets the
+ *   page title in the serif at 24px, which is also the bare `h1` rule's size. The
+ *   first cut stepped it down to 20px (`text-2xl`) against an earlier prototype;
+ *   drawn beside the artboards that read as a smaller, lighter header on every
+ *   screen, so the class now names the canvas's step. The scale is a checked port
+ *   (`styles/tokens.test.ts` pins it at eight `rem` sizes) and 24px is on it.
  * - **The description's cap is `max-w-measure`, not `max-w-prose`.** The design
  *   caps prose at 70ch; Tailwind v4 emits `max-w-prose` as a static utility with
  *   a literal 65ch rather than from a theme key, so it cannot be re-pointed, and
