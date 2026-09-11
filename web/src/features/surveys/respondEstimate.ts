@@ -9,9 +9,10 @@
  * it says "about", and a survey that reported its own estimate would be a server field
  * rather than this arithmetic.
  *
- * Moved here from `dashboard/components/EmployeeDashboardView.tsx`, which keeps a
- * private copy while it still stands as the no-department fallback, so that the Home
+ * Moved here from `dashboard/components/EmployeeDashboardView.tsx` so that the Home
  * card and the respond page's footer cannot quote the same survey two different ways.
+ * That file keeps a private copy only because it is left as it was, as the wiring
+ * reference: nothing routes to it or imports it any more (`router.test.ts`).
  */
 export function estimatedMinutes(questionCount: number): number {
   return Math.max(1, Math.round((questionCount * 2) / 3))

@@ -83,9 +83,10 @@ export default function DashboardPage() {
   }
 
   // The redesigned employee Home (the canvas's EmployeeDashboard, 10 Sep), which replaced
-  // `EmployeeDashboardView` on this branch. The old view stays in the tree — it is still
-  // the no-department fallback `DepartmentAdminDashboardView` draws for a leader, and the
-  // wiring reference for this one.
+  // `EmployeeDashboardView`. The old view stays in the tree as the wiring reference only:
+  // nothing routes to it or imports it. `DepartmentAdminDashboardView`'s no-department
+  // fallback draws this same `EmployeeHomeView` — both dispatchers are pinned in
+  // `router.test.ts`.
   return <EmployeeHomeView />
 }
 
