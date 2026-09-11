@@ -143,6 +143,8 @@ export function utcOffsetLabel(timeZone: string, at: Date): string | null {
   if (part === 'GMT') return 'UTC'
   const match = /^GMT([+-])(\d{1,2})(?::(\d{2}))?$/.exec(part)
   if (!match) return null
+  // Some engines name UTC itself "GMT+0"; a zero offset is just UTC.
+  if (Number(match[2]) === 0 && !match[3]) return 'UTC'
   const sign = match[1] === '-' ? '−' : '+'
   return `UTC${sign}${match[2]}${match[3] ? `:${match[3]}` : ''}`
 }

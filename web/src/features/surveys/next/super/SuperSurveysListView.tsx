@@ -63,6 +63,19 @@ const HEAD = 'px-3 pt-2 pb-2 text-left text-2xs font-bold uppercase leading-norm
  */
 const SUPER_ROW: RowCapabilities = { canAuthorSurveys: true, canOpenResults: () => true }
 
+/**
+ * The SuperSurveysList artboard stacks what closed straight under what is open — the wave just
+ * read sits under the wave being answered, across tenants — and the drafts after both; the
+ * archived block stays last and demoted. The chip row follows the same reading order.
+ */
+const SUPER_SECTIONS: readonly SurveySection[] = ['open', 'closed', 'upcoming', 'archived']
+const FACET_ORDER: readonly string[] = ['active', 'closed', 'draft', 'scheduled', 'archived']
+
+function facetRank(status: string): number {
+  const index = FACET_ORDER.indexOf(status)
+  return index === -1 ? FACET_ORDER.length : index
+}
+
 function waveOrdinal(t: TranslateFn, place: number): string {
   if (place >= 2 && place <= 10) return t(`surveys.next.super.wave${place}`)
   return t('surveys.next.super.waveN', { n: place })
@@ -81,8 +94,13 @@ export default function SuperSurveysListView() {
   const capabilities = useViewerCapabilities()
   const model = useSuperSurveysListModel()
   const { base } = model
-  const sections = groupBySection(model.visible)
-  const facets = [{ status: '', count: model.rows.length }, ...visibleFacets(model.facets, base.statusFilter)]
+  const sections = groupBySection(model.visible).sort(
+    (a, b) => SUPER_SECTIONS.indexOf(a.section) - SUPER_SECTIONS.indexOf(b.section),
+  )
+  const facets = [
+    { status: '', count: model.rows.length },
+    ...visibleFacets(model.facets, base.statusFilter).sort((a, b) => facetRank(a.status) - facetRank(b.status)),
+  ]
   const companies = companyCount(model.rows)
 
   return (
@@ -414,15 +432,15 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
           <span className="truncate text-xs text-fg-light">{meta}</span>
         </div>
       </td>
-      <td className="py-3 pr-3">
+      <td className="py-3 pr-3 pl-0">
         <span data-slot="row-company" className="block truncate text-sm font-medium text-fg-secondary">
           {company}
         </span>
       </td>
-      <td className="py-3 pr-3">
+      <td className="py-3 pr-3 pl-0">
         <Chip tone={statusTone(section)} label={statusLabel(t, row.status)} />
       </td>
-      <td className="py-3 pr-3 whitespace-nowrap">
+      <td className="py-3 pr-3 pl-0 whitespace-nowrap">
         {upcoming ? (
           <span className="text-sm text-fg-tertiary">{t('surveys.next.super.unpublished')}</span>
         ) : (
@@ -438,7 +456,7 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
           </span>
         )}
       </td>
-      <td className="py-3 pr-3">
+      <td className="py-3 pr-3 pl-0">
         {upcoming || (archived && counts.count === 0) ? (
           <span className="text-sm text-fg-light">{t('surveys.next.list.noSubmissions')}</span>
         ) : counts.percent === null ? (
@@ -456,7 +474,7 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
           </span>
         )}
       </td>
-      <td className="py-3 pr-3 whitespace-nowrap">
+      <td className="py-3 pr-3 pl-0 whitespace-nowrap">
         {archived ? (
           <span aria-hidden="true" className="text-base text-fg-light">
             —
@@ -472,7 +490,7 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
           </span>
         )}
       </td>
-      <td className="py-3 pr-3">
+      <td className="py-3 pr-3 pl-0">
         <div className="flex items-center justify-end gap-2">
           {action && (
             <Button asChild variant="outline">
