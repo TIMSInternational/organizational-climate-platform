@@ -189,25 +189,37 @@ describe('ActionPlansListNextPage — company_admin', () => {
     expect(table.querySelector('th[data-col="owner"] [data-slot="sample-chip"]')).toBeNull()
   })
 
-  it('sets the columns on the artboard grid — Vence, Prioridad and the actions at 132, 92 and 144px, finding and owner sharing its 384 — each cell padded on the left only', async () => {
+  it('sets the columns on the artboard grid — the finding, the owner, Vence, Prioridad and the actions at 222, 162, 132, 92 and 144px — each cell padded on the left only', async () => {
     renderPage()
     await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
     const table = section(next.groupNotStarted).querySelector('table') as HTMLTableElement
     const width = (col: string) => (table.querySelector(`th[data-col="${col}"]`) as HTMLElement).className.match(/\bw-\[(\d+)px\]/)?.[1]
-    expect(['finding', 'owner', 'due', 'priority', 'actions'].map(width)).toEqual(['255', '129', '132', '92', '144'])
-    // The finding and the owner keep the artboard's 222 + 162 between them, so Vence and
-    // Prioridad sit where the artboard puts them.
-    expect(Number(width('finding')) + Number(width('owner'))).toBe(222 + 162)
+    // The artboard's `210px 150px 120px 80px 120px` plus the 12px gap before each.
+    expect(['finding', 'owner', 'due', 'priority', 'actions'].map(width)).toEqual(['222', '162', '132', '92', '144'])
     for (const cell of table.querySelectorAll('th, td')) {
       expect(cell.className).toMatch(/(^|\s)pl-3(\s|$)/)
       expect(cell.className).toMatch(/(^|\s)pr-0(\s|$)/)
       expect(cell.className).toContain('last:pr-3')
     }
-    // The one heading that keeps a chip keeps it on its own line.
+  })
+
+  it('hangs the sample chip UNDER the finding heading, so the heading keeps the artboard line and its 222px column', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
+    const table = section(next.groupNotStarted).querySelector('table') as HTMLTableElement
+    for (const th of table.querySelectorAll('th')) {
+      // Every heading at the top of its cell: the chip under one of them adds a line below the
+      // headings instead of pushing the others down to its middle.
+      expect(th.className).toMatch(/(^|\s)align-top(\s|$)/)
+    }
     const heading = table.querySelector('th[data-col="finding"]') as HTMLElement
     expect(heading.className).toContain('whitespace-nowrap')
     const chip = heading.querySelector('[data-slot="sample-chip"]') as HTMLElement
-    expect((chip.parentElement as HTMLElement).className).not.toMatch(/flex-wrap/)
+    const stack = chip.parentElement as HTMLElement
+    // A column, the heading's words first and the chip on the line under them.
+    expect(stack.className).toMatch(/(^|\s)flex-col(\s|$)/)
+    expect(stack.firstChild?.textContent).toBe(next.colFinding)
+    expect(stack.lastElementChild).toBe(chip)
   })
 
   it('folds the finding and owner into the plan cell below 1360px instead of scrolling a minimum width', async () => {
@@ -234,11 +246,18 @@ describe('ActionPlansListNextPage — company_admin', () => {
     expect(screen.getByRole('link', { name: 'Reuniones abiertas con la dirección' })).toBeTruthy()
   })
 
-  it('prints the first plan behind on one line, as the tile reads, with the whole of it in its title', async () => {
+  it('prints the first plan behind on one line, cut after a whole word as the tile reads, with the whole of it in its title', async () => {
     renderPage()
     const first = await screen.findByText('Finanzas · Reponer la reunión de handover entre turnos')
-    expect(first.className).toMatch(/(^|\s)truncate(\s|$)/)
+    // The line wraps at word boundaries and shows its first line only: "…de handover", never
+    // "…de handove…" (the CSS ellipsis cuts inside a word, the refuter's shot at 1440).
+    expect(first.className).toContain('max-h-[1lh]')
+    expect(first.className).toMatch(/(^|\s)overflow-hidden(\s|$)/)
+    expect(first.className).toMatch(/(^|\s)whitespace-normal(\s|$)/)
+    expect(first.className).not.toMatch(/(^|\s)(truncate|text-ellipsis|whitespace-nowrap)(\s|$)/)
     expect(first.className).not.toContain('line-clamp')
+    // "la" and "de" are tied to the next word, so the line never stops on one of them.
+    expect(first.textContent).toBe('Finanzas · Reponer la\u00A0reunión de\u00A0handover entre turnos')
     expect(first.getAttribute('title')).toBe('Finanzas · Reponer la reunión de handover entre turnos')
   })
 
@@ -254,17 +273,26 @@ describe('ActionPlansListNextPage — company_admin', () => {
     renderPage()
     await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
     const labels = [...document.querySelectorAll('[data-slot="due-timeline-label"]')] as HTMLElement[]
+    // The plans' own titles, each short word tied to the next by a no-break space, so a label
+    // cut by its room stops at "…de trabajo" or "Reuniones abiertas", never on "en" or "la".
     expect(labels.map((label) => label.textContent)).toEqual([
-      'Programa de reconocimiento entre pares',
-      'Reducir la carga de trabajo en Operaciones',
-      'Reuniones abiertas con la dirección',
-      'Plan de desarrollo de carrera en Ingeniería',
+      'Programa de\u00A0reconocimiento entre pares',
+      'Reducir la\u00A0carga de\u00A0trabajo en\u00A0Operaciones',
+      'Reuniones abiertas con\u00A0la\u00A0dirección',
+      'Plan de\u00A0desarrollo de\u00A0carrera en\u00A0Ingeniería',
     ])
+    const align = { start: 'text-left', middle: 'text-center', end: 'text-right' } as const
     for (const label of labels) {
-      expect(label.className).toMatch(/(^|\s)truncate(\s|$)/)
-      expect(label.className).toContain('whitespace-nowrap')
-      expect(label.getAttribute('title')).toBe(label.textContent)
-      expect(Number.parseFloat(label.style.maxWidth)).toBeGreaterThan(100)
+      // One line box, the title wrapping at word boundaries inside it: whatever does not fit
+      // stops after a whole word, never an ellipsis inside one ("…trabajo en …", r3).
+      expect(label.className).toContain('max-h-[1lh]')
+      expect(label.className).toMatch(/(^|\s)overflow-hidden(\s|$)/)
+      expect(label.className).toMatch(/(^|\s)whitespace-normal(\s|$)/)
+      expect(label.className).not.toMatch(/(^|\s)(truncate|text-ellipsis|whitespace-nowrap)(\s|$)/)
+      // The box is the room its neighbours leave, and the line sits in it as the date sits on its dot.
+      expect(Number.parseFloat(label.style.width)).toBeGreaterThan(100)
+      expect(label.className).toContain(align[label.getAttribute('data-anchor') as keyof typeof align])
+      expect(label.getAttribute('title')).toBe(label.textContent?.replaceAll('\u00A0', ' '))
       expect(label.style.top).toBe('51px')
     }
     // One row of labels: the drawing keeps the artboard's 64px.

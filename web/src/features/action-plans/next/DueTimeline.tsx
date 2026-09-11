@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { calendarDay } from '../../../lib/calendarDay'
 import type { TranslateFn } from '../../../i18n'
-import { timelineLabelSlots, type DueTimeline as DueTimelineData, type TimelineAnchor } from './derive'
+import { cn } from '../../../lib/cn'
+import { bindShortWords, timelineLabelSlots, type DueTimeline as DueTimelineData, type TimelineAnchor } from './derive'
 
 /**
  * The drawing is laid out in real pixels: the viewBox is as wide as the card measures, so the
@@ -36,6 +37,9 @@ function useMeasuredWidth<T extends Element>(): [React.RefObject<T | null>, numb
   return [ref, width]
 }
 
+/** The label's line sits in its box as the date above it sits on its dot. */
+const ALIGN: Record<TimelineAnchor, string> = { start: 'text-left', middle: 'text-center', end: 'text-right' }
+
 /** How an HTML label hangs from its dot — the SVG `text-anchor` the dates use, as CSS. */
 function hang(anchor: TimelineAnchor, x: number, width: number): React.CSSProperties {
   if (anchor === 'start') return { left: x }
@@ -49,9 +53,12 @@ function hang(anchor: TimelineAnchor, x: number, width: number): React.CSSProper
  * plan a dot with its date in mono over its name, and a red run from today to the last
  * plan that is due before this month is out.
  *
- * The names are one line each, as the artboard's are: HTML over the drawing, each as wide as
- * `timelineLabelSlots` leaves it before its neighbour's, so a title prints whole where the
- * axis has room and ends in an ellipsis (the whole title in `title`) where it does not.
+ * The names are one line each, as the artboard's are: HTML over the drawing, each box as wide
+ * as `timelineLabelSlots` leaves it before its neighbour's. The title wraps at word boundaries
+ * inside that box and only its first line shows, so it prints whole where the axis has room and
+ * stops after its last WHOLE word where it does not — "Reducir la carga de trabajo", never
+ * "Reducir la carga de trabajo en …" cut mid-word — and never on a short word like "en" or
+ * "la", which `bindShortWords` ties to the word after it. The whole title is in `title`.
  *
  * Colour is never the only signal: the run and the red dots are the urgent ones, and
  * the table below says the same thing in words ("en 20 días · este mes"). The list under
@@ -129,10 +136,14 @@ export default function DueTimeline({
           aria-hidden="true"
           title={point.name}
           data-slot="due-timeline-label"
-          className="pointer-events-auto absolute block truncate whitespace-nowrap text-[10px] leading-3 text-fg-label"
-          style={{ top: NAME_TOP, maxWidth: slots[index].room, ...hang(slots[index].anchor, xs[index], width) }}
+          data-anchor={slots[index].anchor}
+          className={cn(
+            'pointer-events-auto absolute block max-h-[1lh] overflow-hidden whitespace-normal text-[10px] leading-3 text-fg-label',
+            ALIGN[slots[index].anchor],
+          )}
+          style={{ top: NAME_TOP, width: slots[index].room, ...hang(slots[index].anchor, xs[index], width) }}
         >
-          {point.name}
+          {bindShortWords(point.name)}
         </span>
       ))}
       <ul className="sr-only">

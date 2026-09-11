@@ -11,6 +11,7 @@ import {
   ownerReading,
   summarize,
   timelineLabelSlots,
+  bindShortWords,
 } from './derive'
 import type { PlanRow } from './model'
 
@@ -174,5 +175,21 @@ describe('timelineLabelSlots', () => {
 
   it('hangs a plan already past due, which sits on today, from the start of the axis', () => {
     expect(timelineLabelSlots([40, 600], 40, 1080, 1120)[0].anchor).toBe('start')
+  })
+})
+
+describe('bindShortWords', () => {
+  const NBSP = '\u00A0'
+  it('ties each short lowercase word to the next, so a line cut at a word boundary never ends on one', () => {
+    expect(bindShortWords('Reducir la carga de trabajo en Operaciones')).toBe(`Reducir la${NBSP}carga de${NBSP}trabajo en${NBSP}Operaciones`)
+    expect(bindShortWords('Reuniones abiertas con la dirección')).toBe(`Reuniones abiertas con${NBSP}la${NBSP}dirección`)
+  })
+
+  it('leaves longer words, capitalised ones and the last word as they are, and prints the same words', () => {
+    expect(bindShortWords('Programa entre pares')).toBe('Programa entre pares')
+    expect(bindShortWords('Plan IA de Ley')).toBe(`Plan IA de${NBSP}Ley`)
+    expect(bindShortWords('Hablar con')).toBe('Hablar con')
+    const title = 'Plan de desarrollo de carrera en Ingeniería'
+    expect(bindShortWords(title).replaceAll(NBSP, ' ')).toBe(title)
   })
 })

@@ -13,6 +13,10 @@ import es from '../../../i18n/es.json'
 /**
  * `/tracking/planes/:id` — the redesigned plan detail. PA-2026-00001 is the body the local
  * tracking service answered on 10 Sep; the personas are the directory's own rows.
+ *
+ * The clock is pinned to that day (local noon, so no time zone moves it to the 9th or the
+ * 11th): "Venció el 20 de agosto, hace 21 días" is a count from today, and against the real
+ * clock the suite passed only on 10 Sep (CI run 34559118997 went red on the 11th, UTC).
  */
 
 const API = 'http://api.test'
@@ -84,6 +88,8 @@ function renderPage(id = PLAN_ID) {
 const next = es.tracking.next
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 8, 10, 12, 0, 0))
   vi.stubEnv('VITE_TRACKING_API_BASE_URL', TRACKING)
   vi.stubEnv('VITE_API_BASE_URL', API)
   vi.stubGlobal('fetch', vi.fn())
@@ -97,6 +103,7 @@ afterEach(() => {
   localStorage.removeItem(COMPANY_CONTEXT_STORAGE_KEY)
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
+  vi.useRealTimers()
 })
 
 describe('PlanDetailNextPage — an administrator', () => {

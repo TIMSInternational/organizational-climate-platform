@@ -37,6 +37,7 @@ import ActionPlanForm from '../components/ActionPlanForm'
 import DueTimeline from './DueTimeline'
 import {
   applyFilters,
+  bindShortWords,
   daysToDue,
   dueTimeline,
   EMPTY_PLAN_FILTERS,
@@ -52,19 +53,23 @@ import type { ActionPlansListModel, PlanGroup, PlanRow } from './model'
 import { useActionPlansListModel } from './useActionPlansListModel'
 
 /**
- * The artboard's column header: 10px, bold, uppercase, the label ink, no tint.
+ * The artboard's column header: 10px, bold, uppercase, the label ink, no tint — set at the TOP
+ * of its cell, so every heading stands on one line whatever hangs under one of them.
  *
  * Cells pad on the LEFT only, 12px, and the last column on the right too: the artboard's
  * grid is `minmax(0,1fr) 210px 150px 120px 80px 120px` with 12px gaps and 12px at each end,
- * so a column is its content plus the gap before it — 132, 92 and 120 + 24 for Vence,
- * Prioridad and the actions put those headings and values exactly where the artboard does.
+ * so a column is its content plus the gap before it — 222, 162, 132, 92 and 120 + 24 put the
+ * finding, the owner, Vence, Prioridad and the actions exactly where the artboard does.
  *
- * The finding and the owner share the artboard's 384px (222 + 162) differently, 255 + 129:
- * the finding's heading carries the "Datos de muestra" chip the artboard does not draw
- * (127px of heading, 6 of gap, 110 of chip), and 222 would push the chip over "Responsable".
- * The owner's content — the heading, a 28px mark and "Sin asignar" — needs 98 of its 117.
+ * The finding's heading carries the "Datos de muestra" chip the artboard does not draw. Beside
+ * the heading it would need 243px (127 of heading, 6 of gap, 110 of chip) of the column's 210,
+ * and it ran over "Responsable" (r1); so it hangs UNDER the heading (`HEAD_STACK`). The headings
+ * keep the artboard's line and its columns; the header row is one chip taller while the finding
+ * is sample-fed, and loses that line the day the finding reaches the payload.
  */
-const HEAD = 'h-auto bg-transparent pl-3 pr-0 last:pr-3 pb-2 pt-0 text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
+const HEAD = 'h-auto bg-transparent pl-3 pr-0 last:pr-3 pb-2 pt-0 align-top text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
+/** A heading with the sample chip under it rather than beside it. */
+const HEAD_STACK = 'flex flex-col items-start gap-1'
 const CELL = 'pl-3 pr-0 last:pr-3 py-3 align-middle'
 /** Shown from 1360px, where the finding and the owner have columns of their own. */
 const WIDE_ONLY = 'hidden min-[1360px]:table-cell'
@@ -383,16 +388,19 @@ function Tiles({ model, t, locale }: { model: ActionPlansListModel; t: Translate
         sub={
           overdue.first ? (
             <span
-              // One line, as the artboard's tile reads: the place and the plan, and where the
-              // plan's own title outruns the tile, an ellipsis — the whole of it in `title`.
-              className="block truncate text-accent-red"
+              // One line, as the artboard's tile reads ("Finanzas · Reponer la reunión de
+              // handover"): the line wraps at word boundaries and the tile shows its first line
+              // only, so the plan's title stops after the last WHOLE word the tile has room for —
+              // never "handove…", and never on a short word ("de", "la": `bindShortWords`). The
+              // whole of it is in `title`, and a screen reader reads it all.
+              className="block min-w-0 max-h-[1lh] overflow-hidden whitespace-normal text-accent-red"
               data-slot="seguimiento-first"
               data-source={overdue.source}
               title={overdue.first.placeName ? `${overdue.first.placeName} · ${overdue.first.name}` : overdue.first.name}
             >
               {overdue.first.placeName
-                ? t('actionPlans.next.overdueFirst', { place: overdue.first.placeName, name: overdue.first.name })
-                : overdue.first.name}
+                ? t('actionPlans.next.overdueFirst', { place: overdue.first.placeName, name: bindShortWords(overdue.first.name) })
+                : bindShortWords(overdue.first.name)}
             </span>
           ) : (
             <span className="text-fg-label" data-source={overdue.source}>
@@ -566,18 +574,18 @@ function PlanTable({
         <thead>
           <tr className="border-b border-line-default">
             <th className={HEAD}>
-              <span className="flex items-center gap-1.5">
+              <span className={HEAD_STACK}>
                 {t('actionPlans.next.colPlan')}
                 {model.findingsAreSample && <SampleChip t={t} className={FOLDED_ONLY} />}
               </span>
             </th>
-            <th className={cn(HEAD, WIDE_ONLY, 'w-[255px]')} data-col="finding">
-              <span className="flex items-center gap-1.5">
+            <th className={cn(HEAD, WIDE_ONLY, 'w-[222px]')} data-col="finding">
+              <span className={HEAD_STACK}>
                 {t('actionPlans.next.colFinding')}
                 {model.findingsAreSample && <SampleChip t={t} />}
               </span>
             </th>
-            <th className={cn(HEAD, WIDE_ONLY, 'w-[129px]')} data-col="owner">
+            <th className={cn(HEAD, WIDE_ONLY, 'w-[162px]')} data-col="owner">
               {t('actionPlans.next.colOwner')}
             </th>
             <th className={cn(HEAD, 'w-[132px]')} data-col="due">

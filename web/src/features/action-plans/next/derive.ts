@@ -220,12 +220,36 @@ export function isFiltering(filters: PlanFilters): boolean {
   return filters.q.trim() !== '' || filters.status !== '' || filters.priority !== ''
 }
 
+/** A no-break space: the two words either side of it wrap as one. */
+const NBSP = '\u00A0'
+/** A lowercase word of one to three letters: "la", "de", "en", "con", "y", "the", "of". */
+const SHORT_WORD = /^\p{Ll}{1,3}$/u
+
+/**
+ * A plan's title with each short lowercase word ("la", "de", "en", "con", "y") tied to the word
+ * after it by a no-break space, so a line that stops at a word boundary never ends on one.
+ *
+ * The timeline labels and the Seguimiento tile show the first line of a title and hide the rest
+ * (it wraps at word boundaries inside one line box). Untied, "Reuniones abiertas con la
+ * dirección" stops at "Reuniones abiertas con la" and "Reducir la carga de trabajo en
+ * Operaciones" at "…de trabajo en": each reads as a cut rather than a phrase. Tied, the line
+ * stops before the short word: "Reuniones abiertas", "Reducir la carga de trabajo". It is the
+ * rule Spanish typesetting keeps for short words at a line end. The words printed are the same;
+ * the plain title still reaches `title` and the screen reader.
+ */
+export function bindShortWords(text: string): string {
+  const words = text.split(/\s+/).filter(Boolean)
+  return words
+    .map((word, index) => (index === words.length - 1 ? word : word + (SHORT_WORD.test(word) ? NBSP : ' ')))
+    .join('')
+}
+
 export type TimelineAnchor = 'start' | 'middle' | 'end'
 
 /** Where one plan's label sits under its dot: how it hangs from the dot, and how wide it may run. */
 export interface TimelineLabelSlot {
   anchor: TimelineAnchor
-  /** Pixels the label may take before it would meet its neighbour's; the rest ends in an ellipsis. */
+  /** Pixels the label may take before it would meet its neighbour's; it stops after the last whole word that fits. */
   room: number
 }
 
@@ -242,8 +266,9 @@ const EDGE_ANCHOR = 60
  *
  * Each label is the plan's own title (the artboard's hand-shortened "Carga · Operaciones" is
  * half finding dimension, which no endpoint carries — `sampleModel.ts`). It prints whole where
- * the axis leaves it room and ends in an ellipsis only where a neighbour's label begins, so a
- * wide screen shows more of each title and a narrow one less, never two labels over each other.
+ * the axis leaves it room and stops after its last whole word where a neighbour's label begins,
+ * so a wide screen shows more of each title and a narrow one less, never two labels over each
+ * other and never a word cut in half.
  *
  * Laid out left to right: a centred label takes the same room either side of its dot, up to
  * the end of the label before it and the midpoint to the dot after it; a label at an end of
