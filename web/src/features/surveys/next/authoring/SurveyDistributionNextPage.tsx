@@ -392,7 +392,7 @@ export function DistributionView({
       </section>
 
       <Dialog open={audienceOpen} onOpenChange={setAudienceOpen}>
-        <DialogContent>
+        <DialogContent closeLabel={t('common.close')}>
           <DialogHeader>
             <DialogTitle>{copy('changeAudience')}</DialogTitle>
           </DialogHeader>

@@ -1,3 +1,9 @@
+/*
+ * UNROUTED since the redesign (ruled 10 Sep): `/surveys/new` renders
+ * `next/authoring/SurveyBuilderNextPage`. This page stays in the tree as the wiring reference for
+ * the builder -- the same state, draft and submit, now in `useSurveyBuilderModel` -- until the
+ * builder has shipped a release without needing it.
+ */
 import { useCallback, useEffect, useId, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { AlertTriangle, Check, Plus, ShieldCheck, Trash2 } from 'lucide-react'

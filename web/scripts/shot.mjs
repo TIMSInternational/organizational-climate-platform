@@ -94,6 +94,9 @@ const { values, positionals } = parseArgs({
     server: { type: 'string' },
     port: { type: 'string', default: 'auto' },
     settle: { type: 'string', default: '400' },
+    // A button to press before the capture, by its accessible name; repeatable. For a state
+    // only a user's press reaches (a recovered draft, an open menu) -- never to fill a form.
+    click: { type: 'string', multiple: true },
     viewport: { type: 'boolean', default: false },
     help: { type: 'boolean', default: false },
   },
@@ -350,6 +353,11 @@ async function main() {
     await page.waitForLoadState('networkidle').catch(() => {})
     await page.evaluate(() => document.fonts.ready)
     await page.waitForTimeout(settleMs)
+    for (const name of values.click ?? []) {
+      await page.getByRole('button', { name }).first().click()
+      await page.waitForLoadState('networkidle').catch(() => {})
+      await page.waitForTimeout(settleMs)
+    }
 
     const applied = await page.evaluate(() =>
       document.documentElement.getAttribute('data-admin-theme'),
