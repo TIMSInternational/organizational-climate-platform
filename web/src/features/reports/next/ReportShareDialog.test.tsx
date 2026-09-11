@@ -134,7 +134,24 @@ describe('ReportShareDialog', () => {
     expect(link.querySelector('[data-slot="report-share-masked"]')?.textContent).toMatch(/\/shared\/reports\/····$/)
     expect(within(link).queryByRole('button', { name: 'Copiar' })).toBeNull()
     expect(within(link).getByRole('button', { name: 'Revocar' })).toBeTruthy()
-    expect(screen.getByText('El enlace completo solo se muestra al crearlo.')).toBeTruthy()
+  })
+
+  it('explains the dots on the masked link itself, never in a line of its own under the card', async () => {
+    // The ReportShare artboard has nothing between the link card and "Mostrar revocados"; the
+    // sentence rides on the masked address (its hover title) and inside the card for a screen
+    // reader, so the dialog keeps the canvas's height.
+    const sentence = 'El enlace completo solo se muestra al crearlo.'
+    routeFetch()
+    renderDialog()
+    const link = await waitFor(() => {
+      const found = document.querySelector('[data-slot="active-link"]')
+      expect(found).not.toBeNull()
+      return found as HTMLElement
+    })
+    expect(link.querySelector('[data-slot="report-share-masked"]')?.getAttribute('title')).toBe(sentence)
+    expect(within(link).getByText(sentence).className).toContain('sr-only')
+    // Every place the sentence is written is inside the card: no paragraph after it.
+    for (const node of screen.getAllByText(sentence)) expect(link.contains(node)).toBe(true)
   })
 
   it('mints with the lifetime typed, then shows the absolute URL once with Copiar', async () => {

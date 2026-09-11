@@ -310,6 +310,11 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
                         <span
                           data-slot={isMinted ? 'report-share-url' : 'report-share-masked'}
                           aria-label={t('reports.next.linkAddress')}
+                          // An earlier link explains its dots where they are: on hover here, and
+                          // to a screen reader in the hidden sentence below. The ReportShare
+                          // artboard has no line for it under the card — the refuter measured
+                          // that line at 21px of extra dialog, "Mostrar revocados" pushed down.
+                          title={isMinted ? undefined : t('reports.next.maskedNote')}
                           className={cn(
                             'font-mono text-sm leading-normal tabular-nums text-fg-primary',
                             isMinted ? 'break-all select-all' : 'truncate',
@@ -317,6 +322,12 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
                         >
                           {isMinted ? mintedUrl : maskedShareUrl(window.location.host)}
                         </span>
+                        {/* `sr-only` is absolutely placed, so the column's gap and height ignore it. */}
+                        {!isMinted && (
+                          <span data-slot="masked-note" className="sr-only">
+                            {t('reports.next.maskedNote')}
+                          </span>
+                        )}
                         <span className="text-xs leading-normal text-fg-label">
                           {t('reports.next.linkMeta', {
                             created: day(share.createdAt),
@@ -342,10 +353,6 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
                 })
               )}
 
-              {active.some((share) => share.id !== minted?.id) && (
-                <p className="m-0 text-xs text-fg-label">{t('reports.next.maskedNote')}</p>
-              )}
-
               {copied !== null && (
                 <p role="status" className="m-0 text-xs text-fg-secondary">
                   {copied ? t('reports.shareCopied') : t('reports.next.copyFailed')}
@@ -363,8 +370,10 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
                         type="button"
                         variant="ghost"
                         size="sm"
-                        // `leading-normal`: the canvas's row is 10px + an 18px line + 10px.
-                        className="h-auto gap-2 p-0 text-sm font-normal leading-normal text-fg-secondary hover:not-disabled:bg-transparent"
+                        // The canvas's row is 10px + an 18px line + 10px: `leading-normal` gives
+                        // the line, `border-0` takes back the ghost variant's transparent 1px
+                        // border above and below it, which drew nothing and made the row 40.
+                        className="h-auto gap-2 border-0 p-0 text-sm font-normal leading-normal text-fg-secondary hover:not-disabled:bg-transparent"
                       >
                         <ChevronRight
                           aria-hidden="true"
