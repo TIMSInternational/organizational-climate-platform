@@ -272,10 +272,14 @@ export default function ReportsListNextPage() {
                     <Table className="min-w-180 table-fixed xl:min-w-230">
                       <colgroup>
                         <col />
-                        <col className="w-54 xl:w-78" />
-                        <col className="w-14 xl:w-20.5" />
+                        {/* Below xl: 212 (the 199px survey line) / 70 (the "Formato" head is 50px
+                            and must not run into "Estado") / 108 (the "Completado" chip is 95) /
+                            92 ("vence el 10 oct" is 78) / 84 (two 32px buttons and their gap),
+                            leaving the title ~158px at 1024 — two lines for either report. */}
+                        <col className="w-53 xl:w-78" />
+                        <col className="w-17.5 xl:w-20.5" />
                         <col className="w-27 xl:w-30.5" />
-                        <col className="w-26 xl:w-35.5" />
+                        <col className="w-23 xl:w-35.5" />
                         <col className="w-21 xl:w-40.5" />
                       </colgroup>
                       <thead>

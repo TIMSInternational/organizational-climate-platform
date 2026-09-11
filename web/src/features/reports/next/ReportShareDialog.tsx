@@ -185,13 +185,20 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
         // (border-box), so it carries the padding and the border the canvas adds outside.
         className="top-24 max-h-[calc(100dvh-7rem)] max-w-[690px] translate-y-0 gap-4 overflow-y-auto rounded-xl px-6 py-5 shadow-2xl"
         // Radix focuses the first control on open, which here is the close button — and a
-        // visit to `?share=<id>` has had no pointer interaction, so `:focus-visible` matches
-        // and the page opens with a red ring on "×". The dialog is announced by its title
-        // instead: focus lands on the heading (not a control, so no ring), and Tab from
-        // there reaches the close button first, exactly as before.
+        // visit to `?share=<id>` has had no pointer interaction, so Chromium treats the
+        // programmatic focus as keyboard focus and the page opens with a red ring on "×".
+        // The dialog is announced by its title instead (the APG's static element at the
+        // top, and Enter no longer closes a dialog nobody has read), moved there with the
+        // platform's own `focusVisible: false`: the title is not a control, so it draws no
+        // indicator, and nothing in CSS suppresses the one ring the app has
+        // (`keyboardOperable.test.tsx`). Tab from the title reaches "×" first, ring and all.
+        // Measured in the harness's Chromium 151: a heading focused plainly matches
+        // `:focus-visible`; with `{ focusVisible: false }` it does not.
         onOpenAutoFocus={(event) => {
           event.preventDefault()
-          titleRef.current?.focus()
+          // A variable, not a literal: `focusVisible` is newer than the DOM lib's `FocusOptions`.
+          const quiet: FocusOptions & { focusVisible?: boolean } = { focusVisible: false }
+          titleRef.current?.focus(quiet)
         }}
       >
         <div className="flex items-start justify-between gap-3">
@@ -201,12 +208,8 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
             </p>
             {/* An `<h2>`, so the base rule sets it in the display serif; only the primitive's
                 sans weight and size are taken back. `tabIndex={-1}`: focusable by the
-                opening above, never a Tab stop; `outline-none` because it is not a control. */}
-            <DialogTitle
-              ref={titleRef}
-              tabIndex={-1}
-              className="m-0 text-2xl font-normal leading-tight outline-none"
-            >
+                opening above, never a Tab stop. */}
+            <DialogTitle ref={titleRef} tabIndex={-1} className="m-0 text-2xl font-normal leading-tight">
               {t('reports.next.shareHeading')}
             </DialogTitle>
             <DialogDescription className="m-0 text-sm text-fg-secondary">{t('reports.next.shareSub')}</DialogDescription>
@@ -238,7 +241,9 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
 
         <div className="flex flex-wrap items-end gap-2.5">
           <div className="flex flex-col gap-1">
-            <Label htmlFor="report-share-days" className={cn(LABEL, 'mb-0')}>
+            {/* `leading-normal`: the canvas's label sits on a 15px line; the primitive's
+                `leading-none` made the block 5px shorter and lifted everything below it. */}
+            <Label htmlFor="report-share-days" className={cn(LABEL, 'mb-0 leading-normal')}>
               {t('reports.next.expiresIn')}
             </Label>
             <div className="flex items-center gap-2">
@@ -270,12 +275,15 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
           ) : (
             <div className="flex flex-col gap-2">
               <div className="flex items-baseline justify-between gap-3">
-                <span data-slot="active-heading" className={LABEL}>
+                {/* `leading-normal` on this row and on the link's two lines below: the canvas
+                    sets them on its 1.5 body line, and the tighter theme lines put the link
+                    card 4px higher than the artboard's. */}
+                <span data-slot="active-heading" className={cn(LABEL, 'leading-normal')}>
                   {active.length > 1
                     ? t('reports.next.activeHeadingMany', { count: active.length })
                     : t('reports.next.activeHeading', { count: active.length })}
                 </span>
-                <span className="text-xs text-fg-label">
+                <span className="text-xs leading-normal text-fg-label">
                   {opensTotal === 1 ? t('reports.next.opensTotalOne') : t('reports.next.opensTotal', { count: opensTotal })}
                 </span>
               </div>
@@ -303,13 +311,13 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
                           data-slot={isMinted ? 'report-share-url' : 'report-share-masked'}
                           aria-label={t('reports.next.linkAddress')}
                           className={cn(
-                            'font-mono text-sm tabular-nums text-fg-primary',
+                            'font-mono text-sm leading-normal tabular-nums text-fg-primary',
                             isMinted ? 'break-all select-all' : 'truncate',
                           )}
                         >
                           {isMinted ? mintedUrl : maskedShareUrl(window.location.host)}
                         </span>
-                        <span className="text-xs text-fg-label">
+                        <span className="text-xs leading-normal text-fg-label">
                           {t('reports.next.linkMeta', {
                             created: day(share.createdAt),
                             expires: day(share.expiresAt),
@@ -355,7 +363,8 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-auto gap-2 p-0 text-sm font-normal text-fg-secondary hover:not-disabled:bg-transparent"
+                        // `leading-normal`: the canvas's row is 10px + an 18px line + 10px.
+                        className="h-auto gap-2 p-0 text-sm font-normal leading-normal text-fg-secondary hover:not-disabled:bg-transparent"
                       >
                         <ChevronRight
                           aria-hidden="true"
