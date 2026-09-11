@@ -275,5 +275,8 @@ describe('QuestionLibraryNextPage — drawer link, multiple choice, vocabulary',
     renderAs(<QuestionLibraryNextPage />)
     expect(await screen.findByText(`${en.insights.next.proposal} · Grupo Meridiano S.A.`)).toBeTruthy()
     expect(screen.getByPlaceholderText(lib.search).className.split(' ')).toContain('mt-0')
+    // …and runs the row to the type select: index.css caps every `label > input` at the field
+    // max, and the board's search is `width: 100%` (library-light.png is the evidence).
+    expect(screen.getByPlaceholderText(lib.search).className.split(' ')).toContain('max-w-none')
   })
 })

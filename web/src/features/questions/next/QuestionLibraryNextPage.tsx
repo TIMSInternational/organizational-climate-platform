@@ -329,7 +329,10 @@ export default function QuestionLibraryNextPage() {
                   <label className="relative min-w-60 flex-1">
                     <span className="sr-only">{t('questionLibrary.next.search')}</span>
                     <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-tertiary" />
-                    <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('questionLibrary.next.search')} className="mt-0 pl-8" />
+                    {/* `max-w-none`: index.css caps every `label > input` at the field max, which
+                        left the search short of the type select (library-light.png). The board's
+                        search is `width: 100%` beside a 150px select. */}
+                    <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('questionLibrary.next.search')} className="mt-0 max-w-none pl-8" />
                   </label>
                   <select aria-label={t('questionBank.next.allTypes')} className={`${SELECT_CLASS} w-40`} value={type} onChange={(e) => setType(e.target.value)}>
                     <option value="">{t('questionBank.next.allTypes')}</option>
