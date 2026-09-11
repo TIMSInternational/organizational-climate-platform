@@ -24,6 +24,7 @@ import {
   responseRate,
   targetedDepartments,
   yearOf,
+  sentenceCase,
 } from './launch'
 import { useSurveyDetailModel, type SurveyDetailModel } from './useSurveyDetailModel'
 
@@ -112,6 +113,7 @@ export function SurveyDetailView({
         eyebrow={copy('eyebrow', { type: typeLabel(t, survey.type), count: survey.questions.length })}
         description={survey.description ?? undefined}
         breadcrumbs={[{ label: t('navigation.surveys'), href: '/surveys' }, { label: title }]}
+        tightBreadcrumb
         actions={
           <>
             {canAuthor && (
@@ -240,7 +242,7 @@ export function SurveyDetailView({
             <PanelHeading title={copy('sheet')} />
             <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
               <dt className="text-fg-secondary">{copy('type')}</dt>
-              <dd className="m-0">{typeLabel(t, survey.type)}</dd>
+              <dd className="m-0">{sentenceCase(typeLabel(t, survey.type), locale)}</dd>
               <dt className="text-fg-secondary">{opensIn !== null && opensIn > 0 ? copy('opens') : copy('opened')}</dt>
               <dd className="m-0 font-mono tabular-nums">{fullDay(survey.startDate, locale)}</dd>
               <dt className="text-fg-secondary">{copy('closesRow')}</dt>

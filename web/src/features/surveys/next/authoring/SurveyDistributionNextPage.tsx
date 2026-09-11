@@ -139,7 +139,6 @@ export function DistributionView({
   const steps = launchChecklist({ audience, publicLink: distribution?.publicLink ?? null, summary, reminders })
   const ready = readySteps(steps)
   const firstMissing = steps.find((step) => step.state === 'missing')
-  const rate = responseRate(survey.responseCount, survey.targetAudienceCount)
   const closesIn = daysFrom(survey.endDate, now)
   const targets = targetedDepartments(survey.departmentIds, scoped ? departments : null)
   const stateOf = (id: string): LaunchStepState => steps.find((step) => step.id === id)?.state ?? 'missing'
@@ -147,7 +146,13 @@ export function DistributionView({
   const userById = new Map(users.map((user) => [user.id, user]))
   const departmentName = new Map(departments.map((department) => [department.id, department.name]))
   const rows = showAll ? invitations.invitations : invitations.invitations.slice(0, INVITATION_PREVIEW_ROWS)
+  // ONE audience per screen: the people invited once invitations exist, the people the server
+  // would resolve before that. The same number is the reach, the response rate's denominator and
+  // the audience line's count — the stated `targetAudienceCount` only stands in for a viewer who
+  // cannot read the directory. Measured on the Meridiano survey: 41 resolved, 24 stated, and the
+  // screen printed both (fidelity refuter, 11 Sep).
   const reach = summary.total > 0 ? summary.total : audience
+  const rate = responseRate(survey.responseCount, reach ?? survey.targetAudienceCount)
 
   return (
     <div>
@@ -160,6 +165,7 @@ export function DistributionView({
           { label: title, href: `/surveys/${survey.id}` },
           { label: copy('title') },
         ]}
+        tightBreadcrumb
         actions={
           <Button asChild variant="outline">
             <Link to={`/surveys/${survey.id}`}>
@@ -192,7 +198,7 @@ export function DistributionView({
           testId="tile-responses"
           label={copy('responses')}
           value={survey.responseCount}
-          unit={rate === null ? copy('responsesNoTarget') : copy('responsesOf', { target: survey.targetAudienceCount ?? 0, rate })}
+          unit={rate === null ? copy('responsesNoTarget') : copy('responsesOf', { target: reach ?? survey.targetAudienceCount ?? 0, rate })}
         >
           {rate !== null && <Meter percent={rate} label={copy('responses')} />}
         </ReadingTile>
@@ -243,10 +249,10 @@ export function DistributionView({
             {audience === null
               ? t('surveys.distribution.outOfScope')
               : survey.departmentIds.length === 0
-                ? copy('audienceCompany', { people: audience })
+                ? copy('audienceCompany', { people: reach ?? audience })
                 : copy(survey.departmentIds.length === 1 ? 'audienceOne' : 'audienceLine', {
                     count: survey.departmentIds.length,
-                    people: audience,
+                    people: reach ?? audience,
                     names: joinNames(targets.names, copy('and')),
                   })}
           </p>

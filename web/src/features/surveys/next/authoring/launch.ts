@@ -147,6 +147,15 @@ function localeTag(locale: string): string {
   return locale === 'es' ? 'es-CR' : 'en-US'
 }
 
+/**
+ * "Encuesta periódica" — the fact sheet's sentence case over the vocabulary's title case
+ * ("Encuesta Periódica"), as the SurveyDetail artboard prints the type.
+ */
+export function sentenceCase(text: string, locale: string): string {
+  const tag = localeTag(locale)
+  return text.charAt(0).toLocaleUpperCase(tag) + text.slice(1).toLocaleLowerCase(tag)
+}
+
 /** "10 oct" — the tiles' reading. */
 export function dayMonth(iso: string, locale: string): string {
   const at = new Date(iso)

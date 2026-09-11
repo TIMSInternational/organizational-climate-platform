@@ -10,10 +10,14 @@ import { tokenFor } from '../../../../test/jwtFixture'
 import type { SurveyDetail } from '../../api/surveys'
 import type { SurveyInvitationList } from '../../api/surveyDistribution'
 import { SurveyDetailView } from './SurveyDetailNextPage'
-import { DistributionView, INVITATION_PREVIEW_ROWS } from './SurveyDistributionNextPage'
+import SurveyDistributionNextPage, { DistributionView, INVITATION_PREVIEW_ROWS } from './SurveyDistributionNextPage'
 import SurveyBuilderNextPage from './SurveyBuilderNextPage'
 import * as drafts from '../../api/surveyDrafts'
 import * as creating from '../../api/surveyCreate'
+import * as surveysApi from '../../api/surveys'
+import * as distributionApi from '../../api/surveyDistribution'
+import * as templatesApi from '../../api/surveyTemplates'
+import * as usersApi from '../../../org-structure/api/users'
 
 vi.mock('../../api/surveyDrafts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/surveyDrafts')>()),
@@ -31,10 +35,18 @@ vi.mock('../../../org-structure/api/departments', () => ({ listDepartments: vi.f
 vi.mock('../../api/surveyTemplates', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/surveyTemplates')>()),
   listSurveyTemplates: vi.fn(async () => []),
+  getSurveyTemplate: vi.fn(),
 }))
+vi.mock('../../api/surveyDistribution', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api/surveyDistribution')>()),
+  getSurveyDistribution: vi.fn(),
+  listSurveyInvitations: vi.fn(),
+}))
+vi.mock('../../../org-structure/api/users', () => ({ listUsers: vi.fn(async () => []) }))
 vi.mock('../../api/surveys', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/surveys')>()),
   listSurveyDimensions: vi.fn(async () => []),
+  getSurvey: vi.fn(),
 }))
 
 /** A share-link path segment. Low entropy on purpose: it stands for a credential, and is not one. */
@@ -79,14 +91,14 @@ const users = Array.from({ length: 6 }, (_, i) => ({
   id: `u${i}`, email: `persona${i}@meridiano.test`, name: `Persona ${i}`, role: 'employee', departmentId: i % 2 ? 'd2' : 'd1', isActive: true,
 })) as never[]
 
-function renderAs(role: string, element: ReactNode, companyId = 'c1') {
+function renderAs(role: string, element: ReactNode, companyId = 'c1', entry = '/x', path = '/x') {
   setToken(tokenFor({ role, companyId, sub: 'u-viewer', name: 'Ana Rojas' }))
   return render(
     <TranslationProvider>
       <CompanyContextProvider>
-        <MemoryRouter initialEntries={['/x']}>
+        <MemoryRouter initialEntries={[entry]}>
           <Routes>
-            <Route path="/x" element={element} />
+            <Route path={path} element={element} />
           </Routes>
         </MemoryRouter>
       </CompanyContextProvider>
@@ -153,6 +165,11 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     expect(screen.getByTestId('detail-link').textContent).not.toContain(LINK_SEGMENT.slice(0, 6))
     expect(document.body.textContent).not.toContain(LINK_SEGMENT.slice(0, 6))
   })
+
+  it("prints the type in the fact sheet's sentence case, as the artboard does", () => {
+    detail(survey())
+    expect(screen.getByTestId('detail-sheet').textContent).toContain('Encuesta periódica')
+  })
 })
 
 const distribution = (list: SurveyInvitationList, role = 'company_admin', scoped = true) =>
@@ -205,6 +222,46 @@ describe('Distribución (Distribution artboard)', () => {
     expect(screen.queryAllByRole('button').map((b) => b.textContent)).not.toContain('Enviar recordatorio')
     expect(screen.queryByRole('button', { name: 'Crear enlace' })).toBeNull()
   })
+
+  it('never puts a character of the share-link token on screen', () => {
+    distribution(invitationList())
+    expect(screen.getByTestId('step-link').textContent).toContain('/s/')
+    expect(document.body.textContent).not.toContain(LINK_SEGMENT.slice(0, 6))
+  })
+
+  it('prints one audience size: the reach, the response rate and the audience line agree', () => {
+    // 6 people resolve from the directory; the survey states 24. One number, not both.
+    distribution(invitationList())
+    expect(screen.getByTestId('tile-reach').querySelector('[data-slot="reading"]')?.textContent).toBe('6')
+    expect(screen.getByTestId('tile-responses').textContent).toContain('de 6 · 50 %')
+    expect(screen.getByTestId('tile-responses').textContent).not.toContain('24')
+    expect(screen.getByTestId('step-audience').textContent).toContain('6 personas')
+  })
+})
+
+describe('Distribución — the role half of the rule, through the page model', () => {
+  beforeEach(() => {
+    vi.mocked(surveysApi.getSurvey).mockResolvedValue(survey())
+    vi.mocked(distributionApi.getSurveyDistribution).mockResolvedValue({ publicLink: `/s/${LINK_SEGMENT}`, accessRules: { requireLogin: true } } as never)
+    vi.mocked(distributionApi.listSurveyInvitations).mockResolvedValue(invitationList())
+    vi.mocked(usersApi.listUsers).mockResolvedValue(users)
+  })
+  const page = (role: string) => renderAs(role, <SurveyDistributionNextPage />, 'c1', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+
+  it('offers an administrator of the survey company the audience and send controls (the control)', async () => {
+    page('company_admin')
+    expect(await screen.findByRole('button', { name: 'Cambiar audiencia' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Enviar invitaciones/ })).toBeTruthy()
+  })
+
+  it("offers a leader of the survey's own company no audience, send, reminder or link control", async () => {
+    page('leader')
+    await screen.findByTestId('step-audience')
+    for (const name of [/Cambiar audiencia/, /Enviar invitaciones/, /Enviar recordatorio/, /Crear enlace/]) {
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    }
+    expect(usersApi.listUsers).not.toHaveBeenCalled()
+  })
 })
 
 describe('Nueva encuesta (SurveyBuilder artboard)', () => {
@@ -218,6 +275,34 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     renderAs('company_admin', <SurveyBuilderNextPage />)
     const language = await screen.findByRole('combobox', { name: 'Idioma del contenido' })
     expect(language.textContent).toContain('Español')
+  })
+
+  it("starts in English for an English reader: the reader's locale, not a constant", async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    renderAs('company_admin', <SurveyBuilderNextPage />)
+    const language = await screen.findByRole('combobox', { name: 'Content language' })
+    expect(language.textContent).toContain('English')
+    expect(language.textContent).not.toContain('Spanish')
+  })
+
+  it('draws the add row from a template too, and says where a question is added', async () => {
+    const content = {
+      version: 1, templateId: 't1', language: 'es', titleEn: '', titleEs: 'Clima Q1', descriptionEn: '', descriptionEs: '',
+      type: 'periodic', startDate: '2027-01-11T09:00', endDate: '2027-02-01T17:00', departmentIds: [], targetAudienceCount: '',
+      anonymous: true, allowPartialResponses: true, showProgress: true, questions: [],
+    }
+    vi.mocked(templatesApi.getSurveyTemplate).mockResolvedValue({
+      id: 't1', name: 'Instrumento', language: 'es',
+      questions: [{ id: 'tq1', text: 'Confío en la dirección.', type: 'likert', options: null, scaleMin: 1, scaleMax: 5, scaleLabelMin: null,
+        scaleLabelMax: null, required: true, commentRequired: false, commentPrompt: null, order: 0, category: 'trust' }],
+    } as never)
+    vi.mocked(drafts.getLatestSurveyDraft).mockResolvedValue({ id: 'dr1', sessionId: 'x', version: 1, currentStep: 4, content, updatedAt: '2026-09-10T10:00:00Z' } as never)
+    renderAs('company_admin', <SurveyBuilderNextPage />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Restaurarla' }))
+    const row = await screen.findByTestId('add-question')
+    expect(row.textContent).toContain('de la biblioteca o en blanco')
+    await userEvent.click(within(row).getByRole('button', { name: /Agregar pregunta/ }))
+    expect(row.textContent).toContain('Editar preguntas')
   })
 
   it('creates the survey with the wizard payload, `buildCreateInput` over the same values', async () => {

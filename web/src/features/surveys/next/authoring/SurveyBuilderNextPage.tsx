@@ -105,6 +105,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
   const [editing, setEditing] = useState<string | null>(null)
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
+  const [addNote, setAddNote] = useState(false)
 
   const fromTemplate = startsFromTemplate(values)
   const errors = wizardStepErrors(values, t, template === null ? null : template.questions.length)
@@ -151,7 +152,13 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
     <div>
       <PageTopBar
         title={copy('title')}
-        badge={{ text: copy('draftBadge'), variant: 'secondary' }}
+        // The artboard's chip: small, serif, lavender — not the sans secondary badge.
+        badge={{
+          text: copy('draftBadge'),
+          variant: 'secondary',
+          className: 'h-5.5 rounded border border-line-default bg-surface-icon-box px-2 font-serif text-xs font-normal text-fg-primary',
+        }}
+        tightBreadcrumb
         description={`${copy(`stepLine.${step}`)} ${copy('stepOf', { current: stepIndex + 1, total: SURVEY_WIZARD_STEPS.length })}`}
         breadcrumbs={[{ label: t('navigation.surveys'), href: '/surveys' }, { label: copy('title') }]}
         actions={
@@ -358,8 +365,23 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   )
                 })}
               </ol>
-              {!fromTemplate && (
-                <div className="flex h-10 items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-default" data-testid="add-question">
+              {/* The add row in both modes, as the artboard draws it. From a template the server
+                  copies the template's questions whole (`buildInstantiateInput` sends none), so
+                  the row says where a question is added instead of adding one here. */}
+              <div className="flex min-h-10 flex-wrap items-center justify-center gap-x-1.5 rounded-lg border border-dashed border-line-default px-2 py-1" data-testid="add-question">
+                {fromTemplate ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-8 px-2"
+                    aria-expanded={addNote}
+                    aria-controls="add-question-note"
+                    onClick={() => setAddNote(!addNote)}
+                  >
+                    <Plus aria-hidden="true" className="size-4" />
+                    {copy('addQuestion')}
+                  </Button>
+                ) : (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button type="button" variant="ghost" className="h-8 px-2">
@@ -381,9 +403,14 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                  <span className="text-sm text-fg-label">{copy('addTail')}</span>
-                </div>
-              )}
+                )}
+                <span className="text-sm text-fg-label">{copy('addTail')}</span>
+                {fromTemplate && addNote && (
+                  <p id="add-question-note" className="m-0 basis-full pb-1.5 text-center text-sm text-fg-secondary">
+                    {copy('templateAddNote')}
+                  </p>
+                )}
+              </div>
               <QuestionsFooter t={t} values={values} questions={previewQuestions} fromTemplate={fromTemplate} />
               <QuestionLibraryBrowser
                 open={libraryOpen}
@@ -459,7 +486,11 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
             <Lock aria-hidden="true" className="size-3.5 shrink-0" />
             {copy('nothingSent')}
           </span>
-          <SurveyDraftIndicator state={draft.state} locale={locale} onSaveAnyway={draft.saveAnyway} />
+          {/* The artboard's bar prints no save time; the indicator speaks only when the draft
+              needs the reader — a conflict with another tab, or a save that failed. */}
+          {(draft.state.status === 'conflict' || draft.state.status === 'error') && (
+            <SurveyDraftIndicator state={draft.state} locale={locale} onSaveAnyway={draft.saveAnyway} />
+          )}
         </span>
         <span className="flex gap-2">
           <Button type="button" variant="outline" disabled={stepIndex === 0} onClick={() => setStepIndex(stepIndex - 1)}>
