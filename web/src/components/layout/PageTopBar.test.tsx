@@ -204,7 +204,14 @@ describe('PageTopBar', () => {
       const column = container.querySelector('[data-slot="page-top-bar"] h1')!.closest('.flex-col')!
       const meta = container.querySelector('[data-testid="meta"]')!
       expect(column.contains(meta)).toBe(true)
-      expect(column.lastElementChild).toBe(meta)
+      expect(column.lastElementChild?.getAttribute('data-slot')).toBe('page-meta')
+      expect(column.lastElementChild?.contains(meta)).toBe(true)
+      // The first canvas's boards set the row 6px lower than the column's gap; these do not.
+      expect(column.lastElementChild?.className.split(/\s+/)).toContain('mt-1.5')
+      cleanup()
+      const compact = renderTopBar({ title: 'Pulso', description: 'Hágalo llegar', compact: true, meta: <span>En vivo</span> })
+      const slot = compact.container.querySelector('[data-slot="page-meta"]')!
+      expect(slot.className.split(/\s+/)).not.toContain('mt-1.5')
     })
 
     it('draws the rule itself rather than delegating to a Separator element', () => {

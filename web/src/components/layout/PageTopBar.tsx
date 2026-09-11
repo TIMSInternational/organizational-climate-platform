@@ -145,16 +145,18 @@ export interface PageTopBarProps {
   /** Buttons, links, filters — whatever the page acts with. */
   actions?: ReactNode
   /**
-   * The line under the title and description — a state chip and the sentences that date
-   * it ("En vivo · abierta hasta el 11 de septiembre a las 21:06"). The admin-gaps boards
-   * of 10 Sep draw it inside the header's text column, 6px under the description.
+   * A line of chips and facts under the description — the redesign's status row
+   * ("Borrador · Encuesta de Clima Q1 2027 · 6 preguntas", "En vivo · abierta hasta el 11 de
+   * septiembre a las 21:06"). Optional and additive: a page that passes nothing renders
+   * exactly as before.
    */
   meta?: ReactNode
   /**
    * The admin-gaps boards of 10 Sep (Detalle de plan; Crear, Detalle, Analítica and
    * Resultados de microclima) nest the breadcrumb in the header block with a 14px margin
    * (`margin-bottom: 14px` in each `.dc.html`) instead of the first canvas's 38px, so the
-   * crumb sits 32px above the eyebrow's centre, not 55px. `compact` draws that gap.
+   * crumb sits 32px above the eyebrow's centre, not 55px, and they set the meta row at the
+   * text column's own 6px gap, with no margin of its own. `compact` draws both.
    */
   compact?: boolean
 }
@@ -272,7 +274,14 @@ export function PageTopBar({
           {description && (
             <p className="mb-0 max-w-measure break-words text-fg-secondary">{description}</p>
           )}
-          {meta}
+          {meta && (
+            <div
+              data-slot="page-meta"
+              className={cn('flex flex-wrap items-center gap-1.5 text-xs text-fg-secondary', !compact && 'mt-1.5')}
+            >
+              {meta}
+            </div>
+          )}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-inline">{actions}</div>}
       </div>
