@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { ArrowRight, Check, LayoutDashboard, ListChecks, PanelsTopLeft, Target } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
-import { Alert, AlertDescription, Button, Chip, EmptyState, Input, LoadingRegion, NetworkError, SkeletonText } from '../../../components/ui'
+import { Alert, AlertDescription, Button, Chip, DatePicker, EmptyState, Input, LoadingRegion, NetworkError, SkeletonText } from '../../../components/ui'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay, calendarDayLong } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
@@ -225,7 +225,7 @@ function Board({
               </>
             )}
           </NodoTile>
-          <NodoTile label={t('tracking.next.tileAvances')} aside={model.avancesAreSample ? <SampleChip /> : undefined}>
+          <NodoTile label={t('tracking.next.tileAvances')} note={model.avancesAreSample ? <SampleChip /> : undefined}>
             <span className="font-mono text-3xl leading-none text-fg-primary tabular-nums">{model.avancesRegistrados}</span>
             <span className="text-sm text-fg-label">
               {model.avancesRegistrados > 0
@@ -363,14 +363,27 @@ function PlanCard({
         />
       </div>
 
-      {writable && <AvanceInlineForm card={card} onRecord={onRecord} t={t} />}
+      {writable && <AvanceInlineForm card={card} onRecord={onRecord} t={t} locale={locale} />}
     </article>
   )
 }
 
+/** `YYYY-MM-DD` as the local-midnight `Date` the picker's calendar works in. */
+function dateOfIso(iso: string): Date | undefined {
+  const [year, month, day] = iso.split('-').map(Number)
+  return year && month && day ? new Date(year, month - 1, day) : undefined
+}
+
+/** The picker's local-midnight `Date` back to the `DateOnly` the service takes. */
+function isoOfDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 /**
  * "Registrar avance", in the card: the percentage, the day it corresponds to, and a
- * line of what was done. The typed percentage crosses `semaforo.fromPercent` — the one
+ * line of what was done. The day is the app's date picker printing the board's own
+ * "10 sept 2026" in the reader's language — the browser's `type="date"` control printed
+ * its own locale's numeric form ("09/10/2026" in the shot browser) instead. The typed percentage crosses `semaforo.fromPercent` — the one
  * conversion back into the wire's fraction — and is refused outside 0–100 before it is
  * sent, with the same sentence the plan detail's form uses.
  */
@@ -378,10 +391,12 @@ function AvanceInlineForm({
   card,
   onRecord,
   t,
+  locale,
 }: {
   card: TableroPlanCard
   onRecord: (plan: PlanAccion, input: RegistrarAvanceInput) => Promise<void>
   t: TranslateFn
+  locale: string
 }) {
   const [percent, setPercent] = useState(String(card.percent))
   const [fecha, setFecha] = useState(() => todayIso())
@@ -458,14 +473,18 @@ function AvanceInlineForm({
           </div>
         </div>
         <div className="flex w-40 flex-col gap-1">
-          <label htmlFor={`${idBase}-fecha`} className="mb-0 text-2xs font-bold uppercase tracking-label text-fg-label">
+          <span aria-hidden="true" className="mb-0 text-2xs font-bold uppercase tracking-label text-fg-label">
             {t('tracking.next.fieldFecha')}
-          </label>
-          <Input
-            id={`${idBase}-fecha`}
-            type="date"
-            value={fecha}
-            onChange={(event) => setFecha(event.target.value)}
+          </span>
+          <DatePicker
+            label={t('tracking.next.fieldFecha')}
+            placeholder={t('tracking.next.fieldFechaPlaceholder')}
+            value={dateOfIso(fecha)}
+            onChange={(date) => {
+              if (date) setFecha(isoOfDate(date))
+            }}
+            formatValue={(date) => fullDay(isoOfDate(date), locale)}
+            showIcon={false}
             disabled={saving}
             className="font-mono"
           />

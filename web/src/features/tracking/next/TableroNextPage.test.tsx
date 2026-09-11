@@ -131,6 +131,22 @@ describe('TableroNextPage — the leader of the nodo', () => {
     const chips = document.querySelectorAll('[data-slot="sample-chip"]')
     expect(chips).toHaveLength(1)
     expect(chips[0].closest('[data-slot="nodo-tile"]')?.textContent).toContain(next.tileAvances)
+    // On a line of its own under the reading, never in the label row: there it wrapped under
+    // "Avances registrados" and pushed the reading a row below the other three tiles'.
+    expect(chips[0].closest('[data-slot="nodo-tile-note"]')).not.toBeNull()
+  })
+
+  it('prints the avance date as the board prints dates, not as the browser numeric control', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 8, 10, 12, 0, 0))
+    try {
+      renderPage()
+      const card = await screen.findByRole('article')
+      expect(within(card).getByRole('button', { name: next.fieldFecha }).textContent).toBe('10 sept 2026')
+      expect(card.querySelector('input[type="date"]')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('records an avance as the fraction the service stores', async () => {

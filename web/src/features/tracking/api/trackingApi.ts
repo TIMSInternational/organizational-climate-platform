@@ -159,3 +159,24 @@ export async function agregarInvolucrado(id: string, input: AgregarInvolucradoIn
   })
   return response.json() as Promise<PlanAccion>
 }
+
+/**
+ * The seguimiento sheet, as the client's own workbook (`GET /api/planes-accion/export`,
+ * `TrackingSheetExportEndpoints.cs:27`). It holds the plans the listing would show this
+ * caller and no other: the endpoint runs the listing's own `Visible` predicate.
+ *
+ * An authorized `fetch` read into a `Blob`, never an `<a href>`, which would send cookies
+ * and not the bearer header (`features/surveys/api/surveyExport.ts`). The file name is
+ * chosen by the caller (`trackingSheetFileName`) because the browser cannot read the
+ * server's: the tracking service's CORS policy (`ClimateTracking.Api/Program.cs:80-88`)
+ * exposes no response header, so `Content-Disposition` is invisible to a cross-origin fetch.
+ */
+export async function exportPlanesAccionSheet(baseUrl: string = getTrackingApiBaseUrl()): Promise<Blob> {
+  const response = await authFetch(`${baseUrl}/api/planes-accion/export`)
+  return response.blob()
+}
+
+/** The name `TrackingSheetExportEndpoints.cs:58-60` gives the sheet, for a `DateOnly` day. */
+export function trackingSheetFileName(day: string): string {
+  return `seguimiento-planes-accion-${day}.xlsx`
+}

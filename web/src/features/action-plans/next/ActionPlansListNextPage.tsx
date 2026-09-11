@@ -30,6 +30,7 @@ import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { KpiRow } from '../../dashboard/components/dashboardGrammar'
+import { CanvasSelect } from '../../org-structure/next/super/parts'
 import { ACTION_PLAN_PRIORITIES, ACTION_PLAN_STATUSES, priorityLabel, statusLabel } from '../actionPlanVocabulary'
 import ActionPlanForm from '../components/ActionPlanForm'
 import DueTimeline from './DueTimeline'
@@ -52,6 +53,10 @@ import { useActionPlansListModel } from './useActionPlansListModel'
 /** The artboard's column header: 10px, bold, uppercase, the label ink, no tint. */
 const HEAD = 'h-auto bg-transparent px-3 pb-2 pt-0 text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
 const CELL = 'px-3 py-3 align-middle'
+/** Shown from 1360px, where the finding and the owner have columns of their own. */
+const WIDE_ONLY = 'hidden min-[1360px]:table-cell'
+/** Shown below 1360px, where the finding and the owner fold into the plan's cell. */
+const FOLDED_ONLY = 'min-[1360px]:hidden'
 
 const GROUP_HEADING: Record<PlanGroup, string> = {
   overdue: 'actionPlans.next.groupOverdue',
@@ -367,7 +372,10 @@ function Tiles({ model, t, locale }: { model: ActionPlansListModel; t: Translate
         sub={
           overdue.first ? (
             <span
-              className="block truncate text-accent-red"
+              // The artboard prints the place and the plan in full; a long title wraps to a
+              // second line rather than losing its end to an ellipsis, and stops there.
+              className="line-clamp-2 text-accent-red"
+              data-slot="seguimiento-first"
               data-source={overdue.source}
               title={overdue.first.placeName ? `${overdue.first.placeName} · ${overdue.first.name}` : overdue.first.name}
             >
@@ -442,11 +450,11 @@ function Filters({
           className="pl-8"
         />
       </div>
-      <select
+      <CanvasSelect
         aria-label={t('actionPlans.next.statusFilter')}
         value={filters.status}
         onChange={(event) => onChange({ ...filters, status: event.target.value })}
-        className="w-44"
+        className="w-full sm:w-[170px]"
       >
         <option value="">{t('actionPlans.next.allStates')}</option>
         {ACTION_PLAN_STATUSES.map((status) => (
@@ -454,12 +462,12 @@ function Filters({
             {statusLabel(t, status)}
           </option>
         ))}
-      </select>
-      <select
+      </CanvasSelect>
+      <CanvasSelect
         aria-label={t('actionPlans.next.priorityFilter')}
         value={filters.priority}
         onChange={(event) => onChange({ ...filters, priority: event.target.value })}
-        className="w-46"
+        className="w-full sm:w-[180px]"
       >
         <option value="">{t('actionPlans.allPriorities')}</option>
         {ACTION_PLAN_PRIORITIES.map((priority) => (
@@ -467,7 +475,7 @@ function Filters({
             {priorityLabel(t, priority)}
           </option>
         ))}
-      </select>
+      </CanvasSelect>
       <p className="m-0 ml-auto text-xs text-fg-label">
         {t('actionPlans.next.countSummary', { total: summary.total, open: summary.open, cancelled: summary.cancelled })}
       </p>
@@ -538,33 +546,35 @@ function PlanTable({
 }) {
   return (
     <div className="rounded-lg border border-line-default bg-surface-card pt-2 shadow-sm">
-      <Table className="min-w-[1000px] table-fixed">
-        <colgroup>
-          <col />
-          <col className="w-[222px]" />
-          <col className="w-[162px]" />
-          <col className="w-[150px]" />
-          <col className="w-[92px]" />
-          <col className="w-[132px]" />
-        </colgroup>
+      {/* No minimum width: at 1024 the table fits its card instead of scrolling inside it.
+          From 1360px the finding and the owner are columns, as the artboard draws them;
+          below that they fold into the plan's cell (`PlanTableRow`), and the sample chip
+          moves with them to the Plan heading. Widths sit on the header cells, because a
+          `<col>` would keep a hidden column's width in the fixed layout. */}
+      <Table className="table-fixed">
         <thead>
           <tr className="border-b border-line-default">
-            <th className={HEAD}>{t('actionPlans.next.colPlan')}</th>
-            <th className={cn(HEAD, 'whitespace-normal')}>
-              <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            <th className={HEAD}>
+              <span className="flex items-center gap-1.5">
+                {t('actionPlans.next.colPlan')}
+                {(model.findingsAreSample || model.ownersAreSample) && <SampleChip t={t} className={FOLDED_ONLY} />}
+              </span>
+            </th>
+            <th className={cn(HEAD, WIDE_ONLY, 'w-[268px]')}>
+              <span className="flex items-center gap-1.5">
                 {t('actionPlans.next.colFinding')}
                 {model.findingsAreSample && <SampleChip t={t} />}
               </span>
             </th>
-            <th className={cn(HEAD, 'whitespace-normal')}>
-              <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            <th className={cn(HEAD, WIDE_ONLY, 'w-[214px]')}>
+              <span className="flex items-center gap-1.5">
                 {t('actionPlans.next.colOwner')}
                 {model.ownersAreSample && <SampleChip t={t} />}
               </span>
             </th>
-            <th className={HEAD}>{t('actionPlans.next.colDue')}</th>
-            <th className={HEAD}>{t('actionPlans.next.colPriority')}</th>
-            <th className={HEAD}>
+            <th className={cn(HEAD, 'w-[136px]')}>{t('actionPlans.next.colDue')}</th>
+            <th className={cn(HEAD, 'w-[92px]')}>{t('actionPlans.next.colPriority')}</th>
+            <th className={cn(HEAD, 'w-[124px]')}>
               <span className="sr-only">{t('common.actions')}</span>
             </th>
           </tr>
@@ -633,12 +643,18 @@ function PlanTableRow({
               ? t('actionPlans.next.createdMeta', { date: calendarDay(Date.parse(row.createdAt), locale), note: progressNote })
               : t('actionPlans.next.createdOn', { date: calendarDay(Date.parse(row.createdAt), locale) })}
           </span>
+          <span data-slot="plan-row-folded" className={cn('mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1', FOLDED_ONLY)}>
+            <FindingCell row={row} t={t} />
+            <span className={cn('text-xs', row.ownerName ? 'text-fg-secondary' : 'text-fg-label')}>
+              {t('actionPlans.next.ownerInline', { name: row.ownerName ?? t('actionPlans.next.unassigned') })}
+            </span>
+          </span>
         </div>
       </td>
-      <td className={CELL}>
+      <td className={cn(CELL, WIDE_ONLY)}>
         <FindingCell row={row} t={t} />
       </td>
-      <td className={CELL}>
+      <td className={cn(CELL, WIDE_ONLY)}>
         <div className="flex items-center gap-2">
           <span
             aria-hidden="true"

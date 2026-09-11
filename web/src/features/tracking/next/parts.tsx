@@ -87,8 +87,24 @@ export function SampleChip({ className }: { className?: string }) {
   return <Chip tone="warning" label={t('dashboard.next.sampleChip')} data-slot="sample-chip" className={cn('normal-case tracking-normal', className)} />
 }
 
-/** A card of the tablero's "Dónde está el nodo" row: a label, a reading, a unit. */
-export function NodoTile({ label, children, aside }: { label: string; children: ReactNode; aside?: ReactNode }) {
+/**
+ * A card of the tablero's "Dónde está el nodo" row: a label, a reading, a unit.
+ *
+ * `note` is a line of its own under the reading — where a sample-fed tile wears its chip, so
+ * the label and the reading keep the rows the other three tiles set. In the label row the
+ * chip wrapped under "Avances registrados" at 1440 and pushed that tile's reading a row down.
+ */
+export function NodoTile({
+  label,
+  children,
+  aside,
+  note,
+}: {
+  label: string
+  children: ReactNode
+  aside?: ReactNode
+  note?: ReactNode
+}) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-line-default bg-surface-card px-4 py-3.5 shadow-sm" data-slot="nodo-tile">
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
@@ -96,6 +112,11 @@ export function NodoTile({ label, children, aside }: { label: string; children: 
         {aside}
       </div>
       <div className="flex min-h-7 flex-wrap items-baseline gap-1.5">{children}</div>
+      {note && (
+        <div data-slot="nodo-tile-note" className="flex">
+          {note}
+        </div>
+      )}
     </div>
   )
 }

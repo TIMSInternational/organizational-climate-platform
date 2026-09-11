@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { PlanAccion } from '../api/trackingApi'
 import {
+  asSentence,
   byCompromiso,
   dayDiff,
   hasRecordedProgress,
@@ -139,5 +140,20 @@ describe('isNotFound', () => {
     expect(isNotFound(new Error('Request failed: 404'))).toBe(true)
     expect(isNotFound(new Error('Request failed: 500'))).toBe(false)
     expect(isNotFound('404')).toBe(false)
+  })
+})
+
+describe('asSentence', () => {
+  it('closes a bare clause with a full stop, as the Main artboard prints the qué', () => {
+    expect(asSentence('Reponer la reunión de handover entre turnos')).toBe('Reponer la reunión de handover entre turnos.')
+    expect(asSentence('  Reponer la reunión  ')).toBe('Reponer la reunión.')
+  })
+
+  it('leaves text that already closes alone, and an empty text empty', () => {
+    expect(asSentence('Sesión de 20 minutos al cierre de cada turno, con acta breve.')).toBe(
+      'Sesión de 20 minutos al cierre de cada turno, con acta breve.',
+    )
+    expect(asSentence('¿Quién abre la reunión?')).toBe('¿Quién abre la reunión?')
+    expect(asSentence('')).toBe('')
   })
 })

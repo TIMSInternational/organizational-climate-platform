@@ -144,3 +144,14 @@ export function nextCompromiso<T extends { fechaCompromiso: string; code: string
 export function isNotFound(error: unknown): boolean {
   return error instanceof Error && /\b404\b/.test(error.message)
 }
+
+/**
+ * A clause as the "Qué se hará y cómo" card prints it: the plan's own text, closed with a
+ * full stop when it has no closing punctuation. The Main artboard prints "Reponer la reunión
+ * de handover entre turnos." in that card; the page title keeps the text exactly as written.
+ */
+export function asSentence(text: string): string {
+  const trimmed = text.trim()
+  if (trimmed === '' || /[.!?…:;)»"]$/.test(trimmed)) return trimmed
+  return `${trimmed}.`
+}

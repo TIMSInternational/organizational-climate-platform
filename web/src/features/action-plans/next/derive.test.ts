@@ -10,6 +10,8 @@ import {
   isDueThisMonth,
   ownerReading,
   summarize,
+  TIMELINE_LABEL_CHARS,
+  timelineLabelLines,
 } from './derive'
 import type { PlanRow } from './model'
 
@@ -139,5 +141,24 @@ describe('applyFilters', () => {
     expect(applyFilters(MERIDIANO, { ...EMPTY_PLAN_FILTERS, status: 'cancelled' })).toHaveLength(3)
     expect(applyFilters(MERIDIANO, { ...EMPTY_PLAN_FILTERS, priority: 'high' }).map((r) => r.id)).toEqual(['p1', 'p2'])
     expect(applyFilters(MERIDIANO, { ...EMPTY_PLAN_FILTERS, q: 'CARGA' }).map((r) => r.id)).toEqual(['p2'])
+  })
+})
+
+describe('timelineLabelLines', () => {
+  it('breaks a title at a word onto two whole lines', () => {
+    expect(timelineLabelLines('Programa de reconocimiento entre pares')).toEqual(['Programa de reconocimiento', 'entre pares'])
+    expect(timelineLabelLines('Reducir la carga de trabajo en Operaciones')).toEqual(['Reducir la carga de', 'trabajo en Operaciones'])
+  })
+
+  it('keeps a short title on one line', () => {
+    expect(timelineLabelLines('Buzón anónimo')).toEqual(['Buzón anónimo'])
+  })
+
+  it('ends only a title longer than two lines with an ellipsis, on the second line', () => {
+    const lines = timelineLabelLines('Publicar el rol de fines de semana con dos semanas de antelación y avisar a cada turno')
+    expect(lines).toHaveLength(2)
+    expect(lines[0].endsWith('…')).toBe(false)
+    expect(lines[1].endsWith('…')).toBe(true)
+    expect(lines.every((line) => line.length <= TIMELINE_LABEL_CHARS)).toBe(true)
   })
 })

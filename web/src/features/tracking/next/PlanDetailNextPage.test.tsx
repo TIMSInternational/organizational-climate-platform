@@ -115,6 +115,14 @@ describe('PlanDetailNextPage — an administrator', () => {
     expect(within(meta).getByText(next.metaNoAvances)).toBeTruthy()
   })
 
+  it('prints the qué as a sentence in its card, while the title keeps it as written', async () => {
+    renderPage()
+    const card = (await screen.findByRole('heading', { name: next.queComoHeading })).closest('section') as HTMLElement
+    expect(within(card).getByText('Reponer la reunión de handover entre turnos.')).toBeTruthy()
+    expect(within(card).getByText('Sesión de 20 minutos al cierre de cada turno, con acta breve.')).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Reponer la reunión de handover entre turnos')
+  })
+
   it('names the nodo and the people from the directory in the Ficha', async () => {
     renderPage()
     const ficha = (await screen.findByRole('heading', { name: next.fichaHeading })).closest('section') as HTMLElement

@@ -183,7 +183,8 @@
       "noFinding": "Sin hallazgo · toda la empresa",
       "cancelledSummaryCompanyWide": "{names} · toda la empresa",
       "show": "Mostrar",
-      "hide": "Ocultar"
+      "hide": "Ocultar",
+      "ownerInline": "Responsable: {name}"
     }
   },
   "analytics": {
@@ -3716,7 +3717,10 @@
       "personasOne": "1 persona",
       "personasMany": "{count} personas",
       "cannotRemove": "No es posible retirar a quien ya está en el plan.",
-      "addByAdmin": "Agregar personas lo hace la administración, que tiene el directorio."
+      "addByAdmin": "Agregar personas lo hace la administración, que tiene el directorio.",
+      "exporting": "Exportando la hoja…",
+      "exportFailed": "No se pudo descargar la hoja del seguimiento. Inténtelo de nuevo en un momento.",
+      "fieldFechaPlaceholder": "Elija la fecha"
     }
   },
   "privacy": {

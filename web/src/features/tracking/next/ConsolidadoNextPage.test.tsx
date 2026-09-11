@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, within } from '@testing-library/react'
+import { render, screen, cleanup, within, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import ConsolidadoNextPage from './ConsolidadoNextPage'
 import { TranslationProvider } from '../../../i18n'
@@ -8,6 +9,9 @@ import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../co
 import { clearCompanyNameCache } from '../../../company-context/useCompanyName'
 import { tokenFor } from '../../../test/jwtFixture'
 import es from '../../../i18n/es.json'
+import { downloadBlobFile } from '../../../lib/downloadBlobFile'
+
+vi.mock('../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
 
 /**
  * `/tracking` — the redesigned Vista Consolidada. The payloads are the ones the local
@@ -108,9 +112,20 @@ beforeEach(() => {
   vi.stubEnv('VITE_TRACKING_API_BASE_URL', TRACKING)
   vi.stubEnv('VITE_API_BASE_URL', API)
   vi.stubGlobal('fetch', vi.fn())
+  vi.mocked(downloadBlobFile).mockClear()
   clearCompanyNameCache()
   routeFetch()
 })
+
+/** The export answers `status` (the sheet's bytes on a 200); every other request as `routeFetch`. */
+function routeExport(status: number) {
+  const base = vi.mocked(fetch).getMockImplementation() as typeof fetch
+  vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) =>
+    String(input) === `${TRACKING}/api/planes-accion/export`
+      ? Promise.resolve(new Response(status === 200 ? 'PK-sheet' : '{}', { status }))
+      : base(input, init),
+  )
+}
 
 afterEach(() => {
   cleanup()
@@ -162,12 +177,26 @@ describe('ConsolidadoNextPage — company_admin', () => {
     expect(screen.queryByText(es.tracking.columnPriorYear)).toBeNull()
   })
 
-  it('draws "Exportar hoja" disabled, with its reason readable', async () => {
+  it('hands the seguimiento sheet to the browser as a file, fetched with the bearer token', async () => {
+    routeExport(200)
     renderPage()
     const button = await screen.findByRole('button', { name: next.exportSheet })
-    expect((button as HTMLButtonElement).disabled).toBe(true)
-    const reasonId = button.getAttribute('aria-describedby') ?? ''
-    expect(document.getElementById(reasonId)?.textContent).toBe(next.exportUnavailable)
+    expect((button as HTMLButtonElement).disabled).toBe(false)
+    await userEvent.click(button)
+    await waitFor(() => expect(vi.mocked(downloadBlobFile)).toHaveBeenCalledTimes(1))
+    const [fileName, blob] = vi.mocked(downloadBlobFile).mock.calls[0]
+    expect(fileName).toMatch(/^seguimiento-planes-accion-\d{4}-\d{2}-\d{2}\.xlsx$/)
+    expect(await blob.text()).toBe('PK-sheet')
+    const request = vi.mocked(fetch).mock.calls.find((call) => String(call[0]) === `${TRACKING}/api/planes-accion/export`)
+    expect(new Headers(request?.[1]?.headers).get('Authorization')).toMatch(/^Bearer /)
+  })
+
+  it('says so above the page when the sheet cannot be downloaded, and hands the browser nothing', async () => {
+    routeExport(500)
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: next.exportSheet }))
+    expect(await screen.findByText(next.exportFailed)).toBeTruthy()
+    expect(vi.mocked(downloadBlobFile)).not.toHaveBeenCalled()
   })
 
   it('keeps the counts when only the plans listing fails, and says the plans could not be read', async () => {

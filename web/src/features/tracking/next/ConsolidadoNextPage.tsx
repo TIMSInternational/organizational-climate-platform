@@ -1,16 +1,19 @@
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { CalendarDays, CircleDot, Download } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { KpiTile } from '../../../components/charts'
-import { Button, EmptyState, ErrorState, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../components/ui'
+import { Alert, AlertDescription, Button, EmptyState, ErrorState, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../components/ui'
 import { useCompanyName } from '../../../company-context/useCompanyName'
 import { calendarDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { KpiRow } from '../../dashboard/components/dashboardGrammar'
-import type { SemaforoCounts } from '../api/trackingApi'
+import { downloadBlobFile } from '../../../lib/downloadBlobFile'
+import { exportPlanesAccionSheet, trackingSheetFileName, type SemaforoCounts } from '../api/trackingApi'
 import SemaforoChip, { SemaforoGlyph } from '../components/SemaforoChip'
 import { SEMAFORO_ORDER, semaforoCount, semaforoPresentation, type SemaforoEstado } from '../semaforo'
+import { todayIso } from '../planDates'
 import { percentagePoints } from '../trackingUnits'
 import { joinNames, nodosIn } from './derive'
 import type { ConsolidadoModel, NodoBlock, PlanLine } from './model'
@@ -51,15 +54,30 @@ const TILE_SUB: Record<keyof SemaforoCounts, string> = {
  *
  * ## "Exportar hoja"
  *
- * The tracking service has an xlsx endpoint (`GET /api/planes-accion/export`,
- * `TrackingSheetExportEndpoints.cs:27`) but the web has no client for it
- * (`trackingApi.ts`), and this lane adds none; so the control is drawn disabled with its
- * reason, never as a button that does nothing.
+ * The client's own workbook from the tracking service (`GET /api/planes-accion/export`,
+ * `TrackingSheetExportEndpoints.cs:27`), through `exportPlanesAccionSheet`: an authorized
+ * `fetch` read into a `Blob` and handed to the browser as a file. The sheet holds the plans
+ * the listing would show this caller and nothing more (the endpoint's `Visible` predicate).
+ * A failed download says so above the page rather than leaving the click unanswered.
  */
 export default function ConsolidadoNextPage() {
   const { t, locale } = useTranslation()
   const companyName = useCompanyName()
   const state = useConsolidadoModel()
+  const [exporting, setExporting] = useState(false)
+  const [exportFailed, setExportFailed] = useState(false)
+
+  async function exportSheet() {
+    setExporting(true)
+    setExportFailed(false)
+    try {
+      downloadBlobFile(trackingSheetFileName(todayIso()), await exportPlanesAccionSheet())
+    } catch {
+      setExportFailed(true)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   if (state.status === 'restricted') {
     return <ErrorState title={t('tracking.consolidadoRestrictedTitle')} description={t('tracking.consolidadoRestrictedBody')} />
@@ -76,15 +94,10 @@ export default function ConsolidadoNextPage() {
         description={t('tracking.consolidadoDescription')}
         actions={
           <>
-            <span title={t('tracking.next.exportUnavailable')} className="inline-flex">
-              <Button type="button" variant="outline" disabled aria-describedby="consolidado-export-reason">
-                <Download aria-hidden="true" />
-                {t('tracking.next.exportSheet')}
-              </Button>
-              <span id="consolidado-export-reason" className="sr-only">
-                {t('tracking.next.exportUnavailable')}
-              </span>
-            </span>
+            <Button type="button" variant="outline" disabled={exporting} aria-busy={exporting || undefined} onClick={() => void exportSheet()}>
+              <Download aria-hidden="true" />
+              {exporting ? t('tracking.next.exporting') : t('tracking.next.exportSheet')}
+            </Button>
             <Button asChild variant="outline">
               <Link to="/tracking/planes">
                 <CircleDot aria-hidden="true" />
@@ -94,6 +107,12 @@ export default function ConsolidadoNextPage() {
           </>
         }
       />
+
+      {exportFailed && (
+        <Alert variant="destructive" className="mb-panel-gap">
+          <AlertDescription>{t('tracking.next.exportFailed')}</AlertDescription>
+        </Alert>
+      )}
 
       {state.status === 'error' ? (
         <NetworkError

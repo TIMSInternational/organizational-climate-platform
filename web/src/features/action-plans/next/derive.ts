@@ -219,3 +219,34 @@ export function applyFilters(rows: readonly PlanRow[], filters: PlanFilters): Pl
 export function isFiltering(filters: PlanFilters): boolean {
   return filters.q.trim() !== '' || filters.status !== '' || filters.priority !== ''
 }
+
+/** How many characters one line of a timeline label holds at the axis's 10px. */
+export const TIMELINE_LABEL_CHARS = 26
+
+/**
+ * A plan's name as the timeline prints it under its date: the whole title, broken at a word
+ * onto at most two lines of `chars` characters. Only a title longer than two lines loses its
+ * end, and then to an ellipsis on the second line, never a cut on the first.
+ *
+ * The artboard's labels are hand-shortened ("Carga · Operaciones"): half of each is the
+ * finding's dimension, which no endpoint carries (`sampleModel.ts`), so the label is the
+ * plan's own title, printed in full wherever two lines hold it.
+ */
+export function timelineLabelLines(name: string, chars: number = TIMELINE_LABEL_CHARS): string[] {
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  const lines: string[] = []
+  let current = ''
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word
+    if (candidate.length <= chars || current === '') {
+      current = candidate
+      continue
+    }
+    lines.push(current)
+    current = word
+  }
+  if (current) lines.push(current)
+  const clip = (line: string) => (line.length > chars ? `${line.slice(0, chars - 1).trimEnd()}…` : line)
+  if (lines.length <= 2) return lines.map(clip)
+  return [clip(lines[0]), `${lines.slice(1).join(' ').slice(0, chars - 1).trimEnd()}…`]
+}

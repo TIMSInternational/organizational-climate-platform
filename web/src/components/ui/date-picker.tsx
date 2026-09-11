@@ -35,6 +35,14 @@ export interface DatePickerProps {
   disabled?: boolean
   /** Marks the trigger invalid, matching FormControl's contract. */
   invalid?: boolean
+  /**
+   * How the trigger prints the chosen date, for a screen whose artboard sets dates its own
+   * way (the Tablero de Seguimiento's "10 sept 2026", in the mono face). Defaults to
+   * `date-fns` with `dateFormat`, in the UI language.
+   */
+  formatValue?: (date: Date) => string
+  /** Whether the trigger leads with the calendar glyph. Defaults to true. */
+  showIcon?: boolean
   className?: string
 }
 
@@ -46,6 +54,8 @@ export function DatePicker({
   dateFormat = 'PPP',
   disabled,
   invalid,
+  formatValue,
+  showIcon = true,
   className,
 }: DatePickerProps) {
   const { locale } = useTranslation()
@@ -70,9 +80,13 @@ export function DatePicker({
             className,
           )}
         >
-          <CalendarIcon aria-hidden="true" className="size-icon shrink-0 text-fg-tertiary" />
+          {showIcon && <CalendarIcon aria-hidden="true" className="size-icon shrink-0 text-fg-tertiary" />}
           <span className="truncate">
-            {value ? format(value, dateFormat, { locale: DATE_FNS_LOCALES[locale] }) : placeholder}
+            {value
+              ? formatValue
+                ? formatValue(value)
+                : format(value, dateFormat, { locale: DATE_FNS_LOCALES[locale] })
+              : placeholder}
           </span>
         </button>
       </PopoverTrigger>

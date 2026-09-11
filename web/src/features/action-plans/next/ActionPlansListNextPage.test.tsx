@@ -175,10 +175,70 @@ describe('ActionPlansListNextPage — company_admin', () => {
       const tile = chip.closest('[data-slot="kpi-tile"]')
       const header = chip.closest('th')
       const where = tile?.querySelector('[data-slot="kpi-label"]')?.textContent ?? header?.textContent ?? ''
-      expect([next.tileFinding, next.tileOwner, next.colFinding, next.colOwner].some((name) => where.startsWith(name))).toBe(true)
+      // Below 1360px the two columns fold into the plan's cell, and their chip moves to the
+      // Plan heading with them, drawn there in that layout only.
+      const folded = where.startsWith(next.colPlan) && chip.className.includes('min-[1360px]:hidden')
+      expect(folded || [next.tileFinding, next.tileOwner, next.colFinding, next.colOwner].some((name) => where.startsWith(name))).toBe(true)
     }
     const tileChips = chips.filter((chip) => chip.closest('[data-slot="kpi-tile"]'))
     expect(tileChips).toHaveLength(2)
+  })
+
+  it('keeps a sample chip in a column heading on the heading line, never wrapped under it', async () => {
+    renderPage()
+    await screen.findByText('Programa de reconocimiento entre pares')
+    const table = section(next.groupNotStarted).querySelector('table') as HTMLTableElement
+    for (const name of [next.colFinding, next.colOwner]) {
+      const heading = [...table.querySelectorAll('th')].find((th) => th.textContent?.startsWith(name)) as HTMLElement
+      const line = heading.querySelector('[data-slot="sample-chip"]')?.parentElement as HTMLElement
+      expect(line.className).not.toMatch(/flex-wrap/)
+      expect(heading.className).toContain('whitespace-nowrap')
+    }
+  })
+
+  it('folds the finding and owner into the plan cell below 1360px instead of scrolling a minimum width', async () => {
+    renderPage()
+    await screen.findByText('Programa de reconocimiento entre pares')
+    const table = section(next.groupNotStarted).querySelector('table') as HTMLTableElement
+    expect(table.className).not.toMatch(/min-w-/)
+    const finding = [...table.querySelectorAll('th')].find((th) => th.textContent?.startsWith(next.colFinding)) as HTMLElement
+    expect(finding.className).toContain('hidden')
+    expect(finding.className).toContain('min-[1360px]:table-cell')
+    const folded = table.querySelector('[data-plan-row="p2"] [data-slot="plan-row-folded"]') as HTMLElement
+    expect(folded.className).toContain('min-[1360px]:hidden')
+    expect(folded.textContent).toContain('Operaciones')
+    expect(folded.textContent).toContain(next.ownerInline.replace('{name}', next.unassigned))
+  })
+
+  it('draws the state and priority filters as the canvas select, and they still narrow the list', async () => {
+    renderPage()
+    await screen.findByText('Programa de reconocimiento entre pares')
+    const selects = [...document.querySelectorAll('[data-slot="canvas-select"] select')]
+    expect(selects.map((select) => select.getAttribute('aria-label'))).toEqual([next.statusFilter, next.priorityFilter])
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: next.priorityFilter }), 'medium')
+    expect(screen.queryByText('Programa de reconocimiento entre pares')).toBeNull()
+    expect(screen.getByText('Reuniones abiertas con la dirección')).toBeTruthy()
+  })
+
+  it('prints the first plan behind in full, wrapping to a second line rather than cutting it', async () => {
+    renderPage()
+    const first = await screen.findByText('Finanzas · Reponer la reunión de handover entre turnos')
+    expect(first.className).toContain('line-clamp-2')
+    expect(first.className).not.toMatch(/\btruncate\b/)
+  })
+
+  it('labels the timeline with each plan whole title on up to two lines, never cut with an ellipsis', async () => {
+    renderPage()
+    await screen.findByText('Programa de reconocimiento entre pares')
+    const labels = [...document.querySelectorAll('[data-slot="due-timeline"] g')].map((group) =>
+      [...group.querySelectorAll('[data-slot="due-timeline-label"]')].map((text) => text.textContent).join(' '),
+    )
+    expect(labels).toEqual([
+      'Programa de reconocimiento entre pares',
+      'Reducir la carga de trabajo en Operaciones',
+      'Reuniones abiertas con la dirección',
+      'Plan de desarrollo de carrera en Ingeniería',
+    ])
   })
 
   it('offers the new plan and, per row, cancelling — which PUTs status cancelled after a confirmation', async () => {

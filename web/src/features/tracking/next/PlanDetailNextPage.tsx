@@ -31,7 +31,7 @@ import RegistrarAvanceForm from '../components/RegistrarAvanceForm'
 import SemaforoChip from '../components/SemaforoChip'
 import { todayIso } from '../planDates'
 import { toPercent } from '../semaforo'
-import { dayDiff, fullDay, hasRecordedProgress, isOverdue } from './derive'
+import { asSentence, dayDiff, fullDay, hasRecordedProgress, isOverdue } from './derive'
 import type { PersonaRef, PlanDetailModel } from './model'
 import { InfoBox, PersonaAvatar, ProgressTrack, SampleChip } from './parts'
 import { usePlanDetailModel, type PlanDetailState } from './usePlanDetailModel'
@@ -372,9 +372,9 @@ function QueComoCard({ model, t }: { model: PlanDetailModel; t: TranslateFn }) {
       </h2>
       <dl className="m-0 grid grid-cols-[120px_minmax(0,1fr)] gap-x-4 gap-y-2 text-base">
         <dt className="pt-0.5 text-2xs font-bold uppercase tracking-label text-fg-label">{t('tracking.next.que')}</dt>
-        <dd className="m-0 max-w-[70ch] text-fg-primary">{plan.descripcionQue}</dd>
+        <dd className="m-0 max-w-[70ch] text-fg-primary">{asSentence(plan.descripcionQue)}</dd>
         <dt className="pt-0.5 text-2xs font-bold uppercase tracking-label text-fg-label">{t('tracking.next.como')}</dt>
-        <dd className="m-0 max-w-[70ch] text-fg-primary">{plan.metodologiaComo}</dd>
+        <dd className="m-0 max-w-[70ch] text-fg-primary">{asSentence(plan.metodologiaComo)}</dd>
         <dt className="pt-0.5 text-2xs font-bold uppercase tracking-label text-fg-label">{t('tracking.fields.hallazgo')}</dt>
         {/* Text, never a link: see the module comment. */}
         <dd className="m-0 text-fg-label">
