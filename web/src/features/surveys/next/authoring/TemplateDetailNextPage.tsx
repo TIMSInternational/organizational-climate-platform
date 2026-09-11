@@ -142,17 +142,18 @@ export default function TemplateDetailNextPage() {
       />
 
       {caps.canAuthorSurveys && needsCompany && (
-        <Alert variant="warning" className="mb-panel-gap">
+        <Alert variant="warning" className="mb-5">
           <AlertDescription>{scope.isSuperAdmin ? t('surveys.chooseCompanyToUseTemplate') : t('surveys.noCompanyToUseTemplate')}</AlertDescription>
         </Alert>
       )}
       {actionError && (
-        <Alert variant="destructive" role="alert" className="mb-panel-gap">
+        <Alert variant="destructive" role="alert" className="mb-5">
           <AlertDescription>{actionError}</AlertDescription>
         </Alert>
       )}
 
-      <div className="grid items-start gap-panel-gap lg:grid-cols-[minmax(0,1fr)_22.5rem]">
+      {/* The board's two columns and the Ficha / "Al usarla" stack, 16px apart (TemplateDetail.dc.html). */}
+      <div data-testid="template-columns" className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22.5rem]">
         <Panel aria-labelledby="template-questions">
           <PanelHeading
             id="template-questions"
@@ -201,7 +202,7 @@ export default function TemplateDetailNextPage() {
           ))}
         </Panel>
 
-        <div className="flex flex-col gap-panel-gap">
+        <div data-testid="template-aside" className="flex flex-col gap-4">
           <Panel aria-labelledby="template-facts">
             <h2 id="template-facts" className="mb-3 mt-0 text-xl">
               {copy('facts')}

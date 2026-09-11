@@ -53,13 +53,14 @@ export default function QuestionBankNextPage() {
     <div>
       <PageTopBar eyebrow={[t('insights.next.proposal'), companyName].filter(Boolean).join(' · ')} title={t('questionBank.next.title')} description={t('questionBank.next.description')} />
 
-      <div className="mb-panel-gap flex flex-wrap items-center gap-3 rounded-lg border border-line-default bg-surface-card p-4">
+      {/* The board's column: header, 24px, this card, 24px, the filters (QuestionBank.dc.html). */}
+      <div data-testid="bank-split" className="mb-section flex flex-wrap items-center gap-3.5 rounded-lg border border-line-default bg-surface-card px-4 py-3">
         <IconBox>
           <SquareLibrary />
         </IconBox>
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <p className="m-0 text-sm font-semibold text-fg-primary">{t('questionBank.next.splitTitle')}</p>
-          <p className="m-0 text-xs text-fg-secondary">
+          <p className="m-0 text-xs leading-normal text-fg-secondary">
             {t('questionBank.next.splitBody')}
             {state.status === 'ready' && state.data.library && (
               <>
@@ -151,6 +152,7 @@ export default function QuestionBankNextPage() {
                   <tr>
                     <td colSpan={7} className="p-0">
                       <EmptyRow
+                        measure="max-w-[100ch]"
                         icon={<Library />}
                         title={t('questionBank.next.emptyTitle')}
                         lines={[t('questionBank.next.emptyWhen'), t('questionBank.next.emptyMeanwhile', { company })]}

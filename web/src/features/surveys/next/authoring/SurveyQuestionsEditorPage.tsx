@@ -12,7 +12,7 @@ import { getSurveyQuestionAuthoring, saveSurveyQuestions, type AuthoringQuestion
 import { duplicateSurvey, getSurvey, type SurveyDetail } from '../../api/surveys'
 import { dimensionLabel } from '../../dimensionLabel'
 import { needsScaleLabels, statusLabel, SUGGESTED_DIMENSION_KEYS, SURVEY_QUESTION_TYPES, typeLabel } from '../../surveyVocabulary'
-import { Eyebrow, IconBox, Note, Panel, PanelHeading, Segmented } from '../../../shared-next/parts'
+import { Eyebrow, IconBox, Panel, PanelHeading, Segmented } from '../../../shared-next/parts'
 import {
   authoredLocales,
   blankQuestion,
@@ -211,21 +211,23 @@ export default function SurveyQuestionsEditorPage() {
       />
 
       {actionError && (
-        <Alert variant="destructive" role="alert" className="mb-panel-gap">
+        <Alert variant="destructive" role="alert" className="mb-5">
           <AlertDescription>{actionError}</AlertDescription>
         </Alert>
       )}
 
       {locked && (
-        <Panel data-testid="locked-banner" className="mb-panel-gap flex items-start gap-3">
-          <IconBox>
+        // The board's banner: the ground tint (#f8f7fb) under a white tile, 14px by 16px, and the
+        // page column's 20px to the panels (SurveyQuestionsEditorLocked.dc.html).
+        <Panel data-testid="locked-banner" className="mb-5 flex items-start gap-3.5 bg-surface-outer px-4 py-3.5">
+          <IconBox tone="card">
             <Lock />
           </IconBox>
-          <div className="min-w-0 text-xs text-fg-secondary">
+          <div className="flex min-w-0 flex-col gap-1 text-xs text-fg-secondary">
             <p className="m-0 text-sm font-semibold text-fg-primary">
               {detail.responseCount > 0 ? copy('lockedHasResponses') : copy('lockedByStatus')}
             </p>
-            <p className="m-0 max-w-measure">
+            <p className="m-0 max-w-[96ch] leading-normal">
               {detail.responseCount > 0 &&
                 `${
                   detail.targetAudienceCount !== null
@@ -244,7 +246,8 @@ export default function SurveyQuestionsEditorPage() {
         </Panel>
       )}
 
-      <div className="grid items-start gap-panel-gap xl:grid-cols-[minmax(0,1fr)_minmax(0,29rem)]">
+      {/* The board's two columns and the preview stack, 16px apart (SurveyQuestionsEditor.dc.html). */}
+      <div data-testid="editor-columns" className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,29rem)]">
         <Panel aria-labelledby="questions-heading">
           <PanelHeading
             id="questions-heading"
@@ -399,17 +402,21 @@ export default function SurveyQuestionsEditorPage() {
             })}
           </ol>
           {editable && (
-            <div data-testid="add-question" className="mt-2 flex h-10 w-full items-center justify-center gap-1 rounded-lg border border-dashed border-line-default text-sm">
-              <Button type="button" variant="ghost" className="h-8 pl-2 pr-0.5" onClick={() => setLibraryOpen(true)}>
+            // The board's row: "Agregar pregunta" at 13px/500 in the ghost button's ink (#4a3d72), then
+            // its tail at 12px/400 as one run of words — "· de la biblioteca o en blanco" — with a word
+            // space around "o" and nothing more. The board paints the tail #8a82a5 (3.25:1), below AA for
+            // 12px text and barred by inkContrast.test.ts, so it takes the lightest AA ink, the tertiary.
+            <div data-testid="add-question" className="mt-2 flex h-10 w-full items-center justify-center rounded-lg border border-dashed border-line-default">
+              <Button type="button" variant="ghost" className="h-8 pl-2 pr-0" onClick={() => setLibraryOpen(true)}>
                 <Plus aria-hidden="true" />
                 {copy('addQuestion')}
-                <span className="font-normal text-fg-secondary">{copy('addFromLibrary')}</span>
+                <span data-testid="add-tail" className="text-xs font-normal text-fg-tertiary">{copy('addFromLibrary')}</span>
               </Button>
-              <span className="text-fg-secondary">{copy('addOr')}</span>
+              <span className="whitespace-pre text-xs text-fg-tertiary">{` ${copy('addOr')} `}</span>
               <Button
                 type="button"
                 variant="ghost"
-                className="h-8 px-0.5 font-normal text-fg-secondary"
+                className="h-8 px-0 text-xs font-normal text-fg-tertiary"
                 onClick={() => {
                   setQuestions((current) => [...current, blankQuestion(current.length, locales)])
                   setOpenIndex(questions.length)
@@ -470,7 +477,7 @@ export default function SurveyQuestionsEditorPage() {
           </div>
         </Panel>
 
-        <div className="flex flex-col gap-panel-gap">
+        <div data-testid="editor-aside" className="flex flex-col gap-4">
           <Panel aria-labelledby="preview-heading">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 id="preview-heading" className="m-0 text-xl">
@@ -560,10 +567,12 @@ export default function SurveyQuestionsEditorPage() {
         </div>
       </div>
 
+      {/* The board's footer: the page column's 20px, a full-width hairline, 16px, then the line. */}
       {!locked && (
-        <Note icon={<Lock />} className="mt-panel-gap bg-transparent px-0">
+        <p data-testid="save-note" className="mb-0 mt-5 flex items-center gap-2 border-t border-line-light pt-4 text-xs text-fg-tertiary">
+          <Lock aria-hidden="true" className="size-3.5 shrink-0" />
           {copy('saveWritesOnly')}
-        </Note>
+        </p>
       )}
     </div>
   )
@@ -581,9 +590,11 @@ function scaleLong(t: (key: string, vars?: Record<string, string | number>) => s
     : type
 }
 
+// `mb-0`: index.css gives every <label> a 12px bottom margin for the old stacked forms; here the
+// grid's gap spaces the fields, and the margin made the open card 46px taller than the board.
 function EditorField({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
-    <label className="flex flex-col gap-1">
+    <label className="mb-0 flex flex-col gap-1">
       <span className="text-sm font-semibold text-fg-primary">
         {label}
         {required && <span className="text-chip-critical-ink"> *</span>}

@@ -63,7 +63,8 @@ export default function AnalyticsNextPage() {
           }
         />
       ) : (
-        <div className="grid items-start gap-panel-gap xl:grid-cols-[minmax(0,1fr)_22.5rem]">
+        // The board's two columns, 16px apart (AnalyticsDashboard.dc.html: `minmax(0, 1fr) 360px; gap: 16px`).
+        <div data-testid="analytics-columns" className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22.5rem]">
           <section aria-labelledby="analytics-references">
             <PanelHeading
               id="analytics-references"
@@ -98,7 +99,9 @@ export default function AnalyticsNextPage() {
               </div>
               {!state.data.benchmarks.some((row) => !row.isGlobal) && (
                 <EmptyRow
-                  className="border-t border-line-light bg-surface-icon-box"
+                  // The board's row: the ground tint (#f8f7fb) under a white tile, 14px 12px 16px.
+                  className="gap-3 border-t border-line-light bg-surface-outer px-3 pb-4 pt-3.5"
+                  iconTone="card"
                   icon={<Gauge />}
                   title={t('analytics.next.noOwnTitle', { company })}
                   lines={[t('analytics.next.noOwnBody')]}
@@ -116,18 +119,18 @@ export default function AnalyticsNextPage() {
             />
             <div className={TABLE_CARD_CLASS}>
               {openInsightCount(state.data.insights) === 0 ? (
-                <div className="flex items-start gap-3 p-4">
+                <div className="flex items-start gap-3.5 p-4.5">
                   <IconBox>
                     <Sparkles />
                   </IconBox>
-                  <div className="min-w-0 text-xs">
+                  <div className="flex min-w-0 flex-col items-start gap-1.5 text-xs">
                     <p className="m-0 text-sm font-semibold text-fg-primary">{t('insights.next.emptyTitle')}</p>
-                    <p className="m-0 text-fg-secondary">
+                    <p className="m-0 leading-normal text-fg-secondary">
                       {state.data.insights.length === 0
                         ? t('analytics.next.insightsEmpty')
                         : t('analytics.next.insightsAllReviewed')}
                     </p>
-                    <Link to="/analytics/ai-insights" className="mt-1 inline-flex items-center gap-1 text-fg-secondary">
+                    <Link to="/analytics/ai-insights" className="inline-flex items-center gap-1 text-fg-secondary">
                       {t('analytics.next.openInsights')}
                       <ArrowRight aria-hidden="true" className="size-3" />
                     </Link>

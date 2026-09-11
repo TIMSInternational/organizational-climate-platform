@@ -53,38 +53,59 @@ export function Eyebrow({ children, className }: { children: ReactNode; classNam
   )
 }
 
-export function IconBox({ children }: { children: ReactNode }) {
+/**
+ * The artboards' 32px icon tile. `tint` (the default) sits on a card; `card` is the white tile
+ * the boards draw on a ground-tinted row — the locked banner (SurveyQuestionsEditorLocked) and
+ * the analytics "no own references" row (AnalyticsDashboard) — where a tinted tile would sink
+ * into its row.
+ */
+export function IconBox({ children, tone = 'tint' }: { children: ReactNode; tone?: 'tint' | 'card' }) {
   return (
     <span
       aria-hidden="true"
-      className="flex size-8 shrink-0 items-center justify-center rounded-md border border-line-light bg-surface-icon-box text-fg-secondary [&>svg]:size-4"
+      data-tone={tone}
+      className={cn(
+        'flex size-8 shrink-0 items-center justify-center rounded-md border border-line-light text-fg-secondary [&>svg]:size-4',
+        tone === 'card' ? 'bg-surface-card' : 'bg-surface-icon-box',
+      )}
     >
       {children}
     </span>
   )
 }
 
-/** An honest "nothing here" inside a table or card: what is absent, and why. */
+/**
+ * An honest "nothing here" inside a table or card: what is absent, and why. Drawn as the boards
+ * draw it (QuestionBank.dc.html, AIInsights.dc.html): a 32px tile, 14px to the text, 20px by
+ * 16px of padding, 4px between the lines; the reason in the secondary ink (#4a3d72) and what
+ * follows it in the tertiary (#6e648b), both at a 1.5 line height and at the row's full width.
+ * No board caps these lines at the reading measure — only the bank's, at 100ch (`measure`).
+ */
 export function EmptyRow({
   icon,
   title,
   lines,
   className,
+  iconTone,
+  measure,
 }: {
   icon: ReactNode
   title: string
   lines: ReactNode[]
   className?: string
+  iconTone?: 'tint' | 'card'
+  /** A max-width class for the lines, where the board caps them. */
+  measure?: string
 }) {
   return (
-    <div data-slot="empty-row" className={cn('flex items-start gap-3 p-4', className)}>
-      <IconBox>{icon}</IconBox>
-      <div className="min-w-0">
+    <div data-slot="empty-row" className={cn('flex items-start gap-3.5 px-4 py-5', className)}>
+      <IconBox tone={iconTone}>{icon}</IconBox>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         <p className="m-0 text-sm font-semibold text-fg-primary">{title}</p>
         {lines.map((line, index) => (
           <p
             key={index}
-            className={cn('m-0 max-w-measure text-xs', index === 0 ? 'text-fg-primary' : 'text-fg-secondary')}
+            className={cn('m-0 text-xs leading-normal', index === 0 ? 'text-fg-secondary' : 'text-fg-tertiary', measure)}
           >
             {line}
           </p>

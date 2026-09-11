@@ -142,7 +142,8 @@ export default function AIInsightsNextPage() {
         </div>
       )}
 
-      <Note icon={<ShieldCheck />} className="mt-panel-gap">
+      {/* The board's column gap: 24px from the table to the note (AIInsights.dc.html). */}
+      <Note icon={<ShieldCheck />} className="mt-section">
         {t('insights.next.privacy')}
       </Note>
     </div>

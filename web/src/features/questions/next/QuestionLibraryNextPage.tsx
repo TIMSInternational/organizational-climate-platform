@@ -367,7 +367,10 @@ export default function QuestionLibraryNextPage() {
                       ))}
                     </tbody>
                   </Table>
-                  <p className="m-0 border-t border-line-light px-3 py-2.5 text-xs text-fg-secondary">
+                  {/* The board caps this note at 480px of text (a content-box max-width; 31.5rem here
+                      with the 12px pads), so it wraps before the drawer that overlays the list. The last
+                      row's own hairline is the separator above it, as on the board. */}
+                  <p data-testid="library-globals-note" className="m-0 max-w-[31.5rem] px-3 py-2.5 text-xs leading-normal text-fg-tertiary">
                     {t('questionLibrary.next.globalsNote')}
                   </p>
                 </div>
@@ -628,9 +631,11 @@ function ChildSection({ child, parentName, nameOf, children }: { child: Category
   )
 }
 
+// `mb-0`: index.css gives every <label> a 12px bottom margin; the drawer's own gap spaces the
+// fields, and the margin made it 56px taller than the board.
 function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
-    <label className="flex flex-col gap-1">
+    <label className="mb-0 flex flex-col gap-1">
       <span className="text-sm font-semibold text-fg-primary">
         {label}
         {required && <span className="text-chip-critical-ink"> *</span>}
