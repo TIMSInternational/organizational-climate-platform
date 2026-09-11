@@ -119,6 +119,12 @@ export interface UseSurveyDraftResult {
   dismissRecovery: () => void
   /** Re-run the blocked save, ignoring the version guard. Only meaningful on `conflict`. */
   saveAnyway: () => void
+  /**
+   * Save now rather than after the debounce — the builder's "Guardar borrador". The same save
+   * autosave runs, version guard included, so it can never overwrite another tab; it does
+   * nothing while a conflict has stopped autosave or before there is anything to save.
+   */
+  saveNow: () => void
   /** Called once the survey exists: the draft has served its purpose. */
   discardAfterCreate: () => Promise<void>
 }
@@ -335,6 +341,12 @@ export function useSurveyDraft(options: UseSurveyDraftOptions): UseSurveyDraftRe
     void save(true)
   }, [save])
 
+  const saveNow = useCallback(() => {
+    if (!enabled || !decided || blockedRef.current) return
+    if (timerRef.current !== null) clearTimeout(timerRef.current)
+    void save(false)
+  }, [decided, enabled, save])
+
   const discardAfterCreate = useCallback(async () => {
     const id = draftIdRef.current
     // Stop the unmount flush from recreating what is about to be deleted.
@@ -356,6 +368,7 @@ export function useSurveyDraft(options: UseSurveyDraftOptions): UseSurveyDraftRe
     discardRecovered,
     dismissRecovery,
     saveAnyway,
+    saveNow,
     discardAfterCreate,
   }
 }
