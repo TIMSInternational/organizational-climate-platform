@@ -145,7 +145,8 @@ describe('SystemHealthNextPage', () => {
     for (const tile of tiles) {
       const title = tile.querySelector('[data-slot="tile-title"]') as HTMLElement
       expect(title.className.split(/\s+/)).toEqual(expect.arrayContaining(['text-[15px]', 'leading-normal']))
-      expect((tile.firstElementChild?.firstElementChild as HTMLElement).className.split(/\s+/)).toContain('leading-normal')
+      const eyebrow = (tile.firstElementChild as HTMLElement).firstElementChild as HTMLElement
+      expect(eyebrow.className.split(/\s+/)).toContain('leading-normal')
     }
     // Every chip on the page is the board's 24px box (22px of content plus its 1px border).
     const chips = [...document.querySelectorAll('[data-slot="chip"]')]
