@@ -110,6 +110,30 @@ export interface ViewerCapabilities {
    */
   canUseDirectoryPickers: boolean
   /**
+   * The tracking consolidado — `GET /api/consolidado` — answers this viewer.
+   * `DashboardEndpoints.ConsolidadoAsync` returns `Results.Forbid()` outside `Roles.Admin`
+   * (`trackingAccess.canViewConsolidado`), and every tracking endpoint first passes
+   * `MatchingTenantRequirement` (`ClimateTracking.Application/Auth/MatchingTenantRequirement.cs:61-73`):
+   * a `super_admin` always, anyone else only with a non-blank `companyId` claim naming the
+   * one tenant the deployment is pinned to. The browser cannot see which tenant that is,
+   * so a `company_admin` with a tenant claim is answered `true` and the service keeps the
+   * last word; a `company_admin` with a blank claim never matches and is `false`, as the
+   * server answers. Not scoped by the company selection: the service is single-tenant and
+   * takes no company parameter.
+   */
+  canViewConsolidado: boolean
+  /**
+   * The viewer leads a real tracking node: role `leader` and a `nodoId` claim that names
+   * one. `JwtTokenService` mints `nodoId` for everyone, as the department's external id
+   * or the synthetic `unassigned-<companyId>` for a person with no department
+   * (`TrackingIdentifiers.NodoIdClaimForUser`), and `TableroAsync` answers a caller who
+   * names no node with their own — so for an `unassigned-` or blank claim the board is
+   * always empty, and `canCreatePlan` refuses the blank one on every node. The nodo board
+   * (`/tracking/tablero`) is this viewer's screen; the nav offers it to `leader` alone
+   * (`navSections.ts`, the client's spec §7).
+   */
+  leadsANodo: boolean
+  /**
    * `avance`, `cumplir`, `involucrados` on a tracking plan: an admin, or the `leader`
    * whose `nodoId` claim equals the plan's node. Delegates to `trackingAccess.canManagePlan`,
    * which mirrors `ClimateTracking.Application.Auth.PlanAccessHandler` claim for claim —
@@ -130,6 +154,15 @@ const SUPER_ADMIN = 'super_admin'
 const COMPANY_ADMIN = 'company_admin'
 const LEADER = 'leader'
 const SUPERVISOR = 'supervisor'
+
+/**
+ * A `nodoId` claim that names a node: not blank, and not the synthetic
+ * `unassigned-<companyId>` minted for a person with no department
+ * (`TrackingIdentifiers.NodoIdClaimForUser`).
+ */
+function isRealNodo(nodoExternalId: string): boolean {
+  return nodoExternalId !== '' && !nodoExternalId.startsWith('unassigned-')
+}
 
 /** `Roles.Admin` — `super_admin` or `company_admin`. */
 function isAdminRole(role: string | undefined): boolean {
@@ -163,6 +196,8 @@ export function capabilitiesFor(claims: ViewerClaims, scope: CompanyScope): View
     canExport: adminWithCompany || runsADepartment,
     canManageOrg: adminWithCompany,
     canUseDirectoryPickers: adminWithCompany,
+    canViewConsolidado: role === SUPER_ADMIN || (role === COMPANY_ADMIN && claims.companyId !== undefined),
+    leadsANodo: role === LEADER && isRealNodo(claims.nodoExternalId),
     canRecordProgress: (plan) => canManagePlan(plan, trackingClaims),
     canOpenResults: (survey) =>
       role === SUPER_ADMIN || (role === COMPANY_ADMIN && claims.companyId !== undefined && claims.companyId === survey.companyId),

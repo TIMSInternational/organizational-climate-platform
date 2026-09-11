@@ -78,6 +78,12 @@ export interface SemaforoPresentation {
    * the tests can sweep in every locale alongside `labelKey`.
    */
   subKey: string
+  /**
+   * Catalogue path for the long form the TrackingTablero artboard (10 Sep) prints on a
+   * plan card — the colour word AND the meaning, "Verde · al día" — so a board read aloud
+   * or photocopied still says both. Drawn by `SemaforoChip`'s `long` prop.
+   */
+  longKey: string
   /** The matching field on `SemaforoCounts`, which the API spells in lower case. */
   countKey: keyof SemaforoCounts
 }
@@ -89,6 +95,7 @@ const PRESENTATION: Record<SemaforoEstado, SemaforoPresentation> = {
     shape: 'octagon',
     labelKey: 'tracking.semaforo.rojo',
     subKey: 'tracking.semaforo.subRojo',
+    longKey: 'tracking.next.semaforoLargoRojo',
     countKey: 'rojo',
   },
   Amarillo: {
@@ -97,6 +104,7 @@ const PRESENTATION: Record<SemaforoEstado, SemaforoPresentation> = {
     shape: 'triangle',
     labelKey: 'tracking.semaforo.amarillo',
     subKey: 'tracking.semaforo.subAmarillo',
+    longKey: 'tracking.next.semaforoLargoAmarillo',
     countKey: 'amarillo',
   },
   Verde: {
@@ -105,6 +113,7 @@ const PRESENTATION: Record<SemaforoEstado, SemaforoPresentation> = {
     shape: 'circle',
     labelKey: 'tracking.semaforo.verde',
     subKey: 'tracking.semaforo.subVerde',
+    longKey: 'tracking.next.semaforoLargoVerde',
     countKey: 'verde',
   },
 }

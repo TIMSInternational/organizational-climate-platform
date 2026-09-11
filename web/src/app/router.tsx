@@ -17,7 +17,7 @@ import SystemSettingsPage from '../features/org-structure/pages/SystemSettingsPa
 import SystemHealthPage from '../features/org-structure/pages/SystemHealthPage'
 import DemographicFieldsPage from '../features/org-structure/pages/DemographicFieldsPage'
 import DepartmentsPage from '../features/org-structure/pages/DepartmentsPage'
-import ActionPlansListPage from '../features/action-plans/pages/ActionPlansListPage'
+import ActionPlansListNextPage from '../features/action-plans/next/ActionPlansListNextPage'
 import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetailPage'
 import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
 import MicroclimateCreatePage from '../features/microclimates/pages/MicroclimateCreatePage'
@@ -129,7 +129,9 @@ const trackingRoutes: RouteObject[] = [
   {
     path: '/tracking',
     lazy: async () => ({
-      Component: (await import('../features/tracking/pages/ConsolidadoPage')).default,
+      // The redesigned Vista Consolidada replaced `pages/ConsolidadoPage` here (ruled
+      // 10 Sep); the old page stays in the tree, unrouted, as the wiring reference.
+      Component: (await import('../features/tracking/next/ConsolidadoNextPage')).default,
     }),
   },
   {
@@ -141,7 +143,7 @@ const trackingRoutes: RouteObject[] = [
     // one board and should not have to know its external id to open it.
     path: '/tracking/tablero',
     lazy: async () => ({
-      Component: (await import('../features/tracking/pages/TableroSeguimientoPage')).default,
+      Component: (await import('../features/tracking/next/TableroNextPage')).default,
     }),
   },
   {
@@ -153,7 +155,7 @@ const trackingRoutes: RouteObject[] = [
   {
     path: '/tracking/planes/:id',
     lazy: async () => ({
-      Component: (await import('../features/tracking/pages/PlanDeAccionDetailPage')).default,
+      Component: (await import('../features/tracking/next/PlanDetailNextPage')).default,
     }),
   },
   {
@@ -343,7 +345,10 @@ export const router = createBrowserRouter([
               // /action-plans: the page takes its company from `company-context`,
               // so one route and one nav entry serve both admin roles.
               { path: '/departments', element: <DepartmentsPage /> },
-              { path: '/action-plans', element: <ActionPlansListPage /> },
+              // The redesigned Planes de Acción replaced `ActionPlansListPage` here (ruled
+              // 10 Sep): a redesigned screen takes its real route, never a `/next` sibling.
+              // The old page stays in the tree, unrouted, as the wiring reference.
+              { path: '/action-plans', element: <ActionPlansListNextPage /> },
               { path: '/action-plans/:id', element: <ActionPlanDetailPage /> },
               { path: '/microclimates', element: <MicroclimatesListPage /> },
               // Before `/microclimates/:id` for readability only, same as

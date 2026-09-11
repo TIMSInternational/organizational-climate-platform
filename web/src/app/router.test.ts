@@ -5,6 +5,7 @@ import { router } from './router'
 import SurveysListNextPage from '../features/surveys/next/list/SurveysListNextPage'
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
 import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
+import ActionPlansListNextPage from '../features/action-plans/next/ActionPlansListNextPage'
 
 /**
  * A construction guard for the router.
@@ -293,6 +294,26 @@ describe('router', () => {
   })
 
   /**
+   * The plans-and-tracking lane swapped Planes de Acción the same way: the redesigned list
+   * is the element at `/action-plans`, the old page is imported by no route, and there is
+   * no `/next` sibling. The tracking screens' swap is asserted in "the tracking module".
+   */
+  it('mounts the redesigned Planes de Acción on /action-plans, and no /next sibling', () => {
+    const byPath = new Map<string, unknown>()
+    function walk(routes: typeof router.routes): void {
+      for (const route of routes) {
+        if (route.path) byPath.set(route.path, route.element)
+        if (route.children) walk(route.children as typeof router.routes)
+      }
+    }
+    walk(router.routes)
+    expect((byPath.get('/action-plans') as { type?: unknown } | undefined)?.type).toBe(ActionPlansListNextPage)
+    expect(byPath.has('/action-plans/next')).toBe(false)
+    const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
+    expect(source).not.toMatch(/pages\/ActionPlansListPage'/)
+  })
+
+  /**
    * The tracking module (#125, #126). Its dashboards shipped as an integration
    * layer with no consuming UI at all — `trackingApi.ts` existed, worked, and no
    * user could reach any of it — so "is it routed" is the first acceptance
@@ -350,13 +371,34 @@ describe('router', () => {
      * never routed fails here. That is the exact shape of the defect this module
      * shipped with, and a hardcoded list of five would not have caught it.
      */
+    /**
+     * The three pages the redesign replaced (ruled 10 Sep) stay in `pages/` as the wiring
+     * reference and must be reached by NO route — each carries a "NOT ROUTED" header
+     * saying so. Everything else in `pages/`, and every page in `next/`, must be routed.
+     */
+    const WIRING_REFERENCES = ['ConsolidadoPage', 'TableroSeguimientoPage', 'PlanDeAccionDetailPage']
+    const REDESIGNED = ['ConsolidadoNextPage', 'TableroNextPage', 'PlanDetailNextPage']
+
+    it('routes the redesigned tracking screens and leaves the wiring references unrouted', () => {
+      const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
+      for (const page of REDESIGNED) {
+        expect(source, `${page} is not routed`).toContain(`await import('../features/tracking/next/${page}')`)
+      }
+      for (const page of WIRING_REFERENCES) {
+        expect(source, `${page} is still routed`).not.toContain(`/tracking/pages/${page}'`)
+        const file = readFileSync(join(process.cwd(), 'src', 'features', 'tracking', 'pages', `${page}.tsx`), 'utf8')
+        expect(file.startsWith('/**\n * NOT ROUTED.'), `${page} lacks its NOT ROUTED header`).toBe(true)
+      }
+    })
+
     it('leaves no tracking page unrouted', () => {
       const pagesDir = join(process.cwd(), 'src', 'features', 'tracking', 'pages')
       const pages = globSync('*.tsx', { cwd: pagesDir })
         .filter((file) => !/\.test\.tsx$/.test(file))
         .map((file) => file.replace(/\.tsx$/, ''))
+        .filter((page) => !WIRING_REFERENCES.includes(page))
 
-      expect(pages.length, 'no tracking pages found — the glob is wrong').toBeGreaterThan(4)
+      expect(pages.length, 'no tracking pages found — the glob is wrong').toBeGreaterThan(1)
 
       const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
       const unrouted = pages.filter(
@@ -396,7 +438,7 @@ describe('router', () => {
       const src = join(process.cwd(), 'src')
       const source = readFileSync(join(src, 'app', 'router.tsx'), 'utf8')
       const pageNames =
-        'ConsolidadoPage|TableroSeguimientoPage|PlanesAccionListPage|PlanDeAccionDetailPage|MisTareasPage'
+        'ConsolidadoPage|TableroSeguimientoPage|PlanesAccionListPage|PlanDeAccionDetailPage|MisTareasPage|ConsolidadoNextPage|TableroNextPage|PlanDetailNextPage'
       expect(source).not.toMatch(new RegExp(`^import .*(${pageNames}).*$`, 'm'))
 
       const offenders = globSync('**/*.{ts,tsx}', { cwd: src })

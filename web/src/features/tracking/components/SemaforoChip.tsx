@@ -59,6 +59,8 @@ import {
 export interface SemaforoChipProps {
   /** The raw `estadoSemaforo` from the API — `"Rojo" | "Amarillo" | "Verde"` in practice. */
   estado: string
+  /** The long form — "Verde · al día" — for a plan card (the TrackingTablero artboard). */
+  long?: boolean
   className?: string
 }
 
@@ -94,7 +96,7 @@ export function SemaforoGlyph({ estado, className }: { estado: SemaforoEstado; c
   )
 }
 
-export default function SemaforoChip({ estado, className }: SemaforoChipProps) {
+export default function SemaforoChip({ estado, long = false, className }: SemaforoChipProps) {
   const { t } = useTranslation()
   const known = toSemaforoEstado(estado)
 
@@ -117,7 +119,7 @@ export default function SemaforoChip({ estado, className }: SemaforoChipProps) {
     <Chip
       tone={presentation.tone}
       icon={SHAPE_ICONS[presentation.shape]}
-      label={t(presentation.labelKey)}
+      label={t(long ? presentation.longKey : presentation.labelKey)}
       className={className}
     />
   )

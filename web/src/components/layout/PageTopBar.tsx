@@ -144,6 +144,12 @@ export interface PageTopBarProps {
   }
   /** Buttons, links, filters — whatever the page acts with. */
   actions?: ReactNode
+  /**
+   * A row of chips and short facts under the title — the Main (plan detail) artboard of
+   * 10 Sep prints the plan's code, its semáforo and how far its date is there. Already
+   * translated; rendered after the description, in the text column.
+   */
+  meta?: ReactNode
 }
 
 export function PageTopBar({
@@ -154,6 +160,7 @@ export function PageTopBar({
   breadcrumbLabel,
   badge,
   actions,
+  meta,
 }: PageTopBarProps) {
   const { t } = useTranslation()
   const derivedEyebrow = useSectionEyebrow()
@@ -256,6 +263,11 @@ export function PageTopBar({
               than on the page around it. */}
           {description && (
             <p className="mb-0 max-w-measure break-words text-fg-secondary">{description}</p>
+          )}
+          {meta && (
+            <div data-slot="page-meta" className="mt-0.5 flex flex-wrap items-center gap-2.5">
+              {meta}
+            </div>
           )}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-inline">{actions}</div>}

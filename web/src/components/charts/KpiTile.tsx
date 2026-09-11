@@ -83,6 +83,13 @@ export interface KpiTileProps {
    * this off.
    */
   unit?: React.ReactNode
+  /**
+   * A chip at the right end of the label row — the Planes de Acción and Vista
+   * Consolidada artboards (10 Sep) put the semáforo word there ("Atrasado", "Al día"),
+   * and a sample-fed tile wears its "Datos de muestra" chip in the same place.
+   * Already translated; the chip carries its own word, never colour alone.
+   */
+  aside?: React.ReactNode
   /** BCP-47 locale. Defaults to the document's language. */
   locale?: string
   className?: string
@@ -97,6 +104,7 @@ export default function KpiTile({
   sub,
   changeLabel,
   unit,
+  aside,
   locale,
   className,
 }: KpiTileProps) {
@@ -141,9 +149,18 @@ export default function KpiTile({
 
           `data-slot="kpi-label"` is how a test finds a tile by its label: "Completed"
           is also a badge and a filter option on the list pages, so text alone is not. */}
-      <div data-slot="kpi-label" className="text-2xs font-bold uppercase tracking-tile text-fg-label">
-        {label}
-      </div>
+      {aside ? (
+        <div className="flex items-center justify-between gap-2">
+          <div data-slot="kpi-label" className="text-2xs font-bold uppercase tracking-tile text-fg-label">
+            {label}
+          </div>
+          {aside}
+        </div>
+      ) : (
+        <div data-slot="kpi-label" className="text-2xs font-bold uppercase tracking-tile text-fg-label">
+          {label}
+        </div>
+      )}
       {/* The unit shares the value's baseline, as the artboards draw it — never a
           second line, which is what `sub` is for. */}
       <div className="mt-1.5 flex flex-wrap items-baseline gap-2">
