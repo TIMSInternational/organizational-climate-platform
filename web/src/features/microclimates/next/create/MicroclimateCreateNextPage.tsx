@@ -1,7 +1,8 @@
 import { useId, useMemo, useState } from 'react'
 import * as RadioGroupPrimitive from '@radix-ui/react-radio-group'
-import { Clock, Ellipsis, FileText, GripVertical, Plus, Send, ShieldCheck, Users } from 'lucide-react'
+import { Clock, Ellipsis, GripVertical, Plus, Send, Users } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
+import { RailReportsIcon, RailShieldIcon } from '../../../../navigation/railIcons'
 import { PageTopBar } from '../../../../components/layout'
 import { CanvasCard, FactList, NoteBand } from '../../../../components/canvas'
 import { QuestionLibraryBrowser } from '../../../../components/questions'
@@ -109,8 +110,8 @@ function CreateScreen() {
           { label: t('microclimates.next.create.title') },
         ]}
         actions={
-          <Button variant="outline" disabled={busy} onClick={state.saveDraft}>
-            <FileText aria-hidden="true" />
+          <Button variant="outline" size="canvas" disabled={busy} onClick={state.saveDraft}>
+            <RailReportsIcon strokeWidth={2} />
             {state.submitting === 'draft' ? t('common.creating') : t('microclimates.next.create.saveDraft')}
           </Button>
         }
@@ -409,7 +410,7 @@ function CreateScreen() {
                   },
                 ]}
               />
-              <Button variant="primary" className="w-full" disabled={busy} onClick={state.launch}>
+              <Button variant="primary" size="canvas" className="w-full" disabled={busy} onClick={state.launch}>
                 <Send aria-hidden="true" />
                 {state.submitting === 'launch' ? t('common.creating') : t('microclimates.next.create.launch')}
               </Button>
@@ -547,7 +548,7 @@ function QuestionRow({
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              size="icon"
+              size="icon-canvas"
               disabled={disabled}
               aria-label={t('microclimates.next.create.questionMenu', { order })}
             >
@@ -642,7 +643,7 @@ function RespondentPreview({ values }: { values: MicroclimateWizardValues }) {
       <span className="font-store-serif text-xl leading-tight text-fg-primary">{title}</span>
       <span className="self-start">
         {values.anonymousResponses ? (
-          <Chip tone="good" icon={<ShieldCheck />} label={t('microclimates.respondAnonymityChip')} />
+          <Chip tone="good" icon={<RailShieldIcon strokeWidth={2} className="size-3.25" />} label={t('microclimates.respondAnonymityChip')} />
         ) : (
           <Chip label={t('microclimates.identifiedShort')} />
         )}
@@ -664,7 +665,7 @@ function RespondentPreview({ values }: { values: MicroclimateWizardValues }) {
           </div>
         )
       })}
-      <span className="inline-flex h-8 items-center self-start rounded-md border border-line-default px-3 text-base font-medium text-fg-tertiary">
+      <span className="inline-flex h-control-canvas items-center self-start rounded-md border border-line-default px-3 text-base font-medium text-fg-tertiary">
         {t('microclimates.next.create.previewSubmit')}
       </span>
     </div>

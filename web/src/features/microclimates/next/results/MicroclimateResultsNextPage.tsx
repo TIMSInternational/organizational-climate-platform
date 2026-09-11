@@ -131,7 +131,7 @@ function ResultsView({
         }
         actions={
           detail.status === 'active' ? (
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" size="canvas">
               <Link to={`/microclimates/${detail.id}/live`}>
                 <ArrowRight aria-hidden="true" />
                 {t('microclimates.next.viewLive')}
@@ -198,7 +198,7 @@ function ResultsView({
             <CanvasCard title={t('microclimates.next.results.exportTitle')} inset="side">
               <span className="text-sm text-fg-secondary">{t('microclimates.next.results.exportBody')}</span>
               <span className="self-start">
-                <Button variant="outline" disabled={exporting} onClick={onExport}>
+                <Button variant="outline" size="canvas" disabled={exporting} onClick={onExport}>
                   <Download aria-hidden="true" />
                   {t('microclimates.exportCsv')}
                 </Button>

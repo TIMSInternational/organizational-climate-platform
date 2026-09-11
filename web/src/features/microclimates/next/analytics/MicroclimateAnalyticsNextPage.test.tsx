@@ -114,6 +114,12 @@ describe('MicroclimateAnalyticsNextPage', () => {
     expect(getLiveResults).not.toHaveBeenCalled()
   })
 
+  it('draws each row’s Resultados at the canvas’s 34px', async () => {
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    const row = await waitFor(() => rowOf('Pulso semanal — ¿cómo fue la semana?'))
+    expect(within(row).getByRole('link', { name: es.microclimates.results }).className.split(' ')).toContain('h-control-canvas')
+  })
+
   it('keeps the sessions table the positioning context of its sr-only header, so nothing escapes the scroll container', async () => {
     // Measured with the shot harness at 1024 before this: the sr-only "Acciones" span sat at
     // right=1051 outside the Table primitive's clip. happy-dom has no layout, so the guard

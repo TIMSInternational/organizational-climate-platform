@@ -147,8 +147,40 @@ describe('MicroclimateCreateNextPage', () => {
     expect(opens.textContent).toBe('10/09/2026 · 21:00')
     expect(closes.textContent).toBe('12/09/2026 · 21:00')
     expect(opens.firstElementChild?.tagName.toLowerCase()).toBe('svg')
+    // The glyph is the calendar, not the picker's clock: lucide names each icon in its class.
+    for (const field of [opens, closes]) {
+      expect(field.firstElementChild?.getAttribute('class')?.split(' ')).toContain('lucide-calendar')
+      expect(field.querySelector('.lucide-clock')).toBeNull()
+    }
     // The native field printed the browser's format: "09/10/2026, 09:00 PM" in an en-US browser.
     expect(document.querySelector('input[type="datetime-local"]')).toBeNull()
+  })
+
+  it('draws the board’s glyphs and its 34px controls: a plain page on Guardar borrador, a 13px shield in the preview’s chip', async () => {
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await waitFor(async () => expect((await nameField()).value).not.toBe(''))
+    const paths = (element: Element | null | undefined) =>
+      [...(element?.querySelectorAll('path') ?? [])].map((path) => path.getAttribute('d'))
+    // MicroclimateCreate.dc.html, the header: a plain page and its fold — not lucide's FileText,
+    // whose page carries lines of text.
+    const draft = screen.getByRole('button', { name: copy.saveDraft })
+    expect(paths(draft)).toEqual(['M4 2h5l3 3v9H4z', 'M9 2v3h3'])
+    // The preview's "No se asocia a usted": the board's shield, 13px, inside the 22px chip. The
+    // chip's own `[&>svg]:size-3` cannot reach an icon it wraps in a span, so the glyph is sized here.
+    const chip = screen
+      .getAllByText(es.microclimates.respondAnonymityChip)
+      .map((element) => element.closest('[data-slot="chip"]'))
+      .find(Boolean)
+    const shield = chip?.querySelector('svg')
+    expect(paths(shield)).toEqual(['M8 2l5 2v4c0 3-2.2 5-5 6-2.8-1-5-3-5-6V4z'])
+    expect(shield?.getAttribute('class')?.split(' ')).toContain('size-3.25')
+    // The canvas's .btn is 34px outside: 32px of content box and its 1px border.
+    expect(draft.className.split(' ')).toContain('h-control-canvas')
+    expect(screen.getByRole('button', { name: copy.launch }).className.split(' ')).toContain('h-control-canvas')
+    expect(
+      screen.getByRole('button', { name: copy.questionMenu.replace('{order}', '1') }).className.split(' '),
+    ).toContain('size-control-canvas')
+    expect(screen.getByText(copy.previewSubmit, { selector: 'span' }).className.split(' ')).toContain('h-control-canvas')
   })
 
   it('moves Cierre through its picker — a day, then an hh:mm — and the save carries the datetime-local string', async () => {

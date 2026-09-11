@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router'
 import { ArrowRight, ChevronRight, Clock, Copy, Ellipsis, EyeOff, Link2, Mail, Plus, Send } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
-import { CanvasCard, FactList, IconBox, NoteBand, PageMeta } from '../../../../components/canvas'
+import { CanvasCard, FactList, IconBox, NoteBand, PageMeta, PageMetaSentences } from '../../../../components/canvas'
 import {
   Alert,
   AlertDescription,
@@ -160,28 +160,32 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
         breadcrumbs={[{ label: t('navigation.microclimates'), href: '/microclimates' }, { label: title }]}
         meta={
           <PageMeta>
-            <Chip label={sessionStatusLabel(t, detail.status)} tone={sessionStatusTone(detail.status)} />
-            <span>{when}</span>
-            <span className="text-fg-tertiary">{tally}</span>
+            <Chip className="self-start" label={sessionStatusLabel(t, detail.status)} tone={sessionStatusTone(detail.status)} />
+            <PageMetaSentences
+              sentences={[
+                { id: 'when', text: when },
+                { id: 'tally', text: tally, muted: true },
+              ]}
+            />
           </PageMeta>
         }
         actions={
           <>
             {isDraft && manages && (
-              <Button variant="primary" disabled={state.pending !== null} onClick={state.launch}>
+              <Button variant="primary" size="canvas" disabled={state.pending !== null} onClick={state.launch}>
                 <Send aria-hidden="true" />
                 {t('microclimates.next.detail.launch')}
               </Button>
             )}
             {isLive && (
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" size="canvas">
                 <Link to={`/microclimates/${detail.id}/live`}>
                   <ArrowRight aria-hidden="true" />
                   {t('microclimates.next.viewLive')}
                 </Link>
               </Button>
             )}
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" size="canvas">
               <Link to={`/microclimates/${detail.id}/results`}>
                 <RailAnalyticsIcon strokeWidth={2} />
                 {t('microclimates.results')}
@@ -189,7 +193,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" aria-label={t('microclimates.next.detail.moreActions')}>
+                <Button variant="outline" size="icon-canvas" aria-label={t('microclimates.next.detail.moreActions')}>
                   <Ellipsis aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
@@ -226,7 +230,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
                   <Link2 aria-hidden="true" className="size-3.5 shrink-0 text-fg-tertiary" />
                   <span className="truncate font-mono text-base text-fg-primary">{`${host}${path}`}</span>
                 </span>
-                <Button variant={isDraft ? 'outline' : 'primary'} onClick={() => void copyLink()}>
+                <Button variant={isDraft ? 'outline' : 'primary'} size="canvas" onClick={() => void copyLink()}>
                   <Copy aria-hidden="true" />
                   {t('microclimates.next.detail.copyLink')}
                 </Button>
@@ -347,7 +351,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
               {isLive && manages && (
                 <div className="flex flex-col gap-1.5 border-t border-line-light pt-2.5">
                   <span className="self-start">
-                    <Button variant="outline" disabled={state.pending !== null} onClick={() => setConfirmClose(true)}>
+                    <Button variant="outline" size="canvas" disabled={state.pending !== null} onClick={() => setConfirmClose(true)}>
                       <Clock aria-hidden="true" />
                       {t('microclimates.next.detail.closeNow')}
                     </Button>
@@ -431,7 +435,7 @@ function InvitationsCard({
             <span className="text-sm leading-normal text-fg-secondary">{t('microclimates.next.detail.invitationsEmptyBody')}</span>
             {canInvite && (
               <span className="mt-1 self-start">
-                <Button variant="outline" onClick={onInvite}>
+                <Button variant="outline" size="canvas" onClick={onInvite}>
                   <Plus aria-hidden="true" />
                   {t('microclimates.next.detail.invite')}
                 </Button>
@@ -455,7 +459,7 @@ function InvitationsCard({
           )}
           {canInvite && (
             <span className="self-start">
-              <Button variant="outline" onClick={onInvite}>
+              <Button variant="outline" size="canvas" onClick={onInvite}>
                 <Plus aria-hidden="true" />
                 {t('microclimates.next.detail.inviteMore')}
               </Button>

@@ -180,6 +180,14 @@ describe('ActionPlanDetailNextPage', () => {
     expect(screen.getByRole('button', { name: new RegExp(copy.changeStatus) })).toBeTruthy()
   })
 
+  it('draws the header’s actions at the canvas’s 34px', async () => {
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    const record = await screen.findByRole('button', { name: new RegExp(copy.recordProgress) })
+    expect(record.className.split(' ')).toContain('h-control-canvas')
+    expect(screen.getByRole('button', { name: new RegExp(copy.changeStatus) }).className.split(' ')).toContain('h-control-canvas')
+    expect(screen.getByRole('button', { name: copy.moreActions }).className.split(' ')).toContain('size-control-canvas')
+  })
+
   it('never claims the plan has no progress: the server does not return it, and the Bitácora says so', async () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     await screen.findByText(copy.log.entryOne)

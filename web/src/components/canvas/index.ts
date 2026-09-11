@@ -2,4 +2,4 @@ export { CanvasCard, CanvasSectionHead, type CanvasCardProps } from './CanvasCar
 export { FactList, type Fact } from './FactList'
 export { NoteBand } from './NoteBand'
 export { HatchField, HatchPill, HatchTag, IconBox } from './HatchTag'
-export { PageMeta } from './PageMeta'
+export { PageMeta, PageMetaSentences } from './PageMeta'

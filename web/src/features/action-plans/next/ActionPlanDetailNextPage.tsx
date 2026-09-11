@@ -182,13 +182,13 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
         actions={
           manages ? (
             <>
-              <Button variant="primary" onClick={() => setProgressOpen(true)}>
+              <Button variant="primary" size="canvas" onClick={() => setProgressOpen(true)}>
                 <Plus aria-hidden="true" />
                 {t('actionPlans.next.recordProgress')}
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" disabled={state.saving}>
+                  <Button variant="outline" size="canvas" disabled={state.saving}>
                     {t('actionPlans.next.changeStatus')}
                     <ChevronDown aria-hidden="true" className="text-fg-tertiary" />
                   </Button>
@@ -205,7 +205,7 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
               </DropdownMenu>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon" disabled={state.saving} aria-label={t('actionPlans.next.moreActions')}>
+                  <Button variant="outline" size="icon-canvas" disabled={state.saving} aria-label={t('actionPlans.next.moreActions')}>
                     <Ellipsis aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>

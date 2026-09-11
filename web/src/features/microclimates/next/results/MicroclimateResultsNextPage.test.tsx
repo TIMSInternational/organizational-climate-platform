@@ -133,6 +133,13 @@ describe('MicroclimateResultsNextPage', () => {
     expect(vi.mocked(getMicroclimateCsv).mock.calls[0]?.slice(1)).toEqual(['m1', 'es'])
   })
 
+  it('draws Ver en vivo and Exportar CSV at the canvas’s 34px', async () => {
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    const exportButton = await screen.findByRole('button', { name: es.microclimates.exportCsv })
+    expect(exportButton.className.split(' ')).toContain('h-control-canvas')
+    expect(screen.getByRole('link', { name: copy.viewLive }).className.split(' ')).toContain('h-control-canvas')
+  })
+
   it('offers a super administrator the export with no company chosen', async () => {
     renderAs({ role: 'super_admin' })
     expect(await screen.findByRole('button', { name: es.microclimates.exportCsv })).toBeTruthy()

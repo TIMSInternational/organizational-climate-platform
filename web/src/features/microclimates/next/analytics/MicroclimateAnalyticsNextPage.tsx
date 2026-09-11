@@ -335,7 +335,7 @@ function SessionsTable({ rows }: { rows: readonly SessionRow[] }) {
                   {row.detail.status === 'ready' ? shortDay(row.detail.value.startTime, locale) : shortDay(session.createdAt, locale)}
                 </td>
                 <td className={cn(cell, 'text-right')}>
-                  <Button asChild variant="outline">
+                  <Button asChild variant="outline" size="canvas">
                     <Link to={`/microclimates/${session.id}/results`}>{t('microclimates.results')}</Link>
                   </Button>
                 </td>

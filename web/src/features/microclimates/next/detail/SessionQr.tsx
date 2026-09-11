@@ -72,7 +72,7 @@ export function SessionQr({ url, microclimateId, children }: { url: string; micr
       </div>
       <div className="flex min-w-0 flex-col items-start gap-2.5">
         {children}
-        <Button variant="outline" disabled={busy} onClick={() => void download()}>
+        <Button variant="outline" size="canvas" disabled={busy} onClick={() => void download()}>
           <Download aria-hidden="true" />
           {t('microclimates.next.detail.downloadQr')}
         </Button>

@@ -132,6 +132,39 @@ describe('MicroclimateDetailNextPage', () => {
     expect(glyphs(live)[1]).not.toBe(glyphs(live)[0])
   })
 
+  it('draws the header’s Resultados with the board’s bars, and every button of the board at its 34px', async () => {
+    const { container } = renderAs({ role: 'company_admin', companyId: COMPANY })
+    await screen.findByText(`${window.location.host}/microclimates/m1/respond`)
+    // The header's links are the ones outside the Después list.
+    const outsideList = (href: string) =>
+      [...container.querySelectorAll<HTMLAnchorElement>(`a[href="${href}"]`)].filter((link) => !link.closest('li'))
+    const results = outsideList('/microclimates/m1/results')
+    expect(results).toHaveLength(1)
+    // MicroclimateDetail.dc.html, the header's Resultados: three bars, no axis.
+    expect([...results[0]!.querySelectorAll('svg path')].map((path) => path.getAttribute('d'))).toEqual(['M3 13V8M8 13V4M13 13V6'])
+    expect(results[0]!.className.split(' ')).toContain('h-control-canvas')
+    const live = outsideList('/microclimates/m1/live')
+    expect(live).toHaveLength(1)
+    expect(live[0]!.className.split(' ')).toContain('h-control-canvas')
+    expect(screen.getByRole('button', { name: copy.detail.moreActions }).className.split(' ')).toContain('size-control-canvas')
+    for (const name of [copy.detail.copyLink, copy.detail.downloadQr, copy.detail.invite, copy.detail.closeNow]) {
+      expect(screen.getByRole('button', { name }).className.split(' ')).toContain('h-control-canvas')
+    }
+  })
+
+  it('leads the tally with a "·" that is not part of its copy, so at 1024 a wrapped tally opens its line with the number', async () => {
+    const { container } = renderAs({ role: 'company_admin', companyId: COMPANY })
+    // An exact match: the copy itself carries no "·".
+    const tally = await screen.findByText('0 de 20 respuestas')
+    const run = container.querySelector('[data-slot="page-meta-sentences"]')
+    expect(run?.contains(tally)).toBe(true)
+    const sentences = [...(run?.children ?? [])]
+    expect(sentences).toHaveLength(2)
+    expect(sentences[1]!.lastElementChild).toBe(tally)
+    expect(sentences[1]!.querySelector('[data-slot="page-meta-separator"]')?.textContent).toBe('·')
+    expect(sentences[0]!.textContent).not.toContain('·')
+  })
+
   it('draws the anonymous ladder from the payload: up to opened, started and completed struck', async () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     await screen.findByText(copy.detail.ladderTitle)
@@ -160,7 +193,10 @@ describe('MicroclimateDetailNextPage', () => {
     vi.mocked(getMicroclimate).mockResolvedValue({ ...detail, status: 'draft' })
     vi.mocked(updateMicroclimate).mockResolvedValue(detail)
     renderAs({ role: 'company_admin', companyId: COMPANY })
-    await userEvent.click(await screen.findByRole('button', { name: copy.detail.launch }))
+    const launch = await screen.findByRole('button', { name: copy.detail.launch })
+    // The header's primary, at the canvas's 34px like the rest of the header.
+    expect(launch.className.split(' ')).toContain('h-control-canvas')
+    await userEvent.click(launch)
     await waitFor(() => expect(vi.mocked(updateMicroclimate).mock.calls[0]?.slice(1)).toEqual(['m1', { status: 'active' }]))
   })
 
