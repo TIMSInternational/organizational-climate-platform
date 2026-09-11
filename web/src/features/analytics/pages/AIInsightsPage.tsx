@@ -1,3 +1,7 @@
+/**
+ * NOT ROUTED. `/analytics/ai-insights` renders `features/analytics/next/insights/AIInsightsNextPage` since the per-role canvas redesign (10 Sep);
+ * this page stays in the tree as the wiring reference for its payload and submit path.
+ */
 import { useCallback, useEffect, useState } from 'react'
 import {
   acknowledgeAIInsight,

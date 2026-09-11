@@ -37,7 +37,7 @@ import PrivacySettingsPage from '../features/profile/pages/PrivacySettingsPage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
 import SurveyDistributionPage from '../features/surveys/pages/SurveyDistributionPage'
 import BenchmarksPage from '../features/analytics/pages/BenchmarksPage'
-import AIInsightsPage from '../features/analytics/pages/AIInsightsPage'
+import AIInsightsNextPage from '../features/analytics/next/insights/AIInsightsNextPage'
 import ReportsListPage from '../features/reports/pages/ReportsListPage'
 import SharedReportPage from '../features/reports/pages/SharedReportPage'
 import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
@@ -429,7 +429,9 @@ export const router = createBrowserRouter([
               // one survey rather than a destination, so it gets a route and no nav entry.
               { path: '/surveys/:surveyId/distribution', element: <SurveyDistributionPage /> },
               { path: '/analytics/benchmarks', element: <BenchmarksPage /> },
-              { path: '/analytics/ai-insights', element: <AIInsightsPage /> },
+              // The redesigned Información de IA (the per-role canvas, 10 Sep) replaced
+              // AIInsightsPage here; the old page stays in the tree unrouted, as the wiring reference.
+              { path: '/analytics/ai-insights', element: <AIInsightsNextPage /> },
               // The tracking module (#125, #126). Inside `AdminLayout` like every
               // other work surface — these are administration screens, not a
               // respondent flow — and gated by nothing beyond `RequireAuth`,

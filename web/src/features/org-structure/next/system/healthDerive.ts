@@ -114,6 +114,16 @@ export function clockTime(iso: string, locale: string, timeZone?: string): strin
   )
 }
 
+/**
+ * "9 sept" — the day of an instant in `timeZone` (the viewer's, unless a test names one),
+ * the same zone `clockTime` prints the hour in. `calendarDay` reads the day in UTC, which is
+ * right for a survey's close date and wrong beside a local clock time: a job that ran at
+ * 03:01 UTC on 10 Sep is "9 sept · 22:01" in Costa Rica, never "10 sept · 22:01".
+ */
+export function localDay(iso: string, locale: string, timeZone?: string): string {
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone }).format(new Date(iso))
+}
+
 /** The calendar day of an instant, as `YYYY-MM-DD` in `timeZone` — for "same day as the check". */
 export function dayKey(iso: string, timeZone?: string): string {
   return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone }).format(

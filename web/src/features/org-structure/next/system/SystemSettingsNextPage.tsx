@@ -47,7 +47,6 @@ export default function SystemSettingsNextPage() {
 
   return (
     <form
-      className="flex flex-col gap-6"
       onSubmit={(event) => {
         event.preventDefault()
         model.save()
@@ -60,10 +59,10 @@ export default function SystemSettingsNextPage() {
         actions={
           settings && draft ? (
             <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" onClick={model.discard} disabled={!model.dirty || model.saving}>
+              <Button type="button" variant="outline" onClick={model.discard} disabled={model.saving}>
                 {t('settings.next.discard')}
               </Button>
-              <Button type="submit" variant="primary" disabled={!model.dirty || model.saving}>
+              <Button type="submit" variant="primary" disabled={model.saving}>
                 <Check aria-hidden="true" />
                 {model.saving ? t('common.saving') : t('common.save')}
               </Button>
@@ -90,7 +89,7 @@ export default function SystemSettingsNextPage() {
       )}
 
       {model.saveError !== null && (
-        <Alert variant="destructive" role="alert">
+        <Alert variant="destructive" role="alert" className="mt-6">
           <AlertDescription>{model.saveError || t('errors.generic')}</AlertDescription>
         </Alert>
       )}
@@ -114,7 +113,7 @@ function SettingsBody({
   const mail = settings.emailSettings
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-4">
           <Panel id="settings-availability" heading={t('settings.next.availabilityHeading')} meta={t('settings.next.availabilityMeta')}>
@@ -250,7 +249,7 @@ function SettingsBody({
           </span>
         )}
       </p>
-    </>
+    </div>
   )
 }
 

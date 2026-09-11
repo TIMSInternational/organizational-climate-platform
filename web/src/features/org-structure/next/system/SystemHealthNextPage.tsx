@@ -4,7 +4,6 @@ import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { Button, Chip, NetworkError, SkeletonText, type ChipTone } from '../../../../components/ui'
 import { useHeaderSwitcherStandDown } from '../../../../company-context/useHeaderSwitcherStandDown'
-import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import type { SystemJobStatus, SystemStatusResponse } from '../../api/systemStatus'
 import type { SystemEmailSettings } from '../../api/systemSettings'
@@ -13,6 +12,7 @@ import {
   clockTime,
   componentTone,
   dayKey,
+  localDay,
   mailTone,
   minutesSince,
   tallyJobs,
@@ -105,14 +105,14 @@ export default function SystemHealthNextPage() {
     : null
 
   return (
-    <div className="flex flex-col gap-6">
+    <div>
       <PageTopBar
         eyebrow={t('navigation.systemAdministration')}
         title={t('systemHealth.title')}
         description={
           status
             ? t('systemHealth.next.description', {
-                date: calendarDay(Date.parse(status.checkedAt), locale),
+                date: localDay(status.checkedAt, locale),
                 time: clockTime(status.checkedAt, locale),
               })
             : t('systemHealth.description')
@@ -157,7 +157,7 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
   const dispatchJob = jobs.find((job) => job.jobName === 'notification-dispatch')
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <div data-slot="health-tiles" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Tile
           eyebrow={t('systemHealth.next.tileApi')}
@@ -247,8 +247,8 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
             <Facts labelWidth="build">
               <Fact label={t('systemHealth.commit')}>
                 {status.build.commit === 'unknown' ? (
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-sm text-fg-light">{t('systemHealth.next.unknown')}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="shrink-0 font-mono text-sm text-fg-light">{t('systemHealth.next.unknown')}</span>
                     <span className="text-xs text-fg-light">{t('systemHealth.next.commitUnknownNote')}</span>
                   </span>
                 ) : (
@@ -261,7 +261,7 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
                   <span className="text-sm text-fg-light">{t('systemHealth.next.unknown')}</span>
                 ) : (
                   <span className="font-mono text-sm tabular-nums text-fg-primary">
-                    {`${calendarDay(Date.parse(status.build.builtAt), locale)} · ${clockTime(status.build.builtAt, locale)}`}
+                    {`${localDay(status.build.builtAt, locale)} · ${clockTime(status.build.builtAt, locale)}`}
                   </span>
                 )}
               </Fact>
@@ -286,7 +286,7 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
               </Fact>
               <Fact label={t('systemHealth.next.poolerLabel')}>
                 {/* #220: the port is a fact on a page rather than a coin flip. */}
-                <span className="flex flex-wrap items-center gap-2">
+                <span className="flex items-center gap-2">
                   <Chip
                     tone={db.usesTransactionPoolerPort ? 'critical' : 'good'}
                     label={t(
@@ -309,7 +309,7 @@ function HealthBody({ status, email }: { status: SystemStatusResponse; email: Sy
       </div>
 
       <JobsDisclosure jobs={jobs} checkedAt={status.checkedAt} />
-    </>
+    </div>
   )
 }
 
@@ -324,7 +324,7 @@ function dispatcherSentence(
     dispatcher.lastDispatchAt === null
       ? t('systemHealth.next.dispatcherNeverRun')
       : t('systemHealth.next.dispatcherLast', {
-          date: calendarDay(Date.parse(dispatcher.lastDispatchAt), locale),
+          date: localDay(dispatcher.lastDispatchAt, locale),
           time: clockTime(dispatcher.lastDispatchAt, locale),
         })
   const cadence = dispatchJob
@@ -452,7 +452,7 @@ function JobsDisclosure({ jobs, checkedAt }: { jobs: readonly SystemJobStatus[];
   const instant = (iso: string | null) => {
     if (iso === null) return '—'
     const time = clockTime(iso, locale)
-    return dayKey(iso) === checkedDay ? time : `${calendarDay(Date.parse(iso), locale)} · ${time}`
+    return dayKey(iso) === checkedDay ? time : `${localDay(iso, locale)} · ${time}`
   }
 
   return (
