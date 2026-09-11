@@ -166,13 +166,17 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
           <>
             <Chip label={plan.planCode} className="font-mono" />
             <SemaforoChip estado={plan.estadoSemaforo} />
-            <span className={cn('text-base', overdue ? 'text-accent-red' : 'text-fg-secondary')}>
-              {dueSentence(t, locale, plan.fechaCompromiso, days, plan.cumplido)}
-            </span>
-            <span className="text-base text-fg-label">
-              {progressed
-                ? t('tracking.next.metaLastAvance', { date: calendarDayLong(Date.parse(plan.fechaUltimaActualizacion), locale) })
-                : t('tracking.next.metaNoAvances')}
+            {/* One run of text: where the title column is narrow (1024) it wraps as a sentence
+                does, rather than breaking between two flex items and opening a line with "·". */}
+            <span className="text-base" data-slot="plan-meta-dates">
+              <span className={overdue ? 'text-accent-red' : 'text-fg-secondary'}>
+                {dueSentence(t, locale, plan.fechaCompromiso, days, plan.cumplido)}
+              </span>
+              <span className="ml-2.5 text-fg-label">
+                {progressed
+                  ? t('tracking.next.metaLastAvance', { date: calendarDayLong(Date.parse(plan.fechaUltimaActualizacion), locale) })
+                  : t('tracking.next.metaNoAvances')}
+              </span>
             </span>
           </>
         }

@@ -189,12 +189,15 @@ describe('ActionPlansListNextPage — company_admin', () => {
     expect(table.querySelector('th[data-col="owner"] [data-slot="sample-chip"]')).toBeNull()
   })
 
-  it('sets the columns on the artboard grid — 222, 162, 132, 92 and 144px — each cell padded on the left only', async () => {
+  it('sets the columns on the artboard grid — Vence, Prioridad and the actions at 132, 92 and 144px, finding and owner sharing its 384 — each cell padded on the left only', async () => {
     renderPage()
     await screen.findByRole('link', { name: 'Programa de reconocimiento entre pares' })
     const table = section(next.groupNotStarted).querySelector('table') as HTMLTableElement
     const width = (col: string) => (table.querySelector(`th[data-col="${col}"]`) as HTMLElement).className.match(/\bw-\[(\d+)px\]/)?.[1]
-    expect(['finding', 'owner', 'due', 'priority', 'actions'].map(width)).toEqual(['222', '162', '132', '92', '144'])
+    expect(['finding', 'owner', 'due', 'priority', 'actions'].map(width)).toEqual(['255', '129', '132', '92', '144'])
+    // The finding and the owner keep the artboard's 222 + 162 between them, so Vence and
+    // Prioridad sit where the artboard puts them.
+    expect(Number(width('finding')) + Number(width('owner'))).toBe(222 + 162)
     for (const cell of table.querySelectorAll('th, td')) {
       expect(cell.className).toMatch(/(^|\s)pl-3(\s|$)/)
       expect(cell.className).toMatch(/(^|\s)pr-0(\s|$)/)

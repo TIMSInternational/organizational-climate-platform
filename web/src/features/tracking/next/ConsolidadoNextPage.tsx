@@ -376,7 +376,7 @@ function CompromisoReading({
       <span className={cn('font-mono text-sm tabular-nums', overdue ? 'text-accent-red' : 'text-fg-primary')}>
         {calendarDay(Date.parse(plan.fechaCompromiso), locale)}
       </span>
-      <span className={cn('text-xs', overdue ? 'text-accent-red' : 'text-fg-label')}>
+      <span className={cn('whitespace-nowrap text-xs', overdue ? 'text-accent-red' : 'text-fg-label')}>
         {plan.cumplido
           ? t('tracking.detail.cumplido')
           : overdue
@@ -440,7 +440,7 @@ function PlanRow({ plan, t, locale }: { plan: PlanLine; t: TranslateFn; locale: 
           <div className="w-[150px] shrink-0">
             <AvanceReading plan={plan} overdue={overdue} stretch t={t} />
           </div>
-          <div className="w-[104px] shrink-0">
+          <div className="w-[120px] shrink-0">
             <CompromisoReading plan={plan} overdue={overdue} inline={false} t={t} locale={locale} />
           </div>
         </div>

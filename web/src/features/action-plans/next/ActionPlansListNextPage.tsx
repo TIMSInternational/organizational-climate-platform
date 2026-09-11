@@ -56,8 +56,13 @@ import { useActionPlansListModel } from './useActionPlansListModel'
  *
  * Cells pad on the LEFT only, 12px, and the last column on the right too: the artboard's
  * grid is `minmax(0,1fr) 210px 150px 120px 80px 120px` with 12px gaps and 12px at each end,
- * so a column is its content plus the gap before it — the widths below (222, 162, 132, 92,
- * and 120 + 24 for the last) put every heading and value where the artboard puts it.
+ * so a column is its content plus the gap before it — 132, 92 and 120 + 24 for Vence,
+ * Prioridad and the actions put those headings and values exactly where the artboard does.
+ *
+ * The finding and the owner share the artboard's 384px (222 + 162) differently, 255 + 129:
+ * the finding's heading carries the "Datos de muestra" chip the artboard does not draw
+ * (127px of heading, 6 of gap, 110 of chip), and 222 would push the chip over "Responsable".
+ * The owner's content — the heading, a 28px mark and "Sin asignar" — needs 98 of its 117.
  */
 const HEAD = 'h-auto bg-transparent pl-3 pr-0 last:pr-3 pb-2 pt-0 text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
 const CELL = 'pl-3 pr-0 last:pr-3 py-3 align-middle'
@@ -566,13 +571,13 @@ function PlanTable({
                 {model.findingsAreSample && <SampleChip t={t} className={FOLDED_ONLY} />}
               </span>
             </th>
-            <th className={cn(HEAD, WIDE_ONLY, 'w-[222px]')} data-col="finding">
+            <th className={cn(HEAD, WIDE_ONLY, 'w-[255px]')} data-col="finding">
               <span className="flex items-center gap-1.5">
                 {t('actionPlans.next.colFinding')}
                 {model.findingsAreSample && <SampleChip t={t} />}
               </span>
             </th>
-            <th className={cn(HEAD, WIDE_ONLY, 'w-[162px]')} data-col="owner">
+            <th className={cn(HEAD, WIDE_ONLY, 'w-[129px]')} data-col="owner">
               {t('actionPlans.next.colOwner')}
             </th>
             <th className={cn(HEAD, 'w-[132px]')} data-col="due">
