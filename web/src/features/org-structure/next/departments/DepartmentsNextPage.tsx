@@ -166,7 +166,7 @@ function DepartmentsView({
               }}
             >
               {creating ? null : <Plus aria-hidden="true" />}
-              {creating ? t('common.cancel') : t('departments.newDepartment')}
+              {creating ? t('common.cancel') : t(`${K}.newDepartment`)}
             </Button>
           </>
         }
@@ -238,7 +238,7 @@ function DepartmentsView({
 
         <section aria-labelledby="departments-chart" className="flex flex-col">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <h2 id="departments-chart" className="m-0 text-xl">
+            <h2 id="departments-chart" className="m-0 text-2xl">
               {t(`${K}.chartHeading`)}
             </h2>
             <span className="text-xs text-fg-tertiary">{t(`${K}.chartMeta`)}</span>
@@ -294,7 +294,7 @@ function DepartmentsView({
 
         <section aria-labelledby="departments-list" className="flex flex-col gap-3">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <h2 id="departments-list" className="m-0 text-xl">
+            <h2 id="departments-list" className="m-0 text-2xl">
               {t(`${K}.listHeading`)}
             </h2>
             <span className="text-xs text-fg-tertiary">{t(`${K}.listMeta`)}</span>

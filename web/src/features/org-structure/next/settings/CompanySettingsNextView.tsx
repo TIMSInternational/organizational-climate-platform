@@ -204,7 +204,7 @@ function SettingsForm({
         <Panel
           labelledBy={`${ids}-surveys`}
           heading={
-            <h2 id={`${ids}-surveys`} className="m-0 text-xl">
+            <h2 id={`${ids}-surveys`} className="m-0 text-2xl">
               {t(`${K}.surveysHeading`)}
             </h2>
           }
@@ -317,7 +317,7 @@ function SettingsForm({
           <Panel
             labelledBy={`${ids}-brand`}
             heading={
-              <h2 id={`${ids}-brand`} className="m-0 text-xl">
+              <h2 id={`${ids}-brand`} className="m-0 text-2xl">
                 {t(`${K}.brandHeading`)}
               </h2>
             }
@@ -384,7 +384,7 @@ function SettingsForm({
           <Panel
             labelledBy={`${ids}-company`}
             heading={
-              <h2 id={`${ids}-company`} className="m-0 text-xl">
+              <h2 id={`${ids}-company`} className="m-0 text-2xl">
                 {t(`${K}.companyHeading`)}
               </h2>
             }

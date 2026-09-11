@@ -1057,7 +1057,8 @@
       "noInactive": "No inactive departments.",
       "inactiveHidden": "{count} inactive departments hidden. They keep their survey history and receive no invitations.",
       "inactiveShown": "{count} inactive departments shown. They keep their survey history and receive no invitations.",
-      "showInactive": "Show inactive"
+      "showInactive": "Show inactive",
+      "newDepartment": "New department"
     }
   },
   "demographicFields": {
@@ -1614,7 +1615,9 @@
       "byType": "Adjust by kind of notice",
       "localMailLead": "Local mail.",
       "localMailBefore": "The server refuses to send to",
-      "localMailAfter": " addresses, so in this environment notices exist only here, inside the app. In production they also arrive by email from the configured sender."
+      "localMailAfter": " addresses, so in this environment notices exist only here, inside the app. In production they also arrive by email from the configured sender.",
+      "eyebrow": "Communication",
+      "markAll": "Mark all as read"
     }
   },
   "profile": {

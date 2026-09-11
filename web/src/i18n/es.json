@@ -1057,7 +1057,8 @@
       "noInactive": "No hay departamentos inactivos.",
       "inactiveHidden": "{count} departamentos inactivos ocultos. Conservan su historial de encuestas y no reciben invitaciones.",
       "inactiveShown": "{count} departamentos inactivos a la vista. Conservan su historial de encuestas y no reciben invitaciones.",
-      "showInactive": "Mostrar inactivos"
+      "showInactive": "Mostrar inactivos",
+      "newDepartment": "Nuevo departamento"
     }
   },
   "demographicFields": {
@@ -1614,7 +1615,9 @@
       "byType": "Ajustar por tipo de aviso",
       "localMailLead": "Correo local.",
       "localMailBefore": "El servidor rechaza el envío a direcciones",
-      "localMailAfter": ", así que en este entorno los avisos solo existen aquí, dentro de la aplicación. En producción también llegan por correo al remitente configurado."
+      "localMailAfter": ", así que en este entorno los avisos solo existen aquí, dentro de la aplicación. En producción también llegan por correo al remitente configurado.",
+      "eyebrow": "Comunicación",
+      "markAll": "Marcar todo como leído"
     }
   },
   "profile": {

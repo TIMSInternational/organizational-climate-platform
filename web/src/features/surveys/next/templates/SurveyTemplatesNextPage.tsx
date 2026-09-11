@@ -106,7 +106,7 @@ export default function SurveyTemplatesNextPage() {
       ) : (
         <section aria-labelledby="templates-count" className="flex flex-col gap-3">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <h2 id="templates-count" className="m-0 text-xl">
+            <h2 id="templates-count" className="m-0 text-2xl">
               {t(`${K}.count`, { count: visible.length })}
             </h2>
             <span className="text-xs text-fg-tertiary">{t(`${K}.sortedByUse`)}</span>

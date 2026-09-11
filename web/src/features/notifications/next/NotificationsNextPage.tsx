@@ -61,14 +61,14 @@ export default function NotificationsNextPage() {
   return (
     <div>
       <PageTopBar
-        eyebrow={t('notifications.eyebrow')}
+        eyebrow={t(`${K}.eyebrow`)}
         title={t('notifications.title')}
         description={t(`${K}.description`)}
         actions={
           <>
             <Button variant="outline" size="canvas" disabled={unread === 0} onClick={() => void state.markAllRead()}>
               <Check aria-hidden="true" />
-              {t('notifications.markAllAsRead')}
+              {t(`${K}.markAll`)}
             </Button>
             <Button asChild variant="outline" size="canvas">
               <Link to="/settings/notifications">
@@ -154,17 +154,17 @@ export default function NotificationsNextPage() {
         </section>
 
         <div className="flex min-w-0 flex-col gap-4">
-          <Panel heading={<h2 className="m-0 text-xl">{t(`${K}.channelsHeading`)}</h2>} className="gap-3 pb-4.5">
+          <Panel heading={<h2 className="m-0 text-2xl">{t(`${K}.channelsHeading`)}</h2>} className="gap-3 pb-4.5">
             {state.preferences ? (
               <div className="flex flex-col gap-2.5 text-xs">
-                <label className="m-0 flex items-center justify-between gap-2">
+                <label className="m-0 flex items-center justify-between gap-2 text-xs font-normal text-fg-primary">
                   {t(`${K}.channelApp`)}
                   <Switch checked disabled className="data-[state=checked]:bg-accent-green disabled:opacity-100" aria-describedby="channel-app-note" />
                 </label>
                 <span id="channel-app-note" className="sr-only">
                   {t(`${K}.channelAppNote`)}
                 </span>
-                <label className="m-0 flex items-center justify-between gap-2">
+                <label className="m-0 flex items-center justify-between gap-2 text-xs font-normal text-fg-primary">
                   {t(`${K}.channelEmail`)}
                   <Switch
                     className="data-[state=checked]:bg-accent-green"
@@ -186,7 +186,7 @@ export default function NotificationsNextPage() {
                     }
                   />
                 </label>
-                <label className="m-0 flex items-center justify-between gap-2">
+                <label className="m-0 flex items-center justify-between gap-2 text-xs font-normal text-fg-primary">
                   {t(`${K}.channelDigest`)}
                   <Switch
                     className="data-[state=checked]:bg-accent-green"
