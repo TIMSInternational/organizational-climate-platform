@@ -181,6 +181,20 @@ describe('PlanesListNextPage', () => {
     expect(within(red).getByRole('link', { name: T.planesOpenNamed.replace('{code}', 'PA-2026-00001') }).textContent).toBe(T.planesAbrir)
   })
 
+  it('draws the list’s thin bar under each printed percentage, with no compromiso mark at its end', async () => {
+    renderPage()
+    await screen.findByText('PA-2026-00001')
+    for (const [code, percent] of [['PA-2026-00001', 0], ['PA-2026-00002', 40], ['PA-2026-00003', 0]] as const) {
+      const row = screen.getByText(code).closest('tr') as HTMLElement
+      const avance = row.querySelector('[data-slot="avance"]') as HTMLElement
+      expect(within(avance).getByText(T.planesPercent.replace('{value}', String(percent)))).toBeTruthy()
+      // The detail's `ProgressTrack` is a progressbar with the compromiso tick; the list's bar is not.
+      expect(within(row).queryByRole('progressbar')).toBeNull()
+      const fill = avance.querySelector('[aria-hidden="true"] > span') as HTMLElement
+      expect(fill.style.width).toBe(`${percent}%`)
+    }
+  })
+
   it('names the service in Spanish, offers a retry, and draws no tile when it is unreachable', async () => {
     routeFetch(PLANS, { down: true })
     renderPage()

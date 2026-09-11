@@ -1161,7 +1161,7 @@
         "usable": "Utilizable",
         "usableSub": "la media supera {floor}",
         "narrow": "Demasiado estrecho",
-        "narrowSub": "no se ofrece · con {values} valores serían {mean} por valor",
+        "narrowSub": "no se ofrece · con {ranges} rangos serían {perValue} por valor",
         "narrowSubNone": "no se ofrece · ninguna lista supera el umbral con esta muestra",
         "notACut": "No verificable",
         "notACutSub": "fecha, texto y número no dividen resultados",
@@ -1817,7 +1817,15 @@
         "themeSystem": "Como el sistema",
         "timezoneHelper": "Un nombre IANA, como America/Costa_Rica.",
         "storedLead": "Guardado en tu cuenta: {language} y {timezone}.",
-        "storedDiffers": "Esta pantalla está en {screen}, pero tus correos salen en {language}: elige y guarda para que coincidan."
+        "storedDiffers": "Esta pantalla está en {screen}, pero tus correos salen en {language}: elige y guarda para que coincidan.",
+        "languageName": {
+          "en": "English",
+          "es": "Español"
+        },
+        "languageNoun": {
+          "en": "inglés",
+          "es": "español"
+        }
       },
       "password": {
         "meta": "escribe la actual para elegir una nueva",

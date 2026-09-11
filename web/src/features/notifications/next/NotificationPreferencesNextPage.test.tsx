@@ -50,6 +50,7 @@ function renderPage() {
 
 const row = (key: string) => document.querySelector(`tr[data-pref="${key}"]`) as HTMLElement
 const saveButton = () => screen.getByRole('button', { name: T.save })
+const discardButton = () => screen.getByRole('button', { name: T.discard })
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn())
@@ -82,16 +83,21 @@ describe('NotificationPreferencesNextPage', () => {
     expect(screen.getByText(T.alwaysSent)).toBeTruthy()
   })
 
-  it('wakes Guardar only on a change, and Descartar puts back what is saved', async () => {
-    routeFetch()
+  it('draws Guardar and Descartar live on load, as the board does; Descartar puts back what is saved', async () => {
+    const calls = routeFetch()
     renderPage()
     await screen.findByRole('heading', { name: T.tableHeading })
-    expect((saveButton() as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.click(within(row('emailMicroclimates')).getByRole('switch'))
     expect((saveButton() as HTMLButtonElement).disabled).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: T.discard }))
+    expect((discardButton() as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(within(row('emailMicroclimates')).getByRole('switch'))
+    expect(screen.getByText(new RegExp(T.unsaved))).toBeTruthy()
+    fireEvent.click(discardButton())
     expect(within(row('emailMicroclimates')).getByRole('switch').getAttribute('aria-checked')).toBe('false')
-    expect((saveButton() as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText(new RegExp(T.nothingChanges))).toBeTruthy()
+    // Guardar with nothing moved sends the saved values back unchanged — never a default.
+    fireEvent.click(saveButton())
+    await waitFor(() => expect(calls.some((call) => call.method === 'PUT')).toBe(true))
+    expect(calls.find((call) => call.method === 'PUT')?.body).toEqual(SAVED)
   })
 
   it('saves exactly what was set and keeps the values the server returns', async () => {
@@ -104,7 +110,17 @@ describe('NotificationPreferencesNextPage', () => {
     await waitFor(() => expect(calls.some((call) => call.method === 'PUT')).toBe(true))
     expect(calls.find((call) => call.method === 'PUT')?.body).toEqual({ ...SAVED, emailMicroclimates: true, digestFrequency: 'daily' })
     expect(await screen.findByText(new RegExp(T.allOn.replace('{count}', '4')))).toBeTruthy()
-    expect((saveButton() as HTMLButtonElement).disabled).toBe(true)
+    await waitFor(() => expect((saveButton() as HTMLButtonElement).disabled).toBe(false))
+  })
+
+  it('sets the Privacidad link in the sentence’s own ink, as the board does', async () => {
+    routeFetch()
+    renderPage()
+    await screen.findByRole('heading', { name: T.tableHeading })
+    // The account tabs carry a "Privacidad" link too; this is the one in «Cómo se decide».
+    const link = within(screen.getByRole('region', { name: T.howHeading })).getByRole('link', { name: es.profile.next.tabs.privacy })
+    expect(link.getAttribute('href')).toBe('/settings/privacy')
+    expect(link.className).toMatch(/(^|\s)text-fg-secondary(\s|$)/)
   })
 
   it('shows a load failure instead of an empty table, and recovers without a reload', async () => {

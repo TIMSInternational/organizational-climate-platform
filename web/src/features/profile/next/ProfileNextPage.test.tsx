@@ -171,7 +171,10 @@ describe('ProfileNextPage', () => {
     const preferences = region(es.profile.preferencesTitle)
     // The link points at the other page rather than duplicating its switches. Read before the
     // save: the stored language is English, and a successful save applies it to this screen.
-    expect(within(preferences).getByRole('link', { name: es.profile.notificationPreferencesLink }).getAttribute('href')).toBe('/settings/notifications')
+    const link = within(preferences).getByRole('link', { name: es.profile.notificationPreferencesLink })
+    expect(link.getAttribute('href')).toBe('/settings/notifications')
+    // The board sets it in the sentence's own ink, not the app's blue link colour.
+    expect(link.className).toMatch(/(^|\s)text-fg-secondary(\s|$)/)
     fireEvent.change(within(preferences).getByLabelText(es.profile.next.preferences.theme), { target: { value: 'dark' } })
     fireEvent.click(within(preferences).getByRole('button', { name: es.profile.next.save }))
     await waitFor(() => expect(calls.some((call) => call.method === 'PUT' && call.url.includes('/profile/preferences'))).toBe(true))
@@ -179,12 +182,19 @@ describe('ProfileNextPage', () => {
     expect(JSON.stringify(body)).not.toMatch(/email|digest/i)
   })
 
-  it('says when the stored language is not the one this screen is in', async () => {
+  it('says when the stored language is not the one this screen is in, naming each language as the board does', async () => {
     routeFetch()
     renderPage()
     await screen.findByRole('heading', { name: es.profile.preferencesTitle })
-    const lead = es.profile.next.preferences.storedLead.replace('{language}', es.language.english).replace('{timezone}', 'UTC')
-    expect(screen.getByText(lead)).toBeTruthy()
+    const P = es.profile.next.preferences
+    // The lead names the stored language by its own name, as the board's «Guardado en tu cuenta: English y UTC».
+    expect(screen.getByText(P.storedLead.replace('{language}', 'English').replace('{timezone}', 'UTC'))).toBeTruthy()
+    // Mid-sentence, Spanish writes a language in lower case: «está en español, pero tus correos salen en inglés».
+    expect(screen.getByText(P.storedDiffers.replace('{screen}', 'español').replace('{language}', 'inglés'))).toBeTruthy()
+    // The picker offers each language by its own name, never the Spanish exonym «Inglés».
+    const picker = within(region(es.profile.preferencesTitle)).getByLabelText(es.profile.language)
+    expect([...picker.querySelectorAll('option')].map((option) => option.textContent)).toEqual(['English', 'Español'])
+    expect(screen.queryByText(new RegExp(es.language.english))).toBeNull()
   })
 
   it('shows a load failure instead of an empty page', async () => {

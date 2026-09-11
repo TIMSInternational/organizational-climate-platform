@@ -6,6 +6,7 @@ import { Alert, AlertDescription, Button, Table } from '../../../components/ui'
 import { useTranslation } from '../../../i18n'
 import { downloadTextFile } from '../../../lib/downloadTextFile'
 import { cn } from '../../../lib/cn'
+import { countWord } from '../../../lib/countWord'
 import { Panel } from '../../org-structure/next/super/parts'
 import AccountTabs from './AccountTabs'
 import { usePrivacyModel } from './usePrivacyModel'
@@ -38,7 +39,7 @@ const DIGEST_PHRASE: Readonly<Record<string, string>> = {
  * `DELETE /gdpr/erase` is an administrator's action on someone else, never self-service.
  */
 export default function PrivacyNextPage() {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const state = usePrivacyModel()
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -111,7 +112,7 @@ export default function PrivacyNextPage() {
             </h2>
             <span className="text-xs text-fg-tertiary">{t('privacy.next.held.meta')}</span>
           </div>
-          <p className="m-0 max-w-measure text-xs leading-normal text-fg-secondary">{t('privacy.next.held.text')}</p>
+          <p className="m-0 max-w-[96ch] text-sm leading-normal text-fg-secondary">{t('privacy.next.held.text')}</p>
         </div>
         <div className="overflow-x-auto">
           <div className="min-w-[48rem] [&_[data-slot=table-container]]:overflow-visible">
@@ -167,7 +168,7 @@ export default function PrivacyNextPage() {
             {t('privacy.next.consent.heading')}
           </h2>
         }
-        meta={t('privacy.next.consent.meta', { count: CONSENTS.length })}
+        meta={t('privacy.next.consent.meta', { count: countWord(t, CONSENTS.length, locale) })}
       >
         <dl className="m-0 grid grid-cols-1 gap-x-6 sm:grid-cols-2 xl:grid-cols-3">
           {CONSENTS.map((key) => (

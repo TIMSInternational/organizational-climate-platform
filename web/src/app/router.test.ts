@@ -19,6 +19,9 @@ import QuestionBankNextPage from '../features/questions/next/QuestionBankNextPag
 import QuestionLibraryNextPage from '../features/questions/next/QuestionLibraryNextPage'
 import AIInsightsNextPage from '../features/analytics/next/AIInsightsNextPage'
 import AnalyticsNextPage from '../features/analytics/next/AnalyticsNextPage'
+import ProfileNextPage from '../features/profile/next/ProfileNextPage'
+import NotificationPreferencesNextPage from '../features/notifications/next/NotificationPreferencesNextPage'
+import PrivacyNextPage from '../features/profile/next/PrivacyNextPage'
 
 /**
  * A construction guard for the router.
@@ -312,6 +315,12 @@ describe('router', () => {
     expect(componentAt('/admin/question-library')).toBe(QuestionLibraryNextPage)
     expect(componentAt('/analytics/ai-insights')).toBe(AIInsightsNextPage)
     expect(componentAt('/admin/companies/:companyId/analytics')).toBe(AnalyticsNextPage)
+    // The admin-gaps lane swapped the three account pages the user menu links. Pinned on the
+    // element: with only the path asserted, swapping Tu perfil and Privacidad, or putting the
+    // inbox behind /settings/notifications, left this file green.
+    expect(componentAt('/profile')).toBe(ProfileNextPage)
+    expect(componentAt('/settings/notifications')).toBe(NotificationPreferencesNextPage)
+    expect(componentAt('/settings/privacy')).toBe(PrivacyNextPage)
     expect(byPath.has('/surveys/next')).toBe(false)
     expect(byPath.has('/surveys/climate-trends/next')).toBe(false)
     expect(byPath.has('/surveys/:id/results/next')).toBe(false)
@@ -335,6 +344,9 @@ describe('router', () => {
     expect(source).not.toMatch(/pages\/QuestionLibraryPage'/)
     expect(source).not.toMatch(/pages\/AIInsightsPage'/)
     expect(source).not.toMatch(/pages\/AnalyticsDashboardPage'/)
+    expect(source).not.toMatch(/pages\/ProfilePage'/)
+    expect(source).not.toMatch(/pages\/NotificationPreferencesPage'/)
+    expect(source).not.toMatch(/pages\/PrivacySettingsPage'/)
   })
 
   /**

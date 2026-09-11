@@ -1161,7 +1161,7 @@
         "usable": "Usable",
         "usableSub": "the mean clears {floor}",
         "narrow": "Too narrow",
-        "narrowSub": "not offered · with {values} values it would be {mean} per value",
+        "narrowSub": "not offered · with {ranges} ranges it would be {perValue} per value",
         "narrowSubNone": "not offered · no list clears the floor with this sample",
         "notACut": "Not checkable",
         "notACutSub": "date, text and number do not divide results",
@@ -1817,7 +1817,15 @@
         "themeSystem": "As the system",
         "timezoneHelper": "An IANA name, such as America/Costa_Rica.",
         "storedLead": "Saved on your account: {language} and {timezone}.",
-        "storedDiffers": "This screen is in {screen}, but your emails go out in {language}: choose and save so they match."
+        "storedDiffers": "This screen is in {screen}, but your emails go out in {language}: choose and save so they match.",
+        "languageName": {
+          "en": "English",
+          "es": "Español"
+        },
+        "languageNoun": {
+          "en": "English",
+          "es": "Spanish"
+        }
       },
       "password": {
         "meta": "type the current one to choose a new one",

@@ -14,13 +14,18 @@ import { createPlanAccion, type CreatePlanAccionInput, type PlanAccion } from '.
 import PlanDeAccionForm from '../components/PlanDeAccionForm'
 import { SEMAFORO_ORDER, semaforoPresentation, type SemaforoEstado } from '../semaforo'
 import { canCreatePlan, readTrackingClaims } from '../trackingAccess'
-import { CanvasSelect } from '../../org-structure/next/super/parts'
+import { CanvasSelect, MiniBar } from '../../org-structure/next/super/parts'
 import { joinNames } from './derive'
-import { PersonaAvatar, ProgressTrack } from './parts'
+import { PersonaAvatar } from './parts'
 import { coverage, groupRows, nodoNamesOf, toRows, type ListRow } from './planesList'
 import { usePlanesListModel } from './usePlanesListModel'
 
-const TH = 'h-auto bg-transparent px-3 pb-2 pt-2 text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
+const TH = 'h-auto bg-transparent px-1.5 pb-2 pt-2 first:pl-3 last:pr-3 text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
+/**
+ * The board's row is a grid with a 12px gap inside 12px of padding; 6px either side of a cell,
+ * 12px at the row's two ends, keeps that rhythm, so the column widths are the board's own.
+ */
+const TD = 'px-1.5 py-3 align-middle first:pl-3 last:pr-3'
 const ALL = ''
 
 const TONE_INK: Record<string, string> = {
@@ -417,18 +422,20 @@ function PlansTable({ rows, label, t, locale }: { rows: readonly ListRow[]; labe
   return (
     <div className="overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-sm">
       <div className="overflow-x-auto">
-        {/* The six fixed columns take 54rem; the minimum leaves "Qué se hará" ~14rem at any width.
-            At 1024 the table scrolls inside this container rather than crushing that column. */}
+        {/* The six fixed columns are the board's 124 / 100 / 170 / 96 / 136 / 136px, each with its
+            share of the gap, so "Qué se hará" gets the board's ~286px at 1440 and a title sets on
+            one line. The minimum leaves that column ~15rem; at 1024 the table scrolls inside this
+            container rather than crushing it. */}
         <div className="min-w-[68rem] [&_[data-slot=table-container]]:overflow-visible">
           <Table aria-label={label} className="table-fixed">
             <colgroup>
-              <col className="w-36" />
+              <col className="w-35.5" />
               <col />
               <col className="w-28" />
-              <col className="w-48" />
-              <col className="w-28" />
-              <col className="w-36" />
-              <col className="w-40" />
+              <col className="w-45.5" />
+              <col className="w-27" />
+              <col className="w-37" />
+              <col className="w-38.5" />
             </colgroup>
             <thead>
               <tr className="border-b border-line-default">
@@ -467,19 +474,19 @@ function PlanRow({ row, t, locale }: { row: ListRow; t: TranslateFn; locale: str
   const responsable = row.responsable
   return (
     <tr data-plan-code={row.code} className="border-b border-line-light last:border-b-0">
-      <td className="px-3 py-3 align-middle">
+      <td className={TD}>
         <Link to={`/tracking/planes/${row.id}`} className="font-mono text-xs text-fg-secondary underline decoration-line-hover underline-offset-4">
           {row.code}
         </Link>
       </td>
-      <td className="px-3 py-3 align-middle">
+      <td className={TD}>
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="font-semibold text-fg-primary">{row.que}</span>
           {row.como && <span className="line-clamp-2 text-xs text-fg-label">{row.como}</span>}
         </span>
       </td>
-      <td className="px-3 py-3 align-middle text-sm text-fg-secondary">{row.nodoName ?? t('tracking.next.nodoUnnamed')}</td>
-      <td className="px-3 py-3 align-middle">
+      <td className={cn(TD, 'text-sm text-fg-secondary')}>{row.nodoName ?? t('tracking.next.nodoUnnamed')}</td>
+      <td className={TD}>
         {responsable.id === '' ? (
           <span className="text-xs text-fg-label">{t('tracking.next.responsableUnassigned')}</span>
         ) : responsable.name ? (
@@ -492,13 +499,16 @@ function PlanRow({ row, t, locale }: { row: ListRow; t: TranslateFn; locale: str
           <span className="text-xs text-fg-label">{t('tracking.next.responsableUnnamed')}</span>
         )}
       </td>
-      <td className="px-3 py-3 align-middle">
-        <span className="flex flex-col gap-1.5">
-          <span className="font-mono text-xs tabular-nums text-fg-primary">{t('tracking.next.planesPercent', { value: row.percent })}</span>
-          <ProgressTrack percent={row.percent} overdue={row.overdue} label={t('tracking.next.planesPercent', { value: row.percent })} />
+      <td className={TD}>
+        {/* The list's thin 72px bar, as the board draws it here: the reading only. The compromiso
+            mark at the end of the detail's track (`ProgressTrack`) belongs to that screen, and the
+            printed percentage above is what a reader or a screen reader takes from this cell. */}
+        <span className="flex flex-col gap-1.5" data-slot="avance">
+          <span className="font-mono text-sm tabular-nums text-fg-primary">{t('tracking.next.planesPercent', { value: row.percent })}</span>
+          <MiniBar percent={row.percent} className="w-18" />
         </span>
       </td>
-      <td className="px-3 py-3 align-middle">
+      <td className={TD}>
         <span className="flex flex-col gap-0.5">
           <span className={cn('font-mono text-sm tabular-nums', row.overdue ? 'text-accent-red' : 'text-fg-primary')}>
             {calendarDay(Date.parse(`${row.fechaCompromiso}T00:00:00Z`), locale)}
@@ -506,7 +516,7 @@ function PlanRow({ row, t, locale }: { row: ListRow; t: TranslateFn; locale: str
           <span className={cn('text-2xs', row.overdue ? 'text-accent-red' : 'text-fg-label')}>{compromisoSub(row, t)}</span>
         </span>
       </td>
-      <td className="px-3 py-3 text-right align-middle">
+      <td className={cn(TD, 'text-right')}>
         <Button asChild variant="outline">
           <Link to={`/tracking/planes/${row.id}`} aria-label={t('tracking.next.planesOpenNamed', { code: row.code })}>
             {row.canManage && row.estado === 'Rojo' ? t('tracking.next.planesRegistrarAvance') : t('tracking.next.planesAbrir')}

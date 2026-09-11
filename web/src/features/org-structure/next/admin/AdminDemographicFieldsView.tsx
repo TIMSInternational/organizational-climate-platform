@@ -3,7 +3,8 @@ import { useParams } from 'react-router'
 import { Check, FileText, Filter, Lock, Plus, Shield } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
-import { ANONYMITY_FLOOR, KpiTile, ProtectedCell, isSuppressed } from '../../../../components/charts'
+import { ANONYMITY_FLOOR, KpiTile, isSuppressed } from '../../../../components/charts'
+import { PROTECTED_HATCH } from '../../../../components/charts/suppression'
 import { Button, EmptyState, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { cn } from '../../../../lib/cn'
@@ -12,12 +13,17 @@ import { peoplePerValue } from '../../components/demographicReach'
 import { fieldVerdict, usableCuts } from '../super/demographics'
 import { CanvasChip, IconBox, Panel } from '../super/parts'
 import { FieldForm, FloorRules } from '../super/SuperDemographicFieldsView'
-import { widestUsable } from './adminDemographics'
+import { mergedRanges } from './adminDemographics'
 import { SAMPLE_CATALOGUE } from './sampleCatalogue'
 import { useAdminDemographicsModel } from './useAdminDemographicsModel'
 
 const TH =
-  'border-b border-line-default bg-transparent px-3 pb-2 pt-1 text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
+  'border-b border-line-default bg-transparent px-1.5 pb-2 pt-1 first:pl-3 last:pr-3 text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
+/**
+ * The board's row is a grid with a 12px gap inside 12px of padding; a cell's 6px either side,
+ * 12px at the row's two ends, is the same rhythm, so the column widths below are the board's.
+ */
+const TD = 'px-1.5 py-3 align-middle first:pl-3 last:pr-3'
 
 /** One catalogue line, whether the tenant's own field or the proposal's. */
 interface Row {
@@ -203,9 +209,7 @@ export default function AdminDemographicFieldsView() {
                   {t('demographicFields.next.floor.text')}
                 </p>
                 <span className="inline-flex items-center gap-2 text-xs text-fg-tertiary">
-                  <ProtectedCell responses={ANONYMITY_FLOOR - 1} showWord={false}>
-                    {null}
-                  </ProtectedCell>
+                  <HatchSwatch />
                   {t('demographicFields.next.floor.legend', { floor: ANONYMITY_FLOOR })}
                 </span>
               </div>
@@ -272,7 +276,7 @@ function Catalogue({
           </span>
         </div>
         {isSample && people !== undefined && (
-          <p className="m-0 max-w-measure text-xs leading-normal text-fg-secondary">
+          <p className="m-0 max-w-[110ch] text-sm leading-normal text-fg-secondary">
             {t('demographicFields.next.catalogue.textSample', { company, people })}
           </p>
         )}
@@ -281,12 +285,13 @@ function Catalogue({
         <div className="min-w-[60rem] [&_[data-slot=table-container]]:overflow-visible">
           <Table aria-label={isSample ? t('demographicFields.next.catalogue.headingSample') : t('demographicFields.next.catalogue.heading')}>
             <colgroup>
-              <col className="w-52" />
-              <col className="w-24" />
+              {/* The board's 1.2fr / 80px / 2.3fr / 138px / 186px / 76px at 1440, each plus its share of the gap. */}
+              <col className="w-54" />
+              <col className="w-23" />
               <col />
-              <col className="w-36" />
-              <col className="w-52" />
-              <col className="w-24" />
+              <col className="w-37.5" />
+              <col className="w-49.5" />
+              <col className="w-23.5" />
             </colgroup>
             <thead>
               <tr>
@@ -325,7 +330,7 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
   const count = row.values.length
   const perValue = isList && people !== undefined ? peoplePerValue(people, count) : null
   const verdict = fieldVerdict({ type: row.type, options: row.values.map((value, order) => ({ order, value, label: value })) }, people, ANONYMITY_FLOOR)
-  const widest = people === undefined ? null : widestUsable(people, ANONYMITY_FLOOR)
+  const merged = people === undefined || !isList ? null : mergedRanges(people, count, ANONYMITY_FLOOR)
 
   let cut: { chip: ReactNode; sub: string }
   if (!row.isActive) {
@@ -338,8 +343,8 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
   } else if (verdict === 'narrow') {
     cut = {
       chip: <CanvasChip tone="warning" icon={<Lock className="size-3" />} label={t('demographicFields.next.catalogue.narrow')} />,
-      sub: widest
-        ? t('demographicFields.next.catalogue.narrowSub', { values: widest.values, mean: widest.perValue })
+      sub: merged
+        ? t('demographicFields.next.catalogue.narrowSub', { ranges: merged.ranges, perValue: merged.perValue })
         : t('demographicFields.next.catalogue.narrowSubNone'),
     }
   } else if (verdict === 'not-a-cut') {
@@ -350,7 +355,7 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
 
   return (
     <tr data-field={row.field}>
-      <td className="px-3 py-3 align-middle">
+      <td className={TD}>
         <div className="flex flex-col gap-1">
           <span className="flex flex-wrap items-center gap-1.5">
             <span className="font-semibold text-fg-primary">{row.label}</span>
@@ -360,31 +365,29 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
           <span className="font-mono text-2xs text-fg-tertiary">{row.field}</span>
         </div>
       </td>
-      <td className="px-3 py-3 align-middle">
+      <td className={TD}>
         <CanvasChip tone="neutral" label={TYPE_KEY[row.type] ? t(TYPE_KEY[row.type]) : row.type} />
       </td>
-      <td className="px-3 py-3 align-middle">
+      <td className={TD}>
         {isList ? (
           <span className="flex flex-wrap gap-1.5">
             {row.values.map((value) => (
-              <CanvasChip key={value} tone="neutral" label={value} className="font-normal" />
+              <CanvasChip key={value} tone="neutral" label={value} />
             ))}
           </span>
         ) : (
           <span className="text-sm text-fg-tertiary">{t('demographicFields.next.catalogue.noLimit')}</span>
         )}
       </td>
-      <td className="px-3 py-3 align-middle">
+      <td className={TD}>
         {!isList ? (
           <span className="text-sm text-fg-tertiary">{t('demographicFields.next.catalogue.notCountable')}</span>
         ) : perValue === null ? (
           <span className="text-sm text-fg-tertiary">{t('demographicFields.next.catalogue.unknown')}</span>
         ) : isSuppressed(perValue, ANONYMITY_FLOOR) ? (
           <span className="flex flex-col gap-0.5">
-            <span className="inline-flex items-center gap-2 text-sm text-fg-secondary">
-              <ProtectedCell responses={perValue} showWord={false}>
-                {null}
-              </ProtectedCell>
+            <span className="inline-flex items-center gap-1.5 text-sm text-fg-secondary">
+              <HatchSwatch />
               {t('demographicFields.next.catalogue.belowFloor', { floor: ANONYMITY_FLOOR })}
             </span>
             <span className="text-2xs text-fg-tertiary">{t('demographicFields.next.catalogue.perValueProtectedSub', { values: count })}</span>
@@ -400,13 +403,13 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
           </span>
         )}
       </td>
-      <td className="px-3 py-3 align-middle">
+      <td className={TD}>
         <span className="flex flex-col items-start gap-1">
           {cut.chip}
           {cut.sub && <span className="text-2xs leading-snug text-fg-tertiary">{cut.sub}</span>}
         </span>
       </td>
-      <td className="px-3 py-3 text-right align-middle">
+      <td className={cn(TD, 'text-right')}>
         <Button
           type="button"
           variant="outline"
@@ -421,6 +424,22 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
         </Button>
       </td>
     </tr>
+  )
+}
+
+/**
+ * The board's protected mark: a 14px square of the recessed surface under `PROTECTED_HATCH`, the
+ * stripe every protected cell in the product wears (`ResultsClimateGrid`, `ClimateMap`'s key).
+ * Decorative and figure-free — the words beside it («menos de 5») say what it means, and no
+ * count is ever drawn in or near it.
+ */
+function HatchSwatch() {
+  return (
+    <span
+      aria-hidden="true"
+      data-slot="protected-swatch"
+      className={cn('inline-block size-3.5 shrink-0 rounded-sm border border-line-default bg-surface-icon-box', PROTECTED_HATCH)}
+    />
   )
 }
 

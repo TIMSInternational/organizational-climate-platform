@@ -88,6 +88,18 @@ describe('AdminUsersView (company administrator)', () => {
     expect(rows()).toHaveLength(USERS.length)
   })
 
+  it('spells the rail’s department count as the board writes it inside a sentence', async () => {
+    vi.stubGlobal('fetch', fetchWith())
+    renderAt(ROUTE)
+    // One rail entry per department that has people; the people with none are the administration.
+    const named = new Set(USERS.flatMap((user) => (user.departmentId ? [user.departmentId] : []))).size
+    expect(USERS.filter((user) => user.departmentId === null).every((user) => user.role === 'company_admin')).toBe(true)
+    const word = es.dashboard.next.countWord[String(named) as keyof typeof es.dashboard.next.countWord]
+    expect(word).toBeTruthy()
+    expect(await screen.findByText(fill(T.rail.allSub, { count: word }))).toBeTruthy()
+    expect(screen.queryByText(fill(T.rail.allSub, { count: named }))).toBeNull()
+  })
+
   it('filters the roster by the department picked on the rail, leaders first', async () => {
     vi.stubGlobal('fetch', fetchWith())
     const user = userEvent.setup()

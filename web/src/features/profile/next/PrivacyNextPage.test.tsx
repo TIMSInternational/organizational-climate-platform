@@ -74,6 +74,15 @@ describe('PrivacyNextPage', () => {
     expect(screen.getAllByText(T.consent.inFile)).toHaveLength(6)
   })
 
+  it('spells the consent count in the card’s meta, as the board writes it: «seis consentimientos»', async () => {
+    routeFetch()
+    renderPage()
+    expect(await screen.findByText(PROFILE.email)).toBeTruthy()
+    const rows = screen.getAllByText(T.consent.inFile).length
+    expect(screen.getByText(T.consent.meta.replace('{count}', es.dashboard.next.countWord[String(rows) as '6']))).toBeTruthy()
+    expect(screen.queryByText(T.consent.meta.replace('{count}', String(rows)))).toBeNull()
+  })
+
   it('downloads the whole export as parseable JSON when asked', async () => {
     routeFetch()
     renderPage()

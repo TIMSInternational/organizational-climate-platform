@@ -19,6 +19,7 @@ import {
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
+import { countWord } from '../../../../lib/countWord'
 import { createInvitation, createShareableLink, resendInvitation, type Invitation } from '../../api/invitations'
 import { updateUser, type User } from '../../api/users'
 import type { Department } from '../../api/departments'
@@ -464,15 +465,18 @@ function DepartmentRail({
   selected: string
   onSelect: (id: string) => void
 }) {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const namedCount = groups.filter((entry) => entry.id !== NO_DEPARTMENT).length
   const noDepartment = groups.find((entry) => entry.id === NO_DEPARTMENT)
+  // A sentence, so its small counts are spelled as the board writes them: «cinco departamentos
+  // y la administración». The rows under it keep their digits, as the board's do.
+  const named = countWord(t, namedCount, locale)
   const allSub =
     noDepartment === undefined
-      ? t('users.next.rail.allSubOnly', { count: namedCount })
+      ? t('users.next.rail.allSubOnly', { count: named })
       : noDepartment.members.every((person) => isAdminRole(person.role))
-        ? t('users.next.rail.allSub', { count: namedCount })
-        : t('users.next.rail.allSubOthers', { count: namedCount, none: noDepartment.people })
+        ? t('users.next.rail.allSub', { count: named })
+        : t('users.next.rail.allSubOthers', { count: named, none: countWord(t, noDepartment.people, locale) })
   return (
     <nav
       aria-label={t('users.next.rail.heading')}

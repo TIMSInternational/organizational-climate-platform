@@ -30,6 +30,9 @@ const DIGEST_PHRASE: Readonly<Record<DigestFrequency, string>> = {
   never: 'notifications.next.prefs.digestNever',
 }
 
+/** The board's link inside a sentence: the sentence's own ink, underlined on hover or focus. */
+const PROSE_LINK = 'text-fg-secondary hover:text-fg-primary hover:underline focus-visible:underline'
+
 const same = (a: NotificationPreferences, b: NotificationPreferences) =>
   EMAILS.every(({ key }) => a[key] === b[key]) && a.digestFrequency === b.digestFrequency
 
@@ -53,10 +56,12 @@ function savedSummary(t: TranslateFn, saved: NotificationPreferences): string {
  *
  * Channel × event as one compact table: the four configurable emails with their switch, the
  * in-app inbox beside each as the thing that never turns off, the account and security mail
- * that is always sent, and the digest frequency — with one "Guardar" (and "Descartar") that
- * only wake when something differs from what the account holds. Nothing is pre-filled from a
- * default: the table waits for the saved values. The platform sends no push and no SMS, so no
- * control offers them.
+ * that is always sent, and the digest frequency — with one "Guardar" and "Descartar", live as
+ * the artboard draws them: "Guardar" sends the table as it stands (the saved values again when
+ * nothing moved, which the server stores unchanged), "Descartar" puts back what the account
+ * holds, and the line under the tabs says whether anything is unsaved. Nothing is pre-filled
+ * from a default: the table waits for the saved values. The platform sends no push and no SMS,
+ * so no control offers them.
  */
 export default function NotificationPreferencesNextPage() {
   const { t } = useTranslation()
@@ -102,10 +107,10 @@ export default function NotificationPreferencesNextPage() {
           actions={
             state.status === 'ready' ? (
               <>
-                <Button type="button" variant="outline" disabled={!dirty || saving} onClick={() => setDraft(state.saved)}>
+                <Button type="button" variant="outline" disabled={saving} onClick={() => setDraft(state.saved)}>
                   {t('notifications.next.prefs.discard')}
                 </Button>
-                <Button type="button" variant="primary" disabled={!dirty || saving} onClick={() => void save()}>
+                <Button type="button" variant="primary" disabled={saving} onClick={() => void save()}>
                   <Check aria-hidden="true" />
                   {t('notifications.next.prefs.save')}
                 </Button>
@@ -281,7 +286,11 @@ function HowItIsDecided() {
         ))}
       </ul>
       <p className="m-0 border-t border-line-light pt-3 text-sm text-fg-secondary">
-        {t('notifications.next.prefs.howConsent')} <Link to="/settings/privacy">{t('profile.next.tabs.privacy')}</Link>.
+        {t('notifications.next.prefs.howConsent')}{' '}
+        <Link to="/settings/privacy" className={PROSE_LINK}>
+          {t('profile.next.tabs.privacy')}
+        </Link>
+        .
       </p>
     </Panel>
   )

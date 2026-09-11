@@ -15,7 +15,18 @@ import { useProfileModel } from './useProfileModel'
 
 const TH = 'border-b border-line-default bg-transparent px-3 pb-2 pt-1 text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
 
-const LANGUAGE_KEY: Readonly<Record<string, string>> = { en: 'language.english', es: 'language.spanish' }
+/** Each language by its own name, as the artboard's picker and note write it: «English», «Español». */
+const LANGUAGE_NAME: Readonly<Record<string, string>> = {
+  en: 'profile.next.preferences.languageName.en',
+  es: 'profile.next.preferences.languageName.es',
+}
+/** The same language as a noun inside a sentence of the screen's own language: «en español», «en inglés». */
+const LANGUAGE_NOUN: Readonly<Record<string, string>> = {
+  en: 'profile.next.preferences.languageNoun.en',
+  es: 'profile.next.preferences.languageNoun.es',
+}
+/** The board's link inside a sentence: the sentence's own ink, underlined on hover or focus. */
+const PROSE_LINK = 'text-fg-secondary hover:text-fg-primary hover:underline focus-visible:underline'
 const THEME_KEY: Readonly<Record<ProfileTheme, string>> = {
   light: 'profile.next.preferences.themeLight',
   dark: 'profile.next.preferences.themeDark',
@@ -208,8 +219,9 @@ function PreferencesCard({
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const ids = { language: useId(), theme: useId(), timezone: useId() }
-  const storedLanguage = LANGUAGE_KEY[preferences.language] ? t(LANGUAGE_KEY[preferences.language]) : preferences.language
-  const screenLanguage = LANGUAGE_KEY[locale] ? t(LANGUAGE_KEY[locale]) : locale
+  const storedName = LANGUAGE_NAME[preferences.language] ? t(LANGUAGE_NAME[preferences.language]) : preferences.language
+  const storedNoun = LANGUAGE_NOUN[preferences.language] ? t(LANGUAGE_NOUN[preferences.language]) : preferences.language
+  const screenNoun = LANGUAGE_NOUN[locale] ? t(LANGUAGE_NOUN[locale]) : locale
 
   function update(patch: Partial<ProfileDisplayPreferences>) {
     setSaved(false)
@@ -252,7 +264,7 @@ function PreferencesCard({
           <CanvasSelect id={ids.language} className="w-full" value={values.language} onChange={(event) => update({ language: event.target.value })}>
             {LOCALES.map((code) => (
               <option key={code} value={code}>
-                {LANGUAGE_KEY[code] ? t(LANGUAGE_KEY[code]) : code}
+                {LANGUAGE_NAME[code] ? t(LANGUAGE_NAME[code]) : code}
               </option>
             ))}
           </CanvasSelect>
@@ -276,14 +288,17 @@ function PreferencesCard({
             <CircleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-amber-ink" />
             <span>
               <b className="font-semibold text-fg-primary">
-                {t('profile.next.preferences.storedLead', { language: storedLanguage, timezone: preferences.timezone })}
+                {t('profile.next.preferences.storedLead', { language: storedName, timezone: preferences.timezone })}
               </b>{' '}
-              {t('profile.next.preferences.storedDiffers', { screen: screenLanguage, language: storedLanguage })}
+              {t('profile.next.preferences.storedDiffers', { screen: screenNoun, language: storedNoun })}
             </span>
           </div>
         )}
         <p className="m-0 text-xs text-fg-secondary">
-          <Link to="/settings/notifications">{t('profile.notificationPreferencesLink')}</Link> {t('profile.notificationPreferencesNote')}
+          <Link to="/settings/notifications" className={PROSE_LINK}>
+            {t('profile.notificationPreferencesLink')}
+          </Link>{' '}
+          {t('profile.notificationPreferencesNote')}
         </p>
         <div className="flex justify-end border-t border-line-light pt-3">
           <Button type="submit" variant="outline" disabled={saving}>

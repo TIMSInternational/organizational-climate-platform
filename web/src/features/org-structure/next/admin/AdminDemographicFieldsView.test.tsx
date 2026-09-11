@@ -10,6 +10,7 @@ import { clearToken, setToken } from '../../../../auth/token'
 import { tokenFor } from '../../../../test/jwtFixture'
 import { MERIDIANO_ID, superMeridianoFetch } from '../../../../test/superMeridianoFetch'
 import type { DemographicField } from '../../api/demographicFields'
+import { PROTECTED_HATCH } from '../../../../components/charts/suppression'
 import es from '../../../../i18n/es.json'
 
 /**
@@ -111,8 +112,28 @@ describe('AdminDemographicFieldsView (company administrator)', () => {
     const age = row('rango_edad')
     expect(age.querySelector('[data-per-value]')).toBeNull()
     expect(within(age).getByText(fill(T.catalogue.belowFloor, { floor: 5 }))).toBeTruthy()
-    const widest = Math.floor(PEOPLE / 5)
-    expect(within(age).getByText(fill(T.catalogue.narrowSub, { values: widest, mean: Math.floor(PEOPLE / widest) }))).toBeTruthy()
+    // Nine bands merged in pairs until the whole-number mean clears the floor: the board's
+    // "con 5 rangos serían 8 por valor" for its 42 people, computed here from the capture.
+    let ranges = 9
+    while (ranges >= 2 && Math.floor(PEOPLE / ranges) < 5) ranges = Math.ceil(ranges / 2)
+    expect(Math.floor(PEOPLE / ranges)).toBeGreaterThanOrEqual(5)
+    expect(within(age).getByText(fill(T.catalogue.narrowSub, { ranges, perValue: Math.floor(PEOPLE / ranges) }))).toBeTruthy()
+  })
+
+  it('marks a protected mean and the floor legend with the canvas hatch, and draws no figure in either', async () => {
+    vi.stubGlobal('fetch', fetchWith())
+    renderAt()
+    await screen.findByRole('heading', { name: T.catalogue.headingSample })
+    const marks = [row('rango_edad'), document.querySelector('[data-slot="floor-band"]') as HTMLElement].map((region) =>
+      region.querySelector('[data-slot="protected-swatch"]'),
+    )
+    for (const mark of marks) {
+      expect(mark).not.toBeNull()
+      expect(mark?.className).toContain(PROTECTED_HATCH)
+      expect(mark?.getAttribute('aria-hidden')).toBe('true')
+      expect(mark?.textContent).toBe('')
+      expect(mark?.querySelector('svg')).toBeNull()
+    }
   })
 
   it("draws the tenant's own catalogue with no sample chip, and counts only the cuts that clear the floor", async () => {
