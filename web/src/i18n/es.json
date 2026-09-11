@@ -1704,7 +1704,49 @@
     "typeAiInsightAlert": "Hallazgo",
     "typeSystemNotification": "Sistema",
     "emptyTitle": "Todavía no ha llegado nada",
-    "emptyBody": "Aquí le avisaremos cuando se abra una encuesta para usted, cuando cierre y cuando se publiquen sus resultados."
+    "emptyBody": "Aquí le avisaremos cuando se abra una encuesta para usted, cuando cierre y cuando se publiquen sus resultados.",
+    "next": {
+      "prefs": {
+        "description": "Qué correos te envía la plataforma. La bandeja dentro de la aplicación no se apaga: solo el correo se configura.",
+        "discard": "Descartar",
+        "save": "Guardar",
+        "savedLine": "Guardado en tu cuenta: {summary}.",
+        "nothingChanges": "Nada cambia hasta que guardes.",
+        "unsaved": "Tienes cambios sin guardar.",
+        "allOn": "los {count} correos configurables activados",
+        "allOff": "ningún correo configurable activado",
+        "someOn": "{on} de {total} correos configurables activados",
+        "summary": "{emails} y {digest}",
+        "digestDaily": "resumen diario",
+        "digestWeekly": "resumen semanal",
+        "digestMonthly": "resumen mensual",
+        "digestNever": "sin resumen",
+        "tableHeading": "Qué te llega y por dónde",
+        "tableMeta": "solo el correo se configura",
+        "colAviso": "Aviso",
+        "colEmail": "Correo",
+        "colInApp": "En la aplicación",
+        "surveys": "Encuestas",
+        "microclimates": "Microclimas",
+        "actionPlans": "Planes de acción",
+        "reminders": "Recordatorios",
+        "receives": "Recibes",
+        "doesNotReceive": "No recibes",
+        "inAppAlways": "No se apaga",
+        "systemName": "Cuenta, seguridad y avisos del sistema",
+        "systemDescription": "Inicio de sesión, contraseña, invitaciones y alertas de la plataforma. Apagarlos te dejaría sin forma de recuperar tu cuenta.",
+        "alwaysSent": "Siempre se envía",
+        "howHeading": "Cómo se decide",
+        "howSendLead": "Se consulta al enviar, no al programar.",
+        "howSendText": "Un recordatorio de la semana que viene sigue lo que tengas guardado ese día.",
+        "howOneLead": "Apagar uno detiene ese correo y ningún otro.",
+        "howInboxLead": "La bandeja recibe todo.",
+        "howInboxText": "Lo que no te llega por correo lo ves al entrar, en Notificaciones.",
+        "howPushLead": "Sin push ni SMS.",
+        "howPushText": "La plataforma no envía avisos al teléfono.",
+        "howConsent": "Es el único consentimiento que cambias tú; el resto de lo que consta sobre ti está en"
+      }
+    }
   },
   "profile": {
     "title": "Tu perfil",
@@ -1751,7 +1793,41 @@
     "activityFailed": "Fallido",
     "activityProfileUpdate": "Perfil actualizado",
     "activityPasswordChange": "Cambio de contraseña",
-    "activityPreferencesUpdate": "Preferencias actualizadas"
+    "activityPreferencesUpdate": "Preferencias actualizadas",
+    "next": {
+      "description": "Tu nombre, el idioma y la zona horaria de tus correos, y tu contraseña. Cada bloque se guarda por separado.",
+      "tabs": {
+        "label": "Cuenta",
+        "profile": "Tu perfil",
+        "notifications": "Notificaciones",
+        "privacy": "Privacidad"
+      },
+      "save": "Guardar",
+      "details": {
+        "meta": "tu nombre es lo único que cambias aquí",
+        "preview": "Así te ven en la bitácora de cada plan y en lo que creas. La barra lateral toma un nombre nuevo la próxima vez que entras.",
+        "noDepartment": "Sin departamento"
+      },
+      "preferences": {
+        "meta": "se aplican al guardar",
+        "languageHelper": "El de los correos que te enviamos y el de esta pantalla después de guardar.",
+        "theme": "Tema",
+        "themeLight": "Claro",
+        "themeDark": "Oscuro",
+        "themeSystem": "Como el sistema",
+        "timezoneHelper": "Un nombre IANA, como America/Costa_Rica.",
+        "storedLead": "Guardado en tu cuenta: {language} y {timezone}.",
+        "storedDiffers": "Esta pantalla está en {screen}, pero tus correos salen en {language}: elige y guarda para que coincidan."
+      },
+      "password": {
+        "meta": "escribe la actual para elegir una nueva",
+        "signsOut": "Cambiarla cierra tu sesión en todos los demás dispositivos. Esta sigue abierta."
+      },
+      "activity": {
+        "meta": "cambios en tu propia cuenta, del más reciente al más antiguo",
+        "empty": "Aún no ha ocurrido nada en tu cuenta. Cada cambio de nombre, de preferencias o de contraseña queda aquí, con su fecha y si se aplicó."
+      }
+    }
   },
   "reports": {
     "newReport": "Nuevo informe",
@@ -4404,7 +4480,131 @@
     "referenceName": "Nombre",
     "referenceCopy": "Copiar datos",
     "referenceCopied": "Copiado.",
-    "referenceCopyFailed": "Se bloqueó la copia; selecciona el texto de arriba."
+    "referenceCopyFailed": "Se bloqueó la copia; selecciona el texto de arriba.",
+    "next": {
+      "title": "Privacidad",
+      "description": "Qué guarda la plataforma sobre ti, qué consentimiento consta en tu cuenta y cómo pedir un borrado. Tu copia completa se descarga en un archivo.",
+      "download": "Descargar mis datos",
+      "downloading": "Preparando tu archivo…",
+      "downloadFailed": "No se pudieron preparar tus datos.",
+      "held": {
+        "heading": "Qué se guarda sobre ti",
+        "meta": "cuántos registros de cada uno lo dice tu archivo",
+        "text": "Cada descarga queda registrada en la auditoría, porque entregar los datos de una persona es un hecho que merece constancia. Por eso los registros se cuentan en el archivo y no en esta pantalla.",
+        "colWhat": "Qué es",
+        "colLink": "Cómo te vincula",
+        "colBasis": "Base jurídica",
+        "colKept": "Se conserva",
+        "account": {
+          "name": "Tu cuenta",
+          "what": "tu nombre, correo, rol, departamento y preferencias",
+          "link": "Es tu cuenta.",
+          "basis": "Prestar el servicio",
+          "kept": "Mientras exista la cuenta; al borrarla se seudonimiza y no se restaura."
+        },
+        "responses": {
+          "name": "Tus respuestas",
+          "what": "lo que respondiste y los datos demográficos que acompañan cada respuesta",
+          "link": "Llevan tu identificador. Las anónimas no lo llevan y no entran.",
+          "basis": "Prestar el servicio",
+          "kept": "Sin plazo; al borrarla se anonimiza."
+        },
+        "demographics": {
+          "name": "Tus datos demográficos",
+          "what": "lo que consta sobre ti y sus instantáneas históricas",
+          "link": "Llevan tu identificador.",
+          "basis": "Servicio e interés legítimo",
+          "kept": "Mientras exista la cuenta; las instantáneas históricas no vencen."
+        },
+        "notices": {
+          "name": "Avisos e invitaciones",
+          "what": "tus avisos y tus invitaciones a encuestas, microclimas y a la plataforma",
+          "link": "Van dirigidos a ti: llevan tu identificador o tu correo.",
+          "basis": "Prestar el servicio",
+          "kept": "Los avisos se borran al cumplir su plazo; las invitaciones se sobrescriben al borrar."
+        },
+        "drafts": {
+          "name": "Borradores de encuesta",
+          "what": "las encuestas que empezaste y no publicaste",
+          "link": "Llevan tu identificador.",
+          "basis": "Prestar el servicio",
+          "kept": "30 días desde el último guardado."
+        },
+        "activity": {
+          "name": "Tu actividad",
+          "what": "lo que hiciste en la plataforma y en cada encuesta",
+          "link": "Te registra como quien actuó.",
+          "basis": "Interés legítimo",
+          "kept": "Lo que dure la empresa o la encuesta; no vence sola."
+        },
+        "authored": {
+          "name": "Lo que creaste o te nombra",
+          "what": "encuestas, informes, planes de acción y otros tipos de registro",
+          "link": "Te nombra como autora o responsable; el archivo trae solo identificador y título.",
+          "basis": "Interés legítimo",
+          "kept": "Mientras exista el registro; la autoría sobrevive al borrado."
+        }
+      },
+      "tracking": {
+        "lead": "Tu archivo no incluye el servicio de seguimiento.",
+        "text": "Los planes de acción de seguimiento y sus avances viven en otra base que esta plataforma no lee;",
+        "responsible": "eres responsable de {codes}, así que esa parte se pide a mano.",
+        "askByHand": "si un plan te nombra, esa parte se pide a mano."
+      },
+      "consent": {
+        "heading": "Consentimiento en tu cuenta",
+        "meta": "{count} consentimientos",
+        "essential": "Esencial",
+        "analytics": "Analítica",
+        "marketing": "Marketing",
+        "personalization": "Personalización",
+        "thirdParties": "Terceros",
+        "demographics": "Datos demográficos",
+        "inFile": "— en tu archivo",
+        "why": "Su valor está en tu archivo y no en esta pantalla, porque leerlo queda registrado en la auditoría, igual que cada descarga. Ninguna pantalla de este producto los cambia: conservan el valor que tenían al crearse tu cuenta.",
+        "emailsLabel": "El que sí cambias: tus correos",
+        "emailsValue": "{on} de {total} activados · {digest}",
+        "emailsUnknown": "no se pudo leer"
+      },
+      "erasure": {
+        "heading": "Borrado de tus datos",
+        "meta": "irreversible",
+        "lead": "El borrado no es un botón de esta página.",
+        "text": "Es irreversible, así que nadie borra su propia cuenta, ni empleados ni administradores. Lo pides tú; lo ejecuta quien administra tu organización.",
+        "removed": {
+          "title": "Se elimina",
+          "sub": "desaparece del todo",
+          "notices": "tus avisos",
+          "activity": "tu actividad en cada encuesta",
+          "drafts": "tus borradores de encuesta",
+          "demographics": "tus datos demográficos",
+          "invitationDemographics": "los datos demográficos de tus invitaciones"
+        },
+        "unlinked": {
+          "title": "Se conserva sin vínculo",
+          "sub": "el registro queda sin tu nombre",
+          "responses": "tus respuestas, que siguen contando en los resultados",
+          "account": "tu cuenta, sin nombre ni correo"
+        },
+        "overwritten": {
+          "title": "Se sobrescribe",
+          "sub": "se reemplazan tu correo y tu enlace personal",
+          "surveyInvitations": "tus invitaciones a encuestas",
+          "microclimateInvitations": "tus invitaciones a microclimas",
+          "platformInvitations": "tus invitaciones a la plataforma"
+        },
+        "notErased": "No elimina la auditoría general, la autoría de lo que creaste, el texto libre, las instantáneas históricas ni lo que guarda el servicio de seguimiento."
+      },
+      "request": {
+        "heading": "Datos para tu solicitud",
+        "id": "Identificador de cuenta",
+        "email": "Correo",
+        "name": "Nombre",
+        "copy": "Copiar datos",
+        "copied": "Copiado.",
+        "copyRefused": "El portapapeles no lo permitió: cópialos a mano."
+      }
+    }
   },
   "questionLibrary": {
     "title": "Biblioteca de preguntas",

@@ -31,9 +31,9 @@ import SurveyRespondPage from '../features/surveys/pages/SurveyRespondPage'
 import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespondPage'
 import PublicSurveyLinkPage from '../features/surveys/pages/PublicSurveyLinkPage'
 import SurveyInvitationPage from '../features/surveys/pages/SurveyInvitationPage'
-import NotificationPreferencesPage from '../features/notifications/pages/NotificationPreferencesPage'
-import ProfilePage from '../features/profile/pages/ProfilePage'
-import PrivacySettingsPage from '../features/profile/pages/PrivacySettingsPage'
+import NotificationPreferencesNextPage from '../features/notifications/next/NotificationPreferencesNextPage'
+import ProfileNextPage from '../features/profile/next/ProfileNextPage'
+import PrivacyNextPage from '../features/profile/next/PrivacyNextPage'
 import NotificationsInboxPage from '../features/notifications/pages/NotificationsInboxPage'
 import SurveyDistributionPage from '../features/surveys/pages/SurveyDistributionPage'
 import BenchmarksNextPage from '../features/analytics/next/benchmarks/BenchmarksNextPage'
@@ -424,17 +424,21 @@ export const router = createBrowserRouter([
               // authenticated role — plain employees included — owns a profile, and
               // every endpoint behind this page resolves the caller from their own
               // token and takes no user id at all (#136).
-              { path: '/profile', element: <ProfilePage /> },
+              // The per-role canvas's Tu perfil replaced `ProfilePage` here (10 Sep); the old page
+              // stays unrouted as the wiring reference.
+              { path: '/profile', element: <ProfileNextPage /> },
               // Not under /admin: every authenticated role owns their own preferences,
               // and the API behind this page takes no user id at all (#103).
-              { path: '/settings/notifications', element: <NotificationPreferencesPage /> },
+              // Replaced `NotificationPreferencesPage` (10 Sep); the old page stays unrouted.
+              { path: '/settings/notifications', element: <NotificationPreferencesNextPage /> },
               // #137, and gated the same way for the same reason. `GET /gdpr/access` with
               // no `userId` is the self-service case and needs no role — the handler says
               // so — so every authenticated role reaches this page and none of them can
               // ask it about anybody else. Under `/settings` beside notification
               // preferences rather than under `/admin`: the erasure endpoint IS admin
               // surface, but nothing on this page calls it.
-              { path: '/settings/privacy', element: <PrivacySettingsPage /> },
+              // Replaced `PrivacySettingsPage` (10 Sep); the old page and its panels stay unrouted.
+              { path: '/settings/privacy', element: <PrivacyNextPage /> },
               // Self-service, so no role gate beyond RequireAuth: /notifications/mine
               // is scoped per user and every authenticated role can load it.
               { path: '/notifications', element: <NotificationsInboxPage /> },

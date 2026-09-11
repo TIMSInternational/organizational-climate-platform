@@ -1704,7 +1704,49 @@
     "typeAiInsightAlert": "Insight",
     "typeSystemNotification": "System",
     "emptyTitle": "Nothing has come in yet",
-    "emptyBody": "You will be told here when a survey opens to you, when one closes, and when its results are published."
+    "emptyBody": "You will be told here when a survey opens to you, when one closes, and when its results are published.",
+    "next": {
+      "prefs": {
+        "description": "Which emails the platform sends you. The in-app inbox does not turn off: only email is configured.",
+        "discard": "Discard",
+        "save": "Save",
+        "savedLine": "Saved on your account: {summary}.",
+        "nothingChanges": "Nothing changes until you save.",
+        "unsaved": "You have unsaved changes.",
+        "allOn": "all {count} configurable emails on",
+        "allOff": "no configurable email on",
+        "someOn": "{on} of {total} configurable emails on",
+        "summary": "{emails} and {digest}",
+        "digestDaily": "a daily digest",
+        "digestWeekly": "a weekly digest",
+        "digestMonthly": "a monthly digest",
+        "digestNever": "no digest",
+        "tableHeading": "What reaches you, and how",
+        "tableMeta": "only email is configured",
+        "colAviso": "Notice",
+        "colEmail": "Email",
+        "colInApp": "In the app",
+        "surveys": "Surveys",
+        "microclimates": "Microclimates",
+        "actionPlans": "Action plans",
+        "reminders": "Reminders",
+        "receives": "You receive it",
+        "doesNotReceive": "You do not receive it",
+        "inAppAlways": "Never off",
+        "systemName": "Account, security and system notices",
+        "systemDescription": "Sign-in, password, invitations and platform alerts. Turning them off would leave you no way to recover your account.",
+        "alwaysSent": "Always sent",
+        "howHeading": "How it is decided",
+        "howSendLead": "Checked when sending, not when scheduling.",
+        "howSendText": "A reminder for next week follows whatever you have saved that day.",
+        "howOneLead": "Turning one off stops that email and no other.",
+        "howInboxLead": "The inbox gets everything.",
+        "howInboxText": "What does not reach you by email you see when you sign in, in Notifications.",
+        "howPushLead": "No push and no SMS.",
+        "howPushText": "The platform sends no notices to your phone.",
+        "howConsent": "It is the only consent you change yourself; the rest of what is recorded about you is in"
+      }
+    }
   },
   "profile": {
     "title": "Your profile",
@@ -1751,7 +1793,41 @@
     "activityFailed": "Failed",
     "activityProfileUpdate": "Profile updated",
     "activityPasswordChange": "Password change",
-    "activityPreferencesUpdate": "Preferences updated"
+    "activityPreferencesUpdate": "Preferences updated",
+    "next": {
+      "description": "Your name, the language and time zone of your emails, and your password. Each block is saved on its own.",
+      "tabs": {
+        "label": "Account",
+        "profile": "Your profile",
+        "notifications": "Notifications",
+        "privacy": "Privacy"
+      },
+      "save": "Save",
+      "details": {
+        "meta": "your name is the only thing you change here",
+        "preview": "This is how you appear in the log of each plan and in what you create. The sidebar takes a new name the next time you sign in.",
+        "noDepartment": "No department"
+      },
+      "preferences": {
+        "meta": "applied when you save",
+        "languageHelper": "The one our emails use, and this screen's after you save.",
+        "theme": "Theme",
+        "themeLight": "Light",
+        "themeDark": "Dark",
+        "themeSystem": "As the system",
+        "timezoneHelper": "An IANA name, such as America/Costa_Rica.",
+        "storedLead": "Saved on your account: {language} and {timezone}.",
+        "storedDiffers": "This screen is in {screen}, but your emails go out in {language}: choose and save so they match."
+      },
+      "password": {
+        "meta": "type the current one to choose a new one",
+        "signsOut": "Changing it signs you out on every other device. This one stays signed in."
+      },
+      "activity": {
+        "meta": "changes to your own account, newest first",
+        "empty": "Nothing has happened on your account yet. Every change of name, preferences or password lands here, with its date and whether it was applied."
+      }
+    }
   },
   "reports": {
     "newReport": "New report",
@@ -4404,7 +4480,131 @@
     "referenceName": "Name",
     "referenceCopy": "Copy details",
     "referenceCopied": "Copied.",
-    "referenceCopyFailed": "Copying was blocked - select the text above instead."
+    "referenceCopyFailed": "Copying was blocked - select the text above instead.",
+    "next": {
+      "title": "Privacy",
+      "description": "What the platform keeps about you, what consent your account records and how to ask for an erasure. Your full copy downloads as a file.",
+      "download": "Download my data",
+      "downloading": "Preparing your file…",
+      "downloadFailed": "Your data could not be prepared.",
+      "held": {
+        "heading": "What is kept about you",
+        "meta": "your file says how many records of each",
+        "text": "Every download is recorded in the audit, because handing over a person's data is an act that deserves a record. That is why the records are counted in the file and not on this screen.",
+        "colWhat": "What it is",
+        "colLink": "How it links to you",
+        "colBasis": "Legal basis",
+        "colKept": "Kept",
+        "account": {
+          "name": "Your account",
+          "what": "your name, email, role, department and preferences",
+          "link": "It is your account.",
+          "basis": "Providing the service",
+          "kept": "While the account exists; erasing it pseudonymises it for good."
+        },
+        "responses": {
+          "name": "Your responses",
+          "what": "what you answered and the demographics that go with each response",
+          "link": "They carry your identifier. Anonymous ones do not, and are not included.",
+          "basis": "Providing the service",
+          "kept": "No limit; erasing anonymises them."
+        },
+        "demographics": {
+          "name": "Your demographics",
+          "what": "what is recorded about you and its historical snapshots",
+          "link": "They carry your identifier.",
+          "basis": "Service and legitimate interest",
+          "kept": "While the account exists; historical snapshots do not expire."
+        },
+        "notices": {
+          "name": "Notices and invitations",
+          "what": "your notices and your invitations to surveys, microclimates and the platform",
+          "link": "They are addressed to you: they carry your identifier or your email.",
+          "basis": "Providing the service",
+          "kept": "Notices are deleted when they expire; invitations are overwritten on erasure."
+        },
+        "drafts": {
+          "name": "Survey drafts",
+          "what": "the surveys you started and did not publish",
+          "link": "They carry your identifier.",
+          "basis": "Providing the service",
+          "kept": "30 days from the last save."
+        },
+        "activity": {
+          "name": "Your activity",
+          "what": "what you did on the platform and in each survey",
+          "link": "It records you as the one who acted.",
+          "basis": "Legitimate interest",
+          "kept": "As long as the company or the survey lasts; it does not expire on its own."
+        },
+        "authored": {
+          "name": "What you created or what names you",
+          "what": "surveys, reports, action plans and other kinds of record",
+          "link": "It names you as author or responsible; the file brings only the identifier and title.",
+          "basis": "Legitimate interest",
+          "kept": "While the record exists; authorship survives the erasure."
+        }
+      },
+      "tracking": {
+        "lead": "Your file does not include the tracking service.",
+        "text": "Tracking action plans and their progress live in another store this platform does not read;",
+        "responsible": "you are responsible for {codes}, so that part is requested by hand.",
+        "askByHand": "if a plan names you, that part is requested by hand."
+      },
+      "consent": {
+        "heading": "Consent on your account",
+        "meta": "{count} consents",
+        "essential": "Essential",
+        "analytics": "Analytics",
+        "marketing": "Marketing",
+        "personalization": "Personalisation",
+        "thirdParties": "Third parties",
+        "demographics": "Demographics",
+        "inFile": "— in your file",
+        "why": "Their value is in your file and not on this screen, because reading it is recorded in the audit, like every download. No screen in this product changes them: they keep the value they had when your account was created.",
+        "emailsLabel": "The one you do change: your emails",
+        "emailsValue": "{on} of {total} on · {digest}",
+        "emailsUnknown": "could not be read"
+      },
+      "erasure": {
+        "heading": "Erasing your data",
+        "meta": "irreversible",
+        "lead": "Erasure is not a button on this page.",
+        "text": "It is irreversible, so nobody erases their own account, neither employees nor administrators. You ask for it; whoever administers your organisation carries it out.",
+        "removed": {
+          "title": "Deleted",
+          "sub": "gone entirely",
+          "notices": "your notices",
+          "activity": "your activity in each survey",
+          "drafts": "your survey drafts",
+          "demographics": "your demographics",
+          "invitationDemographics": "the demographics on your invitations"
+        },
+        "unlinked": {
+          "title": "Kept without the link",
+          "sub": "the record stays without your name",
+          "responses": "your responses, which still count in the results",
+          "account": "your account, with no name or email"
+        },
+        "overwritten": {
+          "title": "Overwritten",
+          "sub": "your email and your personal link are replaced",
+          "surveyInvitations": "your survey invitations",
+          "microclimateInvitations": "your microclimate invitations",
+          "platformInvitations": "your platform invitations"
+        },
+        "notErased": "It does not delete the general audit, the authorship of what you created, free text, historical snapshots or what the tracking service keeps."
+      },
+      "request": {
+        "heading": "Details for your request",
+        "id": "Account identifier",
+        "email": "Email",
+        "name": "Name",
+        "copy": "Copy details",
+        "copied": "Copied.",
+        "copyRefused": "The clipboard refused: copy them by hand."
+      }
+    }
   },
   "questionLibrary": {
     "title": "Question library",

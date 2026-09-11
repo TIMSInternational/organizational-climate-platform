@@ -37,6 +37,8 @@ import { getMyDataExport, readConsentRecord, type SubjectAccessExport } from '..
  * only 403. Building the intake would be a new table, a new endpoint and a notification —
  * server work this issue does not own.
  */
+// UNROUTED since the per-role canvas (10 Sep): `/settings/privacy` mounts `profile/next/PrivacyNextPage`. This file stays in the
+// tree as the wiring reference — the reads and writes the redesign kept.
 export default function PrivacySettingsPage() {
   const { t } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
