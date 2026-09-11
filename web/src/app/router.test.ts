@@ -19,6 +19,8 @@ import QuestionBankNextPage from '../features/questions/next/QuestionBankNextPag
 import QuestionLibraryNextPage from '../features/questions/next/QuestionLibraryNextPage'
 import AIInsightsNextPage from '../features/analytics/next/AIInsightsNextPage'
 import AnalyticsNextPage from '../features/analytics/next/AnalyticsNextPage'
+import MicroclimatesListNextPage from '../features/microclimates/next/MicroclimatesListNextPage'
+import MicroclimateLiveNextPage from '../features/microclimates/next/MicroclimateLiveNextPage'
 
 /**
  * A construction guard for the router.
@@ -321,6 +323,12 @@ describe('router', () => {
     expect(componentAt('/analytics/benchmarks')).toBe(BenchmarksNextPage)
     expect(byPath.has('/admin/companies/:companyId/reports/next')).toBe(false)
     expect(byPath.has('/analytics/benchmarks/next')).toBe(false)
+    // Microclimas and its live session were swapped the same way (the microclimates lane):
+    // the sidebar's link and the list's "Ver en vivo" reach the artboards, no `/next` sibling.
+    expect(componentAt('/microclimates')).toBe(MicroclimatesListNextPage)
+    expect(componentAt('/microclimates/:id/live')).toBe(MicroclimateLiveNextPage)
+    expect(byPath.has('/microclimates/next')).toBe(false)
+    expect(byPath.has('/microclimates/:id/live/next')).toBe(false)
 
     // Unrouted means unreferenced: the router imports neither old page for any route.
     const source = readFileSync(join(process.cwd(), 'src', 'app', 'router.tsx'), 'utf8')
@@ -328,6 +336,8 @@ describe('router', () => {
     expect(source).not.toMatch(/pages\/ClimateTrendsPage'/)
     expect(source).not.toMatch(/pages\/SurveyResultsPage'/)
     expect(source).not.toMatch(/pages\/ReportsListPage'/)
+    expect(source).not.toMatch(/pages\/MicroclimatesListPage'/)
+    expect(source).not.toMatch(/pages\/MicroclimateLivePage'/)
     expect(source).not.toMatch(/pages\/BenchmarksPage'/)
     expect(source).not.toMatch(/pages\/SurveyQuestionsEditPage'/)
     expect(source).not.toMatch(/pages\/SurveyTemplateDetailPage'/)

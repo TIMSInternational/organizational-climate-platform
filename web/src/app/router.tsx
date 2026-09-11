@@ -19,11 +19,11 @@ import DemographicFieldsPage from '../features/org-structure/pages/DemographicFi
 import DepartmentsPage from '../features/org-structure/pages/DepartmentsPage'
 import ActionPlansListNextPage from '../features/action-plans/next/ActionPlansListNextPage'
 import ActionPlanDetailPage from '../features/action-plans/pages/ActionPlanDetailPage'
-import MicroclimatesListPage from '../features/microclimates/pages/MicroclimatesListPage'
+import MicroclimatesListNextPage from '../features/microclimates/next/MicroclimatesListNextPage'
 import MicroclimateCreatePage from '../features/microclimates/pages/MicroclimateCreatePage'
 import MicroclimateAnalyticsPage from '../features/microclimates/pages/MicroclimateAnalyticsPage'
 import MicroclimateDetailPage from '../features/microclimates/pages/MicroclimateDetailPage'
-import MicroclimateLivePage from '../features/microclimates/pages/MicroclimateLivePage'
+import MicroclimateLiveNextPage from '../features/microclimates/next/MicroclimateLiveNextPage'
 import MicroclimateResultsPage from '../features/microclimates/pages/MicroclimateResultsPage'
 import MicroclimateRespondPage from '../features/microclimates/pages/MicroclimateRespondPage'
 import MicroclimateInvitationPage from '../features/microclimates/pages/MicroclimateInvitationPage'
@@ -355,7 +355,11 @@ export const router = createBrowserRouter([
               // The old page stays in the tree, unrouted, as the wiring reference.
               { path: '/action-plans', element: <ActionPlansListNextPage /> },
               { path: '/action-plans/:id', element: <ActionPlanDetailPage /> },
-              { path: '/microclimates', element: <MicroclimatesListPage /> },
+              // The redesigned Microclimas replaced `MicroclimatesListPage` here (the
+              // MicroclimatesList artboard, 10 Sep): a redesigned screen takes its real route,
+              // never a `/next` sibling. The old page stays in the tree, unrouted, as the
+              // wiring reference.
+              { path: '/microclimates', element: <MicroclimatesListNextPage /> },
               // Before `/microclimates/:id` for readability only, same as
               // `/surveys/my`: react-router ranks a static segment above a dynamic
               // one whatever the declaration order, so `new` can never be parsed as
@@ -366,7 +370,9 @@ export const router = createBrowserRouter([
               // No nav entry, deliberately: both are per-session destinations reached
               // from the session, not places in the sidebar. Same rule as
               // `/surveys/:id/results`.
-              { path: '/microclimates/:id/live', element: <MicroclimateLivePage /> },
+              // The redesigned live session (MicroclimateLive, 10 Sep) replaced
+              // `MicroclimateLivePage` here; the old page stays unrouted as the wiring reference.
+              { path: '/microclimates/:id/live', element: <MicroclimateLiveNextPage /> },
               { path: '/microclimates/:id/results', element: <MicroclimateResultsPage /> },
               // The redesigned Todas las Encuestas replaced `SurveysListPage` on this route
               // (ruled 10 Sep). The old page stays in the tree, unrouted, as the wiring
