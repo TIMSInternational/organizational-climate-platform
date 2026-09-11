@@ -20,7 +20,7 @@ import {
   itemsIn,
   usedCount,
   type LibraryDraft,
-} from './derive'
+} from './libraryDerive'
 import { useQuestionLibraryModel, type QuestionLibraryModelState } from './useQuestionLibraryModel'
 
 type EditorMode = 'item' | 'new-item' | 'new-category'
@@ -49,7 +49,7 @@ const HEAD = 'px-3 pt-2 pb-2 text-left text-2xs font-bold uppercase leading-norm
  * the company chosen above); a company administrator reads the global rows and writes only
  * their own (`canWriteLibraryRow`, `:60-67`) — a global row opens read-only for them.
  */
-export default function QuestionLibraryNextPage() {
+export default function SuperQuestionLibraryView() {
   const { t } = useTranslation()
   const scope = useCompanyScope()
   const model = useQuestionLibraryModel()

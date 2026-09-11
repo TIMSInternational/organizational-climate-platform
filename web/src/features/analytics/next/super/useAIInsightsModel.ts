@@ -6,8 +6,8 @@ import { acknowledgeAIInsight, getAIInsight, listAIInsights } from '../../api/in
 import { getUser } from '../../../org-structure/api/users'
 import { listCompanies } from '../../../org-structure/api/companies'
 import { listSurveys } from '../../../surveys/api/surveys'
-import { acknowledgerIds, defaultSelection } from './derive'
-import type { CompanyPick, InsightRow } from './model'
+import { acknowledgerIds, defaultSelection } from './insightsDerive'
+import type { CompanyPick, InsightRow } from './insightsModel'
 
 /**
  * What the page may show this viewer:

@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
-import QuestionBankNextPage from './QuestionBankNextPage'
+import QuestionBankNextPage from './SuperQuestionBankView'
+import RoutedQuestionBankPage from '../QuestionBankNextPage'
 import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../../i18n'
 import { setToken, clearToken } from '../../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../../company-context'
@@ -213,5 +214,36 @@ describe('QuestionBankNextPage — owners and roles', () => {
     await userEvent.selectOptions(screen.getByRole('combobox', { name: next.colOwner }), 'acme')
     expect(rowOf('global')).toBeNull()
     expect(rowOf('acme-row')).toBeTruthy()
+  })
+})
+
+// `/admin/question-bank` mounts #472's company page; its one role branch sends the super
+// administrator here. Rendered through the routed component, so breaking the branch fails.
+describe('the route dispatches by role', () => {
+  function renderRoute() {
+    return render(
+      <TranslationProvider>
+        <MemoryRouter>
+          <CompanyContextProvider>
+            <RoutedQuestionBankPage />
+          </CompanyContextProvider>
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+  }
+
+  it('gives a super administrator this view, where each row names its owner', async () => {
+    setToken(tokenFor({ role: 'super_admin' }))
+    serve({ items: [item({ id: 'acme-row', companyId: 'acme', text: 'Acme row' })] })
+    renderRoute()
+    await waitFor(() => expect(within(rowOf('acme-row')).getByText('Acme Corporation')).toBeTruthy())
+  })
+
+  it('gives a company administrator the company page, never this view', async () => {
+    serve({ items: [item({ id: 'own', text: 'Own row' })] })
+    renderRoute()
+    expect(await screen.findByText(next.splitTitle)).toBeTruthy()
+    await screen.findByText('Own row')
+    expect(rowOf('own')).toBeNull()
   })
 })

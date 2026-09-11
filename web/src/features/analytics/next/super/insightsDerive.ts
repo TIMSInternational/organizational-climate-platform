@@ -1,6 +1,6 @@
 import { CRITICAL_PRIORITY, HIGH_PRIORITY } from '../../insightVocabulary'
 import type { AIInsightListItem } from '../../api/insights'
-import type { CompanyPick, InsightRow, InsightsTally } from './model'
+import type { CompanyPick, InsightRow, InsightsTally } from './insightsModel'
 
 /**
  * The three headline counts, counted from the rows the page holds — never fetched, so a

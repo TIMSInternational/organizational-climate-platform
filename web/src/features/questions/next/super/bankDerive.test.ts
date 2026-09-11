@@ -9,7 +9,7 @@ import {
   filterByOwner,
   librarySummary,
   needsAttention,
-} from './derive'
+} from './bankDerive'
 
 function row(over: Partial<QuestionBankItem> = {}): QuestionBankItem {
   return {

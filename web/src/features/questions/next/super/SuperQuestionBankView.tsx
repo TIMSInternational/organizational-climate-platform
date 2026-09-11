@@ -24,7 +24,7 @@ import { readViewerClaims } from '../../../../auth/viewerCapabilities'
 import { cn } from '../../../../lib/cn'
 import { questionTypeLabel } from '../../../surveys/surveyVocabulary'
 import { QUESTION_BANK_TYPES, type QuestionBankItem } from '../../api/questionBank'
-import { OWNER_ALL, OWNER_GLOBAL, askedAnsweredSkipped, canWriteRow, needsAttention } from './derive'
+import { OWNER_ALL, OWNER_GLOBAL, askedAnsweredSkipped, canWriteRow, needsAttention } from './bankDerive'
 import { useQuestionBankModel, type BankDraft, type QuestionBankModelState } from './useQuestionBankModel'
 
 const EMPTY_DRAFT: BankDraft = { text: '', type: 'likert', category: '', subcategory: '' }
@@ -50,7 +50,7 @@ const HEAD = 'px-3 pt-2 pb-2 text-left text-2xs font-bold uppercase leading-norm
  * own (`canWriteRow`, `QuestionBankEndpoints.cs:94-102`) — a global row offers them no Edit
  * and no Retire. Every write is the old page's call with the old page's body.
  */
-export default function QuestionBankNextPage() {
+export default function SuperQuestionBankView() {
   const { t } = useTranslation()
   const scope = useCompanyScope()
   const model = useQuestionBankModel()
@@ -68,7 +68,7 @@ export default function QuestionBankNextPage() {
       <PageTopBar
         eyebrow={t('navigation.sectionWorkspace')}
         title={t('navigation.questionBank')}
-        description={`${t('questionBank.next.description')}${
+        description={`${t('questionBank.next.performanceDescription')}${
           scope.isSuperAdmin ? t('questionBank.next.descriptionSuper') : t('questionBank.next.descriptionCompany')
         }`}
         actions={
@@ -133,7 +133,7 @@ function SplitCard({ model, t }: { model: QuestionBankModelState; t: TranslateFn
           </span>
         </div>
         <Link to="/admin/question-library" className="inline-flex shrink-0 items-center gap-1 text-sm">
-          {t('questionBank.next.openLibrary')}
+          {t('questionBank.next.openLibraryShort')}
           <ArrowRight aria-hidden="true" className="size-3.5" />
         </Link>
       </div>
@@ -211,7 +211,7 @@ function Filters({ model, t }: { model: QuestionBankModelState; t: TranslateFn }
             ? t('questionBank.next.ownerAll')
             : t('questionBank.next.ownerAllCompany', { company: ownCompany })}
         </option>
-        <option value={OWNER_GLOBAL}>{t('questionBank.next.ownerGlobal')}</option>
+        <option value={OWNER_GLOBAL}>{t('questionBank.next.ownerGlobalOnly')}</option>
         {[...model.companyNames.entries()].map(([id, name]) => (
           <option key={id} value={id}>
             {name}

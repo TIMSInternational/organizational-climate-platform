@@ -10,8 +10,8 @@ import { calendarDay } from '../../../../lib/calendarDay'
 import { calendarDayWithYear } from '../../../../lib/calendarDayWithYear'
 import { cn } from '../../../../lib/cn'
 import { insightPriorityLabel, insightTypeLabel } from '../../insightVocabulary'
-import { pickLine, priorityTone, tallyInsights, type PickLine } from './derive'
-import type { CompanyPick, InsightRow, InsightsTally } from './model'
+import { pickLine, priorityTone, tallyInsights, type PickLine } from './insightsDerive'
+import type { CompanyPick, InsightRow, InsightsTally } from './insightsModel'
 import { useAIInsightsModel, type AIInsightsModelState } from './useAIInsightsModel'
 
 /**
@@ -32,7 +32,7 @@ import { useAIInsightsModel, type AIInsightsModelState } from './useAIInsightsMo
  * checks the privacy floor (`AIInsightValidation.cs`; the generator, #92, does not exist) —
  * a guarantee the server does not keep is not one this page states.
  */
-export default function AIInsightsNextPage() {
+export default function SuperAIInsightsView() {
   const { t } = useTranslation()
   const scope = useCompanyScope()
   const model = useAIInsightsModel()
@@ -46,7 +46,7 @@ export default function AIInsightsNextPage() {
       <PageTopBar
         eyebrow={t('navigation.analytics')}
         title={t('navigation.aiInsights')}
-        description={t('insights.next.description')}
+        description={t('insights.next.findingsDescription')}
         actions={
           model.mode === 'insights' && companyId ? (
             <Button asChild variant="outline">

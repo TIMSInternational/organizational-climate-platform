@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { AIInsight, AIInsightListItem } from '../../api/insights'
-import { acknowledgerIds, defaultSelection, pickLine, priorityTone, tallyInsights } from './derive'
-import type { InsightRow } from './model'
+import { acknowledgerIds, defaultSelection, pickLine, priorityTone, tallyInsights } from './insightsDerive'
+import type { InsightRow } from './insightsModel'
 
 function item(over: Partial<AIInsightListItem> = {}): AIInsightListItem {
   return { id: 'i1', companyId: 'c1', type: 'risk', category: 'engagement', title: 'T', priority: 'high', isAcknowledged: false, ...over }

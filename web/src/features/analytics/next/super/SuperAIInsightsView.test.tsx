@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
-import AIInsightsNextPage from './AIInsightsNextPage'
+import AIInsightsNextPage from './SuperAIInsightsView'
+import RoutedAIInsightsPage from '../AIInsightsNextPage'
 import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../../i18n'
 import { setToken, clearToken } from '../../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../../company-context'
@@ -256,5 +257,40 @@ describe('AIInsightsNextPage — reading and acknowledging (moved and extended)'
     const other = screen.getByText('Otra').closest('[data-slot="insight-card"]') as HTMLElement
     expect(within(other).getByText('omen')).toBeTruthy()
     expect(within(other).getByText('urgent')).toBeTruthy()
+  })
+})
+
+// `/analytics/ai-insights` mounts #472's company page; its one role branch sends the super
+// administrator here. Rendered through the routed component, so breaking the branch fails.
+describe('the route dispatches by role', () => {
+  function renderRoute() {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    return render(
+      <TranslationProvider>
+        <MemoryRouter>
+          <CompanyContextProvider>
+            <RoutedAIInsightsPage />
+          </CompanyContextProvider>
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+  }
+
+  it('gives a super administrator this view, starting at the choose-a-company card', async () => {
+    setToken(tokenFor({ role: 'super_admin' }))
+    routeFetch([
+      [/\/admin\/companies/, json({ companies: [{ id: 'acme', name: 'Acme Corporation', emailDomain: null, industry: null, size: null, country: null, subscriptionTier: null, createdAt: '2026-01-01T00:00:00Z' }] })],
+      [/\/surveys/, json({ surveys: [] })],
+      [/\/admin\/ai-insights\?companyId=acme/, json([])],
+    ])
+    renderRoute()
+    expect(await screen.findByRole('heading', { name: next.chooseTitle })).toBeTruthy()
+  })
+
+  it('gives a company administrator the company page, never this view', async () => {
+    routeFetch([[/\/admin\/ai-insights\?companyId=/, json([])]])
+    renderRoute()
+    expect(await screen.findByText(next.emptyTitle)).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: next.chooseTitle })).toBeNull()
   })
 })

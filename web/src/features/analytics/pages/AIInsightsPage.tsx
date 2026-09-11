@@ -1,6 +1,6 @@
 /**
- * NOT ROUTED. `/analytics/ai-insights` renders `features/analytics/next/insights/AIInsightsNextPage` since the per-role canvas redesign (10 Sep);
- * this page stays in the tree as the wiring reference for its payload and submit path.
+ * NOT MOUNTED. The router serves the redesigned screen in `features/analytics/next/` at
+ * this route; this file stays in the tree as the wiring reference for it.
  */
 import { useCallback, useEffect, useState } from 'react'
 import {

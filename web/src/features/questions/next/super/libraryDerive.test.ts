@@ -9,7 +9,7 @@ import {
   createBody,
   draftFromDetail,
   updateBody,
-} from './derive'
+} from './libraryDerive'
 
 function category(id: string, companyId: string | null, nameEs: string, nameEn: string): QuestionCategory {
   return {

@@ -17,7 +17,7 @@ import {
   updateQuestionLibraryItem,
   type CreateQuestionCategoryInput,
 } from '../../api/questionLibraryAdmin'
-import { categoryTree, createBody, itemsIn, updateBody, type CategoryTree, type LibraryDraft } from './derive'
+import { categoryTree, createBody, itemsIn, updateBody, type CategoryTree, type LibraryDraft } from './libraryDerive'
 
 export interface QuestionLibraryModelState {
   loading: boolean

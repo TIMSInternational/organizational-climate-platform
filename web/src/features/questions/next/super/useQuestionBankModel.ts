@@ -15,7 +15,7 @@ import {
   type QuestionBankMetrics,
 } from '../../api/questionBank'
 import { listQuestionCategories, listQuestionLibraryItems } from '../../api/questionLibrary'
-import { OWNER_ALL, filterByOwner, librarySummary, type OwnerFilter } from './derive'
+import { OWNER_ALL, filterByOwner, librarySummary, type OwnerFilter } from './bankDerive'
 
 /** How long typing rests before the search reaches the server. */
 export const SEARCH_DEBOUNCE_MS = 350
