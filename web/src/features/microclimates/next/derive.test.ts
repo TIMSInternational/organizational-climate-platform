@@ -113,6 +113,20 @@ describe('the invitation ladder', () => {
     ).toEqual({ recorded: ['pending', 'sent', 'opened'], suppressed: ['started', 'completed'] })
   })
 
+  it('honours the ceiling on its own: nothing past highestRecordableState, even with nothing suppressed', () => {
+    expect(invitationLadder({ highestRecordableState: 'sent', suppressedStates: [] })).toEqual({
+      recorded: ['pending', 'sent'],
+      suppressed: [],
+    })
+  })
+
+  it('honours the suppressed list on its own: a suppressed rung under the ceiling is still struck', () => {
+    expect(invitationLadder({ highestRecordableState: 'completed', suppressedStates: ['opened'] })).toEqual({
+      recorded: ['pending', 'sent', 'started', 'completed'],
+      suppressed: ['opened'],
+    })
+  })
+
   it('records every rung for a signed-in session', () => {
     expect(invitationLadder({ highestRecordableState: 'completed', suppressedStates: [] }).recorded).toEqual([
       'pending',
