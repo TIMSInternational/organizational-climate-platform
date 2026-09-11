@@ -74,8 +74,9 @@ export default function PlanDetailNextPage() {
     return (
       <div>
         <PageTopBar
-          title={t('tracking.next.notFoundTitle')}
+          title={t('tracking.detail.title')}
           breadcrumbs={[{ label: t('tracking.planes.title'), href: '/tracking/planes' }, { label: t('tracking.detail.title') }]}
+          tightBreadcrumb
         />
         <EmptyState
           fill
