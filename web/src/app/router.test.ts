@@ -510,6 +510,29 @@ describe('router', () => {
       }
     })
 
+    /**
+     * The swap pinned on the component each path resolves to, not on the source text. The
+     * test above asks only that each page's `await import` appears somewhere in router.tsx,
+     * and "registers every tracking screen" only that each path exists — so swapping the
+     * lazy imports of `/tracking/planes` and `/tracking/tablero` left this file green (the
+     * admin-gaps refuter, 11 Sep). Each route's `lazy()` is resolved here and its Component
+     * compared with the module built for that path.
+     */
+    it('resolves each tracking path to the page built for it', async () => {
+      const routes = shellChildren()
+      async function componentAt(path: string): Promise<unknown> {
+        const lazy = routes.find((route) => route.path === path)?.lazy
+        if (typeof lazy !== 'function') throw new Error(`${path} is not a lazy route in the admin shell`)
+        const resolved = (await (lazy as () => Promise<unknown>)()) as { Component?: unknown }
+        return resolved.Component
+      }
+      expect(await componentAt('/tracking')).toBe((await import('../features/tracking/next/ConsolidadoNextPage')).default)
+      expect(await componentAt('/tracking/tablero')).toBe((await import('../features/tracking/next/TableroNextPage')).default)
+      expect(await componentAt('/tracking/planes')).toBe((await import('../features/tracking/next/PlanesListNextPage')).default)
+      expect(await componentAt('/tracking/planes/:id')).toBe((await import('../features/tracking/next/PlanDetailNextPage')).default)
+      expect(await componentAt('/tracking/mis-tareas')).toBe((await import('../features/tracking/pages/MisTareasPage')).default)
+    })
+
     it('leaves no tracking page unrouted', () => {
       const pagesDir = join(process.cwd(), 'src', 'features', 'tracking', 'pages')
       const found = globSync('*.tsx', { cwd: pagesDir })
