@@ -1,3 +1,11 @@
+/**
+ * NOT ROUTED. `/microclimates/:id/results` renders the redesigned board (`../next/results/MicroclimateResultsNextPage`),
+ * which replaced this page — ruled 10 Sep: a redesigned screen replaces its real route.
+ * Nothing in `router.tsx` reaches this file.
+ *
+ * It stays in the tree on purpose, as the wiring reference: `useMicroclimateResultsModel` makes this page's three reads,
+ * and this file's own test still pins what it did. Delete it when nothing reads it.
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useTranslation } from '../../../i18n'

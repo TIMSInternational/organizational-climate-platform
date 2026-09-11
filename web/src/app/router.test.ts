@@ -11,6 +11,11 @@ import DemographicFieldsPage from '../features/org-structure/pages/DemographicFi
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
 import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
 import ActionPlansListNextPage from '../features/action-plans/next/ActionPlansListNextPage'
+import ActionPlanDetailNextPage from '../features/action-plans/next/ActionPlanDetailNextPage'
+import MicroclimateCreateNextPage from '../features/microclimates/next/create/MicroclimateCreateNextPage'
+import MicroclimateDetailNextPage from '../features/microclimates/next/detail/MicroclimateDetailNextPage'
+import MicroclimateAnalyticsNextPage from '../features/microclimates/next/analytics/MicroclimateAnalyticsNextPage'
+import MicroclimateResultsNextPage from '../features/microclimates/next/results/MicroclimateResultsNextPage'
 import ReportsListNextPage from '../features/reports/next/ReportsListNextPage'
 import BenchmarksNextPage from '../features/analytics/next/benchmarks/BenchmarksNextPage'
 import SurveyQuestionsEditorPage from '../features/surveys/next/authoring/SurveyQuestionsEditorPage'
@@ -280,6 +285,32 @@ describe('router', () => {
    * them; the `/next` siblings the first cut mounted are gone with the ruling. Asserted
    * on the element, not the path: a path alone would pass with the old page behind it.
    */
+  /**
+   * The admin-gaps boards of 10 Sep replaced five pages on their real routes: the action
+   * plan the list links to, and the microclimate flow's create, share, analytics and read
+   * steps. Asserted on the element, as above — a path alone would pass with the old page
+   * behind it — and no `/next` sibling may exist for any of them.
+   */
+  it('mounts Detalle de plan and the microclimate flow on the real routes, and no /next sibling', () => {
+    const byPath = new Map<string, unknown>()
+    function walk(routes: typeof router.routes): void {
+      for (const route of routes) {
+        if (route.path) byPath.set(route.path, route.element)
+        if (route.children) walk(route.children as typeof router.routes)
+      }
+    }
+    walk(router.routes)
+    const componentAt = (path: string) => (byPath.get(path) as { type?: unknown } | undefined)?.type
+    expect(componentAt('/action-plans/:id')).toBe(ActionPlanDetailNextPage)
+    expect(componentAt('/microclimates/new')).toBe(MicroclimateCreateNextPage)
+    expect(componentAt('/microclimates/:id')).toBe(MicroclimateDetailNextPage)
+    expect(componentAt('/microclimates/analytics')).toBe(MicroclimateAnalyticsNextPage)
+    expect(componentAt('/microclimates/:id/results')).toBe(MicroclimateResultsNextPage)
+    for (const path of ['/action-plans/:id', '/microclimates/new', '/microclimates/:id', '/microclimates/analytics', '/microclimates/:id/results']) {
+      expect(byPath.has(`${path}/next`)).toBe(false)
+    }
+  })
+
   it('mounts the redesigned list, Clima en el tiempo and the results on the real routes, and no /next sibling', () => {
     const byPath = new Map<string, unknown>()
     function walk(routes: typeof router.routes): void {
@@ -546,12 +577,14 @@ describe('router', () => {
       const source = readFileSync(join(src, 'app', 'router.tsx'), 'utf8')
       const pageNames =
         'ConsolidadoPage|TableroSeguimientoPage|PlanesAccionListPage|PlanDeAccionDetailPage|MisTareasPage|ConsolidadoNextPage|TableroNextPage|PlanDetailNextPage'
-      expect(source).not.toMatch(new RegExp(`^import .*(${pageNames}).*$`, 'm'))
+      // Whole names only (a regex \b): the Detalle de plan's `ActionPlanDetailNextPage` contains
+      // `PlanDetailNextPage` and is a static import of an action-plans page, not a tracking one.
+      expect(source).not.toMatch(new RegExp(`^import .*\\b(${pageNames})\\b.*$`, 'm'))
 
       const offenders = globSync('**/*.{ts,tsx}', { cwd: src })
         .filter((file) => !file.includes('features/tracking/') && !/\.test\.tsx?$/.test(file))
         .filter((file) =>
-          new RegExp(`^\\s*import\\s[^\\n]*(${pageNames})`, 'm').test(
+          new RegExp(`^\\s*import\\s[^\\n]*\\b(${pageNames})\\b`, 'm').test(
             readFileSync(join(src, file), 'utf8'),
           ),
         )

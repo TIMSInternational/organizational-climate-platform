@@ -146,8 +146,9 @@ export interface PageTopBarProps {
   actions?: ReactNode
   /**
    * A line of chips and facts under the description — the redesign's status row
-   * ("Borrador · Encuesta de Clima Q1 2027 · 6 preguntas"), and the plan detail's code,
-   * semáforo and date (the Main artboard of 10 Sep). Optional and additive: a page that
+   * ("Borrador · Encuesta de Clima Q1 2027 · 6 preguntas"), the plan detail's code,
+   * semáforo and date (the Main artboard of 10 Sep), and a microclimate's state ("En vivo ·
+   * abierta hasta el 11 de septiembre a las 21:06"). Optional and additive: a page that
    * passes nothing renders exactly as before. Already translated.
    */
   meta?: ReactNode
@@ -163,6 +164,15 @@ export interface PageTopBarProps {
    * artboard of 10 Sep, whose breadcrumb carries only its own margin.
    */
   tightBreadcrumb?: boolean
+  /**
+   * The admin-gaps boards of 10 Sep (Detalle de plan; Crear, Detalle, Analítica and
+   * Resultados de microclima) nest the breadcrumb in the header block with a 14px margin
+   * (`margin-bottom: 14px` in each `.dc.html`) instead of the first canvas's 38px, so the
+   * crumb sits 32px above the eyebrow's centre, not 55px, and they set the meta row at the
+   * text column's own 6px gap, with no margin of its own. `compact` draws both: the
+   * `tightBreadcrumb` gap plus a meta row with no top margin.
+   */
+  compact?: boolean
 }
 
 export function PageTopBar({
@@ -176,6 +186,7 @@ export function PageTopBar({
   meta,
   metaClassName,
   tightBreadcrumb = false,
+  compact = false,
 }: PageTopBarProps) {
   const { t } = useTranslation()
   const derivedEyebrow = useSectionEyebrow()
@@ -192,7 +203,7 @@ export function PageTopBar({
       data-slot="page-top-bar"
       className={cn(
         'mb-section flex flex-col border-b border-line-light pb-4',
-        tightBreadcrumb ? 'gap-3.5' : 'gap-9.5',
+        tightBreadcrumb || compact ? 'gap-3.5' : 'gap-9.5',
       )}
     >
       {breadcrumbs && breadcrumbs.length > 0 && (
@@ -285,7 +296,11 @@ export function PageTopBar({
           {meta && (
             <div
               data-slot="page-meta"
-              className={cn('mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-fg-secondary', metaClassName)}
+              className={cn(
+                'flex flex-wrap items-center gap-1.5 text-xs text-fg-secondary',
+                !compact && 'mt-1.5',
+                metaClassName,
+              )}
             >
               {meta}
             </div>
