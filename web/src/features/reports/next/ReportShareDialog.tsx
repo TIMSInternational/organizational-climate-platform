@@ -256,7 +256,7 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
                     ? t('reports.next.activeHeadingMany', { count: active.length })
                     : t('reports.next.activeHeading', { count: active.length })}
                 </span>
-                <span className="text-xs text-fg-light">
+                <span className="text-xs text-fg-label">
                   {opensTotal === 1 ? t('reports.next.opensTotalOne') : t('reports.next.opensTotal', { count: opensTotal })}
                 </span>
               </div>
@@ -316,7 +316,7 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
               )}
 
               {active.some((share) => share.id !== minted?.id) && (
-                <p className="m-0 text-xs text-fg-light">{t('reports.next.maskedNote')}</p>
+                <p className="m-0 text-xs text-fg-label">{t('reports.next.maskedNote')}</p>
               )}
 
               {copied !== null && (
@@ -340,14 +340,14 @@ export default function ReportShareDialog({ open, onOpenChange, baseUrl, report,
                       >
                         <ChevronRight
                           aria-hidden="true"
-                          className={cn('size-3.5 text-fg-light transition-transform', showInactive && 'rotate-90')}
+                          className={cn('size-3.5 text-fg-label transition-transform', showInactive && 'rotate-90')}
                         />
                         {allRevoked ? t('reports.next.showRevoked') : t('reports.next.showInactive')}
-                        <span className="font-mono text-sm tabular-nums text-fg-light">{inactive.length}</span>
+                        <span className="font-mono text-sm tabular-nums text-fg-label">{inactive.length}</span>
                       </Button>
                     </CollapsibleTrigger>
                     {span && (
-                      <span className="text-xs text-fg-light">
+                      <span className="text-xs text-fg-label">
                         {sameUtcDay(span.first, span.last)
                           ? t('reports.next.revokedAllOn', { date: day(span.first) })
                           : t('reports.next.revokedRange', { first: day(span.first), last: day(span.last) })}

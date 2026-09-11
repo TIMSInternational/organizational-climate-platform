@@ -31,6 +31,7 @@
   --color-surface-input: var(--admin-bg-input);
   --color-surface-icon-box: var(--admin-bg-icon-box);
   --color-surface-overlay: var(--admin-bg-overlay);
+  --color-surface-scrim: var(--admin-bg-scrim);
 
   /* -- Interaction states (translucent, layer over any surface) ---------- */
   --color-state-hover: var(--admin-bg-hover);

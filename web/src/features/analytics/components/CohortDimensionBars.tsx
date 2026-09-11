@@ -131,7 +131,7 @@ export default function CohortDimensionBars({
                   <Chip tone={chip.tone} label={t(chip.key)} />
                 </span>
               ) : (
-                <span data-slot="cohort-no-median" className="whitespace-nowrap text-xs text-fg-light">
+                <span data-slot="cohort-no-median" className="whitespace-nowrap text-xs text-fg-label">
                   {t('benchmarks.next.noMedian')}
                 </span>
               )}
@@ -157,7 +157,7 @@ export default function CohortDimensionBars({
           <span aria-hidden="true" className="inline-block h-2 w-3.5 rounded-full bg-accent-red" />
           {t('benchmarks.next.chipBelow')}
         </span>
-        <span className="ml-auto text-fg-light">{t('benchmarks.next.legendScale')}</span>
+        <span className="ml-auto text-fg-label">{t('benchmarks.next.legendScale')}</span>
       </div>
     </div>
   )

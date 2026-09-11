@@ -23,7 +23,8 @@ export interface DimensionStanding {
  */
 export function dimensionStanding(score: number | null, median: number | null): DimensionStanding {
   if (score === null || median === null) return { standing: 'none', delta: null }
-  const delta = Math.round(score - median)
+  // `|| 0` folds the `-0` that `Math.round(-0.4)` returns into a plain zero.
+  const delta = Math.round(score - median) || 0
   return { standing: delta < 0 ? 'below' : delta > 0 ? 'above' : 'at', delta }
 }
 

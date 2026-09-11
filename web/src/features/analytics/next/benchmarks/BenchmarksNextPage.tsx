@@ -123,15 +123,15 @@ export default function BenchmarksNextPage() {
                     >
                       <ChevronRight
                         aria-hidden="true"
-                        className={cn('size-3.5 text-fg-light transition-transform', referencesOpen && 'rotate-90')}
+                        className={cn('size-3.5 text-fg-label transition-transform', referencesOpen && 'rotate-90')}
                       />
                       {t('benchmarks.allBenchmarks')}
-                      <span className="font-mono text-sm font-normal tabular-nums text-fg-light">
+                      <span className="font-mono text-sm font-normal tabular-nums text-fg-label">
                         {state.references.length}
                       </span>
                     </Button>
                   </CollapsibleTrigger>
-                  <p className="m-0 text-sm text-fg-light">{t('benchmarks.next.referencesHint')}</p>
+                  <p className="m-0 text-sm text-fg-label">{t('benchmarks.next.referencesHint')}</p>
                 </div>
                 <CollapsibleContent>
                   <div className="pt-2">
@@ -349,10 +349,10 @@ function ReferenceRow({
       <td data-slot="quality-score" className="py-3 pr-3 text-right">
         {quality.kind === 'unscored' ? (
           <span className="inline-flex items-center justify-end gap-1.5">
-            <span aria-hidden="true" className="font-mono text-base text-fg-light">
+            <span aria-hidden="true" className="font-mono text-base text-fg-label">
               —
             </span>
-            <span className="text-xs text-fg-light">{t('benchmarks.next.unscored')}</span>
+            <span className="text-xs text-fg-label">{t('benchmarks.next.unscored')}</span>
           </span>
         ) : (
           <span className="font-mono text-base tabular-nums text-fg-primary">

@@ -133,8 +133,15 @@ export default function ReportsListNextPage() {
   const schedule = scheduleReading(rows)
   const survey = commonSurvey(rows)
   const formats = formatsSentence(t, rows)
+  // `normal-case tracking-normal`: the chip also rides in a small-caps column head, whose
+  // uppercase and spacing it must not inherit — it is a word, not a label.
   const sampleChip = state.model.isSample ? (
-    <Chip data-slot="sample-chip" tone="warning" label={t('dashboard.next.sampleChip')} />
+    <Chip
+      data-slot="sample-chip"
+      tone="warning"
+      label={t('dashboard.next.sampleChip')}
+      className="normal-case tracking-normal"
+    />
   ) : null
 
   return (
@@ -427,7 +434,7 @@ function ReportTableRow({
       <td className="px-3 py-3.5">
         <div className="flex min-w-0 flex-col">
           <span className="truncate text-base font-semibold text-fg-primary">{row.title}</span>
-          <span data-slot="report-meta" className="truncate text-xs leading-normal text-fg-light">
+          <span data-slot="report-meta" className="truncate text-xs leading-normal text-fg-label">
             {meta}
           </span>
         </div>
@@ -442,15 +449,17 @@ function ReportTableRow({
         <Chip
           tone={STATUS_TONE[row.status] ?? 'neutral'}
           label={reportStatusLabel(t, row.status)}
-          icon={completed ? <Check strokeWidth={2.25} /> : undefined}
+          // Sized here: `Chip` wraps its icon in a span, so the primitive's `[&>svg]:size-3`
+          // never reaches it and lucide's own 24px would push the word out of the chip.
+          icon={completed ? <Check strokeWidth={2.25} className="size-3" /> : undefined}
           className="w-full justify-start"
         />
       </td>
       <td data-slot="report-links" className="py-3.5 pr-3">
         {links === null ? (
-          <span className="text-sm text-fg-light">{mayShare && completed ? t('reports.next.linksNotRead') : t('reports.next.linksNone')}</span>
+          <span className="text-sm text-fg-label">{mayShare && completed ? t('reports.next.linksNotRead') : t('reports.next.linksNone')}</span>
         ) : links.active === 0 || links.firstExpiry === null ? (
-          <span className="text-sm text-fg-light">{t('reports.next.linksNone')}</span>
+          <span className="text-sm text-fg-label">{t('reports.next.linksNone')}</span>
         ) : (
           <span className="flex flex-col">
             <span className="text-base text-fg-primary">
@@ -458,7 +467,7 @@ function ReportTableRow({
                 ? t('reports.next.linksActiveOne')
                 : t('reports.next.linksActiveMany', { count: links.active })}
             </span>
-            <span className="text-xs leading-normal text-fg-light">
+            <span className="text-xs leading-normal text-fg-label">
               {t('reports.next.linksExpiry', {
                 date: calendarDay(Date.parse(links.firstExpiry), locale),
                 opens: opensPhrase(t, links.opens),

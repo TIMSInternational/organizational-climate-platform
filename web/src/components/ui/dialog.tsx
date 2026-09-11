@@ -35,7 +35,9 @@ export function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        'fixed inset-0 z-50 bg-surface-overlay',
+        // The canvas's dialog scrim (ReportShare, 10 Sep): the ink at 45%, not the white
+        // veil `bg-surface-overlay` paints — every dialog reads as the one thing on screen.
+        'fixed inset-0 z-50 bg-surface-scrim',
         'data-[state=open]:animate-fade-in',
         className,
       )}
